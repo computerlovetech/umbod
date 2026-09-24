@@ -81,7 +81,7 @@ jobs:
             echo "Select at least one release group" >&2
             exit 1
           fi
-          count="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/workflows/umbod-ci.yml/runs?head_sha=${GITHUB_SHA}&branch=main&status=success&per_page=100" --jq '[.workflow_runs[] | select(.name == "umbod CI" and .head_sha == "'"${GITHUB_SHA}"'" and .head_branch == "main" and .event == "push")] | length' | awk '{ total += $1 } END { print total + 0 }')"
+          count="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/workflows/umbod-ci.yml/runs?head_sha=${GITHUB_SHA}&branch=main&status=success&per_page=100" --jq '[.workflow_runs[] | select(.head_sha == "'"${GITHUB_SHA}"'" and .head_branch == "main" and .event == "push")] | length' | awk '{ total += $1 } END { print total + 0 }')"
           [[ "${count}" -gt 0 ]] || { echo "Exact main commit ${GITHUB_SHA} has no successful umbod CI push run" >&2; exit 1; }
 
       - name: Log in to GHCR
