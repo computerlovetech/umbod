@@ -44,3 +44,7 @@ Install, configure, and run Umbod on your own infrastructure. Start with a local
 ## Early beta
 
 Umbod is in early beta. These guides cover installation, operations, and connector development. Questions or feedback? [Join the community on Discord](https://discord.gg/mjrbtBYeS) or [visit the source on GitHub](https://github.com/computerlovetech/umbod).
+
+## About the name
+
+Umbod takes its name from Old Norse *umboð*: a mandate to act on another’s behalf. Its theme song is [MMMBop by Hanson](https://www.youtube.com/watch?v=NHozn0YXAeE).

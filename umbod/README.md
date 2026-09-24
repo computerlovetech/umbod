@@ -1,30 +1,6 @@
-# Umbod
+# Umbod development
 
-The product vision and strategy live in `docs/VISION.md` and `docs/STRATEGY.md`.
-
-Starter app with the same high-level layout as `apps/computerlove-tech`:
-
-- `api/` — Python package with FastAPI, FastMCP, and Typer CLI entrypoints.
-- `frontend/` — SvelteKit app served with adapter-node.
-- `docker-compose.yml` — API, MCP, and frontend services.
-
-## Feature roadmap
-
-**Legend:** ✅ Complete · 🚧 In progress · ⬜ Planned · 🟢 Stable · 🟡 Evolving · ⚪ Not assessed
-
-| Feature | Delivery | Stability | Scope |
-| --- | :---: | :---: | --- |
-| Connector administration | ✅ Complete | 🟡 Evolving | Configure, publish, and unpublish registered connectors from the admin UI. |
-| Dynamic MCP tool publication | ✅ Complete | 🟡 Evolving | Reconcile connector tools into the running MCP server without restarting it. |
-| OpenAPI connectors | ✅ Complete | 🟡 Evolving | Create connectors from OpenAPI documents and configure their authentication. |
-| Downstream MCP connectors | ✅ Complete | 🟡 Evolving | Register downstream MCP servers and expose their tools through Umbod. |
-| Group permissions | ✅ Complete | 🟡 Evolving | Manage group-level access to MCP tools from the admin UI. |
-| Authentication and deployment profiles | ✅ Complete | 🟡 Evolving | Support local development authentication and production OIDC-based deployments. |
-| Helm chart for Kubernetes | ⬜ Planned | ⚪ Not assessed | Install and configure Umbod on Kubernetes using Helm. |
-| Tool description overrides | ⬜ Planned | ⚪ Not assessed | Override published tool descriptions from the `/admin` interface. |
-| Configurable `toolPolicy` | ⬜ Planned | ⚪ Not assessed | Configure tool access policies as `allow`, `ask`, or `blocked`, controlling whether tools run directly, require approval, or cannot be used. |
-| Agent observability tools | ⬜ Planned | ⚪ Not assessed | Provide built-in tools such as `give_feedback` and `self_diagnose` for agent feedback and diagnostics. |
-| Per-connector runtime logging configuration | ⬜ Planned | ⚪ Not assessed | Configure logging levels independently for each connector at runtime. |
+For an overview and a quick start, see the [project README](../README.md).
 
 ## Development setup
 
@@ -36,7 +12,7 @@ Everyday development uses:
 
 - Git.
 - Docker Engine with Docker Compose v2.
-- Python 3.14 or newer. The repository pins Python 3.14 in the root `.python-version`.
+- Python 3.14 or newer.
 - [uv](https://docs.astral.sh/uv/) for Python environments, dependencies, commands, tests, linting, and documentation.
 - [Bun](https://bun.sh/) for frontend dependencies, scripts, tests, and checks. Do not use npm, pnpm, or Yarn in `frontend/`.
 - curl for command-line health checks.
@@ -52,7 +28,7 @@ The chart supports Kubernetes 1.25 or newer. CI currently uses Helm 3.17.3, kube
 
 ### Run the complete local stack
 
-From `apps/umbod`:
+From `umbod`:
 
 ```bash
 docker compose build
@@ -73,7 +49,7 @@ Production authentication can be exercised with `docker compose --profile auth u
 
 ### Run services from source
 
-Install API dependencies from `apps/umbod/api`:
+Install API dependencies from `umbod/api`:
 
 ```bash
 uv sync
@@ -86,7 +62,7 @@ uv run umbod api serve --reload
 uv run umbod mcp serve --reload
 ```
 
-Install and run the frontend from `apps/umbod/frontend`:
+Install and run the frontend from `umbod/frontend`:
 
 ```bash
 bun install --frozen-lockfile
@@ -108,16 +84,9 @@ bun run test
 bun run check
 ```
 
-Run the shared Semgrep rules from `apps/umbod`:
-
-```bash
-uv sync --group dev
-uv run semgrep scan --config ../.semgrep.yml .
-```
-
 ### Documentation
 
-The static solution documentation is maintained in `docs/` and built with MkDocs Material. From `apps/umbod`:
+The static solution documentation is maintained in `docs/` and built with MkDocs Material. From `umbod`:
 
 ```bash
 uv sync --group dev
@@ -129,7 +98,7 @@ The authoring server is available at `http://127.0.0.1:8000`.
 
 ### Helm chart validation
 
-Run static chart validation from `apps/umbod`:
+Run static chart validation from `umbod`:
 
 ```bash
 deploy/helm/umbod/scripts/validate.sh
@@ -170,3 +139,7 @@ uv run umbod config show --advanced # full resolved config
 
 - Health: `GET /system/health`
 - MCP card: `GET /.well-known/mcp/server-card.json` on `UMBOD_PUBLIC_MCP_ORIGIN`
+
+## About the name
+
+Umbod takes its name from Old Norse *umboð*: a mandate to act on another’s behalf. Its theme song is [MMMBop by Hanson](https://www.youtube.com/watch?v=NHozn0YXAeE).
