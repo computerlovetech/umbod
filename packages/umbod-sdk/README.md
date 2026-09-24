@@ -6,6 +6,8 @@ Public Python connector authoring API and plugin discovery contract for Umbod.
 
 The SDK is published to PyPI as `umbod` (`pip install umbod`) and exposes the `umbod_sdk.connectors` Python package. It contains the public contracts used to implement connector plugins, including `umbod_sdk.connectors.plugin_api`, configuration models, registration contracts, uploaded files, and plugin discovery.
 
+The SDK wheel includes the connector-authoring skill at `umbod_sdk/skills/draft-agent-connector/` (`SKILL.md` and `REFERENCE.md`). The `umbod skills` CLI lists bundled skills and installs a named skill or all bundled skills into a selected harness. Claude uses `.claude/skills/`; Codex and the shared agents convention use `.agents/skills/`. Installations default to the current project, with options for a different project or the user's home directory. Existing skill directories require explicit replacement. The CLI does not install skills automatically.
+
 Concrete connector implementations belong in separate Python distributions. Umbod discovers installed connector distributions through Python package entry points and enables a deployment-specific subset through its connector deployment configuration.
 
 ## Plugin system overview
@@ -219,4 +221,4 @@ Umbod can also discover Python files from the directory selected by `UMBOD_CONNE
 
 ## Package boundary
 
-This SDK distribution contains only connector authoring and discovery contracts. Concrete connector implementations are distributed separately, such as the repository's `umbod-connectors` package.
+This SDK distribution contains connector authoring and discovery contracts and the connector-authoring skill. Concrete connector implementations are distributed separately, such as the repository's `umbod-connectors` package.

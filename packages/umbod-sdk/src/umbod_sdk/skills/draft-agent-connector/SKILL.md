@@ -7,7 +7,7 @@ description: Use when a developer wants to build, draft, or add an Umbod connect
 
 Author one connector plugin implementation against the `umbod_sdk.connectors.plugin_api` interface. The user has the connector module, not the whole Umbod app: do **not** touch `pyproject.toml`, connector deployment configuration, Docker Compose, or MCP runtime — packaging and deployment are a separate integration step. Stop when the connector implementation is written and its mocked tests pass.
 
-Read [REFERENCE.md](REFERENCE.md) for the exact interface before writing code. For the subsequent distribution packaging, `umbod.connectors` entry-point declaration, installation, and deployment-enablement steps, read `packages/umbod-connector-sdk/README.md` from the repository root.
+Read [REFERENCE.md](REFERENCE.md) for the exact interface before writing code. For the subsequent distribution packaging, `umbod.connectors` entry-point declaration, installation, and deployment-enablement steps, read the Umbod SDK's connector distribution guide (`README.md` in the SDK distribution).
 
 ## Steps
 

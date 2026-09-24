@@ -5,7 +5,7 @@
 Start at the boundary exposing the behavior, use that module's `README.md` as its local index, follow calls into `api/src/umbod/core/`, and inspect `infrastructure/` or other adapters only for external I/O. Update affected module `README.md` indexes when responsibilities, entrypoints, or submodule structures change.
 
 - REST/API behavior → `api/src/umbod/rest/`; MCP behavior → `api/src/umbod/mcp/`; CLI behavior → `api/src/umbod/cli/`.
-- Connector authoring API → `api/src/connectors/` is the public API for users building connectors to deploy in Umbod; read `api/src/connectors/README.md` and `skills/draft-agent-connector/SKILL.md` before changing it or creating a connector.
+- Connector authoring API → `api/src/connectors/` is the public API for users building connectors to deploy in Umbod; read `api/src/connectors/README.md` and `../packages/umbod-sdk/src/umbod_sdk/skills/draft-agent-connector/SKILL.md` before changing it or creating a connector.
 - Messaging/events → `api/src/messaging/`.
 - Pages/navigation → `frontend/src/routes/`; reusable UI → `frontend/src/lib/components/`; frontend administration APIs and state → `frontend/src/lib/admin/`.
 - Configuration → `api/src/umbod/config/`, then `docker-compose.yml` or Helm when deployment wiring is involved.

@@ -7,7 +7,11 @@ requires-python = ">=3.14"
 dependencies = [
     "jsonschema>=4.26.0",
     "pydantic>=2.13.4",
+    "typer>=0.25.1",
 ]
+
+[project.scripts]
+umbod = "umbod_sdk.cli:app"
 
 [build-system]
 requires = ["hatchling>=1.27.0,<2"]

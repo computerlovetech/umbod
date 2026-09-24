@@ -1,5 +1,8 @@
+import subprocess
 from importlib import import_module
 from importlib.metadata import distribution
+from pathlib import Path
+from zipfile import ZipFile
 
 import pytest
 from pydantic import ConfigDict, Field
@@ -41,6 +44,27 @@ def test_plugin_api_is_exposed_from_umbod_sdk_namespace() -> None:
     plugin_api = import_module("umbod_sdk.connectors.plugin_api")
 
     assert plugin_api.Connector is Connector
+
+
+def test_wheel_contains_connector_authoring_skill(tmp_path: Path) -> None:
+    package_root = Path(__file__).resolve().parents[1]
+    subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", str(tmp_path)],
+        cwd=package_root,
+        check=True,
+    )
+    wheel = next(tmp_path.glob("*.whl"))
+
+    with ZipFile(wheel) as archive:
+        skill_files = {
+            name for name in archive.namelist()
+            if name.startswith("umbod_sdk/skills/draft-agent-connector/")
+        }
+
+    assert skill_files == {
+        "umbod_sdk/skills/draft-agent-connector/SKILL.md",
+        "umbod_sdk/skills/draft-agent-connector/REFERENCE.md",
+    }
 
 
 def test_distribution_does_not_expose_legacy_connectors_namespace() -> None:

@@ -2,7 +2,7 @@
 
 **Module responsibility:** Public Python API for users building connectors that are deployed in Umbod and exposed as configurable MCP capabilities.
 
-**Read when working with:** Connector packages, public connector contracts, configuration models, capability declarations, or plugin discovery. Use `skills/draft-agent-connector/SKILL.md` as the connector-authoring workflow and contract reference. Use the SDK package-level `README.md` for distribution packaging, entry-point registration, installation, and deployment enablement.
+**Read when working with:** Connector packages, public connector contracts, configuration models, capability declarations, or plugin discovery. Use `../skills/draft-agent-connector/SKILL.md` as the connector-authoring workflow and contract reference. Use the SDK package-level `README.md` for distribution packaging, entry-point registration, installation, and deployment enablement.
 
 ## Submodules
 
