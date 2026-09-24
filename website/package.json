@@ -1,0 +1,17 @@
+{
+  "name": "umbod-website",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "docs": "cd ../umbod && uv run --group dev mkdocs build --strict --site-dir ../website/public/docs",
+    "dev": "bun run docs && vite dev",
+    "build": "bun run docs && vite build",
+    "preview": "vite preview",
+    "deploy": "bun run build && wrangler deploy"
+  },
+  "devDependencies": {
+    "vite": "^7.3.1",
+    "wrangler": "^4.34.0"
+  }
+}

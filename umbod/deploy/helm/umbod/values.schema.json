@@ -1,0 +1,554 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "core",
+    "config",
+    "plugins",
+    "frontend",
+    "persistence",
+    "services",
+    "ingress",
+    "serviceAccount"
+  ],
+  "properties": {
+    "nameOverride": {
+      "type": "string"
+    },
+    "fullnameOverride": {
+      "type": "string"
+    },
+    "imagePullSecrets": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "existingSecret": {
+      "type": "string"
+    },
+    "podAnnotations": {
+      "type": "object"
+    },
+    "podLabels": {
+      "type": "object"
+    },
+    "nodeSelector": {
+      "type": "object"
+    },
+    "tolerations": {
+      "type": "array"
+    },
+    "affinity": {
+      "type": "object"
+    },
+    "serviceAccount": {
+      "type": "object",
+      "required": [
+        "create",
+        "name",
+        "automountServiceAccountToken"
+      ],
+      "properties": {
+        "create": {
+          "type": "boolean"
+        },
+        "name": {
+          "type": "string"
+        },
+        "automountServiceAccountToken": {
+          "type": "boolean"
+        }
+      }
+    },
+    "plugins": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deploymentConfigurationPath",
+        "availableConnectorIds",
+        "image",
+        "resources"
+      ],
+      "properties": {
+        "deploymentConfigurationPath": {
+          "type": "string",
+          "minLength": 1
+        },
+        "availableConnectorIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^.*\\S.*$"
+          }
+        },
+        "image": {
+          "$ref": "#/definitions/optionalImage"
+        },
+        "resources": {
+          "type": "object"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "availableConnectorIds": {
+                "minItems": 1
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "image": {
+                "properties": {
+                  "repository": {
+                    "minLength": 1
+                  },
+                  "tag": {
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "core": {
+      "type": "object",
+      "required": [
+        "replicaCount",
+        "image",
+        "api",
+        "mcp"
+      ],
+      "properties": {
+        "replicaCount": {
+          "type": "integer",
+          "const": 1
+        },
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "api": {
+          "$ref": "#/definitions/coreWorkload"
+        },
+        "mcp": {
+          "$ref": "#/definitions/coreWorkload"
+        }
+      }
+    },
+    "frontend": {
+      "allOf": [
+        {
+          "$ref": "#/definitions/workload"
+        },
+        {
+          "type": "object",
+          "required": [
+            "bodySizeLimit",
+            "privateAuthTokenHeader",
+            "replicaCount"
+          ],
+          "properties": {
+            "bodySizeLimit": {
+              "type": "string",
+              "minLength": 1
+            },
+            "privateAuthTokenHeader": {
+              "type": "string",
+              "minLength": 1
+            },
+            "replicaCount": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      ]
+    },
+    "persistence": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "existingClaim",
+        "storageClass",
+        "accessModes",
+        "size"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "existingClaim": {
+          "type": "string"
+        },
+        "storageClass": {
+          "type": "string"
+        },
+        "accessModes": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "const": "ReadWriteOnce"
+          }
+        },
+        "size": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "services": {
+      "type": "object",
+      "required": [
+        "api",
+        "mcp",
+        "frontend"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "api": {
+          "$ref": "#/definitions/service"
+        },
+        "mcp": {
+          "$ref": "#/definitions/service"
+        },
+        "frontend": {
+          "$ref": "#/definitions/service"
+        }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "required": [
+        "enabled",
+        "className",
+        "annotations",
+        "host",
+        "tls",
+        "paths"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "className": {
+          "type": "string"
+        },
+        "annotations": {
+          "type": "object"
+        },
+        "host": {
+          "type": "string"
+        },
+        "tls": {
+          "type": "array"
+        },
+        "paths": {
+          "type": "object",
+          "required": [
+            "frontend",
+            "api",
+            "mcp"
+          ],
+          "properties": {
+            "frontend": {
+              "type": "string"
+            },
+            "api": {
+              "type": "string"
+            },
+            "mcp": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "logLevel",
+        "authentication",
+        "authorization",
+        "publicOrigins",
+        "features"
+      ],
+      "properties": {
+        "profile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "logLevel": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authentication": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "oidc"
+          ],
+          "properties": {
+            "mode": {
+              "type": "string",
+              "minLength": 1
+            },
+            "oidc": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "domain",
+                "clientId",
+                "audience",
+                "requiredScopes"
+              ],
+              "properties": {
+                "domain": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "clientId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "audience": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "requiredScopes": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        "authorization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "adminGroup",
+            "adminMembershipClaim",
+            "mcpPermissionClaim",
+            "adminJwtHeader"
+          ],
+          "properties": {
+            "adminGroup": {
+              "type": "string",
+              "minLength": 1
+            },
+            "adminMembershipClaim": {
+              "type": "string",
+              "minLength": 1
+            },
+            "mcpPermissionClaim": {
+              "type": "string",
+              "minLength": 1
+            },
+            "adminJwtHeader": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "publicOrigins": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "site",
+            "api",
+            "mcp"
+          ],
+          "properties": {
+            "site": {
+              "type": "string",
+              "minLength": 1
+            },
+            "api": {
+              "type": "string",
+              "minLength": 1
+            },
+            "mcp": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "features": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mcp"
+          ],
+          "properties": {
+            "mcp": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "administratorEnabled"
+              ],
+              "properties": {
+                "administratorEnabled": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "image": {
+      "type": "object",
+      "required": [
+        "repository",
+        "tag",
+        "pullPolicy"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pullPolicy": {
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      }
+    },
+    "optionalImage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository",
+        "tag",
+        "pullPolicy"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string"
+        },
+        "tag": {
+          "type": "string"
+        },
+        "pullPolicy": {
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      },
+      "if": {
+        "properties": {
+          "repository": {
+            "minLength": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "tag": {
+            "minLength": 1
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "tag": {
+            "const": ""
+          }
+        }
+      }
+    },
+    "coreWorkload": {
+      "type": "object",
+      "required": [
+        "port",
+        "env",
+        "resources"
+      ],
+      "properties": {
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "resources": {
+          "type": "object"
+        }
+      }
+    },
+    "workload": {
+      "type": "object",
+      "required": [
+        "image",
+        "port",
+        "env",
+        "resources"
+      ],
+      "properties": {
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "resources": {
+          "type": "object"
+        }
+      }
+    },
+    "service": {
+      "type": "object",
+      "required": [
+        "port"
+      ],
+      "properties": {
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        }
+      }
+    }
+  }
+}

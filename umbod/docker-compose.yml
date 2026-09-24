@@ -1,0 +1,186 @@
+services:
+  api:
+    image: umbod
+    build:
+      context: ..
+      dockerfile: umbod/api/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "18010:8000"
+    expose:
+      - "8001"
+    environment:
+      - UMBOD_PROFILE=${UMBOD_PROFILE:-local}
+      - UMBOD_AUTH=${UMBOD_AUTH:-dev}
+      - UMBOD_MCP_DOWNSTREAM_OAUTH_ENABLED=${UMBOD_MCP_DOWNSTREAM_OAUTH_ENABLED:-false}
+      - UMBOD_FEATURE_MCP_ADMINISTRATOR_ENABLED=${UMBOD_FEATURE_MCP_ADMINISTRATOR_ENABLED:-true}
+      - UMBOD_LOG_LEVEL=${UMBOD_LOG_LEVEL:-info}
+      - UMBOD_REST_METRICS_PORT=8001
+      - UMBOD_MCP_MESSAGING_TRANSPORT=${UMBOD_MCP_MESSAGING_TRANSPORT:-sql}
+      - UMBOD_PUBLIC_SITE_ORIGIN=${UMBOD_PUBLIC_SITE_ORIGIN:-http://localhost:3010}
+      - UMBOD_PUBLIC_API_ORIGIN=${UMBOD_PUBLIC_API_ORIGIN:-http://localhost:18010}
+      - UMBOD_PUBLIC_MCP_ORIGIN=${UMBOD_PUBLIC_MCP_ORIGIN:-http://localhost:8011}
+      - UMBOD_INTERNAL_API_ORIGIN=${UMBOD_INTERNAL_API_ORIGIN:-http://api:8000}
+      - UMBOD_DATA_DIR=${UMBOD_DATA_DIR:-/app/data}
+      - UMBOD_CONNECTOR_STORE=${UMBOD_CONNECTOR_STORE:-sqlite}
+      - UMBOD_ADMIN_GROUP=${UMBOD_ADMIN_GROUP:-umbod:admin}
+      - UMBOD_ADMIN_JWT_HEADER=${UMBOD_ADMIN_JWT_HEADER:-Authorization}
+      - UMBOD_ROOT_SECRET=${UMBOD_ROOT_SECRET:-}
+      - UMBOD_OIDC_DOMAIN=${UMBOD_OIDC_DOMAIN:-}
+      - UMBOD_OIDC_CLIENT_ID=${UMBOD_OIDC_CLIENT_ID:-}
+      - UMBOD_OIDC_CLIENT_SECRET=${UMBOD_OIDC_CLIENT_SECRET:-}
+      - UMBOD_OIDC_AUDIENCE=${UMBOD_OIDC_AUDIENCE:-}
+      - UMBOD_OIDC_TENANT_ID=${UMBOD_OIDC_TENANT_ID:-}
+      - UMBOD_OIDC_REQUIRED_SCOPES=${UMBOD_OIDC_REQUIRED_SCOPES:-}
+      - UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH=${UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH:-/app/config/connector-deployment-availability.json}
+    volumes:
+      - umbod-data:/app/data
+    configs:
+      - source: connector-deployment-availability
+        target: ${UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH:-/app/config/connector-deployment-availability.json}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/system/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  mcp:
+    image: umbod
+    command: ["umbod", "mcp", "serve"]
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "8011:8011"
+    expose:
+      - "8012"
+    labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.umbod-forward-proto.headers.customrequestheaders.X-Forwarded-Proto=https
+      - "traefik.http.routers.umbod-mcp.rule=Host(`umbod.computerlove.tech`)"
+      - traefik.http.routers.umbod-mcp.entryPoints=http
+      - traefik.http.routers.umbod-mcp.middlewares=umbod-forward-proto@docker
+      - traefik.http.services.umbod-mcp.loadbalancer.server.port=8011
+    environment:
+      - UMBOD_PROFILE=${UMBOD_PROFILE:-local}
+      - UMBOD_AUTH=${UMBOD_AUTH:-dev}
+      - UMBOD_MCP_DOWNSTREAM_OAUTH_ENABLED=${UMBOD_MCP_DOWNSTREAM_OAUTH_ENABLED:-false}
+      - UMBOD_FEATURE_MCP_ADMINISTRATOR_ENABLED=${UMBOD_FEATURE_MCP_ADMINISTRATOR_ENABLED:-true}
+      - UMBOD_LOG_LEVEL=${UMBOD_LOG_LEVEL:-info}
+      - UMBOD_PUBLIC_SITE_ORIGIN=${UMBOD_PUBLIC_SITE_ORIGIN:-http://localhost:3010}
+      - UMBOD_PUBLIC_API_ORIGIN=${UMBOD_PUBLIC_API_ORIGIN:-http://localhost:18010}
+      - UMBOD_PUBLIC_MCP_ORIGIN=${UMBOD_PUBLIC_MCP_ORIGIN:-http://localhost:8011}
+      - UMBOD_INTERNAL_API_ORIGIN=${UMBOD_INTERNAL_API_ORIGIN:-http://api:8000}
+      - UMBOD_DATA_DIR=${UMBOD_DATA_DIR:-/app/data}
+      - UMBOD_CONNECTOR_STORE=${UMBOD_CONNECTOR_STORE:-sqlite}
+      - UMBOD_ADMIN_GROUP=${UMBOD_ADMIN_GROUP:-umbod:admin}
+      - UMBOD_MCP_TOOL_EXPOSURE=${UMBOD_MCP_TOOL_EXPOSURE:-flat}
+      - UMBOD_MCP_MESSAGING_TRANSPORT=${UMBOD_MCP_MESSAGING_TRANSPORT:-sql}
+      - UMBOD_MCP_METRICS_PORT=8012
+      - UMBOD_MCP_STATELESS_HTTP=${UMBOD_MCP_STATELESS_HTTP:-true}
+      - UMBOD_MCP_AUTH_DEBUG_ENABLED=${UMBOD_MCP_AUTH_DEBUG_ENABLED:-false}
+      - UMBOD_ROOT_SECRET=${UMBOD_ROOT_SECRET:-}
+      - UMBOD_OIDC_DOMAIN=${UMBOD_OIDC_DOMAIN:-}
+      - UMBOD_OIDC_CLIENT_ID=${UMBOD_OIDC_CLIENT_ID:-}
+      - UMBOD_OIDC_CLIENT_SECRET=${UMBOD_OIDC_CLIENT_SECRET:-}
+      - UMBOD_OIDC_AUDIENCE=${UMBOD_OIDC_AUDIENCE:-}
+      - UMBOD_OIDC_TENANT_ID=${UMBOD_OIDC_TENANT_ID:-}
+      - UMBOD_OIDC_REQUIRED_SCOPES=${UMBOD_OIDC_REQUIRED_SCOPES:-}
+      - UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH=${UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH:-/app/config/connector-deployment-availability.json}
+    volumes:
+      - umbod-data:/app/data
+    configs:
+      - source: connector-deployment-availability
+        target: ${UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH:-/app/config/connector-deployment-availability.json}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8011/system/health').status==200 else 1)"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+  oauth2-proxy:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.6.0
+    profiles:
+      - auth
+    restart: unless-stopped
+    command:
+      - --provider=oidc
+      - --oidc-issuer-url=https://${UMBOD_OIDC_DOMAIN:-example.eu.auth0.com}/
+      - --client-id=${UMBOD_OIDC_CLIENT_ID:-}
+      - --client-secret=${UMBOD_OIDC_CLIENT_SECRET:-}
+      - --redirect-url=${UMBOD_PUBLIC_SITE_ORIGIN:-https://umbod-admin.computerlove.tech}/oauth2/callback
+      - --cookie-secret=${UMBOD_OAUTH2_PROXY_COOKIE_SECRET:-}
+      - --email-domain=${UMBOD_OAUTH2_PROXY_EMAIL_DOMAIN:-*}
+      - --scope=${UMBOD_OAUTH2_PROXY_SCOPE:-openid email profile permissions offline_access}
+      - --cookie-refresh=${UMBOD_OAUTH2_PROXY_COOKIE_REFRESH:-5m}
+      - --cookie-expire=${UMBOD_OAUTH2_PROXY_COOKIE_EXPIRE:-8h}
+      - --http-address=0.0.0.0:4180
+      - --upstream=static://202
+      - --reverse-proxy=true
+      - --set-authorization-header=true
+      - --set-xauthrequest=true
+      - --pass-access-token=true
+      - --pass-authorization-header=true
+      - --skip-provider-button=true
+    ports:
+      - "4180:4180"
+    labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.umbod-auth.forwardauth.address=http://oauth2-proxy:4180/
+      - traefik.http.middlewares.umbod-auth.forwardauth.trustForwardHeader=true
+      - traefik.http.middlewares.umbod-auth.forwardauth.authResponseHeaders=Authorization,X-Auth-Request-Access-Token,X-Auth-Request-User,X-Auth-Request-Email
+      - traefik.http.middlewares.umbod-auth-errors.errors.status=401
+      - traefik.http.middlewares.umbod-auth-errors.errors.service=umbod-oauth
+      - traefik.http.middlewares.umbod-auth-errors.errors.query=/oauth2/sign_in?rd={url}
+      - "traefik.http.routers.umbod-oauth.rule=Host(`umbod-admin.computerlove.tech`) && PathPrefix(`/oauth2/`)"
+      - traefik.http.routers.umbod-oauth.entryPoints=http
+      - traefik.http.routers.umbod-oauth.priority=100
+      - traefik.http.services.umbod-oauth.loadbalancer.server.port=4180
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3010:3000"
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.umbod-frontend.rule=Host(`umbod-admin.computerlove.tech`) && !Path(`/system/health`)"
+      - traefik.http.routers.umbod-frontend.entryPoints=http
+      - traefik.http.routers.umbod-frontend.priority=10
+      - traefik.http.routers.umbod-frontend.middlewares=umbod-auth-errors@docker,umbod-auth@docker
+      - traefik.http.services.umbod-frontend.loadbalancer.server.port=3000
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - BODY_SIZE_LIMIT=12M
+      - UMBOD_LOG_LEVEL=${UMBOD_LOG_LEVEL:-info}
+      - ORIGIN=${UMBOD_PUBLIC_SITE_ORIGIN:-http://localhost:3010}
+      - PROTOCOL_HEADER=x-forwarded-proto
+      - HOST_HEADER=x-forwarded-host
+      - PUBLIC_MCP_BASE_URL=${UMBOD_PUBLIC_MCP_ORIGIN:-http://localhost:8011}
+      - PRIVATE_API_BASE_URL=${UMBOD_INTERNAL_API_ORIGIN:-http://api:8000}
+      - PRIVATE_AUTH_TOKEN_HEADER=${UMBOD_ADMIN_JWT_HEADER:-Authorization}
+    depends_on:
+      - api
+      - mcp
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/system/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  umbod-data:
+
+configs:
+  connector-deployment-availability:
+    content: |
+      {
+        "connectors": []
+      }

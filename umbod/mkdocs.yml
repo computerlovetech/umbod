@@ -1,0 +1,82 @@
+site_name: Umbod
+site_description: Installation, operation, and architecture documentation for Umbod
+site_dir: site
+
+theme:
+  name: material
+  custom_dir: docs-theme
+  logo: assets/umbod-logo.svg
+  favicon: assets/umbod-logo.svg
+  font: false
+  features:
+    - content.code.copy
+    - navigation.footer
+    - navigation.indexes
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-7
+        name: Use dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/brightness-4
+        name: Use light mode
+
+extra_css:
+  - assets/umbod.css
+
+extra:
+  homepage: https://umbod.ai
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Overview: getting-started/index.md
+      - Kubernetes installation: getting-started/kubernetes-installation.md
+  - Operations:
+      - Service topology: operations/service-topology.md
+      - Configuration: operations/configuration.md
+  - Connector plugins:
+      - Overview: plugins/index.md
+      - Build a connector: plugins/build-a-connector.md
+  - Reference:
+      - Helm values: reference/helm-values.md
+      - Endpoints and ports: reference/endpoints-and-ports.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - toc:
+      permalink: true
+
+plugins:
+  - search
+
+hooks:
+  - docs/hooks.py
+
+strict: true

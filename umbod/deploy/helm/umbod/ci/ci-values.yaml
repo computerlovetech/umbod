@@ -1,0 +1,20 @@
+core:
+  image:
+    tag: ci
+frontend:
+  image:
+    tag: ci
+plugins:
+  availableConnectorIds:
+    - test
+    - rejseplanen
+  image:
+    repository: ghcr.io/computerlovetech/umbod-plugins
+    tag: ci
+ingress:
+  enabled: true
+  className: nginx
+  host: umbod.example.invalid
+existingSecret: umbod-ci
+persistence:
+  enabled: true

@@ -1,0 +1,7 @@
+apiVersion: v2
+name: umbod
+description: Development and evaluation deployment of Umbod
+version: 0.0.1-beta.2
+appVersion: "0.0.1-beta.2"
+type: application
+kubeVersion: ">=1.25.0-0"

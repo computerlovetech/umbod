@@ -1,0 +1,54 @@
+name: Docker Build
+description: Build a Docker image with optional Buildx cache
+
+inputs:
+  context:
+    description: Build context path
+    required: true
+  file:
+    description: Dockerfile path relative to the repository root (omit to use Dockerfile inside the context)
+    required: false
+    default: ''
+  cache-scope:
+    description: Cache scope for GitHub Actions cache
+    required: true
+  tags:
+    description: Optional image tags
+    required: false
+    default: ''
+  docker-output:
+    description: Optional path for a Docker image archive
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - uses: docker/setup-buildx-action@v4
+
+    - name: Build image
+      if: inputs.file == ''
+      uses: docker/build-push-action@v7.1.0
+      env:
+        DOCKER_BUILD_RECORD_UPLOAD: 'false'
+      with:
+        context: ${{ inputs.context }}
+        push: false
+        tags: ${{ inputs.tags }}
+        outputs: ${{ inputs.docker-output != '' && format('type=docker,dest={0}', inputs.docker-output) || '' }}
+        cache-from: type=gha,scope=${{ inputs.cache-scope }}
+        cache-to: type=gha,mode=max,scope=${{ inputs.cache-scope }}
+
+    - name: Build image
+      if: inputs.file != ''
+      uses: docker/build-push-action@v7.1.0
+      env:
+        DOCKER_BUILD_RECORD_UPLOAD: 'false'
+      with:
+        context: ${{ inputs.context }}
+        file: ${{ inputs.file }}
+        push: false
+        tags: ${{ inputs.tags }}
+        outputs: ${{ inputs.docker-output != '' && format('type=docker,dest={0}', inputs.docker-output) || '' }}
+        cache-from: type=gha,scope=${{ inputs.cache-scope }}
+        cache-to: type=gha,mode=max,scope=${{ inputs.cache-scope }}

@@ -1,0 +1,6 @@
+Umbod has been installed for development or evaluation.
+
+This chart uses SQLite on one ReadWriteOnce volume shared by the API and MCP containers. SQLite and this single-replica architecture are not suitable for production.
+
+Run the chart test with:
+  helm test {{ .Release.Name }}

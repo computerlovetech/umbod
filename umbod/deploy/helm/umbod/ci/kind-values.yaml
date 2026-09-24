@@ -1,0 +1,18 @@
+config:
+  profile: local
+  authentication:
+    mode: dev
+core:
+  image:
+    tag: ci
+frontend:
+  image:
+    tag: ci
+plugins:
+  availableConnectorIds:
+    - test
+    - rejseplanen
+  image:
+    repository: ghcr.io/computerlovetech/umbod-plugins
+    tag: ci
+existingSecret: umbod-ci

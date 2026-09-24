@@ -1,0 +1,217 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "umbod.fullname" . }}-core
+  labels:
+    {{- include "umbod.labels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "umbod.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: core
+  template:
+    metadata:
+      annotations:
+        checksum/connector-availability: {{ include (print $.Template.BasePath "/connector-availability-configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "umbod.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: core
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "umbod.serviceAccountName" . }}
+      automountServiceAccountToken: false
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.plugins.image.repository }}
+      initContainers:
+        - name: connector-plugins
+          image: "{{ .Values.plugins.image.repository }}:{{ .Values.plugins.image.tag }}"
+          imagePullPolicy: {{ .Values.plugins.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.plugins.resources | nindent 12 }}
+          volumeMounts:
+            - name: connector-plugins
+              mountPath: /plugins
+        - name: validate-connector-plugins
+          image: "{{ .Values.core.image.repository }}:{{ .Values.core.image.tag }}"
+          imagePullPolicy: {{ .Values.core.image.pullPolicy }}
+          command: ["umbod", "connectors", "validate", "--plugin-path", "/plugins"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            {{- toYaml .Values.plugins.resources | nindent 12 }}
+          volumeMounts:
+            - name: connector-plugins
+              mountPath: /plugins
+              readOnly: true
+      {{- end }}
+      containers:
+        {{- range $name := list "api" "mcp" }}
+        {{- $container := index $.Values.core $name }}
+        - name: {{ $name }}
+          image: "{{ $.Values.core.image.repository }}:{{ $.Values.core.image.tag }}"
+          imagePullPolicy: {{ $.Values.core.image.pullPolicy }}
+          command: ["umbod", "{{ $name }}", "serve"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          ports:
+            - name: http-{{ $name }}
+              containerPort: {{ $container.port }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ if eq $name "api" }}8001{{ else }}8012{{ end }}
+              protocol: TCP
+          env:
+            {{- if $.Values.plugins.image.repository }}
+            - name: PYTHONPATH
+              value: /plugins
+            {{- end }}
+            - name: UMBOD_PROFILE
+              value: {{ $.Values.config.profile | quote }}
+            - name: UMBOD_AUTH
+              value: {{ $.Values.config.authentication.mode | quote }}
+            - name: UMBOD_LOG_LEVEL
+              value: {{ $.Values.config.logLevel | quote }}
+            - name: UMBOD_PUBLIC_SITE_ORIGIN
+              value: {{ $.Values.config.publicOrigins.site | quote }}
+            - name: UMBOD_PUBLIC_API_ORIGIN
+              value: {{ $.Values.config.publicOrigins.api | quote }}
+            - name: UMBOD_PUBLIC_MCP_ORIGIN
+              value: {{ $.Values.config.publicOrigins.mcp | quote }}
+            - name: UMBOD_FEATURE_MCP_ADMINISTRATOR_ENABLED
+              value: {{ $.Values.config.features.mcp.administratorEnabled | quote }}
+            - name: UMBOD_INTERNAL_API_ORIGIN
+              value: http://127.0.0.1:{{ $.Values.services.api.port }}
+            - name: UMBOD_DATA_DIR
+              value: /app/data
+            - name: UMBOD_CONNECTOR_STORE
+              value: sqlite
+            - name: UMBOD_MCP_MESSAGING_TRANSPORT
+              value: sql
+            - name: UMBOD_ADMIN_GROUP
+              value: {{ $.Values.config.authorization.adminGroup | quote }}
+            - name: UMBOD_ADMIN_MEMBERSHIP_CLAIM
+              value: {{ $.Values.config.authorization.adminMembershipClaim | quote }}
+            - name: UMBOD_MCP_PERMISSION_CLAIM
+              value: {{ $.Values.config.authorization.mcpPermissionClaim | quote }}
+            - name: UMBOD_ADMIN_JWT_HEADER
+              value: {{ $.Values.config.authorization.adminJwtHeader | quote }}
+            - name: UMBOD_OIDC_DOMAIN
+              value: {{ $.Values.config.authentication.oidc.domain | quote }}
+            - name: UMBOD_OIDC_CLIENT_ID
+              value: {{ $.Values.config.authentication.oidc.clientId | quote }}
+            - name: UMBOD_OIDC_AUDIENCE
+              value: {{ $.Values.config.authentication.oidc.audience | quote }}
+            - name: UMBOD_OIDC_REQUIRED_SCOPES
+              value: {{ $.Values.config.authentication.oidc.requiredScopes | quote }}
+            - name: UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH
+              value: {{ $.Values.plugins.deploymentConfigurationPath | quote }}
+            {{- if eq $name "api" }}
+            - name: UMBOD_REST_METRICS_PORT
+              value: "8001"
+            {{- else }}
+            - name: UMBOD_MCP_TOOL_EXPOSURE
+              value: codemode
+            - name: UMBOD_MCP_METRICS_PORT
+              value: "8012"
+            - name: UMBOD_MCP_STATELESS_HTTP
+              value: "true"
+            - name: UMBOD_MCP_AUTH_DEBUG_ENABLED
+              value: "false"
+            {{- end }}
+            {{- range $key, $value := $container.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- with $.Values.existingSecret }}
+          envFrom:
+            - secretRef:
+                name: {{ . }}
+          {{- end }}
+          startupProbe:
+            httpGet:
+              path: /system/health
+              port: http-{{ $name }}
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /system/health
+              port: http-{{ $name }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /system/health
+              port: http-{{ $name }}
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 4
+          resources:
+            {{- toYaml $container.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: connector-availability
+              mountPath: {{ $.Values.plugins.deploymentConfigurationPath | quote }}
+              subPath: connector-deployment-availability.json
+              readOnly: true
+            {{- if $.Values.plugins.image.repository }}
+            - name: connector-plugins
+              mountPath: /plugins
+              readOnly: true
+            {{- end }}
+        {{- end }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "umbod.claimName" . }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: connector-availability
+          configMap:
+            name: {{ include "umbod.fullname" . }}-connector-availability
+        {{- if .Values.plugins.image.repository }}
+        - name: connector-plugins
+          emptyDir: {}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

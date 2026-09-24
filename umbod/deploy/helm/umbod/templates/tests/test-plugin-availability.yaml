@@ -1,0 +1,40 @@
+{{- if .Values.plugins.availableConnectorIds }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "umbod.fullname" . }}-test-plugin-availability"
+  labels:
+    {{- include "umbod.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: plugin-availability
+      image: curlimages/curl:8.12.1
+      command: ["/bin/sh", "-ec"]
+      args:
+        - |
+          catalog="$(curl --fail --silent --show-error "http://{{ include "umbod.fullname" . }}-api:{{ .Values.services.api.port }}/admin/connectors/catalog")"
+          echo "$catalog" | grep -q '^{"connectors":\['
+          {{- range .Values.plugins.availableConnectorIds }}
+          echo "$catalog" | grep -q '"id":"{{ . }}"'
+          {{- end }}
+          connector_count="$(echo "$catalog" | grep -o '"id":' | wc -l | tr -d ' ')"
+          test "$connector_count" -eq {{ len .Values.plugins.availableConnectorIds }}
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 32Mi
+{{- end }}

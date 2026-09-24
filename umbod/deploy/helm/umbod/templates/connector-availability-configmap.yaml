@@ -1,0 +1,12 @@
+{{- $connectors := list -}}
+{{- range .Values.plugins.availableConnectorIds -}}
+{{- $connectors = append $connectors (dict "id" .) -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "umbod.fullname" . }}-connector-availability
+  labels:
+    {{- include "umbod.labels" . | nindent 4 }}
+data:
+  connector-deployment-availability.json: {{ dict "connectors" $connectors | toJson | quote }}

@@ -1,0 +1,127 @@
+# Umbod's SQLite storage is for development and evaluation only. It is not a production database architecture.
+nameOverride: ""
+fullnameOverride: ""
+imagePullSecrets: []
+
+serviceAccount:
+  create: true
+  name: ""
+  automountServiceAccountToken: false
+
+existingSecret: ""
+
+config:
+  profile: production
+  logLevel: info
+  authentication:
+    mode: auth0
+    oidc:
+      domain: auth.example.invalid
+      clientId: umbod-example
+      audience: https://umbod.example.invalid
+      requiredScopes: openid,email,profile,groups
+  authorization:
+    adminGroup: admin
+    adminMembershipClaim: https://umbod.example.invalid/claims/groups
+    mcpPermissionClaim: https://umbod.example.invalid/claims/groups
+    adminJwtHeader: Authorization
+  publicOrigins:
+    site: https://umbod.example.invalid
+    api: https://umbod.example.invalid
+    mcp: https://mcp.umbod.example.invalid
+  features:
+    mcp:
+      administratorEnabled: true
+
+plugins:
+  deploymentConfigurationPath: /app/config/connector-deployment-availability.json
+  availableConnectorIds: []
+  image:
+    repository: ""
+    tag: ""
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+core:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/computerlovetech/umbod
+    tag: "0.0.1-beta.2"
+    pullPolicy: IfNotPresent
+  api:
+    port: 8000
+    env: {}
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+  mcp:
+    port: 8011
+    env: {}
+    resources:
+      requests:
+        cpu: 100m
+        memory: 128Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+frontend:
+  bodySizeLimit: 12M
+  privateAuthTokenHeader: Authorization
+  replicaCount: 1
+  image:
+    repository: ghcr.io/computerlovetech/umbod-frontend
+    tag: "0.0.1-beta.2"
+    pullPolicy: IfNotPresent
+  port: 3000
+  env: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+persistence:
+  enabled: false
+  existingClaim: ""
+  storageClass: ""
+  accessModes:
+    - ReadWriteOnce
+  size: 1Gi
+
+services:
+  api:
+    port: 8000
+  mcp:
+    port: 8011
+  frontend:
+    port: 3000
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: ""
+  tls: []
+  paths:
+    frontend: /
+    api: /api
+    mcp: /mcp
+
+podAnnotations: {}
+podLabels: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}

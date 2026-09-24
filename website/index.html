@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Umbod gives platform teams one place to connect internal APIs and MCP servers, manage group access, and use compatible agents. Self-host on Kubernetes. Try the beta locally.">
+  <link rel="icon" type="image/svg+xml" href="/umbod-logo.svg">
+  <link rel="stylesheet" href="/styles.css">
+  <title>Umbod — Agent access on your own infrastructure</title>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header>
+    <nav class="wrap" aria-label="Main navigation">
+      <a class="brand" href="/" aria-label="Umbod home"><img class="brand-mark" src="/umbod-logo.svg" width="40" height="40" alt=""><span class="brand-wordmark">umbod<span>.ai</span></span></a>
+      <div class="nav-links">
+        <a href="#how-it-works">How it works</a>
+        <a href="/docs/">Docs</a>
+      </div>
+      <div class="nav-actions">
+        <div class="community-nav" role="group" aria-label="Umbod community">
+          <a class="icon-link" href="https://discord.gg/mjrbtBYeS" target="_blank" rel="noreferrer" aria-label="Join Umbod on Discord" title="Discord">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.317 4.369A19.8 19.8 0 0 0 15.886 3a13.8 13.8 0 0 0-.568 1.17 18.3 18.3 0 0 0-6.634 0A12.6 12.6 0 0 0 8.116 3a19.7 19.7 0 0 0-4.434 1.37C.88 8.53.12 12.58.5 16.57A17.8 17.8 0 0 0 5.93 19.3a13.4 13.4 0 0 0 1.3-1.78 11.5 11.5 0 0 1-2.05-.98l.5-.39c3.95 1.82 8.24 1.82 12.14 0l.51.39c-.65.38-1.34.71-2.06.98.38.63.82 1.23 1.3 1.78A17.7 17.7 0 0 0 23 16.57c.45-4.63-.78-8.64-2.68-12.2ZM8.02 14.14c-1.19 0-2.16-1.1-2.16-2.45s.95-2.45 2.16-2.45c1.22 0 2.18 1.1 2.16 2.45 0 1.35-.95 2.45-2.16 2.45Zm7.97 0c-1.19 0-2.16-1.1-2.16-2.45s.95-2.45 2.16-2.45c1.22 0 2.18 1.1 2.16 2.45 0 1.35-.94 2.45-2.16 2.45Z"/></svg>
+          </a>
+          <a class="icon-link" href="https://x.com/umbodai" target="_blank" rel="noreferrer" aria-label="Follow Umbod on X" title="X">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.657l-5.214-6.817-5.967 6.817H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"/></svg>
+          </a>
+          <a class="icon-link" href="https://github.com/computerlovetech/umbod" target="_blank" rel="noreferrer" aria-label="View Umbod on GitHub" title="GitHub">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.68.08-.68 1.13.08 1.72 1.16 1.72 1.16 1 1.72 2.63 1.22 3.27.93.1-.73.39-1.22.71-1.5-2.5-.29-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.29-.5-1.43.11-2.98 0 0 .95-.3 3.09 1.15a10.77 10.77 0 0 1 5.63 0c2.14-1.45 3.08-1.15 3.08-1.15.61 1.55.23 2.69.11 2.98.72.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.27-5.14 5.55.4.35.76 1.03.76 2.08v3.1c0 .3.2.65.77.54A11.25 11.25 0 0 0 12 .75Z"/></svg>
+          </a>
+        </div>
+        <a class="button small" href="#how">Try locally <span aria-hidden="true">↗</span></a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="status-dot" aria-hidden="true"></span>MCP infrastructure for platform teams</p>
+        <h1 id="hero-title">Manage agent access.<br><span>On your own infrastructure.</span></h1>
+        <p class="hero-description">Connect internal APIs and MCP servers, manage access by group, and run Umbod on your Kubernetes cluster. Keep your connectors and access rules independent of your choice of agent vendor.</p>
+        <div class="actions">
+          <a class="button" href="#how">Try locally <span aria-hidden="true">↓</span></a>
+          <a class="text-link" href="#feedback">Share feedback <span aria-hidden="true">↗</span></a>
+        </div>
+        <p class="hero-note">Early beta · Install with Helm · No Umbod account required</p>
+      </div>
+
+      <figure class="architecture" aria-labelledby="architecture-caption">
+        <div class="diagram-heading"><span class="mono">01 / CONNECTION MODEL</span><span class="diagram-dot" aria-hidden="true"></span></div>
+        <div class="agent-layer">
+          <span class="diagram-label">Your choice of agent</span>
+          <div class="agent-list"><span>Claude Code</span><span>Codex</span><span>Cursor</span><span>Hermes</span></div>
+        </div>
+        <div class="flow-line" aria-hidden="true"><span>MCP</span></div>
+        <div class="cluster">
+          <span class="cluster-label"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 9 5v10l-9 5-9-5V7Z M3 7l9 5 9-5 M12 12v10"/></svg>Your Kubernetes cluster</span>
+          <div class="umbod-node">
+            <span class="node-title"><img class="node-mark" src="/umbod-logo.svg" width="44" height="44" alt="">umbod</span>
+            <span class="node-description">Connectors &amp; group permissions</span>
+          </div>
+        </div>
+        <div class="flow-line" aria-hidden="true"></div>
+        <div class="tool-layer"><span>Internal APIs</span><span>MCP servers</span></div>
+        <figcaption id="architecture-caption">Keep tool access in your infrastructure.<br>Let teams choose compatible agents.</figcaption>
+      </figure>
+    </section>
+
+    <div class="principles wrap" aria-label="Deployment principles">
+      <span>Self-hosted</span><span>MCP-compatible</span><span>Independent of your agent vendor</span>
+      <a href="/docs/operations/service-topology/">Explore the architecture <span aria-hidden="true">↗</span></a>
+    </div>
+
+    <section class="product dark" id="how-it-works" aria-labelledby="product-title">
+      <div class="wrap">
+        <div class="section-head">
+          <div><p class="eyebrow">Why Umbod</p><h2 id="product-title">One place to manage<br>who can use which tools.</h2></div>
+          <p class="section-lead">Direct connections work well to get started. As more teams and agents need access, connector configuration and permissions become harder to keep consistent. Umbod gives platform teams a shared place to manage them.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature"><span class="number">01 / CONNECT</span><h3>Configure connectors once.</h3><p>Connect an internal API through OpenAPI, or add an MCP server. Configure and publish its tools from the administration interface.</p></article>
+          <article class="feature"><span class="number">02 / CONTROL</span><h3>Grant access by group.</h3><p>Choose which tools each group can use. Manage those permissions centrally as teams and their needs change.</p></article>
+          <article class="feature"><span class="number">03 / KEEP YOUR OPTIONS</span><h3>Change agents. Keep your setup.</h3><p>Your connectors and group permissions live in Umbod. Teams can switch compatible MCP clients without moving that configuration into another agent vendor’s platform.</p></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="install-guide" id="how" aria-labelledby="install-title">
+      <div class="wrap">
+        <div class="section-head">
+          <div><p class="eyebrow">Try it yourself</p><h2 id="install-title">Start with a<br>local cluster.</h2></div>
+          <div><p class="section-lead">Use kind to try the Kubernetes setup on your machine. The commands below install the beta and open the administration interface.</p><p class="requirements">You’ll need Docker, kind, kubectl, and Helm 3.</p></div>
+        </div>
+
+        <ol class="install-steps">
+          <li>
+            <div class="step-heading"><span class="number" aria-hidden="true">01</span><h3>Create a cluster</h3></div>
+            <div class="code-block"><div class="code-heading"><span>Terminal</span><button class="copy-btn" type="button" data-copy-target="kind-command" aria-label="Copy cluster command">Copy</button></div><pre tabindex="0" aria-label="Create a local kind cluster"><code id="kind-command">kind create cluster --name umbod --wait 2m</code></pre></div>
+          </li>
+          <li>
+            <div class="step-heading"><span class="number" aria-hidden="true">02</span><h3>Install Umbod</h3><span class="version">0.0.1-beta.2</span></div>
+            <div class="code-block"><div class="code-heading"><span>Terminal</span><button class="copy-btn" type="button" data-copy-target="install-command" aria-label="Copy Helm installation command">Copy</button></div><pre tabindex="0" aria-label="Install the Umbod Helm chart"><code id="install-command">helm upgrade --install umbod \
+  oci://ghcr.io/computerlovetech/charts/umbod \
+  --version 0.0.1-beta.2 \
+  --kube-context kind-umbod \
+  --set config.profile=local \
+  --set config.authentication.mode=dev \
+  --wait --timeout 5m</code></pre></div>
+          </li>
+          <li>
+            <div class="step-heading"><span class="number" aria-hidden="true">03</span><h3>Open the admin UI</h3></div>
+            <div class="code-block"><div class="code-heading"><span>Terminal</span><button class="copy-btn" type="button" data-copy-target="port-forward-command" aria-label="Copy port-forward command">Copy</button></div><pre tabindex="0" aria-label="Forward the Umbod frontend port"><code id="port-forward-command">kubectl --context kind-umbod port-forward \
+  service/umbod-frontend 3000:3000</code></pre></div>
+            <p class="step-note">Open <a href="http://localhost:3000" target="_blank" rel="noreferrer">localhost:3000</a>. Keep this terminal running while you use Umbod.</p>
+          </li>
+        </ol>
+        <p class="install-note">This local setup uses development authentication. For a shared cluster, follow the guide to configure identity, ingress, and storage.</p>
+        <div class="guide-links"><a class="text-link" href="/docs/getting-started/kubernetes-installation/">Full installation guide <span aria-hidden="true">↗</span></a><a class="text-link" href="/docs/reference/helm-values/">Helm values reference <span aria-hidden="true">↗</span></a></div>
+        <div class="next-step"><span class="number">NEXT</span><div><h3>Try a connector you would actually use.</h3><p>Configure a connector, publish its tools, and grant group access. Then connect an MCP client. Tell us where you get stuck.</p><a class="text-link" href="/docs/reference/endpoints-and-ports/">MCP endpoints and ports <span aria-hidden="true">↗</span></a></div></div>
+        <p class="sr-only" id="copy-status" role="status" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="project-status" aria-labelledby="status-title">
+      <div class="wrap status-grid">
+        <div><p class="eyebrow">Project status</p><h2 id="status-title">Early beta.<br>Useful feedback welcome.</h2></div>
+        <div class="status-details"><p>Today you can install the Helm chart, manage connectors, and configure group permissions. We’re looking for platform teams to try these workflows and help us understand what’s missing.</p><p>The current chart uses a single core replica backed by SQLite. It is an evaluation setup, with no high-availability database architecture yet.</p><a class="text-link" href="/docs/operations/service-topology/">Read the deployment details <span aria-hidden="true">↗</span></a></div>
+      </div>
+    </section>
+
+    <section class="feedback" id="feedback" aria-labelledby="feedback-title">
+      <div class="wrap feedback-grid">
+        <div><p class="eyebrow">Built at Computerlove</p><h2 id="feedback-title">What would make this<br>useful for your team?</h2></div>
+        <div><p>We’d like to hear what works, what is confusing, and which systems your agents need to reach. If you’d like to work on an integration or try Umbod with us, we’re up for that too.</p><div class="actions"><a class="button" href="mailto:hello@computerlove.tech?subject=Umbod%20feedback">Email us <span aria-hidden="true">↗</span></a><a class="text-link" href="https://discord.gg/mjrbtBYeS" target="_blank" rel="noreferrer">Join the Discord <span aria-hidden="true">↗</span></a></div><p class="contact-note">hello@computerlove.tech · <a href="https://computerlove.tech/#contact">Meet Computerlove</a></p></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-inner"><a class="brand" href="/" aria-label="Umbod home"><img class="brand-mark" src="/umbod-logo.svg" width="40" height="40" alt=""><span class="brand-wordmark">umbod<span>.ai</span></span></a><p>Agent access on your own infrastructure.</p><nav class="footer-links" aria-label="Footer navigation"><a href="/docs/">Docs</a><a href="https://discord.gg/mjrbtBYeS" target="_blank" rel="noreferrer">Discord</a><a href="https://x.com/umbodai" target="_blank" rel="noreferrer">X</a><a href="https://computerlove.tech">computerlove.tech <span aria-hidden="true">↗</span></a></nav></div>
+  </footer>
+
+  <script type="module">
+    const status = document.getElementById('copy-status');
+    for (const button of document.querySelectorAll('[data-copy-target]')) {
+      let resetTimer;
+      button.addEventListener('click', async () => {
+        const target = document.getElementById(button.dataset.copyTarget);
+        if (!target) return;
+        clearTimeout(resetTimer);
+        try {
+          await navigator.clipboard.writeText(target.textContent);
+          button.textContent = 'Copied';
+          status.textContent = 'Command copied to clipboard.';
+        } catch {
+          button.textContent = 'Select text';
+          status.textContent = 'Could not access the clipboard. Select and copy the command below.';
+          const selection = window.getSelection();
+          const range = document.createRange();
+          range.selectNodeContents(target);
+          selection.removeAllRanges();
+          selection.addRange(range);
+          target.closest('pre').focus();
+        }
+        resetTimer = setTimeout(() => { button.textContent = 'Copy'; }, 2400);
+      });
+    }
+  </script>
+</body>
+</html>

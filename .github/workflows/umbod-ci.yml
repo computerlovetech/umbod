@@ -1,0 +1,256 @@
+name: umbod CI
+
+run-name: ${{ github.workflow }} on ${{ github.ref_name }} @ ${{ github.sha }}
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'umbod/**'
+      - 'packages/umbod-sdk/**'
+      - '.github/workflows/umbod-ci.yml'
+      - '.github/workflows/umbod-release.yml'
+      - '.github/actions/docker-build/action.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'umbod/**'
+      - 'packages/umbod-sdk/**'
+      - '.github/workflows/umbod-ci.yml'
+      - '.github/workflows/umbod-release.yml'
+      - '.github/actions/docker-build/action.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changes:
+    name: Detect Kind-relevant changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      kind: ${{ steps.filter.outputs.kind }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            kind:
+              - '.github/workflows/umbod-ci.yml'
+              - '.github/actions/docker-build/action.yml'
+              - '.dockerignore'
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'umbod/api/Dockerfile'
+              - 'umbod/api/pyproject.toml'
+              - 'umbod/api/uv.lock'
+              - 'umbod/api/README.md'
+              - 'umbod/api/src/**'
+              - 'umbod/frontend/**'
+              - 'umbod/deploy/helm/umbod/**'
+              - 'packages/umbod-sdk/**'
+        
+  docs:
+    name: umbod Documentation Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: umbod
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: umbod/uv.lock
+
+      - name: Install documentation dependencies
+        run: uv sync --group dev --locked
+
+      - name: Build documentation
+        run: uv run mkdocs build --strict
+
+  backend-tests:
+    name: umbod Backend Tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: umbod/api
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: umbod/api/uv.lock
+
+      - name: Install backend dependencies
+        run: uv sync --locked
+
+      - name: Run complete backend test suite
+        run: uv run --locked pytest tests
+
+      - name: Test release version resolution
+        env:
+          PYTHONPATH: ..
+        run: uv run --locked pytest ../scripts/tests/test_release_versions.py
+
+  core:
+    name: umbod Core Docker Build
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Test deployment authentication contract
+        working-directory: umbod/api
+        run: uv run pytest tests/deployment/test_proxy_compose.py -q
+
+      - name: Build image
+        uses: ./.github/actions/docker-build
+        with:
+          context: .
+          file: umbod/api/Dockerfile
+          cache-scope: umbod
+          tags: ghcr.io/computerlovetech/umbod:ci
+
+  connector-builder:
+    name: umbod Connector Builder Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Build image
+        run: |
+          docker build \
+            --build-arg UMBOD_RELEASE=ci \
+            --file packages/umbod-sdk/Dockerfile \
+            --tag ghcr.io/computerlovetech/umbod-connector-builder:ci \
+            .
+
+      - name: Verify SDK and build tools
+        run: |
+          docker run --rm ghcr.io/computerlovetech/umbod-connector-builder:ci \
+            python -c 'import umbod_sdk.connectors; import os; assert os.environ["UMBOD_RELEASE"] == "ci"'
+          docker run --rm ghcr.io/computerlovetech/umbod-connector-builder:ci uv --version
+
+  frontend:
+    name: umbod Frontend Docker Build
+    needs: changes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install frontend dependencies
+        working-directory: umbod/frontend
+        run: bun install --frozen-lockfile
+
+      - name: Run complete frontend test suite
+        working-directory: umbod/frontend
+        run: bun run test
+
+      - name: Check frontend
+        working-directory: umbod/frontend
+        run: bun run check
+
+      - name: Build image
+        uses: ./.github/actions/docker-build
+        with:
+          context: umbod/frontend
+          cache-scope: umbod-frontend
+          tags: ghcr.io/computerlovetech/umbod-frontend:ci
+
+  helm:
+    name: umbod Helm Chart
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: umbod
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v3.17.3
+
+      - name: Lint chart
+        run: helm lint --strict deploy/helm/umbod -f deploy/helm/umbod/ci/ci-values.yaml
+
+      - name: Render chart
+        run: helm template umbod deploy/helm/umbod -f deploy/helm/umbod/ci/ci-values.yaml > rendered.yaml
+
+      - name: Validate rendered architecture
+        run: python3 deploy/helm/umbod/scripts/validate-rendered.py rendered.yaml
+
+      - name: Verify schema rejects unsupported core replicas
+        run: |
+          if helm template umbod deploy/helm/umbod --set core.replicaCount=2 > /dev/null 2> schema-error.txt; then
+            echo "Schema accepted unsupported core replica count"
+            exit 1
+          fi
+          grep -q "core.replicaCount" schema-error.txt
+
+      - name: Package chart
+        run: helm package deploy/helm/umbod --destination chart-package
+
+  helm-kubernetes-schema:
+    name: umbod Helm Chart (Kubernetes ${{ matrix.kubernetes-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kubernetes-version:
+          - '1.25.0'
+          - '1.32.0'
+          - '1.33.0'
+          - '1.34.0'
+    defaults:
+      run:
+        working-directory: umbod
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v3.17.3
+
+      - name: Render chart
+        run: helm template umbod deploy/helm/umbod -f deploy/helm/umbod/ci/ci-values.yaml > rendered.yaml
+
+      - name: Validate Kubernetes schemas
+        run: >-
+          docker run --rm -i ghcr.io/yannh/kubeconform:v0.6.7
+          -kubernetes-version ${{ matrix.kubernetes-version }}
+          -strict
+          -summary
+          < rendered.yaml
+
+  ci-complete:
+    name: umbod CI
+    needs: [changes, docs, backend-tests, core, connector-builder, frontend, helm, helm-kubernetes-schema]
+    if: always()
+    runs-on: ubuntu-latest
+    environment: umbod-ci
+    steps:
+      - name: Fail if any required job failed
+        run: |
+          if [ "${{ needs.changes.result }}" != "success" ] || \
+             [ "${{ needs.docs.result }}" != "success" ] || \
+             [ "${{ needs.backend-tests.result }}" != "success" ] || \
+             [ "${{ needs.core.result }}" != "success" ] || \
+             [ "${{ needs.connector-builder.result }}" != "success" ] || \
+             [ "${{ needs.frontend.result }}" != "success" ] || \
+             [ "${{ needs.helm.result }}" != "success" ] || \
+             [ "${{ needs.helm-kubernetes-schema.result }}" != "success" ]; then
+            echo "One or more CI jobs failed"
+            exit 1
+          fi

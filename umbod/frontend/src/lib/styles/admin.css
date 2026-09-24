@@ -1,0 +1,168 @@
+:root {
+  --admin-ink: #37352f;
+  --admin-muted: #787774;
+  --admin-canvas: #fffdf8;
+  --admin-sidebar: #f7f6f3;
+  --admin-panel: #ffffff;
+  --admin-soft: #f7f6f3;
+  --admin-border: #e9e9e7;
+  --admin-border-strong: #d9d9d6;
+  --admin-accent: #93c5fd;
+  --admin-accent-strong: #2563eb;
+  --admin-accent-soft: rgb(147 197 253 / 14%);
+  --admin-navy: #111827;
+  --admin-slate: #cbd5e1;
+  --admin-success-bg: #f1faf3;
+  --admin-success-border: #cce9d2;
+  --admin-success-text: #2f6b3f;
+  --admin-danger-bg: #fff6f6;
+  --admin-danger-border: #f0c7c7;
+  --admin-danger-text: #8f3232;
+  --admin-warning-bg: #fbf3db;
+  --admin-warning-border: #ead9a9;
+  --admin-warning-text: #7a5d16;
+}
+
+.admin-page {
+  color: var(--admin-ink);
+}
+
+.admin-back-link {
+  border-radius: 6px;
+  color: var(--admin-muted);
+  display: inline-flex;
+  font-size: 14px;
+  line-height: 1.4;
+  margin-bottom: 22px;
+  text-decoration: none;
+}
+
+.admin-back-link:hover {
+  color: var(--admin-ink);
+  text-decoration: underline;
+  text-decoration-color: var(--admin-accent-strong);
+  text-underline-offset: 3px;
+}
+
+.admin-eyebrow {
+  color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  margin: 0 0 10px;
+  text-transform: uppercase;
+}
+
+.admin-title {
+  color: var(--admin-ink);
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin: 0;
+}
+
+.admin-lede {
+  color: var(--admin-muted);
+  font-size: 15px;
+  line-height: 1.6;
+  margin: 10px 0 0;
+  max-width: 42rem;
+}
+
+.connector-page-header {
+  margin-bottom: 32px;
+}
+
+.connector-page-header .admin-lede {
+  min-height: 3.2em;
+}
+
+.connector-page-heading {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+}
+
+.admin-panel,
+.admin-message {
+  background: var(--admin-panel);
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  box-shadow: 0 1px 2px rgb(15 15 15 / 3%);
+}
+
+.admin-panel {
+  margin-top: 24px;
+  padding: 18px;
+}
+
+.admin-panel-accent {
+  border-top-color: var(--admin-accent);
+}
+
+.admin-message {
+  color: var(--admin-ink);
+  font-size: 14px;
+  line-height: 1.5;
+  margin-top: 24px;
+  max-width: 42rem;
+  padding: 14px 16px;
+}
+
+.admin-message-success {
+  background: var(--admin-success-bg);
+  border-color: var(--admin-success-border);
+  color: var(--admin-success-text);
+}
+
+.admin-message-error {
+  background: var(--admin-danger-bg);
+  border-color: var(--admin-danger-border);
+  color: var(--admin-danger-text);
+}
+
+.admin-button {
+  background: var(--admin-ink);
+  border: 1px solid var(--admin-ink);
+  border-radius: 8px;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  padding: 8px 12px;
+}
+
+.admin-button:hover {
+  background: var(--admin-navy);
+  border-color: var(--admin-navy);
+}
+
+.admin-button:disabled {
+  background: var(--admin-border);
+  border-color: #e3e2df;
+  color: var(--admin-muted);
+  cursor: not-allowed;
+}
+
+.admin-card-link {
+  align-items: center;
+  border: 1px solid var(--admin-border);
+  border-radius: 10px;
+  color: var(--admin-ink);
+  display: flex;
+  font-size: 14px;
+  font-weight: 600;
+  justify-content: space-between;
+  line-height: 1.4;
+  padding: 14px 16px;
+  text-decoration: none;
+}
+
+.admin-card-link:hover {
+  background: linear-gradient(135deg, var(--admin-accent-soft), var(--admin-soft) 58%);
+  border-color: var(--admin-accent);
+}

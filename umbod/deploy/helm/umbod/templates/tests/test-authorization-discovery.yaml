@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: "{{ include "umbod.fullname" . }}-test-authorization-discovery"
+  labels:
+    {{- include "umbod.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+spec:
+  restartPolicy: Never
+  automountServiceAccountToken: false
+  securityContext:
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: authorization-discovery
+      image: curlimages/curl:8.12.1
+      command: ["/bin/sh", "-ec"]
+      args:
+        - |
+          protected_resource="$(curl --fail --silent --show-error "http://{{ include "umbod.fullname" . }}-mcp:{{ .Values.services.mcp.port }}/.well-known/oauth-protected-resource/mcp")"
+          echo "$protected_resource" | grep -q '"resource":"{{ .Values.config.publicOrigins.mcp }}/mcp"'
+          echo "$protected_resource" | grep -q '"authorization_servers":\['
+          authorization_server="$(curl --fail --silent --show-error "http://{{ include "umbod.fullname" . }}-mcp:{{ .Values.services.mcp.port }}/.well-known/oauth-authorization-server")"
+          echo "$authorization_server" | grep -q '"issuer":'
+          echo "$authorization_server" | grep -q '"authorization_endpoint":'
+          echo "$authorization_server" | grep -q '"token_endpoint":'
+          challenge="$(curl --silent --show-error --output /dev/null --dump-header - --request POST "http://{{ include "umbod.fullname" . }}-mcp:{{ .Values.services.mcp.port }}/mcp")"
+          echo "$challenge" | grep -q '401'
+          echo "$challenge" | grep -qi 'www-authenticate:.*resource_metadata="{{ .Values.config.publicOrigins.mcp }}/.well-known/oauth-protected-resource/mcp"'
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 32Mi

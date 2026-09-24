@@ -1,0 +1,375 @@
+name: umbod Release
+
+run-name: umbod Release on main @ ${{ github.sha }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      sdk:
+        description: Publish the Umbod Python SDK
+        type: boolean
+        default: false
+      sdk_increment:
+        description: SDK version increment
+        type: choice
+        options: [beta, patch, minor, major]
+        default: patch
+      images:
+        description: Publish Umbod builder, core and frontend images
+        type: boolean
+        default: false
+      images_increment:
+        description: Image version increment
+        type: choice
+        options: [beta, patch, minor, major]
+        default: patch
+      chart:
+        description: Publish the Umbod Helm chart
+        type: boolean
+        default: false
+      chart_increment:
+        description: Chart version increment
+        type: choice
+        options: [beta, patch, minor, major]
+        default: patch
+
+concurrency:
+  group: umbod-release
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  CHART_DIRECTORY: umbod/deploy/helm/umbod
+  CHART_REGISTRY: ghcr.io/computerlovetech/charts
+  CONNECTOR_BUILDER_IMAGE: ghcr.io/computerlovetech/umbod-connector-builder
+  CORE_IMAGE: ghcr.io/computerlovetech/umbod
+  FRONTEND_IMAGE: ghcr.io/computerlovetech/umbod-frontend
+  SDK_DIRECTORY: packages/umbod-sdk
+
+jobs:
+  plan:
+    name: Plan and preflight release
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    outputs:
+      sdk_version: ${{ steps.resolve.outputs.sdk_version }}
+      image_version: ${{ steps.resolve.outputs.image_version }}
+      chart_version: ${{ steps.resolve.outputs.chart_version }}
+      chart_image_version: ${{ steps.resolve.outputs.chart_image_version }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v3.17.3
+
+      - name: Validate invocation and CI provenance
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          [[ "${GITHUB_REF}" == "refs/heads/main" ]] || { echo "Releases must run from main" >&2; exit 1; }
+          if [[ '${{ inputs.sdk }}' != 'true' && '${{ inputs.images }}' != 'true' && '${{ inputs.chart }}' != 'true' ]]; then
+            echo "Select at least one release group" >&2
+            exit 1
+          fi
+          count="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/workflows/umbod-ci.yml/runs?head_sha=${GITHUB_SHA}&branch=main&status=success&per_page=100" --jq '[.workflow_runs[] | select(.name == "umbod CI" and .head_sha == "'"${GITHUB_SHA}"'" and .head_branch == "main" and .event == "push")] | length' | awk '{ total += $1 } END { print total + 0 }')"
+          [[ "${count}" -gt 0 ]] || { echo "Exact main commit ${GITHUB_SHA} has no successful umbod CI push run" >&2; exit 1; }
+
+      - name: Log in to GHCR
+        if: ${{ inputs.images || inputs.chart }}
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve versions
+        id: resolve
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SDK_SELECTED: ${{ inputs.sdk }}
+          SDK_INCREMENT: ${{ inputs.sdk_increment }}
+          IMAGES_SELECTED: ${{ inputs.images }}
+          IMAGES_INCREMENT: ${{ inputs.images_increment }}
+          CHART_SELECTED: ${{ inputs.chart }}
+          CHART_INCREMENT: ${{ inputs.chart_increment }}
+        run: |
+          set -euo pipefail
+          resolver="umbod/scripts/release_versions.py"
+          chart_checked="$(python3 -c 'import pathlib, re; print(re.search(r"^version: (.+)$", pathlib.Path("umbod/deploy/helm/umbod/Chart.yaml").read_text(), re.M).group(1))')"
+          sdk_checked="$(python3 -c 'import pathlib, tomllib; print(tomllib.loads(pathlib.Path("packages/umbod-sdk/pyproject.toml").read_text())["project"]["version"])')"
+
+          package_tags() {
+            local package_name="$1"
+            local encoded response status body page count
+            encoded="$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "${package_name}")"
+            response="$(mktemp)"
+            page=1
+            while :; do
+              status="$(curl --fail-with-body --silent --show-error --location --output "${response}" --write-out '%{http_code}' -H "Authorization: Bearer ${GH_TOKEN}" -H 'Accept: application/vnd.github+json' "https://api.github.com/orgs/computerlovetech/packages/container/${encoded}/versions?per_page=100&page=${page}" || true)"
+              if [[ "${status}" == "404" && "${page}" == 1 ]]; then rm -f "${response}"; return 0; fi
+              [[ "${status}" == "200" ]] || { body="$(cat "${response}")"; rm -f "${response}"; echo "GHCR lookup failed for ${package_name}: HTTP ${status}: ${body}" >&2; return 1; }
+              jq -r '.[].metadata.container.tags[]?' "${response}"
+              count="$(jq length "${response}")"
+              [[ "${count}" -lt 100 ]] && break
+              page=$((page + 1))
+            done
+            rm -f "${response}"
+          }
+
+          core_tags=""
+          frontend_tags=""
+          builder_tags=""
+          if [[ "${IMAGES_SELECTED}" == true || "${CHART_SELECTED}" == true ]]; then
+            core_tags="$(package_tags umbod)"
+            frontend_tags="$(package_tags umbod-frontend)"
+            builder_tags="$(package_tags umbod-connector-builder)"
+          fi
+          latest_version() {
+            python3 -c 'import re, sys; sys.path.insert(0, "umbod/scripts"); from release_versions import ReleaseVersion; values=[x.strip() for x in sys.stdin if re.fullmatch(r"\d+\.\d+\.\d+(?:-beta\.\d+)?", x.strip())]; print(max(values, key=lambda value: (lambda parsed: (parsed.major, parsed.minor, parsed.patch, parsed.beta < 0, parsed.beta))(ReleaseVersion.parse(value))) if values else "")'
+          }
+          core_latest="$(printf '%s\n' "${core_tags}" | latest_version)"
+          frontend_latest="$(printf '%s\n' "${frontend_tags}" | latest_version)"
+          builder_latest="$(printf '%s\n' "${builder_tags}" | latest_version)"
+          if [[ "${IMAGES_SELECTED}" == true ]] && [[ "${core_latest}" != "${frontend_latest}" || "${core_latest}" != "${builder_latest}" ]]; then
+            echo "Image release versions disagree: core=${core_latest}, frontend=${frontend_latest}, builder=${builder_latest}" >&2
+            exit 1
+          fi
+          highest_common_images="$(comm -12 <(printf '%s\n' "${core_tags}" | sort -u) <(printf '%s\n' "${frontend_tags}" | sort -u) | comm -12 - <(printf '%s\n' "${builder_tags}" | sort -u) | latest_version)"
+          image_bootstrap=false
+          image_current="${highest_common_images}"
+          if [[ -z "${image_current}" ]]; then image_current="${chart_checked}"; image_bootstrap=true; fi
+          image_args=(--current "${image_current}" --increment "${IMAGES_INCREMENT}")
+          [[ "${image_bootstrap}" == true ]] && image_args+=(--bootstrap)
+          image_version="$(python3 "${resolver}" "${image_args[@]}")"
+
+          chart_tags=""
+          [[ "${CHART_SELECTED}" != true ]] || chart_tags="$(package_tags 'charts/umbod')"
+          chart_latest="$(printf '%s\n' "${chart_tags}" | latest_version)"
+          chart_args=(--current "${chart_latest:-${chart_checked}}" --increment "${CHART_INCREMENT}")
+          [[ -z "${chart_latest}" ]] && chart_args+=(--bootstrap)
+          chart_version="$(python3 "${resolver}" "${chart_args[@]}")"
+
+          sdk_version=""
+          if [[ "${SDK_SELECTED}" == true ]]; then
+            sdk_response="$(mktemp)"
+            sdk_status="$(curl --silent --show-error --location --output "${sdk_response}" --write-out '%{http_code}' https://pypi.org/pypi/umbod/json)"
+            sdk_args=(--increment "${SDK_INCREMENT}" --pep440)
+            if [[ "${sdk_status}" == "404" ]]; then
+              sdk_args+=(--current "${sdk_checked}" --bootstrap)
+            elif [[ "${sdk_status}" == "200" ]]; then
+              sdk_latest="$(jq -r '.releases | keys[]' "${sdk_response}" | python3 -c 'import re, sys; sys.path.insert(0, "umbod/scripts"); from release_versions import ReleaseVersion; values=[x.strip() for x in sys.stdin if re.fullmatch(r"\d+\.\d+\.\d+b\d+|\d+\.\d+\.\d+", x.strip())]; print(max(values, key=lambda value: (lambda parsed: (parsed.major, parsed.minor, parsed.patch, parsed.beta < 0, parsed.beta))(ReleaseVersion.parse(value))) if values else "")')"
+              [[ -n "${sdk_latest}" ]] || { echo "PyPI project has no supported releases" >&2; exit 1; }
+              sdk_args+=(--current "${sdk_latest}")
+            else
+              echo "PyPI lookup failed: HTTP ${sdk_status}: $(cat "${sdk_response}")" >&2
+              exit 1
+            fi
+            rm -f "${sdk_response}"
+            sdk_version="$(python3 "${resolver}" "${sdk_args[@]}")"
+          fi
+
+          chart_image_version="${image_version}"
+          if [[ "${IMAGES_SELECTED}" != true ]]; then
+            [[ -n "${highest_common_images}" ]] || { [[ "${CHART_SELECTED}" != true ]] || { echo "Chart-only release requires published core, frontend and builder images" >&2; exit 1; }; }
+            chart_image_version="${highest_common_images}"
+          fi
+          {
+            echo "sdk_version=${sdk_version}"
+            echo "image_version=${image_version}"
+            echo "chart_version=${chart_version}"
+            echo "chart_image_version=${chart_image_version}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Ensure selected versions are unpublished
+        shell: bash
+        env:
+          SDK_VERSION: ${{ steps.resolve.outputs.sdk_version }}
+          IMAGE_VERSION: ${{ steps.resolve.outputs.image_version }}
+          CHART_VERSION: ${{ steps.resolve.outputs.chart_version }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ '${{ inputs.sdk }}' == true ]]; then
+            sdk_status="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "https://pypi.org/pypi/umbod/${SDK_VERSION}/json")"
+            [[ "${sdk_status}" == "404" ]] || { [[ "${sdk_status}" != "200" ]] || echo "SDK ${SDK_VERSION} already exists" >&2; [[ "${sdk_status}" == "200" ]] || echo "PyPI preflight failed with HTTP ${sdk_status}" >&2; exit 1; }
+          fi
+          if [[ '${{ inputs.images }}' == true ]]; then
+            for image in "${CONNECTOR_BUILDER_IMAGE}" "${CORE_IMAGE}" "${FRONTEND_IMAGE}"; do
+              ! docker buildx imagetools inspect "${image}:${IMAGE_VERSION}" >/dev/null 2>&1 || { echo "${image}:${IMAGE_VERSION} already exists" >&2; exit 1; }
+            done
+          fi
+          if [[ '${{ inputs.chart }}' == true ]]; then
+            echo "${GHCR_TOKEN}" | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+            if helm show chart "oci://${CHART_REGISTRY}/umbod" --version "${CHART_VERSION}" >/dev/null 2>&1; then echo "Chart ${CHART_VERSION} already exists" >&2; exit 1; fi
+          fi
+
+  sdk-build:
+    name: Build SDK
+    if: ${{ inputs.sdk }}
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
+      - name: Build isolated SDK source
+        shell: bash
+        env:
+          VERSION: ${{ needs.plan.outputs.sdk_version }}
+        run: |
+          set -euo pipefail
+          cp -R "${SDK_DIRECTORY}" "${RUNNER_TEMP}/sdk"
+          cd "${RUNNER_TEMP}/sdk"
+          uv version --no-sync "${VERSION}"
+          uv build --no-sources --out-dir "${RUNNER_TEMP}/dist"
+          python3 - "${RUNNER_TEMP}/dist" "${VERSION}" <<'PY'
+          import pathlib
+          import sys
+          import tarfile
+          import zipfile
+          directory = pathlib.Path(sys.argv[1])
+          expected = f"Version: {sys.argv[2]}"
+          wheel = next(directory.glob("*.whl"))
+          archive = next(directory.glob("*.tar.gz"))
+          with zipfile.ZipFile(wheel) as contents:
+              metadata = next(name for name in contents.namelist() if name.endswith(".dist-info/METADATA"))
+              assert expected in contents.read(metadata).decode().splitlines()
+              assert "umbod_sdk/connectors/__init__.py" in contents.namelist()
+          with tarfile.open(archive, "r:gz") as contents:
+              metadata = next(member for member in contents if member.name.endswith("/PKG-INFO"))
+              assert expected in contents.extractfile(metadata).read().decode().splitlines()
+          PY
+      - uses: actions/upload-artifact@v6
+        with:
+          name: umbod-sdk-${{ needs.plan.outputs.sdk_version }}
+          path: ${{ runner.temp }}/dist/*
+          if-no-files-found: error
+
+  sdk-publish:
+    name: Publish SDK
+    if: ${{ inputs.sdk }}
+    needs: [plan, sdk-build]
+    runs-on: ubuntu-latest
+    environment: umbod-pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: umbod-sdk-${{ needs.plan.outputs.sdk_version }}
+          path: dist
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  images:
+    name: Publish ${{ matrix.name }} image
+    if: ${{ always() && inputs.images && needs.plan.result == 'success' && (needs.sdk-publish.result == 'success' || needs.sdk-publish.result == 'skipped') }}
+    needs: [plan, sdk-publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: connector-builder, image: ghcr.io/computerlovetech/umbod-connector-builder, context: ., file: packages/umbod-sdk/Dockerfile, cache: umbod-connector-builder-release}
+          - {name: core, image: ghcr.io/computerlovetech/umbod, context: ., file: umbod/api/Dockerfile, cache: umbod-release}
+          - {name: frontend, image: ghcr.io/computerlovetech/umbod-frontend, context: umbod/frontend, file: umbod/frontend/Dockerfile, cache: umbod-frontend-release}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v4
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v3
+        with: {registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}"}
+      - uses: docker/build-push-action@v7.1.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ matrix.image }}:${{ needs.plan.outputs.image_version }}
+          build-args: ${{ matrix.name == 'connector-builder' && format('UMBOD_RELEASE={0}', needs.plan.outputs.image_version) || '' }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ needs.plan.outputs.image_version }}
+          cache-from: type=gha,scope=${{ matrix.cache }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.cache }}
+      - name: Verify published manifest
+        run: docker buildx imagetools inspect "${{ matrix.image }}:${{ needs.plan.outputs.image_version }}"
+
+  chart:
+    name: Publish Helm chart
+    if: ${{ always() && inputs.chart && needs.plan.result == 'success' && (needs.images.result == 'success' || needs.images.result == 'skipped') }}
+    needs: [plan, images]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: azure/setup-helm@v4.3.0
+        with: {version: v3.17.3}
+      - name: Install kubeconform
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_url=https://github.com/yannh/kubeconform/releases/download/v0.6.7
+          curl --fail --location --silent --show-error -o kubeconform.tar.gz "${release_url}/kubeconform-linux-amd64.tar.gz"
+          curl --fail --location --silent --show-error -o checksums.txt "${release_url}/CHECKSUMS"
+          expected="$(grep 'kubeconform-linux-amd64.tar.gz$' checksums.txt | awk '{print $1}')"
+          echo "${expected}  kubeconform.tar.gz" | sha256sum --check
+          sudo tar -xzf kubeconform.tar.gz -C /usr/local/bin kubeconform
+      - name: Prepare and validate chart
+        shell: bash
+        env:
+          VERSION: ${{ needs.plan.outputs.chart_version }}
+          IMAGE_VERSION: ${{ needs.plan.outputs.chart_image_version }}
+        run: |
+          set -euo pipefail
+          cp -R "${CHART_DIRECTORY}" "${RUNNER_TEMP}/umbod"
+          python3 - "${RUNNER_TEMP}/umbod" "${VERSION}" "${IMAGE_VERSION}" <<'PY'
+          import pathlib
+          import re
+          import sys
+          chart = pathlib.Path(sys.argv[1])
+          version = sys.argv[2]
+          image_version = sys.argv[3]
+          chart_file = chart / "Chart.yaml"
+          text = chart_file.read_text()
+          text = re.sub(r"^version: .+$", f"version: {version}", text, flags=re.M)
+          text = re.sub(r'^appVersion: .+$', f'appVersion: "{image_version}"', text, flags=re.M)
+          chart_file.write_text(text)
+          values_file = chart / "values.yaml"
+          values = values_file.read_text()
+          values = re.sub(r'(repository: ghcr.io/computerlovetech/umbod\n\s+tag:) ".+"', rf'\1 "{image_version}"', values)
+          values = re.sub(r'(repository: ghcr.io/computerlovetech/umbod-frontend\n\s+tag:) ".+"', rf'\1 "{image_version}"', values)
+          values_file.write_text(values)
+          PY
+          "${RUNNER_TEMP}/umbod/scripts/validate.sh"
+          helm package "${RUNNER_TEMP}/umbod" --destination "${RUNNER_TEMP}"
+      - name: Publish and verify chart
+        shell: bash
+        env:
+          VERSION: ${{ needs.plan.outputs.chart_version }}
+          IMAGE_VERSION: ${{ needs.plan.outputs.chart_image_version }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          echo "${GHCR_TOKEN}" | helm registry login ghcr.io --username "${GITHUB_ACTOR}" --password-stdin
+          helm push "${RUNNER_TEMP}/umbod-${VERSION}.tgz" "oci://${CHART_REGISTRY}"
+          shown="$(helm show chart "oci://${CHART_REGISTRY}/umbod" --version "${VERSION}")"
+          grep -Fxq "version: ${VERSION}" <<< "${shown}"
+          rendered="$(helm template umbod "oci://${CHART_REGISTRY}/umbod" --version "${VERSION}")"
+          grep -Fq "image: \"${CORE_IMAGE}:${IMAGE_VERSION}\"" <<< "${rendered}"
+          grep -Fq "image: \"${FRONTEND_IMAGE}:${IMAGE_VERSION}\"" <<< "${rendered}"
