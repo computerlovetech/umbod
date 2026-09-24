@@ -9,10 +9,5 @@ frontend:
   image:
     tag: ci
 plugins:
-  availableConnectorIds:
-    - test
-    - rejseplanen
-  image:
-    repository: ghcr.io/computerlovetech/umbod-plugins
-    tag: ci
+  availableConnectorIds: []
 existingSecret: umbod-ci

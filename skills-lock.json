@@ -1,0 +1,85 @@
+{
+  "version": 1,
+  "skills": {
+    "agent-browser-ui-check": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "b07a58493e2c324126dc25930868453d7a0a3e94e4a8093eeac647228c10c967"
+    },
+    "api-client-architecture": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "6d2b7c41e54b542571bdb431278631011ddbba9fc23e6f765dae8defa3b8e78c"
+    },
+    "atdd-clarify-feature": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "9e3bb1834c92dc9aeca914922d938172ffbe0b33507526d4144806e6784c58d1"
+    },
+    "atdd-design-testable-interface": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "ce5831872706aada839cd5405cc03aaf8e3e4dedb0b8f8646d2cdeea902a3c5f"
+    },
+    "atdd-identify-scenarios": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "a73b3ad9bff22d04829e1ced6f24745b128f4f459166cc83d9180b3fbbd1ea36"
+    },
+    "atdd-implementation-loop": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "270739f6c829657c86f4f38b4e9197fcba0f2ffeb07d510a07239553eb9c77ee"
+    },
+    "atdd-write-acceptance-tests": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "e1e940178ed8b1226e6ea1cba7c30f7baaee3b4e600c6052fe22b4ed9a481539"
+    },
+    "choose-design-pattern": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "9f6d60c7bddc0b21e9360208917e2bf5b75722a9d8b0d46a23c65acf31492f60"
+    },
+    "create-state-class": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "5a13729dce9ccdce18afc86e832c128d155d836cdd51ccb769fb63e27e9cbdcc"
+    },
+    "effect-usage-guard": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "0e30fa0b795656dee2317ddafa06719332d214f6cc6529b0201b6646aab03a49"
+    },
+    "fastapi-dependency-lifetime": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "d46d429b6194a56276e22a8a003124758508f1f6bc39bf2b8480a5c923dd165a"
+    },
+    "frontend-package-manager": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "e82e77727079249fba9966e272990cde465ab45a569974022f0a34136274c675"
+    },
+    "ports-adapters-io": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "99d609ebecdcccdc218adef9a56c16a7c9f5f1d323a7a87a5cd4088859c6c6f7"
+    },
+    "python-domain-model-none-design": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "510812e8b4c14b94ded36115445fc6c7e216f0a870580f143ca6bfde9ca06e9b"
+    },
+    "python-test-practices": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "c30cb34295400af96d639441721d81422804c6989650d357598129db6f788d1b"
+    },
+    "svelte-docs-best-practices": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "7545fe39a3d7666f0deb87966369e6eb6a0d3b49f1e2f357e21e19625a864dcb"
+    }
+  }
+}

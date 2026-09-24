@@ -1255,12 +1255,14 @@ source = { editable = "../../packages/umbod-sdk" }
 dependencies = [
     { name = "jsonschema" },
     { name = "pydantic" },
+    { name = "typer" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "jsonschema", specifier = ">=4.26.0" },
     { name = "pydantic", specifier = ">=2.13.4" },
+    { name = "typer", specifier = ">=0.25.1" },
 ]
 
 [package.metadata.requires-dev]

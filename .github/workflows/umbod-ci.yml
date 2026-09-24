@@ -228,9 +228,32 @@ jobs:
           -summary
           < rendered.yaml
 
+  helm-kind-install:
+    name: umbod Helm Chart Kind Install
+    needs: [changes, core, frontend]
+    if: needs.changes.outputs.kind == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: umbod
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: azure/setup-helm@v4.3.0
+        with:
+          version: v3.17.3
+
+      - uses: helm/kind-action@v1.12.0
+        with:
+          install_only: true
+          version: v0.27.0
+
+      - name: Install and test chart in Kind
+        run: bash deploy/helm/umbod/scripts/kind-install-test.sh
+
   ci-complete:
     name: umbod CI
-    needs: [changes, docs, backend-tests, core, connector-builder, frontend, helm, helm-kubernetes-schema]
+    needs: [changes, docs, backend-tests, core, connector-builder, frontend, helm, helm-kubernetes-schema, helm-kind-install]
     if: always()
     runs-on: ubuntu-latest
     environment: umbod-ci
@@ -244,7 +267,8 @@ jobs:
              [ "${{ needs.connector-builder.result }}" != "success" ] || \
              [ "${{ needs.frontend.result }}" != "success" ] || \
              [ "${{ needs.helm.result }}" != "success" ] || \
-             [ "${{ needs.helm-kubernetes-schema.result }}" != "success" ]; then
+             [ "${{ needs.helm-kubernetes-schema.result }}" != "success" ] || \
+             { [ "${{ needs.changes.outputs.kind }}" = "true" ] && [ "${{ needs.helm-kind-install.result }}" != "success" ]; }; then
             echo "One or more CI jobs failed"
             exit 1
           fi

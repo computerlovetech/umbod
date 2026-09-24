@@ -1,0 +1,196 @@
+rules:
+  - id: python.no-print-use-typer-output
+    languages:
+      - python
+    severity: ERROR
+    message: >-
+      Harness metric violation: do not use print(...). Start a Refactorer subagent for this file.
+      Subagent prompt: Refactor the reported file to remove print(...) usage. For Typer CLI output,
+      use typer.echo or typer.secho; otherwise route output through the existing logging, event, or response
+      boundary. Preserve public behavior, keep the change focused, and run the relevant targeted tests plus
+      Semgrep for this file.
+    paths:
+      include:
+        - '**/api/src/**'
+        - '**/api/tests/**'
+        - '**/frontend/src/**'
+        - '**/src/**'
+    pattern: print(...)
+
+  - id: python.no-parameter-default-values
+    languages:
+      - python
+    severity: ERROR
+    message: >-
+      Harness metric violation: function or method parameters must not define default values. Start a
+      Refactorer subagent for this file. Subagent prompt: Refactor the reported file to remove parameter
+      default values from function and method signatures. Move defaults to the call site, configuration
+      boundary, typed option object, or explicit argument resolver while preserving public behavior. Keep the
+      change focused, avoid broad rewrites, and run the relevant targeted tests plus Semgrep for this file.
+    paths:
+      include:
+        - '**/api/src/**'
+        - '**/api/tests/**'
+        - '**/frontend/src/**'
+        - '**/src/**'
+    patterns:
+      - pattern: |
+          def $FUNCTION(..., $PARAM=$DEFAULT, ...):
+            ...
+      - pattern-not: |
+          def $FUNCTION(..., $PARAM=Depends(...), ...):
+            ...
+      - pattern-not: |
+          def $FUNCTION(..., $PARAM=fastapi.Depends(...), ...):
+            ...
+
+  - id: python.fastapi.no-app-state-dependencies
+    languages:
+      - python
+    severity: ERROR
+    message: >-
+      Harness metric violation: FastAPI routes must not use app.state to store or retrieve dependencies.
+      Start a Refactorer subagent for this file. Subagent prompt: Refactor the reported file to remove app.state
+      dependencies from FastAPI routes. Use Depends for dependency injection and inject factory instances that
+      create the route dependencies. Preserve public behavior, keep the change focused, and run the relevant
+      targeted tests plus Semgrep for this file.
+    paths:
+      include:
+        - '**/api/src/**'
+    patterns:
+      - pattern-either:
+          - pattern: $REQUEST.app.state.$DEPENDENCY
+          - pattern: $APP.state.$DEPENDENCY
+      - pattern-inside: |
+          def $FUNCTION(...):
+            ...
+
+  - id: dataclass-with-methods
+    languages: [python]
+    severity: WARNING
+    message: >
+      Dataclass '$CLASS' contains method '$METHOD'.
+
+      Classify this as GOOD or BAD use of dataclasses using these principles:
+        - BAD: the method encodes a business rule, state transition, or domain operation
+        - BAD: the method orchestrates external services, triggers I/O, or causes side effects
+        - BAD: the method would make sense as a standalone function that takes this dataclass as input
+        - GOOD: a computed property or simple data derivation
+        - GOOD: a factory or serialiser (from_dict, to_json, formatted)
+
+      If BAD: refactor the method out to a service or standalone function that accepts this dataclass as an argument.
+      If GOOD: leave unchanged.
+    patterns:
+      - pattern: |
+          @dataclass
+          class $CLASS:
+            ...
+            def $METHOD(self, ...):
+              ...
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: ^(?!__).*
+
+  - id: python.dataclass.none-type-field
+    languages:
+      - python
+    severity: WARNING
+    message: >-
+      Design warning: dataclass field '$FIELD' allows None. Assume presence of values in internal core
+      models and validate missing or optional values at the edge of the system, such as API, CLI, config,
+      file, or external-service input boundaries. If None represents a different state, model that state
+      explicitly with a separate DTO or domain type instead of allowing None to spread downstream. Many
+      None-able fields in one dataclass usually indicate the model should be split.
+    paths:
+      include:
+        - '**/api/src/**'
+        - '**/api/tests/**'
+        - '**/frontend/src/**'
+        - '**/src/**'
+    patterns:
+      - pattern-inside: |
+          @dataclass
+          class $CLASS:
+            ...
+      - pattern-either:
+          - pattern: "$FIELD: Optional[$TYPE]"
+          - pattern: "$FIELD: Union[$TYPE, None]"
+          - pattern: "$FIELD: Union[None, $TYPE]"
+          - pattern: "$FIELD: $TYPE | None"
+          - pattern: "$FIELD: None | $TYPE"
+          - pattern: "$FIELD: $TYPE = None"
+
+  - id: python.pydantic.none-type-field
+    languages:
+      - python
+    severity: WARNING
+    message: >-
+      Design warning: Pydantic field '$FIELD' allows None. Prefer validating missing or optional user input
+      at the API/request boundary and converting it into a required internal DTO before core logic sees it.
+      If None means the model is in another state, split the model into explicit DTOs or domain types. Many
+      None-able fields in one Pydantic model usually indicate the model has too many responsibilities.
+    paths:
+      include:
+        - '**/api/src/**'
+        - '**/api/tests/**'
+        - '**/frontend/src/**'
+        - '**/src/**'
+    pattern-either:
+      - patterns:
+          - pattern-inside: |
+              class $CLASS(BaseModel):
+                ...
+          - pattern-either:
+              - pattern: "$FIELD: Optional[$TYPE]"
+              - pattern: "$FIELD: Union[$TYPE, None]"
+              - pattern: "$FIELD: Union[None, $TYPE]"
+              - pattern: "$FIELD: $TYPE | None"
+              - pattern: "$FIELD: None | $TYPE"
+              - pattern: "$FIELD: $TYPE = None"
+      - patterns:
+          - pattern-inside: |
+              class $CLASS(pydantic.BaseModel):
+                ...
+          - pattern-either:
+              - pattern: "$FIELD: Optional[$TYPE]"
+              - pattern: "$FIELD: Union[$TYPE, None]"
+              - pattern: "$FIELD: Union[None, $TYPE]"
+              - pattern: "$FIELD: $TYPE | None"
+              - pattern: "$FIELD: None | $TYPE"
+              - pattern: "$FIELD: $TYPE = None"
+
+  - id: python.function-argument-none-type
+    languages:
+      - python
+    severity: WARNING
+    message: >-
+      Design warning: function or method argument '$PARAM' allows None. Treat uncertainty about missing
+      values as a boundary validation concern rather than a downstream core-logic concern. Validate and
+      normalize inputs at API, CLI, config, file, or adapter edges, then pass required values internally. If
+      None represents a separate state, model that state explicitly with separate DTOs or domain types rather
+      than adding None checks throughout the core.
+    paths:
+      include:
+        - '**/api/src/**'
+        - '**/api/tests/**'
+        - '**/frontend/src/**'
+        - '**/src/**'
+    pattern-either:
+      - pattern: |
+          def $FUNCTION(..., $PARAM: Optional[$TYPE], ...):
+            ...
+      - pattern: |
+          def $FUNCTION(..., $PARAM: Union[$TYPE, None], ...):
+            ...
+      - pattern: |
+          def $FUNCTION(..., $PARAM: Union[None, $TYPE], ...):
+            ...
+      - pattern: |
+          def $FUNCTION(..., $PARAM: $TYPE | None, ...):
+            ...
+      - pattern: |
+          def $FUNCTION(..., $PARAM: None | $TYPE, ...):
+            ...
+      - pattern: |
+          def $FUNCTION(..., $PARAM: $TYPE = None, ...):
+            ...

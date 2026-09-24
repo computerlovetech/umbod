@@ -68,24 +68,24 @@ Run the chart tests after installation:
 helm test umbod
 ```
 
-The tests verify API, MCP, and frontend health through their ClusterIP Services. They also verify RFC 9728 protected-resource metadata, OAuth authorization-server metadata, the MCP `WWW-Authenticate` discovery challenge, and that the running API loaded the selected installed plugins without exposing unselected plugins.
+The tests verify API, MCP, and frontend health through their ClusterIP Services. They also verify RFC 9728 protected-resource metadata, OAuth authorization-server metadata, and the MCP `WWW-Authenticate` discovery challenge. When plugins are configured, an additional test checks that the running API loaded only the selected plugins.
 
-Run the same Docker-based Kind installation used by CI from `apps/umbod`:
+Run the same Docker-based Kind installation used by CI from `umbod/`:
 
 ```sh
 deploy/helm/umbod/scripts/kind-install-test.sh
 ```
 
-The script builds the core, frontend, and `ghcr.io/computerlovetech/umbod-plugins:ci` plugin images, creates a Kubernetes 1.32 Kind cluster, loads the images, installs the chart with `ci/kind-values.yaml`, verifies both plugin init containers and validator output, and runs the Helm tests. Archive mode requires all three `--core-image-archive`, `--frontend-image-archive`, and `--plugin-image-archive` arguments. It deletes the cluster afterward. Set `UMBOD_KIND_KEEP_CLUSTER=true` to retain the cluster for investigation.
+The script builds the core and frontend images, creates a Kubernetes 1.32 Kind cluster, loads the images, installs the chart without connector plugins using `ci/kind-values.yaml`, and runs the Helm tests. Archive mode requires both `--core-image-archive` and `--frontend-image-archive`. It deletes the cluster afterward. Set `UMBOD_KIND_KEEP_CLUSTER=true` to retain the cluster for investigation.
 
 ## Validation
 
 Run the validation script from any directory:
 
 ```sh
-apps/umbod/deploy/helm/umbod/scripts/validate.sh
+umbod/deploy/helm/umbod/scripts/validate.sh
 ```
 
 The script runs strict Helm linting, renders the chart with the CI values, validates the Kubernetes resources with kubeconform and the chart-specific validator, and verifies that the chart can be packaged. Temporary rendered and packaged artifacts are removed automatically.
 
-CI runs three independent Helm jobs. Chart validation lints, renders, checks architecture, and packages the chart. Schema validation runs kubeconform against Kubernetes 1.25, the chart's minimum supported version, and Kubernetes 1.32, 1.33, and 1.34. Installation validation invokes `scripts/kind-install-test.sh` with the CI-built core, frontend, and plugin image archives. The same script performs local and CI cluster creation, image loading, chart installation, workload waiting, Helm tests, diagnostics, and cleanup.
+CI runs three independent Helm jobs. Chart validation lints, renders, checks architecture, and packages the chart. Schema validation runs kubeconform against Kubernetes 1.25, the chart's minimum supported version, and Kubernetes 1.32, 1.33, and 1.34. Installation validation invokes `scripts/kind-install-test.sh`, which builds core and frontend images in the Kind job without uploading artifacts. The same script performs local and CI cluster creation, image loading, chart installation, workload waiting, Helm tests, diagnostics, and cleanup.
