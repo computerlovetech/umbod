@@ -9,7 +9,9 @@ URLs to `/` through `public/_redirects`.
 
 ## Development
 
-Run these commands from `apps/umbod-website/`. The development command builds the Umbod MkDocs site into `/docs/`, so `uv` is also required.
+Run these commands from `website/` with Bun and Python (including pip) available.
+The development command installs `mkdocs-material==9.7.7` and builds the Umbod
+MkDocs site into `/docs/`.
 
 ```bash
 bun install
@@ -22,7 +24,21 @@ bun run dev
 bun run build
 ```
 
-The build generates the Umbod reference documentation from `apps/umbod/docs/` and the Helm chart sources before Vite packages the complete site.
+The build installs only the documentation dependencies with
+`python -m pip install "mkdocs-material==9.7.7"`, then runs
+`python -m mkdocs build --strict --site-dir ../website/public/docs` from `umbod/`,
+where `mkdocs.yml` lives. Vite then runs from `website/` and packages the complete
+site into `website/dist/`. Python is needed only during the build; the deployed
+website is static.
+
+Build from a checkout that preserves the sibling `website/` and `umbod/`
+directories. The build needs these inputs:
+
+- `umbod/mkdocs.yml`
+- `umbod/docs/`, including `hooks.py`
+- `umbod/docs-theme/`
+- `umbod/deploy/helm/umbod/Chart.yaml`, `values.yaml`, and `values.schema.json`,
+  which the docs hook uses to generate the Helm values reference
 
 To check redirects and static assets with Cloudflare's local runtime after building:
 

@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "docs": "cd ../umbod && uv run --group dev mkdocs build --strict --site-dir ../website/public/docs",
+    "docs": "python -m pip install \"mkdocs-material==9.7.7\" && cd ../umbod && python -m mkdocs build --strict --site-dir ../website/public/docs",
     "dev": "bun run docs && vite dev",
     "build": "bun run docs && vite build",
     "preview": "vite preview",
