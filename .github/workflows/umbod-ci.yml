@@ -5,12 +5,6 @@ run-name: ${{ github.workflow }} on ${{ github.ref_name }} @ ${{ github.sha }}
 on:
   push:
     branches: [main]
-    paths:
-      - 'umbod/**'
-      - 'packages/umbod-sdk/**'
-      - '.github/workflows/umbod-ci.yml'
-      - '.github/workflows/umbod-release.yml'
-      - '.github/actions/docker-build/action.yml'
   pull_request:
     branches: [main]
     paths:
