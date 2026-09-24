@@ -214,11 +214,15 @@ jobs:
             if helm show chart "oci://${CHART_REGISTRY}/umbod" --version "${CHART_VERSION}" >/dev/null 2>&1; then echo "Chart ${CHART_VERSION} already exists" >&2; exit 1; fi
           fi
 
-  sdk-build:
-    name: Build SDK
+  sdk-publish:
+    name: Build and publish SDK
     if: ${{ inputs.sdk }}
     needs: plan
     runs-on: ubuntu-latest
+    environment: umbod-pypi
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
@@ -231,8 +235,8 @@ jobs:
           cp -R "${SDK_DIRECTORY}" "${RUNNER_TEMP}/sdk"
           cd "${RUNNER_TEMP}/sdk"
           uv version --no-sync "${VERSION}"
-          uv build --no-sources --out-dir "${RUNNER_TEMP}/dist"
-          python3 - "${RUNNER_TEMP}/dist" "${VERSION}" <<'PY'
+          uv build --no-sources --out-dir "${GITHUB_WORKSPACE}/dist"
+          python3 - "${GITHUB_WORKSPACE}/dist" "${VERSION}" <<'PY'
           import pathlib
           import sys
           import tarfile
@@ -249,25 +253,6 @@ jobs:
               metadata = next(member for member in contents if member.name.endswith("/PKG-INFO"))
               assert expected in contents.extractfile(metadata).read().decode().splitlines()
           PY
-      - uses: actions/upload-artifact@v6
-        with:
-          name: umbod-sdk-${{ needs.plan.outputs.sdk_version }}
-          path: ${{ runner.temp }}/dist/*
-          if-no-files-found: error
-
-  sdk-publish:
-    name: Publish SDK
-    if: ${{ inputs.sdk }}
-    needs: [plan, sdk-build]
-    runs-on: ubuntu-latest
-    environment: umbod-pypi
-    permissions:
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v7
-        with:
-          name: umbod-sdk-${{ needs.plan.outputs.sdk_version }}
-          path: dist
       - uses: pypa/gh-action-pypi-publish@release/v1
 
   images:
