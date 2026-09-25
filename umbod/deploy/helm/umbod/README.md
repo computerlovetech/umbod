@@ -56,7 +56,7 @@ The default standalone configuration uses an ephemeral `emptyDir` volume for SQL
 
 ## Networking
 
-Three ClusterIP Services expose API, MCP, and frontend internally. The optional `networking.k8s.io/v1` Ingress is disabled by default. Set `ingress.enabled`, `ingress.className`, `ingress.host`, path values, annotations, and TLS entries for the target cluster. The Ingress routes RFC 9728 protected-resource discovery and the MCP OAuth authorization endpoints directly to the MCP Service. Path handling depends on the selected ingress controller and application configuration.
+Three ClusterIP Services expose API, MCP, and frontend internally. With the `umbod` release name, they are `umbod-api`, `umbod-mcp`, and `umbod-frontend`. Other release names prefix the chart name unless they already contain it; `fullnameOverride` replaces that prefix. Workload Pods disable Kubernetes service-link environment variables to prevent Service names such as `umbod-mcp` from colliding with application port settings. The optional `networking.k8s.io/v1` Ingress is disabled by default. Set `ingress.enabled`, `ingress.className`, `ingress.host`, path values, annotations, and TLS entries for the target cluster. The Ingress routes RFC 9728 protected-resource discovery and the MCP OAuth authorization endpoints directly to the MCP Service. Path handling depends on the selected ingress controller and application configuration.
 
 ## Security and operations
 
