@@ -31,10 +31,11 @@ kind create cluster --name umbod --wait 2m
 
 helm upgrade --install umbod \
   oci://ghcr.io/computerlovetech/charts/umbod \
-  --version 0.0.1-beta.2 \
+  --version 0.0.1-beta.4 \
   --kube-context kind-umbod \
   --set config.profile=local \
   --set config.authentication.mode=dev \
+  --set-string config.publicOrigins.site=http://localhost:3000 \
   --wait --timeout 5m
 
 kubectl --context kind-umbod port-forward \

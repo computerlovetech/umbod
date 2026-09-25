@@ -31,14 +31,15 @@ Install Umbod from its OCI Helm chart. Start with kind for a local evaluation, o
 
 ## Install Umbod locally
 
-Install the `0.0.1-beta.2` beta with development authentication:
+Install the `0.0.1-beta.4` beta with development authentication:
 
 ```bash
 helm upgrade --install umbod \
   oci://ghcr.io/computerlovetech/charts/umbod \
-  --version 0.0.1-beta.2 \
+  --version 0.0.1-beta.4 \
   --set config.profile=local \
   --set config.authentication.mode=dev \
+  --set-string config.publicOrigins.site=http://localhost:3000 \
   --wait --timeout 5m
 ```
 
@@ -110,7 +111,7 @@ Install or upgrade Umbod:
 ```bash
 helm upgrade --install umbod \
   oci://ghcr.io/computerlovetech/charts/umbod \
-  --version 0.0.1-beta.2 \
+  --version 0.0.1-beta.4 \
   --namespace umbod \
   --values values.production.yaml \
   --wait --timeout 5m

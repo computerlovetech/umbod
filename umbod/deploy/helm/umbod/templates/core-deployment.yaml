@@ -81,7 +81,7 @@ spec:
             - name: http-{{ $name }}
               containerPort: {{ $container.port }}
               protocol: TCP
-            - name: metrics
+            - name: metrics-{{ $name }}
               containerPort: {{ if eq $name "api" }}8001{{ else }}8012{{ end }}
               protocol: TCP
           env:
