@@ -32,18 +32,27 @@
     state.beginSubmit();
     const wasConfiguring = configuring;
     return async ({ result, update }) => {
-      if (result.type === 'redirect') {
-        toast.success(wasConfiguring ? 'Connector configuration saved' : 'MCP proxy connector added');
-      } else if (result.type === 'failure') {
-        if (!isRecord(result.data) || !['invalid', 'failed', 'network', 'stale', 'conflict', 'authentication'].includes(String(result.data.status)) || typeof result.data.message !== 'string') {
-          throw new Error('Invalid MCP proxy connector setup result');
+      try {
+        if (result.type === 'error') {
+          state.failSubmit(result.status === 403
+            ? 'The server rejected this request (403). Check that the site origin matches the address in your browser and that you have administrator access.'
+            : 'The server could not save this connector. Please try again.');
+          return;
         }
-        if (result.data.status === 'failed' || result.data.status === 'network') toast.error(result.data.message);
-      } else {
-        throw new Error('Unexpected MCP proxy connector setup result');
+        if (result.type === 'failure') {
+          if (!isRecord(result.data) || !['invalid', 'failed', 'network', 'stale', 'conflict', 'authentication'].includes(String(result.data.status)) || typeof result.data.message !== 'string') {
+            state.failSubmit('The server returned an unexpected response. Please try again.');
+            return;
+          }
+          if (result.data.status === 'failed' || result.data.status === 'network') toast.error(result.data.message);
+        }
+        await update();
+        if (result.type === 'redirect') toast.success(wasConfiguring ? 'Connector configuration saved' : 'MCP proxy connector added');
+      } catch {
+        state.failSubmit('Unable to complete the save. Please try again.');
+      } finally {
+        state.finishSubmit();
       }
-      await update();
-      if (result.type === 'failure') state.finishSubmit();
     };
   };
 </script>
@@ -90,6 +99,7 @@
         {/if}
         {#if configuring}<p class="warning">Changing the endpoint or authentication unpublishes this connector and requires discovery to run again. The dedicated MCP path is immutable and remains additional to the shared <code>/mcp</code> endpoint.</p>{/if}
         {#if message}<p class="error" id={`${fieldPrefix}-error`} role="alert">{message}</p>{/if}
+        {#if state.submitError}<p class="error" role="alert">{state.submitError}</p>{/if}
       {/snippet}
       {#snippet actions()}
         <LoadingButton label="Cancel" loading={false} variant="secondary" onclick={state.close} />

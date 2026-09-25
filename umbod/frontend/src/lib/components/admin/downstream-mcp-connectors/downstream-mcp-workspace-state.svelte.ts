@@ -48,6 +48,7 @@ export class DownstreamMcpWorkspaceState {
   headerType = $state<'bearer' | 'basic' | 'custom'>('bearer');
   customHeaderName = $state('');
   submitting = $state(false);
+  submitError = $state<string | null>(null);
   menuOpen = $state(false);
   returnFocus = $state<HTMLElement | null>(null);
   createPublicPath = $state('');
@@ -109,6 +110,7 @@ export class DownstreamMcpWorkspaceState {
   close = (): void => {
     this.modal = null;
     this.submitting = false;
+    this.submitError = null;
     this.returnFocus?.focus();
   };
 
@@ -193,8 +195,9 @@ export class DownstreamMcpWorkspaceState {
     this.createPublicPath = String(event.currentTarget.value);
   };
 
-  beginSubmit = (): void => { this.submitting = true; };
+  beginSubmit = (): void => { this.submitError = null; this.submitting = true; };
   finishSubmit = (): void => { this.submitting = false; };
+  failSubmit = (message: string): void => { this.submitError = message; this.submitting = false; };
   setMenuOpen = (open: boolean): void => { this.menuOpen = open; };
   handleKeydown = (event: KeyboardEvent): void => { if (event.key === 'Escape') this.close(); };
 }
