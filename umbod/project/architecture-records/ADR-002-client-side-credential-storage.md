@@ -1,4 +1,4 @@
-# ADR-001: Client-Owned Credentials for Multi-Provider MCP Tool Authentication
+# ADR-002: Client-Owned Credentials for Multi-Provider MCP Tool Authentication
 
 -   **Status:** Proposed
 -   **Date:** 2026-09-26

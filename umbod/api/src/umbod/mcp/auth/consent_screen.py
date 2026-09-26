@@ -123,6 +123,7 @@ def _consent_document(display: ConsentDisplay) -> str:
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjU0IDEyNTQiPjxwYXRoIGZpbGw9IiMwMDAiIGQ9Ik01ODIgMjQwaDkwdjE4OWwzMDUgMjkxdjI5MmgtOTBWNzQ3TDY3MiA1NDN2MzgxaC05MFY1NDNMMzY3IDc0N3YyNjVoLTkwVjcyMGwzMDUtMjkxWiIvPjwvc3ZnPgo=" />
 {display.csp_meta}
 <title>{display.title_display}</title>
 <style>{_styles()}</style>

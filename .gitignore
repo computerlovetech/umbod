@@ -1,3 +1,4 @@
 .agents/skills/
 .claude/skills/
 .github/skills/
+__pycache__/

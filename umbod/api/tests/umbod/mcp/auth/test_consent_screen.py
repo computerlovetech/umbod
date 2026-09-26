@@ -1,3 +1,7 @@
+import base64
+import re
+from pathlib import Path
+
 from umbod.mcp.auth.consent_screen import (
     create_umbod_consent_html,
     install_umbod_consent_screen,
@@ -16,6 +20,11 @@ def test_umbod_consent_screen_uses_umbod_visual_language() -> None:
         server_name="Umbod MCP",
     )
 
+    favicon = re.search(r'href="data:image/svg\+xml;base64,([^"]+)"', html)
+    assert favicon is not None
+    assert base64.b64decode(favicon.group(1)) == (
+        Path(__file__).resolve().parents[6] / "website/public/umbod-logo.svg"
+    ).read_bytes()
     assert "Umbod" in html
     assert (
         "radial-gradient(circle at top left, rgb(59 130 246 / 35%), transparent 35rem), #111827"

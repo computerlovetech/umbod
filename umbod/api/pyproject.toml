@@ -7,9 +7,9 @@ requires-python = ">=3.14"
 dependencies = [
     "umbod",
     "aiosqlite>=0.22.1",
-    "fastapi>=0.136.1",
-    "fastmcp-slim[client]==4.0.0b1",
-    "fastmcp[apps,code-mode]==4.0.0b1",
+    "fastapi>=0.141.1",
+    "fastmcp-slim[client]==4.0.10",
+    "fastmcp[apps,code-mode]==4.0.10",
     "httpx>=0.28.1",
     "jsonschema>=4.26.0",
     "packaging>=24.0",
@@ -41,7 +41,7 @@ dev-mode-dirs = ["src"]
 
 [tool.uv]
 default-groups = ["dev", "shared", "api", "mcp"]
-constraint-dependencies = ["fastmcp-slim==4.0.0b1"]
+constraint-dependencies = ["fastmcp-slim==4.0.10"]
 
 [tool.uv.sources]
 umbod = { path = "../../packages/umbod-sdk", editable = true }
@@ -57,13 +57,13 @@ shared = [
     "uvicorn[standard]>=0.46.0",
 ]
 api = [
-    "fastapi>=0.136.1",
-    "fastmcp-slim[client]==4.0.0b1",
+    "fastapi>=0.141.1",
+    "fastmcp-slim[client]==4.0.10",
     "prometheus-client>=0.26.0",
     "python-multipart>=0.0.29",
 ]
 mcp = [
-    "fastmcp[apps,code-mode]==4.0.0b1",
+    "fastmcp[apps,code-mode]==4.0.10",
     "prometheus-client>=0.26.0",
     "starlette>=1.0.1",
 ]
