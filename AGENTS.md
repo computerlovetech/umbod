@@ -16,8 +16,9 @@ Start at the boundary exposing the behavior, use that module's `README.md` as it
 
 ## Runtime verification
 
-- When changing application code, run `docker compose build` and `docker compose up -d` from `umbod/` before reporting the work as done.
-- For service-specific fixes, inspect the relevant container logs with `docker compose logs <service>` from `umbod/` and verify the changed service starts successfully.
+- For API or MCP application changes, verify the running services in a disposable Kind cluster with `bash umbod/tests/kind-runtime/run.sh` from the repository root. This builds and loads local images, installs the Helm chart, runs its in-cluster tests, and runs `umbod/api/live_runtime_tests` through Kubernetes Service port-forwards. Docker Compose is not a substitute for these service integration tests.
+- If Kind service integration tests fail, inspect the runner's pod diagnostics, report the failing assertions, and do not describe the integration suite as passing. The connector fixture and test-only values under `umbod/tests/kind-runtime/` must not enter the published chart or application images.
+- For frontend UI changes, follow the separate Docker Compose and browser verification instructions below.
 
 ## Tests and static checks
 
@@ -28,7 +29,7 @@ Run the checks applicable to the changed area:
 - Python lint: `cd umbod/api && uv run ruff check .`
 - Frontend tests: `cd umbod/frontend && bun run test`
 - Frontend type and Svelte checks: `cd umbod/frontend && bun run check`
-- Running-service integration tests, after starting Docker Compose: `cd umbod/api && uv run pytest live_runtime_tests`
+- Running-service integration tests: `bash umbod/tests/kind-runtime/run.sh` from the repository root. Do not run `uv run pytest live_runtime_tests` against the default Docker Compose stack; its stateless MCP configuration and missing test connector do not satisfy this suite.
 
 ## UI inspection
 

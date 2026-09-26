@@ -1,0 +1,7 @@
+plugins:
+  availableConnectorIds:
+    - test
+  image:
+    repository: umbod-kind-test-connector
+    tag: ci
+    pullPolicy: Never

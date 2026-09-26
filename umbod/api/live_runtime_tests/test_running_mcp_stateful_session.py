@@ -5,12 +5,11 @@ import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 
-MCP_URL = "http://localhost:8011/mcp"
-BEARER_TOKEN = "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJsb2NhbC10ZXN0LXVzZXIiLCJlbWFpbCI6InRlc3QtdXNlckBleGFtcGxlLmNvbSIsIm5hbWUiOiJMb2NhbCBUZXN0IFVzZXIiLCJncm91cHMiOlsidGVzdCJdfQ."
+from conftest import RuntimeEndpoints
 
 
 @pytest.mark.asyncio
-async def test_stateful_runtime_issues_and_reuses_session_id() -> None:
+async def test_stateful_runtime_issues_and_reuses_session_id(runtime_endpoints: RuntimeEndpoints) -> None:
     request_session_ids: list[Optional[str]] = []
     response_session_ids: list[Optional[str]] = []
 
@@ -27,8 +26,8 @@ async def test_stateful_runtime_issues_and_reuses_session_id() -> None:
         )
 
     transport = StreamableHttpTransport(
-        MCP_URL,
-        headers={"Authorization": f"Bearer {BEARER_TOKEN}"},
+        runtime_endpoints.mcp_url,
+        headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"},
         httpx_client_factory=create_http_client,
     )
     async with Client(transport) as client:
@@ -43,10 +42,10 @@ async def test_stateful_runtime_issues_and_reuses_session_id() -> None:
 
 
 @pytest.mark.asyncio
-async def test_stateful_runtime_rejects_unknown_session_id() -> None:
+async def test_stateful_runtime_rejects_unknown_session_id(runtime_endpoints: RuntimeEndpoints) -> None:
     headers = {
         "Accept": "application/json, text/event-stream",
-        "Authorization": f"Bearer {BEARER_TOKEN}",
+        "Authorization": f"Bearer {runtime_endpoints.bearer_token}",
         "Content-Type": "application/json",
         "Mcp-Session-Id": "unknown-session-id",
     }
@@ -58,7 +57,7 @@ async def test_stateful_runtime_rejects_unknown_session_id() -> None:
     }
 
     async with httpx2.AsyncClient() as client:
-        response = await client.post(MCP_URL, headers=headers, json=request)
+        response = await client.post(runtime_endpoints.mcp_url, headers=headers, json=request)
 
     assert response.status_code == 404
     assert response.headers.get("mcp-session-id") is None
