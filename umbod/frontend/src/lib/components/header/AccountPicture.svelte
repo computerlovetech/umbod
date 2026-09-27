@@ -34,7 +34,7 @@
 
   .account-picture-placeholder {
     align-items: center;
-    background: rgb(148 163 184 / 24%);
+    background: var(--admin-hover);
     color: currentColor;
     display: inline-flex;
     justify-content: center;

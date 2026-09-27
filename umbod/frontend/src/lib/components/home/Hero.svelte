@@ -14,31 +14,34 @@
     box-sizing: border-box;
     display: grid;
     align-content: center;
-    min-height: 100vh;
+    min-height: calc(100svh - 4.5rem);
     padding: clamp(2rem, 8vw, 6rem);
-    background:
-      radial-gradient(circle at top left, rgb(59 130 246 / 35%), transparent 35rem),
-      #111827;
+    color: var(--admin-ink);
+    background: var(--admin-canvas);
   }
 
   .eyebrow {
-    color: #93c5fd;
-    font-weight: 700;
-    letter-spacing: 0.18em;
+    color: var(--admin-accent);
+    font-family: var(--admin-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
     margin: 0 0 1rem;
     text-transform: uppercase;
   }
 
   h1 {
-    font-size: clamp(3rem, 9vw, 7rem);
-    line-height: 0.95;
+    font-size: clamp(3rem, 6vw, 4.5rem);
+    font-weight: 600;
+    letter-spacing: -0.05em;
+    line-height: 1.1;
     margin: 0;
     max-width: 9ch;
   }
 
   .lede {
-    color: #cbd5e1;
-    font-size: clamp(1.125rem, 2vw, 1.4rem);
+    color: var(--admin-muted);
+    font-size: clamp(1rem, 2vw, 1.125rem);
     line-height: 1.6;
     max-width: 42rem;
   }
@@ -51,13 +54,18 @@
   }
 
   a {
-    border: 1px solid rgb(255 255 255 / 20%);
-    border-radius: 999px;
+    background: var(--admin-action);
+    border: 1px solid var(--admin-action);
+    border-radius: var(--admin-radius);
+    color: var(--admin-on-action);
+    font-size: 14px;
+    font-weight: 600;
     padding: 0.85rem 1.1rem;
     text-decoration: none;
   }
 
   a:hover {
-    border-color: #93c5fd;
+    background: var(--admin-action-hover);
+    border-color: var(--admin-action-hover);
   }
 </style>
