@@ -40,9 +40,10 @@
 <style>
   ul {
     display: grid;
-    gap: 10px;
+    gap: 12px;
     list-style: none;
     margin: 32px 0 0;
     padding: 0;
+    max-width: 42rem;
   }
 </style>

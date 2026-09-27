@@ -16,24 +16,25 @@
 
 <style>
   .stat-card {
-    background: #ffffff;
-    border: 1px solid #e9e9e7;
-    border-radius: 8px;
+    background: var(--admin-panel);
+    border: 1px solid var(--admin-border);
+    border-radius: var(--admin-radius);
     min-width: 0;
     padding: 0.85rem;
   }
 
   dt {
-    color: #afaeab;
+    color: var(--admin-muted);
     font-size: 0.72rem;
-    font-weight: 700;
+    font-family: var(--admin-mono);
+    font-weight: 500;
     letter-spacing: 0.08em;
     line-height: 1.4;
     text-transform: uppercase;
   }
 
   dd {
-    color: #37352f;
+    color: var(--admin-ink);
     font-size: 0.9rem;
     line-height: 1.45;
     margin: 0.3rem 0 0;
@@ -41,7 +42,7 @@
   }
 
   dd :global(p) {
-    color: #787774;
+    color: var(--admin-muted);
     font-size: 0.8rem;
     line-height: 1.4;
     margin: 0.45rem 0 0;

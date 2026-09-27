@@ -8,12 +8,13 @@
 
 `../styles/admin.css` defines semantic theme variables adapted from the website and
 documentation palette. The admin shell, native/OpenAPI/MCP connector workspaces,
-prompt and resource catalogs, configuration and confirmation dialogs, and shared
-controls and feedback consume these variables in component-scoped styles.
+prompt and resource catalogs, group permissions, MCP setup, instance configuration,
+configuration and confirmation dialogs, and shared controls and feedback consume
+these variables in component-scoped styles. The home page, app header and global
+light-theme defaults use the same palette.
 Keep presentation changes in those components; feature state and API adapters stay
 in their existing modules. Use the semantic variables for surfaces, text, actions,
-focus and feedback instead of duplicating literal colours. Other feature-specific
-styles are being migrated incrementally.
+focus and feedback instead of duplicating literal colours. Keep intentional vendor logo colors in the MCP setup guide.
 
 The shell uses `static/umbod-logo.svg`, copied from the website's existing logo.
 
