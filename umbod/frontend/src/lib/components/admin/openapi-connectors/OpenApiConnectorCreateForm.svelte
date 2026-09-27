@@ -63,8 +63,8 @@
 <style>
   .create {
     align-items: end;
-    background: #ffffff;
-    border: 1px solid #e9e9e7;
+    background: var(--admin-panel);
+    border: 1px solid var(--admin-border);
     border-radius: 10px;
     display: grid;
     gap: 1.5rem;
@@ -74,7 +74,7 @@
   }
 
   .eyebrow {
-    color: #afaeab;
+    color: var(--admin-muted);
     font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -83,13 +83,13 @@
   }
 
   h2 {
-    color: #37352f;
+    color: var(--admin-ink);
     font-size: 1.125rem;
     margin: 0;
   }
 
   label {
-    color: #37352f;
+    color: var(--admin-ink);
     display: block;
     font-size: 0.8125rem;
     font-weight: 650;
@@ -104,8 +104,8 @@
   .override-toggle { align-items: center; display: flex; gap: .4rem; margin: 0; }
   textarea,
   input {
-    background: #ffffff;
-    border: 1px solid #e9e9e7;
+    background: var(--admin-panel);
+    border: 1px solid var(--admin-border);
     border-radius: 6px;
     color: inherit;
     flex: 1;
@@ -116,7 +116,7 @@
 
 
   .error {
-    color: #8f3232;
+    color: var(--admin-danger-text);
     font-size: 0.8125rem;
     margin: 0.5rem 0 0;
   }

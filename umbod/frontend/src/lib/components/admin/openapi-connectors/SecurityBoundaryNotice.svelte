@@ -8,9 +8,9 @@
 
 <style>
   .notice {
-    background: #f7f6f3;
-    border: 1px solid #e9e9e7;
-    border-left: 4px solid #37352f;
+    background: var(--admin-soft);
+    border: 1px solid var(--admin-border);
+    border-left: 4px solid var(--admin-ink);
     border-radius: 8px;
     padding: 0.85rem 1rem;
   }
@@ -21,12 +21,12 @@
   }
 
   h3 {
-    color: #37352f;
+    color: var(--admin-ink);
     font-size: 0.875rem;
   }
 
   p {
-    color: #787774;
+    color: var(--admin-muted);
     font-size: 0.875rem;
     line-height: 1.55;
     margin-top: 0.35rem;

@@ -154,7 +154,7 @@
 
 <style>
   .import-panel {
-    color: #37352f;
+    color: var(--admin-ink);
   }
 
   .modes {
@@ -167,10 +167,10 @@
   .modes button,
   .host-entry button,
   .host button {
-    background: #ffffff;
-    border: 1px solid #d8d8d4;
+    background: var(--admin-panel);
+    border: 1px solid var(--admin-border-strong);
     border-radius: 6px;
-    color: #37352f;
+    color: var(--admin-ink);
     cursor: pointer;
     font: inherit;
     font-size: 0.86rem;
@@ -179,9 +179,9 @@
   }
 
   .modes .active {
-    background: #37352f;
-    border-color: #37352f;
-    color: #ffffff;
+    background: var(--admin-ink);
+    border-color: var(--admin-ink);
+    color: var(--admin-panel);
   }
 
   form {
@@ -192,14 +192,14 @@
   }
 
   label {
-    color: #37352f;
+    color: var(--admin-ink);
     font-size: 0.86rem;
     font-weight: 650;
   }
 
   input {
-    background: #ffffff;
-    border: 1px solid #e9e9e7;
+    background: var(--admin-panel);
+    border: 1px solid var(--admin-border);
     border-radius: 6px;
     color: inherit;
     font: inherit;
@@ -221,23 +221,23 @@
   }
 
   code {
-    background: #f1f1ef;
-    border: 1px solid #e3e2df;
+    background: var(--admin-soft);
+    border: 1px solid var(--admin-border);
     border-radius: 999px;
-    color: #37352f;
+    color: var(--admin-ink);
     font-size: 0.75rem;
     line-height: 1.4;
     padding: 2px 7px;
   }
 
   .help {
-    color: #787774;
+    color: var(--admin-muted);
     font-size: 0.875rem;
     margin: 0 0 0.5rem;
   }
 
   .error {
-    color: #8f3232;
+    color: var(--admin-danger-text);
     font-size: 0.875rem;
     margin: 0;
   }

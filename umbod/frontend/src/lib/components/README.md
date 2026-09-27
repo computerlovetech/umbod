@@ -7,8 +7,9 @@
 ## Admin visual styling
 
 `../styles/admin.css` defines semantic theme variables adapted from the website and
-documentation palette. The admin shell, connector catalog and OpenAPI workspace,
-and their shared controls consume these variables in component-scoped styles.
+documentation palette. The admin shell, native/OpenAPI/MCP connector workspaces,
+prompt and resource catalogs, configuration and confirmation dialogs, and shared
+controls and feedback consume these variables in component-scoped styles.
 Keep presentation changes in those components; feature state and API adapters stay
 in their existing modules. Use the semantic variables for surfaces, text, actions,
 focus and feedback instead of duplicating literal colours. Other feature-specific
