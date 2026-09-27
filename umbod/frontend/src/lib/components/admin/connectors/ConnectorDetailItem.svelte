@@ -25,16 +25,16 @@
 
 <style>
   .detail-item { min-width: 0; }
-  dt { color: #787774; font-size: 0.72rem; font-weight: 650; letter-spacing: 0.04em; margin-bottom: 0.3rem; text-transform: uppercase; }
-  dd { color: #37352f; font-size: 0.9rem; line-height: 1.45; margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  dt { color: var(--admin-muted); font-size: 0.72rem; font-weight: 650; letter-spacing: 0.04em; margin-bottom: 0.3rem; text-transform: uppercase; }
+  dd { color: var(--admin-ink); font-size: 0.9rem; line-height: 1.45; margin: 0; min-width: 0; overflow-wrap: anywhere; }
   .summary dd { align-items: center; display: flex; font-weight: 600; gap: 0.45rem; }
-  .indicator { align-items: center; background: #f1f1ef; border-radius: 50%; color: #6b6964; display: inline-flex; flex: 0 0 auto; font-size: 0.72rem; font-weight: 800; height: 1.25rem; justify-content: center; width: 1.25rem; }
-  [data-tone='success'] .indicator { background: #e8f3eb; color: #28733d; }
-  [data-tone='warning'] .indicator { background: #fff3d6; color: #8a5b00; }
-  [data-tone='danger'] .indicator { background: #fbe9e7; color: #a33a30; }
+  .indicator { align-items: center; background: var(--admin-soft); border-radius: 50%; color: var(--admin-muted); display: inline-flex; flex: 0 0 auto; font-size: 0.72rem; font-weight: 800; height: 1.25rem; justify-content: center; width: 1.25rem; }
+  [data-tone='success'] .indicator { background: var(--admin-success-bg); color: var(--admin-success-text); }
+  [data-tone='warning'] .indicator { background: var(--admin-warning-bg); color: var(--admin-warning-text); }
+  [data-tone='danger'] .indicator { background: var(--admin-danger-bg); color: var(--admin-danger-text); }
   .detail dt { margin-bottom: 0.4rem; }
-  .detail dd { color: #4f4d48; }
+  .detail dd { color: var(--admin-ink); }
   dd :global(a), dd :global(code) { overflow-wrap: anywhere; word-break: break-word; }
-  dd :global(code) { background: #e9e9e7; border-radius: 4px; color: #37352f; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.82rem; padding: 0.12rem 0.3rem; white-space: normal; }
+  dd :global(code) { background: var(--admin-border); border-radius: 4px; color: var(--admin-ink); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.82rem; padding: 0.12rem 0.3rem; white-space: normal; }
   dd :global(p) { margin: 0.35rem 0 0; }
 </style>

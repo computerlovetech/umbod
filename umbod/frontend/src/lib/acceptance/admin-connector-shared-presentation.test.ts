@@ -32,7 +32,8 @@ describe('admin connector shared presentation', () => {
     expect(pageHeader).toContain('class="connector-page-header"');
     expect(pageHeader).toContain('aria-label={addLabel}');
     expect(pageHeader).toContain('onclick={(event) => onadd(event.currentTarget)}');
-    expect(pageHeader).toContain('.add:focus-visible');
+    expect(pageHeader).toContain("import Button from '$lib/components/admin/shared/Button.svelte'");
+    expect(pageHeader).toContain('<Button');
   });
 
   test('keeps connector workspaces keyed without effect synchronization', () => {

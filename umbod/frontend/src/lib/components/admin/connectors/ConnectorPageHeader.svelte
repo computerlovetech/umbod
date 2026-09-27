@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/admin/shared/Button.svelte';
   type Props = {
     title: string;
     lede: string;
@@ -10,38 +11,41 @@
 </script>
 
 <div class="connector-page-header">
-  <p class="admin-eyebrow">Umbod</p>
-  <div class="connector-page-heading">
+  <div>
+    <p class="admin-eyebrow">Umbod / Connectors</p>
     <h1 class="admin-title">{title}</h1>
-    <button class="add" type="button" aria-label={addLabel} onclick={(event) => onadd(event.currentTarget)}>+</button>
+    <p class="admin-lede">{lede}</p>
   </div>
-  <p class="admin-lede">{lede}</p>
+  <Button aria-label={addLabel} onclick={(event) => onadd(event.currentTarget)}><span class="plus" aria-hidden="true">+</span>{addLabel}</Button>
 </div>
 
 <style>
-  .add {
-    align-items: center;
-    background: #37352f;
-    border: 0;
-    border-radius: 50%;
-    color: white;
-    cursor: pointer;
-    display: inline-flex;
-    font-size: 1.25rem;
-    height: 2rem;
-    justify-content: center;
-    min-width: 2rem;
-    width: 2rem;
+  .connector-page-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 24px;
+    justify-content: space-between;
   }
 
-  .add:focus-visible {
-    outline: 3px solid rgb(47 111 235 / 24%);
-    outline-offset: 2px;
+  .connector-page-header :global(.admin-shared-button) {
+    flex-shrink: 0;
+    margin-top: 26px;
   }
 
-  @media (max-width: 600px) {
-    .connector-page-heading {
-      align-items: flex-start;
+  .plus {
+    font-size: 18px;
+    font-weight: 400;
+    margin-right: 8px;
+  }
+
+  @media (max-width: 1000px) {
+    .connector-page-header {
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .connector-page-header :global(.admin-shared-button) {
+      margin-top: 0;
     }
   }
 </style>

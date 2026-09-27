@@ -226,7 +226,7 @@
   }
 
   h3 {
-    color: #37352f;
+    color: var(--admin-ink);
     font-size: 0.95rem;
     margin-bottom: 0.75rem;
   }
@@ -234,10 +234,10 @@
   .panel-section { min-width: 0; }
 
   .empty-note {
-    background: #fbfbfa;
-    border: 1px solid #e9e9e7;
+    background: var(--admin-soft);
+    border: 1px solid var(--admin-border);
     border-radius: 10px;
-    color: #787774;
+    color: var(--admin-muted);
     margin: 1.5rem 0 0;
     padding: 1rem;
   }

@@ -24,10 +24,9 @@
 <style>
   .save-bar {
     align-items: center;
-    background: rgb(255 255 255 / 96%);
+    background: var(--admin-soft);
     border: 1px solid var(--admin-border);
     border-radius: 10px;
-    box-shadow: 0 8px 24px rgb(55 53 47 / 12%);
     display: flex;
     gap: 1rem;
     justify-content: flex-end;
@@ -36,13 +35,12 @@
   }
 
   .save-bar--dirty {
-    background: #fffaf5;
-    border-color: #e9b872;
-    box-shadow: 0 8px 24px rgb(146 64 14 / 14%);
+    background: var(--admin-warning-bg);
+    border-color: var(--admin-warning-border);
   }
 
   .save-bar--pending {
-    background: #fbfbfa;
+    background: var(--admin-soft);
   }
 
   .message {
@@ -52,7 +50,7 @@
   }
 
   .save-bar--dirty .message {
-    color: #92400e;
+    color: var(--admin-warning-text);
   }
 
   .action {

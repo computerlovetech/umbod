@@ -98,8 +98,8 @@
 
 <section class="configuration admin-panel" aria-labelledby="connector-configuration-title">
   <div class="section-heading">
-    <p class="eyebrow">Connector action</p>
-    <h2 id="connector-configuration-title">Configure connector</h2>
+    <p class="eyebrow">Configuration</p>
+    <h2 id="connector-configuration-title">{connector.name}</h2>
   </div>
 
   <form
@@ -180,6 +180,8 @@
 <style>
   .configuration {
     max-width: 64rem;
+    min-height: 0;
+    overflow-y: auto;
   }
 
   .section-heading {
@@ -188,7 +190,7 @@
   }
 
   h2 {
-    color: #37352f;
+    color: var(--admin-ink);
     font-size: 18px;
     font-weight: 650;
     line-height: 1.3;
@@ -196,10 +198,11 @@
   }
 
   .eyebrow {
-    color: #787774;
-    font-size: 12px;
-    font-weight: 650;
-    letter-spacing: 0.12em;
+    color: var(--admin-accent);
+    font-family: var(--admin-mono);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.08em;
     line-height: 1.4;
     margin: 0;
     text-transform: uppercase;
@@ -225,27 +228,27 @@
   }
 
   .feedback-message--success {
-    background: #edf7ed;
-    border: 1px solid #d3e8d3;
-    color: #2f6f3e;
+    background: var(--admin-success-bg);
+    border: 1px solid var(--admin-success-border);
+    color: var(--admin-success-text);
   }
 
   .feedback-message--warning {
-    background: #fbf3db;
-    border: 1px solid #ead9a9;
-    color: #7a5d16;
+    background: var(--admin-warning-bg);
+    border: 1px solid var(--admin-warning-border);
+    color: var(--admin-warning-text);
   }
 
   .feedback-message--error {
-    background: #fff6f6;
-    border: 1px solid #f0c7c7;
-    color: #8f3232;
+    background: var(--admin-danger-bg);
+    border: 1px solid var(--admin-danger-border);
+    color: var(--admin-danger-text);
   }
 
   .feedback-message--muted {
-    background: #f7f6f3;
-    border: 1px solid #e9e9e7;
-    color: #787774;
+    background: var(--admin-soft);
+    border: 1px solid var(--admin-border);
+    color: var(--admin-muted);
   }
 
   .form-actions {
@@ -253,12 +256,14 @@
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
+    border-top: 1px solid var(--admin-border);
+    padding-top: 16px;
   }
 
   .unsupported {
-    background: #fbf3db;
-    border: 1px solid #ead9a9;
-    color: #7a5d16;
+    background: var(--admin-warning-bg);
+    border: 1px solid var(--admin-warning-border);
+    color: var(--admin-warning-text);
     padding: 9px 10px;
   }
 

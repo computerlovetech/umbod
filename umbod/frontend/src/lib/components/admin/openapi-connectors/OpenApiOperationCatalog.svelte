@@ -77,7 +77,7 @@
 </div>
 
 <style>
-  .catalog { color: #37352f; }
+  .catalog { color: var(--admin-ink); }
   .save-tools { align-items: center; display: flex; justify-content: flex-end; margin: 0; }
-  .empty { color: #787774; font-size: 0.875rem; line-height: 1.55; margin: 0.7rem 0 0; }
+  .empty { color: var(--admin-muted); font-size: 0.875rem; line-height: 1.55; margin: 0.7rem 0 0; }
 </style>

@@ -57,9 +57,9 @@
   nav { border-bottom: 1px solid var(--admin-border); display: flex; flex-wrap: wrap; gap: 0.25rem; }
   a { align-items: center; border: 1px solid transparent; border-bottom-width: 3px; border-radius: 7px 7px 0 0; color: var(--admin-muted); display: flex; flex: 0 0 auto; font-size: 0.875rem; font-weight: 650; gap: 0.45rem; margin-bottom: -1px; padding: 0.65rem 0.8rem; text-decoration: none; }
   a:hover { background: var(--admin-sidebar); color: var(--admin-ink); }
-  a:focus-visible { outline: 3px solid rgb(47 111 235 / 24%); outline-offset: -3px; }
-  a.active { background: rgb(47 111 235 / 10%); border-color: rgb(47 111 235 / 20%); border-bottom-color: var(--admin-accent); color: var(--admin-ink); font-weight: 750; }
+  a:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: -3px; }
+  a.active { background: var(--admin-accent-soft); border-color: var(--admin-accent-border); border-bottom-color: var(--admin-accent); color: var(--admin-ink); font-weight: 750; }
   strong { background: var(--admin-sidebar); border: 1px solid var(--admin-border); border-radius: 999px; color: inherit; font-size: 0.7rem; min-width: 1.45rem; padding: 0.08rem 0.35rem; text-align: center; }
-  a.active strong { background: #fff; border-color: rgb(47 111 235 / 30%); color: var(--admin-accent); }
+  a.active strong { background: var(--admin-panel); border-color: var(--admin-accent-border); color: var(--admin-accent); }
   .catalog { margin-top: 1rem; min-width: 0; }
 </style>

@@ -4,6 +4,18 @@
 
 **Read when working with:** Shared UI behavior, visual components, accessibility-visible controls, or reusable interaction patterns.
 
+## Admin visual styling
+
+`../styles/admin.css` defines semantic theme variables adapted from the website and
+documentation palette. The admin shell, connector catalog and OpenAPI workspace,
+and their shared controls consume these variables in component-scoped styles.
+Keep presentation changes in those components; feature state and API adapters stay
+in their existing modules. Use the semantic variables for surfaces, text, actions,
+focus and feedback instead of duplicating literal colours. Other feature-specific
+styles are being migrated incrementally.
+
+The shell uses `static/umbod-logo.svg`, copied from the website's existing logo.
+
 ## Submodules
 
 ### `admin/`

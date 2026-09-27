@@ -464,13 +464,13 @@
   }
 
   h3 {
-    color: #37352f;
+    color: var(--admin-ink);
     font-size: 0.95rem;
     margin-bottom: 0.75rem;
   }
 
   .description {
-    color: #787774;
+    color: var(--admin-muted);
     line-height: 1.55;
     margin-top: 1rem;
     max-width: 46rem;
@@ -479,7 +479,7 @@
   .tools-section { min-width: 0; }
 
   .configuration-section {
-    border-top: 1px solid #e9e9e7;
+    border-top: 1px solid var(--admin-border);
     margin-top: 1.5rem;
     padding-top: 1.25rem;
   }
@@ -495,10 +495,10 @@
   }
 
   .empty-note {
-    background: #fbfbfa;
-    border: 1px solid #e9e9e7;
+    background: var(--admin-soft);
+    border: 1px solid var(--admin-border);
     border-radius: 10px;
-    color: #787774;
+    color: var(--admin-muted);
     margin: 1.5rem 0 0;
     padding: 1rem;
   }
