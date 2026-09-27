@@ -43,7 +43,7 @@
 <div class="admin-shell">
   <aside class="sidebar" aria-label="Admin sidebar">
     <div class="sidebar-top">
-      <a class="brand" href="/admin">Umbod</a>
+      <a class="brand" href="/admin"><img src="/umbod-logo.svg" alt="" width="40" height="40" /><span>Umbod</span></a>
       <p class="workspace">Administration</p>
 
       <nav class="navigation" aria-label="Admin navigation">
@@ -85,15 +85,13 @@
     background: var(--admin-canvas);
     color: var(--admin-ink);
     display: grid;
-    grid-template-columns: 220px minmax(0, 1fr);
+    grid-template-columns: 232px minmax(0, 1fr);
     height: 100vh;
     overflow: hidden;
   }
 
   .sidebar {
-    background:
-      radial-gradient(circle at 0 0, var(--admin-accent-soft), transparent 13rem),
-      var(--admin-sidebar);
+    background: var(--admin-sidebar);
     border-right: 1px solid var(--admin-border);
     box-sizing: border-box;
     display: flex;
@@ -101,17 +99,20 @@
     justify-content: space-between;
     height: 100vh;
     min-height: 0;
-    padding: 18px 12px;
+    padding: 26px 16px 18px;
   }
 
   .brand {
-    border-radius: 6px;
+    align-items: center;
+    border-radius: var(--admin-radius);
     color: var(--admin-ink);
-    display: block;
-    font-size: 15px;
+    display: flex;
+    gap: 8px;
+    font-size: 24px;
     font-weight: 650;
+    letter-spacing: -0.06em;
     line-height: 1.3;
-    padding: 7px 8px;
+    padding: 0 4px;
     text-decoration: none;
   }
 
@@ -122,28 +123,32 @@
 
   .workspace {
     color: var(--admin-muted);
-    font-size: 12px;
+    font-family: var(--admin-mono);
+    font-size: 10px;
+    letter-spacing: 0.08em;
     line-height: 1.4;
-    margin: 2px 8px 18px;
+    margin: 18px 12px 12px;
+    text-transform: uppercase;
   }
 
   .navigation {
     display: grid;
-    gap: 2px;
+    gap: 4px;
   }
 
   .navigation-link {
-    border-radius: 6px;
-    color: var(--admin-ink);
+    border-radius: var(--admin-radius);
+    color: var(--admin-muted);
     font-size: 14px;
     line-height: 1.35;
-    padding: 7px 8px;
+    padding: 10px 12px;
     text-decoration: none;
   }
 
   .navigation-link.active {
-    background: linear-gradient(90deg, var(--admin-accent-soft), var(--admin-border));
-    box-shadow: inset 3px 0 0 var(--admin-accent);
+    background: var(--admin-accent-soft);
+    color: var(--admin-accent);
+    box-shadow: inset 2px 0 0 var(--admin-accent);
     font-weight: 600;
   }
 
@@ -186,9 +191,7 @@
   }
 
   .content-shell {
-    background:
-      radial-gradient(circle at 100% 0, rgb(147 197 253 / 8%), transparent 18rem),
-      var(--admin-canvas);
+    background: var(--admin-canvas);
     box-sizing: border-box;
     min-height: 0;
     overflow: auto;
@@ -197,7 +200,7 @@
 
   .content-loading {
     align-items: center;
-    background: rgb(235 235 232 / 78%);
+    background: rgb(244 247 245 / 88%);
     display: flex;
     inset: 0;
     justify-content: center;
@@ -218,7 +221,7 @@
   .content-width {
     box-sizing: border-box;
     max-width: 860px;
-    padding: 52px 60px;
+    padding: 48px clamp(24px, 4vw, 56px);
     width: 100%;
   }
 
