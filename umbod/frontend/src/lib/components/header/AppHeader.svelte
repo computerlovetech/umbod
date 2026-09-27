@@ -22,14 +22,13 @@
 <style>
   .app-header {
     align-items: center;
-    backdrop-filter: blur(16px);
-    background: rgb(17 24 39 / 86%);
-    border-bottom: 1px solid rgb(255 255 255 / 10%);
+    background: var(--admin-panel);
+    border-bottom: 1px solid var(--admin-border);
     box-sizing: border-box;
     display: flex;
     gap: 1rem;
     justify-content: space-between;
-    min-height: 4rem;
+    min-height: 4.5rem;
     padding: 0.85rem clamp(1rem, 4vw, 2rem);
     position: sticky;
     top: 0;
@@ -37,12 +36,27 @@
   }
 
   .brand {
-    color: #f8fafc;
-    font-size: 0.95rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
+    align-items: center;
+    border-radius: var(--admin-radius);
+    color: var(--admin-ink);
+    display: inline-flex;
+    flex-shrink: 0;
+    gap: 8px;
+    font-size: 24px;
+    font-weight: 650;
+    letter-spacing: -0.06em;
     text-decoration: none;
-    text-transform: uppercase;
+  }
+
+  .brand::before {
+    background: url('/umbod-logo.svg') center / contain no-repeat;
+    content: '';
+    height: 32px;
+    width: 32px;
+  }
+
+  .brand:hover {
+    color: var(--admin-accent);
   }
 
   .account {
@@ -67,33 +81,26 @@
   }
 
   .account-name {
-    color: #f8fafc;
+    color: var(--admin-ink);
     font-size: 0.95rem;
-    font-weight: 700;
+    font-weight: 600;
     max-width: min(16rem, 42vw);
   }
 
   .account-email {
-    color: #cbd5e1;
+    color: var(--admin-muted);
     font-size: 0.8rem;
     max-width: min(18rem, 48vw);
   }
 
   @media (width < 36rem) {
-    .app-header {
-      align-items: flex-start;
-      flex-direction: column;
-    }
-
     .account {
-      align-items: center;
-      text-align: left;
-      width: 100%;
+      --account-picture-size: 1.75rem;
     }
 
     .account-name,
     .account-email {
-      max-width: 100%;
+      max-width: min(10rem, 38vw);
     }
   }
 </style>

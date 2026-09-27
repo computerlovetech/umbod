@@ -77,7 +77,7 @@
     display: flex;
     gap: 24px;
     justify-content: space-between;
-    margin-bottom: 24px;
+    margin-bottom: 32px;
   }
   .page-header :global(.admin-lede) {
     margin-bottom: 0;
@@ -86,23 +86,25 @@
     font: inherit;
   }
   .copy-value {
-    background: var(--admin-surface);
+    background: var(--admin-panel);
     border: 1px solid var(--admin-border);
-    border-radius: 7px;
+    border-radius: var(--admin-radius);
     color: inherit;
     cursor: pointer;
     font-weight: 600;
   }
   .copy-value {
+    flex-shrink: 0;
     font-size: 12px;
     padding: 6px 9px;
   }
   .copy-value:hover {
-    border-color: var(--admin-muted);
+    background: var(--admin-hover);
+    border-color: var(--admin-border-strong);
   }
   .copy-value:focus-visible,
   summary:focus-visible {
-    outline: 2px solid currentColor;
+    outline: 3px solid var(--admin-focus);
     outline-offset: 3px;
   }
   .groups {
@@ -110,15 +112,16 @@
     gap: 16px;
   }
   .configuration-group {
-    background: var(--admin-surface);
+    background: var(--admin-panel);
     border: 1px solid var(--admin-border);
-    border-radius: 10px;
+    border-radius: var(--admin-radius-panel);
     padding: 0 22px;
   }
   summary {
     cursor: pointer;
     font-size: 17px;
-    font-weight: 650;
+    font-weight: 600;
+    line-height: 1.5;
     padding: 18px 0;
   }
   summary::marker {
@@ -127,7 +130,8 @@
   .entry-count {
     color: var(--admin-muted);
     float: right;
-    font-size: 13px;
+    font-family: var(--admin-mono);
+    font-size: 12px;
     font-weight: 400;
     margin-top: 3px;
   }
@@ -159,6 +163,7 @@
     margin: 0;
   }
   .description {
+    line-height: 1.6;
     color: var(--admin-muted);
     font-size: 13px;
   }
@@ -175,12 +180,16 @@
     min-width: 0;
   }
   code {
-    background: var(--admin-accent-soft);
+    background: var(--admin-soft);
+    font-family: var(--admin-mono);
+    overflow-wrap: anywhere;
     border-radius: 5px;
     padding: 3px 6px;
   }
   .value {
-    font-size: 14px;
+    color: var(--admin-ink);
+    min-width: 0;
+    font-size: 13px;
     overflow-wrap: anywhere;
     white-space: pre-wrap;
   }
@@ -189,15 +198,30 @@
     font-style: italic;
   }
   .state-card {
+    background: var(--admin-soft);
+    color: var(--admin-muted);
+    line-height: 1.6;
     border: 1px solid var(--admin-border);
-    border-radius: 10px;
+    border-radius: var(--admin-radius-panel);
     padding: 22px;
   }
   .admin-button {
+    text-decoration: none;
     display: inline-block;
     margin-top: 12px;
   }
+  summary:hover {
+    color: var(--admin-accent);
+  }
   @media (max-width: 640px) {
+    .configuration-group {
+      padding: 0 16px;
+    }
+    .entry-count {
+      display: block;
+      float: none;
+      margin: 4px 0 0;
+    }
     .page-header {
       align-items: stretch;
       flex-direction: column;

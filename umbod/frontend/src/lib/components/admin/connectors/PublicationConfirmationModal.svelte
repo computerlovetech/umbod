@@ -32,7 +32,8 @@
 
 <style>
   p {
-    color: var(--admin-muted, #787774);
+    color: var(--admin-muted);
+    font-size: 14px;
     line-height: 1.55;
     margin: 1rem 0 0;
   }
@@ -42,6 +43,8 @@
     flex-wrap: wrap;
     gap: 0.5rem;
     justify-content: flex-end;
+    border-top: 1px solid var(--admin-border);
+    padding-top: 1rem;
     margin-top: 1.5rem;
   }
 

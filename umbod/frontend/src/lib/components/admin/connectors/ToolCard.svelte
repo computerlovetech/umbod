@@ -29,10 +29,10 @@
 </article>
 
 <style>
-  .tool-card { background: #fff; border: 1px solid #e9e9e7; border-radius: 10px; padding: 0.875rem; }
+  .tool-card { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 1rem; }
   .tool-heading { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; }
   .tool-title { align-items: flex-start; display: flex; flex: 1 1 20rem; flex-direction: column; gap: 0.5rem; min-width: 0; }
-  h4 { color: #37352f; display: -webkit-box; font-size: 0.94rem; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin: 0; max-width: 100%; overflow: hidden; overflow-wrap: anywhere; }
-  code { background: #f1f1ef; border: 1px solid #e3e2df; border-radius: 999px; color: #37352f; font-size: 0.75rem; line-height: 1.4; max-width: 100%; overflow-wrap: anywhere; padding: 2px 7px; white-space: normal; word-break: break-word; }
-  p { color: #787774; font-size: 0.875rem; line-height: 1.55; margin: 0.7rem 0 0; overflow-wrap: anywhere; }
+  h4 { color: var(--admin-ink); display: -webkit-box; font-size: 0.94rem; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; margin: 0; max-width: 100%; overflow: hidden; overflow-wrap: anywhere; }
+  code { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 4px; font-family: var(--admin-mono); color: var(--admin-ink); font-size: 0.75rem; line-height: 1.4; max-width: 100%; overflow-wrap: anywhere; padding: 2px 7px; white-space: normal; word-break: break-word; }
+  p { color: var(--admin-muted); font-size: 0.875rem; line-height: 1.55; margin: 0.7rem 0 0; overflow-wrap: anywhere; }
 </style>

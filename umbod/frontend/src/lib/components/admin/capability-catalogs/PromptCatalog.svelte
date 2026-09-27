@@ -86,17 +86,18 @@
   .catalog.embedded { border-top: 0; margin-top: 0; padding-top: 0; }
   .catalog-heading, .item-heading { align-items: center; display: flex; gap: 0.5rem; }
   .catalog-heading { margin-bottom: 0.875rem; }
-  .item-heading { justify-content: space-between; }
+  .item-heading { align-items: flex-start; justify-content: space-between; }
   .catalog-heading span { background: var(--admin-sidebar); border: 1px solid var(--admin-border); border-radius: 999px; color: var(--admin-muted); font-size: 0.75rem; font-weight: 650; padding: 0.1rem 0.45rem; }
   .catalog > p, li > p, dd { color: var(--admin-muted); }
+  .catalog > p { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); font-size: 14px; line-height: 1.55; margin: 0; padding: 1rem; }
   h3, h4 { color: var(--admin-ink); margin: 0; }
   h3 { font-size: 1rem; }
   h4 { font-size: 0.94rem; overflow-wrap: anywhere; }
-  li { background: #fff; border: 1px solid var(--admin-border); border-radius: 10px; min-width: 0; padding: 1rem; }
+  li { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); min-width: 0; padding: 1rem; }
   li > p, dl { margin: 0.55rem 0 0; }
   li > p, dd { font-size: 0.875rem; line-height: 1.5; overflow-wrap: anywhere; }
   dl { border-top: 1px solid var(--admin-border); display: grid; gap: 0.55rem; padding-top: 0.75rem; }
   dl div { display: grid; gap: 0.15rem; }
-  dt { font-size: 0.8125rem; font-weight: 650; overflow-wrap: anywhere; }
+  dt { color: var(--admin-ink); font-family: var(--admin-mono); font-size: 0.75rem; font-weight: 650; overflow-wrap: anywhere; }
   dd { margin: 0; }
 </style>

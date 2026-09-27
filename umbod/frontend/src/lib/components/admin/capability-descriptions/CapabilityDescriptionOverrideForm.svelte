@@ -31,4 +31,19 @@
   {#if state.message}<p role="status">{state.message}</p>{/if}
 </section>
 
-<style>.override{border-top:1px solid #e9e9e7;display:grid;gap:.5rem;margin-top:1.5rem;padding-top:1rem}.override h3{margin:0}.override textarea{border:1px solid #d9d9d6;border-radius:6px;font:inherit;min-height:4rem;padding:.6rem;resize:vertical}.override textarea:read-only{background:#f7f7f5;color:#5f5e5b}.meta,.actions{display:flex;gap:.75rem;justify-content:space-between}.error{color:#9f2d20}.actions{justify-content:flex-start}</style>
+<style>
+  .override { color: var(--admin-ink); display: grid; gap: .75rem; margin-top: 1.25rem; min-height: 0; overflow-y: auto; padding: .25rem; }
+  .override h3 { font-size: 1rem; margin: 0 0 .25rem; }
+  .override label { font-size: 13px; font-weight: 600; }
+  .override textarea { background: var(--admin-panel); border: 1px solid var(--admin-border-strong); border-radius: var(--admin-radius); box-sizing: border-box; color: var(--admin-ink); font: inherit; font-size: 14px; line-height: 1.55; min-height: 5rem; min-width: 0; padding: .7rem; resize: vertical; width: 100%; }
+  .override textarea:read-only { background: var(--admin-soft); color: var(--admin-muted); }
+  .override textarea:focus-visible { border-color: var(--admin-accent); outline: 2px solid var(--admin-focus); outline-offset: 1px; }
+  .override textarea[aria-invalid='true'] { border-color: var(--admin-danger); }
+  .meta, .actions { display: flex; flex-wrap: wrap; gap: .75rem; justify-content: space-between; }
+  .meta { color: var(--admin-muted); font-size: 12px; line-height: 1.5; }
+  .error { color: var(--admin-danger-text); }
+  .actions { border-top: 1px solid var(--admin-border); justify-content: flex-start; padding-top: 1rem; }
+  .override [role='status'] { color: var(--admin-muted); font-size: 14px; line-height: 1.55; margin: 0; }
+  .override [role='alertdialog'] { background: var(--admin-warning-bg); border: 1px solid var(--admin-warning-border); border-radius: var(--admin-radius); color: var(--admin-warning-text); display: flex; flex-wrap: wrap; gap: .75rem; padding: 1rem; }
+  .override [role='alertdialog'] p { flex-basis: 100%; font-size: 14px; line-height: 1.55; margin: 0; }
+</style>

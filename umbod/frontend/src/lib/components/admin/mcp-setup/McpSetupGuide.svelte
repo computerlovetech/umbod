@@ -94,27 +94,28 @@
 </div>
 
 <style>
-  header { margin-bottom: 28px; }
-  h2 { color: var(--admin-ink); font-size: 17px; line-height: 1.35; margin: 0; }
-  .connection-card, .guide-card { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: 12px; box-shadow: 0 1px 2px rgb(15 15 15 / 3%); }
-  .connection-card { display: grid; gap: 18px; padding: 22px; }
-  .connection-card :global(.copyable-value) { background: var(--admin-soft); max-width: 640px; width: 100%; }
-  .step-label { color: var(--admin-accent-strong); font-size: 12px; font-weight: 700; letter-spacing: .06em; margin: 0 0 5px; text-transform: uppercase; }
-  .guides { display: grid; gap: 14px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 18px; }
+  header { margin-bottom: 32px; }
+  h2 { color: var(--admin-ink); font-size: 18px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.35; margin: 0; }
+  .connection-card, .guide-card { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-panel); }
+  .connection-card { display: grid; gap: 18px; min-width: 0; padding: 24px; }
+  .connection-card :global(.copyable-value) { background: var(--admin-soft); box-sizing: border-box; max-width: 640px; width: 100%; }
+  .step-label { color: var(--admin-accent-strong); font-family: var(--admin-mono); font-size: 11px; font-weight: 500; letter-spacing: .08em; margin: 0 0 5px; text-transform: uppercase; }
+  .guides { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 18px; }
   .guide-card { min-width: 0; padding: 20px; }
   .guide-heading { align-items: center; display: flex; gap: 12px; margin-bottom: 18px; }
   .guide-heading p { color: var(--admin-muted); font-size: 13px; margin: 2px 0 0; }
-  .icon { align-items: center; background: #f3f3f1; border: 1px solid var(--admin-border); border-radius: 9px; display: inline-flex; flex: 0 0 38px; height: 38px; justify-content: center; }
+  .icon { align-items: center; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 9px; display: inline-flex; flex: 0 0 38px; height: 38px; justify-content: center; }
   .icon img { height: 20px; width: 20px; }
   .icon.anthropic { background: #f1e6d5; }
   .icon.copilot { background: #efe7ff; }
   ol { color: var(--admin-ink); font-size: 14px; line-height: 1.55; margin: 0; padding-left: 22px; }
   li + li { margin-top: 8px; }
-  p { color: var(--admin-muted); font-size: 14px; line-height: 1.5; }
+  .guide-card p { color: var(--admin-muted); font-size: 14px; line-height: 1.5; }
   strong { color: var(--admin-ink); }
-  code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  code { font-family: var(--admin-mono); overflow-wrap: anywhere; }
   li code { background: var(--admin-accent-soft); border-radius: 4px; color: var(--admin-ink); padding: 2px 4px; }
-  pre { background: var(--admin-navy); border-radius: 8px; color: #f8fafc; font-size: 12px; line-height: 1.55; margin: 14px 0; overflow-x: auto; padding: 14px; white-space: pre-wrap; word-break: break-word; }
+  pre { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); color: var(--admin-ink); font-size: 12px; line-height: 1.55; margin: 14px 0; overflow-x: auto; padding: 14px; white-space: pre-wrap; word-break: break-word; }
   .note { border-top: 1px solid var(--admin-border); font-size: 12px; margin: 18px 0 0; padding-top: 13px; }
+  @media (max-width: 480px) { .connection-card, .guide-card { padding: 18px; } }
   @media (max-width: 900px) { .guides { grid-template-columns: 1fr; } }
 </style>

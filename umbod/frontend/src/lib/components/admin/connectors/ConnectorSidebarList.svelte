@@ -33,12 +33,12 @@
 
 <style>
   .connector-list { list-style: none; margin: 0; padding: 0; }
-  .connector-list li { border-top: 1px solid #f0efec; }
+  .connector-list li { border-top: 1px solid var(--admin-border); }
   .connector-row { align-items: center; display: flex; }
-  .connector-row:hover { background: #f4f4f2; }
-  .connector-row-selected { background: #ffffff; box-shadow: inset 3px 0 0 #37352f; }
-  .connector-list .connector-row > button { align-items: flex-start; background: transparent; border: 0; color: #37352f; cursor: pointer; display: flex; font: inherit; gap: 0.6rem; padding: 11px 15px; text-align: left; width: 100%; }
-  .connector-copy { display: grid; gap: 0.25rem; }
-  .connector-name { font-size: 13px; font-weight: 600; }
-  :global(.connector-meta) { color: #afaeab; font-size: 11px; overflow-wrap: anywhere; }
+  .connector-row:hover { background: var(--admin-hover); }
+  .connector-row-selected, .connector-row-selected:hover { background: var(--admin-accent-soft); box-shadow: inset 2px 0 0 var(--admin-accent); }
+  .connector-list .connector-row > button { align-items: flex-start; background: transparent; border: 0; color: var(--admin-ink); cursor: pointer; display: flex; font: inherit; gap: 0.6rem; min-width: 0; padding: 15px 16px; text-align: left; width: 100%; }
+  .connector-copy { min-width: 0; display: grid; gap: 0.25rem; }
+  .connector-name { overflow-wrap: anywhere; font-size: 13px; font-weight: 600; }
+  :global(.connector-meta) { color: var(--admin-muted); font-size: 11px; overflow-wrap: anywhere; }
 </style>

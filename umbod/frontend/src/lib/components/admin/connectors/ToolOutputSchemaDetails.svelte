@@ -42,12 +42,12 @@
 
 <style>
   .output-schema { align-items: baseline; display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.875rem; }
-  .label { color: #37352f; font-size: 0.8rem; font-weight: 600; }
+  .label { color: var(--admin-ink); font-size: 0.8rem; font-weight: 600; }
   details { max-width: 100%; width: 100%; }
-  summary, .status { color: #787774; font-size: 0.8rem; }
+  summary, .status { color: var(--admin-muted); font-size: 0.8rem; }
   summary { cursor: pointer; width: fit-content; }
-  .status--warning { align-items: center; color: #9a6700; display: inline-flex; font-weight: 600; gap: 0.25rem; }
-  .warning-icon { fill: #fff4ce; height: 1rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; width: 1rem; }
-  pre { background: #f7f6f3; border: 1px solid #e3e2df; border-radius: 6px; margin: 0.4rem 0 0; max-height: 16rem; max-width: 100%; overflow: auto; padding: 0.65rem; }
+  .status--warning { align-items: center; color: var(--admin-warning-text); display: inline-flex; font-weight: 600; gap: 0.25rem; }
+  .warning-icon { fill: var(--admin-warning-bg); height: 1rem; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.5; width: 1rem; }
+  pre { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 6px; margin: 0.4rem 0 0; max-height: 16rem; max-width: 100%; overflow: auto; padding: 0.65rem; }
   pre code { background: transparent; border: 0; border-radius: 0; display: block; padding: 0; white-space: pre; }
 </style>

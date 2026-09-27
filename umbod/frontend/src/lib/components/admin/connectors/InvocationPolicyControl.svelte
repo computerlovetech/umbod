@@ -28,5 +28,5 @@
 
 <style>
   .policy-control { display: grid; gap: 0.3rem; min-width: 12rem; }
-  .conflict { color: #9f2d20; font-size: 0.75rem; }
+  .conflict { color: var(--admin-danger-text); font-size: 0.75rem; }
 </style>

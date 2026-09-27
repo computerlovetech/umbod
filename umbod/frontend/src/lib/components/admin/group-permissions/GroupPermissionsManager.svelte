@@ -343,8 +343,8 @@
   }
 
   .group-permissions__target-notice {
-    background: #eef6ff;
-    border: 1px solid #b6d7f2;
+    background: var(--admin-accent-soft);
+    border: 1px solid var(--admin-accent-border);
     border-radius: 8px;
     padding: 12px 16px;
   }
@@ -361,20 +361,20 @@
 
   .group-permissions__group-row {
     align-items: center;
-    border-top: 1px solid #f0efec;
+    border-top: 1px solid var(--admin-border);
     display: flex;
     position: relative;
   }
 
   .group-permissions__group-row:hover {
-    background: #f4f4f2;
+    background: var(--admin-soft);
   }
 
   .group-permissions__group-button {
     align-items: center;
     background: transparent;
     border: 0;
-    color: #37352f;
+    color: var(--admin-ink);
     cursor: pointer;
     display: flex;
     flex: 1;
@@ -386,15 +386,15 @@
   }
 
   .group-permissions__group-selected {
-    background: #fff;
-    box-shadow: inset 3px 0 0 #37352f;
+    background: var(--admin-accent-soft);
+    box-shadow: inset 3px 0 0 var(--admin-accent);
   }
 
   .group-permissions__avatar {
     align-items: center;
-    background: #37352f;
+    background: var(--admin-ink);
     border-radius: 50%;
-    color: #fff;
+    color: var(--admin-on-action);
     display: inline-flex;
     flex-shrink: 0;
     font-size: 11px;
@@ -411,6 +411,7 @@
   }
 
   .group-permissions__group-name {
+    overflow-wrap: anywhere;
     display: block;
     flex: 1;
     font-size: 13px;
@@ -419,13 +420,13 @@
   }
 
   .group-permissions__add {
-    border-top: 1px solid #e9e9e7;
+    border-top: 1px solid var(--admin-border);
     margin-top: auto;
     padding: 13px 15px;
   }
 
   .group-permissions__add label {
-    color: #787774;
+    color: var(--admin-muted);
     display: block;
     font-size: 12px;
     font-weight: 600;
@@ -438,20 +439,22 @@
   }
 
   .group-permissions__add-row input {
-    border: 1px solid #e2e1de;
+    background: var(--admin-panel);
+    border: 1px solid var(--admin-border-strong);
     border-radius: 7px;
-    color: #37352f;
+    color: var(--admin-ink);
     flex: 1;
     font: inherit;
+    font-size: 14px;
     min-width: 0;
     padding: 8px 9px;
   }
 
   .group-permissions__edit-button {
-    background: #fff;
-    border: 1px solid #e2e1de;
+    background: var(--admin-panel);
+    border: 1px solid var(--admin-border-strong);
     border-radius: 6px;
-    color: #37352f;
+    color: var(--admin-ink);
     cursor: pointer;
     flex-shrink: 0;
     font: inherit;
@@ -463,9 +466,9 @@
   }
 
   .group-permissions__button-dark {
-    background: #37352f;
-    border-color: #37352f;
-    color: #fff;
+    background: var(--admin-ink);
+    border-color: var(--admin-ink);
+    color: var(--admin-on-action);
   }
 
   .group-permissions__detail-head {
@@ -475,16 +478,22 @@
     margin-bottom: 6px;
   }
 
+  .group-permissions__detail-head > div {
+    min-width: 0;
+  }
+
   .group-permissions__detail-head h2 {
-    font-size: 20px;
-    letter-spacing: -0.3px;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.03em;
+    overflow-wrap: anywhere;
     margin: 0;
   }
 
   .group-permissions__detail-head p,
   .group-permissions__description,
   .group-permissions__block > p {
-    color: #787774;
+    color: var(--admin-muted);
     font-size: 13px;
     line-height: 1.55;
     margin: 0;
@@ -502,7 +511,7 @@
   }
 
   .group-permissions__stat-card {
-    border: 1px solid #e9e9e7;
+    border: 1px solid var(--admin-border);
     border-radius: 8px;
     min-width: 118px;
     padding: 10px 15px;
@@ -515,33 +524,34 @@
   }
 
   .group-permissions__stat-card span {
-    color: #afaeab;
+    color: var(--admin-muted);
     font-size: 13px;
     font-weight: 500;
   }
 
   .group-permissions__stat-card p {
-    color: #787774;
+    color: var(--admin-muted);
     font-size: 11px;
     margin: 1px 0 0;
   }
 
   .group-permissions__block h3 {
-    color: #afaeab;
+    color: var(--admin-muted);
     font-size: 12px;
-    font-weight: 700;
+    font-family: var(--admin-mono);
+    font-weight: 500;
     letter-spacing: 0.5px;
     margin: 0 0 4px;
     text-transform: uppercase;
   }
 
   .group-permissions__block > p {
-    color: #afaeab;
+    color: var(--admin-muted);
     margin-bottom: 12px;
   }
 
   .group-permissions__connector {
-    border-bottom: 1px solid #f4f4f2;
+    border-bottom: 1px solid var(--admin-soft);
   }
 
   .group-permissions__connector:last-child {
@@ -551,16 +561,17 @@
   .group-permissions__connector-row {
     align-items: center;
     display: flex;
+    flex-wrap: wrap;
     gap: 11px;
     padding: 11px 0;
   }
 
   .group-permissions__connector-icon {
     align-items: center;
-    background: #fff;
-    border: 1px solid #ececea;
+    background: var(--admin-panel);
+    border: 1px solid var(--admin-border);
     border-radius: 6px;
-    color: #37352f;
+    color: var(--admin-ink);
     display: inline-flex;
     flex-shrink: 0;
     font-size: 11px;
@@ -571,15 +582,17 @@
   }
 
   .group-permissions__connector-name {
-    flex: 1;
+    overflow-wrap: anywhere;
+    flex: 1 1 12rem;
     font-weight: 600;
     min-width: 0;
   }
 
   .group-permissions__connector-name span {
-    color: #afaeab;
+    color: var(--admin-muted);
     display: block;
-    font-size: 11px;
+    font-size: 12px;
+    line-height: 1.5;
     font-weight: 400;
     margin-top: 2px;
   }
@@ -596,21 +609,21 @@
   }
 
   .group-permissions__tag-muted {
-    background: #f4f4f2;
-    border: 1px solid #e9e9e7;
-    color: #787774;
+    background: var(--admin-soft);
+    border: 1px solid var(--admin-border);
+    color: var(--admin-muted);
   }
 
   .group-permissions__tag-green {
-    background: #edf9f4;
-    border: 1px solid #c5e8d5;
-    color: #1a7f4b;
+    background: var(--admin-success-bg);
+    border: 1px solid var(--admin-success-border);
+    color: var(--admin-success-text);
   }
 
   .group-permissions__tag-orange {
-    background: #fff6ee;
-    border: 1px solid #fdd8a8;
-    color: #b35b00;
+    background: var(--admin-warning-bg);
+    border: 1px solid var(--admin-warning-border);
+    color: var(--admin-warning-text);
   }
 
   .group-permissions__operations-wrap {
@@ -619,24 +632,27 @@
   }
 
   .group-permissions__operations {
-    background: #fafaf9;
-    border: 1px solid #e9e9e7;
+    background: var(--admin-soft);
+    border: 1px solid var(--admin-border);
     border-radius: 9px;
     min-width: 0;
     padding: 4px 14px;
   }
 
   .group-permissions__operations-heading {
-    border-bottom: 1px solid #ececea;
-    color: #787774;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+    border-bottom: 1px solid var(--admin-border);
+    color: var(--admin-muted);
     font-size: 12px;
     padding: 11px 0 9px;
   }
 
   .group-permissions__section-heading {
-    color: #afaeab;
+    color: var(--admin-muted);
     font-size: 11px;
-    font-weight: 700;
+    font-family: var(--admin-mono);
+    font-weight: 500;
     letter-spacing: 0.4px;
     padding: 12px 0 4px;
     text-transform: uppercase;
@@ -644,7 +660,7 @@
 
   .group-permissions__operation {
     align-items: flex-start;
-    border-bottom: 1px solid #f4f4f2;
+    border-bottom: 1px solid var(--admin-border);
     display: flex;
     font-size: 13px;
     gap: 11px;
@@ -657,9 +673,9 @@
   }
 
   .group-permissions__operation-selected {
-    background: #eef6ff;
+    background: var(--admin-accent-soft);
     border-radius: 6px;
-    outline: 2px solid #3b82c4;
+    outline: 2px solid var(--admin-accent);
     outline-offset: 2px;
   }
 
@@ -669,16 +685,16 @@
   }
 
   .group-permissions__operation code {
-    color: #37352f;
+    color: var(--admin-ink);
     display: block;
-    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-family: var(--admin-mono);
     font-size: 12.5px;
     overflow-wrap: anywhere;
     word-break: break-word;
   }
 
   .group-permissions__operation span span {
-    color: #afaeab;
+    color: var(--admin-muted);
     display: block;
     font-size: 11px;
     margin-top: 1px;
@@ -700,22 +716,62 @@
   }
 
   .group-permissions__error {
-    color: #b42318;
+    color: var(--admin-danger);
   }
 
   .group-permissions__success {
-    color: #067647;
+    color: var(--admin-success-text);
   }
 
   .group-permissions__warning,
   .group-permissions__warning-panel {
-    color: #92400e;
+    color: var(--admin-warning-text);
+  }
+
+  .group-permissions__target-notice {
+    color: var(--admin-accent);
+    font-size: 14px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+
+  .group-permissions__target-notice code {
+    font-family: var(--admin-mono);
+  }
+
+  .group-permissions__edit-button:hover {
+    background: var(--admin-hover);
+    border-color: var(--admin-accent-border);
+  }
+
+  .group-permissions__button-dark:hover {
+    background: var(--admin-action-hover);
+    border-color: var(--admin-action-hover);
+  }
+
+  .group-permissions__warning-panel {
+    background: var(--admin-warning-bg);
+    border: 1px solid var(--admin-warning-border);
+    border-radius: var(--admin-radius);
+    font-size: 14px;
+    line-height: 1.6;
+    padding: 14px 16px;
+  }
+
+  .group-permissions__warning-panel p {
+    margin: 0 0 12px;
   }
 
   @media (max-width: 820px) {
     .group-permissions__connector-row {
-      align-items: flex-start;
-      flex-wrap: wrap;
+      align-items: center;
+      display: grid;
+      gap: 10px 8px;
+      grid-template-columns: 24px minmax(0, 1fr) auto 34px;
+    }
+
+    .group-permissions__connector-name {
+      grid-column: 2 / -1;
     }
 
     .group-permissions__operations-wrap {
@@ -723,11 +779,13 @@
     }
 
     .group-permissions__tag {
-      order: 3;
+      grid-column: 2;
+      justify-self: start;
+      white-space: normal;
     }
 
     .group-permissions__edit-button {
-      margin-left: auto;
+      grid-column: 3;
     }
   }
 </style>

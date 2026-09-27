@@ -87,9 +87,9 @@
 {/if}
 
 <style>
-  .import-tabs { border-bottom: 1px solid #d9d9d6; display: flex; gap: 18px; }
-  .import-tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: #787774; cursor: pointer; font: inherit; font-size: 13px; font-weight: 650; padding: 0 2px 8px; }
-  .import-tabs button.active { border-bottom-color: #37352f; color: #37352f; }
-  .helper { color: #787774; font-size: 13px; margin: -0.5rem 0 0; }
-  .error { background: #fbe9e7; border-radius: 8px; color: #9f2d20; font-size: 13px; margin: 0; padding: 9px 10px; }
+  .import-tabs { border-bottom: 1px solid var(--admin-border-strong); display: flex; gap: 18px; }
+  .import-tabs button { background: transparent; border: 0; border-bottom: 2px solid transparent; color: var(--admin-muted); cursor: pointer; font: inherit; font-size: 13px; font-weight: 650; padding: 0 2px 8px; }
+  .import-tabs button.active { border-bottom-color: var(--admin-ink); color: var(--admin-ink); }
+  .helper { color: var(--admin-muted); font-size: 13px; margin: -0.5rem 0 0; }
+  .error { background: var(--admin-danger-bg); border-radius: 8px; color: var(--admin-danger-text); font-size: 13px; margin: 0; padding: 9px 10px; }
 </style>

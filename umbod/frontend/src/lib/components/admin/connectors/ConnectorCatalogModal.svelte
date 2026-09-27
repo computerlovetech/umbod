@@ -61,11 +61,12 @@
 {/if}
 
 <style>
-  .intro, .empty { color: #787774; margin: 1rem 0 0; }
-  .back { background: transparent; border: 0; color: #56554f; cursor: pointer; font: inherit; margin-top: 1rem; padding: 0; }
+  .intro, .empty { color: var(--admin-muted); margin: 1rem 0 0; }
+  .back { background: transparent; border: 0; color: var(--admin-ink); cursor: pointer; font: inherit; margin-top: 1rem; padding: 0; }
   ul { display: grid; gap: 0.5rem; list-style: none; margin: 1rem 0 0; overflow: auto; padding: 0; }
-  li button { align-items: flex-start; background: #fbfbfa; border: 1px solid #e9e9e7; border-radius: 8px; cursor: pointer; display: flex; gap: 0.6rem; padding: 0.85rem; text-align: left; width: 100%; }
-  li button:hover { background: #f4f4f2; }
+  li button { align-items: flex-start; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 8px; cursor: pointer; display: flex; gap: 0.6rem; padding: 0.85rem; text-align: left; width: 100%; }
+  li button:hover { background: var(--admin-hover); }
+  .connector-copy strong { color: var(--admin-ink); }
   .connector-copy { display: grid; gap: 0.3rem; }
-  li span { color: #787774; font-size: 13px; }
+  li span { color: var(--admin-muted); font-size: 13px; }
 </style>

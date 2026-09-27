@@ -77,17 +77,17 @@
 
 <style>
   .parameter-details {
-    border-top: 1px solid #e9e9e7;
+    border-top: 1px solid var(--admin-border);
     margin-top: 14px;
     padding-top: 14px;
   }
 
   summary {
     align-items: center;
-    background: #f7f6f3;
-    border: 1px solid #e9e9e7;
+    background: var(--admin-soft);
+    border: 1px solid var(--admin-border);
     border-radius: 999px;
-    color: #37352f;
+    color: var(--admin-ink);
     cursor: pointer;
     display: inline-flex;
     gap: 6px;
@@ -100,12 +100,12 @@
   }
 
   summary:hover {
-    border-color: #c9c8c4;
+    border-color: var(--admin-border-strong);
   }
 
   summary:focus-visible {
     border-radius: 8px;
-    outline: 3px solid rgb(55 53 47 / 16%);
+    outline: 3px solid var(--admin-focus);
     outline-offset: 3px;
   }
 
@@ -117,7 +117,7 @@
   }
 
   .schema-icon {
-    background: #e9e9e7;
+    background: var(--admin-border);
     border-radius: 999px;
     height: 24px;
     width: 24px;
@@ -153,7 +153,7 @@
 
   summary small,
   .overview span {
-    color: #787774;
+    color: var(--admin-muted);
   }
 
   .overview {
@@ -164,8 +164,8 @@
   }
 
   .overview span {
-    background: #f7f6f3;
-    border: 1px solid #e9e9e7;
+    background: var(--admin-soft);
+    border: 1px solid var(--admin-border);
   }
 
   section {
@@ -173,7 +173,7 @@
   }
 
   h4 {
-    color: #787774;
+    color: var(--admin-muted);
     font-size: 12px;
     font-weight: 650;
     letter-spacing: 0.12em;
@@ -191,8 +191,8 @@
   }
 
   li {
-    background: #f7f6f3;
-    border: 1px solid #e9e9e7;
+    background: var(--admin-soft);
+    border: 1px solid var(--admin-border);
     border-radius: 8px;
     display: grid;
     gap: 6px;
@@ -207,30 +207,30 @@
   }
 
   strong {
-    color: #37352f;
+    color: var(--admin-ink);
     font-size: 14px;
   }
 
   code {
-    background: #fff;
-    border: 1px solid #e3e2df;
+    background: var(--admin-panel);
+    border: 1px solid var(--admin-border);
     border-radius: 999px;
-    color: #37352f;
+    color: var(--admin-ink);
     font-size: 12px;
     padding: 2px 7px;
   }
 
   p {
-    color: #787774;
+    color: var(--admin-muted);
     font-size: 13px;
     line-height: 1.5;
     margin: 0;
   }
 
   .type-label {
-    background: #f1faf3;
-    border: 1px solid #cce9d2;
-    color: #2f6b3f;
+    background: var(--admin-success-bg);
+    border: 1px solid var(--admin-success-border);
+    color: var(--admin-success-text);
     justify-self: start;
   }
 

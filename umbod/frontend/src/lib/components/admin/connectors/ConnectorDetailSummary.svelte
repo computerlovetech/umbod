@@ -52,16 +52,16 @@
   header { align-items: center; display: flex; gap: 1.25rem; justify-content: space-between; min-height: 2.5rem; }
   .heading { align-items: center; display: flex; gap: 0.8rem; min-width: 0; }
   .identity { min-width: 0; }
-  .eyebrow { color: #afaeab; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; margin: 0 0 0.35rem; text-transform: uppercase; }
-  h2 { color: #37352f; font-size: 1.55rem; line-height: 1.2; margin: 0; overflow-wrap: anywhere; }
-  .description { color: #787774; line-height: 1.55; margin-top: 1rem; max-width: 48rem; }
+  .eyebrow { color: var(--admin-muted); font-size: 0.72rem; font-family: var(--admin-mono); font-weight: 500; letter-spacing: 0.08em; margin: 0 0 0.35rem; text-transform: uppercase; }
+  h2 { color: var(--admin-ink); font-size: 1.55rem; font-weight: 600; letter-spacing: -0.035em; line-height: 1.2; margin: 0; overflow-wrap: anywhere; }
+  .description { color: var(--admin-muted); line-height: 1.55; margin-top: 1rem; max-width: 48rem; }
   .description :global(p) { margin: 0; }
-  .summary-row { border-bottom: 1px solid #e9e9e7; border-top: 1px solid #e9e9e7; display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; margin: 1.25rem 0 0; padding: 0.9rem 0; }
+  .summary-row { border-bottom: 1px solid var(--admin-border); border-top: 1px solid var(--admin-border); display: grid; grid-auto-columns: minmax(0, 1fr); grid-auto-flow: column; margin: 1.25rem 0 0; padding: 0.9rem 0; }
   .summary-row :global(.detail-item) { padding: 0 1.25rem; }
   .summary-row :global(.detail-item:first-child) { padding-left: 0; }
-  .summary-row :global(.detail-item + .detail-item) { border-left: 1px solid #e9e9e7; }
-  .technical-details { background: #f7f7f5; border: 1px solid #e9e9e7; border-radius: 8px; margin-top: 0.8rem; padding: 0.85rem 1rem; }
-  summary { color: #565550; cursor: pointer; font-size: 0.85rem; font-weight: 650; }
+  .summary-row :global(.detail-item + .detail-item) { border-left: 1px solid var(--admin-border); }
+  .technical-details { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 8px; margin-top: 0.8rem; padding: 0.85rem 1rem; }
+  summary { color: var(--admin-ink); cursor: pointer; font-size: 0.85rem; font-weight: 650; }
   .technical-details dl { display: grid; gap: 1.25rem 2rem; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 1rem 0 0; }
   .body { margin-top: 1.5rem; }
 
@@ -71,7 +71,7 @@
     .summary-row :global(.detail-item) { padding: 0.75rem 0; }
     .summary-row :global(.detail-item:first-child) { padding-top: 0; }
     .summary-row :global(.detail-item:last-child) { padding-bottom: 0; }
-    .summary-row :global(.detail-item + .detail-item) { border-left: 0; border-top: 1px solid #e9e9e7; }
+    .summary-row :global(.detail-item + .detail-item) { border-left: 0; border-top: 1px solid var(--admin-border); }
     .technical-details dl { grid-template-columns: 1fr; }
     .body { margin-top: 1.25rem; }
   }

@@ -70,7 +70,11 @@ const mcpPage = readFileSync('src/lib/components/admin/downstream-mcp-connectors
 
   test('MCP workspace buttons expose pointer and disabled cursor styles', () => {
     expect(mcpPage).toContain('<ConnectorPageHeader');
-    expect(connectorPageHeader).toContain('cursor: pointer');
+    expect(connectorPageHeader).toContain('<Button');
+    const button = readFileSync('src/lib/components/admin/shared/Button.svelte', 'utf8');
+    expect(button).toContain('cursor: pointer');
+    expect(button).toContain('cursor: not-allowed');
+    expect(button).toContain('.admin-shared-button:focus-visible');
     expect(mcpWorkspace).toContain('button:not(:disabled){cursor:pointer}');
     expect(mcpWorkspace).toContain('button:disabled{cursor:not-allowed}');
   });

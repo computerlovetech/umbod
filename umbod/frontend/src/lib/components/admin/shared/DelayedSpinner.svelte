@@ -38,7 +38,7 @@
 <style>
   .delayed-spinner {
     align-items: center;
-    color: #787774;
+    color: var(--admin-muted);
     display: flex;
     font-size: 13px;
     font-weight: 500;
@@ -55,8 +55,8 @@
 
   .delayed-spinner__mark {
     animation: delayed-spinner-rotate 0.75s linear infinite;
-    border: 2px solid #e9e9e7;
-    border-top-color: #37352f;
+    border: 2px solid var(--admin-border);
+    border-top-color: var(--admin-ink);
     border-radius: 50%;
     box-sizing: border-box;
     flex: 0 0 auto;
@@ -73,7 +73,7 @@
   }
 
   .delayed-spinner__label {
-    color: #787774;
+    color: var(--admin-muted);
     white-space: nowrap;
   }
 

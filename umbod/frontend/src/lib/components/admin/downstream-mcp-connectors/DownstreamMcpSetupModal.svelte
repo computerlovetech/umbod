@@ -111,18 +111,19 @@
 {/if}
 
 <style>
-  .endpoint-help { color: #5f5e5b; font-size: 12px; margin: 0; }
-  .endpoint-help code { color: #37352f; }
+  .endpoint-help { color: var(--admin-muted); font-size: 12px; margin: 0; }
+  .endpoint-help code { color: var(--admin-ink); }
   .path-field { display: grid; gap: 7px; }
-  .path-field label { color: #37352f; font-size: 13px; font-weight: 650; line-height: 1.4; }
-  .path-input { align-items: stretch; background: #fff; border: 1px solid #d9d9d6; border-radius: 8px; display: flex; overflow: hidden; }
-  .path-input:focus-within { border-color: #787774; outline: 3px solid rgb(55 53 47 / 12%); }
-  .path-input.invalid { border-color: #9f2d20; }
-  .path-input span { align-items: center; background: #f1f1ef; border-right: 1px solid #d9d9d6; color: #787774; display: flex; font-size: 14px; padding: 9px 10px; white-space: nowrap; }
-  .path-input input { border: 0; color: #37352f; flex: 1; font: inherit; font-size: 14px; line-height: 1.4; min-width: 0; padding: 9px 10px; }
+  .path-field label { color: var(--admin-ink); font-size: 13px; font-weight: 650; line-height: 1.4; }
+  .path-input { align-items: stretch; background: var(--admin-panel); border: 1px solid var(--admin-border-strong); border-radius: 8px; display: flex; overflow: hidden; }
+  .path-input:focus-within { border-color: var(--admin-accent); outline: 3px solid var(--admin-focus); }
+  .path-input.invalid { border-color: var(--admin-danger-text); }
+  .path-input span { align-items: center; background: var(--admin-soft); border-right: 1px solid var(--admin-border-strong); color: var(--admin-muted); display: flex; font-size: 14px; padding: 9px 10px; white-space: nowrap; }
+  .path-input input { background: var(--admin-panel); border: 0; color: var(--admin-ink); flex: 1; font: inherit; font-size: 14px; line-height: 1.4; min-width: 0; padding: 9px 10px; }
   .path-input input:focus { outline: 0; }
-  .path-input input:read-only { background: #f7f7f5; color: #787774; }
-  .helper { color: #787774; font-size: 13px; line-height: 1.5; margin: 0; }
-  .warning { background: #fff4e8; border-radius: 8px; color: #80521f; font-size: 12px; margin: 0; padding: .7rem; }
-  .error { background: #fbe9e7; color: #9f2d20; font-size: 12px; margin: 0; padding: .7rem; }
+  .path-input input:read-only { background: var(--admin-soft); color: var(--admin-muted); }
+  .helper { color: var(--admin-muted); font-size: 13px; line-height: 1.5; margin: 0; }
+  .warning { background: var(--admin-warning-bg); border: 1px solid var(--admin-warning-border); border-radius: var(--admin-radius); color: var(--admin-warning-text); font-size: 13px; line-height: 1.5; margin: 0; padding: .75rem; }
+  .error { background: var(--admin-danger-bg); border: 1px solid var(--admin-danger-border); border-radius: var(--admin-radius); color: var(--admin-danger-text); font-size: 13px; line-height: 1.5; margin: 0; padding: .75rem; }
+  code { font-family: var(--admin-mono); overflow-wrap: anywhere; }
 </style>

@@ -64,9 +64,9 @@
   .controls { align-items: end; display: flex; flex-wrap: wrap; gap: 0.75rem; margin-bottom: 1rem; }
   .control { display: grid; flex: 1 1 10rem; font-size: 0.8125rem; font-weight: 600; gap: 0.35rem; min-width: 9rem; }
   .search { flex: 3 1 28rem; min-width: min(100%, 18rem); }
-  .control input { background: #fff; border: 1px solid #e9e9e7; border-radius: 6px; color: #37352f; font: inherit; min-height: 2.75rem; padding: 0.65rem 0.7rem; }
-  .control input:focus-visible { border-color: #2f6feb; outline: 3px solid rgb(47 111 235 / 24%); outline-offset: 2px; }
+  .control input { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: 6px; color: var(--admin-ink); font: inherit; min-height: 2.75rem; padding: 0.65rem 0.7rem; }
+  .control input:focus-visible { border-color: var(--admin-accent); outline: 3px solid var(--admin-focus); outline-offset: 2px; }
   .search input { width: 100%; }
-  .status { color: #787774; flex-basis: 100%; font-size: 0.875rem; line-height: 1.5; margin: 0; }
+  .status { color: var(--admin-muted); flex-basis: 100%; font-size: 0.875rem; line-height: 1.5; margin: 0; }
   @media (max-width: 42rem) { .controls { align-items: stretch; flex-direction: column; } .control, .search { flex-basis: auto; min-width: 0; width: 100%; } }
 </style>

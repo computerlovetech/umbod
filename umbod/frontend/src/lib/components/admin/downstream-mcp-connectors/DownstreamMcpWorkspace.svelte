@@ -142,5 +142,19 @@
 </AdminSplitWorkspace>
 {:else}<p class="empty">No MCP proxy connectors are configured yet. Add one to publish tools from a downstream MCP server.</p>{/if}
 <style>
- button:not(:disabled){cursor:pointer}button:disabled{cursor:not-allowed}.datetime-pair{display:grid;gap:.35rem}.datetime-pair span{display:grid;gap:.1rem}.datetime-pair strong{color:#787774;font-size:11px;font-weight:600}.tools h3{color:var(--admin-ink);font-size:1rem;margin:0 0 .875rem}.backdrop{align-items:center;background:#0007;display:flex;inset:0;justify-content:center;position:fixed;z-index:110}.confirm{background:white;border-radius:12px;padding:1.25rem;width:min(28rem,calc(100% - 2rem))}.confirm footer{display:flex;gap:.7rem;justify-content:flex-end}.danger-text{color:#a33}.feedback,.empty{border:1px solid #e9e9e7;border-radius:8px;padding:1rem}
+  button:not(:disabled){cursor:pointer}
+  button:disabled{cursor:not-allowed}
+  .datetime-pair { display: grid; gap: .35rem; }
+  .datetime-pair span { display: grid; gap: .1rem; }
+  .datetime-pair strong { color: var(--admin-muted); font-size: 11px; font-weight: 600; }
+  .tools h3 { color: var(--admin-ink); font-size: 1rem; margin: 0 0 .875rem; }
+  .backdrop { align-items: center; background: var(--admin-overlay); display: flex; inset: 0; justify-content: center; padding: 1rem; position: fixed; z-index: 110; }
+  .confirm { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-panel); box-shadow: var(--admin-shadow-dialog); box-sizing: border-box; color: var(--admin-ink); max-height: calc(100dvh - 2rem); overflow-y: auto; padding: 1.5rem; width: min(28rem, 100%); }
+  .confirm h2 { font-size: 1.25rem; font-weight: 600; letter-spacing: -.03em; margin: 0; }
+  .confirm p { color: var(--admin-muted); font-size: 14px; line-height: 1.55; margin: 1rem 0 1.5rem; }
+  .confirm footer { border-top: 1px solid var(--admin-border); display: flex; flex-wrap: wrap; gap: .7rem; justify-content: flex-end; padding-top: 1rem; }
+  .danger-text[role='menuitem'] { color: var(--admin-danger-text); }
+  .feedback, .empty { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); color: var(--admin-muted); font-size: 14px; line-height: 1.55; padding: 1rem; }
+  .feedback[role='alert'] { background: var(--admin-danger-bg); border-color: var(--admin-danger-border); color: var(--admin-danger-text); }
+  .feedback p { margin: 0 0 .75rem; }
 </style>

@@ -1,17 +1,33 @@
 :root {
-  --admin-ink: #37352f;
-  --admin-muted: #787774;
-  --admin-canvas: #fffdf8;
-  --admin-sidebar: #f7f6f3;
+  /* Website palette, with semantic roles for interactive application surfaces. */
+  --admin-ink: #14201c;
+  --admin-muted: #5d6b64;
+  --admin-canvas: #ffffff;
+  --admin-sidebar: #f4f7f5;
   --admin-panel: #ffffff;
-  --admin-soft: #f7f6f3;
-  --admin-border: #e9e9e7;
-  --admin-border-strong: #d9d9d6;
-  --admin-accent: #93c5fd;
-  --admin-accent-strong: #2563eb;
-  --admin-accent-soft: rgb(147 197 253 / 14%);
-  --admin-navy: #111827;
-  --admin-slate: #cbd5e1;
+  --admin-soft: #f4f7f5;
+  --admin-hover: #eaf0ec;
+  --admin-border: #dce4df;
+  --admin-border-strong: #b6c5bd;
+  --admin-accent: #07634e;
+  --admin-accent-strong: #07634e;
+  --admin-accent-soft: #e8f3ed;
+  --admin-accent-border: #bfd8cb;
+  --admin-focus: #07634e;
+  --admin-action: #14201c;
+  --admin-action-hover: #294638;
+  --admin-on-action: #ffffff;
+  --admin-disabled-bg: #edf1ee;
+  --admin-disabled-text: #68776e;
+  --admin-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --admin-radius: 8px;
+  --admin-radius-panel: 12px;
+  --admin-shadow: 0 8px 24px rgb(20 32 28 / 10%);
+  --admin-shadow-dialog: 0 24px 80px rgb(20 32 28 / 20%);
+  --admin-overlay: rgb(20 32 28 / 42%);
+  --admin-loading-bg: rgb(244 247 245 / 88%);
+  --admin-danger: #b42318;
+  --admin-danger-hover: #962018;
   --admin-success-bg: #f1faf3;
   --admin-success-border: #cce9d2;
   --admin-success-text: #2f6b3f;
@@ -25,6 +41,15 @@
 
 .admin-page {
   color: var(--admin-ink);
+}
+
+.admin-shell {
+  -webkit-font-smoothing: antialiased;
+}
+
+.admin-shell :focus-visible {
+  outline: 3px solid var(--admin-focus);
+  outline-offset: 3px;
 }
 
 .admin-back-link {
@@ -45,10 +70,11 @@
 }
 
 .admin-eyebrow {
-  color: var(--admin-muted);
-  font-size: 12px;
-  font-weight: 650;
-  letter-spacing: 0.12em;
+  color: var(--admin-accent);
+  font-family: var(--admin-mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
   line-height: 1.4;
   margin: 0 0 10px;
   text-transform: uppercase;
@@ -56,9 +82,9 @@
 
 .admin-title {
   color: var(--admin-ink);
-  font-size: 28px;
-  font-weight: 650;
-  letter-spacing: -0.02em;
+  font-size: clamp(28px, 3vw, 34px);
+  font-weight: 600;
+  letter-spacing: -0.04em;
   line-height: 1.2;
   margin: 0;
 }
@@ -76,7 +102,7 @@
 }
 
 .connector-page-header .admin-lede {
-  min-height: 3.2em;
+  max-width: 48rem;
 }
 
 .connector-page-heading {
@@ -89,8 +115,7 @@
 .admin-message {
   background: var(--admin-panel);
   border: 1px solid var(--admin-border);
-  border-radius: 10px;
-  box-shadow: 0 1px 2px rgb(15 15 15 / 3%);
+  border-radius: var(--admin-radius-panel);
 }
 
 .admin-panel {
@@ -124,10 +149,10 @@
 }
 
 .admin-button {
-  background: var(--admin-ink);
-  border: 1px solid var(--admin-ink);
-  border-radius: 8px;
-  color: #fff;
+  background: var(--admin-action);
+  border: 1px solid var(--admin-action);
+  border-radius: var(--admin-radius);
+  color: var(--admin-on-action);
   cursor: pointer;
   font: inherit;
   font-size: 14px;
@@ -137,14 +162,14 @@
 }
 
 .admin-button:hover {
-  background: var(--admin-navy);
-  border-color: var(--admin-navy);
+  background: var(--admin-action-hover);
+  border-color: var(--admin-action-hover);
 }
 
 .admin-button:disabled {
-  background: var(--admin-border);
-  border-color: #e3e2df;
-  color: var(--admin-muted);
+  background: var(--admin-disabled-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-disabled-text);
   cursor: not-allowed;
 }
 
@@ -163,6 +188,6 @@
 }
 
 .admin-card-link:hover {
-  background: linear-gradient(135deg, var(--admin-accent-soft), var(--admin-soft) 58%);
-  border-color: var(--admin-accent);
+  background: var(--admin-soft);
+  border-color: var(--admin-accent-border);
 }

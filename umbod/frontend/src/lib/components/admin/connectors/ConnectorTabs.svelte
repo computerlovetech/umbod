@@ -43,7 +43,8 @@
   .connector-tabs {
     border-bottom: 1px solid var(--admin-border);
     display: flex;
-    gap: 24px;
+    flex-wrap: wrap;
+    gap: 12px 24px;
     margin-bottom: 32px;
   }
 
@@ -63,7 +64,7 @@
 
   a.active {
     border-bottom-color: var(--admin-accent);
-    color: var(--admin-ink);
+    color: var(--admin-accent);
   }
 
   .connector-tabs-loading {
