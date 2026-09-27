@@ -91,10 +91,11 @@
   .resource-title { align-items: flex-start; flex-wrap: wrap; }
   .catalog-heading span, .resource-title span { background: var(--admin-sidebar); border: 1px solid var(--admin-border); border-radius: 999px; color: var(--admin-muted); font-size: 0.75rem; font-weight: 650; padding: 0.1rem 0.45rem; }
   .catalog > p, li > p { color: var(--admin-muted); }
+  .catalog > p { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); font-size: 14px; line-height: 1.55; margin: 0; padding: 1rem; }
   h3, h4 { color: var(--admin-ink); margin: 0; }
   h3 { font-size: 1rem; }
   h4 { font-size: 0.94rem; overflow-wrap: anywhere; }
-  li { background: #fff; border: 1px solid var(--admin-border); border-radius: 10px; min-width: 0; padding: 1rem; }
+  li { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); min-width: 0; padding: 1rem; }
   li > p { font-size: 0.875rem; line-height: 1.5; margin: 0.55rem 0 0.75rem; overflow-wrap: anywhere; }
-  code { background: var(--admin-sidebar); border: 1px solid var(--admin-border); border-radius: 6px; display: block; font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; padding: 0.4rem 0.55rem; }
+  code { background: var(--admin-soft); color: var(--admin-ink); font-family: var(--admin-mono); border: 1px solid var(--admin-border); border-radius: 6px; display: block; font-size: 0.75rem; line-height: 1.5; overflow-wrap: anywhere; padding: 0.4rem 0.55rem; }
 </style>

@@ -86,7 +86,7 @@
 </div>
 
 <style>
-  .catalog { color: #37352f; }
+  .catalog { color: var(--admin-ink); }
   .save-tools { align-items: center; display: flex; justify-content: flex-end; margin: 0; }
-  .empty { margin: 0; }
+  .empty { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); color: var(--admin-muted); font-size: 14px; line-height: 1.55; margin: 0; padding: 1rem; }
 </style>

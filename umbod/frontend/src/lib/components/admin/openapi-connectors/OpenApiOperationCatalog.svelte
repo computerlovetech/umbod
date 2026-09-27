@@ -79,5 +79,5 @@
 <style>
   .catalog { color: var(--admin-ink); }
   .save-tools { align-items: center; display: flex; justify-content: flex-end; margin: 0; }
-  .empty { color: var(--admin-muted); font-size: 0.875rem; line-height: 1.55; margin: 0.7rem 0 0; }
+  .empty { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 1rem; color: var(--admin-muted); font-size: 0.875rem; line-height: 1.55; margin: 0.7rem 0 0; }
 </style>
