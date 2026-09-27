@@ -561,6 +561,7 @@
   .group-permissions__connector-row {
     align-items: center;
     display: flex;
+    flex-wrap: wrap;
     gap: 11px;
     padding: 11px 0;
   }
@@ -582,7 +583,7 @@
 
   .group-permissions__connector-name {
     overflow-wrap: anywhere;
-    flex: 1;
+    flex: 1 1 12rem;
     font-weight: 600;
     min-width: 0;
   }
@@ -639,6 +640,8 @@
   }
 
   .group-permissions__operations-heading {
+    line-height: 1.5;
+    overflow-wrap: anywhere;
     border-bottom: 1px solid var(--admin-border);
     color: var(--admin-muted);
     font-size: 12px;
@@ -657,7 +660,7 @@
 
   .group-permissions__operation {
     align-items: flex-start;
-    border-bottom: 1px solid var(--admin-soft);
+    border-bottom: 1px solid var(--admin-border);
     display: flex;
     font-size: 13px;
     gap: 11px;
@@ -761,8 +764,14 @@
 
   @media (max-width: 820px) {
     .group-permissions__connector-row {
-      align-items: flex-start;
-      flex-wrap: wrap;
+      align-items: center;
+      display: grid;
+      gap: 10px 8px;
+      grid-template-columns: 24px minmax(0, 1fr) auto 34px;
+    }
+
+    .group-permissions__connector-name {
+      grid-column: 2 / -1;
     }
 
     .group-permissions__operations-wrap {
@@ -770,11 +779,13 @@
     }
 
     .group-permissions__tag {
-      order: 3;
+      grid-column: 2;
+      justify-self: start;
+      white-space: normal;
     }
 
     .group-permissions__edit-button {
-      margin-left: auto;
+      grid-column: 3;
     }
   }
 </style>

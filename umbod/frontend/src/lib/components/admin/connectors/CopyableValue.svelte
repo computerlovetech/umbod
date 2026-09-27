@@ -28,7 +28,7 @@
   .copyable-value { align-items: stretch; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 8px; display: flex; max-width: 100%; overflow: hidden; transition: border-color 120ms ease, box-shadow 120ms ease; }
   .copyable-value:focus-within { border-color: var(--admin-accent); box-shadow: 0 0 0 3px var(--admin-focus); }
   .copyable-value.failed { border-color: var(--admin-danger-border); }
-  code { align-items: center; background: transparent; display: flex; flex: 1 1 auto; font-size: 0.8rem; min-height: 2.25rem; min-width: 0; overflow: hidden; padding: 0.45rem 0.7rem; text-overflow: ellipsis; white-space: nowrap; }
+  code { align-items: center; background: transparent; display: flex; flex: 1 1 auto; font-family: var(--admin-mono); font-size: 0.8rem; min-height: 2.25rem; min-width: 0; overflow-wrap: anywhere; padding: 0.45rem 0.7rem; white-space: normal; }
   button { align-items: center; background: var(--admin-hover); border: 0; border-left: 1px solid var(--admin-border); color: var(--admin-muted); cursor: pointer; display: inline-flex; flex: 0 0 2.65rem; justify-content: center; padding: 0; transition: background 120ms ease, color 120ms ease; }
   button:hover { background: var(--admin-hover); color: var(--admin-ink); }
   button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: -3px; }

@@ -14,9 +14,12 @@ these variables in component-scoped styles. The home page, app header and global
 light-theme defaults use the same palette.
 Keep presentation changes in those components; feature state and API adapters stay
 in their existing modules. Use the semantic variables for surfaces, text, actions,
-focus and feedback instead of duplicating literal colours. Keep intentional vendor logo colors in the MCP setup guide.
+focus and feedback instead of duplicating literal colours. Keep intentional vendor
+logo colors in the MCP setup guide.
 
-The shell uses `static/umbod-logo.svg`, copied from the website's existing logo.
+The shell and app header use `static/umbod-logo.svg`, copied from the website's
+existing logo. `AdminShell` provides the inline-size container used by
+`AdminSplitWorkspace` to stack its sidebar when the content area is narrow.
 
 ## Submodules
 

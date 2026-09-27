@@ -88,7 +88,7 @@
     }
   }
 
-  @media (max-width: 820px) {
+  @container (max-width: 760px) {
     .admin-split-workspace {
       grid-template-columns: 1fr;
     }

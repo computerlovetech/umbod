@@ -35,6 +35,6 @@
   .detail dt { margin-bottom: 0.4rem; }
   .detail dd { color: var(--admin-ink); }
   dd :global(a), dd :global(code) { overflow-wrap: anywhere; word-break: break-word; }
-  dd :global(code) { background: var(--admin-border); border-radius: 4px; color: var(--admin-ink); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.82rem; padding: 0.12rem 0.3rem; white-space: normal; }
+  dd :global(code) { background: var(--admin-border); border-radius: 4px; color: var(--admin-ink); font-family: var(--admin-mono); font-size: 0.82rem; padding: 0.12rem 0.3rem; white-space: normal; }
   dd :global(p) { margin: 0.35rem 0 0; }
 </style>

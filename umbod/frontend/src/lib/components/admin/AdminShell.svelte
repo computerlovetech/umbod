@@ -99,6 +99,7 @@
     justify-content: space-between;
     height: 100vh;
     min-height: 0;
+    min-width: 0;
     padding: 26px 16px 18px;
   }
 
@@ -194,6 +195,7 @@
     background: var(--admin-canvas);
     box-sizing: border-box;
     min-height: 0;
+    min-width: 0;
     overflow: auto;
     position: relative;
   }
@@ -220,6 +222,7 @@
 
   .content-width {
     box-sizing: border-box;
+    container-type: inline-size;
     max-width: 860px;
     padding: 48px clamp(24px, 4vw, 56px);
     width: 100%;
@@ -231,7 +234,7 @@
 
   @media (max-width: 720px) {
     .admin-shell {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
       height: auto;
       min-height: 100vh;
       overflow: visible;
