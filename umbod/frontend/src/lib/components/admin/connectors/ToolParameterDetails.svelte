@@ -100,7 +100,7 @@
   }
 
   summary:hover {
-    border-color: #c9c8c4;
+    border-color: var(--admin-border-strong);
   }
 
   summary:focus-visible {
@@ -228,9 +228,9 @@
   }
 
   .type-label {
-    background: #f1faf3;
-    border: 1px solid #cce9d2;
-    color: #2f6b3f;
+    background: var(--admin-success-bg);
+    border: 1px solid var(--admin-success-border);
+    color: var(--admin-success-text);
     justify-self: start;
   }
 

@@ -200,7 +200,7 @@
 
   .content-loading {
     align-items: center;
-    background: rgb(244 247 245 / 88%);
+    background: var(--admin-loading-bg);
     display: flex;
     inset: 0;
     justify-content: center;

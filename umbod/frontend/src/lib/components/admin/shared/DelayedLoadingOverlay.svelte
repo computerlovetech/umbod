@@ -47,7 +47,7 @@
 
   .delayed-loading-overlay__scrim {
     align-items: center;
-    background: rgb(250 250 249 / 72%);
+    background: var(--admin-loading-bg);
     border-radius: inherit;
     display: flex;
     inset: 0;
@@ -61,7 +61,7 @@
     background: var(--admin-panel);
     border: 1px solid var(--admin-border);
     border-radius: 8px;
-    box-shadow: 0 8px 24px rgb(15 15 15 / 8%);
+    box-shadow: var(--admin-shadow);
     color: var(--admin-ink);
     padding: 10px 14px;
   }

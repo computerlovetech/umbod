@@ -68,5 +68,5 @@
   }
 
   .loading-button__loading :global(.delayed-spinner__label) { color: currentColor; }
-  .loading-button__loading :global(.delayed-spinner__mark) { border-color: rgb(120 119 116 / 35%); border-top-color: currentColor; }
+  .loading-button__loading :global(.delayed-spinner__mark) { border-color: var(--admin-border-strong); border-top-color: currentColor; }
 </style>

@@ -55,8 +55,8 @@
   }
 
   .admin-save-action__status--error {
-    background: #fef3f2;
-    color: #b42318;
+    background: var(--admin-danger-bg);
+    color: var(--admin-danger);
   }
 
   .admin-save-action__status--muted {
@@ -70,18 +70,18 @@
   }
 
   .admin-save-action__status--success {
-    background: #edf9f4;
-    color: #067647;
+    background: var(--admin-success-bg);
+    color: var(--admin-success-text);
   }
 
   .admin-save-action__status--warning {
-    background: #fff6ee;
+    background: var(--admin-warning-bg);
     color: var(--admin-warning-text);
   }
 
   .admin-save-action__spinner {
     animation: admin-save-action-spin 0.8s linear infinite;
-    border: 2px solid rgb(120 119 116 / 30%);
+    border: 2px solid var(--admin-border-strong);
     border-radius: 50%;
     border-top-color: currentColor;
     height: 14px;

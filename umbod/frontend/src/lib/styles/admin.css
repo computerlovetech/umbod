@@ -13,7 +13,7 @@
   --admin-accent-strong: #07634e;
   --admin-accent-soft: #e8f3ed;
   --admin-accent-border: #bfd8cb;
-  --admin-focus: rgb(7 99 78 / 24%);
+  --admin-focus: #07634e;
   --admin-action: #14201c;
   --admin-action-hover: #294638;
   --admin-on-action: #ffffff;
@@ -25,7 +25,9 @@
   --admin-radius: 8px;
   --admin-radius-panel: 12px;
   --admin-shadow: 0 8px 24px rgb(20 32 28 / 10%);
+  --admin-shadow-dialog: 0 24px 80px rgb(20 32 28 / 20%);
   --admin-overlay: rgb(20 32 28 / 42%);
+  --admin-loading-bg: rgb(244 247 245 / 88%);
   --admin-danger: #b42318;
   --admin-danger-hover: #962018;
   --admin-success-bg: #f1faf3;

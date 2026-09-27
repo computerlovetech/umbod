@@ -70,7 +70,7 @@
   }
 
   .admin-shared-button--danger {
-    background: var(--admin-danger, #b42318);
+    background: var(--admin-danger);
     color: var(--admin-on-action);
   }
 
