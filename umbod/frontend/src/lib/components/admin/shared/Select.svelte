@@ -106,18 +106,18 @@
 <style>
   .select { display: grid; gap: 0.35rem; min-width: 0; }
   label { font-size: 0.8125rem; font-weight: 600; }
-  .trigger { align-items: center; background: #fff; border: 1px solid #e9e9e7; border-radius: 6px; color: #37352f; display: flex; font: inherit; justify-content: space-between; min-height: 2.75rem; padding: 0.65rem 0.7rem; text-align: left; width: 100%; }
+  .trigger { align-items: center; background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: 6px; color: var(--admin-ink); display: flex; font: inherit; justify-content: space-between; min-height: 2.75rem; padding: 0.65rem 0.7rem; text-align: left; width: 100%; }
   .select.compact { gap: 0.25rem; }
   .select.compact label { font-size: 0.75rem; }
   .select.compact .trigger { font-size: 0.875rem; min-height: 2.25rem; padding: 0.45rem 0.6rem; }
   .trigger:not(:disabled) { cursor: pointer; }
-  .trigger:focus-visible { border-color: #2f6feb; outline: 3px solid rgb(47 111 235 / 24%); outline-offset: 2px; }
-  .trigger:disabled { background: #f1f1ef; color: #8f8e8a; cursor: not-allowed; }
-  .chevron { color: #787774; font-size: 1rem; margin-left: 0.75rem; }
-  .listbox { background: #fff; border: 1px solid #d7d7d4; border-radius: 8px; box-shadow: 0 8px 24px rgb(15 15 15 / 14%); box-sizing: border-box; color: #37352f; list-style: none; margin: 0; overflow-y: auto; padding: 0.25rem; position: fixed; z-index: 1000; }
+  .trigger:focus-visible { border-color: var(--admin-accent); outline: 3px solid var(--admin-focus); outline-offset: 2px; }
+  .trigger:disabled { background: var(--admin-soft); color: var(--admin-muted); cursor: not-allowed; }
+  .chevron { color: var(--admin-muted); font-size: 1rem; margin-left: 0.75rem; }
+  .listbox { background: var(--admin-panel); border: 1px solid var(--admin-border-strong); border-radius: 8px; box-shadow: var(--admin-shadow); box-sizing: border-box; color: var(--admin-ink); list-style: none; margin: 0; overflow-y: auto; padding: 0.25rem; position: fixed; z-index: 1000; }
   .option { align-items: center; border-radius: 5px; cursor: pointer; display: flex; gap: 0.75rem; justify-content: space-between; min-height: 2.25rem; padding: 0.4rem 0.55rem; white-space: nowrap; }
   .listbox.compact .option { font-size: 0.875rem; }
-  .option.active { background: #f1f1ef; }
-  .option.disabled { color: #8f8e8a; cursor: not-allowed; }
-  .check { color: #2f6feb; font-weight: 700; }
+  .option.active { background: var(--admin-soft); }
+  .option.disabled { color: var(--admin-muted); cursor: not-allowed; }
+  .check { color: var(--admin-accent); font-weight: 700; }
 </style>

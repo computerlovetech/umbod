@@ -60,13 +60,13 @@
   }
 
   .admin-save-action__status--muted {
-    background: #f4f4f2;
-    color: #787774;
+    background: var(--admin-hover);
+    color: var(--admin-muted);
   }
 
   .admin-save-action__status--saving {
-    background: #f4f4f2;
-    color: #787774;
+    background: var(--admin-hover);
+    color: var(--admin-muted);
   }
 
   .admin-save-action__status--success {
@@ -76,7 +76,7 @@
 
   .admin-save-action__status--warning {
     background: #fff6ee;
-    color: #92400e;
+    color: var(--admin-warning-text);
   }
 
   .admin-save-action__spinner {

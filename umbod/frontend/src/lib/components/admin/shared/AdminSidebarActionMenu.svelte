@@ -66,12 +66,12 @@
 
 <style>
   .action-menu { position: relative; flex: 0 0 auto; }
-  .trigger { align-items: center; background: transparent; border: 0; border-radius: 4px; color: #787774; cursor: pointer; display: inline-flex; font: inherit; font-size: 1.15rem; height: 2rem; justify-content: center; padding: 0; width: 2rem; }
-  .trigger:hover { background: #e9e9e7; color: #37352f; }
-  .trigger:focus-visible, .popup :global([role='menuitem']:focus-visible), .popup :global(button:focus-visible) { outline: 2px solid #2383e2; outline-offset: 2px; }
-  .popup { background: #fff; border: 1px solid #d8d8d4; border-radius: 7px; box-shadow: 0 8px 24px rgb(15 15 15 / 18%); min-width: 10rem; padding: 0.3rem; position: absolute; right: 0; top: calc(100% + 0.25rem); z-index: 20; }
-  .popup :global([role='menuitem']), .popup :global(button) { background: transparent; border: 0; border-radius: 4px; color: #37352f; cursor: pointer; display: block; font: inherit; font-size: 0.84rem; padding: 0.5rem 0.6rem; text-align: left; width: 100%; }
-  .popup :global([role='menuitem']:hover), .popup :global(button:hover) { background: #f1f1ef; }
+  .trigger { align-items: center; background: transparent; border: 0; border-radius: 4px; color: var(--admin-muted); cursor: pointer; display: inline-flex; font: inherit; font-size: 1.15rem; height: 2rem; justify-content: center; padding: 0; width: 2rem; }
+  .trigger:hover { background: var(--admin-border); color: var(--admin-ink); }
+  .trigger:focus-visible, .popup :global([role='menuitem']:focus-visible), .popup :global(button:focus-visible) { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
+  .popup { background: var(--admin-panel); border: 1px solid var(--admin-border-strong); border-radius: 7px; box-shadow: var(--admin-shadow); min-width: 10rem; padding: 0.3rem; position: absolute; right: 0; top: calc(100% + 0.25rem); z-index: 20; }
+  .popup :global([role='menuitem']), .popup :global(button) { background: transparent; border: 0; border-radius: 4px; color: var(--admin-ink); cursor: pointer; display: block; font: inherit; font-size: 0.84rem; padding: 0.5rem 0.6rem; text-align: left; width: 100%; }
+  .popup :global([role='menuitem']:hover), .popup :global(button:hover) { background: var(--admin-soft); }
   .popup :global([disabled]), .popup :global([aria-disabled='true']) { cursor: not-allowed; opacity: 0.5; }
   .popup :global(form) { margin: 0; }
 </style>

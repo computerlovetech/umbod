@@ -51,7 +51,7 @@
   }
 
   .track {
-    background: #e2e1de;
+    background: var(--admin-border-strong);
     border-radius: 10px;
     display: block;
     height: 20px;
@@ -62,7 +62,7 @@
   }
 
   .thumb {
-    background: #fff;
+    background: var(--admin-panel);
     border-radius: 50%;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
     height: 16px;
@@ -75,7 +75,7 @@
 
   input:checked + .track,
   button.checked .track {
-    background: #37352f;
+    background: var(--admin-accent);
   }
 
   input:checked + .track .thumb,
@@ -85,7 +85,7 @@
 
   button:focus-visible,
   input:focus-visible + .track {
-    outline: 3px solid rgb(55 53 47 / 16%);
+    outline: 3px solid var(--admin-focus);
     outline-offset: 3px;
   }
 

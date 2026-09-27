@@ -58,11 +58,11 @@
   }
 
   .delayed-loading-overlay__panel {
-    background: #ffffff;
-    border: 1px solid #e9e9e7;
+    background: var(--admin-panel);
+    border: 1px solid var(--admin-border);
     border-radius: 8px;
     box-shadow: 0 8px 24px rgb(15 15 15 / 8%);
-    color: #37352f;
+    color: var(--admin-ink);
     padding: 10px 14px;
   }
 </style>

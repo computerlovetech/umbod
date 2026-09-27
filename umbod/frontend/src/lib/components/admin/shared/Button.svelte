@@ -39,7 +39,7 @@
   .admin-shared-button {
     align-items: center;
     border: 1px solid transparent;
-    border-radius: 6px;
+    border-radius: var(--admin-radius);
     cursor: pointer;
     display: inline-flex;
     font: inherit;
@@ -47,8 +47,8 @@
     font-weight: 600;
     justify-content: center;
     line-height: 1.2;
-    min-height: 32px;
-    padding: 7px 12px;
+    min-height: 38px;
+    padding: 9px 14px;
     transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
     white-space: nowrap;
   }
@@ -59,41 +59,43 @@
   }
 
   .admin-shared-button--primary {
-    background: #37352f;
-    color: #ffffff;
+    background: var(--admin-action);
+    color: var(--admin-on-action);
   }
 
   .admin-shared-button--secondary {
-    background: #ffffff;
-    border-color: #e9e9e7;
-    color: #37352f;
+    background: var(--admin-panel);
+    border-color: var(--admin-border);
+    color: var(--admin-ink);
   }
 
   .admin-shared-button--danger {
     background: var(--admin-danger, #b42318);
-    color: #ffffff;
+    color: var(--admin-on-action);
   }
 
   .admin-shared-button--primary:not(:disabled):hover {
-    background: #2f2d28;
+    background: var(--admin-action-hover);
   }
 
   .admin-shared-button--secondary:not(:disabled):hover {
-    background: #fafaf9;
-    border-color: #d8d7d4;
+    background: var(--admin-soft);
+    border-color: var(--admin-border-strong);
   }
 
   .admin-shared-button--danger:not(:disabled):hover {
-    background: #962018;
+    background: var(--admin-danger-hover);
   }
 
   .admin-shared-button:focus-visible {
-    outline: 3px solid rgb(55 53 47 / 16%);
+    outline: 3px solid var(--admin-focus);
     outline-offset: 2px;
   }
 
   .admin-shared-button:disabled {
+    background: var(--admin-disabled-bg);
+    border-color: var(--admin-border);
+    color: var(--admin-disabled-text);
     cursor: not-allowed;
-    opacity: 0.7;
   }
 </style>

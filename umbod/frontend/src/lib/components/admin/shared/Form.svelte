@@ -62,8 +62,8 @@
 
   footer {
     align-items: center;
-    background: #fff;
-    border-top: 1px solid #e9e9e7;
+    background: var(--admin-panel);
+    border-top: 1px solid var(--admin-border);
     display: flex;
     flex: none;
     gap: 0.75rem;

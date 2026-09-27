@@ -24,20 +24,20 @@
   }
 
   .published {
-    background: #edf7ed;
-    border-color: #d3e8d3;
-    color: #2f6f3e;
+    background: var(--admin-success-bg);
+    border-color: var(--admin-success-border);
+    color: var(--admin-success-text);
   }
 
   .draft {
-    background: #fff4e8;
-    border-color: #f1d6b8;
-    color: #9a5a18;
+    background: var(--admin-warning-bg);
+    border-color: var(--admin-warning-border);
+    color: var(--admin-warning-text);
   }
 
   .neutral {
-    background: #f1f1ef;
-    border-color: #e2e2df;
-    color: #787774;
+    background: var(--admin-soft);
+    border-color: var(--admin-border);
+    color: var(--admin-muted);
   }
 </style>
