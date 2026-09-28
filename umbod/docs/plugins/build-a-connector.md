@@ -1,17 +1,19 @@
 # Build a connector
 
-Build connector distributions with the versioned Umbod connector-builder image. The image provides Python, `uv`, and the Connector SDK used by the corresponding Umbod core image.
+The Umbod SDK CLI can generate a working Hello World connector and check its package metadata before you build an image. You no longer need to write the starter module or entry point by hand. The versioned connector-builder image supplies Python, `uv`, and the SDK used by the corresponding Umbod core image.
+
+The short path is: create a Hatch project with `uv`, run `umbod connectors init` (preview, then `--apply`), run `umbod connectors check`, build and validate a plugin image, and enable it in Helm. The CLI does not build or deploy the image for you.
 
 ## Requirements
 
 - Python 3.14 or newer and `uv`
-- An Umbod SDK CLI release containing `connectors init` and `connectors check`
+- An Umbod SDK CLI release containing `connectors init` and `connectors check` (installed below)
 - Docker
 - Access to an OCI registry where you can push a plugin image
 - Helm 3 and `kubectl`
-- An Umbod `0.0.1-beta.4` installation
+- An Umbod installation and a published connector-builder and core image for the same release
 
-Set the image and chart versions and the destination for your plugin image:
+Set the image and chart versions and the destination for your plugin image. The beta.4 tags below are an example; substitute the published release you are running:
 
 ```bash
 export UMBOD_RELEASE=0.0.1-beta.4
@@ -34,14 +36,7 @@ cd my-umbod-connector
 
 If the SDK tool is already installed, use `uv tool upgrade --prerelease allow umbod`. The prerelease option allows installation of the CLI while it is distributed in beta releases. Keep this tool environment separate from the connector's build environment: the latter resolves the SDK from the builder image, not from PyPI.
 
-Read the SDK version supplied by your selected builder image:
-
-```bash
-export UMBOD_SDK_VERSION="$(docker run --rm "$UMBOD_CONNECTOR_BUILDER" \
-  python -c 'from importlib.metadata import version; print(version("umbod"))')"
-```
-
-Configure `pyproject.toml` as below, replacing the `umbod` dependency range with one that includes `$UMBOD_SDK_VERSION`. For a beta SDK, explicitly include the beta version in your lower bound. Keep any other project metadata and dependencies you need. The builder image contains the SDK source at `/opt/umbod-connector-sdk`, so builds do not require that SDK version to be published separately on PyPI.
+Configure `pyproject.toml` as below. Choose an `umbod` dependency range that includes the SDK in your selected release. For a beta SDK, explicitly include its beta version in the lower bound. You can read the exact version from the builder image with the command in the [older-release fallback](#older-release-fallback) below. Keep any other project metadata and dependencies you need. The builder image contains the SDK source at `/opt/umbod-connector-sdk`, so builds do not require that SDK version to be published separately on PyPI.
 
 Do not add the connector entry-point table yet; `init` adds it:
 
@@ -67,7 +62,7 @@ packages = ["src/my_umbod_connector"]
 
 ## Initialize and check the connector
 
-Preview the new module and entry-point metadata, then explicitly apply them:
+From the project directory, preview the generated Hello World module and entry-point metadata, then explicitly apply them:
 
 ```bash
 umbod connectors init --name my-connector --module my_umbod_connector.hello_world
@@ -76,22 +71,31 @@ umbod connectors init --name my-connector --module my_umbod_connector.hello_worl
 
 `init` requires the existing `src/my_umbod_connector/__init__.py` created by uv and explicit Hatch wheel package inclusion as shown above. It refuses existing connector entry-point groups, destination modules, and symlinked paths. It does not install dependencies, change lockfiles, or overwrite files. If apply reports a partial write, inspect the named files before retrying.
 
-Check the entry points and declared SDK dependency:
+Check entry-point syntax locally:
 
 ```bash
 umbod connectors check
-umbod connectors check --sdk-version "$UMBOD_SDK_VERSION"
 ```
 
-The second command checks the dependency declaration against the SDK version you supplied. It does not verify an image or load connector code.
-
-For a release published by the synchronized SDK/image pipeline, you can instead resolve the SDK version from published image metadata:
+This command is offline and does not import the connector. If you substituted a newer synchronized image release with SDK-version labels, check its declared SDK dependency as well:
 
 ```bash
 umbod connectors check --target "$UMBOD_RELEASE"
 ```
 
-`--target` reads registry metadata, not container layers, and does not run Docker. Older releases, including the `0.0.1-beta.4` release used above, may lack the required SDK-version label. In that case, use the explicit `--sdk-version` check after obtaining the version from the builder as shown above; do not infer the SDK version from the old image tag. Neither mode establishes runtime or external-service compatibility.
+`--target` reads core and builder image registry metadata, checks that their SDK versions agree, and verifies that the version satisfies your declared `umbod` dependency. It does not pull image layers, run Docker, or import the connector. The example `0.0.1-beta.4` predates those labels, so use the fallback below if you kept that tag.
+
+### Older-release fallback
+
+For an older image release without SDK-version labels, read the SDK version from the selected builder image and check it explicitly:
+
+```bash
+export UMBOD_SDK_VERSION="$(docker run --rm "$UMBOD_CONNECTOR_BUILDER" \
+  python -c 'from importlib.metadata import version; print(version("umbod"))')"
+umbod connectors check --sdk-version "$UMBOD_SDK_VERSION"
+```
+
+`--sdk-version` is an offline declaration check, not image verification. Do not infer the SDK version from an old image tag. `--target` and `--sdk-version` cannot be combined. Neither mode proves runtime loading or external-service compatibility; validate the completed bundle with the core image below. If the check fails, adjust the `umbod` dependency range in `pyproject.toml` to include the actual SDK version and rerun it.
 
 Generate or refresh the lock file using uv inside the builder image:
 
@@ -108,7 +112,7 @@ Connector code imports the public contracts from `umbod_sdk.connectors.plugin_ap
 
 ## Write a Hello World connector with the SDK
 
-`init` creates `src/my_umbod_connector/hello_world.py` with a complete connector. This is the code to extend:
+`init --apply` creates `src/my_umbod_connector/hello_world.py` and adds `[project.entry-points."umbod.connectors"]` to `pyproject.toml`. No manual entry-point edit is needed. The generated module is a working Hello World connector; inspect and extend it when you need additional capabilities:
 
 ```python
 from typing import Annotated
@@ -150,6 +154,8 @@ plugin = connector
 The `plugin` object matches the `my_umbod_connector.hello_world:plugin` entry point added by `init`. Umbod injects `configuration`; the agent supplies only `name`. The `my-connector` ID also matches `plugins.availableConnectorIds` in the Helm values below. Build and validate the image using the next steps. After deployment, configure, publish, activate `say_hello`, and grant access to the calling agent's group.
 
 For connectors that call an external API, put credentials in the configuration model as `SecretStr`, perform a safe live configuration check, and keep HTTP requests in a separate client module. The [Connector SDK distribution guide](https://github.com/computerlovetech/umbod/tree/main/packages/umbod-sdk) covers entry points and distribution details.
+
+If you use an AI coding agent, the SDK also bundles a connector-authoring skill. Run `umbod skills list` to see bundled skills, then, from your connector project, run `umbod skills install draft-agent-connector --harness agents` (or `--harness claude` / `--harness codex`). This installs guidance under `.agents/skills/` (or `.claude/skills/`) for your agent; it does not create a connector, install dependencies, or deploy anything. Use `--scope user` for a user-wide installation, `--project PATH` to target another project, or `--force` to replace an existing skill.
 
 ## Create the plugin image
 
