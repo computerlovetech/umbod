@@ -1,23 +1,24 @@
 # Build a connector
 
-Build connector distributions with the versioned Umbod connector-builder image. The image provides Python, `uv`, and the Connector SDK that matches the corresponding Umbod release.
+Build connector distributions with the versioned Umbod connector-builder image. The image provides Python, `uv`, and the Connector SDK used by the corresponding Umbod core image.
 
 ## Requirements
 
 - Docker
 - Access to an OCI registry where you can push a plugin image
 - Helm 3 and `kubectl`
-- An Umbod `0.0.1-beta.2` installation
+- An Umbod `0.0.1-beta.4` installation
 
-Set the Umbod release and the destination for your plugin image:
+Set the image and chart versions and the destination for your plugin image:
 
 ```bash
-export UMBOD_RELEASE=0.0.1-beta.2
+export UMBOD_RELEASE=0.0.1-beta.4
+export UMBOD_CHART_VERSION=0.0.1-beta.4
 export UMBOD_CONNECTOR_BUILDER=ghcr.io/computerlovetech/umbod-connector-builder:$UMBOD_RELEASE
 export PLUGIN_IMAGE=registry.example.com/your-organization/my-umbod-connector:0.1.0
 ```
 
-Use the same release for the connector-builder image, core image, and Helm chart. Use immutable image tags rather than floating tags.
+Use the same immutable tag for the connector-builder, core, and frontend images. Select a published Helm chart version separately; its version need not match the image tag. The release pipeline versions the SDK on PyPI, the image group, and the Helm chart independently, so do not assume that a PyPI SDK release exists with the image tag (or that a chart with that version exists). The builder image contains the SDK source used by the core image; choose a compatible `umbod` dependency range in `pyproject.toml` that includes that SDK version. Check the selected builder image's SDK version before locking dependencies, and validate the bundle against the selected core image.
 
 ## Create the Python distribution
 
@@ -29,7 +30,7 @@ A connector is a standard Python distribution. Its `pyproject.toml` must:
 - declare each connector in the `umbod.connectors` entry-point group;
 - configure the chosen Python build backend to include the connector package.
 
-The builder image contains the SDK source at `/opt/umbod-connector-sdk`, so dependency resolution does not require a separately published Python package.
+The builder image contains the SDK source at `/opt/umbod-connector-sdk`, so dependency resolution does not require a separately published Python package. The dependency range below is illustrative; adjust it to include the SDK version in your chosen builder image.
 
 Declare the SDK source and connector entry point in `pyproject.toml`:
 
@@ -71,16 +72,43 @@ Connector code imports the public contracts from `umbod_sdk.connectors.plugin_ap
 
 ## Write a Hello World connector with the SDK
 
-The `umbod` Python package provides the public Connector SDK under `umbod_sdk.connectors`. Use `umbod_sdk.connectors.plugin_api` for `Connector` and `ConfigurationCheckResult`, and subclass `umbod_sdk.connectors.proxies.Model` for the administrator configuration. The builder image supplies the SDK version matching your Umbod release.
+Create `src/my_umbod_connector/__init__.py` with a complete Hello World connector:
 
-For a minimal connector, create `src/my_umbod_connector/__init__.py` and export an object named `plugin`, matching the `my_umbod_connector:plugin` entry point above:
+```python
+from typing import Annotated
 
-1. Define an empty administrator configuration model derived from `Model`, with extra fields forbidden. Hello World needs no credentials or external service.
-2. Create a `Connector` with ID `my-connector`, name `Hello World`, a short description, and that configuration model. Assign it to `plugin`.
-3. Register a configuration check on the connector that accepts the configuration model and returns `ConfigurationCheckResult.valid()`. It does not need to contact an external service.
-4. Register a tool named `say_hello` on the connector with a plain-language description. Give it a `name` input with an `Annotated[str, Field(description=...)]` type and a `configuration` parameter typed as your configuration model. Return a greeting containing the supplied name. Umbod injects `configuration`; the agent supplies only `name`.
+from pydantic import ConfigDict, Field
+from umbod_sdk.connectors.plugin_api import ConfigurationCheckResult, Connector
+from umbod_sdk.connectors.proxies import Model
 
-The ID `my-connector` must also appear in `plugins.availableConnectorIds` when you deploy. The entry-point name, connector ID, and Helm availability ID should match. Build and validate the image using the steps below; validation checks that Umbod can load the plugin, not that a tool call succeeds. After deployment, configure, publish, activate `say_hello`, and grant access to the calling agent's group as described at the end of this guide.
+
+class HelloWorldConfiguration(Model):
+    model_config = ConfigDict(extra="forbid")
+
+
+plugin = Connector(
+    id="my-connector",
+    name="Hello World",
+    description="Greets people by name.",
+    capability_description="Say hello to someone.",
+    configuration=HelloWorldConfiguration,
+)
+
+
+@plugin.configuration_check
+def check_configuration(configuration: HelloWorldConfiguration) -> ConfigurationCheckResult:
+    return ConfigurationCheckResult.valid()
+
+
+@plugin.tool(description="Greet someone by name.")
+def say_hello(
+    name: Annotated[str, Field(description="Name of the person to greet.")],
+    configuration: HelloWorldConfiguration,
+) -> str:
+    return f"Hello, {name}!"
+```
+
+The `plugin` object matches the `my_umbod_connector:plugin` entry point above. Umbod injects `configuration`; the agent supplies only `name`. The `my-connector` ID also matches `plugins.availableConnectorIds` in the Helm values below. Build and validate the image using the next steps. After deployment, configure, publish, activate `say_hello`, and grant access to the calling agent's group.
 
 For connectors that call an external API, put credentials in the configuration model as `SecretStr`, perform a safe live configuration check, and keep HTTP requests in a separate client module. The [Connector SDK distribution guide](https://github.com/computerlovetech/umbod/tree/main/packages/umbod-sdk) covers entry points and distribution details.
 
@@ -89,7 +117,7 @@ For connectors that call an external API, put credentials in the configuration m
 Use the connector-builder image as the build stage. Export third-party runtime dependencies without the SDK, install them into `/plugin-bundle`, then install the connector wheel without dependency resolution.
 
 ```dockerfile
-ARG UMBOD_RELEASE=0.0.1-beta.2
+ARG UMBOD_RELEASE=0.0.1-beta.4
 FROM ghcr.io/computerlovetech/umbod-connector-builder:${UMBOD_RELEASE} AS builder
 
 WORKDIR /workspace
@@ -173,7 +201,7 @@ Upgrade the existing release:
 ```bash
 helm upgrade --install umbod \
   oci://ghcr.io/computerlovetech/charts/umbod \
-  --version "$UMBOD_RELEASE" \
+  --version "$UMBOD_CHART_VERSION" \
   --values values.plugins.yaml \
   --reuse-values \
   --set-string core.image.tag="$UMBOD_RELEASE" \
