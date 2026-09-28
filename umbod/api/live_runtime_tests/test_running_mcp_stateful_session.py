@@ -30,7 +30,7 @@ async def test_stateful_runtime_issues_and_reuses_session_id(runtime_endpoints: 
         headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"},
         httpx_client_factory=create_http_client,
     )
-    async with Client(transport) as client:
+    async with Client(transport, mode="legacy") as client:
         await client.list_tools()
         session_id = transport.get_session_id()
         await client.list_prompts()
@@ -48,6 +48,7 @@ async def test_stateful_runtime_rejects_unknown_session_id(runtime_endpoints: Ru
         "Authorization": f"Bearer {runtime_endpoints.bearer_token}",
         "Content-Type": "application/json",
         "Mcp-Session-Id": "unknown-session-id",
+        "Mcp-Protocol-Version": "2025-11-25",
     }
     request = {
         "jsonrpc": "2.0",

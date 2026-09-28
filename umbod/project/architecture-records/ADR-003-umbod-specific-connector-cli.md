@@ -8,7 +8,7 @@
 
 Building a connector currently requires developers to assemble Python package metadata, connector code, image packaging, and deployment configuration. The SDK CLI can reduce errors and repetitive work by providing knowledge specific to Umbod.
 
-The SDK, container images, and Helm chart are versioned and released independently. Developers need compatibility guidance, not an assumption that all artifacts share a version number.
+New releases synchronize the SDK and container images (`bN` on PyPI corresponds to `-beta.N` on images), while Helm chart versions remain independent. Older artifacts released separately are not guaranteed to correspond. Developers still need compatibility guidance: matching declared versions do not establish runtime compatibility.
 
 We considered simplifying delivery through uploaded connector bundles and adding CLI commands that orchestrate dependency resolution, image builds, publishing, and deployment. Neither is necessary to improve the initial developer experience. Existing tools already own those responsibilities.
 
@@ -49,7 +49,7 @@ Check connector metadata, entry-point declarations, identifier consistency, and 
 
 Checks are read-only. They must not rewrite dependencies, refresh locks, select a newer target, or upgrade a deployment. Diagnostics should identify the failed check and an actionable next step.
 
-SDK compatibility must be assessed against the SDK supplied by the target runtime, not by comparing the PyPI SDK version with an image tag. Builder and core images use the same image release; the Helm chart version is selected independently.
+SDK compatibility must be assessed against the SDK supplied by the target runtime, not by treating matching PyPI SDK and image versions as runtime validation. New builder and core images use the synchronized SDK release; the Helm chart version is selected independently.
 
 If required compatibility information is unavailable, report that the check could not establish compatibility rather than treating matching version strings as proof.
 

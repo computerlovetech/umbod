@@ -1,9 +1,9 @@
 from collections.abc import Callable, Mapping
+from functools import partial
 from pathlib import Path
 from typing import Any, TypedDict, Unpack, cast, overload
 
-from umbod_sdk.connectors.proxies import Model
-from umbod_sdk.connectors.uploaded_file import UploadedFile
+from pydantic_core import PydanticUndefined
 
 from umbod_sdk.connectors.api.definition import (
     AbsentConnectorValue,
@@ -15,12 +15,14 @@ from umbod_sdk.connectors.api.definition import (
 )
 from umbod_sdk.connectors.api.registration import connector_registration
 from umbod_sdk.connectors.models import ConnectorConfigurationCheckResult
+from umbod_sdk.connectors.proxies import Model
 from umbod_sdk.connectors.types import ConnectorRegistration, ConnectorToolOperation
+from umbod_sdk.connectors.uploaded_file import UploadedFile
 
 
 def _valid_configuration_check_result(
-    cls: type["ConfigurationCheckResult"],
-) -> "ConfigurationCheckResult":
+    cls: type[ConfigurationCheckResult],
+) -> ConfigurationCheckResult:
     return cls(valid=True)
 
 
@@ -34,31 +36,31 @@ class _ConfigurationCheckMessageDetails(_ConfigurationCheckDetails):
 
 @overload
 def _invalid_configuration_check_result(
-    cls: type["ConfigurationCheckResult"],
+    cls: type[ConfigurationCheckResult],
     **details: Unpack[_ConfigurationCheckDetails],
-) -> "ConfigurationCheckResult": ...
+) -> ConfigurationCheckResult: ...
 
 
 @overload
 def _invalid_configuration_check_result(
-    cls: type["ConfigurationCheckResult"],
+    cls: type[ConfigurationCheckResult],
     message: str,
     **details: Unpack[_ConfigurationCheckDetails],
-) -> "ConfigurationCheckResult": ...
+) -> ConfigurationCheckResult: ...
 
 
 @overload
 def _invalid_configuration_check_result(
-    cls: type["ConfigurationCheckResult"],
+    cls: type[ConfigurationCheckResult],
     **details: Unpack[_ConfigurationCheckMessageDetails],
-) -> "ConfigurationCheckResult": ...
+) -> ConfigurationCheckResult: ...
 
 
 def _invalid_configuration_check_result(
-    cls: type["ConfigurationCheckResult"],
+    cls: type[ConfigurationCheckResult],
     *args: object,
     **details: object,
-) -> "ConfigurationCheckResult":
+) -> ConfigurationCheckResult:
     if len(args) > 1:
         raise TypeError("invalid() accepts at most one positional message argument")
     message = args[0] if args else cast(str | None, details.pop("message", None))
@@ -67,8 +69,38 @@ def _invalid_configuration_check_result(
 
 
 class ConfigurationCheckResult(ConnectorConfigurationCheckResult):
-    valid = classmethod(_valid_configuration_check_result)
     invalid = classmethod(_invalid_configuration_check_result)
+
+    @classmethod
+    def __pydantic_init_subclass__(cls, **kwargs: Any) -> None:
+        super().__pydantic_init_subclass__(**kwargs)
+        field = cls.model_fields["valid"]
+        default = field.default
+        if isinstance(default, partial) and default.func is _valid_configuration_check_result and default.args == (cls,):
+            field.default = PydanticUndefined
+            cls.model_rebuild(force=True)
+
+
+class _ValidConfigurationCheckResultDescriptor:
+    @overload
+    def __get__(
+        self, instance: None, owner: type[ConfigurationCheckResult]
+    ) -> Callable[[], ConfigurationCheckResult]: ...
+
+    @overload
+    def __get__(
+        self, instance: ConfigurationCheckResult, owner: type[ConfigurationCheckResult]
+    ) -> bool: ...
+
+    def __get__(
+        self, instance: ConfigurationCheckResult | None, owner: type[ConfigurationCheckResult]
+    ) -> bool | Callable[[], ConfigurationCheckResult]:
+        if instance is not None:
+            return instance.__dict__["valid"]
+        return partial(_valid_configuration_check_result, owner)
+
+
+ConfigurationCheckResult.valid = _ValidConfigurationCheckResultDescriptor()
 
 
 class _ConnectorMetadataMixin:
@@ -150,7 +182,7 @@ class ConnectorFacade(_ConnectorMetadataMixin):
     ) -> None:
         unknown_options = set(definition_options) - {"extension", "icon"}
         if unknown_options:
-            option = sorted(unknown_options)[0]
+            option = min(unknown_options)
             raise TypeError(
                 f"ConnectorFacade.__init__() got an unexpected keyword argument '{option}'"
             )

@@ -19,10 +19,10 @@ MCP_TOOL_NAME = "test_echo"
 @pytest.mark.asyncio
 async def test_disabling_enabled_tool_removes_it_from_new_mcp_tools_list(runtime_endpoints: RuntimeEndpoints) -> None:
     _disable_tool(runtime_endpoints)
-    await _wait_until(lambda: _mcp_tool_is_absent(runtime_endpoints))
+    assert await _wait_until(lambda: _mcp_tool_is_absent(runtime_endpoints)) is True
 
     _enable_tool(runtime_endpoints)
-    await _wait_until(lambda: _mcp_tool_is_present(runtime_endpoints))
+    assert await _wait_until(lambda: _mcp_tool_is_present(runtime_endpoints)) is True
 
     _disable_tool(runtime_endpoints)
 
@@ -32,12 +32,13 @@ async def test_disabling_enabled_tool_removes_it_from_new_mcp_tools_list(runtime
 @pytest.mark.asyncio
 async def test_disabling_enabled_tool_removes_it_from_existing_mcp_session_tools_list(runtime_endpoints: RuntimeEndpoints) -> None:
     _disable_tool(runtime_endpoints)
-    await _wait_until(lambda: _mcp_tool_is_absent(runtime_endpoints))
+    assert await _wait_until(lambda: _mcp_tool_is_absent(runtime_endpoints)) is True
 
     transport = StreamableHttpTransport(
         runtime_endpoints.mcp_url, headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"}
     )
-    async with Client(transport) as client:
+    async with Client(transport, mode="legacy") as client:
+        assert transport.get_session_id() is not None
         _enable_tool(runtime_endpoints)
         assert await _wait_until(lambda: _client_tool_is_present(client)) is True
 

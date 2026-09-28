@@ -92,7 +92,7 @@ def _source(name: str) -> str:
         ")\n\n\n"
         "@connector.configuration_check\n"
         "def check_configuration(configuration: HelloWorldConfiguration) -> ConfigurationCheckResult:\n"
-        "    return ConfigurationCheckResult(valid=True)\n\n\n"
+        "    return ConfigurationCheckResult.valid()\n\n\n"
         "@connector.tool(description=\"Greet a person by name.\")\n"
         "def say_hello(\n"
         "    name: Annotated[str, Field(description=\"Name of the person to greet.\")],\n"

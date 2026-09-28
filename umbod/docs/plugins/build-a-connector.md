@@ -4,6 +4,8 @@ Build connector distributions with the versioned Umbod connector-builder image. 
 
 ## Requirements
 
+- Python 3.14 or newer and `uv`
+- An Umbod SDK CLI release containing `connectors init` and `connectors check`
 - Docker
 - Access to an OCI registry where you can push a plugin image
 - Helm 3 and `kubectl`
@@ -18,21 +20,30 @@ export UMBOD_CONNECTOR_BUILDER=ghcr.io/computerlovetech/umbod-connector-builder:
 export PLUGIN_IMAGE=registry.example.com/your-organization/my-umbod-connector:0.1.0
 ```
 
-Use the same immutable tag for the connector-builder, core, and frontend images. Select a published Helm chart version separately; its version need not match the image tag. The release pipeline versions the SDK on PyPI, the image group, and the Helm chart independently, so do not assume that a PyPI SDK release exists with the image tag (or that a chart with that version exists). The builder image contains the SDK source used by the core image; choose a compatible `umbod` dependency range in `pyproject.toml` that includes that SDK version. Check the selected builder image's SDK version before locking dependencies, and validate the bundle against the selected core image.
+Use the same immutable tag for the connector-builder, core, and frontend images. Select a published Helm chart version separately; its version need not match the image tag. New releases publish the SDK and image group together: a `-beta.N` image tag corresponds to a `bN` PyPI SDK version (stable versions have the same spelling). Older, independently released artifacts are not retroactively guaranteed to match. Helm chart versions remain independent, so do not assume a chart exists with the image tag. The builder image contains the SDK source used by the core image; choose a compatible `umbod` dependency range in `pyproject.toml` that includes that SDK version. Check the selected builder image's SDK version before locking dependencies, and validate the bundle against the selected core image.
 
 ## Create the Python distribution
 
-A connector is a standard Python distribution. Its `pyproject.toml` must:
+Install the SDK CLI in its own tool environment and create a Python project with uv:
 
-- require Python 3.14 or newer;
-- depend on a compatible `umbod` version;
-- map that SDK dependency to `/opt/umbod-connector-sdk` for builds in the base image;
-- declare each connector in the `umbod.connectors` entry-point group;
-- configure the chosen Python build backend to include the connector package.
+```bash
+uv tool install --python 3.14 --prerelease allow umbod
+uv init --lib --build-backend hatch --python 3.14 my-umbod-connector
+cd my-umbod-connector
+```
 
-The builder image contains the SDK source at `/opt/umbod-connector-sdk`, so dependency resolution does not require a separately published Python package. The dependency range below is illustrative; adjust it to include the SDK version in your chosen builder image.
+If the SDK tool is already installed, use `uv tool upgrade --prerelease allow umbod`. The prerelease option allows installation of the CLI while it is distributed in beta releases. Keep this tool environment separate from the connector's build environment: the latter resolves the SDK from the builder image, not from PyPI.
 
-Declare the SDK source and connector entry point in `pyproject.toml`:
+Read the SDK version supplied by your selected builder image:
+
+```bash
+export UMBOD_SDK_VERSION="$(docker run --rm "$UMBOD_CONNECTOR_BUILDER" \
+  python -c 'from importlib.metadata import version; print(version("umbod"))')"
+```
+
+Configure `pyproject.toml` as below, replacing the `umbod` dependency range with one that includes `$UMBOD_SDK_VERSION`. For a beta SDK, explicitly include the beta version in your lower bound. Keep any other project metadata and dependencies you need. The builder image contains the SDK source at `/opt/umbod-connector-sdk`, so builds do not require that SDK version to be published separately on PyPI.
+
+Do not add the connector entry-point table yet; `init` adds it:
 
 ```toml
 [project]
@@ -42,9 +53,6 @@ requires-python = ">=3.14"
 dependencies = [
   "umbod>=0.1.0,<0.2.0",
 ]
-
-[project.entry-points."umbod.connectors"]
-my-connector = "my_umbod_connector:plugin"
 
 [tool.uv.sources]
 umbod = { path = "/opt/umbod-connector-sdk" }
@@ -57,7 +65,35 @@ build-backend = "hatchling.build"
 packages = ["src/my_umbod_connector"]
 ```
 
-Generate or refresh the lock file inside the builder image:
+## Initialize and check the connector
+
+Preview the new module and entry-point metadata, then explicitly apply them:
+
+```bash
+umbod connectors init --name my-connector --module my_umbod_connector.hello_world
+umbod connectors init --name my-connector --module my_umbod_connector.hello_world --apply
+```
+
+`init` requires the existing `src/my_umbod_connector/__init__.py` created by uv and explicit Hatch wheel package inclusion as shown above. It refuses existing connector entry-point groups, destination modules, and symlinked paths. It does not install dependencies, change lockfiles, or overwrite files. If apply reports a partial write, inspect the named files before retrying.
+
+Check the entry points and declared SDK dependency:
+
+```bash
+umbod connectors check
+umbod connectors check --sdk-version "$UMBOD_SDK_VERSION"
+```
+
+The second command checks the dependency declaration against the SDK version you supplied. It does not verify an image or load connector code.
+
+For a release published by the synchronized SDK/image pipeline, you can instead resolve the SDK version from published image metadata:
+
+```bash
+umbod connectors check --target "$UMBOD_RELEASE"
+```
+
+`--target` reads registry metadata, not container layers, and does not run Docker. Older releases, including the `0.0.1-beta.4` release used above, may lack the required SDK-version label. In that case, use the explicit `--sdk-version` check after obtaining the version from the builder as shown above; do not infer the SDK version from the old image tag. Neither mode establishes runtime or external-service compatibility.
+
+Generate or refresh the lock file using uv inside the builder image:
 
 ```bash
 docker run --rm \
@@ -72,7 +108,7 @@ Connector code imports the public contracts from `umbod_sdk.connectors.plugin_ap
 
 ## Write a Hello World connector with the SDK
 
-Create `src/my_umbod_connector/__init__.py` with a complete Hello World connector:
+`init` creates `src/my_umbod_connector/hello_world.py` with a complete connector. This is the code to extend:
 
 ```python
 from typing import Annotated
@@ -86,29 +122,32 @@ class HelloWorldConfiguration(Model):
     model_config = ConfigDict(extra="forbid")
 
 
-plugin = Connector(
+connector = Connector(
     id="my-connector",
-    name="Hello World",
-    description="Greets people by name.",
-    capability_description="Say hello to someone.",
+    name="My Connector",
+    description="Greets people with a hello world message.",
+    capability_description="Say hello to a person.",
     configuration=HelloWorldConfiguration,
 )
 
 
-@plugin.configuration_check
+@connector.configuration_check
 def check_configuration(configuration: HelloWorldConfiguration) -> ConfigurationCheckResult:
     return ConfigurationCheckResult.valid()
 
 
-@plugin.tool(description="Greet someone by name.")
+@connector.tool(description="Greet a person by name.")
 def say_hello(
     name: Annotated[str, Field(description="Name of the person to greet.")],
     configuration: HelloWorldConfiguration,
 ) -> str:
     return f"Hello, {name}!"
+
+
+plugin = connector
 ```
 
-The `plugin` object matches the `my_umbod_connector:plugin` entry point above. Umbod injects `configuration`; the agent supplies only `name`. The `my-connector` ID also matches `plugins.availableConnectorIds` in the Helm values below. Build and validate the image using the next steps. After deployment, configure, publish, activate `say_hello`, and grant access to the calling agent's group.
+The `plugin` object matches the `my_umbod_connector.hello_world:plugin` entry point added by `init`. Umbod injects `configuration`; the agent supplies only `name`. The `my-connector` ID also matches `plugins.availableConnectorIds` in the Helm values below. Build and validate the image using the next steps. After deployment, configure, publish, activate `say_hello`, and grant access to the calling agent's group.
 
 For connectors that call an external API, put credentials in the configuration model as `SecretStr`, perform a safe live configuration check, and keep HTTP requests in a separate client module. The [Connector SDK distribution guide](https://github.com/computerlovetech/umbod/tree/main/packages/umbod-sdk) covers entry points and distribution details.
 
