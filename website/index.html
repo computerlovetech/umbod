@@ -117,6 +117,7 @@
   --set config.profile=local \
   --set config.authentication.mode=dev \
   --set-string config.publicOrigins.site=http://localhost:3000 \
+  --set-string config.publicOrigins.mcp=http://localhost:8011 \
   --wait --timeout 5m</code></pre></div>
           </li>
           <li>
@@ -125,10 +126,16 @@
   service/umbod-frontend 3000:3000</code></pre></div>
             <p class="step-note">Open <a href="http://localhost:3000" target="_blank" rel="noreferrer">localhost:3000</a>. Keep this terminal running while you use Umbod.</p>
           </li>
+          <li>
+            <div class="step-heading"><span class="number" aria-hidden="true">04</span><h3>Connect a local agent</h3></div>
+            <div class="code-block"><div class="code-heading"><span>Another terminal</span><button class="copy-btn" type="button" data-copy-target="mcp-port-forward-command" aria-label="Copy MCP port-forward command">Copy</button></div><pre tabindex="0" aria-label="Forward the Umbod MCP port"><code id="mcp-port-forward-command">kubectl --context kind-umbod port-forward \
+  service/umbod-mcp 8011:8011</code></pre></div>
+            <p class="step-note">Keep both terminals running. In the admin UI, open <strong>MCP setup guide</strong> and add <code>http://localhost:8011/mcp</code> as a remote HTTP MCP server in your desktop agent (for example, Claude Code, Codex, or VS Code Copilot). The agent must run on this computer; a hosted agent cannot reach your localhost.</p>
+          </li>
         </ol>
         <p class="install-note">This local setup uses development authentication. For a shared cluster, follow the guide to configure identity, ingress, and storage.</p>
         <div class="guide-links"><a class="text-link" href="/docs/getting-started/kubernetes-installation/">Full installation guide <span aria-hidden="true">↗</span></a><a class="text-link" href="/docs/reference/helm-values/">Helm values reference <span aria-hidden="true">↗</span></a></div>
-        <div class="next-step"><span class="number">NEXT</span><div><h3>Try a connector you would actually use.</h3><p>Configure a connector, publish its tools, and grant group access. Then connect an MCP client. Tell us where you get stuck.</p><a class="text-link" href="/docs/reference/endpoints-and-ports/">MCP endpoints and ports <span aria-hidden="true">↗</span></a></div></div>
+        <div class="next-step"><span class="number">NEXT</span><div><h3>Try a connector you would actually use.</h3><p>Configure a connector, publish its tools, and grant group access. Then connect your local MCP client. Tell us where you get stuck.</p><a class="text-link" href="/docs/reference/endpoints-and-ports/">MCP endpoints and ports <span aria-hidden="true">↗</span></a></div></div>
         <p class="sr-only" id="copy-status" role="status" aria-live="polite"></p>
       </div>
     </section>
