@@ -1,11 +1,11 @@
 <section class="hero">
   <p class="eyebrow">Umbod</p>
-  <h1>Umbod</h1>
+  <h1>Welcome to Umbod.</h1>
   <p class="lede">
-    A SvelteKit app for publishing connector-backed tools through FastAPI, FastMCP, and Typer services.
+    Umbod makes tools from your internal APIs and MCP servers available to compatible agents, with access controlled by group. Open administration to configure a connector, publish its tools, and choose who can use them.
   </p>
   <div class="links">
-    <a href="/admin">Admin</a>
+    <a href="/admin">Open administration</a>
   </div>
 </section>
 

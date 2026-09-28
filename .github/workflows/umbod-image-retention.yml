@@ -1,0 +1,55 @@
+name: umbod Image Retention
+
+on:
+  schedule:
+    - cron: '17 3 * * 0'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: List expired main images without deleting them
+        type: boolean
+        default: true
+
+permissions:
+  packages: write
+
+concurrency:
+  group: umbod-image-retention
+  cancel-in-progress: false
+
+jobs:
+  remove-expired-main-images:
+    name: Remove expired main image versions
+    if: github.repository == 'computerlovetech/umbod'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+    steps:
+      - name: Delete main-only image versions older than 30 days
+        shell: bash
+        run: |
+          set -euo pipefail
+          cutoff="$(date -u -d '30 days ago' '+%Y-%m-%dT%H:%M:%SZ')"
+          for package in umbod umbod-frontend umbod-connector-builder; do
+            versions="${RUNNER_TEMP}/${package}-versions.json"
+            gh api --paginate "/orgs/${GITHUB_REPOSITORY_OWNER}/packages/container/${package}/versions?per_page=100" > "${versions}"
+            expired_file="${RUNNER_TEMP}/${package}-expired.txt"
+            jq -r --arg cutoff "${cutoff}" '
+              .[]
+              | select(.created_at < $cutoff)
+              | (.metadata.container.tags // []) as $tags
+              | select(($tags | length) > 0 and all($tags[]; test("^main-[0-9a-f]{40}$")))
+              | .id
+            ' "${versions}" > "${expired_file}"
+            mapfile -t expired < "${expired_file}"
+            for version in "${expired[@]}"; do
+              if [[ "${DRY_RUN}" == true ]]; then
+                echo "Would delete ${package} package version ${version}"
+              else
+                gh api --method DELETE "/orgs/${GITHUB_REPOSITORY_OWNER}/packages/container/${package}/versions/${version}"
+                echo "Deleted ${package} package version ${version}"
+              fi
+            done
+            echo "${package}: ${#expired[@]} expired main-only versions"
+          done

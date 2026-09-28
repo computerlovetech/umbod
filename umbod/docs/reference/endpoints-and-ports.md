@@ -2,13 +2,17 @@
 
 ## Local access
 
-After installing Umbod with the local Helm profile, forward the frontend Service:
+After installing Umbod with the local Helm profile and setting `config.publicOrigins.mcp=http://localhost:8011`, forward the frontend and MCP Services in separate terminals:
 
 ```bash
 kubectl port-forward service/umbod-frontend 3000:3000
 ```
 
-Open the administration interface at [http://localhost:3000](http://localhost:3000).
+```bash
+kubectl port-forward service/umbod-mcp 8011:8011
+```
+
+Open the administration interface at [http://localhost:3000](http://localhost:3000). A desktop agent on the same computer can use the remote HTTP MCP endpoint `http://localhost:8011/mcp`. Keep both forwards running while connected. See the [Kubernetes installation guide](../getting-started/kubernetes-installation.md) for the local install command.
 
 ## Kubernetes service ports
 

@@ -40,16 +40,25 @@ helm upgrade --install umbod \
   --set config.profile=local \
   --set config.authentication.mode=dev \
   --set-string config.publicOrigins.site=http://localhost:3000 \
+  --set-string config.publicOrigins.mcp=http://localhost:8011 \
   --wait --timeout 5m
 ```
 
-Forward the frontend Service:
+Forward the frontend Service in one terminal:
 
 ```bash
 kubectl port-forward service/umbod-frontend 3000:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Keep the port-forward process running while using Umbod.
+In a second terminal, forward the MCP Service:
+
+```bash
+kubectl port-forward service/umbod-mcp 8011:8011
+```
+
+Open [http://localhost:3000](http://localhost:3000) and keep both port-forwards running. In the administration interface, open **MCP setup guide** to copy `http://localhost:8011/mcp` and follow the instructions for your desktop agent. Configure it as a remote HTTP MCP server; the agent and the port-forwards must run on the same computer. After configuring a connector, publish its tools and grant access before checking the agent's available tools.
+
+The local setup uses development authentication. Hosted agents cannot reach your computer's `localhost`; use an HTTPS Ingress and production authentication for agents running elsewhere.
 
 ## Validate the local installation
 

@@ -70,6 +70,10 @@ Umbod is in **early beta**. Connector administration, tool publication, group pe
 
 Try it with an integration your team actually needs. [Report an issue](https://github.com/computerlovetech/umbod/issues) or [join the conversation on Discord](https://discord.gg/mjrbtBYeS).
 
+## Image channels
+
+Successful pushes to `main` publish core, frontend, and connector-builder images to GHCR under `nightly` and `main-<commit SHA>` tags. `nightly` moves to the latest successful build; it does not automatically update running Kubernetes Pods. SHA-tagged builds are retained for 30 days, so use versioned beta or stable releases for long-lived installations. Versioned images and the Helm chart continue to be published through the separate manual release workflow.
+
 ## Contributing
 
 See the [development guide](umbod/README.md) for local setup and checks.
