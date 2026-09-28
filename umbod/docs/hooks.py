@@ -1,9 +1,13 @@
 import json
+import re
 from pathlib import Path
 from typing import Any
 
 import yaml
 from mkdocs.config.defaults import MkDocsConfig
+
+RELEASE_FIELDS = ("chartVersion", "imageTag", "sdkVersion")
+RELEASE_TOKEN = re.compile(r"\{\{\s*release\.([A-Za-z]+)\s*\}\}")
 
 
 VALUE_SECTIONS = {
@@ -84,8 +88,31 @@ def _reference_rows(
     return rows
 
 
+def _release_metadata(app_directory: Path) -> dict[str, str]:
+    metadata = json.loads((app_directory.parent / "release-metadata.json").read_text())
+    if not isinstance(metadata, dict) or set(metadata) != set(RELEASE_FIELDS):
+        raise ValueError("release-metadata.json must define chartVersion, imageTag, and sdkVersion")
+    if any(not isinstance(metadata[field], str) or not metadata[field] for field in RELEASE_FIELDS):
+        raise ValueError("release-metadata.json versions must be nonempty strings")
+    return metadata
+
+
+def on_page_markdown(markdown: str, **kwargs: Any) -> str:
+    app_directory = Path(kwargs["config"].config_file_path).parent
+    metadata = _release_metadata(app_directory)
+
+    def replace_token(match: re.Match[str]) -> str:
+        field = match.group(1)
+        if field not in metadata:
+            raise ValueError(f"Unknown release metadata field: {field}")
+        return metadata[field]
+
+    return RELEASE_TOKEN.sub(replace_token, markdown)
+
+
 def on_config(config: MkDocsConfig) -> MkDocsConfig:
     app_directory = Path(config.config_file_path).parent
+    release = _release_metadata(app_directory)
     chart_directory = app_directory / "deploy" / "helm" / "umbod"
     values_path = chart_directory / "values.yaml"
     schema_path = chart_directory / "values.schema.json"
@@ -115,10 +142,10 @@ def on_config(config: MkDocsConfig) -> MkDocsConfig:
             "",
             f"This reference is generated from the checked-in chart source (`{chart['version']}`). Its image defaults reflect that source version, not necessarily the latest published chart.",
             "",
-            "For the published chart `0.0.1-beta.5` (core and frontend image tags `0.0.1-beta.3`), inspect its defaults directly:",
+            f"For the published chart `{release['chartVersion']}` (core and frontend image tags `{release['imageTag']}`), inspect its defaults directly:",
             "",
             "```bash",
-            "helm show values oci://ghcr.io/computerlovetech/charts/umbod --version 0.0.1-beta.5",
+            f"helm show values oci://ghcr.io/computerlovetech/charts/umbod --version {release['chartVersion']}",
             "```",
             "",
             "## Values",

@@ -4,6 +4,13 @@ Website for Umbod, computerlove.tech's open-source agent infrastructure product.
 
 The single landing page serves platform teams, with local Kubernetes evaluation and
 feedback as its main paths. See [website context](CONTEXT.md) for positioning and tone.
+
+Update chart, image, and SDK release versions in the repository-root
+[`release-metadata.json`](../release-metadata.json). MkDocs substitutes these values
+in the guides and generated Helm reference; Vite substitutes them in the landing
+page during development and build. Do not edit release tags in the rendered
+`website/public/docs/` or `website/dist/` output.
+
 Cloudflare redirects the former `/enterprise`, `/enterprise/`, and `/enterprise.html`
 URLs to `/` through `public/_redirects`.
 

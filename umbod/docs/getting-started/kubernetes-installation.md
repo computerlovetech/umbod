@@ -31,12 +31,12 @@ Install Umbod from its OCI Helm chart. Start with kind for a local evaluation, o
 
 ## Install Umbod locally
 
-Install chart `0.0.1-beta.5` (which deploys core and frontend images `0.0.1-beta.3`) with development authentication:
+Install chart `{{ release.chartVersion }}` (which deploys core and frontend images `{{ release.imageTag }}`) with development authentication:
 
 ```bash
 helm upgrade --install umbod \
   oci://ghcr.io/computerlovetech/charts/umbod \
-  --version 0.0.1-beta.5 \
+  --version {{ release.chartVersion }} \
   --set config.profile=local \
   --set config.authentication.mode=dev \
   --set-string config.publicOrigins.site=http://localhost:3000 \
@@ -120,7 +120,7 @@ Install or upgrade Umbod:
 ```bash
 helm upgrade --install umbod \
   oci://ghcr.io/computerlovetech/charts/umbod \
-  --version 0.0.1-beta.5 \
+  --version {{ release.chartVersion }} \
   --namespace umbod \
   --values values.production.yaml \
   --wait --timeout 5m

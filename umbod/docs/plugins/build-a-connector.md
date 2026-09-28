@@ -13,11 +13,11 @@ The short path is: create a Hatch project with `uv`, run `umbod connectors init`
 - Helm 3 and `kubectl`
 - An Umbod installation and a published connector-builder and core image for the same release
 
-Set the published image and chart versions and the destination for your plugin image. The image release `0.0.1-beta.3` uses SDK `0.0.1b3`; chart `0.0.1-beta.5` deploys those images by default:
+Set the published image and chart versions and the destination for your plugin image. The image release `{{ release.imageTag }}` uses SDK `{{ release.sdkVersion }}`; chart `{{ release.chartVersion }}` deploys those images by default:
 
 ```bash
-export UMBOD_RELEASE=0.0.1-beta.3
-export UMBOD_CHART_VERSION=0.0.1-beta.5
+export UMBOD_RELEASE={{ release.imageTag }}
+export UMBOD_CHART_VERSION={{ release.chartVersion }}
 export UMBOD_CONNECTOR_BUILDER=ghcr.io/computerlovetech/umbod-connector-builder:$UMBOD_RELEASE
 export PLUGIN_IMAGE=registry.example.com/your-organization/my-umbod-connector:0.1.0
 ```
@@ -46,7 +46,7 @@ name = "my-umbod-connector"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
-  "umbod>=0.0.1b3,<0.0.2",
+  "umbod>={{ release.sdkVersion }},<0.0.2",
 ]
 
 [tool.uv.sources]
@@ -83,7 +83,7 @@ This command is offline and does not import the connector. If you substituted a 
 umbod connectors check --target "$UMBOD_RELEASE"
 ```
 
-`--target` reads core and builder image registry metadata, checks that their SDK versions agree, and verifies that the version satisfies your declared `umbod` dependency. It does not pull image layers, run Docker, or import the connector. The `0.0.1-beta.3` images carry those labels, so the command above applies to this example.
+`--target` reads core and builder image registry metadata, checks that their SDK versions agree, and verifies that the version satisfies your declared `umbod` dependency. It does not pull image layers, run Docker, or import the connector. The `{{ release.imageTag }}` images carry those labels, so the command above applies to this example.
 
 ### Older-release fallback
 
@@ -162,7 +162,7 @@ If you use an AI coding agent, the SDK also bundles a connector-authoring skill.
 Use the connector-builder image as the build stage. Export third-party runtime dependencies without the SDK, install them into `/plugin-bundle`, then install the connector wheel without dependency resolution.
 
 ```dockerfile
-ARG UMBOD_RELEASE=0.0.1-beta.3
+ARG UMBOD_RELEASE={{ release.imageTag }}
 FROM ghcr.io/computerlovetech/umbod-connector-builder:${UMBOD_RELEASE} AS builder
 
 WORKDIR /workspace
