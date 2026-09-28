@@ -6,6 +6,27 @@ import yaml
 from mkdocs.config.defaults import MkDocsConfig
 
 
+VALUE_SECTIONS = {
+    "nameOverride": ("Chart name override", "Override the chart name used to name Kubernetes resources."),
+    "fullnameOverride": ("Full resource name override", "Set the full name used for chart-created Kubernetes resources."),
+    "imagePullSecrets": ("Image pull secrets", "Provide credentials for pulling images from private registries."),
+    "serviceAccount": ("Service account", "Control the service account created for the workloads and whether its token is mounted."),
+    "existingSecret": ("Application secret", "Name the existing Kubernetes Secret that supplies application credentials."),
+    "config": ("Application configuration", "Set the runtime profile, logging, authentication, authorization, public origins, and features."),
+    "plugins": ("Connector plugins", "Configure available connectors and their deployment image and resources."),
+    "core": ("Core API and MCP workloads", "Configure the shared core image and the API and MCP containers."),
+    "frontend": ("Frontend workload", "Configure the web frontend image, replicas, environment, and resources."),
+    "persistence": ("Persistent storage", "Configure the optional persistent volume claim used for SQLite data."),
+    "services": ("Kubernetes services", "Set the service ports exposed for the API, MCP, and frontend workloads."),
+    "ingress": ("Ingress", "Configure external hosts, TLS, and paths that route traffic to the services."),
+    "podAnnotations": ("Pod annotations", "Attach annotations to the chart-managed pods."),
+    "podLabels": ("Pod labels", "Attach additional labels to the chart-managed pods."),
+    "nodeSelector": ("Node selection", "Select the nodes on which the workloads may run."),
+    "tolerations": ("Pod tolerations", "Allow workloads to run on nodes with matching taints."),
+    "affinity": ("Pod affinity", "Control placement of workloads relative to nodes or other pods."),
+}
+
+
 def _merge_mappings(base: dict[str, Any], addition: dict[str, Any]) -> dict[str, Any]:
     merged = dict(base)
     for key, value in addition.items():
@@ -73,7 +94,21 @@ def on_config(config: MkDocsConfig) -> MkDocsConfig:
     values = yaml.safe_load(values_text)
     schema = json.loads(schema_path.read_text())
     chart = yaml.safe_load(chart_path.read_text())
-    rows = _reference_rows(values, schema, schema.get("definitions", {}))
+    sections: list[str] = []
+    for key, value in values.items():
+        title, description = VALUE_SECTIONS[key]
+        sections.extend(
+            [
+                f"### {title} (`{key}`)",
+                "",
+                description,
+                "",
+                "| Value | Type | Default | Constraints |",
+                "| --- | --- | --- | --- |",
+                *_reference_rows({key: value}, schema, schema.get("definitions", {})),
+                "",
+            ]
+        )
     content = "\n".join(
         [
             "# Helm values reference",
@@ -88,9 +123,7 @@ def on_config(config: MkDocsConfig) -> MkDocsConfig:
             "",
             "## Values",
             "",
-            "| Value | Type | Default | Constraints |",
-            "| --- | --- | --- | --- |",
-            *rows,
+            *sections,
             "",
             "## Complete defaults",
             "",
