@@ -3,6 +3,8 @@ from typing import Annotated
 
 import typer
 
+from umbod_sdk.connector_checks.cli import connectors_app
+from umbod_sdk.connector_init.cli import init
 from umbod_sdk.skill_installation import (
     Harness,
     Scope,
@@ -14,6 +16,8 @@ from umbod_sdk.skill_installation import (
 app = typer.Typer(help="Umbod SDK tools.", no_args_is_help=True)
 skills_app = typer.Typer(help="Manage bundled agent skills.", no_args_is_help=True)
 app.add_typer(skills_app, name="skills")
+app.add_typer(connectors_app, name="connectors")
+connectors_app.command("init")(init)
 
 
 @skills_app.command("list")

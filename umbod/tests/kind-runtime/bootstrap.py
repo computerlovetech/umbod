@@ -14,6 +14,15 @@ def main() -> None:
     connector_url = f"{api_base_url}/admin/connectors/catalog/test"
     put_json(f"{connector_url}/configuration", b'{"configuration":{"instance_name":"Kind"}}')
     put_json(f"{connector_url}/publication", b"{}")
+    put_json(
+        f"{connector_url}/tools/activation",
+        b'{"tools":[{"tool_id":"echo","activation_status":"enabled"}]}',
+    )
+    put_json(
+        f"{api_base_url}/admin/mcp-permissions/groups/admin/permissions",
+        b'{"capabilities":[{"connector_id":"test","capability_kind":"tool",'
+        b'"capability_key":"echo","permission_status":"enabled"}]}',
+    )
 
 
 if __name__ == "__main__":

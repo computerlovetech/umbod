@@ -67,7 +67,7 @@ helm --kube-context "${kube_context}" install "${release_name}" "${chart_directo
 helm --kube-context "${kube_context}" test "${release_name}" --logs --timeout 2m
 
 kubectl --context "${kube_context}" set env deployment/umbod-core --containers=mcp \
-    UMBOD_MCP_TOOL_EXPOSURE=flat UMBOD_MCP_STATELESS_HTTP=false
+    UMBOD_MCP_TOOL_EXPOSURE=flat UMBOD_MCP_STATELESS_HTTP=false UMBOD_MCP_PERMISSION_CLAIM=groups
 kubectl --context "${kube_context}" rollout status deployment/umbod-core --timeout=3m
 
 kubectl --context "${kube_context}" port-forward service/umbod-api "${api_port}:8000" --address 127.0.0.1 &
