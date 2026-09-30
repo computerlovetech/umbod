@@ -1,7 +1,7 @@
 import asyncio
 import json
 from collections.abc import Callable, Awaitable
-from typing import Any
+from typing import Any, Literal
 from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
@@ -45,6 +45,47 @@ async def test_disabling_enabled_tool_removes_it_from_existing_mcp_session_tools
         _disable_tool(runtime_endpoints)
 
         assert await _wait_until(lambda: _client_tool_is_absent(client)) is True
+
+
+@pytest.mark.asyncio
+async def test_admin_mcp_write_changes_running_connector_tool_visibility(runtime_endpoints: RuntimeEndpoints) -> None:
+    _disable_tool(runtime_endpoints)
+    assert await _wait_until(lambda: _mcp_tool_is_absent(runtime_endpoints)) is True
+
+    transport = StreamableHttpTransport(
+        runtime_endpoints.mcp_url,
+        headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"},
+    )
+    async with Client(transport) as administrator:
+        await _set_admin_activation(administrator, "enabled")
+        assert await _wait_until(lambda: _mcp_tool_is_present(runtime_endpoints)) is True
+        await _set_admin_activation(administrator, "disabled")
+        assert await _wait_until(lambda: _mcp_tool_is_absent(runtime_endpoints)) is True
+
+
+async def _set_admin_activation(
+    administrator: Client[Any], status: Literal["enabled", "disabled"]
+) -> None:
+    result = await administrator.call_tool(
+        "upsert_connector_configuration",
+        {
+            "connector_kind": "native",
+            "connector_id": CONNECTOR_ID,
+            "desired_state": {
+                "operations": [{
+                    "operation": "set_capability_activation",
+                    "capability_kind": "tool",
+                    "capability_key": OPERATION_NAME,
+                    "activation_status": status,
+                }],
+            },
+        },
+    )
+    assert any(
+        capability["capability_key"] == OPERATION_NAME
+        and capability["activation_status"] == status
+        for capability in result.structured_content["capabilities"]
+    )
 
 
 async def _mcp_tool_is_present(runtime_endpoints: RuntimeEndpoints) -> bool:

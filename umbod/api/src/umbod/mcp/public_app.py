@@ -14,8 +14,9 @@ from umbod.core.permissions.factories import create_group_permission_store
 from umbod.core.connectors.downstream_mcp.stores import create_downstream_mcp_stores
 from umbod.core.connectors.openapi.stores.factories import ConfiguredOpenApiConnectorStoreFactory
 from umbod.core.administrator.connector_configuration import AdministratorConnectorConfigurationService
-from umbod.core.connectors.openapi.administrator_configuration import OpenApiAdministratorConnectorConfigurationReader
-from umbod.core.connectors.openapi.administrator_configuration_mutation import OpenApiAdministratorConfigurationMutation
+from umbod.core.administrator.connector_configuration.reader import CatalogAdministratorConnectorConfigurationReader
+from umbod.mcp.administrator.catalog import AdministratorConfigurationCatalog
+from umbod.core.administrator.connector_configuration.mutation import CatalogAdministratorConfigurationMutation
 from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
 
 from collections.abc import AsyncIterator
@@ -163,16 +164,27 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     if settings.feature_toggles.mcp_administrator_enabled:
         group_permission_store = await create_group_permission_store(persistence_runtime.database)
         openapi_connector_store = await mcp.openapi_connector_store_factory.create()
-        openapi_administrator_configuration = OpenApiAdministratorConnectorConfigurationReader(
+        downstream_stores = await create_downstream_mcp_stores(
+            downstream_mcp_infrastructure_settings_from_app_config(settings).credential_secret,
+            persistence_runtime.database,
+        )
+        catalog = AdministratorConfigurationCatalog(
+            partial(InMemoryConnectorRegistry, runtime.connector_registrations,
+                [str(registration['id']) for registration in runtime.connector_registrations]),
             openapi_connector_store,
+            downstream_stores.definitions,
+            downstream_stores.catalogs,
+        )
+        openapi_administrator_configuration = CatalogAdministratorConnectorConfigurationReader(
+            catalog,
             mcp.capability_activation_store,
             invocation_policy_store,
             mcp.capability_description_overrides,
             group_permission_store,
         )
-        openapi_administrator_mutation = OpenApiAdministratorConfigurationMutation(
+        openapi_administrator_mutation = CatalogAdministratorConfigurationMutation(
             persistence_runtime.database,
-            openapi_connector_store,
+            catalog,
             openapi_administrator_configuration,
             mcp.capability_description_overrides,
             group_permission_store,

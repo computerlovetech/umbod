@@ -1,7 +1,22 @@
 from typing import Literal, Protocol
 
-from umbod.core.activation import ActivationStatus, CapabilityActivationState, CapabilityRef
-from umbod.core.activation.stores.service import set_statuses_in_session
+from messaging.events import McpGroupPermissionChanged
+from umbod.core.activation.events import connector_capability_activation_changed_event
+from umbod.core.capabilities.descriptions.events import (
+    connector_capability_description_override_changed_event,
+)
+from umbod.core.invocation.events import connector_invocation_policy_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
+
+from umbod.core.activation import (
+    ActivationStatus,
+    CapabilityActivationState,
+    CapabilityRef,
+)
+from umbod.core.activation.stores.service import (
+    get_status_in_session,
+    set_statuses_in_session,
+)
 from umbod.core.administrator.connector_configuration import (
     ConfigurationConflict,
     ConfigurationError,
@@ -22,7 +37,10 @@ from umbod.core.capabilities.descriptions.overrides import (
     OverrideRevisionConflictError,
     SystemCapabilityDescription,
 )
-from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
+from umbod.core.administrator.connector_configuration.catalog import (
+    ConnectorConfigurationCatalog,
+)
+from umbod.core.capabilities import CapabilityKind
 from umbod.core.invocation import (
     ConnectorInvocationPolicyKey,
     ConnectorInvocationPolicyRevisionConflict,
@@ -33,13 +51,16 @@ from umbod.core.permissions.domain import (
     CapabilityPermissionUpdate,
     ConnectorCapabilityRef,
     ConnectorPermissionUpdate,
+    GroupPermissionSet,
     UpdateGroupPermissionsRequest,
 )
 from umbod.core.persistence import Database, DatabaseSession, TransactionMode
 
 
 class ConnectorConfigurationResultReader(Protocol):
-    async def read(self, request: ReadConnectorConfiguration) -> ConfigurationResult: ...
+    async def read(
+        self, request: ReadConnectorConfiguration
+    ) -> ConfigurationResult: ...
 
 
 class DescriptionSessionMutation(Protocol):
@@ -58,16 +79,20 @@ class DescriptionSessionMutation(Protocol):
 
 
 class PermissionSessionMutation(Protocol):
+    async def list_group_permissions_in_session(
+        self, session: DatabaseSession, group_id: str
+    ) -> GroupPermissionSet: ...
+
     async def update_group_permissions_in_session(
         self, session: DatabaseSession, request: UpdateGroupPermissionsRequest
     ) -> None: ...
 
 
-class OpenApiAdministratorConfigurationMutation:
+class CatalogAdministratorConfigurationMutation:
     def __init__(
         self,
         database: Database,
-        store: OpenApiConnectorStore,
+        store: ConnectorConfigurationCatalog,
         reader: ConnectorConfigurationResultReader,
         descriptions: DescriptionSessionMutation,
         permissions: PermissionSessionMutation,
@@ -78,7 +103,9 @@ class OpenApiAdministratorConfigurationMutation:
         self._descriptions = descriptions
         self._permissions = permissions
 
-    async def upsert(self, request: UpsertConnectorConfiguration) -> ConfigurationResult:
+    async def upsert(
+        self, request: UpsertConnectorConfiguration
+    ) -> ConfigurationResult:
         duplicate = self._duplicate_target(request)
         if duplicate is not None:
             return duplicate
@@ -89,23 +116,34 @@ class OpenApiAdministratorConfigurationMutation:
         if invalid_permission is not None:
             return invalid_permission
         description_key = ConnectorCapabilityDescriptionKey(
-            kind="openapi", connector_id=request.connector.connector_id
+            kind=request.connector.connector_kind,
+            connector_id=request.connector.connector_id,
         )
         try:
-            async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
+            async with self._database.session(
+                mode=TransactionMode.SERIALIZED_WRITE
+            ) as session:
                 current_description = await self._descriptions.get_in_session(
                     session, description_key
                 )
-                description_conflict = self._description_conflict(request, current_description)
+                description_conflict = self._description_conflict(
+                    request, current_description
+                )
                 if description_conflict is not None:
                     return description_conflict
-                await compare_and_set_invocation_policies(session, self._policy_updates(request))
-                await set_statuses_in_session(session, self._activation_states(request))
+                updates = self._policy_updates(request)
+                records = await compare_and_set_invocation_policies(session, updates)
+                for update, record in zip(updates, records, strict=True):
+                    if record.revision != update.expected_revision:
+                        await append_event_in_session(
+                            session, connector_invocation_policy_changed_event(record)
+                        )
+                await self._apply_activations(session, request)
                 await self._apply_description(
                     session, request, description_key, current_description
                 )
                 for update in self._permission_updates(request):
-                    await self._permissions.update_group_permissions_in_session(session, update)
+                    await self._apply_permissions(session, update)
         except ConnectorInvocationPolicyRevisionConflict as error:
             conflicts = tuple(
                 ConfigurationConflict(
@@ -124,11 +162,15 @@ class OpenApiAdministratorConfigurationMutation:
                 )
             )
         return await self._reader.read(
-            ReadConnectorConfiguration(principal=request.principal, connector=request.connector)
+            ReadConnectorConfiguration(
+                principal=request.principal, connector=request.connector
+            )
         )
 
     @staticmethod
-    def _duplicate_target(request: UpsertConnectorConfiguration) -> ConfigurationRejected | None:
+    def _duplicate_target(
+        request: UpsertConnectorConfiguration,
+    ) -> ConfigurationRejected | None:
         activations = [
             (operation.capability_kind, operation.capability_key)
             for operation in request.desired_state.operations
@@ -142,7 +184,9 @@ class OpenApiAdministratorConfigurationMutation:
         descriptions = [
             operation
             for operation in request.desired_state.operations
-            if isinstance(operation, (SetCapabilityDescription, UseSystemCapabilityDescription))
+            if isinstance(
+                operation, (SetCapabilityDescription, UseSystemCapabilityDescription)
+            )
         ]
         groups = [
             operation
@@ -173,36 +217,49 @@ class OpenApiAdministratorConfigurationMutation:
 
     async def _operation_keys(
         self, request: UpsertConnectorConfiguration
-    ) -> set[str] | ConfigurationRejected:
+    ) -> set[tuple[CapabilityKind, str]] | ConfigurationRejected:
         connector_id = request.connector.connector_id
-        connector_ids = {connector.connector_id for connector in await self._store.list_connectors()}
-        if connector_id not in connector_ids:
+        if not await self._store.has_connector(request.connector):
             return ConfigurationRejected(
                 error=ConfigurationError(
-                    code="connector_not_found", message=f"Connector '{connector_id}' was not found."
+                    code="connector_not_found",
+                    message=f"Connector '{connector_id}' was not found.",
                 )
             )
         operation_keys = {
-            operation.operation_id
-            for operation in await self._store.list_operation_summaries(connector_id)
+            (identity.capability_kind, identity.capability_key)
+            for identity in await self._store.list_capabilities(request.connector)
         }
         for desired in request.desired_state.operations:
-            if not isinstance(desired, (SetCapabilityActivation, SetCapabilityInvocationPolicy)):
+            if not isinstance(
+                desired, (SetCapabilityActivation, SetCapabilityInvocationPolicy)
+            ):
                 continue
-            if desired.capability_kind != "tool" or desired.capability_key not in operation_keys:
+            if (
+                desired.capability_kind,
+                desired.capability_key,
+            ) not in operation_keys or (
+                isinstance(desired, SetCapabilityInvocationPolicy)
+                and desired.capability_kind != "tool"
+            ):
                 return self._capability_not_found(
                     connector_id, desired.capability_kind, desired.capability_key
                 )
         return operation_keys
 
     def _invalid_permission_target(
-        self, request: UpsertConnectorConfiguration, operation_keys: set[str]
+        self,
+        request: UpsertConnectorConfiguration,
+        operation_keys: set[tuple[CapabilityKind, str]],
     ) -> ConfigurationRejected | None:
         for group in request.desired_state.operations:
             if not isinstance(group, UpdateGroupPermissions):
                 continue
             for capability in group.capabilities:
-                if capability.capability_kind == "tool" and capability.capability_key in operation_keys:
+                if (
+                    capability.capability_kind,
+                    capability.capability_key,
+                ) in operation_keys:
                     continue
                 return self._capability_not_found(
                     request.connector.connector_id,
@@ -222,6 +279,81 @@ class OpenApiAdministratorConfigurationMutation:
             )
         )
 
+    async def _apply_activations(
+        self, session: DatabaseSession, request: UpsertConnectorConfiguration
+    ) -> None:
+        changed = tuple([
+            state
+            for state in self._activation_states(request)
+            if await get_status_in_session(session, state.ref) != state.activation_status
+        ])
+        await set_statuses_in_session(session, changed)
+        for state in changed:
+            ref = state.ref
+            await append_event_in_session(
+                session,
+                connector_capability_activation_changed_event(
+                    ref.connector_kind, ref.connector_id,
+                    ref.capability_kind, ref.capability_key,
+                ),
+            )
+
+    async def _apply_permissions(
+        self, session: DatabaseSession, update: UpdateGroupPermissionsRequest
+    ) -> None:
+        previous = await self._permissions.list_group_permissions_in_session(
+            session, update.group_id
+        )
+        changed_connectors = tuple(
+            connector for connector in update.connectors
+            if (connector.permission_status == "enabled")
+            != (connector.connector_id in previous.connector_ids)
+        )
+        changed_capabilities = tuple(
+            capability for capability in update.capabilities
+            if (capability.permission_status == "enabled")
+            != (capability.capability in previous.capabilities)
+        )
+        if not changed_connectors and not changed_capabilities:
+            return
+        await self._permissions.update_group_permissions_in_session(
+            session,
+            UpdateGroupPermissionsRequest(
+                group_id=update.group_id,
+                connectors=changed_connectors,
+                capabilities=changed_capabilities,
+            ),
+        )
+        for connector in changed_connectors:
+            enabled = connector.permission_status == "enabled"
+            await append_event_in_session(
+                session,
+                McpGroupPermissionChanged(
+                    group_id=update.group_id,
+                    action="grant" if enabled else "revoke",
+                    target_kind="connector",
+                    connector_id=connector.connector_id,
+                ).to_messaging_event(),
+            )
+        for capability_update in changed_capabilities:
+            capability = capability_update.capability
+            enabled = capability_update.permission_status == "enabled"
+            await append_event_in_session(
+                session,
+                McpGroupPermissionChanged(
+                    group_id=update.group_id,
+                    action="grant" if enabled else "revoke",
+                    target_kind=capability.capability_kind,
+                    connector_id=capability.connector_id,
+                    capability_kind=capability.capability_kind,
+                    capability_key=capability.capability_key,
+                    operation_name=(
+                        capability.capability_key
+                        if capability.capability_kind == "tool" else None
+                    ),
+                ).to_messaging_event(),
+            )
+
     @staticmethod
     def _activation_states(
         request: UpsertConnectorConfiguration,
@@ -229,7 +361,10 @@ class OpenApiAdministratorConfigurationMutation:
         return tuple(
             CapabilityActivationState(
                 ref=CapabilityRef(
-                    "openapi", request.connector.connector_id, "tool", desired.capability_key
+                    request.connector.connector_kind,
+                    request.connector.connector_id,
+                    desired.capability_kind,
+                    desired.capability_key,
                 ),
                 activation_status=ActivationStatus(desired.activation_status),
             )
@@ -244,7 +379,9 @@ class OpenApiAdministratorConfigurationMutation:
         return tuple(
             ConnectorInvocationPolicyUpdate(
                 key=ConnectorInvocationPolicyKey(
-                    "openapi", request.connector.connector_id, desired.capability_key
+                    request.connector.connector_kind,
+                    request.connector.connector_id,
+                    desired.capability_key,
                 ),
                 mode=desired.mode,
                 expected_revision=desired.expected_revision,
@@ -262,7 +399,8 @@ class OpenApiAdministratorConfigurationMutation:
                 operation
                 for operation in request.desired_state.operations
                 if isinstance(
-                    operation, (SetCapabilityDescription, UseSystemCapabilityDescription)
+                    operation,
+                    (SetCapabilityDescription, UseSystemCapabilityDescription),
                 )
             ),
             None,
@@ -293,7 +431,8 @@ class OpenApiAdministratorConfigurationMutation:
         )
         return ConfigurationRejected(
             error=ConfigurationError(
-                code="revision_conflict", message=f"{label} revision conflict: {details}"
+                code="revision_conflict",
+                message=f"{label} revision conflict: {details}",
             ),
             conflicts=conflicts,
         )
@@ -321,9 +460,18 @@ class OpenApiAdministratorConfigurationMutation:
         state: Literal["overridden", "system"] = (
             "overridden" if isinstance(desired, SetCapabilityDescription) else "system"
         )
-        description = desired.description if isinstance(desired, SetCapabilityDescription) else ""
-        await self._descriptions.compare_and_swap_in_session(
+        description = (
+            desired.description if isinstance(desired, SetCapabilityDescription) else ""
+        )
+        revision = await self._descriptions.compare_and_swap_in_session(
             session, key, state, description, desired.expected_revision
+        )
+        await append_event_in_session(
+            session,
+            connector_capability_description_override_changed_event(
+                key.kind, key.connector_id,
+                "set" if state == "overridden" else "clear", revision,
+            ),
         )
 
     def _permission_updates(
@@ -333,7 +481,9 @@ class OpenApiAdministratorConfigurationMutation:
         return tuple(
             UpdateGroupPermissionsRequest(
                 group_id=group.group_id,
-                connectors=(ConnectorPermissionUpdate(connector_id, group.connector_status),)
+                connectors=(
+                    ConnectorPermissionUpdate(connector_id, group.connector_status),
+                )
                 if group.connector_status is not None
                 else (),
                 capabilities=tuple(

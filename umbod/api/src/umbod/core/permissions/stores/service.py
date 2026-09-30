@@ -60,38 +60,43 @@ class GroupPermissionStoreService:
 
     async def list_group_permissions(self, group_id: str) -> GroupPermissionSet:
         async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
-            connector_ids = tuple(
-                row.connector_id
-                for row in await session.find_many(
-                    self._connector_permissions,
-                    Query(
-                        filter=Equals(CONNECTOR_PERMISSION_GROUP_ID, group_id),
-                        projection=CONNECTOR_ID_PROJECTION,
-                        ordering=OrderBy((CONNECTOR_PERMISSION_CONNECTOR_ID,)),
-                    ),
-                )
+            return await self.list_group_permissions_in_session(session, group_id)
+
+    async def list_group_permissions_in_session(
+        self, session: DatabaseSession, group_id: str
+    ) -> GroupPermissionSet:
+        connector_ids = tuple(
+            row.connector_id
+            for row in await session.find_many(
+                self._connector_permissions,
+                Query(
+                    filter=Equals(CONNECTOR_PERMISSION_GROUP_ID, group_id),
+                    projection=CONNECTOR_ID_PROJECTION,
+                    ordering=OrderBy((CONNECTOR_PERMISSION_CONNECTOR_ID,)),
+                ),
             )
-            capabilities = tuple(
-                ConnectorCapabilityRef(
-                    connector_id=row.connector_id,
-                    capability_kind=_capability_kind(row.capability_kind),
-                    capability_key=row.capability_key,
-                )
-                for row in await session.find_many(
-                    self._capability_permissions,
-                    Query(
-                        filter=Equals(CAPABILITY_PERMISSION_GROUP_ID, group_id),
-                        projection=CONNECTOR_CAPABILITY_PROJECTION,
-                        ordering=OrderBy(
-                            (
-                                CAPABILITY_PERMISSION_CONNECTOR_ID,
-                                CAPABILITY_PERMISSION_KIND,
-                                CAPABILITY_PERMISSION_KEY,
-                            )
-                        ),
-                    ),
-                )
+        )
+        capabilities = tuple(
+            ConnectorCapabilityRef(
+                connector_id=row.connector_id,
+                capability_kind=_capability_kind(row.capability_kind),
+                capability_key=row.capability_key,
             )
+            for row in await session.find_many(
+                self._capability_permissions,
+                Query(
+                    filter=Equals(CAPABILITY_PERMISSION_GROUP_ID, group_id),
+                    projection=CONNECTOR_CAPABILITY_PROJECTION,
+                    ordering=OrderBy(
+                        (
+                            CAPABILITY_PERMISSION_CONNECTOR_ID,
+                            CAPABILITY_PERMISSION_KIND,
+                            CAPABILITY_PERMISSION_KEY,
+                        )
+                    ),
+                ),
+            )
+        )
         return GroupPermissionSet(
             group_id=group_id, connector_ids=connector_ids, capabilities=capabilities
         )

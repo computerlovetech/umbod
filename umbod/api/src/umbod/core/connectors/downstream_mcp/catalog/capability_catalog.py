@@ -42,6 +42,19 @@ class StoreBackedDownstreamCapabilityCatalog:
     async def list_capabilities(self) -> tuple[NormalizedCapability, ...]:
         return tuple(record.capability for record in await self.list_records())
 
+    async def list_connector_capabilities(
+        self, connector_id: str
+    ) -> tuple[NormalizedCapability, ...]:
+        definition = await self._definitions.get(
+            ConnectorIdQuery(connector_id=connector_id)
+        )
+        if not isinstance(definition, ConnectorDefinitionFound):
+            return ()
+        return tuple(
+            record.capability
+            for record in await self._records_for(definition.definition)
+        )
+
     async def resolve(self, identity: CapabilityIdentity) -> NormalizedCapability:
         return (await self.resolve_record(identity)).capability
 

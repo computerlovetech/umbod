@@ -12,6 +12,7 @@ from umbod.core.persistence import (
     AllFields,
     AllOf,
     Database,
+    DatabaseSession,
     GeneratedIntegerKeyInsertCommand,
     GreaterThan,
     OneOf,
@@ -24,20 +25,26 @@ from messaging.models import MessagingEvent, MessagingEventType, StreamEvent
 _EVENT_ADAPTER = TypeAdapter(MessagingEvent)
 
 
+async def append_event_in_session(
+    session: DatabaseSession, event: MessagingEvent
+) -> StreamEvent:
+    validated = _EVENT_ADAPTER.validate_python(event)
+    record = MessagingEventRecord(
+        sequence=0, event_type=validated.event_type, document=validated.model_dump_json()
+    )
+    sequence = await session.insert_generated_integer_key(
+        EVENT_TABLE, GeneratedIntegerKeyInsertCommand(record, EVENT_SEQUENCE)
+    )
+    return StreamEvent(sequence=sequence, event=validated)
+
+
 class DatabaseEventStream:
     def __init__(self, database: Database) -> None:
         self._database = database
 
     async def append(self, event: MessagingEvent) -> StreamEvent:
-        validated = _EVENT_ADAPTER.validate_python(event)
-        record = MessagingEventRecord(
-            sequence=0, event_type=validated.event_type, document=validated.model_dump_json()
-        )
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
-            sequence = await session.insert_generated_integer_key(
-                EVENT_TABLE, GeneratedIntegerKeyInsertCommand(record, EVENT_SEQUENCE)
-            )
-        return StreamEvent(sequence=sequence, event=validated)
+            return await append_event_in_session(session, event)
 
     async def list_after(self, sequence: int, limit: int) -> list[StreamEvent]:
         return await self.list_after_types(sequence, limit, ())

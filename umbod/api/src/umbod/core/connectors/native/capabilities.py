@@ -74,9 +74,15 @@ class NativeCapabilityCatalog:
 
     @classmethod
     def from_registry(cls, registry: ConnectorRegistry) -> "NativeCapabilityCatalog":
-        definitions = registry.list_connector_definitions(
-            ConnectorDefinitionFilter(availability="available")
+        return cls.from_filtered_registry(
+            registry, ConnectorDefinitionFilter(availability="available")
         )
+
+    @classmethod
+    def from_filtered_registry(
+        cls, registry: ConnectorRegistry, filters: ConnectorDefinitionFilter
+    ) -> "NativeCapabilityCatalog":
+        definitions = registry.list_connector_definitions(filters)
         return cls(
             tuple(
                 binding
@@ -84,6 +90,12 @@ class NativeCapabilityCatalog:
                 for binding in _bindings_from_definition(definition)
             )
         )
+
+    @classmethod
+    def from_definition(
+        cls, definition: ConnectorDefinition
+    ) -> "NativeCapabilityCatalog":
+        return cls(_bindings_from_definition(definition))
 
     async def list_capabilities(self) -> tuple[NormalizedCapability, ...]:
         return tuple(binding.capability for binding in self._bindings)

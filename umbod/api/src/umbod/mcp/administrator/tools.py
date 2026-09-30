@@ -24,7 +24,7 @@ class AdministratorConnectorConfigurationTools:
         self._membership_claim = membership_claim
 
     async def read_connector_configuration(
-        self, connector_kind: Literal["openapi"], connector_id: str
+        self, connector_kind: Literal["native", "openapi", "downstream_mcp"], connector_id: str
     ) -> ConnectorConfigurableState:
         result = await self._configuration.read(
             ReadConnectorConfiguration(
@@ -41,7 +41,7 @@ class AdministratorConnectorConfigurationTools:
 
     async def upsert_connector_configuration(
         self,
-        connector_kind: Literal["openapi"],
+        connector_kind: Literal["native", "openapi", "downstream_mcp"],
         connector_id: str,
         desired_state: ConnectorDesiredState,
     ) -> ConnectorConfigurableState:

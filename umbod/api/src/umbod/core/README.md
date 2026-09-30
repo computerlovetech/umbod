@@ -10,7 +10,7 @@
 
 ### `administrator/connector_configuration/`
 
-**Read when working with:** Shared administrator connector configuration models, explicit discriminated mutation operations, requests, results, reader and atomic mutation ports, or application service behavior. Import its public API only from `umbod.core.administrator.connector_configuration`.
+**Read when working with:** Shared administrator connector configuration models, explicit discriminated mutation operations, requests, results, reader and atomic mutation ports, or application service behavior. Import its public API only from `umbod.core.administrator.connector_configuration`. `reader.py` reads complete cross-kind configurable state. `mutation.py` validates and atomically persists mixed activation, invocation policy, description override, and permission operations with their durable events. `catalog.py` defines the connector inventory port.
 
 ### `activation/`
 
@@ -18,7 +18,7 @@
 
 ### `permissions/`
 
-**Read when working with:** Group access, tool permissions, authorization state, or permission notifications.
+**Read when working with:** Group access, tool permissions, authorization state, or permission notifications. `stores/service.py` exposes session-bound permission reads and updates for atomic configuration writes.
 
 ### `invocation/`
 
@@ -48,7 +48,7 @@
 
 ### `connectors/openapi/`
 
-**Read when working with:** OpenAPI imports, generated connector models, operation execution, or administrator-configurable OpenAPI state. `administrator_configuration.py` reads complete configurable state. `administrator_configuration_mutation.py` validates and atomically persists explicit mixed operations across activation, invocation policy, description override, and group permissions.
+**Read when working with:** OpenAPI imports, generated connector models, operation execution, or administrator-configurable OpenAPI inventory. `administrator_catalog.py` adapts persisted operation summaries to the shared configuration catalog port.
 
 ### `connectors/downstream_mcp/`
 
@@ -58,7 +58,7 @@
 
 ### `messaging/`
 
-**Read when working with:** Core messaging contracts shared with transport implementations.
+**Read when working with:** Core messaging contracts shared with transport implementations. `stores/event_stream.py` provides durable stream storage and `append_event_in_session` for atomic state-and-event writes.
 
 ### `persistence/`
 
