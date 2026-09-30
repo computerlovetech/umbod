@@ -154,6 +154,10 @@ services:
       - traefik.http.routers.umbod-frontend.priority=10
       - traefik.http.routers.umbod-frontend.middlewares=umbod-auth-errors@docker,umbod-auth@docker
       - traefik.http.services.umbod-frontend.loadbalancer.server.port=3000
+      - "traefik.http.routers.umbod-favicon.rule=Host(`umbod-admin.computerlove.tech`) && (Path(`/favicon.svg`) || Path(`/favicon.ico`) || Path(`/umbod-favicon-v2.ico`) || Path(`/umbod-favicon-v2.png`) || Path(`/umbod-apple-touch-icon-v2.png`))"
+      - traefik.http.routers.umbod-favicon.entryPoints=http
+      - traefik.http.routers.umbod-favicon.priority=20
+      - traefik.http.routers.umbod-favicon.service=umbod-frontend
     environment:
       - NODE_ENV=production
       - PORT=3000
