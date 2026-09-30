@@ -46,6 +46,7 @@ nav:
   - Operations:
       - Service topology: operations/service-topology.md
       - Configuration: operations/configuration.md
+      - Admin MCP: operations/admin-mcp.md
   - Connector plugins:
       - Overview: plugins/index.md
       - Build a connector: plugins/build-a-connector.md
