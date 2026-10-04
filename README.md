@@ -87,6 +87,7 @@ Try it with an integration your team actually needs. [Report an issue](https://g
 | Configurable `toolPolicy` | ✅ Complete | 🟡 Evolving | Configure tool access policies as `allow`, `ask`, or `blocked`, controlling whether tools run directly, require approval, or cannot be used. |
 | Agent observability tools | ⬜ Planned | ⚪ Not assessed | Provide built-in tools such as `give_feedback` and `self_diagnose` for agent feedback and diagnostics. |
 | Per-connector runtime logging configuration | ⬜ Planned | ⚪ Not assessed | Configure logging levels independently for each connector at runtime. |
+| OTLP compatible collector endpoint | ⬜ Planned | ⚪ Not assessed | Provide a collector endpoint compatible with the OpenTelemetry Protocol (OTLP) for receiving telemetry. |
 
 ## Image channels
 
