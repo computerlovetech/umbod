@@ -70,6 +70,26 @@ Umbod is in **early beta**. Connector administration, tool publication, group pe
 
 Try it with an integration your team actually needs. [Report an issue](https://github.com/computerlovetech/umbod/issues) or [join the conversation on Discord](https://discord.gg/mjrbtBYeS).
 
+## Feature roadmap
+
+This roadmap originated in the last version in the CLT monorepo (`d2fbdc28^:apps/umbod/README.md`). Helm chart and `toolPolicy` statuses have been updated; other statuses remain as recorded in that version.
+
+**Legend:** ✅ Complete · 🚧 In progress · ⬜ Planned · 🟢 Stable · 🟡 Evolving · ⚪ Not assessed
+
+| Feature | Delivery | Stability | Scope |
+| --- | :---: | :---: | --- |
+| Connector administration | ✅ Complete | 🟡 Evolving | Configure, publish, and unpublish registered connectors from the admin UI. |
+| Dynamic MCP tool publication | ✅ Complete | 🟡 Evolving | Reconcile connector tools into the running MCP server without restarting it. |
+| OpenAPI connectors | ✅ Complete | 🟡 Evolving | Create connectors from OpenAPI documents and configure their authentication. |
+| Downstream MCP connectors | ✅ Complete | 🟡 Evolving | Register downstream MCP servers and expose their tools through Umbod. |
+| Group permissions | ✅ Complete | 🟡 Evolving | Manage group-level access to MCP tools from the admin UI. |
+| Authentication and deployment profiles | ✅ Complete | 🟡 Evolving | Support local development authentication and production OIDC-based deployments. |
+| Helm chart for Kubernetes | ✅ Complete | 🟡 Evolving | Install and configure Umbod on Kubernetes using Helm. |
+| Tool description overrides | ⬜ Planned | ⚪ Not assessed | Override published tool descriptions from the `/admin` interface. |
+| Configurable `toolPolicy` | ✅ Complete | 🟡 Evolving | Configure tool access policies as `allow`, `ask`, or `blocked`, controlling whether tools run directly, require approval, or cannot be used. |
+| Agent observability tools | ⬜ Planned | ⚪ Not assessed | Provide built-in tools such as `give_feedback` and `self_diagnose` for agent feedback and diagnostics. |
+| Per-connector runtime logging configuration | ⬜ Planned | ⚪ Not assessed | Configure logging levels independently for each connector at runtime. |
+
 ## Image channels
 
 Successful pushes to `main` publish core, frontend, and connector-builder images to GHCR under `nightly` and `main-<commit SHA>` tags. `nightly` moves to the latest successful build; it does not automatically update running Kubernetes Pods. SHA-tagged builds are retained for 30 days, so use versioned beta or stable releases for long-lived installations. Versioned images and the Helm chart continue to be published through the separate manual release workflow.
