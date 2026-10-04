@@ -20,7 +20,7 @@ _FRAMEWORK_LOGGERS = ("uvicorn", "uvicorn.error", "uvicorn.access", "fastmcp", "
 _HANDLER_MARKER = "_umbod_otel_stdout_handler"
 _STANDARD_LOG_RECORD_KEYS = frozenset(
     logging.LogRecord("", 0, "", 0, "", (), None).__dict__
-) | {"message", "asctime", "structured_attributes", "trace_id", "span_id"}
+) | {"message", "asctime", "structured_attributes", "trace_id", "span_id", "_umbod_stdout_delivery"}
 
 
 @dataclass(frozen=True)
@@ -30,6 +30,28 @@ class StructuredLogRecord:
     attributes: Mapping[str, Any]
     trace_id: str | None
     span_id: str | None
+
+
+class StdoutLogDeliveryError(RuntimeError):
+    pass
+
+
+@dataclass
+class _StdoutLogDelivery:
+    completed: bool
+
+
+class _StdoutLogHandler(logging.StreamHandler):
+    def emit(self, record: logging.LogRecord) -> None:
+        super().emit(record)
+        delivery = getattr(record, "_umbod_stdout_delivery", None)
+        if isinstance(delivery, _StdoutLogDelivery):
+            delivery.completed = True
+
+    def handleError(self, record: logging.LogRecord) -> None:
+        if isinstance(getattr(record, "_umbod_stdout_delivery", None), _StdoutLogDelivery):
+            raise StdoutLogDeliveryError("Stdout logging failed") from None
+        super().handleError(record)
 
 
 class OpenTelemetryJsonFormatter(logging.Formatter):
@@ -87,7 +109,7 @@ def configure_logging(service_name: str, level: str) -> None:
         for duplicate in owned_handlers[1:]:
             root.removeHandler(duplicate)
     else:
-        handler = logging.StreamHandler(sys.stdout)
+        handler = _StdoutLogHandler(sys.stdout)
         setattr(handler, _HANDLER_MARKER, True)
         handler.setFormatter(OpenTelemetryJsonFormatter(service_name))
         root.addHandler(handler)
@@ -116,6 +138,23 @@ def emit_structured_record(structured_record: StructuredLogRecord) -> None:
             "span_id": structured_record.span_id,
         },
     )
+
+
+def emit_structured_record_to_stdout(structured_record: StructuredLogRecord) -> None:
+    delivery = _StdoutLogDelivery(completed=False)
+    target = logging.getLogger("umbod.structured")
+    target.log(
+        logging.getLevelNamesMapping().get(structured_record.severity_text.upper(), logging.INFO),
+        structured_record.body,
+        extra={
+            "structured_attributes": dict(structured_record.attributes),
+            "trace_id": structured_record.trace_id,
+            "span_id": structured_record.span_id,
+            "_umbod_stdout_delivery": delivery,
+        },
+    )
+    if not delivery.completed:
+        raise StdoutLogDeliveryError("Stdout logging is unavailable")
 
 
 def format_structured_record(

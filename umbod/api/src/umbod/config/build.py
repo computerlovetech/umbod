@@ -11,6 +11,7 @@ from umbod.config.app import (
     OAuthStorageConfig,
     OidcConfig,
     OpenApiConnectorConfig,
+    OtlpReceiverConfig,
     RestConfig,
     RuntimeConfig,
 )
@@ -171,6 +172,12 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
             mcp_base_url=operator.public_mcp_origin,
         ),
         rest=RestConfig(port=operator.rest_port, metrics_port=operator.rest_metrics_port),
+        otlp_receiver=OtlpReceiverConfig(
+            enabled=operator.otlp_enabled,
+            bearer_token=operator.otlp_bearer_token,
+            allow_unauthenticated=operator.otlp_allow_unauthenticated,
+            max_request_bytes=operator.otlp_max_request_bytes,
+        ),
         mcp=_build_mcp(operator, auth_recipe),
         oidc=_build_oidc(operator, auth_recipe),
         oauth_storage=OAuthStorageConfig(

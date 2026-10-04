@@ -16,6 +16,7 @@ api_port="${UMBOD_TEST_API_PORT:-28010}"
 mcp_port="${UMBOD_TEST_MCP_PORT:-28011}"
 export UMBOD_TEST_API_BASE_URL="http://127.0.0.1:${api_port}"
 export UMBOD_TEST_MCP_URL="http://127.0.0.1:${mcp_port}/mcp"
+export UMBOD_TEST_OTLP_BEARER_TOKEN="$(python3 -c 'import secrets; import sys; sys.stdout.write(secrets.token_urlsafe(32))')"
 export UMBOD_TEST_BEARER_TOKEN="eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJraW5kLWNpIiwiaXNzIjoiaHR0cDovL2FnZW50LWNlbnRyYWwta2luZC5pbnZhbGlkIiwiZW1haWwiOiJraW5kLWNpQGV4YW1wbGUuaW52YWxpZCIsImdyb3VwcyI6WyJhZG1pbiJdfQ."
 
 for command_name in docker helm kind kubectl curl uv; do
@@ -59,7 +60,9 @@ kind create cluster --name "${cluster_name}" --image "${UMBOD_KIND_NODE_IMAGE:-k
 cluster_created=true
 kind load docker-image --name "${cluster_name}" ghcr.io/computerlovetech/umbod:ci ghcr.io/computerlovetech/umbod-frontend:ci umbod-kind-test-connector:ci
 
-kubectl --context "${kube_context}" create secret generic umbod-ci --from-literal="UMBOD_MCP_TEST_BEARER_TOKEN=${UMBOD_TEST_BEARER_TOKEN}"
+kubectl --context "${kube_context}" create secret generic umbod-ci \
+    --from-literal="UMBOD_MCP_TEST_BEARER_TOKEN=${UMBOD_TEST_BEARER_TOKEN}" \
+    --from-literal="UMBOD_OTLP_BEARER_TOKEN=${UMBOD_TEST_OTLP_BEARER_TOKEN}"
 helm --kube-context "${kube_context}" install "${release_name}" "${chart_directory}" \
     --values "${chart_directory}/ci/kind-values.yaml" \
     --values "${script_directory}/values.yaml" \
@@ -89,3 +92,5 @@ done
 
 python3 "${script_directory}/bootstrap.py"
 (cd "${app_directory}/api" && uv run --locked pytest live_runtime_tests)
+kubectl --context "${kube_context}" logs deployment/umbod-core --container api \
+    | python3 "${script_directory}/check_telemetry_logs.py"

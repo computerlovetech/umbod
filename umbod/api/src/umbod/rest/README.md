@@ -46,6 +46,10 @@ and multi-worker sign-in coordination remain undecided.
 
 **Read when working with:** Resolved instance configuration exposed to clients.
 
+### `telemetry/`
+
+**Read when working with:** OTLP JSON logs, metrics, and traces ingestion, dedicated bearer authentication, bounded gzip requests, or stdout export logging.
+
 ### `metrics/`, `system/`, and `users/`
 
 **Read when working with:** API observability, health endpoints, or current-user behavior.

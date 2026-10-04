@@ -60,9 +60,27 @@ _SECRET_FIELDS: tuple[tuple[str, str], ...] = (
     ("oidc", "jwt_signing_key"),
     ("oauth_storage", "encryption_key"),
     ("mcp", "test_bearer_token"),
+    ("otlp_receiver", "bearer_token"),
 )
 
 _CATALOG: tuple[ConfigurationCatalogEntry, ...] = (
+    *tuple(
+        ConfigurationCatalogEntry(
+            "telemetry",
+            "Telemetry ingestion",
+            "otlp_receiver",
+            field,
+            variable,
+            label,
+            description,
+            value_type,
+        )
+        for field, variable, label, description, value_type in (
+            ("enabled", "UMBOD_OTLP_ENABLED", "Enabled", "Whether OTLP JSON ingestion is enabled.", "boolean"),
+            ("allow_unauthenticated", "UMBOD_OTLP_ALLOW_UNAUTHENTICATED", "Local unauthenticated access", "Explicit local-only unauthenticated ingestion.", "boolean"),
+            ("max_request_bytes", "UMBOD_OTLP_MAX_REQUEST_BYTES", "Maximum batch size", "Maximum wire and decompressed request size in bytes.", "integer"),
+        )
+    ),
     ConfigurationCatalogEntry(
         "runtime",
         "Runtime",

@@ -2,6 +2,7 @@ from typing import Final
 
 APP_NAME: Final[str] = "umbod"
 LOG_LEVEL: Final[str] = "info"
+OTLP_MAX_REQUEST_BYTES: Final[int] = 10 * 1024 * 1024
 
 PUBLIC_SITE_ORIGIN: Final[str] = "http://localhost:3010"
 PUBLIC_API_ORIGIN: Final[str] = "http://localhost:18010"

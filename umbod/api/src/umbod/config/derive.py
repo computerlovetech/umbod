@@ -10,6 +10,7 @@ _SECRET_FIELDS = (
     ("oidc", "jwt_signing_key"),
     ("oauth_storage", "encryption_key"),
     ("mcp", "test_bearer_token"),
+    ("otlp_receiver", "bearer_token"),
 )
 
 

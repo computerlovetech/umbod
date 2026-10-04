@@ -58,6 +58,8 @@ The default standalone configuration uses an ephemeral `emptyDir` volume for SQL
 
 Three ClusterIP Services expose API, MCP, and frontend internally. With the `umbod` release name, they are `umbod-api`, `umbod-mcp`, and `umbod-frontend`. Other release names prefix the chart name unless they already contain it; `fullnameOverride` replaces that prefix. Workload Pods disable Kubernetes service-link environment variables to prevent Service names such as `umbod-mcp` from colliding with application port settings. The optional `networking.k8s.io/v1` Ingress is disabled by default. Set `ingress.enabled`, `ingress.className`, `ingress.host`, path values, annotations, and TLS entries for the target cluster. The Ingress routes RFC 9728 protected-resource discovery and the MCP OAuth authorization endpoints directly to the MCP Service. Path handling depends on the selected ingress controller and application configuration.
 
+The Ingress also routes `/v1` unchanged to the API Service for OTLP JSON ingestion. Configure `UMBOD_OTLP_ENABLED` through `core.api.env` and keep `UMBOD_OTLP_BEARER_TOKEN` in the existing Secret. The receiver is disabled by default. See [telemetry ingestion](../../../docs/reference/telemetry-ingestion.md) for all three signal endpoints, gzip, limits, and sensitive payload handling.
+
 ## Security and operations
 
 Pods disable service-account token mounting, use the RuntimeDefault seccomp profile, prevent privilege escalation, and drop Linux capabilities. The chart does not force a numeric user or read-only root filesystem because compatibility with the current images is not established. Resource requests, limits, HTTP readiness probes, and HTTP liveness probes are enabled by default.

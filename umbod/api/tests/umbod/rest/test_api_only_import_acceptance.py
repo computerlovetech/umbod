@@ -21,6 +21,7 @@ def test_rest_permission_and_openapi_composition_imports_with_api_only_dependenc
             (
                 "from umbod.rest.mcp_permissions import router as permissions_router; "
                 "from umbod.rest.connectors.openapi import router as openapi_router; "
+                "from umbod.rest.telemetry import install_telemetry_receiver; "
                 "from umbod.rest.main import create_app"
             ),
         ],

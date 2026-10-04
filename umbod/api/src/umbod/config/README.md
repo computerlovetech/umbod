@@ -24,7 +24,7 @@
 
 ### `app.py`
 
-**Read when working with:** Internal application configuration consumed at runtime.
+**Read when working with:** Internal application configuration consumed at runtime, including the independently enabled OTLP receiver and its request limit. Operator OTLP bearer credentials are excluded from configuration inspection and redacted display.
 
 ### `validate.py`
 

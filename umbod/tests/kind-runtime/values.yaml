@@ -1,3 +1,7 @@
+core:
+  api:
+    env:
+      UMBOD_OTLP_ENABLED: "true"
 config:
   authorization:
     adminMembershipClaim: groups

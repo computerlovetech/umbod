@@ -2,6 +2,10 @@
 
 Minimal FastAPI, FastMCP, and Typer scaffold for Umbod.
 
+## Telemetry ingestion
+
+The REST boundary exposes authenticated OTLP JSON logs, metrics, and traces under `/v1`. Accepted exports use the shared structured stdout logger with checked write acknowledgements; ingestion is disabled by default. See [telemetry ingestion](../docs/reference/telemetry-ingestion.md) for operator settings and deployment paths, and `src/umbod/rest/telemetry/README.md` for module responsibilities.
+
 ## Development
 
 ```bash

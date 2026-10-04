@@ -51,6 +51,10 @@ def validate_frontend(frontend: str) -> None:
 
 
 def validate_ingress(ingress: str) -> None:
+    require(
+        re.search(r"- path: /v1\n(?:(?!          - path:).)*?name: [a-z0-9-]+-api", ingress, re.DOTALL) is not None,
+        "OTLP ingress /v1 must route unchanged to the API Service",
+    )
     mcp_service_name = re.search(r"name: ([a-z0-9-]+-mcp)", ingress)
     require(mcp_service_name is not None, "Ingress must route to the MCP Service")
     for path in (

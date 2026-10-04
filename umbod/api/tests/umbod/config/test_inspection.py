@@ -24,6 +24,7 @@ _SECRET_FIELDS = {
     "configuration_secret",
     "approval_state_key",
     "test_bearer_token",
+    "bearer_token",
 }
 _NON_PRODUCTION_USER_VARIABLES = {
     "UMBOD_INTERNAL_API_ORIGIN",
@@ -44,6 +45,7 @@ _SECRET_VARIABLES = {
     "UMBOD_ROOT_SECRET",
     "UMBOD_OIDC_CLIENT_SECRET",
     "UMBOD_MCP_TEST_BEARER_TOKEN",
+    "UMBOD_OTLP_BEARER_TOKEN",
 }
 _DERIVED_SECRET_VARIABLES = {
     "UMBOD_JWT_SIGNING_KEY",
@@ -108,6 +110,7 @@ def test_catalog_order_is_deterministic_and_canonical_variables_are_unique() -> 
     assert first == second
     assert len(variables) == len(set(variables))
     assert [group["id"] for group in first["groups"]] == [
+        "telemetry",
         "runtime",
         "endpoints",
         "features",

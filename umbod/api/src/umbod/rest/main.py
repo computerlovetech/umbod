@@ -23,6 +23,7 @@ from umbod.config import AppConfig, load_app_config
 from umbod.logging import flush_logging
 from umbod.rest.settings import APISettings
 from umbod.rest.system import router as system_router
+from umbod.rest.telemetry import install_telemetry_receiver
 from umbod.rest.users import create_current_user_router
 
 @dataclass(frozen=True)
@@ -115,4 +116,5 @@ def create_app(*args: Any, **kwargs: Any) -> FastAPI:
     app = LifespanRootApiAppFactory(app_settings, lifespan=_create_lifespan(metrics_server, persistence_runtime)).create()
     _mount_admin_app(app, app_settings, dependency_factories, metrics_recorder, app_settings)
     _mount_system_app(app, dependency_factories)
+    install_telemetry_receiver(app, app_settings)
     return app

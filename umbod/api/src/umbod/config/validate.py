@@ -68,6 +68,13 @@ def validate_operator(operator: OperatorSettings, auth_recipe: str) -> None:
                 raise ValueError(f"{other_name} must be distinct from {name}")
     if operator.profile == "production" and not operator.root_secret.strip():
         raise ValueError("UMBOD_ROOT_SECRET is required in production")
+    if operator.otlp_allow_unauthenticated and operator.profile != "local":
+        raise ValueError("UMBOD_OTLP_ALLOW_UNAUTHENTICATED is only allowed with UMBOD_PROFILE=local")
+    if operator.otlp_enabled and not operator.otlp_allow_unauthenticated:
+        if not operator.otlp_bearer_token.strip():
+            raise ValueError("UMBOD_OTLP_BEARER_TOKEN is required when OTLP ingestion is enabled")
+        if any(character.isspace() for character in operator.otlp_bearer_token):
+            raise ValueError("UMBOD_OTLP_BEARER_TOKEN must not contain whitespace")
     if auth_recipe in _OIDC_AUTH_RECIPES:
         _validate_oidc_recipe(operator, auth_recipe)
         return

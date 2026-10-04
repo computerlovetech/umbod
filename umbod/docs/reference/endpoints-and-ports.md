@@ -34,4 +34,6 @@ When `ingress.enabled=true`, the chart routes three configurable paths:
 | `ingress.paths.api` | `/api` | API Service |
 | `ingress.paths.mcp` | `/mcp` | MCP Service |
 
+The chart additionally routes `/v1` unchanged to the API Service for OTLP JSON logs, metrics, and traces. `/api/v1/*` is not rewritten to the receiver. See [telemetry ingestion](telemetry-ingestion.md) for authentication, limits, and client compatibility.
+
 Set `ingress.host`, `ingress.className`, annotations, and TLS values for the target cluster. Set `config.publicOrigins.site`, `config.publicOrigins.api`, and `config.publicOrigins.mcp` to the corresponding browser- and client-visible origins.

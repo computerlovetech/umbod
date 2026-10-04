@@ -32,6 +32,13 @@ spec:
                 port:
                   number: {{ $.Values.services.mcp.port }}
           {{- end }}
+          - path: /v1
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "umbod.fullname" . }}-api
+                port:
+                  number: {{ .Values.services.api.port }}
           {{- range $component := list "api" "mcp" "frontend" }}
           - path: {{ index $.Values.ingress.paths $component }}
             pathType: Prefix

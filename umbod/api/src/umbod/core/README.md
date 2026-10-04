@@ -60,6 +60,10 @@
 
 **Read when working with:** Core messaging contracts shared with transport implementations. `stores/event_stream.py` provides durable stream storage and `append_event_in_session` for atomic state-and-event writes.
 
+### `telemetry/`
+
+**Read when working with:** Validated telemetry exports, sink ports, in-memory acceptance, or existing stdout logger integration.
+
 ### `persistence/`
 
 **Read when working with:** Persistence ports, queries, or database readiness behavior.

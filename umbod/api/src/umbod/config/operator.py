@@ -28,6 +28,10 @@ class OperatorSettings(BaseSettings):
 
     app_name: str = defaults.APP_NAME
     log_level: str = defaults.LOG_LEVEL
+    otlp_enabled: bool = False
+    otlp_bearer_token: str = Field(default="", repr=False)
+    otlp_allow_unauthenticated: bool = False
+    otlp_max_request_bytes: int = Field(default=defaults.OTLP_MAX_REQUEST_BYTES, gt=0)
 
     public_site_origin: str = Field(
         default=defaults.PUBLIC_SITE_ORIGIN,

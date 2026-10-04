@@ -47,6 +47,13 @@ class RestConfig(ConfigModel):
     metrics_port: int = Field(default=defaults.REST_METRICS_PORT, gt=0)
 
 
+class OtlpReceiverConfig(ConfigModel):
+    enabled: bool = False
+    bearer_token: str = Field(default="", repr=False)
+    allow_unauthenticated: bool = False
+    max_request_bytes: int = Field(default=defaults.OTLP_MAX_REQUEST_BYTES, gt=0)
+
+
 class McpConfig(ConfigModel):
     port: int = defaults.MCP_PORT
     messaging_transport: Literal["http", "sql"] = "http"
@@ -174,6 +181,7 @@ class AppConfig(ConfigModel):
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     endpoints: EndpointsConfig = Field(default_factory=EndpointsConfig)
     rest: RestConfig = Field(default_factory=RestConfig)
+    otlp_receiver: OtlpReceiverConfig = Field(default_factory=OtlpReceiverConfig)
     mcp: McpConfig = Field(default_factory=McpConfig)
     oidc: OidcConfig = Field(default_factory=OidcConfig)
     oauth_storage: OAuthStorageConfig = Field(default_factory=OAuthStorageConfig)
