@@ -72,8 +72,6 @@ Try it with an integration your team actually needs. [Report an issue](https://g
 
 ## Feature roadmap
 
-This roadmap originated in the last version in the CLT monorepo (`d2fbdc28^:apps/umbod/README.md`). Helm chart and `toolPolicy` statuses have been updated; other statuses remain as recorded in that version.
-
 **Legend:** ✅ Complete · 🚧 In progress · ⬜ Planned · 🟢 Stable · 🟡 Evolving · ⚪ Not assessed
 
 | Feature | Delivery | Stability | Scope |
