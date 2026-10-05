@@ -166,3 +166,15 @@ footer { padding-block: 32px; }
   .button { transition: none; }
   .mobile-menu[open] { animation: none; }
 }
+
+/* Product walkthrough immediately below the landing section. */
+.walkthrough-video { width: 100%; margin: 0; }
+.walkthrough-video video { display: block; width: 100%; aspect-ratio: 16 / 9; border: 1px solid var(--line); border-radius: 14px; background: var(--ink); box-shadow: 0 18px 48px rgb(20 32 28 / 10%); }
+.walkthrough-video figcaption { display: flex; justify-content: space-between; gap: 12px 24px; margin-top: 16px; color: var(--muted); font-size: 12px; }
+.walkthrough-video figcaption > span:first-child { color: var(--ink); font-weight: 600; }
+.video-credit { display: block; margin-top: 4px; color: var(--muted); font-weight: 400; }
+.video-credit a { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 760px) {
+  .walkthrough-video video { border-radius: 8px; }
+  .walkthrough-video figcaption { flex-direction: column; gap: 4px; }
+}
