@@ -45,7 +45,7 @@ describe('admin connector list UI acceptance', () => {
           href: '/admin/mcp-setup'
         },
         {
-          label: 'Configuration',
+          label: 'Instance settings',
           href: '/admin/instance-configuration'
         }
       ]

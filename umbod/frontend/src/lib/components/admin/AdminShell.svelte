@@ -28,7 +28,7 @@
     { id: 'mcpSetup', label: 'MCP setup guide', href: '/admin/mcp-setup' },
     {
       id: 'instanceConfiguration',
-      label: 'Configuration',
+      label: 'Instance settings',
       href: '/admin/instance-configuration'
     }
   ];

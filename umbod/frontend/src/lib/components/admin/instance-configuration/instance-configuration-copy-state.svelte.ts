@@ -11,12 +11,17 @@ export function formatConfigurationValue(entry: InstanceConfigurationEntry): str
 
 export class InstanceConfigurationCopyState {
   copiedTarget = $state<string | null>(null);
+  private copiedValue = $state<string | null>(null);
   copyFailed = $state(false);
 
   constructor(
     private readonly clipboard: ClipboardWriter,
     private readonly toast: ToastApi
   ) {}
+
+  isCopied = (entry: InstanceConfigurationEntry): boolean => {
+    return this.copiedTarget === entry.variable && this.copiedValue === formatConfigurationValue(entry);
+  };
 
   copyEntry = async (entry: InstanceConfigurationEntry): Promise<void> => {
     await this.copy(entry.variable, formatConfigurationValue(entry));
@@ -26,10 +31,12 @@ export class InstanceConfigurationCopyState {
     try {
       await this.clipboard.writeText(value);
       this.copiedTarget = target;
+      this.copiedValue = value;
       this.copyFailed = false;
       this.toast.success("Value copied.");
     } catch {
       this.copiedTarget = null;
+      this.copiedValue = null;
       this.copyFailed = true;
       this.toast.error("Could not copy to the clipboard.");
     }

@@ -16,6 +16,10 @@
 
 ## Submodules
 
+### `overview/`
+
+**Read when working with:** Administration dashboard counts, source availability, attention aggregation, or bounded tool activation loading. See `overview/README.md`.
+
 ### `infrastructure/`
 
 **Read when working with:** Shared browser and server HTTP transport, request execution, or authentication forwarding.

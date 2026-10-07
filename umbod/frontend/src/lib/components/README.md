@@ -27,6 +27,14 @@ existing logo. `AdminShell` provides the inline-size container used by
 
 **Read when working with:** Administration shell, connectors, permissions, OpenAPI, or downstream MCP interfaces.
 
+### `admin/overview/`
+
+**Read when working with:** Overview cards, connector breakdown, partial-data warnings or connector attention presentation. See `admin/overview/README.md`.
+
+### `admin/instance-configuration/`
+
+**Read when working with:** Read-only Instance settings, friendly value presentation, technical details or raw-value copying. See `admin/instance-configuration/README.md`.
+
 ### `feedback/`
 
 **Read when working with:** Toasts and user feedback state or presentation.

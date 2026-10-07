@@ -8,7 +8,7 @@
   const fallbackAccountIdentity: HeaderAccountIdentityState = { kind: 'hidden' };
 </script>
 
-<svelte:head><title>Configuration</title></svelte:head>
+<svelte:head><title>Instance settings</title></svelte:head>
 
 <AdminShell activeItem="instanceConfiguration" accountIdentity={data.accountIdentity ?? fallbackAccountIdentity}>
   <InstanceConfigurationView state={data} />

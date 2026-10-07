@@ -2,21 +2,26 @@
   import { BrowserClipboardWriter } from '$lib/admin/clipboard';
   import type { InstanceConfigurationPageData } from '$lib/admin/instance-configuration';
   import { useToast } from '$lib/components/feedback';
-  import {
-    formatConfigurationValue,
-    InstanceConfigurationCopyState
-  } from './instance-configuration-copy-state.svelte';
+  import { InstanceConfigurationCopyState } from './instance-configuration-copy-state.svelte';
+  import { InstanceSettingsState } from './instance-settings-state.svelte';
+  import SettingRow from './SettingRow.svelte';
 
   let { state }: { state: InstanceConfigurationPageData } = $props();
   const copyState = new InstanceConfigurationCopyState(new BrowserClipboardWriter(), useToast());
+  const settings = new InstanceSettingsState(() => state);
+  const sections = [
+    { id: 'addresses', label: 'Addresses and browser access', description: 'Find the public addresses and allowed browser origins for this instance.', href: '/admin/mcp-setup', link: 'MCP setup guide' },
+    { id: 'access', label: 'Access and sign-in', description: 'Review who can sign in and use administration. Group permissions control tool access, not membership of the administrator group.', href: '/admin/group-permissions', link: 'Manage group permissions' },
+    { id: 'tools', label: 'Tool behavior and limits', description: 'Review how tools are offered and the limits applied to their use.', href: '/admin/connectors', link: 'Manage connectors' }
+  ] as const;
 </script>
 
 <header class="page-header">
-  <div>
-    <p class="admin-eyebrow">Administration</p>
-    <h1 class="admin-title">Configuration</h1>
-    <p class="admin-lede">Effective non-secret settings used by this running instance.</p>
-  </div>
+  <p class="admin-eyebrow">Administration</p>
+  <h1 class="admin-title">Instance settings</h1>
+  <p class="admin-lede">Review how your Umbod instance is configured. These settings are managed by your deployment team and cannot be changed here.</p>
+  <span class="read-only">Read-only · Deployment managed</span>
+  <p class="supporting">These are configured values, not health or connectivity checks.</p>
 </header>
 
 {#if state.status === 'failed'}
@@ -27,208 +32,58 @@
 {:else if state.status === 'empty'}
   <section class="state-card"><p>No non-secret instance configuration entries are available</p></section>
 {:else}
-  <div class="groups">
-    {#each state.configuration.groups as group (group.id)}
-      <details class="configuration-group">
-        <summary>
-          <span>{group.label}</span>
-          <span class="entry-count">
-            {group.entries.length} {group.entries.length === 1 ? 'setting' : 'settings'}
-          </span>
-        </summary>
+  <div class="settings">
+    <section class="panel essentials" aria-labelledby="essentials-title">
+      <h2 id="essentials-title">Essentials</h2>
+      <dl>
+        {#each settings.presentation.essentials as item (item.variable)}
+          <div><dt>{item.label}</dt><dd>{item.value}</dd></div>
+        {/each}
+      </dl>
+    </section>
+    {#each sections as section (section.id)}
+      <section class="panel" aria-labelledby={`section-${section.id}`}>
+        <h2 id={`section-${section.id}`}>{section.label}</h2>
+        <p class="supporting">{section.description} <a href={section.href}>{section.link}</a></p>
         <dl>
-          {#each group.entries as entry (entry.variable)}
-            <div class="configuration-entry">
-              <dt>
-                <strong>{entry.label}</strong>
-                <code class="variable">{entry.variable}</code>
-              </dt>
-              <dd class="description">{entry.description}</dd>
-              <dd class="value-row">
-                <code class="value">
-                  {#if entry.type === 'string_list' && entry.value.length === 0}
-                    <span class="empty">None</span>
-                  {:else if entry.type === 'string' && entry.value === ''}
-                    <span class="empty">Empty</span>
-                  {:else}
-                    {formatConfigurationValue(entry)}
-                  {/if}
-                </code>
-                <button
-                  class="copy-value"
-                  type="button"
-                  aria-label={`Copy value for ${entry.label}`}
-                  onclick={() => copyState.copyEntry(entry)}
-                >
-                  {copyState.copiedTarget === entry.variable ? 'Copied' : 'Copy value'}
-                </button>
-              </dd>
-            </div>
+          {#each settings.presentation[section.id] as setting (setting.entry.variable)}
+            <SettingRow {setting} {copyState} />
           {/each}
         </dl>
-      </details>
+        {#if settings.presentation[section.id].length === 0}<p class="supporting">No settings available in this section.</p>{/if}
+      </section>
     {/each}
+    <details class="panel advanced">
+      <summary>Advanced deployment details</summary>
+      <p class="supporting">Deployment-level settings, grouped by their original configuration context.</p>
+      {#each settings.presentation.advanced as group (group.id)}
+        <section aria-labelledby={`advanced-${group.id}`}>
+          <h3 id={`advanced-${group.id}`}>{group.label}</h3>
+          <dl>
+            {#each group.entries as setting (setting.entry.variable)}
+              <SettingRow {setting} {copyState} />
+            {/each}
+          </dl>
+        </section>
+      {/each}
+    </details>
   </div>
 {/if}
 
 <style>
-  .page-header {
-    align-items: end;
-    display: flex;
-    gap: 24px;
-    justify-content: space-between;
-    margin-bottom: 32px;
-  }
-  .page-header :global(.admin-lede) {
-    margin-bottom: 0;
-  }
-  button {
-    font: inherit;
-  }
-  .copy-value {
-    background: var(--admin-panel);
-    border: 1px solid var(--admin-border);
-    border-radius: var(--admin-radius);
-    color: inherit;
-    cursor: pointer;
-    font-weight: 600;
-  }
-  .copy-value {
-    flex-shrink: 0;
-    font-size: 12px;
-    padding: 6px 9px;
-  }
-  .copy-value:hover {
-    background: var(--admin-hover);
-    border-color: var(--admin-border-strong);
-  }
-  .copy-value:focus-visible,
-  summary:focus-visible {
-    outline: 3px solid var(--admin-focus);
-    outline-offset: 3px;
-  }
-  .groups {
-    display: grid;
-    gap: 16px;
-  }
-  .configuration-group {
-    background: var(--admin-panel);
-    border: 1px solid var(--admin-border);
-    border-radius: var(--admin-radius-panel);
-    padding: 0 22px;
-  }
-  summary {
-    cursor: pointer;
-    font-size: 17px;
-    font-weight: 600;
-    line-height: 1.5;
-    padding: 18px 0;
-  }
-  summary::marker {
-    color: var(--admin-muted);
-  }
-  .entry-count {
-    color: var(--admin-muted);
-    float: right;
-    font-family: var(--admin-mono);
-    font-size: 12px;
-    font-weight: 400;
-    margin-top: 3px;
-  }
-  dl {
-    margin: 0;
-  }
-  .configuration-group[open] dl {
-    border-top: 1px solid var(--admin-border);
-  }
-  .configuration-entry {
-    border-bottom: 1px solid var(--admin-border);
-    display: grid;
-    gap: 6px;
-    padding: 18px 0;
-  }
-  .configuration-entry:last-child {
-    border-bottom: 0;
-  }
-  dt {
-    align-items: baseline;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 7px 12px;
-  }
-  dt strong {
-    font-size: 15px;
-  }
-  dd {
-    margin: 0;
-  }
-  .description {
-    line-height: 1.6;
-    color: var(--admin-muted);
-    font-size: 13px;
-  }
-  .variable {
-    color: var(--admin-muted);
-    font-size: 12px;
-  }
-  .value-row {
-    align-items: center;
-    display: flex;
-    gap: 10px;
-    justify-content: space-between;
-    margin-top: 4px;
-    min-width: 0;
-  }
-  code {
-    background: var(--admin-soft);
-    font-family: var(--admin-mono);
-    overflow-wrap: anywhere;
-    border-radius: 5px;
-    padding: 3px 6px;
-  }
-  .value {
-    color: var(--admin-ink);
-    min-width: 0;
-    font-size: 13px;
-    overflow-wrap: anywhere;
-    white-space: pre-wrap;
-  }
-  .empty {
-    color: var(--admin-muted);
-    font-style: italic;
-  }
-  .state-card {
-    background: var(--admin-soft);
-    color: var(--admin-muted);
-    line-height: 1.6;
-    border: 1px solid var(--admin-border);
-    border-radius: var(--admin-radius-panel);
-    padding: 22px;
-  }
-  .admin-button {
-    text-decoration: none;
-    display: inline-block;
-    margin-top: 12px;
-  }
-  summary:hover {
-    color: var(--admin-accent);
-  }
-  @media (max-width: 640px) {
-    .configuration-group {
-      padding: 0 16px;
-    }
-    .entry-count {
-      display: block;
-      float: none;
-      margin: 4px 0 0;
-    }
-    .page-header {
-      align-items: stretch;
-      flex-direction: column;
-    }
-    .value-row {
-      align-items: start;
-      flex-direction: column;
-    }
-  }
+  .page-header { margin-bottom: 24px; }
+  .read-only { display: inline-block; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 6px 10px; font-size: 13px; }
+  .supporting { color: var(--admin-muted); font-size: 14px; line-height: 1.6; }
+  .settings { display: grid; gap: 20px; min-width: 0; }
+  .panel, .state-card { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-panel); padding: 20px 24px; min-width: 0; overflow-wrap: anywhere; }
+  h2 { font-size: 19px; margin: 0 0 12px; }
+  h3 { font-size: 16px; margin: 20px 0 12px; }
+  dl { margin: 0; }
+  .essentials dl { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 18px; }
+  .essentials dt { color: var(--admin-muted); font-size: 13px; margin-bottom: 4px; }
+  .essentials dd { margin: 0; font-weight: 600; }
+  summary { cursor: pointer; font-size: 18px; font-weight: 600; }
+  a { color: var(--admin-accent); }
+  a:focus-visible, summary:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
+  @media (max-width: 640px) { .panel, .state-card { padding: 18px 16px; } }
 </style>
