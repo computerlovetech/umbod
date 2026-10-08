@@ -19,6 +19,7 @@ config:
       domain: auth.example.invalid
       clientId: umbod-example
       audience: https://umbod.example.invalid
+      issuerUrl: ""
       requiredScopes: openid,email,profile,groups
   authorization:
     adminGroup: admin
@@ -76,15 +77,13 @@ core:
         memory: 512Mi
 
 frontend:
-  bodySizeLimit: 12M
-  privateAuthTokenHeader: Authorization
+  apiBaseUrl: /api
   replicaCount: 1
   image:
     repository: ghcr.io/computerlovetech/umbod-frontend
     tag: "0.0.1-beta.2"
     pullPolicy: IfNotPresent
   port: 3000
-  env: {}
   resources:
     requests:
       cpu: 50m

@@ -83,7 +83,7 @@ def proxied_driver(
     def probe_override() -> ScriptedDownstreamMcpProbe:
         return probe
 
-    admin_app = cast(FastAPI, next(route.app for route in app.routes if route.path == "/admin"))
+    admin_app = cast(FastAPI, next(route.app for route in app.routes if route.path == "/api/admin"))
     admin_app.dependency_overrides[get_downstream_connector_probe] = probe_override
     client = TestClient(app)
     payload: dict[str, Any] = {
@@ -98,7 +98,7 @@ def proxied_driver(
             "bearer_token": "secret",
         },
     }
-    connector_id = client.post("/admin/connectors/mcp", json=payload).json()["connector_id"]
+    connector_id = client.post("/api/admin/connectors/mcp", json=payload).json()["connector_id"]
     return ConnectorCapabilityAdminDriver(client), connector_id
 
 

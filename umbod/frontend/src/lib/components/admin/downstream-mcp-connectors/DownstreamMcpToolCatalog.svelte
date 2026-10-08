@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
+  import { browserSubmit } from '$lib/admin/operations/browser-submit';
   import { untrack } from 'svelte';
   import { downstreamMcpToolActivationBatchResponseSchema, type DownstreamMcpTool } from '$lib/admin/downstream-mcp-connectors';
   import { mapJsonSchemaToConnectorToolParameters } from '$lib/admin/json-schema-tool-parameters';
@@ -32,8 +32,9 @@
 
 <div class="catalog">
   <ToolSaveBar message={catalog.pending ? 'Saving tool changes' : catalog.dirty ? 'Unsaved tool changes' : 'All tool changes saved'} dirty={catalog.dirty} pending={catalog.pending}>
-    <form method="POST" action="?/saveToolActivations" class="save-tools" use:enhance={() => {
+    <form method="POST" data-operation="saveToolActivations" class="save-tools" use:browserSubmit={({ onComplete }) => {
       const submittedConnectorId = connectorId;
+      onComplete(() => catalog.finishSave());
       catalog.beginSave();
       return async ({ update, result }) => {
         await update({ invalidateAll: false, reset: false });

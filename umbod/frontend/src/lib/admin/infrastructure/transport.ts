@@ -1,4 +1,4 @@
-import { env } from '$env/dynamic/private';
+import { publicConfigurationProvider, type PublicConfigurationProvider } from './public-configuration';
 import { z } from 'zod';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -15,6 +15,7 @@ export interface TransportRequest<TOut> {
   requestBody?: TransportRequestBody;
   body?: unknown;
   inputSchema?: z.ZodType<unknown>;
+  signal?: AbortSignal;
 }
 
 export interface Transport {
@@ -53,26 +54,39 @@ export function isOperationalError(error: unknown): error is HttpError | Network
   return error instanceof HttpError || error instanceof NetworkError;
 }
 
-interface TransportConfig {
-  fetch: typeof globalThis.fetch;
-  baseUrl: string;
-  authHeaders: HeadersInit;
+export interface BrowserTransportConfig {
+  fetch?: typeof globalThis.fetch;
+  configuration?: PublicConfigurationProvider;
+  bearerToken?: () => string | undefined;
+  signIn?: () => void;
 }
 
-const defaultPrivateApiBaseUrl = 'http://api:8000';
-const defaultPrivateAuthTokenHeader = 'authorization';
-const proxyAccessTokenHeaders = ['authorization', 'x-auth-request-access-token', 'x-forwarded-access-token'];
+export class AuthenticationRequiredError extends Error {
+  constructor() { super('Authentication is required'); this.name = 'AuthenticationRequiredError'; }
+}
+
+export function navigateToSignIn(): void {
+  const returnPath = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  window.location.assign(`/oauth2/sign_in?rd=${encodeURIComponent(returnPath)}`);
+}
 
 class HttpTransport implements Transport {
-  constructor(private readonly config: TransportConfig) {}
+  constructor(private readonly config: BrowserTransportConfig) {}
 
   async request<TOut>(opts: TransportRequest<TOut>): Promise<TOut> {
     const init = this.buildRequestInit(opts);
+    const configuration = await (this.config.configuration ?? publicConfigurationProvider).get();
+    const request = this.config.fetch ?? globalThis.fetch;
     let response: Response;
     try {
-      response = await this.config.fetch(`${this.config.baseUrl}${opts.path}`, init);
+      response = await request(`${configuration.apiBaseUrl.replace(/\/$/, '')}${opts.path}`, { ...init, signal: opts.signal, credentials: 'same-origin' });
     } catch (error) {
+      if (opts.signal?.aborted) throw error;
       throw new NetworkError(error);
+    }
+
+    if (response.status === 401) {
+      try { (this.config.signIn ?? navigateToSignIn)(); } finally { throw new AuthenticationRequiredError(); }
     }
 
     if (!response.ok) {
@@ -105,7 +119,7 @@ class HttpTransport implements Transport {
     const parsed = this.parseOutbound(requestBody.schema, requestBody.value);
     return {
       method: opts.method,
-      headers: { ...this.config.authHeaders, 'content-type': 'application/json' },
+      headers: { ...this.authRequestHeaders().headers, 'content-type': 'application/json' },
       body: JSON.stringify(parsed)
     };
   }
@@ -122,33 +136,12 @@ class HttpTransport implements Transport {
     return parsed.data;
   }
 
-  private authRequestHeaders(): Pick<RequestInit, 'headers'> | Record<string, never> {
-    return Object.keys(this.config.authHeaders).length === 0 ? {} : { headers: this.config.authHeaders };
+  private authRequestHeaders(): { headers: Record<string, string> } {
+    const token = this.config.bearerToken?.();
+    return { headers: { 'X-Umbod-Web-Request': '1', ...(token ? { authorization: `Bearer ${token}` } : {}) } };
   }
 }
 
-export function privateApiBaseUrl(): string {
-  return env.PRIVATE_API_BASE_URL ?? defaultPrivateApiBaseUrl;
-}
-
-export function serverTransport(fetch: typeof globalThis.fetch, request?: Request): Transport {
-  return new HttpTransport({ fetch, baseUrl: privateApiBaseUrl(), authHeaders: forwardedAuthHeaders(request) });
-}
-
-export function forwardedAuthHeaders(request?: Request): HeadersInit {
-  if (request === undefined) {
-    return {};
-  }
-  const headerName = privateAuthTokenHeader();
-  const token = [headerName, ...proxyAccessTokenHeaders]
-    .map((candidateHeader) => request.headers.get(candidateHeader))
-    .find((candidateToken) => candidateToken !== null);
-  if (token === undefined || token === null) {
-    return {};
-  }
-  return { [headerName]: token };
-}
-
-function privateAuthTokenHeader(): string {
-  return env.PRIVATE_AUTH_TOKEN_HEADER ?? defaultPrivateAuthTokenHeader;
+export function browserTransport(config: BrowserTransportConfig = {}): Transport {
+  return new HttpTransport(config);
 }

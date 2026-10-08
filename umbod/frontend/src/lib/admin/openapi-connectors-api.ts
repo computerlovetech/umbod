@@ -7,6 +7,7 @@ import {
   type OpenApiConfigurationRequest, type OpenApiConnectorDetailPageData, type OpenApiConnectorListItem, type OpenApiConnectorListPageData
 } from './openapi-connectors';
 import type { ToolActivationCapability, ToolActivationChange } from './tool-activation-capability';
+import { openApiSetupRequestSchema, type OpenApiSetupRequest } from './openapi-setup';
 
 export interface OpenApiConnectorPort extends ToolActivationCapability {
   list(): ReturnType<OpenApiConnectorsRoute['list']>;
@@ -25,6 +26,9 @@ export interface OpenApiConnectorPort extends ToolActivationCapability {
 export class OpenApiConnectorsRoute implements OpenApiConnectorPort {
   constructor(private readonly transport: Transport) {}
   list() { return this.transport.request({ method: 'GET', path: '/admin/connectors/openapi', outputSchema: openApiConnectorListResponseSchema }); }
+  setup(body: OpenApiSetupRequest): Promise<import('./openapi-connectors').OpenApiConnector> {
+    return this.transport.request({ method: 'POST', path: '/admin/connectors/openapi/setup', body, inputSchema: openApiSetupRequestSchema, outputSchema: openApiConnectorSchema });
+  }
   create(body: CreateOpenApiConnectorRequest) { return this.transport.request({ method: 'POST', path: '/admin/connectors/openapi', body, inputSchema: createOpenApiConnectorRequestSchema, outputSchema: openApiConnectorSchema }); }
   get(connectorId: string) { return this.transport.request({ method: 'GET', path: `/admin/connectors/openapi/${encodeURIComponent(connectorId)}`, outputSchema: openApiConnectorSchema }); }
   delete(connectorId: string) { return this.transport.request({ method: 'DELETE', path: `/admin/connectors/openapi/${encodeURIComponent(connectorId)}` }); }

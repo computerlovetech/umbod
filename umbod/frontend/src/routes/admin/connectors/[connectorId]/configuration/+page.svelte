@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { page } from '$app/state';
+  import { operationState } from '$lib/admin/operations/operation-state.svelte';
   import AdminShell from '$lib/components/admin/AdminShell.svelte';
   import ConnectorConfigurationForm from '$lib/components/admin/connectors/ConnectorConfigurationForm.svelte';
   import type { ConnectorConfigurationPageData } from '$lib/admin/connectors';
@@ -16,7 +18,8 @@
     accountIdentity?: HeaderAccountIdentityState;
   };
 
-  let { data, form }: { data: ConnectorConfigurationAdminPageData; form: ActionData } = $props();
+  let { data }: { data: ConnectorConfigurationAdminPageData; form: ActionData } = $props();
+  const form = $derived(operationState.forOwner({ route: page.url.pathname, connectorId: page.params.connectorId }) as ActionData);
 
   const fallbackAccountIdentity: HeaderAccountIdentityState = { kind: 'hidden' };
 </script>
@@ -32,7 +35,7 @@
     {#if data.status === 'ready'}
       <p class="admin-eyebrow">Connector configuration</p>
       <h1 class="admin-title">{data.connector.name}</h1>
-      <ConnectorConfigurationForm connector={data.connector} fields={data.fields} {form} />
+      <ConnectorConfigurationForm connector={data.connector} fields={data.fields} {form} operation="saveConfigurationAndReturn" />
     {:else}
       <div class="admin-message admin-message-error failure-state">
         <p>{data.message}</p>

@@ -1,36 +1,17 @@
-import type { PageLoadEvent } from './$types';
+import { error } from '@sveltejs/kit';
+import { adminApi } from '$lib/admin/infrastructure/admin-api';
+import { HttpError } from '$lib/admin/infrastructure/transport';
+import { loadAdminOverview } from '$lib/admin/overview/aggregate';
+import { ApiOverviewSource } from '$lib/admin/overview/api-source';
+import type { PageLoad } from './$types';
 
-export type AdminNavigationItem = {
-  label: string;
-  href: string;
+export const load: PageLoad = async (event) => {
+  try {
+    return { overview: await loadAdminOverview(new ApiOverviewSource(adminApi(event.fetch))) };
+  } catch (loadError) {
+    if (loadError instanceof HttpError && (loadError.status === 401 || loadError.status === 403)) {
+      error(loadError.status, loadError.statusText);
+    }
+    throw loadError;
+  }
 };
-
-export type AdminPageData = {
-  navigationItems: AdminNavigationItem[];
-};
-
-export function load(): AdminPageData;
-export function load(event: Pick<PageLoadEvent, 'data'>): AdminPageData & PageLoadEvent['data'];
-export function load(event?: Pick<PageLoadEvent, 'data'>) {
-  return {
-    ...event?.data,
-    navigationItems: [
-      {
-        label: 'Connectors',
-        href: '/admin/connectors'
-      },
-      {
-        label: 'Group permissions',
-        href: '/admin/group-permissions'
-      },
-      {
-        label: 'MCP setup guide',
-        href: '/admin/mcp-setup'
-      },
-      {
-        label: 'Instance settings',
-        href: '/admin/instance-configuration'
-      }
-    ]
-  };
-}

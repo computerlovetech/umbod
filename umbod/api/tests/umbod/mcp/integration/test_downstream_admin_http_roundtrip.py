@@ -84,15 +84,15 @@ async def _build_journey(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Dow
     capability = DiscoveredCapabilityTool(name=TOOL_NAME, title='Lookup record', description='Look up a deterministic record', input_schema={'type': 'object', 'properties': {'record_id': {'type': 'integer'}}, 'required': ['record_id']}, output_schema={'type': 'object'})
     probe = ScriptedDownstreamMcpProbe((ProbeCapabilities(capabilities=DiscoveredCapabilities(tools=(capability,)), endpoint_url='https://downstream.example.test/mcp'),))
     admin_app = create_app(settings=APISettings.model_validate(settings.model_dump()), connector_registrations=[])
-    mounted_admin = next((route.app for route in admin_app.routes if route.path == '/admin'))
+    mounted_admin = next((route.app for route in admin_app.routes if route.path == '/api/admin'))
     assert isinstance(mounted_admin, FastAPI)
     mounted_admin.dependency_overrides[get_downstream_connector_probe] = lambda : probe
     admin = TestClient(admin_app)
-    created = admin.post('/admin/connectors/mcp', json={'metadata': {'display_name': 'Deterministic downstream', 'capability_description': 'Look up records', 'public_path': '/mcp/proxies/deterministic-downstream'}, 'configuration': {'endpoint_url': 'https://downstream.example.test/mcp', 'auth_mode': 'none'}})
+    created = admin.post('/api/admin/connectors/mcp', json={'metadata': {'display_name': 'Deterministic downstream', 'capability_description': 'Look up records', 'public_path': '/mcp/proxies/deterministic-downstream'}, 'configuration': {'endpoint_url': 'https://downstream.example.test/mcp', 'auth_mode': 'none'}})
     assert created.status_code == 201
     connector_id = created.json()['connector_id']
-    published = admin.put(f'/admin/connectors/mcp/{connector_id}/publication')
-    enabled = admin.put(f'/admin/connectors/mcp/{connector_id}/tools/activation', json={'tools': [{'tool_id': TOOL_NAME, 'activation_status': 'enabled'}]})
+    published = admin.put(f'/api/admin/connectors/mcp/{connector_id}/publication')
+    enabled = admin.put(f'/api/admin/connectors/mcp/{connector_id}/tools/activation', json={'tools': [{'tool_id': TOOL_NAME, 'activation_status': 'enabled'}]})
     assert published.status_code == 200
     assert enabled.status_code == 200
     await _grant_permission(database_path, connector_id)
@@ -136,7 +136,7 @@ async def test_downstream_failure_is_safe_and_public_http_session_remains_usable
 @pytest.mark.asyncio
 async def test_admin_ask_policy_controls_downstream_http_invocation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, approved: bool) -> None:
     journey = await _build_journey(tmp_path, monkeypatch)
-    policy = journey.admin.put(f'/admin/connectors/mcp/{journey.connector_id}/tools/activation', json={'tools': [{'tool_id': TOOL_NAME, 'invocation_mode': 'ask', 'expected_policy_revision': 0}]})
+    policy = journey.admin.put(f'/api/admin/connectors/mcp/{journey.connector_id}/tools/activation', json={'tools': [{'tool_id': TOOL_NAME, 'invocation_mode': 'ask', 'expected_policy_revision': 0}]})
     assert policy.status_code == 200
 
     async def approval_handler(message: str, *_args: object) -> dict[str, bool]:

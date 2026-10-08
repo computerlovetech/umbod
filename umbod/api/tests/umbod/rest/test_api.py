@@ -25,7 +25,7 @@ def test_connector_configuration_round_trips_through_routes(
     client = TestClient(create_app())
 
     response = client.put(
-        "/admin/connectors/catalog/test/configuration",
+        "/api/admin/connectors/catalog/test/configuration",
         json={
             "configuration": {
                 "instance_name": "Demo",
@@ -34,7 +34,7 @@ def test_connector_configuration_round_trips_through_routes(
             }
         },
     )
-    configuration_response = client.get("/admin/connectors/catalog/test/configuration")
+    configuration_response = client.get("/api/admin/connectors/catalog/test/configuration")
 
     assert response.status_code == 200
     assert configuration_response.status_code == 200

@@ -30,7 +30,7 @@
           <ConnectorConfigurationForm
             connector={selectedConnector}
             fields={selectedConnector.configurationFields}
-            action="?/saveConfiguration"
+            operation="saveConfiguration"
             submitConnectorId={true}
             {form}
             onsaved={state.close}

@@ -1,19 +1,13 @@
 # Routes
 
-**Module responsibility:** SvelteKit routing boundary containing layouts, pages, server loaders, and HTTP endpoints.
+**Module responsibility:** Static SvelteKit SPA layouts, universal browser loaders, navigation, and page composition. Root SSR is disabled; adapter-static emits the `200.html` fallback.
 
-**Read when working with:** Navigation, page composition, route data loading, form actions, or frontend server endpoints.
+## Entry points
 
-## Submodules
+- `+layout.ts` loads validated public configuration from `/app-config.json` before application requests.
+- `admin/+layout.ts` resolves account identity through the authenticated backend `/admin/users` adapter.
+- `admin/+page.ts` composes the administration overview through browser API adapters.
+- Administration `+page.ts` modules load lists, selected details, permissions, instance settings, and MCP setup data.
+- Connector detail routes redirect to the corresponding workspace selection.
 
-### `admin/`
-
-**Read when working with:** Administration pages, route-local loaders, actions, or API endpoints.
-
-### `admin/+page.server.ts` and `admin/+page.ts`
-
-**Read when working with:** Server-loaded overview counts and forwarding the server payload while retaining argument-free navigation-loader compatibility. Presentation lives in `$lib/components/admin/overview/`; aggregation lives in `$lib/admin/overview/`.
-
-### `system/`
-
-**Read when working with:** Frontend health and system endpoint behavior.
+Mutation handlers live in `$lib/admin/operations/`; routes contain no server actions or aggregation endpoints. Authentication expiry uses full navigation to `/oauth2/sign_in` with the return location; forbidden access remains an error.

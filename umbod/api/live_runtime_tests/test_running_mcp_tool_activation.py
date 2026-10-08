@@ -141,7 +141,7 @@ def _disable_tool(runtime_endpoints: RuntimeEndpoints) -> None:
 
 
 def _activation_url(runtime_endpoints: RuntimeEndpoints) -> str:
-    return f"{runtime_endpoints.api_base_url}/admin/connectors/catalog/{CONNECTOR_ID}/tools/activation"
+    return f"{runtime_endpoints.api_base_url}/api/admin/connectors/catalog/{CONNECTOR_ID}/tools/activation"
 
 
 def _request_json(method: str, url: str, payload: dict[str, Any] | None = None) -> dict[str, Any]:

@@ -142,33 +142,28 @@
       }
     },
     "frontend": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/workload"
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["apiBaseUrl", "replicaCount", "image", "port", "resources"],
+      "properties": {
+        "apiBaseUrl": {
+          "type": "string",
+          "minLength": 1
         },
-        {
-          "type": "object",
-          "required": [
-            "bodySizeLimit",
-            "privateAuthTokenHeader",
-            "replicaCount"
-          ],
-          "properties": {
-            "bodySizeLimit": {
-              "type": "string",
-              "minLength": 1
-            },
-            "privateAuthTokenHeader": {
-              "type": "string",
-              "minLength": 1
-            },
-            "replicaCount": {
-              "type": "integer",
-              "minimum": 1
-            }
-          }
+        "replicaCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "image": {
+          "$ref": "#/definitions/image"
+        },
+        "port": {
+          "const": 3000
+        },
+        "resources": {
+          "type": "object"
         }
-      ]
+      }
     },
     "persistence": {
       "type": "object",
@@ -260,7 +255,7 @@
               "type": "string"
             },
             "api": {
-              "type": "string"
+              "const": "/api"
             },
             "mcp": {
               "type": "string"
@@ -322,6 +317,10 @@
                 "audience": {
                   "type": "string",
                   "minLength": 1
+                },
+                "issuerUrl": {
+                  "type": "string",
+                  "pattern": "^(?:|https://[^\\s?#]+)$"
                 },
                 "requiredScopes": {
                   "type": "string",

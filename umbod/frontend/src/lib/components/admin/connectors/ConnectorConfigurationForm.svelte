@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
+  import { browserSubmit } from '$lib/admin/operations/browser-submit';
   import type { ConnectorConfigurationField } from '$lib/admin/connectors';
   import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
   import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
@@ -23,16 +23,16 @@
   let {
     connector,
     fields,
-    form = null,
-    action,
-    checkAction = '?/checkConfiguration',
+    form: submittedForm = null,
+    operation = 'saveConfiguration',
+    checkAction = 'checkConfiguration',
     submitConnectorId = false,
     onsaved
   }: {
     connector: Connector;
     fields: ConnectorConfigurationField[];
     form?: FormData;
-    action?: string;
+    operation?: string;
     checkAction?: string;
     submitConnectorId?: boolean;
     onsaved?: () => void;
@@ -40,6 +40,7 @@
 
   let formElement: HTMLFormElement | undefined;
 
+  const form = $derived(submittedForm?.connectorId === connector.id ? submittedForm : null);
   const pendingState = new FormPendingState();
   const toast = useToast();
   const state = new ConnectorConfigurationFormState();
@@ -72,7 +73,7 @@
   }
 
   function actionIsCheck(submitter: HTMLElement | null): boolean {
-    return submitter instanceof HTMLButtonElement && submitter.formAction.includes('checkConfiguration');
+    return submitter instanceof HTMLButtonElement && submitter.dataset.operation === 'checkConfiguration';
   }
 
   function isRecord(value: unknown): value is Record<string, unknown> {
@@ -105,13 +106,14 @@
   <form
     bind:this={formElement}
     method="POST"
-    {action}
+    data-operation={operation}
     aria-label={`${connector.name} configuration`}
     oninput={updateSignature}
-    use:enhance={({ submitter }) => {
+    use:browserSubmit={({ submitter, onComplete }) => {
       const checkingConfiguration = actionIsCheck(submitter);
       const pendingKey = checkingConfiguration ? checkConfigurationKey : saveConfigurationKey;
       const submittedSignature = formElement ? configurationSignature(formElement) : '';
+      onComplete(() => pendingState.stop(pendingKey));
       pendingState.start(pendingKey);
 
       return async ({ update, result }) => {
@@ -135,9 +137,7 @@
     <p class={["feedback-message", `feedback-message--${feedback.tone}`]}>{feedback.message}</p>
 
     <input type="hidden" name="__secret_fields" value={secretFieldNames.join(',')} />
-    {#if submitConnectorId}
-      <input type="hidden" name="connectorId" value={connector.id} />
-    {/if}
+    <input type="hidden" name="connectorId" value={connector.id} />
 
     {#each fields as field (field.name)}
       <AdminConfigurationField
@@ -164,7 +164,7 @@
         loading={checkConfigurationPending}
         disabled={hasRequiredUnsupportedFields}
         variant="secondary"
-        formaction={checkAction}
+        data-operation={checkAction}
       />
       <LoadingButton
         type="submit"

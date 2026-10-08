@@ -19,7 +19,7 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
 
 
 def test_api_consumer_views_available_connector_with_agent_facing_tools(client: TestClient) -> None:
-    response = client.get("/admin/connectors/catalog/test")
+    response = client.get("/api/admin/connectors/catalog/test")
 
     assert response.status_code == 200
     body = response.json()
@@ -66,7 +66,7 @@ def test_connector_detail_emits_present_output_schema_and_omits_absent_schema(
     descriptions[1].pop("output_schema", None)
     client = TestClient(create_app(connector_registrations=[registration]))
 
-    response = client.get("/admin/connectors/catalog/test")
+    response = client.get("/api/admin/connectors/catalog/test")
 
     assert response.status_code == 200
     present = _tool_by_operation_name(response.json(), descriptions[0]["operation_name"])
@@ -82,7 +82,7 @@ def test_connector_detail_emits_present_output_schema_and_omits_absent_schema(
 
 def test_api_consumer_views_published_connector_status_with_tools(client: TestClient) -> None:
     client.put(
-        "/admin/connectors/catalog/test/configuration",
+        "/api/admin/connectors/catalog/test/configuration",
         json={
             "configuration": {
                 "instance_name": "Demo",
@@ -91,9 +91,9 @@ def test_api_consumer_views_published_connector_status_with_tools(client: TestCl
             }
         },
     )
-    client.put("/admin/connectors/catalog/test/publication")
+    client.put("/api/admin/connectors/catalog/test/publication")
 
-    response = client.get("/admin/connectors/catalog/test")
+    response = client.get("/api/admin/connectors/catalog/test")
 
     assert response.status_code == 200
     body = response.json()
@@ -104,7 +104,7 @@ def test_api_consumer_views_published_connector_status_with_tools(client: TestCl
 def test_available_connector_tool_without_explicit_label_has_derived_label(
     client: TestClient,
 ) -> None:
-    response = client.get("/admin/connectors/catalog/test")
+    response = client.get("/api/admin/connectors/catalog/test")
 
     assert response.status_code == 200
     tool = _tool_by_operation_name(response.json(), "get_default_response")
@@ -113,7 +113,7 @@ def test_available_connector_tool_without_explicit_label_has_derived_label(
 
 
 def test_unknown_connector_returns_helpful_not_found(client: TestClient) -> None:
-    response = client.get("/admin/connectors/catalog/missing")
+    response = client.get("/api/admin/connectors/catalog/missing")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Connector missing was not found"}
@@ -135,7 +135,7 @@ def test_registered_but_unavailable_connector_returns_helpful_not_found(
         )
     )
 
-    response = client.get("/admin/connectors/catalog/slack")
+    response = client.get("/api/admin/connectors/catalog/slack")
 
     assert response.status_code == 404
     assert response.json() == {
@@ -146,7 +146,7 @@ def test_registered_but_unavailable_connector_returns_helpful_not_found(
 def test_unconfigured_available_connector_still_exposes_tool_metadata_without_secrets(
     client: TestClient,
 ) -> None:
-    response = client.get("/admin/connectors/catalog/test")
+    response = client.get("/api/admin/connectors/catalog/test")
 
     assert response.status_code == 200
     body = response.json()

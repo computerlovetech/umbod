@@ -61,35 +61,4 @@ describe('OpenAPI connector administration milestone 5', () => {
     expect(body).not.toMatch(/<ul class="tool-list\b/);
   });
 
-  test('publish and unpublish redirect after a successful publication change', async () => {
-    const { actions } = await import('../../routes/admin/openapi-connectors/+page.server');
-    const publishFetch = vi.fn(async () => new Response(JSON.stringify({ connector_id: 'billing', publication_status: 'published' }))) as never;
-    await expect(
-      actions.publish({
-        fetch: publishFetch,
-        request: new Request('http://frontend', { method: 'POST', body: new URLSearchParams({ connectorId: 'billing' }) })
-      } as never)
-    ).rejects.toMatchObject({
-      status: 303,
-      location: '/admin/openapi-connectors?connector=billing&published=true'
-    });
-    const unpublishFetch = vi.fn(async () => new Response(JSON.stringify({ connector_id: 'billing', publication_status: 'unpublished' }))) as never;
-    await expect(
-      actions.unpublish({
-        fetch: unpublishFetch,
-        request: new Request('http://frontend', { method: 'POST', body: new URLSearchParams({ connectorId: 'billing' }) })
-      } as never)
-    ).rejects.toMatchObject({
-      status: 303,
-      location: '/admin/openapi-connectors?connector=billing&unpublished=true'
-    });
-  });
-
-  test('exposes the batch tool activation action without individual actions', async () => {
-    const { actions } = await import('../../routes/admin/openapi-connectors/+page.server');
-
-    expect(actions.saveToolActivations).toBeTypeOf('function');
-    expect(actions.enableTool).toBeUndefined();
-    expect(actions.disableTool).toBeUndefined();
-  });
 });

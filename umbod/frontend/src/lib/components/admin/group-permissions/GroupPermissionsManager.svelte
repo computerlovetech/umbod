@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
+  import { browserSubmit } from '$lib/admin/operations/browser-submit';
   import { untrack } from 'svelte';
   import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
   import AdminSidebarActionMenu from '$lib/components/admin/shared/AdminSidebarActionMenu.svelte';
@@ -140,11 +140,12 @@
                 {#snippet menu()}
                   <form
                     method="POST"
-                    action="?/deletePermissionGroup"
-                    use:enhance={() => {
+                    data-operation="deletePermissionGroup"
+                    use:browserSubmit={({ onComplete }) => {
                       state.closeGroupMenu();
                       const pendingKey = `delete-group:${group.groupId}`;
-                      pendingState.start(pendingKey);
+                      onComplete(() => pendingState.stop(pendingKey));
+      pendingState.start(pendingKey);
                       return async ({ update, result }) => {
                         const actionForm = formFromActionResult(result);
                         if (!actionForm) throw new Error('Invalid delete permission group result');
@@ -167,11 +168,12 @@
 
       <form
         method="POST"
-        action="?/registerPermissionGroup"
+        data-operation="registerPermissionGroup"
         class="group-permissions__add"
-        use:enhance={() => {
+        use:browserSubmit={({ onComplete }) => {
           const pendingKey = 'register-group';
-          pendingState.start(pendingKey);
+          onComplete(() => pendingState.stop(pendingKey));
+      pendingState.start(pendingKey);
 
           return async ({ update, result }) => {
             const actionForm = formFromActionResult(result);
@@ -288,11 +290,12 @@
         {@const currentSaveFeedback = saveFeedback(state.selectedGroupId)}
         <form
           method="POST"
-          action="?/saveGroupPermissions"
+          data-operation="saveGroupPermissions"
           class="group-permissions__save"
-          use:enhance={() => {
+          use:browserSubmit={({ onComplete }) => {
             const pendingKey = savePendingKey(state.selectedGroupId);
-            pendingState.start(pendingKey);
+            onComplete(() => pendingState.stop(pendingKey));
+      pendingState.start(pendingKey);
 
             return async ({ update, result }) => {
               const actionForm = formFromActionResult(result);

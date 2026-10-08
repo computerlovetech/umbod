@@ -9,6 +9,13 @@ services:
       - "18010:8000"
     expose:
       - "8001"
+    labels:
+      - traefik.enable=true
+      - "traefik.http.routers.umbod-browser-api.rule=Host(`umbod-admin.computerlove.tech`) && PathPrefix(`/api/`)"
+      - traefik.http.routers.umbod-browser-api.entryPoints=http
+      - traefik.http.routers.umbod-browser-api.priority=50
+      - traefik.http.routers.umbod-browser-api.middlewares=umbod-auth@docker
+      - traefik.http.services.umbod-browser-api.loadbalancer.server.port=8000
     environment:
       - UMBOD_PROFILE=${UMBOD_PROFILE:-local}
       - UMBOD_AUTH=${UMBOD_AUTH:-dev}
@@ -24,7 +31,8 @@ services:
       - UMBOD_DATA_DIR=${UMBOD_DATA_DIR:-/app/data}
       - UMBOD_CONNECTOR_STORE=${UMBOD_CONNECTOR_STORE:-sqlite}
       - UMBOD_ADMIN_GROUP=${UMBOD_ADMIN_GROUP:-umbod:admin}
-      - UMBOD_ADMIN_JWT_HEADER=${UMBOD_ADMIN_JWT_HEADER:-Authorization}
+      - UMBOD_ADMIN_JWT_HEADER=${UMBOD_ADMIN_JWT_HEADER:-X-Auth-Request-Access-Token}
+      - UMBOD_OIDC_ISSUER_URL=${UMBOD_OIDC_ISSUER_URL:-}
       - UMBOD_ROOT_SECRET=${UMBOD_ROOT_SECRET:-}
       - UMBOD_OIDC_DOMAIN=${UMBOD_OIDC_DOMAIN:-}
       - UMBOD_OIDC_CLIENT_ID=${UMBOD_OIDC_CLIENT_ID:-}
@@ -81,6 +89,7 @@ services:
       - UMBOD_MCP_METRICS_PORT=8012
       - UMBOD_MCP_STATELESS_HTTP=${UMBOD_MCP_STATELESS_HTTP:-true}
       - UMBOD_MCP_AUTH_DEBUG_ENABLED=${UMBOD_MCP_AUTH_DEBUG_ENABLED:-false}
+      - UMBOD_OIDC_ISSUER_URL=${UMBOD_OIDC_ISSUER_URL:-}
       - UMBOD_ROOT_SECRET=${UMBOD_ROOT_SECRET:-}
       - UMBOD_OIDC_DOMAIN=${UMBOD_OIDC_DOMAIN:-}
       - UMBOD_OIDC_CLIENT_ID=${UMBOD_OIDC_CLIENT_ID:-}
@@ -129,7 +138,7 @@ services:
       - "4180:4180"
     labels:
       - traefik.enable=true
-      - traefik.http.middlewares.umbod-auth.forwardauth.address=http://oauth2-proxy:4180/
+      - traefik.http.middlewares.umbod-auth.forwardauth.address=http://oauth2-proxy:4180/oauth2/auth
       - traefik.http.middlewares.umbod-auth.forwardauth.trustForwardHeader=true
       - traefik.http.middlewares.umbod-auth.forwardauth.authResponseHeaders=Authorization,X-Auth-Request-Access-Token,X-Auth-Request-User,X-Auth-Request-Email
       - traefik.http.middlewares.umbod-auth-errors.errors.status=401
@@ -159,21 +168,14 @@ services:
       - traefik.http.routers.umbod-favicon.priority=20
       - traefik.http.routers.umbod-favicon.service=umbod-frontend
     environment:
-      - NODE_ENV=production
-      - PORT=3000
-      - BODY_SIZE_LIMIT=12M
-      - UMBOD_LOG_LEVEL=${UMBOD_LOG_LEVEL:-info}
-      - ORIGIN=${UMBOD_PUBLIC_SITE_ORIGIN:-http://localhost:3010}
-      - PROTOCOL_HEADER=x-forwarded-proto
-      - HOST_HEADER=x-forwarded-host
+      - PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL:-/api}
       - PUBLIC_MCP_BASE_URL=${UMBOD_PUBLIC_MCP_ORIGIN:-http://localhost:8011}
-      - PRIVATE_API_BASE_URL=${UMBOD_INTERNAL_API_ORIGIN:-http://api:8000}
-      - PRIVATE_AUTH_TOKEN_HEADER=${UMBOD_ADMIN_JWT_HEADER:-Authorization}
+      - API_PROXY_ORIGIN=http://api:8000
     depends_on:
       - api
       - mcp
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/system/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/system/health"]
       interval: 15s
       timeout: 5s
       retries: 5

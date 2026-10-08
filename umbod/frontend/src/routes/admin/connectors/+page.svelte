@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { operationState } from '$lib/admin/operations/operation-state.svelte';
   import { goto, invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import Button from '$lib/components/admin/shared/Button.svelte';
@@ -30,7 +31,8 @@
     errorMessage?: string;
   };
 
-  let { data, form }: { data: ConnectorListAdminPageData; form?: PublicationForm } = $props();
+  let { data }: { data: ConnectorListAdminPageData; form?: PublicationForm } = $props();
+  const form = $derived(operationState.forOwner({ route: page.url.pathname, connectorId: page.url.searchParams.get('connector') ?? data.selectedConnectorId ?? data.connectors[0]?.id }) as PublicationForm);
 
   const fallbackAccountIdentity: HeaderAccountIdentityState = { kind: 'hidden' };
   const catalogState = new ConnectorCatalogState();

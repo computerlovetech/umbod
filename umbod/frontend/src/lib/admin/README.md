@@ -22,4 +22,16 @@
 
 ### `infrastructure/`
 
-**Read when working with:** Shared browser and server HTTP transport, request execution, or authentication forwarding.
+**Read when working with:** Browser HTTP transport, validated public runtime configuration, authentication expiry, or composite API composition.
+
+### `operations/`
+
+**Read when working with:** Typed browser mutations grouped by connector, downstream MCP, OpenAPI, and permissions contexts; reusable submit callbacks, reconciliation, and pending cleanup. See `operations/README.md`.
+
+### `*-browser-api.ts`
+
+**Read when working with:** Browser detail composition through backend adapters, including cancellation and wire-to-UI mapping. These clients do not call frontend aggregation endpoints.
+
+### `openapi-setup.ts`
+
+**Read when working with:** The validated JSON setup request and cleanup-failure contract for backend-owned OpenAPI setup.

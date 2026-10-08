@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
-  import type { SubmitFunction } from '@sveltejs/kit';
+  import { browserSubmit } from '$lib/admin/operations/browser-submit';
+  import type { BrowserSubmitFunction as SubmitFunction } from '$lib/admin/operations/browser-submit';
   import { untrack } from 'svelte';
   import Button from '$lib/components/admin/shared/Button.svelte';
   import SecurityBoundaryNotice from './SecurityBoundaryNotice.svelte';
@@ -20,7 +20,8 @@
     untrack(() => (action ? { mode: action.mode, url: action.url, approvedHosts: action.approvedHosts } : undefined))
   );
 
-  const submitUrlImport: SubmitFunction = async ({ formData, cancel }) => {
+  const submitUrlImport: SubmitFunction = async ({ formData, cancel, onComplete }) => {
+    onComplete(state.finishSubmit);
     if (!state.beginUrlSubmit()) {
       cancel();
       return;
@@ -56,7 +57,7 @@
   {#if state.mode === 'file'}
     <form
       method="POST"
-      action="?/importFile"
+      data-operation="importFile"
       enctype="multipart/form-data"
       onsubmit={(event) => {
         if (!state.beginFileSubmit()) event.preventDefault();
@@ -104,7 +105,7 @@
       <Button class="submit" type="submit" disabled={state.pending || Boolean(state.fileError)}>{state.pending ? 'Importing…' : 'Import file'}</Button>
     </form>
   {:else}
-    <form method="POST" action="?/importDocument" use:enhance={submitUrlImport}>
+    <form method="POST" data-operation="importDocument" use:browserSubmit={submitUrlImport}>
       <input type="hidden" name="connectorId" value={connectorId} />
       <label for="source-url">HTTPS URL</label>
       <input

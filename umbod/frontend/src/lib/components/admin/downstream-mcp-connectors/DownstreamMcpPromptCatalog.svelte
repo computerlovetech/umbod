@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
+  import { browserSubmit } from '$lib/admin/operations/browser-submit';
   import { untrack } from 'svelte';
   import {
     promptActivationBatchResponseSchema,
@@ -36,10 +36,11 @@
 >
   <form
     method="POST"
-    action="?/savePromptActivations"
+    data-operation="savePromptActivations"
     class="save-form"
-    use:enhance={() => {
+    use:browserSubmit={({ onComplete }) => {
       const submittedConnectorId = connectorId;
+      onComplete(() => state.finishSave());
       state.beginSave();
       return async ({ update, result }) => {
         await update({ invalidateAll: false, reset: false });

@@ -1,6 +1,10 @@
 import { describe, expect, test, vi } from 'vitest';
 import { OpenApiBearerConfigurationState } from './openapi-bearer-configuration-state.svelte';
 
+vi.mock('$lib/admin/infrastructure/public-configuration', () => ({
+  publicConfigurationProvider: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }) }
+}));
+
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
 }
@@ -18,7 +22,7 @@ describe('OpenApiBearerConfigurationState', () => {
 
     expect(state.configured).toBe(true);
     expect(state.token).toBe('');
-    expect(request).toHaveBeenCalledWith('/admin/openapi-connectors/billing/configuration');
+    expect(request).toHaveBeenCalledWith('/api/admin/connectors/openapi/billing/configuration', expect.objectContaining({ credentials: 'same-origin' }));
   });
 
   test('submits the entered token and clears it after a successful save', async () => {
@@ -33,10 +37,12 @@ describe('OpenApiBearerConfigurationState', () => {
 
     await state.save({ preventDefault: vi.fn() } as unknown as SubmitEvent);
 
-    expect(request).toHaveBeenLastCalledWith('/admin/openapi-connectors/billing/configuration', {
+    expect(request).toHaveBeenLastCalledWith('/api/admin/connectors/openapi/billing/configuration', {
       method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ bearer_token: 'private-token' })
+      credentials: 'same-origin',
+      signal: undefined,
+      headers: { 'X-Umbod-Web-Request': '1', 'content-type': 'application/json' },
+      body: JSON.stringify({ authentication_type: 'bearer', bearer_token: 'private-token' })
     });
     expect(state.token).toBe('');
     expect(state.message).toBe('Bearer token saved.');
@@ -53,10 +59,12 @@ describe('OpenApiBearerConfigurationState', () => {
 
     await state.save({ preventDefault: vi.fn() } as unknown as SubmitEvent);
 
-    expect(request).toHaveBeenLastCalledWith('/admin/openapi-connectors/billing/configuration', {
+    expect(request).toHaveBeenLastCalledWith('/api/admin/connectors/openapi/billing/configuration', {
       method: 'PUT',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ bearer_token: '' })
+      credentials: 'same-origin',
+      signal: undefined,
+      headers: { 'X-Umbod-Web-Request': '1', 'content-type': 'application/json' },
+      body: JSON.stringify({ authentication_type: 'bearer', bearer_token: '' })
     });
     expect(state.configured).toBe(true);
     expect(state.token).toBe('');

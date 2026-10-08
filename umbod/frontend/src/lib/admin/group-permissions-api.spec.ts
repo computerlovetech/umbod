@@ -1,5 +1,6 @@
+import { InMemoryPublicConfigurationProvider } from './infrastructure/public-configuration';
 import { describe, expect, test, vi } from 'vitest';
-import { serverTransport, type Transport, type TransportRequest } from './infrastructure/transport';
+import { browserTransport, type Transport, type TransportRequest } from './infrastructure/transport';
 import {
   GroupPermissionsApi,
   deletePermissionGroup,
@@ -24,7 +25,7 @@ function recordingTransport(): { transport: Transport; calls: TransportRequest<u
 }
 
 function apiFromFetch(fetch: ReturnType<typeof vi.fn>): GroupPermissionsApi {
-  return new GroupPermissionsApi(serverTransport(fetch as unknown as typeof globalThis.fetch));
+  return new GroupPermissionsApi(browserTransport({ fetch: fetch as unknown as typeof globalThis.fetch, configuration: new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }) }));
 }
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {

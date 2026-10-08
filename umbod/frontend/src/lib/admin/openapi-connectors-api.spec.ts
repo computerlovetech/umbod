@@ -1,5 +1,6 @@
+import { InMemoryPublicConfigurationProvider } from './infrastructure/public-configuration';
 import { describe, expect, test, vi } from 'vitest';
-import { HttpError, SchemaValidationError, serverTransport, type Transport, type TransportRequest } from './infrastructure/transport';
+import { HttpError, SchemaValidationError, browserTransport, type Transport, type TransportRequest } from './infrastructure/transport';
 import { createOpenApiConnectorRequestSchema, openApiConnectorListResponseSchema, openApiConnectorSchema } from './openapi-connectors';
 import {
   InMemoryOpenApiConnectorApi,
@@ -46,7 +47,7 @@ function connectorSummaryFixture(overrides: Record<string, unknown> = {}) {
 
 function apiFrom(body: unknown, status = 200): OpenApiConnectorsApi {
   const fetch = vi.fn(async () => new Response(JSON.stringify(body), { status }));
-  return new OpenApiConnectorsApi(serverTransport(fetch as unknown as typeof globalThis.fetch));
+  return new OpenApiConnectorsApi(browserTransport({ fetch: fetch as unknown as typeof globalThis.fetch, configuration: new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }) }));
 }
 
 describe('OpenApiConnectorsApi connector-list contract', () => {
@@ -77,7 +78,7 @@ describe('OpenApiConnectorsApi connector-list contract', () => {
         connectorSummaryFixture({ connector_id: 'unpublished', display_name: 'Unpublished API', publication_status: 'unpublished', available_actions: ['import', 'publish'] })
       ] }), { status: 200 });
     }) as typeof globalThis.fetch;
-    const data = await loadOpenApiConnectorList(new OpenApiConnectorsApi(serverTransport(fetch)));
+    const data = await loadOpenApiConnectorList(new OpenApiConnectorsApi(browserTransport({ fetch: fetch, configuration: new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }) })));
     expect(data).toMatchObject({ status: 'ready', connectors: [
       { id: 'unconfigured', name: 'Unconfigured API', publicationStatus: 'Unconfigured', canPublish: false, canUnpublish: false, canImport: true, tools: [] },
       { id: 'draft', name: 'Draft API', publicationStatus: 'Draft', canPublish: true, canUnpublish: false, canImport: true, tools: [] },
@@ -97,7 +98,7 @@ describe('OpenApiConnectorsApi connector-list contract', () => {
       if (url.endsWith('/tools')) return new Response(JSON.stringify(tools), { status: 200 });
       return new Response(JSON.stringify({ connectors: [connectorSummaryFixture()] }), { status: 200 });
     }) as typeof globalThis.fetch;
-    const data = await loadOpenApiConnectorList(new OpenApiConnectorsApi(serverTransport(fetch)));
+    const data = await loadOpenApiConnectorList(new OpenApiConnectorsApi(browserTransport({ fetch: fetch, configuration: new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }) })));
     expect(data).toMatchObject({
       status: 'ready',
       connectors: [{
@@ -207,7 +208,7 @@ describe('OpenApiConnectorsApi connector-list contract', () => {
 
   test('rejects malformed batch activation requests and responses at transport boundaries', async () => {
     const fetchForInvalidInput = vi.fn();
-    const invalidInputApi = new OpenApiConnectorsApi(serverTransport(fetchForInvalidInput as unknown as typeof globalThis.fetch));
+    const invalidInputApi = new OpenApiConnectorsApi(browserTransport({ fetch: fetchForInvalidInput as unknown as typeof globalThis.fetch, configuration: new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }) }));
     await expect(invalidInputApi.connectors.saveActivations('billing', [])).rejects.toThrow();
     expect(fetchForInvalidInput).not.toHaveBeenCalled();
 

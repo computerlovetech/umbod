@@ -12,7 +12,7 @@ from umbod.rest.authentication.authorization import (
     JwtVerificationError,
     JwtVerifier,
 )
-from umbod.rest.authentication.tokens import extract_jwt_header_token
+from umbod.rest.authentication.tokens import extract_request_jwt_token
 from umbod.rest.authentication.verifiers import (
     ProductionJwksJwtVerifier,
     SemanticJwtVerifier,
@@ -52,8 +52,14 @@ class AdminAuthenticationSettingsPort(
     pass
 
 
+class AdminOidcSettingsPort(Protocol):
+    issuer_url: str
+    audience: str
+
+
 class APISettingsPort(Protocol):
     admin_authentication: AdminAuthenticationSettingsPort
+    oidc: AdminOidcSettingsPort
 
 
 class AdminAuthorizationServicePort(Protocol):
@@ -83,7 +89,9 @@ class JwtVerifierFactory:
                 authentication_settings.simulated_admin,
             )
         if authentication_settings.environment == "production":
-            return ProductionJwksJwtVerifier(authentication_settings.jwks_url)
+            return ProductionJwksJwtVerifier(
+                authentication_settings.jwks_url, settings.oidc.issuer_url, settings.oidc.audience
+            )
         return SemanticJwtVerifier()
 
 
@@ -110,7 +118,7 @@ class JwtAdminAuthenticationStrategy:
         self.authorization_service = authorization_service
 
     async def authenticate(self, request: Request) -> Response | None:
-        token = extract_jwt_header_token(request.headers.get(self.jwt_header_name, ""))
+        token = extract_request_jwt_token(request.headers, self.jwt_header_name)
         try:
             claims = self.authorization_service.verify_claims(token)
         except JwtVerificationError:

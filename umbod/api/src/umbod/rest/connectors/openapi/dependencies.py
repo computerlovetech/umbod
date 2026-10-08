@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
 from umbod.core.configuration.persistence.factories import create_encrypted_connector_configuration_store
 
@@ -15,7 +17,12 @@ from umbod.core.activation import (
 )
 from umbod.core.connectors.openapi.catalog import OpenApiConnectorToolCatalog, StoreBackedOpenApiCapabilityCatalog
 from umbod.core.connectors.openapi.management import OpenApiBearerConfiguration, OpenApiConfigurationAdapter, OpenApiConfigurationPort, compose_openapi_connector_management, OpenApiConnectorManagementService, PersistedGroupPermissionActivationChangeGuard
-from umbod.core.connectors.openapi.importing import InMemoryOpenApiCandidateImporter
+from umbod.core.connectors.openapi.importing import DefaultOpenApiImportPreparer, InMemoryOpenApiCandidateImporter
+from umbod.core.connectors.openapi.management.setup import OpenApiConnectorSetupService
+from umbod.core.connectors.openapi.management.setup_ports import OpenApiConnectorSetupPort
+from umbod.rest.connectors.openapi.schemas import SetupOpenApiConnectorRequest
+from umbod.rest.connectors.openapi.file_import import decode_json_request_object
+from pydantic import ValidationError
 from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
 from umbod.core.permissions.ports import GroupPermissionReader
 from umbod.rest.connectors.dependencies import get_capability_activation_store
@@ -59,10 +66,36 @@ def get_openapi_tool_activation_port(store: Annotated[OpenApiConnectorStore, Dep
 def get_openapi_json_import_max_bytes(factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)]) -> int:
     return factories.openapi_json_import_max_bytes
 
-async def enforce_openapi_json_import_max_bytes(request: Request, factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)]) -> None:
+def get_openapi_connector_setup_port(
+    management: Annotated[OpenApiConnectorManagementService, Depends(get_openapi_connector_management_service)],
+    importer: Annotated[InMemoryOpenApiCandidateImporter, Depends(get_openapi_candidate_importer)],
+    configuration: Annotated[OpenApiConfigurationPort, Depends(get_openapi_configuration_port)],
+) -> OpenApiConnectorSetupPort:
+    return OpenApiConnectorSetupService(management, importer, DefaultOpenApiImportPreparer(), configuration)
+
+
+async def get_openapi_setup_request(
+    request: Request,
+    content: Annotated[bytes, Depends(enforce_openapi_json_import_max_bytes)],
+) -> SetupOpenApiConnectorRequest:
+    if request.headers.get('content-type', '').split(';', 1)[0].strip().lower() != 'application/json':
+        raise HTTPException(status_code=415, detail={'code': 'openapi_import_unsupported_media_type'})
+    try:
+        return SetupOpenApiConnectorRequest.model_validate(decode_json_request_object(content))
+    except ValidationError as error:
+        raise HTTPException(status_code=422, detail={'code': 'openapi_setup_invalid_request'}) from error
+
+
+async def enforce_openapi_json_import_max_bytes(request: Request, factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)]) -> bytes:
     max_bytes = factories.openapi_json_import_max_bytes
     content_length = request.headers.get('content-length')
     if content_length is not None and content_length.isdigit() and (int(content_length) > max_bytes):
         raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail={'code': 'openapi_import_too_large', 'max_bytes': max_bytes})
-    if len(await request.body()) > max_bytes:
-        raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail={'code': 'openapi_import_too_large', 'max_bytes': max_bytes})
+    chunks: list[bytes] = []
+    total_bytes = 0
+    async for chunk in request.stream():
+        total_bytes += len(chunk)
+        if total_bytes > max_bytes:
+            raise HTTPException(status_code=status.HTTP_413_CONTENT_TOO_LARGE, detail={'code': 'openapi_import_too_large', 'max_bytes': max_bytes})
+        chunks.append(chunk)
+    return b''.join(chunks)

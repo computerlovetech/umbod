@@ -1,6 +1,10 @@
 import { describe, expect, test, vi } from 'vitest';
 import { OpenApiConnectorSetupState } from './openapi-connector-setup-state.svelte';
 
+vi.mock('$lib/admin/infrastructure/public-configuration', () => ({
+  publicConfigurationProvider: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }) }
+}));
+
 function response(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200 });
 }
@@ -61,6 +65,24 @@ describe('OpenApiConnectorSetupState', () => {
     await expect(state.prepareSubmission(new FormData())).resolves.toBe(false);
     expect(state.urlError).toContain('HTTPS URL');
     expect(request).not.toHaveBeenCalled();
+  });
+
+  test.each(['create', 'configure'] as const)('closes %s setup on successful SPA redirect', async (mode) => {
+    const state = new OpenApiConnectorSetupState(vi.fn(async () => response({ configured: false, authentication_type: 'none', masked_token: null })) as typeof fetch);
+    const trigger = { focus: vi.fn() } as unknown as HTMLElement;
+    if (mode === 'create') state.showCreate(trigger); else await state.showConfigure(trigger, 'billing', 'Billing', 'billing', 'Manage billing');
+    state.beginSubmit();
+    state.completeSubmit({ type: 'redirect', location: '/admin/openapi-connectors?connector=billing' });
+    expect(state.open).toBe(false);
+    expect(state.submitting).toBe(false);
+  });
+
+  test('blocks duplicate setup after actionable cleanup warning', () => {
+    const state = new OpenApiConnectorSetupState();
+    state.showCreate({ focus: vi.fn() } as unknown as HTMLElement);
+    state.completeSubmit({ type: 'success', data: { status: 'warning', message: 'Remove connector billing before retrying.' } });
+    expect(state.setupBlocked).toBe(true);
+    expect(state.message).toContain('billing');
   });
 
   test('exposes malformed configure responses as implementation errors', async () => {

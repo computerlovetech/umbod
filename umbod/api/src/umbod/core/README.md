@@ -48,7 +48,7 @@
 
 ### `connectors/openapi/`
 
-**Read when working with:** OpenAPI imports, generated connector models, operation execution, or administrator-configurable OpenAPI inventory. `administrator_catalog.py` adapts persisted operation summaries to the shared configuration catalog port.
+**Read when working with:** OpenAPI imports, generated connector models, operation execution, or administrator-configurable OpenAPI inventory. `administrator_catalog.py` adapts persisted operation summaries to the shared configuration catalog port. `management/setup_ports.py` defines the client-independent setup contract and explicit failure states; `management/setup.py` validates, creates, imports, and configures a connector, compensating configuration and connector persistence on failure. Setup is a backend operation, not a browser workflow or a guaranteed database transaction.
 
 ### `connectors/downstream_mcp/`
 

@@ -8,24 +8,15 @@ RUN bun install --frozen-lockfile
 COPY . .
 RUN bun run build
 
-FROM oven/bun:1 AS production-dependencies
+FROM nginx:1.28-alpine
 
-WORKDIR /app
+RUN apk add --no-cache jq && rm -rf /usr/share/nginx/html/* && mkdir -p /tmp/umbod && chown nginx:nginx /tmp/umbod
+COPY --from=builder /app/build /usr/share/nginx/html
+COPY deployment/nginx.conf /etc/nginx/nginx.conf
+COPY deployment/default.conf.template /etc/nginx/templates/default.conf.template
+COPY deployment/start.sh /usr/local/bin/umbod-frontend
+COPY deployment/generate-config.sh /usr/local/bin/generate-config.sh
 
-COPY package.json bun.lock ./
-RUN bun install --frozen-lockfile --production --ignore-scripts
-
-FROM node:22-alpine
-
-WORKDIR /app
-
-COPY --from=builder /app/build ./build
-COPY --from=builder /app/package.json ./
-COPY --from=production-dependencies /app/node_modules ./node_modules
-
-ENV NODE_ENV=production
-ENV PORT=3000
-
+USER nginx
 EXPOSE 3000
-
-CMD ["node", "build/index.js"]
+ENTRYPOINT ["/bin/sh", "/usr/local/bin/umbod-frontend"]

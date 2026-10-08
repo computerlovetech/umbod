@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { operationState } from '$lib/admin/operations/operation-state.svelte';
   import { invalidateAll } from '$app/navigation';
   import { page } from '$app/state';
   import { parseConnectorCapability } from '$lib/admin/connector-capabilities';
@@ -29,7 +30,8 @@
     | null
     | undefined;
 
-  let { data, form }: { data: PageData; form?: ActionData } = $props();
+  let { data }: { data: PageData; form?: ActionData } = $props();
+  const form = $derived(operationState.forOwner({ route: page.url.pathname, connectorId: page.url.searchParams.get('connector') ?? data.connectors[0]?.id }) as ActionData);
   const fallbackAccountIdentity: HeaderAccountIdentityState = { kind: 'hidden' };
   const listForm = $derived(form && !('displayName' in form) ? form : null);
   const setupState = new OpenApiConnectorSetupState(globalThis.fetch, useToast());

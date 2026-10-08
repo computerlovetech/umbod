@@ -1,23 +1,13 @@
 # Admin Infrastructure
 
-**Module responsibility:** Shared HTTP transport and composition for Umbod administration APIs.
-
-**Read when working with:** Browser or server request execution, transport behavior, or authentication forwarding. Feature-specific payload schemas live in the parent module's `*-api.ts` files.
+**Module responsibility:** Browser HTTP transport, validated public configuration, and administration API composition.
 
 ## Modules
 
-### `transport.ts`
+- `transport.ts`: Transport port, Zod boundary validation, cancellation, same-origin credentials, web-request marker, central authentication expiry, and optional externally supplied bearer credentials.
+- `public-configuration.ts`: Configuration provider port and browser/in-memory adapters. Deployment configuration uses public `apiBaseUrl` and `mcpBaseUrl` keys from `/app-config.json`. Development defaults are `/api` and `http://localhost:8011` when that resource is absent.
+- `admin-api.ts`: Composite `AdminApi` over an injected `Transport`, bounded route adapters, and account identity.
+- `browser-request.ts`: Presentation error mapping for detail clients and component loaders.
+- `schema.ts`: Shared schema helpers.
 
-**Read when working with:** Shared request execution and validated transport contracts.
-
-### `server-api.ts`
-
-**Read when working with:** Server-side administration API access.
-
-### `browser-request.ts`
-
-**Read when working with:** Browser-side administration requests.
-
-### `schema.ts`
-
-**Read when working with:** Schema helpers shared by feature-specific API adapters.
+Feature schemas remain in the parent administration module. Adapter paths start at `/admin/`; the transport prepends the configured API base.

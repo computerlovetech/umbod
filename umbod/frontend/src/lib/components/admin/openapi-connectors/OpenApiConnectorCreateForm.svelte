@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { browserSubmit } from '$lib/admin/operations/browser-submit';
   import { untrack } from 'svelte';
   import type { OpenApiConnectorCreateAction } from '$lib/admin/openapi-connectors';
   import Button from '$lib/components/admin/shared/Button.svelte';
@@ -14,7 +15,7 @@
     <p class="eyebrow">New connector</p>
     <h2 id="create-heading">Create OpenAPI connector</h2>
   </div>
-  <form method="POST" action="?/create" onsubmit={state.beginSubmit}>
+  <form method="POST" data-operation="create" use:browserSubmit={({ onComplete }) => { state.beginSubmit(); onComplete(state.finishSubmit); }}>
     <label for="display-name">Display name</label>
     <div class="controls">
       <input

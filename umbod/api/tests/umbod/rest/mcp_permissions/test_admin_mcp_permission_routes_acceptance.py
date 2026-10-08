@@ -15,10 +15,10 @@ class FastApiAdminMcpPermissionApi:
         self.client = client
 
     def list_groups(self) -> dict[str, object]:
-        return self.client.get('/admin/mcp-permissions/groups').json()
+        return self.client.get('/api/admin/mcp-permissions/groups').json()
 
     def get_group(self, group_id: str) -> dict[str, object]:
-        return self.client.get(f'/admin/mcp-permissions/groups/{group_id}').json()
+        return self.client.get(f'/api/admin/mcp-permissions/groups/{group_id}').json()
 
     def grant_connector(self, group_id: str, connector_id: str) -> tuple[int, dict[str, object]]:
         return self.update_group(group_id, {'connectors': [{'connector_id': connector_id, 'permission_status': 'enabled'}], 'capabilities': []})
@@ -33,7 +33,7 @@ class FastApiAdminMcpPermissionApi:
         return self.update_group(group_id, {'connectors': [], 'capabilities': [{'connector_id': connector_id, 'capability_kind': 'tool', 'capability_key': operation_name, 'permission_status': 'disabled'}]})
 
     def update_group(self, group_id: str, payload: dict[str, object]) -> tuple[int, dict[str, object]]:
-        response = self.client.put(f'/admin/mcp-permissions/groups/{group_id}/permissions', json=payload)
+        response = self.client.put(f'/api/admin/mcp-permissions/groups/{group_id}/permissions', json=payload)
         return (response.status_code, response.json())
 
     def list_system_events(self, event_type: str) -> list[dict[str, object]]:
@@ -42,11 +42,11 @@ class FastApiAdminMcpPermissionApi:
         return response.json()
 
     def configure_test_connector(self) -> tuple[int, dict[str, object]]:
-        response = self.client.put('/admin/connectors/catalog/test/configuration', json={'configuration': {'instance_name': 'Demo', 'api_key': 'test-key', 'default_response': 'Hello from test connector'}})
+        response = self.client.put('/api/admin/connectors/catalog/test/configuration', json={'configuration': {'instance_name': 'Demo', 'api_key': 'test-key', 'default_response': 'Hello from test connector'}})
         return (response.status_code, response.json())
 
     def publish_test_connector(self) -> tuple[int, dict[str, object]]:
-        response = self.client.put('/admin/connectors/catalog/test/publication')
+        response = self.client.put('/api/admin/connectors/catalog/test/publication')
         return (response.status_code, response.json())
 
 @pytest.fixture
@@ -58,7 +58,7 @@ def unassignable_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FastApi
     return _create_api(tmp_path, monkeypatch, False)
 
 def test_openapi_exposes_only_aggregate_group_permission_mutations(api: FastApiAdminMcpPermissionApi) -> None:
-    response = api.client.get('/admin/openapi.json')
+    response = api.client.get('/api/admin/openapi.json')
     assert response.status_code == 200
     paths = response.json()['paths']
     assert set(paths['/mcp-permissions/groups/{group_id}']) == {'get', 'post', 'delete'}
@@ -189,12 +189,12 @@ def test_diff_update_openapi_permissions_can_revoke_and_grant_tools(tmp_path: Pa
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
     settings = APISettings(admin_authentication={'mode': 'simulation', 'simulated_admin': True}, connector_store={'type': 'sqlite', 'sqlite_path': str(tmp_path / 'openapi.sqlite3')})
     api = FastApiAdminMcpPermissionApi(TestClient(create_app(settings=settings, connector_registrations=[])))
-    created = api.client.post('/admin/connectors/openapi', json={'display_name': 'Inventory', 'capability_description': 'Manage inventory resources'})
+    created = api.client.post('/api/admin/connectors/openapi', json={'display_name': 'Inventory', 'capability_description': 'Manage inventory resources'})
     connector_id = str(created.json()['connector_id'])
     document = {'openapi': '3.1.0', 'info': {'title': 'Inventory', 'version': '1'}, 'servers': [{'url': 'https://api.example.com'}], 'paths': {'/items': {'get': {'operationId': 'listItems', 'responses': {'200': {'description': 'ok'}}}, 'post': {'operationId': 'createItem', 'responses': {'200': {'description': 'ok'}}}}}}
-    assert api.client.post(f'/admin/connectors/openapi/{connector_id}/imports', json={'document': document, 'approved_hosts': ['api.example.com']}).status_code == 201
-    assert api.client.put(f'/admin/connectors/openapi/{connector_id}/publication').status_code == 200
-    assert api.client.put(f'/admin/connectors/openapi/{connector_id}/tools/activation', json={'tools': [{'tool_id': operation_id, 'activation_status': 'enabled'} for operation_id in ('listItems', 'createItem')]}).status_code == 200
+    assert api.client.post(f'/api/admin/connectors/openapi/{connector_id}/imports', json={'document': document, 'approved_hosts': ['api.example.com']}).status_code == 201
+    assert api.client.put(f'/api/admin/connectors/openapi/{connector_id}/publication').status_code == 200
+    assert api.client.put(f'/api/admin/connectors/openapi/{connector_id}/tools/activation', json={'tools': [{'tool_id': operation_id, 'activation_status': 'enabled'} for operation_id in ('listItems', 'createItem')]}).status_code == 200
     assert api.grant_tool('engineering', connector_id, 'listItems')[0] == 200
     (saved_status, saved) = api.update_group('engineering', {'connectors': [{'connector_id': connector_id, 'permission_status': 'enabled'}], 'capabilities': [{'connector_id': connector_id, 'capability_kind': 'tool', 'capability_key': 'createItem', 'permission_status': 'enabled'}, {'connector_id': connector_id, 'capability_kind': 'tool', 'capability_key': 'listItems', 'permission_status': 'disabled'}]})
     assert saved_status == 200
@@ -202,13 +202,13 @@ def test_diff_update_openapi_permissions_can_revoke_and_grant_tools(tmp_path: Pa
     assert api.get_group('engineering') == {'group_id': 'engineering', 'connector_ids': [connector_id], 'capabilities': [{'connector_id': connector_id, 'capability_kind': 'tool', 'capability_key': 'createItem'}]}
 
 def test_admin_can_list_assignable_permission_targets(unassignable_api: FastApiAdminMcpPermissionApi) -> None:
-    initial_response = unassignable_api.client.get('/admin/mcp-permissions/assignable-targets')
+    initial_response = unassignable_api.client.get('/api/admin/mcp-permissions/assignable-targets')
     assert initial_response.status_code == 200
     assert initial_response.json() == {'connectors': [], 'capabilities': []}
     unassignable_api.configure_test_connector()
     unassignable_api.publish_test_connector()
     _enable_tool(unassignable_api, 'test', 'echo')
-    assigned_response = unassignable_api.client.get('/admin/mcp-permissions/assignable-targets')
+    assigned_response = unassignable_api.client.get('/api/admin/mcp-permissions/assignable-targets')
     assert assigned_response.status_code == 200
     assert assigned_response.json() == {'connectors': [{'connector_id': 'test', 'display_name': 'Test Connector'}], 'capabilities': [{'connector_id': 'test', 'capability_kind': 'tool', 'capability_key': 'echo', 'display_name': 'Echo'}]}
 
@@ -217,7 +217,7 @@ def test_non_admin_cannot_manage_permissions(tmp_path: Path, monkeypatch: pytest
     availability_path.write_text(json.dumps({'connectors': [{'id': 'test'}]}), encoding='utf-8')
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
     settings = APISettings(admin_authentication={'mode': 'jwt', 'jwt_header_name': 'X-Forwarded-Access-Token', 'jwks_url': 'https://identity.example.com/.well-known/jwks.json', 'membership_claim': 'groups', 'required_membership': 'umbod-admins'}, connector_store={'type': 'sqlite', 'sqlite_path': str(tmp_path / 'umbod.sqlite3')})
-    response = TestClient(create_app(settings=settings, connector_registrations=[TestConnectorPlugin.registration()])).get('/admin/mcp-permissions/groups')
+    response = TestClient(create_app(settings=settings, connector_registrations=[TestConnectorPlugin.registration()])).get('/api/admin/mcp-permissions/groups')
     assert response.status_code == 401
 
 def test_permissions_persist_through_recreated_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -276,5 +276,5 @@ def _provision_assignable_test_connector(api: FastApiAdminMcpPermissionApi) -> N
     _enable_tool(api, 'test', 'get_default_response')
 
 def _enable_tool(api: FastApiAdminMcpPermissionApi, connector_id: str, operation_name: str) -> tuple[int, dict[str, object]]:
-    response = api.client.put(f'/admin/connectors/catalog/{connector_id}/tools/activation', json={'tools': [{'tool_id': operation_name, 'activation_status': 'enabled'}]})
+    response = api.client.put(f'/api/admin/connectors/catalog/{connector_id}/tools/activation', json={'tools': [{'tool_id': operation_name, 'activation_status': 'enabled'}]})
     return (response.status_code, response.json())

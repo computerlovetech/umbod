@@ -1,4 +1,4 @@
-import type { AdminServerApi } from '../infrastructure/server-api';
+import type { AdminApi } from '../infrastructure/admin-api';
 import { HttpError, isOperationalError } from '../infrastructure/transport';
 import type { OverviewSource } from './port';
 import { available, overviewConnectorSchema, overviewToolSchema, type Available, type ConnectorKind, type OverviewConnector, type OverviewTool } from './models';
@@ -14,7 +14,7 @@ async function operationalResult<T>(operation: () => Promise<T>): Promise<Availa
 }
 
 export class ApiOverviewSource implements OverviewSource {
-  constructor(private readonly api: AdminServerApi) {}
+  constructor(private readonly api: AdminApi) {}
 
   async listConnectors(kind: ConnectorKind): Promise<Available<OverviewConnector[]>> {
     return operationalResult(async () => {

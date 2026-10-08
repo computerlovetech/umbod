@@ -50,7 +50,7 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
 
 
 def test_admin_gets_schema_driven_configuration_form_definition(client: TestClient) -> None:
-    response = client.get("/admin/connectors/catalog/slack/configuration")
+    response = client.get("/api/admin/connectors/catalog/slack/configuration")
 
     assert response.status_code == 200
     assert response.json() == slack_configuration_form_definition()
@@ -65,7 +65,7 @@ def test_default_built_in_slack_connector_can_be_configured(
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability_path))
     default_client = TestClient(create_app())
 
-    response = default_client.get("/admin/connectors/catalog/slack/configuration")
+    response = default_client.get("/api/admin/connectors/catalog/slack/configuration")
 
     assert response.status_code == 200
     assert response.json() == slack_configuration_form_definition()
@@ -80,7 +80,7 @@ def test_default_built_in_test_connector_is_available_for_flow_testing(
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability_path))
     default_client = TestClient(create_app())
 
-    response = default_client.get("/admin/connectors/catalog/test/configuration")
+    response = default_client.get("/api/admin/connectors/catalog/test/configuration")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -100,7 +100,7 @@ def test_admin_creates_current_global_configuration_without_reading_back_secret(
     client: TestClient,
 ) -> None:
     response = client.put(
-        "/admin/connectors/catalog/slack/configuration",
+        "/api/admin/connectors/catalog/slack/configuration",
         json={
             "configuration": {
                 "workspace_name": "Acme",
@@ -125,7 +125,7 @@ def test_admin_creates_current_global_configuration_without_reading_back_secret(
 
 def test_admin_updates_current_global_configuration_and_replaces_secret(client: TestClient) -> None:
     client.put(
-        "/admin/connectors/catalog/slack/configuration",
+        "/api/admin/connectors/catalog/slack/configuration",
         json={
             "configuration": {
                 "workspace_name": "Acme",
@@ -136,7 +136,7 @@ def test_admin_updates_current_global_configuration_and_replaces_secret(client: 
     )
 
     response = client.put(
-        "/admin/connectors/catalog/slack/configuration",
+        "/api/admin/connectors/catalog/slack/configuration",
         json={
             "configuration": {
                 "workspace_name": "Acme Europe",
@@ -157,7 +157,7 @@ def test_admin_updates_current_global_configuration_and_replaces_secret(client: 
 
 def test_admin_views_existing_configuration_with_masked_secret(client: TestClient) -> None:
     client.put(
-        "/admin/connectors/catalog/slack/configuration",
+        "/api/admin/connectors/catalog/slack/configuration",
         json={
             "configuration": {
                 "workspace_name": "Acme",
@@ -167,7 +167,7 @@ def test_admin_views_existing_configuration_with_masked_secret(client: TestClien
         },
     )
 
-    response = client.get("/admin/connectors/catalog/slack/configuration")
+    response = client.get("/api/admin/connectors/catalog/slack/configuration")
 
     assert response.status_code == 200
     assert response.json()["configuration"] == {
@@ -182,7 +182,7 @@ def test_admin_updates_non_secret_fields_without_replacing_existing_secret(
     client: TestClient,
 ) -> None:
     client.put(
-        "/admin/connectors/catalog/slack/configuration",
+        "/api/admin/connectors/catalog/slack/configuration",
         json={
             "configuration": {
                 "workspace_name": "Acme",
@@ -193,7 +193,7 @@ def test_admin_updates_non_secret_fields_without_replacing_existing_secret(
     )
 
     response = client.put(
-        "/admin/connectors/catalog/slack/configuration",
+        "/api/admin/connectors/catalog/slack/configuration",
         json={"configuration": {"workspace_name": "Acme Support", "default_channel_id": "C789"}},
     )
 
@@ -227,7 +227,7 @@ def test_admin_sees_schema_validation_errors_without_changing_current_configurat
     field_name: str,
 ) -> None:
     client.put(
-        "/admin/connectors/catalog/slack/configuration",
+        "/api/admin/connectors/catalog/slack/configuration",
         json={
             "configuration": {
                 "workspace_name": "Acme",
@@ -238,9 +238,9 @@ def test_admin_sees_schema_validation_errors_without_changing_current_configurat
     )
 
     response = client.put(
-        "/admin/connectors/catalog/slack/configuration", json={"configuration": payload}
+        "/api/admin/connectors/catalog/slack/configuration", json={"configuration": payload}
     )
-    current_response = client.get("/admin/connectors/catalog/slack/configuration")
+    current_response = client.get("/api/admin/connectors/catalog/slack/configuration")
 
     assert response.status_code == 422
     assert field_name in response.text
@@ -253,7 +253,7 @@ def test_admin_sees_schema_validation_errors_without_changing_current_configurat
 
 def test_admin_cannot_save_configuration_with_invalid_field_data_types(client: TestClient) -> None:
     response = client.put(
-        "/admin/connectors/catalog/slack/configuration",
+        "/api/admin/connectors/catalog/slack/configuration",
         json={
             "configuration": {
                 "workspace_name": 123,
@@ -269,7 +269,7 @@ def test_admin_cannot_save_configuration_with_invalid_field_data_types(client: T
 
 
 def test_admin_cannot_configure_connector_that_is_not_available(client: TestClient) -> None:
-    response = client.get("/admin/connectors/catalog/github/configuration")
+    response = client.get("/api/admin/connectors/catalog/github/configuration")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Connector is not available for configuration"}
@@ -277,7 +277,7 @@ def test_admin_cannot_configure_connector_that_is_not_available(client: TestClie
 
 def test_admin_checks_valid_configuration_without_saving_it(client: TestClient) -> None:
     response = client.post(
-        "/admin/connectors/catalog/slack/configuration/validations",
+        "/api/admin/connectors/catalog/slack/configuration/validations",
         json={
             "configuration": {
                 "workspace_name": "Acme",
@@ -286,7 +286,7 @@ def test_admin_checks_valid_configuration_without_saving_it(client: TestClient) 
             }
         },
     )
-    current_response = client.get("/admin/connectors/catalog/slack/configuration")
+    current_response = client.get("/api/admin/connectors/catalog/slack/configuration")
 
     assert response.status_code == 200
     assert response.json() == {"valid": True, "message": None, "field_messages": {}}
@@ -295,7 +295,7 @@ def test_admin_checks_valid_configuration_without_saving_it(client: TestClient) 
 
 def test_admin_checks_invalid_configuration_without_saving_it(client: TestClient) -> None:
     response = client.post(
-        "/admin/connectors/catalog/slack/configuration/validations",
+        "/api/admin/connectors/catalog/slack/configuration/validations",
         json={
             "configuration": {
                 "workspace_name": "Acme",
@@ -304,7 +304,7 @@ def test_admin_checks_invalid_configuration_without_saving_it(client: TestClient
             }
         },
     )
-    current_response = client.get("/admin/connectors/catalog/slack/configuration")
+    current_response = client.get("/api/admin/connectors/catalog/slack/configuration")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -319,7 +319,7 @@ def test_admin_checks_configuration_with_existing_secret_when_secret_is_omitted(
     client: TestClient,
 ) -> None:
     client.put(
-        "/admin/connectors/catalog/slack/configuration",
+        "/api/admin/connectors/catalog/slack/configuration",
         json={
             "configuration": {
                 "workspace_name": "Acme",
@@ -330,7 +330,7 @@ def test_admin_checks_configuration_with_existing_secret_when_secret_is_omitted(
     )
 
     response = client.post(
-        "/admin/connectors/catalog/slack/configuration/validations",
+        "/api/admin/connectors/catalog/slack/configuration/validations",
         json={"configuration": {"workspace_name": "Acme Support", "default_channel_id": "C789"}},
     )
 
@@ -342,7 +342,7 @@ def test_admin_sees_schema_validation_errors_when_checking_configuration(
     client: TestClient,
 ) -> None:
     response = client.post(
-        "/admin/connectors/catalog/slack/configuration/validations",
+        "/api/admin/connectors/catalog/slack/configuration/validations",
         json={"configuration": {"workspace_name": "Acme", "bot_token": "xoxb-valid"}},
     )
 
@@ -354,7 +354,7 @@ def test_admin_cannot_check_configuration_for_connector_that_is_not_available(
     client: TestClient,
 ) -> None:
     response = client.post(
-        "/admin/connectors/catalog/github/configuration/validations",
+        "/api/admin/connectors/catalog/github/configuration/validations",
         json={
             "configuration": {
                 "workspace_name": "Acme",
@@ -415,7 +415,7 @@ def test_current_global_configuration_is_in_memory_only(
     ]
     first_client = TestClient(create_app(connector_registrations=registrations))
     first_client.put(
-        "/admin/connectors/catalog/slack/configuration",
+        "/api/admin/connectors/catalog/slack/configuration",
         json={
             "configuration": {
                 "workspace_name": "Acme",
@@ -426,7 +426,7 @@ def test_current_global_configuration_is_in_memory_only(
     )
 
     restarted_client = TestClient(create_app(connector_registrations=registrations))
-    response = restarted_client.get("/admin/connectors/catalog/slack/configuration")
+    response = restarted_client.get("/api/admin/connectors/catalog/slack/configuration")
 
     assert response.status_code == 200
     assert response.json()["configuration"] is None

@@ -9,7 +9,7 @@
     type = 'button',
     disabled = false,
     onclick,
-    formaction,
+    'data-operation': operation,
     role,
     title,
     class: className,
@@ -22,7 +22,7 @@
     type?: 'button' | 'submit';
     disabled?: boolean;
     onclick?: MouseEventHandler<HTMLButtonElement>;
-    formaction?: string;
+    'data-operation'?: string;
     role?: HTMLButtonAttributes['role'];
     title?: string;
     class?: string;
@@ -31,7 +31,7 @@
   } = $props();
 </script>
 
-<button class={["admin-shared-button", `admin-shared-button--${variant}`, `admin-shared-button--${size}`, className]} {type} {disabled} {onclick} {formaction} {role} {title} aria-label={ariaLabel} aria-busy={ariaBusy}>
+<button class={["admin-shared-button", `admin-shared-button--${variant}`, `admin-shared-button--${size}`, className]} {type} {disabled} {onclick} data-operation={operation} {role} {title} aria-label={ariaLabel} aria-busy={ariaBusy}>
   {@render children()}
 </button>
 

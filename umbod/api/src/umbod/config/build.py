@@ -88,8 +88,12 @@ def _derived_config_url(operator: OperatorSettings, auth_recipe: str) -> str:
     return ""
 
 
-def _derived_issuer_url(operator: OperatorSettings) -> str:
-    return operator.oidc_issuer_url
+def _derived_issuer_url(operator: OperatorSettings, auth_recipe: str) -> str:
+    if operator.oidc_issuer_url.strip():
+        return operator.oidc_issuer_url
+    if auth_recipe == "auth0" and operator.oidc_domain.strip():
+        return f"https://{operator.oidc_domain}/"
+    return ""
 
 
 def _build_admin_auth(operator: OperatorSettings, auth_recipe: str) -> AdminAuthConfig:
@@ -147,7 +151,7 @@ def _build_oidc(operator: OperatorSettings, auth_recipe: str) -> OidcConfig:
     return OidcConfig(
         provider=_PROVIDER_BY_RECIPE[auth_recipe],
         config_url=_derived_config_url(operator, auth_recipe),
-        issuer_url=_derived_issuer_url(operator),
+        issuer_url=_derived_issuer_url(operator, auth_recipe),
         client_id=operator.oidc_client_id,
         client_secret=operator.oidc_client_secret,
         audience=operator.oidc_audience,

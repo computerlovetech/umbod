@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 
 const controls = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpWorkspace.svelte', 'utf8');
-const route = readFileSync('src/routes/admin/downstream-mcp-connectors/+page.server.ts', 'utf8');
+const route = readFileSync('src/lib/admin/operations/downstream-mcp-connectors.ts', 'utf8');
 const page = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
 const pageRoute = readFileSync('src/routes/admin/downstream-mcp-connectors/+page.svelte', 'utf8');
 const setupModal = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpSetupModal.svelte', 'utf8');
@@ -33,7 +33,7 @@ describe('downstream MCP connector administration', () => {
     expect(openApiToolToggle).toContain('AdminToggle');
     expect(toolToggle).toContain('AdminToggle');
     expect(toolCatalog).toContain('onActivationChange={catalog.setToolActivation}');
-    expect(toolCatalog).toContain('?/saveToolActivations');
+    expect(toolCatalog).toContain('saveToolActivations');
     expect(toolCatalog).toContain('catalog.beginSave()');
     expect(toolCatalog).toContain('catalog.finishSave(');
     expect(controls).toContain('role="alert"');
@@ -61,7 +61,7 @@ describe('downstream MCP connector administration', () => {
   test('shares one create and configure form with the canonical proxy prefix', () => {
     expect(page).not.toContain('name="publicPath"');
     expect(page).toContain('<DownstreamMcpWorkspace');
-    expect(setupModal).toContain("configuring ? '?/configure' : '?/create'");
+    expect(setupModal).toContain("configuring ? 'configure' : 'create'");
     expect(setupModal).toContain('/mcp/proxies/');
     expect(setupModal).not.toContain('Connector ID');
     expect(setupModal).toContain('name="connectorId" value={connector?.connector_id');

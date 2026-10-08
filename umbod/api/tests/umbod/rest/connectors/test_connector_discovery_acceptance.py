@@ -43,7 +43,7 @@ def test_admin_can_discover_builtin_connectors(
         )
     )
 
-    response = client.get("/admin/connectors/catalog")
+    response = client.get("/api/admin/connectors/catalog")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -81,7 +81,7 @@ def test_admin_can_discover_user_supplied_deploy_time_connectors(
         )
     )
 
-    response = client.get("/admin/connectors/catalog")
+    response = client.get("/api/admin/connectors/catalog")
 
     assert response.status_code == 200
     assert response.json()["connectors"] == [
@@ -124,7 +124,7 @@ def test_builtin_and_user_supplied_connectors_appear_in_the_same_product_list(
         )
     )
 
-    response = client.get("/admin/connectors/catalog")
+    response = client.get("/api/admin/connectors/catalog")
 
     assert response.status_code == 200
     assert response.json()["connectors"] == [
@@ -155,7 +155,7 @@ def test_admin_can_tell_when_no_connectors_are_available(
 ) -> None:
     client = TestClient(_ConnectorAppBuilder(tmp_path, monkeypatch).build([], "connectors.json"))
 
-    response = client.get("/admin/connectors/catalog")
+    response = client.get("/api/admin/connectors/catalog")
 
     assert response.status_code == 200
     assert response.json() == {"connectors": []}
@@ -182,7 +182,7 @@ def test_future_connector_metadata_does_not_change_the_basic_connector_list(
         )
     )
 
-    response = client.get("/admin/connectors/catalog")
+    response = client.get("/api/admin/connectors/catalog")
 
     assert response.status_code == 200
     assert response.json()["connectors"] == [
@@ -319,7 +319,7 @@ def test_connector_discovery_does_not_show_operation_permission_status(
         )
     )
 
-    response = client.get("/admin/connectors/catalog")
+    response = client.get("/api/admin/connectors/catalog")
 
     assert response.status_code == 200
     assert "permission_status" not in response.json()["connectors"][0]
@@ -365,7 +365,7 @@ def _slack_connector() -> dict[str, Any]:
 
 
 def _assert_connector_ids(client: TestClient, expected_connector_ids: list[str]) -> None:
-    response = client.get("/admin/connectors/catalog")
+    response = client.get("/api/admin/connectors/catalog")
 
     assert response.status_code == 200
     assert [

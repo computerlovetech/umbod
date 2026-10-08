@@ -224,7 +224,7 @@ async def test_admin_activation_changes_public_tool_discovery_and_stale_invocati
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
     (app, token, context, _publishing_store) = await _build_public_app(tmp_path)
     admin = TestClient(create_app(settings=APISettings.model_validate(context.settings.model_dump()), connector_registrations=[_echo_connector().registration()]))
-    activation_path = '/admin/connectors/catalog/echo/tools/activation'
+    activation_path = '/api/admin/connectors/catalog/echo/tools/activation'
     async with app.router.lifespan_context(app):
         async with Client(_http_transport(app, token)) as client:
             enabled_response = admin.put(activation_path, json={'tools': [{'tool_id': 'echo_message', 'activation_status': 'enabled'}]})
@@ -251,7 +251,7 @@ async def test_admin_ask_policy_requires_agent_confirmation_before_http_invocati
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
     (app, token, context, _publishing_store) = await _build_public_app(tmp_path)
     admin = TestClient(create_app(settings=APISettings.model_validate(context.settings.model_dump()), connector_registrations=[_echo_connector().registration()]))
-    policy_response = admin.put('/admin/connectors/catalog/echo/tools/activation', json={'tools': [{'tool_id': 'echo_message', 'invocation_mode': 'ask', 'expected_policy_revision': 0}]})
+    policy_response = admin.put('/api/admin/connectors/catalog/echo/tools/activation', json={'tools': [{'tool_id': 'echo_message', 'invocation_mode': 'ask', 'expected_policy_revision': 0}]})
     approval_requests: list[str] = []
 
     async def confirmation_handler(message: str, *_args: object) -> dict[str, bool]:
@@ -275,7 +275,7 @@ async def test_admin_changes_observed_ask_policy_to_direct_without_further_elici
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
     (app, token, context, _publishing_store) = await _build_public_app(tmp_path)
     admin = TestClient(create_app(settings=APISettings.model_validate(context.settings.model_dump()), connector_registrations=[_echo_connector().registration()]))
-    activation_path = '/admin/connectors/catalog/echo/tools/activation'
+    activation_path = '/api/admin/connectors/catalog/echo/tools/activation'
     ask_response = admin.put(activation_path, json={'tools': [{'tool_id': 'echo_message', 'invocation_mode': 'ask', 'expected_policy_revision': 0}]})
     approval_requests: list[str] = []
 

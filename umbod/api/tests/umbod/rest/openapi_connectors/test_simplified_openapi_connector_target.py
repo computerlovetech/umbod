@@ -54,7 +54,7 @@ def _document(*operations: tuple[str, str, str, str, str]) -> dict[str, Any]:
 
 def _create_connector(client: TestClient) -> str:
     response = client.post(
-        "/admin/connectors/openapi",
+        "/api/admin/connectors/openapi",
         json={"display_name": "Inventory", "capability_description": "Manage inventory resources"},
     )
     assert response.status_code == 201
@@ -63,14 +63,14 @@ def _create_connector(client: TestClient) -> str:
 
 def _import(client: TestClient, connector_id: str, document: dict[str, Any]) -> None:
     response = client.post(
-        f"/admin/connectors/openapi/{connector_id}/imports",
+        f"/api/admin/connectors/openapi/{connector_id}/imports",
         json={"document": document, "approved_hosts": ["api.example.com"]},
     )
     assert response.status_code == 201
 
 
 def _tools(client: TestClient, connector_id: str) -> list[dict[str, Any]]:
-    response = client.get(f"/admin/connectors/openapi/{connector_id}/tools")
+    response = client.get(f"/api/admin/connectors/openapi/{connector_id}/tools")
     assert response.status_code == 200
     return list(response.json()["tools"])
 
@@ -79,7 +79,7 @@ def _set_activation(
     client: TestClient, connector_id: str, operation_id: str, enabled: bool
 ) -> None:
     response = client.put(
-        f"/admin/connectors/openapi/{connector_id}/tools/activation",
+        f"/api/admin/connectors/openapi/{connector_id}/tools/activation",
         json={
             "tools": [
                 {
@@ -107,7 +107,7 @@ def _enable_operations(
 
 
 def _set_publication(client: TestClient, connector_id: str, published: bool) -> None:
-    path = f"/admin/connectors/openapi/{connector_id}/publication"
+    path = f"/api/admin/connectors/openapi/{connector_id}/publication"
     response = client.put(path) if published else client.delete(path)
     assert response.status_code == 200
 
@@ -166,7 +166,7 @@ def test_reimport_with_connector_permission_reconciles_catalog_and_preserves_gra
     _import(client, connector_id, first)
     _enable_operations(client, connector_id, ("stable", "removed"))
     grant = client.put(
-        "/admin/mcp-permissions/groups/engineering/permissions",
+        "/api/admin/mcp-permissions/groups/engineering/permissions",
         json={
             "connectors": [{"connector_id": connector_id, "permission_status": "enabled"}],
             "capabilities": [],
@@ -207,7 +207,7 @@ def test_reimport_with_connector_permission_reconciles_catalog_and_preserves_gra
         "stable": "enabled",
         "removed": "disabled",
     }
-    group = client.get("/admin/mcp-permissions/groups/engineering")
+    group = client.get("/api/admin/mcp-permissions/groups/engineering")
     assert group.status_code == 200
     assert group.json()["connector_ids"] == [connector_id]
 
@@ -219,7 +219,7 @@ def test_permission_conflict_rejects_removal_without_changing_current_catalog(
     original = _document(("readItems", "get", "/items", "Read", "Reads items"))
     _import(client, connector_id, original)
     grant = client.put(
-        "/admin/mcp-permissions/groups/engineering/permissions",
+        "/api/admin/mcp-permissions/groups/engineering/permissions",
         json={
             "connectors": [],
             "capabilities": [
@@ -235,7 +235,7 @@ def test_permission_conflict_rejects_removal_without_changing_current_catalog(
     assert grant.status_code == 200
 
     conflict = client.post(
-        f"/admin/connectors/openapi/{connector_id}/imports",
+        f"/api/admin/connectors/openapi/{connector_id}/imports",
         json={
             "document": _document(("writeItems", "post", "/items", "Write", "Writes items")),
             "approved_hosts": ["api.example.com"],
@@ -252,7 +252,7 @@ def test_failed_import_leaves_current_catalog_and_activation_unchanged(client: T
     _set_activation(client, connector_id, "readItems", True)
 
     failed = client.post(
-        f"/admin/connectors/openapi/{connector_id}/imports",
+        f"/api/admin/connectors/openapi/{connector_id}/imports",
         json={"document": {"openapi": "2.0"}, "approved_hosts": ["api.example.com"]},
     )
 
@@ -284,7 +284,7 @@ def test_permission_availability_requires_publication_activation_and_grant(
         _set_publication(client, connector_id, True)
     if case.permitted:
         response = client.put(
-            "/admin/mcp-permissions/groups/engineering/permissions",
+            "/api/admin/mcp-permissions/groups/engineering/permissions",
             json={
                 "connectors": [],
                 "capabilities": [
@@ -300,7 +300,7 @@ def test_permission_availability_requires_publication_activation_and_grant(
         assert response.status_code == 200
 
     targets = client.get(
-        "/admin/mcp-permissions/assignable-targets",
+        "/api/admin/mcp-permissions/assignable-targets",
         headers={"x-simulated-groups": "engineering"},
     )
 

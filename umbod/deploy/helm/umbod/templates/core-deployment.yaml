@@ -125,6 +125,8 @@ spec:
               value: {{ $.Values.config.authentication.oidc.clientId | quote }}
             - name: UMBOD_OIDC_AUDIENCE
               value: {{ $.Values.config.authentication.oidc.audience | quote }}
+            - name: UMBOD_OIDC_ISSUER_URL
+              value: {{ $.Values.config.authentication.oidc.issuerUrl | quote }}
             - name: UMBOD_OIDC_REQUIRED_SCOPES
               value: {{ $.Values.config.authentication.oidc.requiredScopes | quote }}
             - name: UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH

@@ -45,7 +45,7 @@ class FastApiAdminApiBoundary:
         headers = {}
         if request is not None and request.token is not None:
             headers[request.header_name or self.configured_header_name] = request.token
-        response = self.client.get("/admin/connectors/catalog/slack/configuration", headers=headers)
+        response = self.client.get("/api/admin/connectors/catalog/slack/configuration", headers=headers)
         return response.status_code
 
     def get_system_health(self) -> int:
@@ -219,10 +219,10 @@ def simulation_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AdminApiB
             AdminRouteScenario(
                 "full_auth_api",
                 "admin_connector_configuration",
-                401,
+                200,
                 token_kind="authorization_header_admin_group",
             ),
-            id="admin_route_authorization_uses_configured_jwt_header_only",
+            id="admin_route_accepts_authorization_when_configured_header_is_absent",
         ),
         pytest.param(
             AdminRouteScenario("full_auth_api", "system_health", 200),

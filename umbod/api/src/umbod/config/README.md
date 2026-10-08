@@ -18,6 +18,8 @@
 
 **Read when working with:** Building internal application configuration from operator settings.
 
+OIDC issuer derivation preserves an explicit `UMBOD_OIDC_ISSUER_URL`. Otherwise Auth0 derives `https://{UMBOD_OIDC_DOMAIN}/`, with the trailing slash matching its discovery issuer. A custom discovery URL without an Auth0 domain requires an explicit issuer in production. Entra and Google require an explicit production issuer: tenant/token-version and issuer spelling must match the JWT exactly, rather than being guessed from the provider recipe. All production OIDC recipes require `UMBOD_OIDC_AUDIENCE`; missing audience or an issuer that cannot be derived is rejected during operator configuration validation. Local authentication modes are unchanged.
+
 ### `secret_derivation.py`
 
 **Read when working with:** Secret generation and resolution.

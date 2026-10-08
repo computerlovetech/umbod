@@ -63,4 +63,32 @@ if helm lint --strict "${chart_directory}" -f "${invalid_duplicate_connector_val
 fi
 printf '%s\n' 'plugins:' '  availableConnectorIds: []' '  image:' '    repository: example.invalid/plugins' '    tag: immutable' > "${plugin_image_empty_availability_values}"
 helm lint --strict "${chart_directory}" -f "${plugin_image_empty_availability_values}" >/dev/null
+for obsolete_key in bodySizeLimit privateAuthTokenHeader env; do
+  printf '%s\n' 'frontend:' "  ${obsolete_key}: obsolete" > "${workspace_directory}/obsolete-frontend.yaml"
+  if helm lint --strict "${chart_directory}" -f "${workspace_directory}/obsolete-frontend.yaml" >/dev/null 2>&1; then
+    printf '%s\n' "Obsolete frontend setting ${obsolete_key} must fail schema validation" >&2
+    exit 1
+  fi
+done
+printf '%s\n' 'frontend:' '  port: 8080' > "${workspace_directory}/invalid-frontend-port.yaml"
+if helm lint --strict "${chart_directory}" -f "${workspace_directory}/invalid-frontend-port.yaml" >/dev/null 2>&1; then
+  printf '%s\n' 'Static frontend must listen on port 3000' >&2
+  exit 1
+fi
+printf '%s\n' 'ingress:' '  paths:' '    api: /backend' > "${workspace_directory}/invalid-api-path.yaml"
+if helm lint --strict "${chart_directory}" -f "${workspace_directory}/invalid-api-path.yaml" >/dev/null 2>&1; then
+  printf '%s\n' 'Browser API ingress must retain /api' >&2
+  exit 1
+fi
+helm template umbod "${chart_directory}" --set frontend.apiBaseUrl=https://api.example.invalid/api > "${workspace_directory}/public-api-override.yaml"
+if ! grep -q 'value: "https://api.example.invalid/api"' "${workspace_directory}/public-api-override.yaml"; then
+  printf '%s\n' 'Public browser API override must render unchanged' >&2
+  exit 1
+fi
+if helm lint --strict "${chart_directory}" --set config.authentication.oidc.issuerUrl=not-a-url >/dev/null 2>&1; then
+  printf '%s\n' 'OIDC issuer override must be an HTTPS URL' >&2
+  exit 1
+fi
+helm template umbod "${chart_directory}" --set config.authentication.oidc.issuerUrl=https://issuer.example.invalid/ > "${workspace_directory}/issuer-override.yaml"
+grep -q 'value: "https://issuer.example.invalid/"' "${workspace_directory}/issuer-override.yaml"
 helm package "${chart_directory}" --destination "${workspace_directory}"

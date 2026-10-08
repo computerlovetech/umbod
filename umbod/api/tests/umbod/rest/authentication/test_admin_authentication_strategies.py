@@ -36,8 +36,15 @@ class AdminAuthenticationSettings:
 
 
 @dataclass(frozen=True)
+class OidcSettings:
+    issuer_url: str = "https://identity.example.com/"
+    audience: str = "umbod-api"
+
+
+@dataclass(frozen=True)
 class APISettings:
     admin_authentication: AdminAuthenticationSettings
+    oidc: OidcSettings = OidcSettings()
 
 
 class FakeAuthorizationService:
@@ -68,7 +75,7 @@ def _create_request(headers: dict[str, str] | None = None) -> Request:
     raw_headers = []
     for name, value in (headers or {}).items():
         raw_headers.append((name.lower().encode(), value.encode()))
-    return Request({"type": "http", "method": "GET", "path": "/admin", "headers": raw_headers})
+    return Request({"type": "http", "method": "GET", "path": "/api/admin", "headers": raw_headers})
 
 
 @pytest.mark.anyio
@@ -76,7 +83,7 @@ async def test_jwt_strategy_verifies_empty_token_when_header_is_missing() -> Non
     service = FakeAuthorizationService(False, False)
     strategy = JwtAdminAuthenticationStrategy("X-Forwarded-Access-Token", service)
 
-    response = await strategy.authenticate(_create_request({"Authorization": "token"}))
+    response = await strategy.authenticate(_create_request())
 
     assert isinstance(response, Response)
     assert response.status_code == 403

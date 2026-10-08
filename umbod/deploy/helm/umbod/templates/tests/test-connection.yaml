@@ -20,7 +20,15 @@ spec:
         - |
           curl --fail --silent --show-error "http://{{ include "umbod.fullname" . }}-api:{{ .Values.services.api.port }}/system/health" | grep -q '"service":"umbod-api"'
           curl --fail --silent --show-error "http://{{ include "umbod.fullname" . }}-mcp:{{ .Values.services.mcp.port }}/system/health" | grep -q '"status":"ok"'
-          curl --fail --silent --show-error --header 'Host: frontend' "http://{{ include "umbod.fullname" . }}-frontend:{{ .Values.services.frontend.port }}/system/health" | grep -q '"status":"ok"'
+          frontend="http://{{ include "umbod.fullname" . }}-frontend:{{ .Values.services.frontend.port }}"
+          curl --fail --silent --show-error "${frontend}/system/health" | grep -q '"service":"umbod-frontend"'
+          curl --fail --silent --show-error "${frontend}/app-config.json" | grep -q '"apiBaseUrl"'
+          curl --fail --silent --show-error --dump-header /tmp/config-headers "${frontend}/app-config.json" > /dev/null
+          grep -qi 'cache-control: no-store' /tmp/config-headers
+          curl --fail --silent --show-error "${frontend}/admin/connectors" | grep -qi '<html'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' "${frontend}/_app/missing.js")" = 404
+          curl --fail --silent --show-error "${frontend}/api/system/health" | grep -q '"service":"umbod-api"'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' "${frontend}/api/not-a-route")" = 404
       securityContext:
         allowPrivilegeEscalation: false
         capabilities:

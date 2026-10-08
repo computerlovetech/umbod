@@ -32,6 +32,10 @@ from umbod.core.connectors.openapi.management import (
     OpenApiConnectorCatalog,
     OpenApiConnectorManagementService,
 )
+from umbod.core.connectors.openapi.management.setup_ports import (
+    OpenApiConnectorSetupPort, OpenApiSetupCleanupFailed, OpenApiSetupFailed,
+    OpenApiSetupInvalidRequest, SetupOpenApiConnector,
+)
 from umbod.core.connectors.openapi.stores import CurrentOpenApiCatalogHeaderReader
 from umbod.core.connectors.openapi.catalog import (
     OpenApiConnectorToolCatalog,
@@ -54,6 +58,8 @@ from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.connectors.openapi.dependencies import (
     get_openapi_candidate_importer,
+    get_openapi_connector_setup_port,
+    get_openapi_setup_request,
     get_openapi_configuration_port,
     get_openapi_connector_management_service,
     get_openapi_connector_store,
@@ -67,6 +73,7 @@ from umbod.rest.connectors.openapi.file_import import (
 )
 from umbod.rest.connectors.openapi.schemas import (
     CreateOpenApiConnectorRequest,
+    SetupOpenApiConnectorRequest,
     ImportOpenApiCatalogRequest,
     OpenApiCatalogImportResponse,
     OpenApiConfigurationRequest,
@@ -230,6 +237,29 @@ async def list_connectors(
             )
         )
     return OpenApiConnectorListResponse(connectors=tuple(summaries))
+
+
+@router.post("/setup", response_model=OpenApiConnectorResponse, status_code=status.HTTP_201_CREATED)
+async def setup_connector(
+    request: Annotated[SetupOpenApiConnectorRequest, Depends(get_openapi_setup_request)],
+    setup: Annotated[OpenApiConnectorSetupPort, Depends(get_openapi_connector_setup_port)],
+    publishing_store: PublishingStore,
+    catalog_reader: CatalogReader,
+    override_store: OverrideStore,
+) -> OpenApiConnectorResponse:
+    try:
+        connector = await setup.setup(SetupOpenApiConnector(**request.model_dump()))
+    except OpenApiSetupInvalidRequest as error:
+        raise HTTPException(status_code=422, detail={"code": "openapi_setup_invalid_request"}) from error
+    except OpenApiSetupCleanupFailed as error:
+        raise HTTPException(status_code=500, detail={"code": "openapi_setup_cleanup_failed", "connector_id": error.connector_id}) from error
+    except OpenApiSetupFailed as error:
+        raise HTTPException(status_code=500, detail={"code": "openapi_setup_failed"}) from error
+    return await _connector_response(
+        connector, publishing_store, catalog_reader,
+        await catalog_reader.current_catalog_connector_ids((connector.connector_id,)),
+        override_store,
+    )
 
 
 @router.get("/{connector_id}", response_model=OpenApiConnectorResponse)

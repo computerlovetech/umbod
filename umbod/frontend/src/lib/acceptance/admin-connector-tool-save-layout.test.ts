@@ -12,7 +12,7 @@ describe('connector tool save visibility acceptance', () => {
     expect(nativeCatalog).toContain('<ToolSaveBar');
     expect(downstreamMcpCatalog).toContain('<ToolSaveBar');
     expect(openApiCatalog).toContain('<ToolSaveBar');
-    expect(openApiCatalog).toContain('?/saveToolActivations');
+    expect(openApiCatalog).toContain('saveToolActivations');
     expect(openApiCatalog).toContain("catalog.pending ? 'Saving tool changes' : catalog.dirty ? 'Unsaved tool changes' : 'All tool changes saved'");
     expect(openApiCatalog).toContain('disabled={!catalog.dirty || catalog.pending}');
     expect(saveBar).not.toContain('position: sticky');

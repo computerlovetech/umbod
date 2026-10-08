@@ -1,10 +1,7 @@
-import {
-  connectorPermissionTargetSchema,
-  groupPermissionSetSchema,
-  type ConnectorPermissionTarget,
-  type GroupPermissionSet
-} from '$lib/admin/group-permissions';
-import { BrowserRequestError, fetchResponse } from '$lib/admin/infrastructure/browser-request';
+import { type ConnectorPermissionTarget, type GroupPermissionSet } from '$lib/admin/group-permissions';
+import { browserRequest } from '$lib/admin/infrastructure/browser-request';
+import { AdminApi } from '$lib/admin/infrastructure/admin-api';
+import { browserTransport } from '$lib/admin/infrastructure/transport';
 
 export interface GroupPermissionsLoader {
   loadGroup(groupId: string, signal?: AbortSignal): Promise<GroupPermissionSet>;
@@ -13,15 +10,16 @@ export interface GroupPermissionsLoader {
 
 export class BrowserGroupPermissionsLoader implements GroupPermissionsLoader {
   async loadGroup(groupId: string, signal?: AbortSignal): Promise<GroupPermissionSet> {
-    const response = await fetchResponse(fetch, `/admin/group-permissions/data/groups/${encodeURIComponent(groupId)}`, { signal });
-    if (!response.ok) throw new BrowserRequestError(response.status);
-    return groupPermissionSetSchema.parse(await response.json());
+    return browserRequest(() => this.api(signal).groupPermissions.permissions.get(groupId));
   }
 
   async loadAssignableTargets(signal?: AbortSignal): Promise<ConnectorPermissionTarget[]> {
-    const response = await fetchResponse(fetch, '/admin/group-permissions/data/assignable-targets', { signal });
-    if (!response.ok) throw new BrowserRequestError(response.status);
-    return connectorPermissionTargetSchema.array().parse(await response.json());
+    return browserRequest(() => this.api(signal).groupPermissions.permissions.listAssignableTargets());
+  }
+
+  private api(signal?: AbortSignal): AdminApi {
+    const transport = browserTransport();
+    return new AdminApi({ request: (options) => transport.request({ ...options, signal }) });
   }
 }
 

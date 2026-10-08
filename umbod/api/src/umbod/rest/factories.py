@@ -19,7 +19,8 @@ from contextlib import AbstractAsyncContextManager
 from functools import cached_property
 from typing import Protocol
 from umbod_sdk.connectors.discovery import load_connector_plugins
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, FastAPI, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from umbod.core.messaging import DatabaseEventStream
 from messaging.in_memory import InMemoryEventStreamFactory
@@ -138,8 +139,17 @@ class SubApiAppFactory:
         self.router = router
 
     def create(self) -> FastAPI:
-        sub_app = FastAPI(title=self.title, version='0.0.1', docs_url='/docs', openapi_url='/openapi.json')
+        sub_app = FastAPI(title=self.title, version='0.0.1', docs_url='/docs', openapi_url='/openapi.json', root_path_in_servers=False)
         sub_app.include_router(self.router)
+        sub_app.router.routes = [route for route in sub_app.router.routes if getattr(route, 'path', '') != '/openapi.json']
+
+        async def mounted_openapi(request: Request) -> JSONResponse:
+            root_path = request.scope.get('root_path', '').rstrip('/')
+            schema = dict(sub_app.openapi())
+            schema['servers'] = [{'url': root_path or '/'}]
+            return JSONResponse(schema)
+
+        sub_app.add_route('/openapi.json', mounted_openapi, include_in_schema=False)
         return sub_app
 
 class ConnectorApiDependencyFactories:

@@ -26,7 +26,7 @@ def admin_client(
 def test_get_instance_configuration_returns_running_effective_config(
     admin_client: TestClient,
 ) -> None:
-    response = admin_client.get("/admin/instance-configuration")
+    response = admin_client.get("/api/admin/instance-configuration")
 
     assert response.status_code == 200
     entries = {
@@ -48,7 +48,7 @@ def test_instance_configuration_has_no_mutation_route(
     admin_client: TestClient,
     method: str,
 ) -> None:
-    response = admin_client.request(method, "/admin/instance-configuration")
+    response = admin_client.request(method, "/api/admin/instance-configuration")
 
     assert response.status_code == 405
 
@@ -70,7 +70,7 @@ def test_instance_configuration_uses_admin_authorization_policy(
     settings = AppConfig(admin_authentication=authentication)
 
     with TestClient(create_app(settings=settings)) as client:
-        response = client.get("/admin/instance-configuration")
+        response = client.get("/api/admin/instance-configuration")
 
     assert response.status_code == expected_status
 

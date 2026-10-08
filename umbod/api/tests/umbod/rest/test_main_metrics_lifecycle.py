@@ -36,7 +36,7 @@ class FailingMetricsServer(RecordingMetricsServer):
 
 def _admin_app(app: FastAPI) -> FastAPI:
     for route in app.routes:
-        if getattr(route, 'path', None) == '/admin':
+        if getattr(route, 'path', None) == '/api/admin':
             return route.app
     raise AssertionError('admin application is not mounted')
 

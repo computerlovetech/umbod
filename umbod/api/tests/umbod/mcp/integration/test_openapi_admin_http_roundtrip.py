@@ -98,13 +98,13 @@ async def test_admin_openapi_connector_roundtrips_through_public_mcp_http(tmp_pa
     token = jwt.encode({'sub': 'engineer@example.test', 'email': 'engineer@example.test', 'groups': ['engineering']}, key='', algorithm='none')
     settings = _settings(database_path, token)
     admin = TestClient(create_app(settings=APISettings.model_validate(settings.model_dump()), connector_registrations=[]))
-    created = admin.post('/admin/connectors/openapi', json={'display_name': 'Inventory', 'capability_description': 'Read inventory'})
+    created = admin.post('/api/admin/connectors/openapi', json={'display_name': 'Inventory', 'capability_description': 'Read inventory'})
     assert created.status_code == 201
     connector_id = created.json()['connector_id']
-    imported = admin.post(f'/admin/connectors/openapi/{connector_id}/imports', json={'document': _document(), 'approved_hosts': ['inventory.example.test']})
-    configured = admin.put(f'/admin/connectors/openapi/{connector_id}/configuration', json={'bearer_token': bearer_secret})
-    published = admin.put(f'/admin/connectors/openapi/{connector_id}/publication')
-    activation_path = f'/admin/connectors/openapi/{connector_id}/tools/activation'
+    imported = admin.post(f'/api/admin/connectors/openapi/{connector_id}/imports', json={'document': _document(), 'approved_hosts': ['inventory.example.test']})
+    configured = admin.put(f'/api/admin/connectors/openapi/{connector_id}/configuration', json={'bearer_token': bearer_secret})
+    published = admin.put(f'/api/admin/connectors/openapi/{connector_id}/publication')
+    activation_path = f'/api/admin/connectors/openapi/{connector_id}/tools/activation'
     enabled = admin.put(activation_path, json={'tools': [{'tool_id': 'getItem', 'activation_status': 'enabled'}]})
     assert imported.status_code == 201
     assert configured.status_code == 200

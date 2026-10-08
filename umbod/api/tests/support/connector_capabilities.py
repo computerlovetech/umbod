@@ -20,11 +20,11 @@ class ConnectorCapabilityAdminDriver:
     def programmed_catalog(
         self, connector_id: str, capability_kind: CapabilityKind
     ) -> CapabilityCatalogResponse:
-        response = self._client.get(f"/admin/connectors/catalog/{connector_id}/{capability_kind}")
+        response = self._client.get(f"/api/admin/connectors/catalog/{connector_id}/{capability_kind}")
         return CapabilityCatalogResponse(response.status_code, response.json())
 
     def proxied_catalog(
         self, connector_id: str, capability_kind: CapabilityKind
     ) -> CapabilityCatalogResponse:
-        response = self._client.get(f"/admin/connectors/mcp/{connector_id}/{capability_kind}")
+        response = self._client.get(f"/api/admin/connectors/mcp/{connector_id}/{capability_kind}")
         return CapabilityCatalogResponse(response.status_code, response.json())

@@ -74,7 +74,7 @@ def test_auth0_recipe_derives_discovery_and_jwks(monkeypatch: MonkeyPatch) -> No
     assert config.mcp.auth_mode == "oidc"
     assert config.oidc.provider == "auth0"
     assert config.oidc.config_url == "https://example.eu.auth0.com/.well-known/openid-configuration"
-    assert config.oidc.issuer_url == ""
+    assert config.oidc.issuer_url == "https://example.eu.auth0.com/"
     assert config.admin_authentication.mode == "jwt"
     assert config.admin_authentication.environment == "production"
     assert (

@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
+  import { browserSubmit } from '$lib/admin/operations/browser-submit';
   import { page } from '$app/state';
-  import type { SubmitFunction } from '@sveltejs/kit';
+  import type { BrowserSubmitFunction as SubmitFunction } from '$lib/admin/operations/browser-submit';
   import { parseConnectorCapability } from '$lib/admin/connector-capabilities';
   import type { DownstreamMcpConnector, DownstreamMcpConnectorSummary, DownstreamMcpToolList } from '$lib/admin/downstream-mcp-connectors';
   import { emptyPromptCatalog, emptyResourceCatalog, type PromptCatalog as PromptCatalogData, type ResourceCatalog as ResourceCatalogData } from '$lib/admin/capability-catalogs';
@@ -56,11 +56,13 @@
   }
 
   function mutationSubmit(action: 'refresh' | 'delete', connectorName: string): SubmitFunction {
-    return () => {
+    return ({ onComplete }) => {
+      onComplete(state.finishSubmit);
       if (action === 'delete') state.beginSubmit();
       return async ({ result, update }) => {
         try {
           if (result.type === 'redirect') {
+            if (action === 'delete') state.close();
             toast.success(action === 'refresh' ? `Refreshed discovery for ${connectorName}` : `${connectorName} deleted`);
           } else if (result.type === 'failure') {
             if (!isRecord(result.data) || !['failed', 'network', 'stale', 'conflict', 'authentication', 'invalid', 'unhealthy'].includes(String(result.data.status)) || typeof result.data.message !== 'string') {
@@ -92,7 +94,7 @@
   oncancel={state.cancelPublication}
 />
 {#if confirmation && selected}
-  <div class="backdrop" role="presentation"><div class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"><h2 id="confirm-title">Delete connector?</h2><p>This permanently removes the connector and its discovered catalog.</p><form method="POST" action={`?/${state.modal}`} use:enhance={mutationSubmit('delete', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id} /><footer><Button variant="secondary" onclick={state.close}>Cancel</Button><Button type="submit" variant="danger" disabled={state.submitting}>{state.submitting ? 'Working…' : 'Confirm'}</Button></footer></form></div></div>
+  <div class="backdrop" role="presentation"><div class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"><h2 id="confirm-title">Delete connector?</h2><p>This permanently removes the connector and its discovered catalog.</p><form method="POST" data-operation={state.modal} use:browserSubmit={mutationSubmit('delete', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id} /><footer><Button variant="secondary" onclick={state.close}>Cancel</Button><Button type="submit" variant="danger" disabled={state.submitting}>{state.submitting ? 'Working…' : 'Confirm'}</Button></footer></form></div></div>
 {/if}
 {#if form?.message && (form.status === 'stale' || form.status === 'conflict' || form.status === 'authentication' || form.status === 'invalid')}<p class="feedback" role="alert">{form.message}</p>{/if}
 {#if connectors.length && selected}
@@ -103,7 +105,7 @@
     <span class="connector-meta">{item.connector.health.status} · {item.connector.publication_status}</span>
    {/snippet}
    {#snippet actions(item)}
-    {#if item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}<button role="menuitem" type="button" onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" action="?/refresh" use:enhance={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem">Refresh discovery</button></form><ConnectorPublicationMenuAction connectorId={selected.connector_id} connectorName={selected.display_name} action={selected.publication_status === 'published' ? 'unpublish' : 'publish'} role="menuitem" onrequest={requestPublicationConfirmation} /><button role="menuitem" class="danger-text" type="button" onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/snippet}</AdminSidebarActionMenu>{/if}
+    {#if item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}<button role="menuitem" type="button" onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem">Refresh discovery</button></form><ConnectorPublicationMenuAction connectorId={selected.connector_id} connectorName={selected.display_name} action={selected.publication_status === 'published' ? 'unpublish' : 'publish'} role="menuitem" onrequest={requestPublicationConfirmation} /><button role="menuitem" class="danger-text" type="button" onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/snippet}</AdminSidebarActionMenu>{/if}
    {/snippet}
   </ConnectorSidebarList>
  {/snippet}

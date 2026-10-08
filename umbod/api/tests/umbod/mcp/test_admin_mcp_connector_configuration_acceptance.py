@@ -191,7 +191,7 @@ async def create_journey(
         )
     )
     response = admin.post(
-        "/admin/connectors/openapi",
+        "/api/admin/connectors/openapi",
         json={"display_name": "Acceptance inventory", "capability_description": "Read inventory"},
     )
     assert response.status_code == 201
@@ -211,17 +211,17 @@ async def create_journey(
         },
     }
     imported = admin.post(
-        f"/admin/connectors/openapi/{connector.connector_id}/imports",
+        f"/api/admin/connectors/openapi/{connector.connector_id}/imports",
         json={"document": document, "approved_hosts": ["inventory.example.test"]},
     )
     assert imported.status_code == 201
     configured = admin.put(
-        f"/admin/connectors/openapi/{connector.connector_id}/configuration",
+        f"/api/admin/connectors/openapi/{connector.connector_id}/configuration",
         json={"authentication_type": "bearer", "bearer_token": "acceptance-secret-token"},
     )
     assert configured.status_code == 200
     activation = admin.put(
-        f"/admin/connectors/openapi/{connector.connector_id}/tools/activation",
+        f"/api/admin/connectors/openapi/{connector.connector_id}/tools/activation",
         json={
             "tools": [
                 {
@@ -235,13 +235,13 @@ async def create_journey(
     )
     assert activation.status_code == 200
     description = admin.put(
-        f"/admin/connector-capability-descriptions/openapi/{connector.connector_id}",
+        f"/api/admin/connector-capability-descriptions/openapi/{connector.connector_id}",
         json={"action": "set", "description": "Custom inventory", "expected_revision": 0},
     )
     assert description.status_code == 200
-    assert admin.post("/admin/mcp-permissions/groups/engineering").status_code == 200
+    assert admin.post("/api/admin/mcp-permissions/groups/engineering").status_code == 200
     permissions = admin.put(
-        "/admin/mcp-permissions/groups/engineering/permissions",
+        "/api/admin/mcp-permissions/groups/engineering/permissions",
         json={
             "connectors": [
                 {"connector_id": connector.connector_id, "permission_status": "enabled"}
@@ -258,18 +258,18 @@ async def create_journey(
     )
     assert permissions.status_code == 200
     duplicate_response = admin.post(
-        "/admin/connectors/openapi",
+        "/api/admin/connectors/openapi",
         json={"display_name": "Second inventory", "capability_description": "Read inventory"},
     )
     assert duplicate_response.status_code == 201
     duplicate_connector = ConnectorReference("openapi", duplicate_response.json()["connector_id"])
     duplicate_import = admin.post(
-        f"/admin/connectors/openapi/{duplicate_connector.connector_id}/imports",
+        f"/api/admin/connectors/openapi/{duplicate_connector.connector_id}/imports",
         json={"document": document, "approved_hosts": ["inventory.example.test"]},
     )
     assert duplicate_import.status_code == 201
     duplicate_activation = admin.put(
-        f"/admin/connectors/openapi/{duplicate_connector.connector_id}/tools/activation",
+        f"/api/admin/connectors/openapi/{duplicate_connector.connector_id}/tools/activation",
         json={
             "tools": [
                 {

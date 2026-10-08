@@ -53,6 +53,16 @@ def _validate_oidc_recipe(operator: OperatorSettings, auth_recipe: str) -> None:
             raise ValueError(
                 "UMBOD_OIDC_REQUIRED_SCOPES is required for UMBOD_AUTH=entra"
             )
+    if operator.profile == "production":
+        if not operator.oidc_audience.strip():
+            raise ValueError(
+                f"UMBOD_OIDC_AUDIENCE is required for production UMBOD_AUTH={auth_recipe}"
+            )
+        issuer_derivable = auth_recipe == "auth0" and bool(operator.oidc_domain.strip())
+        if not operator.oidc_issuer_url.strip() and not issuer_derivable:
+            raise ValueError(
+                f"UMBOD_OIDC_ISSUER_URL is required for production UMBOD_AUTH={auth_recipe} when the issuer cannot be derived"
+            )
 
 
 def validate_operator(operator: OperatorSettings, auth_recipe: str) -> None:

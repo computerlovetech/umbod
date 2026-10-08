@@ -1,9 +1,7 @@
-import {
-  importOpenApiCatalogUrlRequestSchema,
-  normalizeToolNamePrefix,
-  openApiConfigurationResponseSchema
-} from '$lib/admin/openapi-connectors';
+import { importOpenApiCatalogUrlRequestSchema, normalizeToolNamePrefix } from '$lib/admin/openapi-connectors';
 import type { ToastApi } from '$lib/components/feedback';
+import { adminApi } from '$lib/admin/infrastructure/admin-api';
+import { isOperationalError } from '$lib/admin/infrastructure/transport';
 
 export type OpenApiSetupMode = 'create' | 'configure';
 export type OpenApiAuthenticationType = 'none' | 'bearer';
@@ -24,6 +22,7 @@ export class OpenApiConnectorSetupState {
   configuredBearer = $state(false);
   submitting = $state(false);
   message = $state('');
+  setupBlocked = $state(false);
   private returnFocus: HTMLElement | null = null;
   private toolNamePrefixEdited = false;
 
@@ -34,6 +33,7 @@ export class OpenApiConnectorSetupState {
 
   showCreate = (trigger: HTMLElement): void => {
     this.mode = 'create';
+    this.setupBlocked = false;
     this.connectorId = '';
     this.displayName = '';
     this.toolNamePrefix = 'connector';
@@ -50,18 +50,14 @@ export class OpenApiConnectorSetupState {
   };
 
   showConfigure = async (trigger: HTMLElement, connectorId: string, displayName: string, toolNamePrefix: string, capabilityDescription: string): Promise<void> => {
-    let response: Response;
+    let configuration;
     try {
-      response = await this.request(`/admin/openapi-connectors/${encodeURIComponent(connectorId)}/configuration`);
-    } catch {
+      configuration = await adminApi(this.request).openApiConnectors.connectors.getConfiguration(connectorId);
+    } catch (cause) {
+      if (!isOperationalError(cause)) throw cause;
       this.toast?.error('Bearer configuration could not be loaded. Try again.');
       return;
     }
-    if (!response.ok) {
-      this.toast?.error('Bearer configuration could not be loaded. Try again.');
-      return;
-    }
-    const configuration = openApiConfigurationResponseSchema.parse(await response.json());
     const configuredBearer = configuration.authentication_type === 'bearer' && configuration.configured;
     this.mode = 'configure';
     this.connectorId = connectorId;
@@ -183,6 +179,11 @@ export class OpenApiConnectorSetupState {
 
   completeSubmit = (result: unknown): void => {
     this.submitting = false;
+    if (typeof result === 'object' && result !== null && 'type' in result && result.type === 'redirect') {
+      this.close();
+      this.toast?.success(this.mode === 'create' ? 'OpenAPI connector added.' : 'OpenAPI connector configuration saved.');
+      return;
+    }
     if (typeof result !== 'object' || result === null || !('data' in result)) return;
     const data = result.data;
     if (typeof data !== 'object' || data === null) return;
@@ -193,6 +194,8 @@ export class OpenApiConnectorSetupState {
       return;
     }
     if (status === 'warning') {
+      this.setupBlocked = true;
+      this.message = message;
       this.toast?.warning(message || 'The operation completed with a warning.');
       return;
     }

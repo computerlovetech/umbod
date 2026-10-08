@@ -50,7 +50,7 @@ def test_system_runtime_state_list_returns_raw_configuration_publication_and_ava
     client: TestClient,
 ) -> None:
     client.put(
-        "/admin/connectors/catalog/slack/configuration",
+        "/api/admin/connectors/catalog/slack/configuration",
         json={
             "configuration": {
                 "workspace_name": "Acme",
@@ -59,7 +59,7 @@ def test_system_runtime_state_list_returns_raw_configuration_publication_and_ava
             }
         },
     )
-    client.put("/admin/connectors/catalog/slack/publication")
+    client.put("/api/admin/connectors/catalog/slack/publication")
 
     response = client.get("/system/connectors/runtime-state")
 
@@ -87,7 +87,7 @@ def test_system_runtime_state_list_returns_raw_configuration_publication_and_ava
 
 def test_system_runtime_state_single_returns_raw_source_of_truth_state(client: TestClient) -> None:
     client.put(
-        "/admin/connectors/catalog/slack/configuration",
+        "/api/admin/connectors/catalog/slack/configuration",
         json={
             "configuration": {
                 "workspace_name": "Acme",

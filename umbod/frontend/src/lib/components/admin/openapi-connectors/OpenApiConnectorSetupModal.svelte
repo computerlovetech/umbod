@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SubmitFunction } from '@sveltejs/kit';
+  import type { BrowserSubmitFunction as SubmitFunction } from '$lib/admin/operations/browser-submit';
   import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
   import AdminFileUpload from '$lib/components/admin/shared/AdminFileUpload.svelte';
   import AdminModalShell from '$lib/components/admin/shared/AdminModalShell.svelte';
@@ -16,7 +16,8 @@
     { value: 'bearer', label: 'Bearer token' }
   ];
 
-  const submit: SubmitFunction = async ({ formData, cancel }) => {
+  const submit: SubmitFunction = async ({ formData, cancel, onComplete }) => {
+    onComplete(() => state.completeSubmit(null));
     state.beginSubmit();
     if (!(await state.prepareSubmission(formData))) {
       cancel();
@@ -79,9 +80,9 @@
       {/snippet}
       {#snippet actions()}
         <LoadingButton label="Cancel" loading={false} variant="secondary" onclick={state.close} />
-        <LoadingButton type="submit" label="Save" loadingLabel="Saving…" loading={state.submitting} />
+        <LoadingButton type="submit" label="Save" loadingLabel="Saving…" loading={state.submitting} disabled={state.setupBlocked} />
       {/snippet}
-      <Form method="POST" action={state.mode === 'create' ? '?/setup' : '?/configure'} enctype="multipart/form-data" {submit} {fields} {actions} />
+      <Form method="POST" operation={state.mode === 'create' ? 'setup' : 'configure'} enctype="multipart/form-data" {submit} {fields} {actions} />
     {/snippet}
   </AdminModalShell>
 {/if}

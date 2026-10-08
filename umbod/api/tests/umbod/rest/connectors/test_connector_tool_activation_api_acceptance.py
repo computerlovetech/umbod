@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 
 from umbod.rest.main import create_app
 
-ACTIVATION_PATH = "/admin/connectors/catalog/test/tools/activation"
+ACTIVATION_PATH = "/api/admin/connectors/catalog/test/tools/activation"
 
 
 @pytest.fixture
@@ -19,14 +19,14 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
 
 
 def test_native_openapi_exposes_consolidated_activation_route(client: TestClient) -> None:
-    paths = client.get("/admin/openapi.json").json()["paths"]
+    paths = client.get("/api/admin/openapi.json").json()["paths"]
     assert set(paths["/connectors/catalog/{connector_id}/tools/activation"]) == {"get", "put"}
     assert "/connectors/catalog/{connector_id}/tools/{tool_id}/activation" not in paths
     assert "/connectors/catalog/{connector_id}/tools/invocation-policy" not in paths
 
 
 def test_admin_lists_connector_tools_with_disabled_default_activation(client: TestClient) -> None:
-    response = client.get("/admin/connectors/catalog/test/tools")
+    response = client.get("/api/admin/connectors/catalog/test/tools")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -52,7 +52,7 @@ def test_admin_enables_one_connector_tool(client: TestClient) -> None:
         ],
     }
 
-    tools_response = client.get("/admin/connectors/catalog/test/tools")
+    tools_response = client.get("/api/admin/connectors/catalog/test/tools")
     assert tools_response.status_code == 200
     assert _tool_by_operation_name(tools_response.json(), "get_default_response") == {
         "tool_id": "get_default_response",
@@ -131,7 +131,7 @@ def test_admin_bulk_update_leaves_omitted_tools_unchanged(client: TestClient) ->
     )
 
     assert response.status_code == 200
-    tools_response = client.get("/admin/connectors/catalog/test/tools")
+    tools_response = client.get("/api/admin/connectors/catalog/test/tools")
     assert (
         _tool_by_operation_name(tools_response.json(), "get_default_response")["activation_status"]
         == "enabled"
@@ -170,7 +170,7 @@ def test_admin_bulk_update_unknown_tool_writes_nothing(client: TestClient) -> No
     )
 
     assert response.status_code == 404
-    tools_response = client.get("/admin/connectors/catalog/test/tools")
+    tools_response = client.get("/api/admin/connectors/catalog/test/tools")
     assert _tool_by_operation_name(tools_response.json(), "echo")["activation_status"] == "disabled"
 
 
@@ -226,7 +226,7 @@ def test_admin_disables_one_connector_tool(client: TestClient) -> None:
         ],
     }
 
-    tools_response = client.get("/admin/connectors/catalog/test/tools")
+    tools_response = client.get("/api/admin/connectors/catalog/test/tools")
     assert tools_response.status_code == 200
     assert _tool_by_operation_name(tools_response.json(), "echo") == {
         "tool_id": "echo",
@@ -329,9 +329,9 @@ def test_admin_filters_connector_tools_by_activation_status(client: TestClient) 
         json={"tools": [{"tool_id": "echo", "activation_status": "enabled"}]},
     )
 
-    enabled_response = client.get("/admin/connectors/catalog/test/tools?activation_status=enabled")
+    enabled_response = client.get("/api/admin/connectors/catalog/test/tools?activation_status=enabled")
     disabled_response = client.get(
-        "/admin/connectors/catalog/test/tools?activation_status=disabled"
+        "/api/admin/connectors/catalog/test/tools?activation_status=disabled"
     )
 
     assert enabled_response.status_code == 200
@@ -347,7 +347,7 @@ def test_admin_filters_connector_tools_by_activation_status(client: TestClient) 
 
 
 def test_admin_cannot_list_tools_for_unknown_connector(client: TestClient) -> None:
-    response = client.get("/admin/connectors/catalog/missing/tools")
+    response = client.get("/api/admin/connectors/catalog/missing/tools")
 
     assert response.status_code == 404
     assert response.json() == {"detail": "Connector missing was not found"}

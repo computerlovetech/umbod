@@ -42,7 +42,7 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
 
 def test_prompt_activation_put_emits_capability_activation_changed_event(client: TestClient) -> None:
     response = client.put(
-        "/admin/connectors/catalog/test/prompts/activation",
+        "/api/admin/connectors/catalog/test/prompts/activation",
         json={"prompts": [{"prompt_id": "summarize", "activation_status": "enabled"}]},
     )
     events = client.get(
@@ -66,7 +66,7 @@ def test_resource_activation_put_emits_capability_activation_changed_events(
     client: TestClient,
 ) -> None:
     response = client.put(
-        "/admin/connectors/catalog/test/resources/activation",
+        "/api/admin/connectors/catalog/test/resources/activation",
         json={
             "resources": [
                 {

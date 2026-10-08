@@ -19,7 +19,7 @@ spec:
       command: ["/bin/sh", "-ec"]
       args:
         - |
-          catalog="$(curl --fail --silent --show-error "http://{{ include "umbod.fullname" . }}-api:{{ .Values.services.api.port }}/admin/connectors/catalog")"
+          catalog="$(curl --fail --silent --show-error "http://{{ include "umbod.fullname" . }}-api:{{ .Values.services.api.port }}/api/admin/connectors/catalog")"
           echo "$catalog" | grep -q '^{"connectors":\['
           {{- range .Values.plugins.availableConnectorIds }}
           echo "$catalog" | grep -q '"id":"{{ . }}"'

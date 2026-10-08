@@ -43,7 +43,7 @@ def _document() -> dict[str, Any]:
 
 def _create(client: TestClient) -> str:
     response = client.post(
-        "/admin/connectors/openapi",
+        "/api/admin/connectors/openapi",
         json={"display_name": "Example", "capability_description": "Manage example API resources"},
     )
     assert response.status_code == 201
@@ -59,14 +59,14 @@ def _upload(
     approved_hosts: tuple[str, ...] = ("api.example.com",),
 ) -> Response:
     return client.post(
-        f"/admin/connectors/openapi/{connector_id}/imports",
+        f"/api/admin/connectors/openapi/{connector_id}/imports",
         files={"file": (filename, content, media_type)},
         data={"approved_hosts": list(approved_hosts)},
     )
 
 
 def _has_current_catalog(client: TestClient, connector_id: str) -> bool:
-    response = client.get(f"/admin/connectors/openapi/{connector_id}")
+    response = client.get(f"/api/admin/connectors/openapi/{connector_id}")
     assert response.status_code == 200
     return response.json()["publication_status"] != "unconfigured"
 
@@ -144,7 +144,7 @@ def test_file_import_exposes_operations_after_application_restart(tmp_path: Path
     recreated = TestClient(
         create_app(settings=_settings(database_path), connector_registrations=[])
     )
-    tools = recreated.get(f"/admin/connectors/openapi/{connector_id}/tools")
+    tools = recreated.get(f"/api/admin/connectors/openapi/{connector_id}/tools")
     assert tools.status_code == 200
     assert tools.json()["tools"] == [
         {
@@ -193,7 +193,7 @@ def test_tool_catalog_exposes_flattened_operation_parameters_and_request_body(
     }
 
     assert _upload(client, connector_id, json.dumps(document).encode()).status_code == 201
-    parameters = client.get(f"/admin/connectors/openapi/{connector_id}/tools").json()["tools"][0][
+    parameters = client.get(f"/api/admin/connectors/openapi/{connector_id}/tools").json()["tools"][0][
         "parameters"
     ]
 
@@ -360,7 +360,7 @@ def test_tool_catalog_selects_first_declared_json_success_output_schema(tmp_path
     }
 
     assert _upload(client, connector_id, json.dumps(document).encode()).status_code == 201
-    tool = client.get(f"/admin/connectors/openapi/{connector_id}/tools").json()["tools"][0]
+    tool = client.get(f"/api/admin/connectors/openapi/{connector_id}/tools").json()["tools"][0]
 
     assert tool["output_schema_status"] == "present"
     assert tool["output_schema"] == {}
@@ -385,7 +385,7 @@ def test_tool_catalog_uses_declared_json_default_output_schema(tmp_path: Path) -
     }
 
     assert _upload(client, connector_id, json.dumps(document).encode()).status_code == 201
-    tool = client.get(f"/admin/connectors/openapi/{connector_id}/tools").json()["tools"][0]
+    tool = client.get(f"/api/admin/connectors/openapi/{connector_id}/tools").json()["tools"][0]
 
     assert tool["output_schema_status"] == "present"
     assert tool["output_schema"] == {"type": "boolean"}

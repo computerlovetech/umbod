@@ -1,25 +1,19 @@
-import { BrowserRequestError, fetchResponse } from './infrastructure/browser-request';
-import { z } from 'zod';
-import { invocationPolicyListResponseSchema, type InvocationPolicyTool } from './invocation-policy';
-import { mapOpenApiConnector, openApiConnectorSchema, type OpenApiConnectorListItem } from './openapi-connectors';
+import { AdminApi } from './infrastructure/admin-api';
+import { browserTransport } from './infrastructure/transport';
+import { browserRequest } from './infrastructure/browser-request';
+import type { InvocationPolicyTool } from './invocation-policy';
+import { mapOpenApiConnector, type OpenApiConnectorListItem } from './openapi-connectors';
 
-const openApiConnectorDetailBundleSchema = z.object({
-  connector: openApiConnectorSchema,
-  invocationPolicies: invocationPolicyListResponseSchema
-});
-
-export type OpenApiConnectorDetailBundle = {
-  connector: OpenApiConnectorListItem;
-  invocationPolicies: InvocationPolicyTool[];
-};
+export type OpenApiConnectorDetailBundle = { connector: OpenApiConnectorListItem; invocationPolicies: InvocationPolicyTool[] };
 
 export class OpenApiConnectorDetailsBrowserRoute {
-  constructor(private readonly request: typeof globalThis.fetch = globalThis.fetch) {}
-
+  constructor(private readonly request: typeof fetch = globalThis.fetch) {}
   async get(connectorId: string, signal?: AbortSignal): Promise<OpenApiConnectorDetailBundle> {
-    const response = await fetchResponse(this.request, `/admin/openapi-connectors/data/connectors/${encodeURIComponent(connectorId)}`, { signal });
-    if (!response.ok) throw new BrowserRequestError(response.status);
-    const payload = openApiConnectorDetailBundleSchema.parse(await response.json());
-    return { connector: mapOpenApiConnector(payload.connector), invocationPolicies: payload.invocationPolicies.tools };
+    const transport = browserTransport({ fetch: this.request });
+    const api = new AdminApi({ request: (options) => transport.request({ ...options, signal }) }).openApiConnectors;
+    return browserRequest(async () => {
+      const [connector, activation] = await Promise.all([api.connectors.get(connectorId), api.connectors.listActivations(connectorId)]);
+      return { connector: mapOpenApiConnector(connector), invocationPolicies: activation.tools.map((tool) => ({ tool_id: tool.tool_id, mode: tool.invocation_mode, revision: tool.policy_revision })) };
+    });
   }
 }

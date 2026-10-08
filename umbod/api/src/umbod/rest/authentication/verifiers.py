@@ -9,8 +9,12 @@ from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationEr
 
 
 class ProductionJwksJwtVerifier:
-    def __init__(self, jwks_url: str) -> None:
+    def __init__(self, jwks_url: str, issuer: str, audience: str) -> None:
+        if not issuer.strip() or not audience.strip():
+            raise ValueError("Production admin JWT verification requires OIDC issuer and audience")
         self.jwks_client = PyJWKClient(jwks_url)
+        self.issuer = issuer
+        self.audience = audience
 
     def verify(self, token: str) -> JwtClaims:
         try:
@@ -19,7 +23,9 @@ class ProductionJwksJwtVerifier:
                 token,
                 signing_key.key,
                 algorithms=["RS256"],
-                options={"verify_aud": False},
+                issuer=self.issuer,
+                audience=self.audience,
+                options={"require": ["iss", "aud", "exp", "sub"]},
             )
         except (InvalidTokenError, PyJWKClientError, PyJWKSetError) as error:
             raise JwtVerificationError("Invalid JWT") from error

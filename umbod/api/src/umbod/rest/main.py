@@ -7,6 +7,7 @@ from fastapi import APIRouter, FastAPI, Request, Response
 from umbod.core.connectors.native.registry import ConnectorRegistration
 from umbod.core.persistence import PersistenceRuntime
 from umbod.rest.authentication import AdminAuthenticationDebugMiddleware, AdminAuthenticationMiddleware, AdminAuthenticationStrategyFactory, AdminAuthorizationServiceFactory, JwtVerifierFactory
+from umbod.rest.authentication.csrf_middleware import AdminCookieCsrfMiddleware
 from umbod.rest.capability_descriptions import router as capability_description_router
 from umbod.rest.connectors import (
     downstream_mcp_router as downstream_mcp_connector_router,
@@ -23,6 +24,8 @@ from umbod.config import AppConfig, load_app_config
 from umbod.logging import flush_logging
 from umbod.rest.settings import APISettings
 from umbod.rest.system import router as system_router
+from umbod.rest.system.routes import health
+from umbod.rest.system.schemas import HealthResponse
 from umbod.rest.telemetry import install_telemetry_receiver
 from umbod.rest.users import create_current_user_router
 
@@ -77,13 +80,15 @@ def _mount_admin_app(app: FastAPI, settings: APISettings, dependency_factories: 
     _attach_dependency_factories(admin_app, dependency_factories)
     admin_app.dependency_overrides[get_app_config] = provide_app_config
     _attach_admin_authorization(admin_app, settings)
+    admin_app.add_middleware(AdminCookieCsrfMiddleware, site_base_url=settings.endpoints.site_base_url, allowed_origins=settings.cors.origins)
     admin_app.add_middleware(AdminRestMetricsMiddleware, recorder=metrics_recorder, routes=admin_routes)
-    app.mount('/admin', admin_app)
+    app.mount('/api/admin', admin_app)
 
 def _mount_system_app(app: FastAPI, dependency_factories: ConnectorApiDependencyFactories) -> None:
     system_app = SubApiAppFactory(title='umbod-system-api', router=system_router).create()
     _attach_dependency_factories(system_app, dependency_factories)
     app.mount('/system', system_app)
+    app.add_api_route('/api/system/health', health, response_model=HealthResponse, methods=['GET'])
 
 def _create_lifespan(metrics_server: RestMetricsHttpServer, persistence_runtime: PersistenceRuntime) -> Callable[[FastAPI], AbstractAsyncContextManager[None]]:
 

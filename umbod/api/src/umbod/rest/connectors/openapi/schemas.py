@@ -47,6 +47,18 @@ class CreateOpenApiConnectorRequest(Model):
         }
 
 
+class SetupOpenApiConnectorRequest(Model):
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str
+    tool_name_prefix: str = Field(pattern=r"^[a-zA-Z0-9_-]+$")
+    capability_description: CapabilityDescription
+    document: dict[str, object]
+    approved_hosts: tuple[str, ...]
+    authentication_type: Literal["none", "bearer"]
+    bearer_token: SecretStr
+
+
 class ImportOpenApiCatalogRequest(Model):
     model_config = ConfigDict(extra="forbid")
 

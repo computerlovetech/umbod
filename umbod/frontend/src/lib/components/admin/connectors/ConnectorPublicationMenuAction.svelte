@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
+  import { browserSubmit } from '$lib/admin/operations/browser-submit';
   import type { HTMLButtonAttributes } from 'svelte/elements';
   import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
   import { useToast } from '$lib/components/feedback';
@@ -30,7 +30,8 @@
   }
 </script>
 
-<form method="POST" action={`?/${action}`} use:enhance={() => {
+<form method="POST" data-operation={action} use:browserSubmit={({ onComplete }) => {
+  onComplete(() => pendingState.stop(pendingKey));
   pendingState.start(pendingKey);
   return async ({ update, result }) => {
     try {

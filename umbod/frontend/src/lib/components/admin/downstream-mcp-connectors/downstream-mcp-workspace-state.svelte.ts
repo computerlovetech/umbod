@@ -1,17 +1,10 @@
-import { z } from 'zod';
-import { mapResourceCatalog, downstreamPromptCatalogSchema, downstreamResourceCatalogWireSchema, type PromptCatalog, type ResourceCatalog } from '$lib/admin/capability-catalogs';
-import { downstreamMcpConnectorSchema, downstreamMcpToolListSchema, type DownstreamMcpConnector, type DownstreamMcpToolList } from '$lib/admin/downstream-mcp-connectors';
-import { invocationPolicyListResponseSchema, type InvocationPolicyTool } from '$lib/admin/invocation-policy';
+import { AdminApi } from '$lib/admin/infrastructure/admin-api';
+import { browserTransport } from '$lib/admin/infrastructure/transport';
+import { mapResourceCatalog, type PromptCatalog, type ResourceCatalog } from '$lib/admin/capability-catalogs';
+import { type DownstreamMcpConnector, type DownstreamMcpToolList } from '$lib/admin/downstream-mcp-connectors';
+import { type InvocationPolicyTool } from '$lib/admin/invocation-policy';
 import { SelectionDetailController } from '$lib/components/admin/shared/selection-detail-controller.svelte';
 import { InMemorySelectionUrlAdapter, type SelectionUrlPort } from '$lib/components/admin/shared/selection-url-port';
-
-const downstreamMcpWorkspaceBundleSchema = z.object({
-  connector: downstreamMcpConnectorSchema,
-  catalog: downstreamMcpToolListSchema,
-  promptCatalog: downstreamPromptCatalogSchema,
-  resourceCatalog: downstreamResourceCatalogWireSchema,
-  invocationPolicies: invocationPolicyListResponseSchema
-});
 
 export type DownstreamMcpWorkspaceBundle = {
   connector: DownstreamMcpConnector;
@@ -203,10 +196,12 @@ export class DownstreamMcpWorkspaceState {
 }
 
 async function loadDownstreamBundle(connectorId: string, signal?: AbortSignal): Promise<DownstreamMcpWorkspaceBundle> {
-  const response = await fetch(`/admin/downstream-mcp-connectors/data/connectors/${encodeURIComponent(connectorId)}`, { signal });
-  if (!response.ok) throw new Error('Connector detail request failed');
-  const parsed = downstreamMcpWorkspaceBundleSchema.parse(await response.json());
-  return { ...parsed, resourceCatalog: mapResourceCatalog(parsed.resourceCatalog), invocationPolicies: parsed.invocationPolicies.tools };
+  const transport = browserTransport();
+  const api = new AdminApi({ request: (options) => transport.request({ ...options, signal }) }).downstreamMcpConnectors;
+  const [connector, catalog, promptCatalog, resources, activation] = await Promise.all([
+    api.get(connectorId), api.tools(connectorId), api.prompts(connectorId), api.resources(connectorId), api.listActivations(connectorId)
+  ]);
+  return { connector, catalog, promptCatalog, resourceCatalog: mapResourceCatalog(resources), invocationPolicies: activation.tools.map((tool) => ({ tool_id: tool.tool_id, mode: tool.invocation_mode, revision: tool.policy_revision })) };
 }
 
 export function suggestedToolNamePrefix(displayName: string): string {

@@ -81,7 +81,7 @@ describe('admin connector shared presentation', () => {
 
     expect(publicationAction).toContain('method="POST"');
     expect(publicationAction).toContain('<input type="hidden" name="connectorId"');
-    expect(publicationAction).toContain('use:enhance');
+    expect(publicationAction).toContain('use:browserSubmit');
     expect(publicationAction).toContain('pendingState.start');
     expect(publicationAction).toContain('pendingState.stop');
     expect(publicationAction).toContain('loadingLabel={`${actionLabel}ing...`}');

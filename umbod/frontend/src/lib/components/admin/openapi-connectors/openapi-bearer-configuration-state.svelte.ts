@@ -1,5 +1,6 @@
-import { BrowserRequestError, fetchResponse } from '$lib/admin/infrastructure/browser-request';
-import { openApiConfigurationResponseSchema } from '$lib/admin/openapi-connectors';
+import { BrowserRequestError, browserRequest } from '$lib/admin/infrastructure/browser-request';
+import { adminApi } from '$lib/admin/infrastructure/admin-api';
+
 import type { ToastApi } from '$lib/components/feedback';
 
 export class OpenApiBearerConfigurationState {
@@ -27,9 +28,7 @@ export class OpenApiBearerConfigurationState {
     this.loading = true;
     this.message = '';
     try {
-      const response = await fetchResponse(this.request, `/admin/openapi-connectors/${encodeURIComponent(this.connectorId)}/configuration`);
-      if (!response.ok) throw new BrowserRequestError(response.status);
-      const configuration = openApiConfigurationResponseSchema.parse(await response.json());
+      const configuration = await browserRequest(() => adminApi(this.request).openApiConnectors.connectors.getConfiguration(this.connectorId));
       this.configured = configuration.configured;
     } catch (error) {
       if (!(error instanceof BrowserRequestError)) throw error;
@@ -46,13 +45,7 @@ export class OpenApiBearerConfigurationState {
     this.saving = true;
     this.message = '';
     try {
-      const response = await fetchResponse(this.request, `/admin/openapi-connectors/${encodeURIComponent(this.connectorId)}/configuration`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ bearer_token: this.token })
-      });
-      if (!response.ok) throw new BrowserRequestError(response.status);
-      const configuration = openApiConfigurationResponseSchema.parse(await response.json());
+      const configuration = await browserRequest(() => adminApi(this.request).openApiConnectors.connectors.putConfiguration(this.connectorId, { authentication_type: 'bearer', bearer_token: this.token }));
       this.configured = configuration.configured;
       this.message = configuration.configured ? 'Bearer token saved.' : 'Enter a Bearer token.';
       if (configuration.configured) this.toast?.success(this.message);

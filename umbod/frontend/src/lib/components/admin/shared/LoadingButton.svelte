@@ -13,7 +13,7 @@
     loadingLabel = 'Loading',
     variant = 'primary',
     onclick,
-    formaction,
+    'data-operation': operation,
     role,
     title
   }: {
@@ -25,7 +25,7 @@
     loadingLabel?: string;
     variant?: 'primary' | 'secondary';
     onclick?: MouseEventHandler<HTMLButtonElement>;
-    formaction?: string;
+    'data-operation'?: string;
     role?: HTMLButtonAttributes['role'];
     title?: string;
   } = $props();
@@ -40,7 +40,7 @@
   });
 </script>
 
-<Button {variant} {type} {formaction} {role} {title} disabled={disabled || loading} {onclick} aria-busy={loading} aria-label={buttonLabel} class="loading-button">
+<Button {variant} {type} data-operation={operation} {role} {title} disabled={disabled || loading} {onclick} aria-busy={loading} aria-label={buttonLabel} class="loading-button">
   <span class="loading-button__content" aria-hidden={state.visible}>{label}</span>
   <span class="loading-button__loading" aria-hidden={!state.visible}>
     <DelayedSpinner active={state.visible} delayMs={0} label={loadingLabel} size="small" inline />

@@ -30,7 +30,7 @@ def test_deployment_file_exposes_only_declared_installed_connectors_in_order(
 
     client = TestClient(create_app(connector_registrations=_installed_connectors()))
 
-    response = client.get("/admin/connectors/catalog")
+    response = client.get("/api/admin/connectors/catalog")
 
     assert response.status_code == 200
     assert [connector["id"] for connector in response.json()["connectors"]] == [
@@ -51,7 +51,7 @@ def test_deployment_available_connector_uses_installed_plugin_metadata(
 
     client = TestClient(create_app(connector_registrations=_installed_connectors()))
 
-    response = client.get("/admin/connectors/catalog")
+    response = client.get("/api/admin/connectors/catalog")
 
     assert response.status_code == 200
     assert response.json()["connectors"] == [
@@ -75,7 +75,7 @@ def test_empty_deployment_file_exposes_no_connectors(
 
     client = TestClient(create_app(connector_registrations=_installed_connectors()))
 
-    response = client.get("/admin/connectors/catalog")
+    response = client.get("/api/admin/connectors/catalog")
 
     assert response.status_code == 200
     assert response.json() == {"connectors": []}

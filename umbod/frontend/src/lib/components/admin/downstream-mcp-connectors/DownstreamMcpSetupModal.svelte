@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { SubmitFunction } from '@sveltejs/kit';
+  import type { BrowserSubmitFunction as SubmitFunction } from '$lib/admin/operations/browser-submit';
   import type { DownstreamMcpConnector } from '$lib/admin/downstream-mcp-connectors';
   import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
   import AdminModalShell from '$lib/components/admin/shared/AdminModalShell.svelte';
@@ -28,7 +28,8 @@
     return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 
-  const submit: SubmitFunction = () => {
+  const submit: SubmitFunction = ({ onComplete }) => {
+    onComplete(state.finishSubmit);
     state.beginSubmit();
     const wasConfiguring = configuring;
     return async ({ result, update }) => {
@@ -46,6 +47,7 @@
           }
           if (result.data.status === 'failed' || result.data.status === 'network') toast.error(result.data.message);
         }
+        if (result.type === 'redirect') state.close();
         await update();
         if (result.type === 'redirect') toast.success(wasConfiguring ? 'Connector configuration saved' : 'MCP proxy connector added');
       } catch {
@@ -105,7 +107,7 @@
         <LoadingButton label="Cancel" loading={false} variant="secondary" onclick={state.close} />
         <LoadingButton type="submit" label="Save connector" loadingLabel="Saving…" loading={state.submitting} />
       {/snippet}
-      <Form method="POST" action={configuring ? '?/configure' : '?/create'} {submit} {fields} {actions} />
+      <Form method="POST" operation={configuring ? 'configure' : 'create'} {submit} {fields} {actions} />
     {/snippet}
   </AdminModalShell>
 {/if}

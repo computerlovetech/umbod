@@ -43,14 +43,21 @@ def validate_frontend(frontend: str) -> None:
     require("mountPath: /app/data" not in frontend, "frontend must not mount the data PVC")
     require(frontend.count("startupProbe:") == 1, "frontend must have a startup probe")
     require(frontend.count("name: Host\n                  value: frontend") == 3, "frontend health probes must use the internal health host")
-    require("name: PRIVATE_API_BASE_URL" in frontend, "frontend must configure its internal API URL")
-    require(re.search(r"value: http://[a-z0-9-]+-api:8000", frontend) is not None, "frontend internal API URL must use the API Service")
-    variables = ["ORIGIN", "PROTOCOL_HEADER", "HOST_HEADER", "PUBLIC_MCP_BASE_URL", "BODY_SIZE_LIMIT", "PRIVATE_AUTH_TOKEN_HEADER", "UMBOD_LOG_LEVEL"]
-    for variable in variables:
-        require(f"name: {variable}" in frontend, f"frontend must configure {variable}")
+    require('name: PUBLIC_API_BASE_URL\n              value: "/api"' in frontend, "frontend browser API must default to same-origin /api")
+    require("name: PUBLIC_MCP_BASE_URL" in frontend, "frontend must configure its public MCP URL")
+    require(re.search(r"name: API_PROXY_ORIGIN\n\s+value: http://[a-z0-9-]+-api\.[a-z0-9-]+\.svc\.cluster\.local:8000", frontend) is not None, "frontend port-forwards must proxy browser API requests to Python")
+    require("envFrom:" not in frontend and "secretRef:" not in frontend, "frontend must never consume backend Secrets")
+    require("runAsNonRoot: true" in frontend, "frontend must run as non-root")
+    for variable in ("NODE_ENV", "PORT", "ORIGIN", "PROTOCOL_HEADER", "HOST_HEADER", "PRIVATE_API_BASE_URL", "BODY_SIZE_LIMIT", "PRIVATE_AUTH_TOKEN_HEADER"):
+        require(f"name: {variable}\n" not in frontend, f"frontend must not configure obsolete runtime variable {variable}")
 
 
 def validate_ingress(ingress: str) -> None:
+    require(
+        re.search(r"- path: /api\n(?:(?!          - path:).)*?name: [a-z0-9-]+-api", ingress, re.DOTALL) is not None,
+        "browser /api ingress must route unchanged to Python, not the static frontend",
+    )
+    require("rewrite-target" not in ingress and "strip-prefix" not in ingress, "Ingress must retain API and MCP prefixes")
     require(
         re.search(r"- path: /v1\n(?:(?!          - path:).)*?name: [a-z0-9-]+-api", ingress, re.DOTALL) is not None,
         "OTLP ingress /v1 must route unchanged to the API Service",
@@ -93,8 +100,8 @@ def main() -> None:
     require('connector-deployment-availability.json: "{\\"connectors\\":[{\\"id\\":\\"test\\"},{\\"id\\":\\"rejseplanen\\"}]}"' in config_maps[0], "connector availability ConfigMap must use the runtime JSON contract")
     require(len(helm_tests) == 3, "chart must render service health, authorization discovery, and plugin availability tests")
     require("/.well-known/oauth-protected-resource/mcp" in "\n".join(helm_tests), "Helm tests must verify protected resource discovery")
-    require("/admin/connectors/catalog" in "\n".join(helm_tests), "Helm tests must verify selected installed plugins")
-    require("envFrom:" in core and "envFrom:" in frontend, "existing Secret must be consumed through envFrom")
+    require("/api/admin/connectors/catalog" in "\n".join(helm_tests), "Helm tests must verify selected installed plugins")
+    require("envFrom:" in core, "existing Secret must be consumed only by backend containers")
     require(":latest" not in rendered, "rendered images must not use the latest tag")
     validate_core(core)
     validate_frontend(frontend)

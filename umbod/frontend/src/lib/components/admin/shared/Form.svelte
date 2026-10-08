@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
-  import type { SubmitFunction } from '@sveltejs/kit';
+  import { browserSubmit } from '$lib/admin/operations/browser-submit';
+  import type { BrowserSubmitFunction as SubmitFunction } from '$lib/admin/operations/browser-submit';
   import type { Snippet } from 'svelte';
 
   let {
     method = 'POST',
-    action,
+    operation,
     enctype,
     onsubmit,
     submit,
@@ -13,7 +13,7 @@
     actions
   }: {
     method?: 'GET' | 'POST';
-    action?: string;
+    operation?: string;
     enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data' | 'text/plain';
     onsubmit?: (event: SubmitEvent) => void;
     submit?: SubmitFunction;
@@ -33,15 +33,9 @@
   {/if}
 {/snippet}
 
-{#if submit}
-  <form {method} {action} {enctype} {onsubmit} use:enhance={submit}>
-    {@render content()}
-  </form>
-{:else}
-  <form {method} {action} {enctype} {onsubmit}>
-    {@render content()}
-  </form>
-{/if}
+<form {method} data-operation={operation} {enctype} {onsubmit} use:browserSubmit={submit}>
+  {@render content()}
+</form>
 
 <style>
   form {

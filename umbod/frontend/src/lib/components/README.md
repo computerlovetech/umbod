@@ -25,7 +25,7 @@ existing logo. `AdminShell` provides the inline-size container used by
 
 ### `admin/`
 
-**Read when working with:** Administration shell, connectors, permissions, OpenAPI, or downstream MCP interfaces.
+**Read when working with:** Administration shell, connectors, permissions, OpenAPI, or downstream MCP interfaces. Mutation forms dispatch typed browser operations through `$lib/admin/operations/browser-submit`; callbacks preserve reconciliation and register pending-state cleanup.
 
 ### `admin/overview/`
 

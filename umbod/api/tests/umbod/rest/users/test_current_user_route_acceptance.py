@@ -42,7 +42,7 @@ class FastApiCurrentUserApiBoundary:
         headers = {}
         if request is not None and request.token is not None:
             headers[self.configured_header_name] = request.token
-        response = self.client.get("/admin/users", headers=headers)
+        response = self.client.get("/api/admin/users", headers=headers)
         return CurrentUserResponse(status_code=response.status_code, body=response.json())
 
 

@@ -18,7 +18,7 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
 def test_connector_list_shows_unconfigured_status_and_no_publication_actions(
     client: TestClient,
 ) -> None:
-    response = client.get("/admin/connectors/catalog")
+    response = client.get("/api/admin/connectors/catalog")
 
     assert response.status_code == 200
     assert set(response.json()["connectors"][0]) == {
@@ -47,7 +47,7 @@ def test_capability_description_override_changes_emit_sanitized_durable_events(
     client: TestClient,
 ) -> None:
     set_response = client.put(
-        "/admin/connector-capability-descriptions/native/test",
+        "/api/admin/connector-capability-descriptions/native/test",
         json={
             "action": "set",
             "description": "Find deliberately renamed test capabilities",
@@ -57,7 +57,7 @@ def test_capability_description_override_changes_emit_sanitized_durable_events(
 
     assert set_response.status_code == 200
     clear_response = client.put(
-        "/admin/connector-capability-descriptions/native/test",
+        "/api/admin/connector-capability-descriptions/native/test",
         json={"action": "clear", "expected_revision": 1},
     )
     assert clear_response.status_code == 200
@@ -83,7 +83,7 @@ def test_capability_description_override_changes_emit_sanitized_durable_events(
 
 def test_admin_saves_valid_configuration_as_draft_and_can_publish_it(client: TestClient) -> None:
     configuration_response = client.put(
-        "/admin/connectors/catalog/test/configuration",
+        "/api/admin/connectors/catalog/test/configuration",
         json={
             "configuration": {
                 "instance_name": "Demo",
@@ -93,9 +93,9 @@ def test_admin_saves_valid_configuration_as_draft_and_can_publish_it(client: Tes
         },
     )
 
-    list_response = client.get("/admin/connectors/catalog")
-    publish_response = client.put("/admin/connectors/catalog/test/publication")
-    published_list_response = client.get("/admin/connectors/catalog")
+    list_response = client.get("/api/admin/connectors/catalog")
+    publish_response = client.put("/api/admin/connectors/catalog/test/publication")
+    published_list_response = client.get("/api/admin/connectors/catalog")
     system_events_response = client.get("/system/events?after_sequence=0&limit=100")
     publication_system_events_response = client.get(
         "/system/events?after_sequence=0&limit=100&event_type=connector.publication.changed"
@@ -143,7 +143,7 @@ def test_admin_unpublishes_connector_and_keeps_configuration_for_later_publishin
     client: TestClient,
 ) -> None:
     client.put(
-        "/admin/connectors/catalog/test/configuration",
+        "/api/admin/connectors/catalog/test/configuration",
         json={
             "configuration": {
                 "instance_name": "Demo",
@@ -152,11 +152,11 @@ def test_admin_unpublishes_connector_and_keeps_configuration_for_later_publishin
             }
         },
     )
-    client.put("/admin/connectors/catalog/test/publication")
+    client.put("/api/admin/connectors/catalog/test/publication")
 
-    unpublish_response = client.delete("/admin/connectors/catalog/test/publication")
-    list_response = client.get("/admin/connectors/catalog")
-    configuration_response = client.get("/admin/connectors/catalog/test/configuration")
+    unpublish_response = client.delete("/api/admin/connectors/catalog/test/publication")
+    list_response = client.get("/api/admin/connectors/catalog")
+    configuration_response = client.get("/api/admin/connectors/catalog/test/configuration")
     publication_events_response = client.get(
         "/system/events?after_sequence=2&limit=100&event_type=connector.publication.changed"
     )
@@ -186,7 +186,7 @@ def test_publish_is_blocked_when_saved_configuration_fails_connector_check(
     client: TestClient,
 ) -> None:
     client.put(
-        "/admin/connectors/catalog/test/configuration",
+        "/api/admin/connectors/catalog/test/configuration",
         json={
             "configuration": {
                 "instance_name": "Demo",
@@ -196,8 +196,8 @@ def test_publish_is_blocked_when_saved_configuration_fails_connector_check(
         },
     )
 
-    publish_response = client.put("/admin/connectors/catalog/test/publication")
-    list_response = client.get("/admin/connectors/catalog")
+    publish_response = client.put("/api/admin/connectors/catalog/test/publication")
+    list_response = client.get("/api/admin/connectors/catalog")
 
     assert publish_response.status_code == 422
     assert publish_response.json() == {

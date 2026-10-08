@@ -255,17 +255,17 @@ class FastApiPermissionGroupDriver:
         self.client = client
 
     def list_permission_groups(self) -> tuple[GroupPermissionSet, ...]:
-        response = self.client.get("/admin/mcp-permissions/groups")
+        response = self.client.get("/api/admin/mcp-permissions/groups")
         return tuple(
             self.get_permission_group(group["group_id"]) for group in response.json()["groups"]
         )
 
     def get_permission_group(self, group_id: str) -> GroupPermissionSet:
-        response = self.client.get(f"/admin/mcp-permissions/groups/{group_id}")
+        response = self.client.get(f"/api/admin/mcp-permissions/groups/{group_id}")
         return _group_permission_set(response.json())
 
     def register_permission_group(self, group_id: str) -> PermissionGroupChangeResult:
-        response = self.client.post(f"/admin/mcp-permissions/groups/{group_id}")
+        response = self.client.post(f"/api/admin/mcp-permissions/groups/{group_id}")
         if response.status_code >= 400:
             return PermissionGroupChangeResult(
                 status="rejected", group_id=group_id, message=response.json().get("detail")
@@ -273,7 +273,7 @@ class FastApiPermissionGroupDriver:
         return _permission_group_change_result(response.json())
 
     def delete_permission_group(self, group_id: str) -> PermissionGroupChangeResult:
-        response = self.client.delete(f"/admin/mcp-permissions/groups/{group_id}")
+        response = self.client.delete(f"/api/admin/mcp-permissions/groups/{group_id}")
         if response.status_code >= 400:
             return PermissionGroupChangeResult(
                 status="rejected", group_id=group_id, message=response.json().get("detail")
@@ -321,7 +321,7 @@ class FastApiPermissionGroupDriver:
         if not connectors and not capabilities:
             return PermissionGroupChangeResult(status="applied", group_id=request.group_id)
         response = self.client.put(
-            f"/admin/mcp-permissions/groups/{request.group_id}/permissions",
+            f"/api/admin/mcp-permissions/groups/{request.group_id}/permissions",
             json={"connectors": connectors, "capabilities": capabilities},
         )
         if response.status_code >= 400:
@@ -336,13 +336,13 @@ class FastApiPermissionGroupAuthorizationDriver:
         self.client = client
 
     def non_admin_can_register_permission_group(self, group_id: str) -> bool:
-        return self.client.post(f"/admin/mcp-permissions/groups/{group_id}").status_code not in (
+        return self.client.post(f"/api/admin/mcp-permissions/groups/{group_id}").status_code not in (
             401,
             403,
         )
 
     def non_admin_can_delete_permission_group(self, group_id: str) -> bool:
-        return self.client.delete(f"/admin/mcp-permissions/groups/{group_id}").status_code not in (
+        return self.client.delete(f"/api/admin/mcp-permissions/groups/{group_id}").status_code not in (
             401,
             403,
         )
@@ -512,7 +512,7 @@ def _create_client(
 
 def _provision_assignable_test_connector(client: TestClient) -> None:
     client.put(
-        "/admin/connectors/catalog/test/configuration",
+        "/api/admin/connectors/catalog/test/configuration",
         json={
             "configuration": {
                 "instance_name": "Demo",
@@ -521,9 +521,9 @@ def _provision_assignable_test_connector(client: TestClient) -> None:
             }
         },
     )
-    client.put("/admin/connectors/catalog/test/publication")
+    client.put("/api/admin/connectors/catalog/test/publication")
     client.put(
-        "/admin/connectors/catalog/test/tools/activation",
+        "/api/admin/connectors/catalog/test/tools/activation",
         json={"tools": [{"tool_id": "echo", "activation_status": "enabled"}]},
     )
 

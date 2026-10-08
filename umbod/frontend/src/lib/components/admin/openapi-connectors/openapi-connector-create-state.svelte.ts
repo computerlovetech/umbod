@@ -25,5 +25,6 @@ export class OpenApiConnectorCreateState {
     this.toolNamePrefixEdited = true;
   };
   setInitialCapabilityOverride = (event: Event): void => { this.initialCapabilityOverride = event.currentTarget instanceof HTMLInputElement && event.currentTarget.checked; };
+  finishSubmit = (): void => { this.submitting = false; };
   beginSubmit = (): void => { this.submitting = true; };
 }

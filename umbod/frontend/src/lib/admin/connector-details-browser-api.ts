@@ -1,25 +1,9 @@
-import { z } from 'zod';
-import { BrowserRequestError, fetchResponse } from './infrastructure/browser-request';
-import { mapResourceCatalog, promptCatalogSchema, resourceCatalogWireSchema, type PromptCatalog, type ResourceCatalog } from './capability-catalogs';
-import { invocationPolicyListResponseSchema, type InvocationPolicyTool } from './invocation-policy';
-import {
-  connectorConfigurationApiResponseSchema,
-  connectorDetailApiResponseSchema,
-  connectorToolActivationApiResponseSchema,
-  mapConnectorConfigurationApiResponse,
-  mapConnectorDetailApiResponse,
-  type ConnectorConfigurationField,
-  type ConnectorDetailReadyPageData
-} from './connectors';
-
-const connectorDetailBundleSchema = z.object({
-  connector: connectorDetailApiResponseSchema,
-  activation: connectorToolActivationApiResponseSchema,
-  configuration: connectorConfigurationApiResponseSchema,
-  prompts: promptCatalogSchema,
-  resources: resourceCatalogWireSchema,
-  invocationPolicies: invocationPolicyListResponseSchema
-});
+import { AdminApi } from './infrastructure/admin-api';
+import { browserTransport } from './infrastructure/transport';
+import { browserRequest } from './infrastructure/browser-request';
+import { mapResourceCatalog, type PromptCatalog, type ResourceCatalog } from './capability-catalogs';
+import type { InvocationPolicyTool } from './invocation-policy';
+import { mapConnectorConfigurationApiResponse, mapConnectorDetailApiResponse, type ConnectorConfigurationField, type ConnectorDetailReadyPageData } from './connectors';
 
 export type ConnectorDetailBundle = {
   detail: ConnectorDetailReadyPageData;
@@ -30,18 +14,21 @@ export type ConnectorDetailBundle = {
 };
 
 export class ConnectorDetailsBrowserRoute {
-  constructor(private readonly request: typeof globalThis.fetch = globalThis.fetch) {}
-
+  constructor(private readonly request: typeof fetch = globalThis.fetch) {}
   async get(connectorId: string, signal?: AbortSignal): Promise<ConnectorDetailBundle> {
-    const response = await fetchResponse(this.request, `/admin/connectors/data/connectors/${encodeURIComponent(connectorId)}`, { signal });
-    if (!response.ok) throw new BrowserRequestError(response.status);
-    const payload = connectorDetailBundleSchema.parse(await response.json());
-    return {
-      detail: mapConnectorDetailApiResponse(payload.connector, payload.activation),
-      configurationFields: mapConnectorConfigurationApiResponse(payload.configuration).fields,
-      promptCatalog: payload.prompts,
-      resourceCatalog: mapResourceCatalog(payload.resources),
-      invocationPolicies: payload.invocationPolicies.tools
-    };
+    const transport = browserTransport({ fetch: this.request });
+    const api = new AdminApi({ request: (options) => transport.request({ ...options, signal }) }).connectors;
+    return browserRequest(async () => {
+      const [connector, activation, configuration, prompts, resources] = await Promise.all([
+        api.connectors.get(connectorId), api.tools.listActivations(connectorId), api.connectors.getConfiguration(connectorId), api.prompts.list(connectorId), api.resources.list(connectorId)
+      ]);
+      return {
+        detail: mapConnectorDetailApiResponse(connector, activation),
+        configurationFields: mapConnectorConfigurationApiResponse(configuration).fields,
+        promptCatalog: prompts,
+        resourceCatalog: mapResourceCatalog(resources),
+        invocationPolicies: activation.tools.map((tool) => ({ tool_id: tool.tool_id, mode: tool.invocation_mode, revision: tool.policy_revision }))
+      };
+    });
   }
 }

@@ -3,7 +3,7 @@ from typing import Protocol
 from fastapi import HTTPException, Request
 
 from umbod.rest.authentication import JwtVerificationError, JwtVerifier
-from umbod.rest.authentication.tokens import extract_jwt_header_token
+from umbod.rest.authentication.tokens import extract_request_jwt_token
 from umbod.rest.users.responses import CurrentUserResponse
 
 
@@ -17,7 +17,7 @@ class JwtCurrentUserProvider:
         self.jwt_verifier = jwt_verifier
 
     def get_current_user(self, request: Request) -> CurrentUserResponse:
-        token = extract_jwt_header_token(request.headers.get(self.jwt_header_name, ""))
+        token = extract_request_jwt_token(request.headers, self.jwt_header_name)
         try:
             jwt_claims = self.jwt_verifier.verify(token)
         except JwtVerificationError as error:

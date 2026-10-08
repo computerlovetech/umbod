@@ -114,14 +114,14 @@ async def test_admin_to_codemode_execution_enforces_live_sqlite_state(tmp_path: 
     token = jwt.encode({'sub': 'engineer@example.test', 'email': 'engineer@example.test', 'groups': ['engineering']}, key='', algorithm='none')
     settings = _settings(database_path, 'codemode', token)
     admin = TestClient(create_app(settings=APISettings.model_validate(settings.model_dump()), connector_registrations=[]))
-    connector_response = admin.post('/admin/connectors/openapi', json={'display_name': 'Inventory', 'capability_description': 'Manage inventory resources'})
+    connector_response = admin.post('/api/admin/connectors/openapi', json={'display_name': 'Inventory', 'capability_description': 'Manage inventory resources'})
     assert connector_response.status_code == 201
     connector_id = connector_response.json()['connector_id']
-    imported = admin.post(f'/admin/connectors/openapi/{connector_id}/imports', json={'document': _document(), 'approved_hosts': ['api.example.test']})
+    imported = admin.post(f'/api/admin/connectors/openapi/{connector_id}/imports', json={'document': _document(), 'approved_hosts': ['api.example.test']})
     assert imported.status_code == 201
-    assert admin.put(f'/admin/connectors/openapi/{connector_id}/publication').status_code == 200
-    assert admin.put(f'/admin/connectors/openapi/{connector_id}/configuration', json={'bearer_token': 'runtime-token'}).status_code == 200
-    activation_path = f'/admin/connectors/openapi/{connector_id}/tools/activation'
+    assert admin.put(f'/api/admin/connectors/openapi/{connector_id}/publication').status_code == 200
+    assert admin.put(f'/api/admin/connectors/openapi/{connector_id}/configuration', json={'bearer_token': 'runtime-token'}).status_code == 200
+    activation_path = f'/api/admin/connectors/openapi/{connector_id}/tools/activation'
     enabled_activation = {'tools': [{'tool_id': 'getItem', 'activation_status': 'enabled'}]}
     disabled_activation = {'tools': [{'tool_id': 'getItem', 'activation_status': 'disabled'}]}
     assert admin.put(activation_path, json=enabled_activation).status_code == 200
@@ -186,7 +186,7 @@ async def test_admin_to_codemode_execution_enforces_live_sqlite_state(tmp_path: 
         assert result == {'status': 'success', 'code': None, 'message': 'OpenAPI capability executed.', 'http_status': 200, 'content_type': 'application/json', 'response_size_bytes': 4096, 'truncated': True}
         assert outbound_factory.client.requests == [('GET', 'https://api.example.test/items/safe-item?filter=raw-request-canary', {'headers': {'x-trace': 'secret-canary', 'Authorization': 'Bearer runtime-token'}, 'timeout': settings.openapi_connectors.execution_read_timeout_seconds, 'follow_redirects': False})]
         assert admin.put(activation_path, json=disabled_activation).status_code == 200
-        targets = admin.get('/admin/mcp-permissions/assignable-targets').json()
+        targets = admin.get('/api/admin/mcp-permissions/assignable-targets').json()
         assert (connector_id, 'getItem') not in {(item['connector_id'], item['capability_key']) for item in targets['capabilities']}
         unavailable_tools = await client.list_tools()
         unavailable_description = next((tool.description for tool in unavailable_tools if tool.name == 'search_tools'))

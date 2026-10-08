@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { enhance } from '$app/forms';
+  import { browserSubmit } from '$lib/admin/operations/browser-submit';
   import { replaceState } from '$app/navigation';
   import { page } from '$app/state';
   import { untrack } from 'svelte';
@@ -234,12 +234,13 @@
               >
                 <form
                   method="POST"
-                  action="?/saveToolActivations"
+                  data-operation="saveToolActivations"
                   class="save-tools"
-                  use:enhance={() => {
+                  use:browserSubmit={({ onComplete }) => {
                     const submission = state.captureToolActivationSubmission();
                     const pendingKey = saveToolsPendingKey(submission?.connectorId ?? null);
-                    pendingState.start(pendingKey);
+                    onComplete(() => pendingState.stop(pendingKey));
+      pendingState.start(pendingKey);
 
                     return async ({ update, result }) => {
                       try {
@@ -320,12 +321,13 @@
           >
             <form
               method="POST"
-              action="?/savePromptActivations"
+              data-operation="savePromptActivations"
               class="save-tools"
-              use:enhance={() => {
+              use:browserSubmit={({ onComplete }) => {
                 const submission = state.capturePromptActivationSubmission();
                 const pendingKey = savePromptsPendingKey(submission?.connectorId ?? null);
-                pendingState.start(pendingKey);
+                onComplete(() => pendingState.stop(pendingKey));
+      pendingState.start(pendingKey);
                 return async ({ update, result }) => {
                   try {
                     if (result.type === 'failure' && isRecord(result.data)) {
@@ -382,12 +384,13 @@
           >
             <form
               method="POST"
-              action="?/saveResourceActivations"
+              data-operation="saveResourceActivations"
               class="save-tools"
-              use:enhance={() => {
+              use:browserSubmit={({ onComplete }) => {
                 const submission = state.captureResourceActivationSubmission();
                 const pendingKey = saveResourcesPendingKey(submission?.connectorId ?? null);
-                pendingState.start(pendingKey);
+                onComplete(() => pendingState.stop(pendingKey));
+      pendingState.start(pendingKey);
                 return async ({ update, result }) => {
                   try {
                     if (result.type === 'failure' && isRecord(result.data)) {
@@ -440,7 +443,7 @@
               <ConnectorConfigurationForm
                 connector={state.selectedConnector}
                 fields={state.selectedConnector.configurationFields}
-                action="?/saveConfiguration"
+                operation="saveConfiguration"
                 submitConnectorId={true}
                 {form}
               />

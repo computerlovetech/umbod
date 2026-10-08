@@ -92,12 +92,12 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _load_connector_states(api_base_url: str) -> list[ConnectorState]:
-    connectors_payload = _get_json(f"{api_base_url.rstrip('/')}/admin/connectors/catalog")
+    connectors_payload = _get_json(f"{api_base_url.rstrip('/')}/api/admin/connectors/catalog")
     connectors: list[ConnectorState] = []
     for connector in connectors_payload["connectors"]:
         connector_id = connector["id"]
         tools_payload = _get_json(
-            f"{api_base_url.rstrip('/')}/admin/connectors/catalog/{connector_id}/tools"
+            f"{api_base_url.rstrip('/')}/api/admin/connectors/catalog/{connector_id}/tools"
         )
         connectors.append(
             ConnectorState(
