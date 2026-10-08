@@ -1,10 +1,12 @@
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import { z } from 'zod';
 import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError, browserTransport, type Transport } from './transport';
 import { InMemoryPublicConfigurationProvider } from './public-configuration';
 
-function configuredTransport(request: typeof fetch, signIn = vi.fn()): Transport {
-  return browserTransport({ fetch: request, signIn, configuration: new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }) });
+afterEach(() => vi.unstubAllGlobals());
+
+function configuredTransport(request: typeof fetch): Transport {
+  return browserTransport({ fetch: request, configuration: new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }) });
 }
 
 describe('browser transport contract', () => {
@@ -28,17 +30,21 @@ describe('browser transport contract', () => {
     await configuredTransport(request).request({ method: 'PUT', path: '/admin/thing', body: { value: 'saved' }, inputSchema: z.object({ value: z.string() }) });
     expect(request).toHaveBeenCalledWith('/api/admin/thing', expect.objectContaining({ credentials: 'same-origin', headers: { 'X-Umbod-Web-Request': '1', 'content-type': 'application/json' }, body: '{"value":"saved"}' }));
   });
-  test('redirects expired mutations centrally without exposing an operational retry', async () => {
+  test.each(['GET', 'DELETE'] as const)('rejects a single unauthorized %s request without navigation or replay', async (method) => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 401 }));
-    const signIn = vi.fn();
-    await expect(configuredTransport(request, signIn).request({ method: 'DELETE', path: '/admin/thing' })).rejects.toBeInstanceOf(AuthenticationRequiredError);
-    expect(signIn).toHaveBeenCalledOnce();
+    const assign = vi.fn();
+    vi.stubGlobal('window', { location: { assign } });
+    await expect(configuredTransport(request).request({ method, path: '/admin/thing' })).rejects.toBeInstanceOf(AuthenticationRequiredError);
+    expect(request).toHaveBeenCalledOnce();
+    expect(assign).not.toHaveBeenCalled();
   });
   test('preserves forbidden failures without sign-in', async () => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ detail: 'Forbidden' }, { status: 403 }));
-    const signIn = vi.fn();
-    await expect(configuredTransport(request, signIn).request({ method: 'GET', path: '/admin/thing' })).rejects.toBeInstanceOf(HttpError);
-    expect(signIn).not.toHaveBeenCalled();
+    const assign = vi.fn();
+    vi.stubGlobal('window', { location: { assign } });
+    await expect(configuredTransport(request).request({ method: 'GET', path: '/admin/thing' })).rejects.toBeInstanceOf(HttpError);
+    expect(request).toHaveBeenCalledOnce();
+    expect(assign).not.toHaveBeenCalled();
   });
   test('maps network failures', async () => {
     const request = vi.fn<typeof fetch>().mockRejectedValue(new Error('offline'));

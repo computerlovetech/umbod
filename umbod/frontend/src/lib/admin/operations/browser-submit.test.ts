@@ -86,6 +86,14 @@ describe('browser submissions', () => {
       setup.submit(); await vi.waitFor(() => expect(cleanup).toHaveBeenCalledOnce());
       expect(after).toHaveBeenCalledWith(expect.objectContaining({ result: expect.objectContaining({ status: cause instanceof HttpError ? 403 : 401 }) }));
       expect(setup.dependencies.invalidate).not.toHaveBeenCalled();
+      expect(setup.dependencies.navigate).not.toHaveBeenCalled();
+      expect(setup.operation).toHaveBeenCalledOnce();
+      expect((setup.form.elements.namedItem('connectorId') as HTMLInputElement).value).toBe('billing');
+      setup.submit();
+      await vi.waitFor(() => expect(cleanup).toHaveBeenCalledTimes(2));
+      expect(setup.operation).toHaveBeenCalledTimes(2);
+      expect(setup.dependencies.navigate).not.toHaveBeenCalled();
+      expect(setup.dependencies.invalidate).not.toHaveBeenCalled();
     }
   });
   test('navigates redirects without resetting form values', async () => {

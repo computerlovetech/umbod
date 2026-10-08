@@ -58,7 +58,6 @@ export interface BrowserTransportConfig {
   fetch?: typeof globalThis.fetch;
   configuration?: PublicConfigurationProvider;
   bearerToken?: () => string | undefined;
-  signIn?: () => void;
 }
 
 export class AuthenticationRequiredError extends Error {
@@ -86,7 +85,7 @@ class HttpTransport implements Transport {
     }
 
     if (response.status === 401) {
-      try { (this.config.signIn ?? navigateToSignIn)(); } finally { throw new AuthenticationRequiredError(); }
+      throw new AuthenticationRequiredError();
     }
 
     if (!response.ok) {
