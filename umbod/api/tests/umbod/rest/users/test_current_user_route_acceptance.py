@@ -222,11 +222,11 @@ def test_current_user_requires_valid_authentication(
             id="missing_subject_claim",
         ),
         pytest.param(
-            {"sub": "user-123", "groups": ["umbod-admins"]}, id="missing_email_claim"
+            {"sub": 123, "groups": ["umbod-admins"]}, id="invalid_subject_claim"
         ),
     ],
 )
-def test_current_user_requires_subject_and_email_claims(
+def test_current_user_requires_string_subject_claim(
     current_user_api: CurrentUserApiBoundary,
     tokens: JwtTokenFactory,
     claims: dict[str, object],
@@ -235,6 +235,20 @@ def test_current_user_requires_subject_and_email_claims(
 
     assert response.status_code == 401
     assert response.body == {"detail": "Unauthorized"}
+
+
+@pytest.mark.parametrize("profile", [{}, {"email": None}, {"email": 123}, {"email": []}, {"email": {}}])
+def test_authenticated_caller_without_email_retrieves_nullable_profile(
+    current_user_api: CurrentUserApiBoundary,
+    tokens: JwtTokenFactory,
+    profile: dict[str, object],
+) -> None:
+    response = current_user_api.get_current_user(CurrentUserRequest(tokens.trusted_token({
+        "sub": "user-123", "groups": ["umbod-admins"], **profile,
+    })))
+
+    assert response.status_code == 200
+    assert response.body == {"id": "user-123", "email": None, "name": "unknown", "picture": None}
 
 
 def test_authenticated_caller_retrieves_standard_picture_claim(
@@ -309,7 +323,6 @@ def test_non_admin_authenticated_caller_cannot_retrieve_current_user_details(
             tokens.trusted_token(
                 {
                     "sub": "jwt-user-123",
-                    "email": "jwt-alex@example.com",
                     "name": "JWT Alex",
                     "groups": ["umbod-users"],
                     "roles": ["member"],

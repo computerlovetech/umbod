@@ -251,6 +251,8 @@ configs:
           scope: ${UMBOD_OAUTH2_PROXY_SCOPE:-openid email profile permissions offline_access}
           skipClaimsFromProfileURL: false
           oidcConfig:
+            audienceClaims: [aud]
+            emailClaim: email
             issuerURL: https://${UMBOD_OIDC_DOMAIN:-example.eu.auth0.com}/
             groupsClaim: groups
             insecureSkipNonce: true

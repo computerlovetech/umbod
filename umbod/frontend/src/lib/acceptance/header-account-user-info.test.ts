@@ -4,7 +4,7 @@ import { createHeaderAccountUserInfoBoundary } from '../header/accountIdentity';
 
 type CurrentUserIdentity = {
   id: string;
-  email: string;
+  email: string | null;
   name: string;
   picture?: string | null;
 };
@@ -13,7 +13,7 @@ type HeaderAccountIdentityState =
   | {
       kind: 'visible';
       name: string;
-      email: string;
+      email: string | null;
       picture: string | null;
       hiddenValues: {
         id: string;
@@ -69,6 +69,16 @@ describe('header account user info acceptance', () => {
       hiddenValues: {
         id: 'user-123'
       }
+    });
+  });
+
+  test('nullable email preserves the verified account profile', () => {
+    const boundary = createBoundary();
+    expect(boundary.viewHeaderAccountIdentity({
+      id: 'user-123', email: null, name: 'unknown', picture: 'https://example.com/alex.png'
+    })).toEqual({
+      kind: 'visible', email: null, name: 'unknown', picture: 'https://example.com/alex.png',
+      hiddenValues: { id: 'user-123' }
     });
   });
 

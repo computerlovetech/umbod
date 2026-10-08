@@ -70,7 +70,9 @@
           <AccountPicture picture={accountIdentity.picture} label="Current account picture" />
           <div class="account-text">
             <p class="account-name">{accountIdentity.name}</p>
-            <p class="account-email">{accountIdentity.email}</p>
+            {#if accountIdentity.email !== null}
+              <p class="account-email">{accountIdentity.email}</p>
+            {/if}
           </div>
         </div>
       {:else}

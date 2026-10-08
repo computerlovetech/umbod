@@ -68,6 +68,67 @@ def test_invalid_selected_forwarded_token_does_not_fall_back_to_bearer(
     assert response.status_code == 401
 
 
+@pytest.mark.parametrize("profile", [{}, {"email": None}, {"email": 123}])
+@pytest.mark.parametrize("header", ["Authorization", "X-Auth-Request-Access-Token"])
+def test_verified_production_profile_without_email(
+    client: TestClient, signing_key: rsa.RSAPrivateKey, profile: dict[str, object], header: str
+) -> None:
+    claims = jwt.decode(_token(signing_key, "https://identity.example.com/", "umbod-api"), options={"verify_signature": False})
+    claims.pop("email")
+    claims.update(profile)
+    token = jwt.encode(claims, signing_key, algorithm="RS256")
+    response = client.get("/api/admin/users", headers={header: "Bearer " + token})
+    assert response.status_code == 200
+    assert response.json() == {"id": "admin-123", "email": None, "name": "unknown", "picture": None}
+
+
+@pytest.mark.parametrize("changes", [
+    {"exp": int(time()) - 60},
+    {"iss": "https://attacker.example.com/"},
+    {"aud": "web-client-id"},
+    {"sub": None},
+    {"sub": 123},
+])
+def test_invalid_production_token_without_email_remains_unauthorized(
+    client: TestClient, signing_key: rsa.RSAPrivateKey, changes: dict[str, object]
+) -> None:
+    claims = {"iss": "https://identity.example.com/", "aud": "umbod-api", "sub": "admin-123", "groups": ["umbod-admins"], "exp": int(time()) + 600, **changes}
+    response = client.get("/api/admin/users", headers={"Authorization": "Bearer " + jwt.encode(claims, signing_key, algorithm="RS256")})
+    assert response.status_code == 401
+
+
+def test_production_missing_subject_without_email_is_unauthorized(
+    client: TestClient, signing_key: rsa.RSAPrivateKey
+) -> None:
+    claims = {"iss": "https://identity.example.com/", "aud": "umbod-api", "groups": ["umbod-admins"], "exp": int(time()) + 600}
+    response = client.get("/api/admin/users", headers={"Authorization": "Bearer " + jwt.encode(claims, signing_key, algorithm="RS256")})
+    assert response.status_code == 401
+
+
+def test_current_user_openapi_requires_nullable_email(client: TestClient, signing_key: rsa.RSAPrivateKey) -> None:
+    response = client.get("/api/admin/openapi.json", headers={
+        "Authorization": "Bearer " + _token(signing_key, "https://identity.example.com/", "umbod-api")
+    })
+    assert response.status_code == 200
+    schema = response.json()["components"]["schemas"]["CurrentUserResponse"]
+    assert "email" in schema["required"]
+    assert schema["properties"]["email"]["anyOf"] == [{"type": "string"}, {"type": "null"}]
+    assert "default" not in schema["properties"]["email"]
+
+
+def test_wrong_signature_without_email_is_unauthorized(client: TestClient) -> None:
+    attacker_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    claims = {"iss": "https://identity.example.com/", "aud": "umbod-api", "sub": "admin-123", "groups": ["umbod-admins"], "exp": int(time()) + 600}
+    response = client.get("/api/admin/users", headers={"Authorization": "Bearer " + jwt.encode(claims, attacker_key, algorithm="RS256")})
+    assert response.status_code == 401
+
+
+def test_non_admin_without_email_remains_forbidden(client: TestClient, signing_key: rsa.RSAPrivateKey) -> None:
+    claims = {"iss": "https://identity.example.com/", "aud": "umbod-api", "sub": "admin-123", "groups": ["members"], "exp": int(time()) + 600}
+    response = client.get("/api/admin/users", headers={"Authorization": "Bearer " + jwt.encode(claims, signing_key, algorithm="RS256")})
+    assert response.status_code == 403
+
+
 def test_forwarded_access_token_takes_precedence_over_wrong_audience_id_token(
     client: TestClient, signing_key: rsa.RSAPrivateKey
 ) -> None:

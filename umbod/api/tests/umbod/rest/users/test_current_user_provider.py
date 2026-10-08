@@ -69,16 +69,36 @@ def test_jwt_provider_rejects_invalid_token() -> None:
     "claims",
     [
         pytest.param({"email": "alex@example.com"}, id="missing_subject"),
-        pytest.param({"sub": "user-123"}, id="missing_email"),
+        pytest.param({"sub": None}, id="null_subject"),
+        pytest.param({"sub": 123}, id="non_string_subject"),
     ],
 )
-def test_jwt_provider_requires_subject_and_email(claims: dict[str, object]) -> None:
+def test_jwt_provider_requires_string_subject(claims: dict[str, object]) -> None:
     provider = JwtCurrentUserProvider("X-Forwarded-Access-Token", FakeJwtVerifier(claims, False))
 
     with pytest.raises(HTTPException) as error:
         provider.get_current_user(_create_request({"X-Forwarded-Access-Token": "token"}))
 
     assert error.value.status_code == 401
+
+
+@pytest.mark.parametrize("profile", [{}, {"email": None}, {"email": 123}, {"email": []}, {"email": {}}])
+def test_jwt_provider_normalizes_unavailable_email(profile: dict[str, object]) -> None:
+    provider: CurrentUserProvider = JwtCurrentUserProvider(
+        "X-Forwarded-Access-Token",
+        FakeJwtVerifier({"sub": "user-123", **profile}, False),
+    )
+
+    current_user = provider.get_current_user(_create_request({
+        "X-Forwarded-Access-Token": "token",
+        "X-Auth-Request-Email": "untrusted@example.com",
+        "X-Auth-Request-User": "untrusted-user",
+    }))
+
+    assert current_user.id == "user-123"
+    assert current_user.email is None
+    assert current_user.name == "unknown"
+    assert current_user.picture is None
 
 
 def test_jwt_provider_defaults_non_string_optional_claims() -> None:

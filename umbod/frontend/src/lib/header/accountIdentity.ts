@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const currentUserIdentitySchema = z.object({
   id: z.string(),
-  email: z.string(),
+  email: z.string().nullable(),
   name: z.string(),
   picture: z.string().nullish()
 });
@@ -13,7 +13,7 @@ export type HeaderAccountIdentityState =
   | {
       kind: 'visible';
       name: string;
-      email: string;
+      email: string | null;
       picture: string | null;
       hiddenValues: {
         id: string;

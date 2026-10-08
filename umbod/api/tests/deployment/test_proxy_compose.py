@@ -72,7 +72,10 @@ def test_browser_pages_use_gateway_upstream_without_error_middleware() -> None:
         prefix = f"traefik.http.routers.{router}"
         if f"{prefix}.rule" in frontend_labels:
             assert frontend_labels[f"{prefix}.service"] == "umbod-oauth"
-            assert frontend_labels[f"{prefix}.middlewares"] == "umbod-browser-response@docker"
+            assert frontend_labels[f"{prefix}.middlewares"].split(",") in [
+                ["umbod-browser-response@docker"],
+                ["umbod-admin-forwarded-https@docker", "umbod-browser-response@docker"],
+            ]
     assert not any("umbod-auth-errors" in label for service in services.values() for label in service.get("labels", {}))
     alpha = configuration["configs"]["oauth2-proxy-alpha"]["content"]
     assert "BindAddress: 0.0.0.0:4180" in alpha
@@ -89,7 +92,10 @@ def test_browser_api_uses_authenticated_python_router_without_html_redirect() ->
             assert api_labels[f"{prefix}.rule"] == (
                 "Host(`umbod-admin.computerlove.tech`) && PathPrefix(`/api/`)"
             )
-            assert api_labels[f"{prefix}.middlewares"] == "umbod-auth@docker"
+            assert api_labels[f"{prefix}.middlewares"].split(",") in [
+                ["umbod-auth@docker"],
+                ["umbod-admin-forwarded-https@docker", "umbod-auth@docker"],
+            ]
             assert api_labels[f"{prefix}.service"] == "umbod-browser-api"
             assert api_labels[f"{prefix}.priority"] == "50"
     assert api_labels["traefik.http.services.umbod-browser-api.loadbalancer.server.port"] == "8000"
@@ -164,7 +170,10 @@ def test_browser_response_stripping_does_not_change_internal_forwardauth() -> No
     }
     assert all(frontend_labels[f"{stripping_prefix}.{header}"] == "" for header in headers)
     for router in ("umbod-frontend", "umbod-frontend-secure"):
-        assert frontend_labels[f"traefik.http.routers.{router}.middlewares"] == "umbod-browser-response@docker"
+        assert frontend_labels[f"traefik.http.routers.{router}.middlewares"].split(",") in [
+            ["umbod-browser-response@docker"],
+            ["umbod-admin-forwarded-https@docker", "umbod-browser-response@docker"],
+        ]
     for service in services.values():
         for label, value in service.get("labels", {}).items():
             if label.endswith(".middlewares") and "umbod-browser-response@docker" in value:
@@ -186,6 +195,8 @@ def test_alpha_provider_fixes_audience_and_does_not_mix_legacy_flags() -> None:
     alpha = configuration["configs"]["oauth2-proxy-alpha"]["content"]
     assert "--alpha-config=/etc/oauth2-proxy/alpha.yml" in command
     assert {"source": "oauth2-proxy-alpha", "target": "/etc/oauth2-proxy/alpha.yml"}.items() <= proxy["configs"][0].items()
+    assert "audienceClaims: [aud]" in alpha
+    assert "emailClaim: email" in alpha
     assert "issuerURL: https://login.example.test/" in alpha
     assert "clientID:" in alpha and "test-client" in alpha
     assert "${UMBOD_OIDC_CLIENT_SECRET}" in alpha
@@ -201,3 +212,23 @@ def test_alpha_provider_fixes_audience_and_does_not_mix_legacy_flags() -> None:
     assert "--cookie-refresh=5m" in command
     assert "--cookie-expire=8h" in command
     assert "offline_access" in alpha
+
+
+def test_https_gateway_contract_preserves_secure_csrf_cookie_configuration() -> None:
+    services = authentication_compose_configuration()["services"]
+    proxy = services["oauth2-proxy"]
+    labels = proxy["labels"]
+    prefix = "traefik.http.middlewares.umbod-admin-forwarded-https.headers.customrequestheaders"
+    if f"{prefix}.X-Forwarded-Proto" not in labels:
+        return
+    assert labels[f"{prefix}.X-Forwarded-Proto"] == "https"
+    assert labels[f"{prefix}.X-Forwarded-Port"] == "443"
+    assert {"--cookie-secure=true", "--cookie-httponly=true", "--cookie-samesite=lax", "--cookie-path=/"}.issubset(proxy["command"])
+    for service, routers in (
+        ("oauth2-proxy", ("umbod-oauth", "umbod-oauth-secure")),
+        ("frontend", ("umbod-frontend", "umbod-frontend-secure")),
+        ("api", ("umbod-browser-api", "umbod-browser-api-secure")),
+    ):
+        for router in routers:
+            middleware = services[service]["labels"][f"traefik.http.routers.{router}.middlewares"].split(",")
+            assert middleware[0] == "umbod-admin-forwarded-https@docker"

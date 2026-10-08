@@ -26,8 +26,10 @@ class JwtCurrentUserProvider:
         email = jwt_claims.claims.get("email")
         name = jwt_claims.claims.get("name", "unknown")
         picture = jwt_claims.claims.get("picture")
-        if not isinstance(user_id, str) or not isinstance(email, str):
+        if not isinstance(user_id, str):
             raise HTTPException(status_code=401, detail="Unauthorized")
+        if not isinstance(email, str):
+            email = None
         if not isinstance(name, str):
             name = "unknown"
         if not isinstance(picture, str):

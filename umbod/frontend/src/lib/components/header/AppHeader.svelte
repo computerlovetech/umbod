@@ -13,7 +13,9 @@
       <AccountPicture picture={accountIdentity.picture} label="Current account picture" />
       <span class="account-text">
         <span class="account-name">{accountIdentity.name}</span>
-        <span class="account-email">{accountIdentity.email}</span>
+        {#if accountIdentity.email !== null}
+          <span class="account-email">{accountIdentity.email}</span>
+        {/if}
       </span>
     </section>
   {/if}
