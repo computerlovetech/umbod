@@ -49,7 +49,6 @@ class MCPAuthProviderFactory:
             client_id=settings.oidc.client_id,
             client_secret=settings.oidc.client_secret or None,
             base_url=settings.endpoints.mcp_base_url,
-            issuer_url=settings.oidc.issuer_url or None,
             required_scopes=settings.oidc.required_scopes,
             client_storage=client_storage,
             jwt_signing_key=settings.oidc.jwt_signing_key or None,
@@ -64,7 +63,6 @@ class MCPAuthProviderFactory:
             tenant_id=settings.oidc.tenant_id,
             required_scopes=settings.oidc.required_scopes,
             base_url=settings.endpoints.mcp_base_url,
-            issuer_url=settings.oidc.issuer_url or None,
             client_storage=client_storage,
             jwt_signing_key=settings.oidc.jwt_signing_key or None,
         )
@@ -78,7 +76,6 @@ class MCPAuthProviderFactory:
             client_secret=settings.oidc.client_secret,
             audience=settings.oidc.audience,
             base_url=settings.endpoints.mcp_base_url,
-            issuer_url=settings.oidc.issuer_url or None,
             required_scopes=settings.oidc.required_scopes,
             client_storage=client_storage,
             jwt_signing_key=settings.oidc.jwt_signing_key or None,

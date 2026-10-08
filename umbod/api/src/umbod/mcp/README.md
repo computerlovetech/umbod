@@ -38,6 +38,8 @@ File-input connector tools keep uploaded bytes only for the current app-backend 
 
 **Read when working with:** MCP OAuth, client storage, authorization, or consent.
 
+`auth/factory.py` leaves the Google, Entra, and Auth0 OAuth proxy issuer at FastMCP's public MCP base URL default. MCP resource metadata advertises Umbod's authorization server, and authorization metadata exposes Umbod's authorize, token, and register endpoints. Shared `oidc.issuer_url` remains the upstream token issuer for REST validation; Auth0 discovery independently supplies the upstream MCP token verifier's issuer.
+
 ### `messaging/`
 
 **Read when working with:** Event transport and state synchronization used by the MCP process.

@@ -64,6 +64,7 @@ def test_auth0_recipe_derives_discovery_and_jwks(monkeypatch: MonkeyPatch) -> No
         monkeypatch,
         UMBOD_PROFILE="production",
         UMBOD_AUTH="auth0",
+        UMBOD_PUBLIC_MCP_ORIGIN="https://umbod.computerlove.tech",
         UMBOD_OIDC_DOMAIN="example.eu.auth0.com",
         UMBOD_OIDC_CLIENT_ID="client-id",
         UMBOD_OIDC_CLIENT_SECRET="client-secret",
@@ -75,6 +76,7 @@ def test_auth0_recipe_derives_discovery_and_jwks(monkeypatch: MonkeyPatch) -> No
     assert config.oidc.provider == "auth0"
     assert config.oidc.config_url == "https://example.eu.auth0.com/.well-known/openid-configuration"
     assert config.oidc.issuer_url == "https://example.eu.auth0.com/"
+    assert config.endpoints.mcp_base_url == "https://umbod.computerlove.tech"
     assert config.admin_authentication.mode == "jwt"
     assert config.admin_authentication.environment == "production"
     assert (
