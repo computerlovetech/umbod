@@ -13,6 +13,11 @@ server {
         return 200 '{"status":"ok","service":"umbod-frontend"}';
     }
 
+    location = /signed-out.html {
+        try_files $uri =404;
+        add_header Cache-Control "no-store" always;
+    }
+
     location = /app-config.json {
         alias /tmp/umbod/app-config.json;
         default_type application/json;

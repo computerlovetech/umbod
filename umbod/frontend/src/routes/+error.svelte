@@ -1,6 +1,16 @@
 <script lang="ts">
   import { page } from '$app/state';
   import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
+  import { logoutNavigation, type LogoutNavigation } from '$lib/admin/infrastructure/logout';
+
+  let { logout = logoutNavigation }: { logout?: LogoutNavigation } = $props();
+  let loggingOut = $state(false);
+
+  async function handleLogout(): Promise<void> {
+    if (loggingOut) return;
+    loggingOut = true;
+    await logout.logout();
+  }
 
   const accessDenied = $derived(page.status === 401 || page.status === 403);
   const message = $derived(page.status === 401
@@ -20,10 +30,16 @@
   {#if page.status === 401}
     <button type="button" onclick={navigateToSignIn}>Sign in again</button>
   {/if}
+  {#if accessDenied}
+    <button type="button" disabled={loggingOut} onclick={handleLogout}>Log out</button>
+  {/if}
 </section>
 
 <style>
   .error-page { max-width: 42rem; margin: 0 auto; padding: 64px 24px; }
   button { margin-top: 24px; padding: 10px 16px; border: 1px solid var(--admin-action); border-radius: var(--admin-radius); background: var(--admin-action); color: var(--admin-on-action); font: inherit; cursor: pointer; }
   button:hover { background: var(--admin-action-hover); }
+  button + button { margin-left: 12px; }
+  button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
+  button:disabled { cursor: wait; opacity: 0.6; }
 </style>

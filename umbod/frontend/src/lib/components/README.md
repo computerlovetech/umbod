@@ -19,7 +19,7 @@ logo colors in the MCP setup guide.
 
 The shell and app header use `static/umbod-logo.svg`, copied from the website's
 existing logo. `AdminShell` provides the inline-size container used by
-`AdminSplitWorkspace` to stack its sidebar when the content area is narrow.
+`AdminSplitWorkspace` to stack its sidebar when the content area is narrow. Its accessible Log out button uses the injected logout navigation port independently of account identity; navigation occurs only on explicit user action.
 
 ## Submodules
 

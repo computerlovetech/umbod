@@ -15,6 +15,7 @@ services:
       - traefik.http.routers.umbod-browser-api.entryPoints=http
       - traefik.http.routers.umbod-browser-api.priority=50
       - traefik.http.routers.umbod-browser-api.middlewares=umbod-auth@docker
+      - traefik.http.routers.umbod-browser-api.service=umbod-browser-api
       - traefik.http.services.umbod-browser-api.loadbalancer.server.port=8000
     environment:
       - UMBOD_PROFILE=${UMBOD_PROFILE:-local}
@@ -116,24 +117,21 @@ services:
       - auth
     restart: unless-stopped
     command:
-      - --provider=oidc
-      - --oidc-issuer-url=https://${UMBOD_OIDC_DOMAIN:-example.eu.auth0.com}/
-      - --client-id=${UMBOD_OIDC_CLIENT_ID:-}
-      - --client-secret=${UMBOD_OIDC_CLIENT_SECRET:-}
+      - --alpha-config=/etc/oauth2-proxy/alpha.yml
+      - --whitelist-domain=${UMBOD_OIDC_DOMAIN:-example.eu.auth0.com}
+      - --whitelist-domain=${UMBOD_PUBLIC_SITE_HOST:-umbod-admin.computerlove.tech}
       - --redirect-url=${UMBOD_PUBLIC_SITE_ORIGIN:-https://umbod-admin.computerlove.tech}/oauth2/callback
       - --cookie-secret=${UMBOD_OAUTH2_PROXY_COOKIE_SECRET:-}
       - --email-domain=${UMBOD_OAUTH2_PROXY_EMAIL_DOMAIN:-*}
-      - --scope=${UMBOD_OAUTH2_PROXY_SCOPE:-openid email profile permissions offline_access}
       - --cookie-refresh=${UMBOD_OAUTH2_PROXY_COOKIE_REFRESH:-5m}
       - --cookie-expire=${UMBOD_OAUTH2_PROXY_COOKIE_EXPIRE:-8h}
-      - --http-address=0.0.0.0:4180
-      - --upstream=static://202
       - --reverse-proxy=true
-      - --set-authorization-header=true
-      - --set-xauthrequest=true
-      - --pass-access-token=true
-      - --pass-authorization-header=true
       - --skip-provider-button=true
+    environment:
+      UMBOD_OIDC_CLIENT_SECRET: ${UMBOD_OIDC_CLIENT_SECRET:-}
+    configs:
+      - source: oauth2-proxy-alpha
+        target: /etc/oauth2-proxy/alpha.yml
     ports:
       - "4180:4180"
     labels:
@@ -141,12 +139,10 @@ services:
       - traefik.http.middlewares.umbod-auth.forwardauth.address=http://oauth2-proxy:4180/oauth2/auth
       - traefik.http.middlewares.umbod-auth.forwardauth.trustForwardHeader=true
       - traefik.http.middlewares.umbod-auth.forwardauth.authResponseHeaders=Authorization,X-Auth-Request-Access-Token,X-Auth-Request-User,X-Auth-Request-Email
-      - traefik.http.middlewares.umbod-auth-errors.errors.status=401
-      - traefik.http.middlewares.umbod-auth-errors.errors.service=umbod-oauth
-      - traefik.http.middlewares.umbod-auth-errors.errors.query=/oauth2/sign_in?rd={url}
       - "traefik.http.routers.umbod-oauth.rule=Host(`umbod-admin.computerlove.tech`) && PathPrefix(`/oauth2/`)"
       - traefik.http.routers.umbod-oauth.entryPoints=http
       - traefik.http.routers.umbod-oauth.priority=100
+      - traefik.http.routers.umbod-oauth.service=umbod-oauth
       - traefik.http.services.umbod-oauth.loadbalancer.server.port=4180
 
   frontend:
@@ -161,13 +157,39 @@ services:
       - "traefik.http.routers.umbod-frontend.rule=Host(`umbod-admin.computerlove.tech`) && !Path(`/system/health`)"
       - traefik.http.routers.umbod-frontend.entryPoints=http
       - traefik.http.routers.umbod-frontend.priority=10
-      - traefik.http.routers.umbod-frontend.middlewares=umbod-auth-errors@docker,umbod-auth@docker
+      - traefik.http.routers.umbod-frontend.service=umbod-oauth
+      - traefik.http.routers.umbod-frontend.middlewares=umbod-browser-response@docker
+      - "traefik.http.routers.umbod-frontend-secure.rule=Host(`umbod-admin.computerlove.tech`) && !Path(`/system/health`)"
+      - traefik.http.routers.umbod-frontend-secure.entryPoints=https
+      - traefik.http.routers.umbod-frontend-secure.priority=10
+      - traefik.http.routers.umbod-frontend-secure.service=umbod-oauth
+      - traefik.http.routers.umbod-frontend-secure.middlewares=umbod-browser-response@docker
+      - traefik.http.routers.umbod-frontend-secure.tls=true
+      - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.Authorization=
+      - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.X-Auth-Request-Access-Token=
+      - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.X-Auth-Request-User=
+      - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.X-Auth-Request-Email=
+      - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.X-Auth-Request-Preferred-Username=
+      - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.X-Auth-Request-Groups=
+      - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.X-Forwarded-Access-Token=
       - traefik.http.services.umbod-frontend.loadbalancer.server.port=3000
       - "traefik.http.routers.umbod-favicon.rule=Host(`umbod-admin.computerlove.tech`) && (Path(`/favicon.svg`) || Path(`/favicon.ico`) || Path(`/umbod-favicon-v2.ico`) || Path(`/umbod-favicon-v2.png`) || Path(`/umbod-apple-touch-icon-v2.png`))"
       - traefik.http.routers.umbod-favicon.entryPoints=http
       - traefik.http.routers.umbod-favicon.priority=20
       - traefik.http.routers.umbod-favicon.service=umbod-frontend
+      - "traefik.http.routers.umbod-signed-out.rule=Host(`umbod-admin.computerlove.tech`) && Path(`/signed-out.html`)"
+      - traefik.http.routers.umbod-signed-out.entryPoints=http
+      - traefik.http.routers.umbod-signed-out.priority=20
+      - traefik.http.routers.umbod-signed-out.service=umbod-frontend
+      - "traefik.http.routers.umbod-signed-out-secure.rule=Host(`umbod-admin.computerlove.tech`) && Path(`/signed-out.html`)"
+      - traefik.http.routers.umbod-signed-out-secure.entryPoints=https
+      - traefik.http.routers.umbod-signed-out-secure.priority=20
+      - traefik.http.routers.umbod-signed-out-secure.service=umbod-frontend
+      - traefik.http.routers.umbod-signed-out-secure.tls=true
     environment:
+      - PUBLIC_AUTH0_DOMAIN=${PUBLIC_AUTH0_DOMAIN:-}
+      - PUBLIC_AUTH0_CLIENT_ID=${PUBLIC_AUTH0_CLIENT_ID:-}
+      - PUBLIC_LOGOUT_RETURN_URL=${PUBLIC_LOGOUT_RETURN_URL:-}
       - PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL:-/api}
       - PUBLIC_MCP_BASE_URL=${UMBOD_PUBLIC_MCP_ORIGIN:-http://localhost:8011}
       - API_PROXY_ORIGIN=http://api:8000
@@ -185,6 +207,58 @@ volumes:
   umbod-data:
 
 configs:
+  oauth2-proxy-alpha:
+    content: |
+      server:
+        BindAddress: 0.0.0.0:4180
+      upstreamConfig:
+        upstreams:
+          - id: frontend
+            path: /
+            uri: http://frontend:3000/
+      injectRequestHeaders:
+        - name: X-Forwarded-Groups
+          values: [{claim: groups}]
+        - name: X-Forwarded-User
+          values: [{claim: user}]
+        - name: X-Forwarded-Email
+          values: [{claim: email}]
+        - name: X-Forwarded-Preferred-Username
+          values: [{claim: preferred_username}]
+        - name: X-Forwarded-Access-Token
+          values: [{claim: access_token}]
+        - name: Authorization
+          values: [{claim: id_token, prefix: 'Bearer '}]
+      injectResponseHeaders:
+        - name: X-Auth-Request-User
+          values: [{claim: user}]
+        - name: X-Auth-Request-Email
+          values: [{claim: email}]
+        - name: X-Auth-Request-Preferred-Username
+          values: [{claim: preferred_username}]
+        - name: X-Auth-Request-Groups
+          values: [{claim: groups}]
+        - name: X-Auth-Request-Access-Token
+          values: [{claim: access_token}]
+        - name: Authorization
+          values: [{claim: id_token, prefix: 'Bearer '}]
+      providers:
+        - id: auth0
+          provider: oidc
+          clientID: "${UMBOD_OIDC_CLIENT_ID:-}"
+          clientSecret: |-
+            $${UMBOD_OIDC_CLIENT_SECRET}
+          scope: ${UMBOD_OAUTH2_PROXY_SCOPE:-openid email profile permissions offline_access}
+          skipClaimsFromProfileURL: false
+          oidcConfig:
+            issuerURL: https://${UMBOD_OIDC_DOMAIN:-example.eu.auth0.com}/
+            groupsClaim: groups
+            insecureSkipNonce: true
+          loginURLParameters:
+            - name: approval_prompt
+              default: [force]
+            - name: audience
+              default: ["${UMBOD_OIDC_AUDIENCE:-https://umbod.computerlove.tech}"]
   connector-deployment-availability:
     content: |
       {

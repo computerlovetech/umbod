@@ -5,9 +5,9 @@
 ## Entrypoints
 
 - `start.sh` generates configuration atomically and starts nginx.
-- `generate-config.sh` serializes only `PUBLIC_API_BASE_URL` and `PUBLIC_MCP_BASE_URL` through jq as the `apiBaseUrl` and `mcpBaseUrl` JSON fields. Defaults are `/api` and `/mcp`. No other environment value enters the payload.
+- `generate-config.sh` safely serializes `PUBLIC_API_BASE_URL` and `PUBLIC_MCP_BASE_URL` through jq as `apiBaseUrl` and `mcpBaseUrl` (defaults `/api` and `/mcp`). `PUBLIC_AUTH0_DOMAIN`, `PUBLIC_AUTH0_CLIENT_ID`, and `PUBLIC_LOGOUT_RETURN_URL` produce the public `logout` object; all absent produces null. Partial or invalid logout settings fail startup without exposing values. The domain is bare DNS, client ID is bounded without whitespace/control characters, and the return is the fixed HTTPS `/signed-out.html` destination. These are public identifiers, never credentials; production domain/client must match gateway configuration.
 - `nginx.conf` uses writable temporary paths and port 3000.
-- `default.conf.template` serves `/app-config.json`, independent `/system/health`, immutable assets, and the `200.html` SPA fallback. Missing `/_app/` assets return 404. HTML and public configuration use `Cache-Control: no-store`.
+- `default.conf.template` serves `/app-config.json`, independent `/system/health`, immutable assets, and the `200.html` SPA fallback. Missing `/_app/` assets return 404. HTML and public configuration use `Cache-Control: no-store`. Exact `/signed-out.html` serves the standalone dependency-free static page without SPA fallback, returning 404 if missing and always no-store. The gateway must expose that page publicly; sign-in is explicit and logout does not promise universal identity-provider session clearing or token revocation.
 
 `API_PROXY_ORIGIN` is a server-only local routing setting, not browser configuration. Compose and Helm set it to the Python API Service so local frontend port-forwards remain functional; nginx retains `/api/` and forwards Authorization, Cookie, Origin, and forwarded host/protocol headers. DNS resolution uses the container's resolver configuration in Docker and Kubernetes. Production ingress routes `/api` directly to Python without stripping the prefix. API requests must never fall through to the SPA shell or map to internal `/system` endpoints.
 

@@ -13,13 +13,16 @@ describe('root error page', () => {
     state.page.status = status;
     const assign = vi.fn();
     vi.stubGlobal('window', { location: { assign } });
-    const { body } = render(ErrorPage);
+    const logout = vi.fn<() => Promise<void>>().mockResolvedValue();
+    const { body } = render(ErrorPage, { props: { logout: { logout } } });
     expect(body).toContain(status === 401 || status === 403 ? 'Access denied' : 'Page unavailable');
     expect(body).not.toContain(state.page.error.message);
     expect(body.includes('Sign in again</button>')).toBe(status === 401);
     if (status === 401) expect(body).toContain('Your sign-in was not accepted by the API.');
     if (status === 403) expect(body).toContain('You do not have permission');
     if (status >= 404) expect(body).toContain('This page could not be loaded.');
+    expect(body.includes('Log out</button>')).toBe(status === 401 || status === 403);
+    expect(logout).not.toHaveBeenCalled();
     expect(assign).not.toHaveBeenCalled();
   });
 

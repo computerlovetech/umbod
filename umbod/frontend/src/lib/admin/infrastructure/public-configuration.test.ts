@@ -13,6 +13,15 @@ describe('public browser configuration', () => {
   test.each(['//external.example.test', 'javascript:alert(1)', '/api?token=secret', '/api#fragment'])('rejects unsafe bases %s', (apiBaseUrl) => {
     expect(publicConfigurationSchema.safeParse({ apiBaseUrl, mcpBaseUrl: 'http://localhost:8011' }).success).toBe(false);
   });
+  test('loads public logout configuration through the existing provider port', async () => {
+    const logout = { auth0Domain: 'tenant.auth0.com', clientId: 'actual-client', returnTo: 'https://admin.example.test/signed-out.html' };
+    const provider = new BrowserPublicConfigurationProvider(vi.fn<typeof fetch>().mockResolvedValue(Response.json({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', logout })));
+    expect((await provider.get()).logout).toEqual(logout);
+    expect(publicConfigurationSchema.parse({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', logout: null }).logout).toBeNull();
+  });
+  test.each([{}, { auth0Domain: 'tenant.auth0.com' }, { auth0Domain: 'tenant.auth0.com', clientId: 'actual-client' }])('rejects partial logout configuration', (logout) => {
+    expect(publicConfigurationSchema.safeParse({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', logout }).success).toBe(false);
+  });
   test('in-memory configuration satisfies the same validated port', async () => {
     expect(await new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }).get()).toEqual({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' });
   });
