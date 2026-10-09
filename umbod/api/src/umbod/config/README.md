@@ -26,11 +26,11 @@ OIDC issuer derivation preserves an explicit `UMBOD_OIDC_ISSUER_URL`. Otherwise 
 
 ### `app.py`
 
-**Read when working with:** Internal application configuration consumed at runtime, including the independently enabled OTLP receiver and its request limit. Operator OTLP bearer credentials are excluded from configuration inspection and redacted display.
+**Read when working with:** Internal application configuration consumed at runtime, including `user_profile` mapping and token-role validation, and the independently enabled OTLP receiver and its request limit. Operator OTLP bearer credentials are excluded from configuration inspection and redacted display.
 
 ### `validate.py`
 
-**Read when working with:** Cross-field configuration constraints and startup validation.
+**Read when working with:** Cross-field configuration constraints and startup validation. Optional profile mode, header and mapping settings are assembled explicitly in `build.py`, validated by `validate.py` and `app.py`, and exposed through the non-secret inspection catalog. The [environment reference](../../../../docs/operations/configuration.md#optional-user-profile-enrichment) defines the profile contract.
 
 ### `inspection.py`
 

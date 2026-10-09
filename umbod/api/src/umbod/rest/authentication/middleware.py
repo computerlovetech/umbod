@@ -12,6 +12,7 @@ from umbod.rest.authentication.authorization import (
     JwtVerificationError,
     JwtVerifier,
 )
+from umbod.rest.authentication.deps import VERIFIED_ACCESS_CLAIMS_STATE_KEY
 from umbod.rest.authentication.tokens import extract_request_jwt_token
 from umbod.rest.authentication.verifiers import (
     ProductionJwksJwtVerifier,
@@ -34,7 +35,9 @@ class AdminAuthorizationPolicySettingsPort(Protocol):
     required_membership: str
 
 
-class AdminRequestAuthenticationSettingsPort(AdminAuthenticationModeSettingsPort, Protocol):
+class AdminRequestAuthenticationSettingsPort(
+    AdminAuthenticationModeSettingsPort, Protocol
+):
     debug_enabled: bool
     jwt_header_name: str
     simulated_admin: bool
@@ -90,7 +93,9 @@ class JwtVerifierFactory:
             )
         if authentication_settings.environment == "production":
             return ProductionJwksJwtVerifier(
-                authentication_settings.jwks_url, settings.oidc.issuer_url, settings.oidc.audience
+                authentication_settings.jwks_url,
+                settings.oidc.issuer_url,
+                settings.oidc.audience,
             )
         return SemanticJwtVerifier()
 
@@ -125,11 +130,14 @@ class JwtAdminAuthenticationStrategy:
             return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
         if not self.authorization_service.is_authorized(claims):
             return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+        setattr(request.state, VERIFIED_ACCESS_CLAIMS_STATE_KEY, claims)
         return None
 
 
 class AdminAuthenticationStrategyFactory:
-    def __init__(self, authorization_service_factory: AdminAuthorizationServiceFactoryPort) -> None:
+    def __init__(
+        self, authorization_service_factory: AdminAuthorizationServiceFactoryPort
+    ) -> None:
         self.authorization_service_factory = authorization_service_factory
 
     def create(self, settings: APISettingsPort) -> AdminAuthenticationStrategy:
@@ -149,7 +157,9 @@ class AdminAuthenticationMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.strategy = strategy
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         authentication_response = await self.strategy.authenticate(request)
         if authentication_response is not None:
             return authentication_response

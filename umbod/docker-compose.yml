@@ -14,7 +14,7 @@ services:
       - "traefik.http.routers.umbod-browser-api.rule=Host(`umbod-admin.computerlove.tech`) && PathPrefix(`/api/`)"
       - traefik.http.routers.umbod-browser-api.entryPoints=http
       - traefik.http.routers.umbod-browser-api.priority=50
-      - traefik.http.routers.umbod-browser-api.middlewares=umbod-auth@docker
+      - traefik.http.routers.umbod-browser-api.middlewares=umbod-browser-response@docker,umbod-auth@docker
       - traefik.http.routers.umbod-browser-api.service=umbod-browser-api
       - traefik.http.services.umbod-browser-api.loadbalancer.server.port=8000
     environment:
@@ -33,6 +33,11 @@ services:
       - UMBOD_CONNECTOR_STORE=${UMBOD_CONNECTOR_STORE:-sqlite}
       - UMBOD_ADMIN_GROUP=${UMBOD_ADMIN_GROUP:-umbod:admin}
       - UMBOD_ADMIN_JWT_HEADER=${UMBOD_ADMIN_JWT_HEADER:-X-Auth-Request-Access-Token}
+      - UMBOD_USER_PROFILE_MODE=${UMBOD_USER_PROFILE_MODE:-access_claims}
+      - UMBOD_USER_PROFILE_JWT_HEADER=${UMBOD_USER_PROFILE_JWT_HEADER:-X-Auth-Request-ID-Token}
+      - UMBOD_USER_PROFILE_NAME_CLAIM=${UMBOD_USER_PROFILE_NAME_CLAIM:-name}
+      - UMBOD_USER_PROFILE_EMAIL_CLAIM=${UMBOD_USER_PROFILE_EMAIL_CLAIM:-email}
+      - UMBOD_USER_PROFILE_PICTURE_CLAIM=${UMBOD_USER_PROFILE_PICTURE_CLAIM:-picture}
       - UMBOD_OIDC_ISSUER_URL=${UMBOD_OIDC_ISSUER_URL:-}
       - UMBOD_ROOT_SECRET=${UMBOD_ROOT_SECRET:-}
       - UMBOD_OIDC_DOMAIN=${UMBOD_OIDC_DOMAIN:-}
@@ -138,10 +143,11 @@ services:
       - traefik.enable=true
       - traefik.http.middlewares.umbod-auth.forwardauth.address=http://oauth2-proxy:4180/oauth2/auth
       - traefik.http.middlewares.umbod-auth.forwardauth.trustForwardHeader=true
-      - traefik.http.middlewares.umbod-auth.forwardauth.authResponseHeaders=Authorization,X-Auth-Request-Access-Token,X-Auth-Request-User,X-Auth-Request-Email
+      - traefik.http.middlewares.umbod-auth.forwardauth.authResponseHeaders=Authorization,X-Auth-Request-Access-Token,X-Auth-Request-ID-Token,X-Auth-Request-User,X-Auth-Request-Email
       - "traefik.http.routers.umbod-oauth.rule=Host(`umbod-admin.computerlove.tech`) && PathPrefix(`/oauth2/`)"
       - traefik.http.routers.umbod-oauth.entryPoints=http
       - traefik.http.routers.umbod-oauth.priority=100
+      - traefik.http.routers.umbod-oauth.middlewares=umbod-browser-response@docker
       - traefik.http.routers.umbod-oauth.service=umbod-oauth
       - traefik.http.services.umbod-oauth.loadbalancer.server.port=4180
 
@@ -167,6 +173,7 @@ services:
       - traefik.http.routers.umbod-frontend-secure.tls=true
       - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.Authorization=
       - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.X-Auth-Request-Access-Token=
+      - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.X-Auth-Request-ID-Token=
       - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.X-Auth-Request-User=
       - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.X-Auth-Request-Email=
       - traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.X-Auth-Request-Preferred-Username=
@@ -227,8 +234,10 @@ configs:
           values: [{claim: preferred_username}]
         - name: X-Forwarded-Access-Token
           values: [{claim: access_token}]
+        - name: X-Auth-Request-ID-Token
+          values: [{claim: id_token}]
         - name: Authorization
-          values: [{claim: id_token, prefix: 'Bearer '}]
+          values: [{claim: access_token, prefix: 'Bearer '}]
       injectResponseHeaders:
         - name: X-Auth-Request-User
           values: [{claim: user}]
@@ -240,8 +249,10 @@ configs:
           values: [{claim: groups}]
         - name: X-Auth-Request-Access-Token
           values: [{claim: access_token}]
+        - name: X-Auth-Request-ID-Token
+          values: [{claim: id_token}]
         - name: Authorization
-          values: [{claim: id_token, prefix: 'Bearer '}]
+          values: [{claim: access_token, prefix: 'Bearer '}]
       providers:
         - id: auth0
           provider: oidc

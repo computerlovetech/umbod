@@ -29,9 +29,21 @@ def authentication_compose_configuration(
         "PUBLIC_LOGOUT_RETURN_URL": "",
         **(overrides or {}),
     }
-    compose_path = environment.get("UMBOD_PROXY_COMPOSE_FILE", str(APP_ROOT / "docker-compose.yml"))
+    compose_path = environment.get(
+        "UMBOD_PROXY_COMPOSE_FILE", str(APP_ROOT / "docker-compose.yml")
+    )
     result = subprocess.run(
-        ["docker", "compose", "-f", compose_path, "--profile", "auth", "config", "--format", "json"],
+        [
+            "docker",
+            "compose",
+            "-f",
+            compose_path,
+            "--profile",
+            "auth",
+            "config",
+            "--format",
+            "json",
+        ],
         cwd=APP_ROOT,
         env=environment,
         check=True,
@@ -61,7 +73,20 @@ def test_admin_authentication_headers_are_aligned_across_services() -> None:
     assert "name: X-Auth-Request-Access-Token" in alpha
     assert "claim: access_token" in alpha
     assert "name: Authorization" in alpha
-    assert "claim: id_token" in alpha
+    assert "name: X-Auth-Request-ID-Token" in alpha
+    assert (
+        "name: Authorization\n    values: [{claim: access_token, prefix: 'Bearer '}]"
+        in alpha
+    )
+    assert "name: X-Auth-Request-ID-Token\n    values: [{claim: id_token}]" in alpha
+    assert "x-auth-request-id-token" in forwarded_headers
+    assert services["api"]["environment"]["UMBOD_USER_PROFILE_MODE"] == "access_claims"
+    assert (
+        services["frontend"]["labels"][
+            "traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders.X-Auth-Request-ID-Token"
+        ]
+        == ""
+    )
 
 
 def test_browser_pages_use_gateway_upstream_without_error_middleware() -> None:
@@ -76,7 +101,11 @@ def test_browser_pages_use_gateway_upstream_without_error_middleware() -> None:
                 ["umbod-browser-response@docker"],
                 ["umbod-admin-forwarded-https@docker", "umbod-browser-response@docker"],
             ]
-    assert not any("umbod-auth-errors" in label for service in services.values() for label in service.get("labels", {}))
+    assert not any(
+        "umbod-auth-errors" in label
+        for service in services.values()
+        for label in service.get("labels", {})
+    )
     alpha = configuration["configs"]["oauth2-proxy-alpha"]["content"]
     assert "BindAddress: 0.0.0.0:4180" in alpha
     assert "uri: http://frontend:3000/" in alpha
@@ -93,12 +122,19 @@ def test_browser_api_uses_authenticated_python_router_without_html_redirect() ->
                 "Host(`umbod-admin.computerlove.tech`) && PathPrefix(`/api/`)"
             )
             assert api_labels[f"{prefix}.middlewares"].split(",") in [
-                ["umbod-auth@docker"],
-                ["umbod-admin-forwarded-https@docker", "umbod-auth@docker"],
+                ["umbod-browser-response@docker", "umbod-auth@docker"],
+                [
+                    "umbod-admin-forwarded-https@docker",
+                    "umbod-browser-response@docker",
+                    "umbod-auth@docker",
+                ],
             ]
             assert api_labels[f"{prefix}.service"] == "umbod-browser-api"
             assert api_labels[f"{prefix}.priority"] == "50"
-    assert api_labels["traefik.http.services.umbod-browser-api.loadbalancer.server.port"] == "8000"
+    assert (
+        api_labels["traefik.http.services.umbod-browser-api.loadbalancer.server.port"]
+        == "8000"
+    )
     assert not any("stripprefix" in label.lower() for label in api_labels)
 
 
@@ -124,31 +160,49 @@ def test_public_signed_out_and_favicon_routes_bypass_authentication() -> None:
 
 
 def test_static_frontend_receives_only_public_configuration_and_proxy_target() -> None:
-    frontend = authentication_compose_configuration({
-        "PUBLIC_AUTH0_DOMAIN": "login.example.test",
-        "PUBLIC_AUTH0_CLIENT_ID": "test-client",
-        "PUBLIC_LOGOUT_RETURN_URL": "https://umbod-admin.computerlove.tech/signed-out.html",
-    })["services"]["frontend"]
+    frontend = authentication_compose_configuration(
+        {
+            "PUBLIC_AUTH0_DOMAIN": "login.example.test",
+            "PUBLIC_AUTH0_CLIENT_ID": "test-client",
+            "PUBLIC_LOGOUT_RETURN_URL": "https://umbod-admin.computerlove.tech/signed-out.html",
+        }
+    )["services"]["frontend"]
     environment = frontend["environment"]
     assert environment["PUBLIC_AUTH0_DOMAIN"] == "login.example.test"
     assert environment["PUBLIC_AUTH0_CLIENT_ID"] == "test-client"
-    assert environment["PUBLIC_LOGOUT_RETURN_URL"] == "https://umbod-admin.computerlove.tech/signed-out.html"
+    assert (
+        environment["PUBLIC_LOGOUT_RETURN_URL"]
+        == "https://umbod-admin.computerlove.tech/signed-out.html"
+    )
     assert environment["PUBLIC_API_BASE_URL"] == "/api"
-    assert set(environment).issubset({
-        "PUBLIC_API_BASE_URL", "PUBLIC_MCP_BASE_URL", "API_PROXY_ORIGIN",
-        "PUBLIC_AUTH0_DOMAIN", "PUBLIC_AUTH0_CLIENT_ID", "PUBLIC_LOGOUT_RETURN_URL",
-    })
+    assert set(environment).issubset(
+        {
+            "PUBLIC_API_BASE_URL",
+            "PUBLIC_MCP_BASE_URL",
+            "API_PROXY_ORIGIN",
+            "PUBLIC_AUTH0_DOMAIN",
+            "PUBLIC_AUTH0_CLIENT_ID",
+            "PUBLIC_LOGOUT_RETURN_URL",
+        }
+    )
     assert "node" not in " ".join(frontend["healthcheck"]["test"])
 
 
 def test_default_local_logout_configuration_is_null() -> None:
-    configuration = authentication_compose_configuration({
-        "UMBOD_PROXY_COMPOSE_FILE": str(APP_ROOT / "docker-compose.yml"),
-    })
+    configuration = authentication_compose_configuration(
+        {
+            "UMBOD_PROXY_COMPOSE_FILE": str(APP_ROOT / "docker-compose.yml"),
+        }
+    )
     environment = configuration["services"]["frontend"]["environment"]
-    assert {environment[name] for name in (
-        "PUBLIC_AUTH0_DOMAIN", "PUBLIC_AUTH0_CLIENT_ID", "PUBLIC_LOGOUT_RETURN_URL",
-    )} == {""}
+    assert {
+        environment[name]
+        for name in (
+            "PUBLIC_AUTH0_DOMAIN",
+            "PUBLIC_AUTH0_CLIENT_ID",
+            "PUBLIC_LOGOUT_RETURN_URL",
+        )
+    } == {""}
     generated = subprocess.run(
         ["sh", str(APP_ROOT / "frontend/deployment/generate-config.sh")],
         env={**os.environ, **environment},
@@ -162,30 +216,67 @@ def test_default_local_logout_configuration_is_null() -> None:
 def test_browser_response_stripping_does_not_change_internal_forwardauth() -> None:
     services = authentication_compose_configuration()["services"]
     frontend_labels = services["frontend"]["labels"]
-    stripping_prefix = "traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders"
+    stripping_prefix = (
+        "traefik.http.middlewares.umbod-browser-response.headers.customresponseheaders"
+    )
     headers = {
-        "Authorization", "X-Auth-Request-Access-Token", "X-Auth-Request-User",
-        "X-Auth-Request-Email", "X-Auth-Request-Preferred-Username",
-        "X-Auth-Request-Groups", "X-Forwarded-Access-Token",
+        "Authorization",
+        "X-Auth-Request-Access-Token",
+        "X-Auth-Request-ID-Token",
+        "X-Auth-Request-User",
+        "X-Auth-Request-Email",
+        "X-Auth-Request-Preferred-Username",
+        "X-Auth-Request-Groups",
+        "X-Forwarded-Access-Token",
     }
-    assert all(frontend_labels[f"{stripping_prefix}.{header}"] == "" for header in headers)
+    assert all(
+        frontend_labels[f"{stripping_prefix}.{header}"] == "" for header in headers
+    )
     for router in ("umbod-frontend", "umbod-frontend-secure"):
-        assert frontend_labels[f"traefik.http.routers.{router}.middlewares"].split(",") in [
+        assert frontend_labels[f"traefik.http.routers.{router}.middlewares"].split(
+            ","
+        ) in [
             ["umbod-browser-response@docker"],
             ["umbod-admin-forwarded-https@docker", "umbod-browser-response@docker"],
         ]
     for service in services.values():
         for label, value in service.get("labels", {}).items():
-            if label.endswith(".middlewares") and "umbod-browser-response@docker" in value:
+            if (
+                label.endswith(".middlewares")
+                and "umbod-browser-response@docker" in value
+            ):
                 assert label in {
                     "traefik.http.routers.umbod-frontend.middlewares",
                     "traefik.http.routers.umbod-frontend-secure.middlewares",
+                    "traefik.http.routers.umbod-browser-api.middlewares",
+                    "traefik.http.routers.umbod-browser-api-secure.middlewares",
+                    "traefik.http.routers.umbod-oauth.middlewares",
+                    "traefik.http.routers.umbod-oauth-secure.middlewares",
                 }
+    for service_name, routers in (
+        ("api", ("umbod-browser-api", "umbod-browser-api-secure")),
+        ("oauth2-proxy", ("umbod-oauth", "umbod-oauth-secure")),
+    ):
+        labels = services[service_name]["labels"]
+        for router in routers:
+            prefix = f"traefik.http.routers.{router}"
+            if f"{prefix}.rule" not in labels:
+                continue
+            middleware = labels[f"{prefix}.middlewares"].split(",")
+            assert "umbod-browser-response@docker" in middleware
+            if service_name == "api":
+                assert middleware.index(
+                    "umbod-browser-response@docker"
+                ) < middleware.index("umbod-auth@docker")
+            else:
+                assert "umbod-auth@docker" not in middleware
     oauth_labels = services["oauth2-proxy"]["labels"]
     assert "X-Auth-Request-Access-Token" in oauth_labels[
         "traefik.http.middlewares.umbod-auth.forwardauth.authResponseHeaders"
     ].split(",")
-    assert oauth_labels["traefik.http.middlewares.umbod-auth.forwardauth.address"].endswith("/oauth2/auth")
+    assert oauth_labels[
+        "traefik.http.middlewares.umbod-auth.forwardauth.address"
+    ].endswith("/oauth2/auth")
 
 
 def test_alpha_provider_fixes_audience_and_does_not_mix_legacy_flags() -> None:
@@ -194,7 +285,10 @@ def test_alpha_provider_fixes_audience_and_does_not_mix_legacy_flags() -> None:
     command = proxy["command"]
     alpha = configuration["configs"]["oauth2-proxy-alpha"]["content"]
     assert "--alpha-config=/etc/oauth2-proxy/alpha.yml" in command
-    assert {"source": "oauth2-proxy-alpha", "target": "/etc/oauth2-proxy/alpha.yml"}.items() <= proxy["configs"][0].items()
+    assert {
+        "source": "oauth2-proxy-alpha",
+        "target": "/etc/oauth2-proxy/alpha.yml",
+    }.items() <= proxy["configs"][0].items()
     assert "audienceClaims: [aud]" in alpha
     assert "emailClaim: email" in alpha
     assert "issuerURL: https://login.example.test/" in alpha
@@ -204,10 +298,26 @@ def test_alpha_provider_fixes_audience_and_does_not_mix_legacy_flags() -> None:
     assert proxy["environment"]["UMBOD_OIDC_CLIENT_SECRET"] == "test-secret"
     assert 'name: audience\n        default: ["https://audience.example.test"]' in alpha
     assert "allow:" not in alpha
-    forbidden = ("--http-address=", "--provider=", "--oidc-", "--client-", "--scope=", "--login-url=", "--upstream=", "--pass-access-token=", "--set-xauthrequest=", "--set-authorization-header=", "--pass-authorization-header=", "--auth-request-extra-params=")
+    forbidden = (
+        "--http-address=",
+        "--provider=",
+        "--oidc-",
+        "--client-",
+        "--scope=",
+        "--login-url=",
+        "--upstream=",
+        "--pass-access-token=",
+        "--set-xauthrequest=",
+        "--set-authorization-header=",
+        "--pass-authorization-header=",
+        "--auth-request-extra-params=",
+    )
     assert not any(option.startswith(forbidden) for option in command)
-    assert {option for option in command if option.startswith("--whitelist-domain=")} == {
-        "--whitelist-domain=login.example.test", "--whitelist-domain=umbod-admin.computerlove.tech",
+    assert {
+        option for option in command if option.startswith("--whitelist-domain=")
+    } == {
+        "--whitelist-domain=login.example.test",
+        "--whitelist-domain=umbod-admin.computerlove.tech",
     }
     assert "--cookie-refresh=5m" in command
     assert "--cookie-expire=8h" in command
@@ -223,12 +333,19 @@ def test_https_gateway_contract_preserves_secure_csrf_cookie_configuration() -> 
         return
     assert labels[f"{prefix}.X-Forwarded-Proto"] == "https"
     assert labels[f"{prefix}.X-Forwarded-Port"] == "443"
-    assert {"--cookie-secure=true", "--cookie-httponly=true", "--cookie-samesite=lax", "--cookie-path=/"}.issubset(proxy["command"])
+    assert {
+        "--cookie-secure=true",
+        "--cookie-httponly=true",
+        "--cookie-samesite=lax",
+        "--cookie-path=/",
+    }.issubset(proxy["command"])
     for service, routers in (
         ("oauth2-proxy", ("umbod-oauth", "umbod-oauth-secure")),
         ("frontend", ("umbod-frontend", "umbod-frontend-secure")),
         ("api", ("umbod-browser-api", "umbod-browser-api-secure")),
     ):
         for router in routers:
-            middleware = services[service]["labels"][f"traefik.http.routers.{router}.middlewares"].split(",")
+            middleware = services[service]["labels"][
+                f"traefik.http.routers.{router}.middlewares"
+            ].split(",")
             assert middleware[0] == "umbod-admin-forwarded-https@docker"

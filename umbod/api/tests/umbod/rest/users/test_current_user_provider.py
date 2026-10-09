@@ -3,6 +3,7 @@ import pytest
 
 from umbod.rest.authentication import JwtClaims, JwtVerificationError
 from umbod.rest.users.current_user import CurrentUserProvider, JwtCurrentUserProvider
+from umbod.rest.users.mapping import AccessClaimsUserProfileProvider, ClaimProfileMapper
 
 
 class FakeJwtVerifier:
@@ -22,7 +23,9 @@ def _create_request(headers: dict[str, str] | None = None) -> Request:
     raw_headers = []
     for name, value in (headers or {}).items():
         raw_headers.append((name.lower().encode(), value.encode()))
-    return Request({"type": "http", "method": "GET", "path": "/users", "headers": raw_headers})
+    return Request(
+        {"type": "http", "method": "GET", "path": "/users", "headers": raw_headers}
+    )
 
 
 def test_jwt_provider_returns_claim_user() -> None:
@@ -35,9 +38,16 @@ def test_jwt_provider_returns_claim_user() -> None:
         },
         False,
     )
-    provider = JwtCurrentUserProvider("X-Forwarded-Access-Token", verifier)
+    provider = JwtCurrentUserProvider(
+        "X-Forwarded-Access-Token",
+        verifier,
+        AccessClaimsUserProfileProvider(ClaimProfileMapper("name", "email", "picture")),
+        "X-Profile",
+    )
 
-    current_user = provider.get_current_user(_create_request({"X-Forwarded-Access-Token": "token"}))
+    current_user = provider.get_current_user(
+        _create_request({"X-Forwarded-Access-Token": "token"})
+    )
 
     assert current_user.id == "user-123"
     assert current_user.email == "alex@example.com"
@@ -48,7 +58,12 @@ def test_jwt_provider_returns_claim_user() -> None:
 
 def test_jwt_provider_verifies_empty_token_when_header_is_missing() -> None:
     verifier = FakeJwtVerifier({"sub": "user-123", "email": "alex@example.com"}, False)
-    provider = JwtCurrentUserProvider("X-Forwarded-Access-Token", verifier)
+    provider = JwtCurrentUserProvider(
+        "X-Forwarded-Access-Token",
+        verifier,
+        AccessClaimsUserProfileProvider(ClaimProfileMapper("name", "email", "picture")),
+        "X-Profile",
+    )
 
     current_user = provider.get_current_user(_create_request())
 
@@ -57,10 +72,17 @@ def test_jwt_provider_verifies_empty_token_when_header_is_missing() -> None:
 
 
 def test_jwt_provider_rejects_invalid_token() -> None:
-    provider = JwtCurrentUserProvider("X-Forwarded-Access-Token", FakeJwtVerifier({}, True))
+    provider = JwtCurrentUserProvider(
+        "X-Forwarded-Access-Token",
+        FakeJwtVerifier({}, True),
+        AccessClaimsUserProfileProvider(ClaimProfileMapper("name", "email", "picture")),
+        "X-Profile",
+    )
 
     with pytest.raises(HTTPException) as error:
-        provider.get_current_user(_create_request({"X-Forwarded-Access-Token": "token"}))
+        provider.get_current_user(
+            _create_request({"X-Forwarded-Access-Token": "token"})
+        )
 
     assert error.value.status_code == 401
 
@@ -74,26 +96,41 @@ def test_jwt_provider_rejects_invalid_token() -> None:
     ],
 )
 def test_jwt_provider_requires_string_subject(claims: dict[str, object]) -> None:
-    provider = JwtCurrentUserProvider("X-Forwarded-Access-Token", FakeJwtVerifier(claims, False))
+    provider = JwtCurrentUserProvider(
+        "X-Forwarded-Access-Token",
+        FakeJwtVerifier(claims, False),
+        AccessClaimsUserProfileProvider(ClaimProfileMapper("name", "email", "picture")),
+        "X-Profile",
+    )
 
     with pytest.raises(HTTPException) as error:
-        provider.get_current_user(_create_request({"X-Forwarded-Access-Token": "token"}))
+        provider.get_current_user(
+            _create_request({"X-Forwarded-Access-Token": "token"})
+        )
 
     assert error.value.status_code == 401
 
 
-@pytest.mark.parametrize("profile", [{}, {"email": None}, {"email": 123}, {"email": []}, {"email": {}}])
+@pytest.mark.parametrize(
+    "profile", [{}, {"email": None}, {"email": 123}, {"email": []}, {"email": {}}]
+)
 def test_jwt_provider_normalizes_unavailable_email(profile: dict[str, object]) -> None:
     provider: CurrentUserProvider = JwtCurrentUserProvider(
         "X-Forwarded-Access-Token",
         FakeJwtVerifier({"sub": "user-123", **profile}, False),
+        AccessClaimsUserProfileProvider(ClaimProfileMapper("name", "email", "picture")),
+        "X-Profile",
     )
 
-    current_user = provider.get_current_user(_create_request({
-        "X-Forwarded-Access-Token": "token",
-        "X-Auth-Request-Email": "untrusted@example.com",
-        "X-Auth-Request-User": "untrusted-user",
-    }))
+    current_user = provider.get_current_user(
+        _create_request(
+            {
+                "X-Forwarded-Access-Token": "token",
+                "X-Auth-Request-Email": "untrusted@example.com",
+                "X-Auth-Request-User": "untrusted-user",
+            }
+        )
+    )
 
     assert current_user.id == "user-123"
     assert current_user.email is None
@@ -105,11 +142,21 @@ def test_jwt_provider_defaults_non_string_optional_claims() -> None:
     provider = JwtCurrentUserProvider(
         "X-Forwarded-Access-Token",
         FakeJwtVerifier(
-            {"sub": "user-123", "email": "alex@example.com", "name": 123, "picture": 456}, False
+            {
+                "sub": "user-123",
+                "email": "alex@example.com",
+                "name": 123,
+                "picture": 456,
+            },
+            False,
         ),
+        AccessClaimsUserProfileProvider(ClaimProfileMapper("name", "email", "picture")),
+        "X-Profile",
     )
 
-    current_user = provider.get_current_user(_create_request({"X-Forwarded-Access-Token": "token"}))
+    current_user = provider.get_current_user(
+        _create_request({"X-Forwarded-Access-Token": "token"})
+    )
 
     assert current_user.name == "unknown"
     assert current_user.picture is None
@@ -119,8 +166,12 @@ def test_jwt_provider_is_protocol_compatible() -> None:
     provider: CurrentUserProvider = JwtCurrentUserProvider(
         "X-Forwarded-Access-Token",
         FakeJwtVerifier({"sub": "user-123", "email": "alex@example.com"}, False),
+        AccessClaimsUserProfileProvider(ClaimProfileMapper("name", "email", "picture")),
+        "X-Profile",
     )
 
-    current_user = provider.get_current_user(_create_request({"X-Forwarded-Access-Token": "token"}))
+    current_user = provider.get_current_user(
+        _create_request({"X-Forwarded-Access-Token": "token"})
+    )
 
     assert current_user.id == "user-123"

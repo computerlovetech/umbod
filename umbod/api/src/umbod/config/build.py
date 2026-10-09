@@ -14,6 +14,7 @@ from umbod.config.app import (
     OtlpReceiverConfig,
     RestConfig,
     RuntimeConfig,
+    UserProfileConfig,
 )
 from umbod.config.operator import OperatorSettings
 from umbod.config.secret_derivation import derive_secret
@@ -98,7 +99,13 @@ def _derived_issuer_url(operator: OperatorSettings, auth_recipe: str) -> str:
 
 def _build_admin_auth(operator: OperatorSettings, auth_recipe: str) -> AdminAuthConfig:
     environment = "production" if operator.profile == "production" else "development"
-    mode = "disabled" if auth_recipe == "none" else "simulation" if auth_recipe == "dev" else "jwt"
+    mode = (
+        "disabled"
+        if auth_recipe == "none"
+        else "simulation"
+        if auth_recipe == "dev"
+        else "jwt"
+    )
     return AdminAuthConfig(
         environment=environment,
         mode=mode,
@@ -175,7 +182,9 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
             private_api_base_url=operator.internal_api_origin,
             mcp_base_url=operator.public_mcp_origin,
         ),
-        rest=RestConfig(port=operator.rest_port, metrics_port=operator.rest_metrics_port),
+        rest=RestConfig(
+            port=operator.rest_port, metrics_port=operator.rest_metrics_port
+        ),
         otlp_receiver=OtlpReceiverConfig(
             enabled=operator.otlp_enabled,
             bearer_token=operator.otlp_bearer_token,
@@ -213,4 +222,11 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
             mcp_administrator_enabled=operator.feature_mcp_administrator_enabled,
         ),
         admin_authentication=_build_admin_auth(operator, auth_recipe),
+        user_profile=UserProfileConfig(
+            mode=operator.user_profile_mode,
+            jwt_header_name=operator.user_profile_jwt_header,
+            name_claim=operator.user_profile_name_claim,
+            email_claim=operator.user_profile_email_claim,
+            picture_claim=operator.user_profile_picture_claim,
+        ),
     )

@@ -16,6 +16,7 @@ from umbod.config.app import (
     RestConfig,
     RuntimeConfig,
     SQLiteConnectorStoreConfig,
+    UserProfileConfig,
 )
 from umbod.config.derive import (
     build_app_config,
@@ -55,6 +56,7 @@ __all__ = [
     "RestConfig",
     "RuntimeConfig",
     "SQLiteConnectorStoreConfig",
+    "UserProfileConfig",
     "build_app_config",
     "inspect_app_config",
     "load_app_config",

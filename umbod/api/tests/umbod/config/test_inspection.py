@@ -56,7 +56,11 @@ _DERIVED_SECRET_VARIABLES = {
 
 
 def _entries(config: AppConfig) -> list[ConfigurationEntry]:
-    return [entry for group in AppConfigInspector(config).inspect() for entry in group.entries]
+    return [
+        entry
+        for group in AppConfigInspector(config).inspect()
+        for entry in group.entries
+    ]
 
 
 def _assert_value_matches_declared_type(entry: ConfigurationEntry) -> None:
@@ -105,11 +109,14 @@ def test_inspector_returns_effective_typed_values() -> None:
 def test_catalog_order_is_deterministic_and_canonical_variables_are_unique() -> None:
     first = inspect_app_config(AppConfig()).model_dump()
     second = inspect_app_config(AppConfig()).model_dump()
-    variables = [entry["variable"] for group in first["groups"] for entry in group["entries"]]
+    variables = [
+        entry["variable"] for group in first["groups"] for entry in group["entries"]
+    ]
 
     assert first == second
     assert len(variables) == len(set(variables))
     assert [group["id"] for group in first["groups"]] == [
+        "user_profile",
         "telemetry",
         "runtime",
         "endpoints",
@@ -129,7 +136,9 @@ def test_inspector_omits_development_and_deployment_plumbing() -> None:
     assert variables.isdisjoint(_DERIVED_SECRET_VARIABLES)
 
 
-def test_catalog_variables_use_operator_canonical_names_or_documented_derived_sources() -> None:
+def test_catalog_variables_use_operator_canonical_names_or_documented_derived_sources() -> (
+    None
+):
     operator_names = {
         alias
         for field_name, field in OperatorSettings.model_fields.items()

@@ -126,9 +126,7 @@ class OperatorSettings(BaseSettings):
         gt=0,
         validation_alias="UMBOD_REST_METRICS_PORT",
     )
-    mcp_port: int = Field(
-        default=defaults.MCP_PORT, validation_alias="UMBOD_MCP_PORT"
-    )
+    mcp_port: int = Field(default=defaults.MCP_PORT, validation_alias="UMBOD_MCP_PORT")
     mcp_metrics_port: int = Field(
         default=defaults.MCP_METRICS_PORT,
         gt=0,
@@ -209,6 +207,12 @@ class OperatorSettings(BaseSettings):
         default=defaults.ADMIN_JWT_HEADER_NAME,
         validation_alias="UMBOD_ADMIN_JWT_HEADER",
     )
+    user_profile_mode: Literal["access_claims", "id_token"] = "access_claims"
+    user_profile_jwt_header: str = "X-Auth-Request-ID-Token"
+    user_profile_name_claim: str = "name"
+    user_profile_email_claim: str = "email"
+    user_profile_picture_claim: str = "picture"
+
     admin_debug_enabled: bool = Field(
         default=False,
         validation_alias="UMBOD_ADMIN_AUTHENTICATION_DEBUG_ENABLED",

@@ -1,3 +1,4 @@
+from umbod.config.app import UserProfileConfig
 from umbod.config.operator import OperatorSettings
 
 _VALID_PROFILES = ("local", "production")
@@ -46,9 +47,7 @@ def _validate_oidc_recipe(operator: OperatorSettings, auth_recipe: str) -> None:
             )
     if auth_recipe == "entra":
         if not operator.oidc_tenant_id.strip():
-            raise ValueError(
-                "UMBOD_OIDC_TENANT_ID is required for UMBOD_AUTH=entra"
-            )
+            raise ValueError("UMBOD_OIDC_TENANT_ID is required for UMBOD_AUTH=entra")
         if not operator.oidc_required_scopes:
             raise ValueError(
                 "UMBOD_OIDC_REQUIRED_SCOPES is required for UMBOD_AUTH=entra"
@@ -66,6 +65,19 @@ def _validate_oidc_recipe(operator: OperatorSettings, auth_recipe: str) -> None:
 
 
 def validate_operator(operator: OperatorSettings, auth_recipe: str) -> None:
+    profile = UserProfileConfig(
+        mode=operator.user_profile_mode,
+        jwt_header_name=operator.user_profile_jwt_header,
+        name_claim=operator.user_profile_name_claim,
+        email_claim=operator.user_profile_email_claim,
+        picture_claim=operator.user_profile_picture_claim,
+    )
+    if profile.jwt_header_name.lower() == operator.admin_jwt_header_name.lower():
+        raise ValueError("User profile and access JWT headers must be distinct")
+    if profile.mode == "id_token" and (
+        operator.profile != "production" or auth_recipe not in _OIDC_AUTH_RECIPES
+    ):
+        raise ValueError("ID-token profiles require real production JWT authentication")
     ports = (
         ("UMBOD_REST_PORT", operator.rest_port),
         ("UMBOD_REST_METRICS_PORT", operator.rest_metrics_port),
@@ -79,10 +91,14 @@ def validate_operator(operator: OperatorSettings, auth_recipe: str) -> None:
     if operator.profile == "production" and not operator.root_secret.strip():
         raise ValueError("UMBOD_ROOT_SECRET is required in production")
     if operator.otlp_allow_unauthenticated and operator.profile != "local":
-        raise ValueError("UMBOD_OTLP_ALLOW_UNAUTHENTICATED is only allowed with UMBOD_PROFILE=local")
+        raise ValueError(
+            "UMBOD_OTLP_ALLOW_UNAUTHENTICATED is only allowed with UMBOD_PROFILE=local"
+        )
     if operator.otlp_enabled and not operator.otlp_allow_unauthenticated:
         if not operator.otlp_bearer_token.strip():
-            raise ValueError("UMBOD_OTLP_BEARER_TOKEN is required when OTLP ingestion is enabled")
+            raise ValueError(
+                "UMBOD_OTLP_BEARER_TOKEN is required when OTLP ingestion is enabled"
+            )
         if any(character.isspace() for character in operator.otlp_bearer_token):
             raise ValueError("UMBOD_OTLP_BEARER_TOKEN must not contain whitespace")
     if auth_recipe in _OIDC_AUTH_RECIPES:

@@ -7,7 +7,9 @@ from pydantic import BaseModel, ConfigDict
 from umbod.config.app import AppConfig
 
 ConfigurationValue = Union[str, int, float, bool, list[str]]
-ConfigurationValueType = Literal["string", "integer", "number", "boolean", "string_list"]
+ConfigurationValueType = Literal[
+    "string", "integer", "number", "boolean", "string_list"
+]
 
 
 class ConfigurationEntry(BaseModel):
@@ -66,6 +68,50 @@ _SECRET_FIELDS: tuple[tuple[str, str], ...] = (
 _CATALOG: tuple[ConfigurationCatalogEntry, ...] = (
     *tuple(
         ConfigurationCatalogEntry(
+            "user_profile",
+            "User profile",
+            "user_profile",
+            field,
+            variable,
+            label,
+            description,
+            "string",
+        )
+        for field, variable, label, description in (
+            (
+                "mode",
+                "UMBOD_USER_PROFILE_MODE",
+                "Profile mode",
+                "Optional enrichment from access claims or a verified ID token.",
+            ),
+            (
+                "jwt_header_name",
+                "UMBOD_USER_PROFILE_JWT_HEADER",
+                "ID-token header",
+                "Dedicated profile header without Authorization fallback.",
+            ),
+            (
+                "name_claim",
+                "UMBOD_USER_PROFILE_NAME_CLAIM",
+                "Name claim",
+                "Literal profile display-name claim key.",
+            ),
+            (
+                "email_claim",
+                "UMBOD_USER_PROFILE_EMAIL_CLAIM",
+                "Email claim",
+                "Literal profile email claim key.",
+            ),
+            (
+                "picture_claim",
+                "UMBOD_USER_PROFILE_PICTURE_CLAIM",
+                "Picture claim",
+                "Literal profile picture claim key.",
+            ),
+        )
+    ),
+    *tuple(
+        ConfigurationCatalogEntry(
             "telemetry",
             "Telemetry ingestion",
             "otlp_receiver",
@@ -76,9 +122,27 @@ _CATALOG: tuple[ConfigurationCatalogEntry, ...] = (
             value_type,
         )
         for field, variable, label, description, value_type in (
-            ("enabled", "UMBOD_OTLP_ENABLED", "Enabled", "Whether OTLP JSON ingestion is enabled.", "boolean"),
-            ("allow_unauthenticated", "UMBOD_OTLP_ALLOW_UNAUTHENTICATED", "Local unauthenticated access", "Explicit local-only unauthenticated ingestion.", "boolean"),
-            ("max_request_bytes", "UMBOD_OTLP_MAX_REQUEST_BYTES", "Maximum batch size", "Maximum wire and decompressed request size in bytes.", "integer"),
+            (
+                "enabled",
+                "UMBOD_OTLP_ENABLED",
+                "Enabled",
+                "Whether OTLP JSON ingestion is enabled.",
+                "boolean",
+            ),
+            (
+                "allow_unauthenticated",
+                "UMBOD_OTLP_ALLOW_UNAUTHENTICATED",
+                "Local unauthenticated access",
+                "Explicit local-only unauthenticated ingestion.",
+                "boolean",
+            ),
+            (
+                "max_request_bytes",
+                "UMBOD_OTLP_MAX_REQUEST_BYTES",
+                "Maximum batch size",
+                "Maximum wire and decompressed request size in bytes.",
+                "integer",
+            ),
         )
     ),
     ConfigurationCatalogEntry(
@@ -477,7 +541,9 @@ class AppConfigInspector:
             if not groups or groups[-1].id != catalog_entry.group_id:
                 groups.append(
                     ConfigurationGroup(
-                        id=catalog_entry.group_id, label=catalog_entry.group_label, entries=[]
+                        id=catalog_entry.group_id,
+                        label=catalog_entry.group_label,
+                        entries=[],
                     )
                 )
             groups[-1].entries.append(

@@ -1,7 +1,8 @@
+import re
 from typing import Annotated, Literal, Union
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from umbod.config import defaults
 
@@ -36,7 +37,9 @@ class EndpointsConfig(ConfigModel):
             or parsed.query
             or parsed.fragment
         ):
-            raise ValueError("public API origin must not contain credentials, query, or fragment")
+            raise ValueError(
+                "public API origin must not contain credentials, query, or fragment"
+            )
         if parsed.path not in ("", "/"):
             raise ValueError("public API origin must not contain a path")
         return value.rstrip("/")
@@ -137,7 +140,9 @@ PersistenceConfig = Annotated[
 
 
 class OpenApiConnectorConfig(ConfigModel):
-    json_import_max_bytes: int = Field(default=defaults.OPENAPI_JSON_IMPORT_MAX_BYTES, gt=0)
+    json_import_max_bytes: int = Field(
+        default=defaults.OPENAPI_JSON_IMPORT_MAX_BYTES, gt=0
+    )
     url_retrieval_timeout_seconds: float = Field(
         default=defaults.OPENAPI_URL_RETRIEVAL_TIMEOUT_SECONDS, gt=0
     )
@@ -177,6 +182,30 @@ class AdminAuthConfig(ConfigModel):
     debug_enabled: bool = False
 
 
+class UserProfileConfig(ConfigModel):
+    mode: Literal["access_claims", "id_token"] = "access_claims"
+    jwt_header_name: str = "X-Auth-Request-ID-Token"
+    name_claim: str = "name"
+    email_claim: str = "email"
+    picture_claim: str = "picture"
+
+    @field_validator("jwt_header_name")
+    @classmethod
+    def validate_header(cls, value: str) -> str:
+        if not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", value):
+            raise ValueError("User profile JWT header must be an HTTP header name")
+        if value.lower() == "authorization":
+            raise ValueError("User profile JWT header cannot be Authorization")
+        return value
+
+    @field_validator("name_claim", "email_claim", "picture_claim")
+    @classmethod
+    def validate_mapping(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("User profile claim mappings must not be blank")
+        return value
+
+
 class AppConfig(ConfigModel):
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     endpoints: EndpointsConfig = Field(default_factory=EndpointsConfig)
@@ -185,12 +214,47 @@ class AppConfig(ConfigModel):
     mcp: McpConfig = Field(default_factory=McpConfig)
     oidc: OidcConfig = Field(default_factory=OidcConfig)
     oauth_storage: OAuthStorageConfig = Field(default_factory=OAuthStorageConfig)
-    connector_security: ConnectorSecurityConfig = Field(default_factory=ConnectorSecurityConfig)
-    connector_store: PersistenceConfig = Field(default_factory=InMemoryConnectorStoreConfig)
-    openapi_connectors: OpenApiConnectorConfig = Field(default_factory=OpenApiConnectorConfig)
+    connector_security: ConnectorSecurityConfig = Field(
+        default_factory=ConnectorSecurityConfig
+    )
+    connector_store: PersistenceConfig = Field(
+        default_factory=InMemoryConnectorStoreConfig
+    )
+    openapi_connectors: OpenApiConnectorConfig = Field(
+        default_factory=OpenApiConnectorConfig
+    )
     cors: CorsConfig = Field(default_factory=CorsConfig)
     feature_toggles: FeatureTogglesConfig = Field(default_factory=FeatureTogglesConfig)
     admin_authentication: AdminAuthConfig = Field(default_factory=AdminAuthConfig)
+    user_profile: UserProfileConfig = Field(default_factory=UserProfileConfig)
+
+    @model_validator(mode="after")
+    def validate_user_profile(self) -> "AppConfig":
+        if (
+            self.user_profile.jwt_header_name.lower()
+            == self.admin_authentication.jwt_header_name.lower()
+        ):
+            raise ValueError("User profile and access JWT headers must be distinct")
+        if self.user_profile.mode == "id_token":
+            if (
+                self.admin_authentication.mode != "jwt"
+                or self.admin_authentication.environment != "production"
+            ):
+                raise ValueError(
+                    "ID-token profiles require real production JWT authentication"
+                )
+            if not all(
+                value.strip()
+                for value in (
+                    self.oidc.issuer_url,
+                    self.oidc.client_id,
+                    self.admin_authentication.jwks_url,
+                )
+            ):
+                raise ValueError(
+                    "ID-token profiles require OIDC issuer, client ID and admin JWKS URL"
+                )
+        return self
 
     @field_validator("connector_store", mode="before")
     @classmethod
