@@ -178,3 +178,20 @@ footer { padding-block: 32px; }
   .walkthrough-video video { border-radius: 8px; }
   .walkthrough-video figcaption { flex-direction: column; gap: 4px; }
 }
+
+/* Desktop downloads share the landing page's spacing and typography. */
+#downloads { padding: 88px 0; border-top: 1px solid var(--line, #deded8); scroll-margin-top: 100px; }
+#downloads > .wrap > p { max-width: 720px; }
+.download-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 32px 0; }
+.download-card { padding: 28px; border: 1px solid var(--line, #deded8); border-radius: 12px; }
+.download-card h3 { margin-top: 0; }
+.download-card details { margin-top: 24px; }
+.download-card summary { cursor: pointer; }
+.download-card code { display: block; overflow-wrap: anywhere; margin-top: 12px; font-size: .8rem; }
+.download-alternative { margin-top: 24px; }
+#downloads a:focus-visible, #downloads summary:focus-visible { outline: 3px solid currentColor; outline-offset: 5px; }
+@media (max-width: 760px) {
+  #downloads { padding: 56px 0; }
+  .download-grid { grid-template-columns: 1fr; }
+  .download-card { padding: 20px; }
+}

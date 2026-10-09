@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
+import { renderDesktopPage } from './src/downloads.mjs';
 
 const releaseMetadataUrl = new URL('../release-metadata.json', import.meta.url);
 const releaseFields = ['chartVersion', 'imageTag', 'sdkVersion'];
@@ -8,6 +9,7 @@ export default defineConfig({
   plugins: [{
     name: 'release-metadata',
     transformIndexHtml(html) {
+      html = renderDesktopPage(html, JSON.parse(readFileSync(new URL('./public/desktop-downloads.json', import.meta.url), 'utf8')));
       const metadata = JSON.parse(readFileSync(releaseMetadataUrl, 'utf8'));
       if (Object.keys(metadata).length !== releaseFields.length ||
           releaseFields.some((field) => typeof metadata[field] !== 'string' || !metadata[field])) {

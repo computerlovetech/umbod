@@ -1,0 +1,132 @@
+name: Desktop native builds
+on:
+  pull_request:
+    paths: ['desktop/**', 'website/**', '.github/workflows/desktop-*.yml', '.dockerignore']
+  push:
+    branches: [main, feat/desktop-monorepo-releases]
+    paths: ['desktop/**', 'website/**', '.github/workflows/desktop-*.yml', '.dockerignore']
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python3 -m unittest discover -s desktop/tests -v
+      - run: node --test website/tests/*.test.mjs
+      - name: Existing Kubernetes release invariants
+        working-directory: umbod
+        run: |
+          python3 -m pip install pytest pyyaml
+          python3 -m pytest scripts/tests/test_release_versions.py scripts/tests/test_release_workflow.py -q
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - name: Website build
+        working-directory: website
+        run: |
+          bun install --frozen-lockfile
+          bun run build
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify native Apple Silicon runner and Swift 6
+        run: |
+          test "$(uname -m)" = arm64
+          swift --version | grep -E "Swift version 6\."
+      - name: Rust toolchain
+        run: rustup toolchain install stable --profile minimal --component rustfmt --component clippy && rustup default stable
+      - name: Rust tests and lint
+        run: |
+          cargo fmt --check
+          cargo test --locked
+          cargo clippy --locked --all-targets -- -D warnings
+      - name: Native Swift tests
+        run: |
+          swift build --package-path native
+          swift run --package-path native UmbodTests
+      - name: Build unsigned prerelease DMG
+        run: bash scripts/package.sh
+      - name: Isolated packaged gateway tests
+        run: |
+          version="$(python3 scripts/release.py version)"
+          python3 scripts/activation-e2e.py "dist/Umbod-$version.app/Contents/MacOS/umbod-gateway"
+          python3 scripts/oauth-bundle-e2e.py "dist/Umbod-$version.app/Contents/MacOS/umbod-gateway"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos-arm64
+          path: desktop/dist/Umbod-*-arm64.dmg
+          if-no-files-found: error
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      DOTNET_GENERATE_ASPNET_CERTIFICATE: 'false'
+      DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: '1'
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Rust checks
+        run: |
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          rustup default stable
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo fmt --check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo test --locked
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          cargo clippy --locked --all-targets -- -D warnings
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Core behavior and isolated gateway integration
+        run: |
+          dotnet run --project windows/Umbod.Core.Tests -c Release -- --gateway "$PWD/target/debug/umbod-gateway.exe"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          python scripts/test_windows_package.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: Build self-contained unsigned Windows ZIP
+        run: ./scripts/package-windows.ps1 -Channel release
+      - name: Packaged native WPF smoke test
+        run: |
+          $archive = Get-ChildItem dist/Umbod-*-release-win-x64.zip
+          if (@($archive).Count -ne 1) { throw 'Expected exactly one Windows archive' }
+          $smoke = Join-Path $env:RUNNER_TEMP ('umbod-ui-smoke-' + [Guid]::NewGuid().ToString('N'))
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath $smoke
+          # Constructs WPF without opening app data or starting the gateway.
+          $ui = Start-Process -FilePath (Join-Path $smoke 'Umbod.Windows.exe') -ArgumentList '--smoke-test' -PassThru
+          if (!$ui.WaitForExit(30000)) { $ui.Kill(); throw 'WPF smoke timed out' }
+          if ($ui.ExitCode -ne 0) { throw "WPF smoke failed: $($ui.ExitCode)" }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows-x64
+          path: desktop/dist/Umbod-*-release-win-x64.zip
+          if-no-files-found: error

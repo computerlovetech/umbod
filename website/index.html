@@ -38,7 +38,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .75a11.25 11.25 0 0 0-3.56 21.92c.56.1.77-.24.77-.54v-2.1c-3.13.68-3.79-1.33-3.79-1.33-.51-1.3-1.25-1.65-1.25-1.65-1.02-.7.08-.68.08-.68 1.13.08 1.72 1.16 1.72 1.16 1 1.72 2.63 1.22 3.27.93.1-.73.39-1.22.71-1.5-2.5-.29-5.13-1.25-5.13-5.56 0-1.23.44-2.23 1.16-3.02-.12-.29-.5-1.43.11-2.98 0 0 .95-.3 3.09 1.15a10.77 10.77 0 0 1 5.63 0c2.14-1.45 3.08-1.15 3.08-1.15.61 1.55.23 2.69.11 2.98.72.79 1.16 1.79 1.16 3.02 0 4.32-2.63 5.27-5.14 5.55.4.35.76 1.03.76 2.08v3.1c0 .3.2.65.77.54A11.25 11.25 0 0 0 12 .75Z"/></svg>
           </a>
         </div>
-        <a class="button small" href="#how">Try locally <span aria-hidden="true">↗</span></a>
+        <a class="button small" href="#downloads" data-desktop-cta>Desktop downloads <span aria-hidden="true">↗</span></a>
       </div>
       <button class="menu-toggle" type="button" aria-label="Open menu" aria-controls="mobile-menu" aria-expanded="false" aria-haspopup="dialog">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
@@ -55,7 +55,7 @@
     </div>
     <nav class="mobile-menu-links" aria-label="Mobile navigation">
       <a href="/docs/">Docs</a>
-      <a class="button" href="#how">Try locally <span aria-hidden="true">↗</span></a>
+      <a class="button" href="#downloads" data-desktop-cta>Desktop downloads <span aria-hidden="true">↗</span></a>
       <div class="mobile-community" role="group" aria-label="Umbod community"></div>
     </nav>
   </dialog>
@@ -90,6 +90,18 @@
       <span>Self-hosted</span><span>MCP-compatible</span><span>Independent of your agent vendor</span>
       <a href="/docs/operations/service-topology/">Explore the architecture <span aria-hidden="true">↗</span></a>
     </div>
+
+    <section id="downloads" class="section" aria-labelledby="downloads-title">
+      <div class="wrap">
+        <p class="eyebrow">Umbod on your computer</p>
+        <h2 id="downloads-title">Desktop downloads</h2>
+        <p>A native app for local MCP connections and shared tool permissions. macOS and Windows builds are separate from the Kubernetes edition.</p>
+        <div id="desktop-download-options" aria-live="polite"><!-- desktop-downloads:start -->
+          <p>Desktop downloads are not available yet. You can self-host Umbod today.</p>
+          <p><a class="text-link" href="/docs/getting-started/kubernetes-installation/">Self-host on Kubernetes <span aria-hidden="true">↗</span></a></p>
+        <!-- desktop-downloads:end --></div>
+      </div>
+    </section>
 
     <section class="walkthrough" id="walkthrough" aria-labelledby="walkthrough-title">
       <div class="wrap">
@@ -188,6 +200,8 @@
   </footer>
 
   <script type="module">
+    import { initializeDownloads } from './src/downloads.mjs';
+    initializeDownloads();
     const menu = document.getElementById('mobile-menu');
     const menuToggle = document.querySelector('.menu-toggle');
     const mobileLayout = window.matchMedia('(max-width: 760px)');

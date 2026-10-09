@@ -77,3 +77,14 @@ In each of the `umbod.com` and `umbod.dev` Cloudflare zones:
    - `https://umbod.com/*` → `https://umbod.ai/${1}`
    - `https://www.umbod.com/*` → `https://umbod.ai/${1}`
    - Use the equivalent two rules for `umbod.dev`.
+
+## Desktop downloads
+
+Both landing-page download CTAs use `public/desktop-downloads.json`, independently of
+root release metadata. The initial state is unavailable with a self-hosting alternative;
+do not add speculative URLs. `src/downloads.mjs` validates exact desktop tags, public
+asset URLs, hashes and platform choices. Vite renders a no-JavaScript fallback from the
+same validated manifest. Run `bun run test` for download and manifest-update tests.
+
+Follow [the manifest application procedure](../desktop/docs/APPLY-MANIFEST.md) to
+verify published assets and prepare the website PR. No frontend credentials are used.

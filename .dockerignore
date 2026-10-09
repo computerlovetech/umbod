@@ -4,3 +4,6 @@
 **/.pytest_cache
 **/.ruff_cache
 **/.venv
+
+# Desktop is built separately; never include it in server image contexts.
+desktop/

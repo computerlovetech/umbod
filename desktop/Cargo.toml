@@ -1,0 +1,69 @@
+[package]
+name = "umbod-gateway"
+version = "0.2.0"
+edition = "2024"
+
+[lib]
+path = "backend/src/lib.rs"
+
+[[bin]]
+name = "umbod-gateway"
+path = "backend/src/main.rs"
+
+[dependencies]
+anyhow = "1"
+axum = "0.8"
+base64 = "0.22"
+http = "1"
+keyring = { version = "3", features = ["apple-native"] }
+oauth2 = "5"
+reqwest = { version = "0.13", features = ["json", "stream", "query", "form"] }
+rmcp = { version = "3.5.1", features = ["client", "server", "transport-child-process", "transport-streamable-http-client-reqwest", "transport-streamable-http-server", "transport-io"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+subtle = "2"
+tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+uuid = { version = "1", features = ["v4", "serde"] }
+url = "2"
+jsonschema = "0.33"
+
+[dev-dependencies]
+tempfile = "3"
+
+[[test]]
+name = "acl"
+path = "backend/tests/acl.rs"
+
+[[test]]
+name = "runtime"
+path = "backend/tests/runtime.rs"
+
+[[test]]
+name = "gateway"
+path = "backend/tests/gateway.rs"
+
+[[test]]
+name = "oauth"
+path = "backend/tests/oauth.rs"
+
+[[test]]
+name = "process"
+path = "backend/tests/process.rs"
+
+[[test]]
+name = "http_e2e"
+path = "backend/tests/http_e2e.rs"
+
+[[test]]
+name = "bridge"
+path = "backend/tests/bridge.rs"
+
+[[test]]
+name = "activation"
+path = "backend/tests/activation.rs"
+
+[[test]]
+name = "platform"
+path = "backend/tests/platform.rs"

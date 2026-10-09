@@ -1,0 +1,98 @@
+name: Desktop manual prerelease
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Exact desktop/VERSION (X.Y.Z)'
+        required: true
+        type: string
+      mode:
+        description: 'Production is intentionally unsupported and will fail closed'
+        type: choice
+        options: [unsigned-prerelease, production]
+        required: true
+      confirmation:
+        description: 'Type: release desktop-vX.Y.Z unsigned-prerelease'
+        type: string
+        required: true
+      rights_confirmed:
+        description: 'I reviewed source redistribution rights and dependency license obligations'
+        type: boolean
+        default: false
+        required: true
+permissions:
+  contents: read
+concurrency:
+  group: desktop-release
+  cancel-in-progress: false
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate intentional desktop-only release
+        env:
+          DESKTOP_VERSION: ${{ inputs.version }}
+          RELEASE_MODE: ${{ inputs.mode }}
+          CONFIRMATION: ${{ inputs.confirmation }}
+          RIGHTS_CONFIRMED: ${{ inputs.rights_confirmed }}
+        run: python3 desktop/scripts/release.py guard
+      - name: Require a new desktop tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          # Network/API failures also fail closed. No tag or release is overwritten.
+          gh api --paginate "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/desktop-v$VERSION" > refs.json
+          python3 - <<'PY'
+          import json, os
+          refs = json.load(open('refs.json'))
+          if any(r['ref'] == 'refs/tags/desktop-v' + os.environ['VERSION'] for r in refs):
+              raise SystemExit('Desktop tag already exists; use a new version')
+          PY
+  build:
+    needs: guard
+    uses: ./.github/workflows/desktop-build.yml
+    permissions:
+      contents: read
+  publish:
+    needs: [guard, build]
+    runs-on: ubuntu-latest
+    environment: desktop-release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          merge-multiple: true
+          path: desktop/dist/release
+      - name: Generate notes, checksums, and desktop manifest
+        run: python3 desktop/scripts/release.py metadata --directory desktop/dist/release
+      - name: Create desktop tag and unsigned prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          # Tag creation fails if the tag exists. Never force-update tags/assets.
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+            -f "ref=refs/tags/desktop-v$VERSION" -f "sha=$GITHUB_SHA"
+          gh release create "desktop-v$VERSION" desktop/dist/release/* \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --latest=false \
+            --title "Desktop $VERSION — UNSIGNED PRERELEASE" \
+            --notes-file desktop/dist/release/RELEASE_NOTES.md
+      - name: Prepare reviewed website update
+        run: |
+          mkdir -p website-manifest-update/website/public
+          cp desktop/dist/release/desktop-downloads.json website-manifest-update/website/public/desktop-downloads.json
+          cp desktop/docs/APPLY-MANIFEST.md website-manifest-update/APPLY-MANIFEST.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website-manifest-update
+          path: website-manifest-update/
+          if-no-files-found: error
