@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import * as downloadsApi from '../src/downloads.mjs';
 import { validateManifest, detectPlatform, selectDownload, loadManifest, renderDownloads } from '../src/downloads.mjs';
 const fixture = () => ({ schemaVersion: 1, status: 'available', version: '0.2.0', tag: 'desktop-v0.2.0', sourceCommit: 'a'.repeat(40), channel: 'unsigned-prerelease', assets: Object.fromEntries([
   ['macos-arm64', 'Umbod-0.2.0-arm64.dmg'], ['windows-x64', 'Umbod-0.2.0-release-win-x64.zip'],
@@ -48,6 +49,8 @@ test('rendered links include explicit OS, unsigned label, version, hash and self
   assert.ok(renderDownloads({schemaVersion: 1, status: 'unavailable'}, 'unknown').includes('not available yet'));
   assert.ok(!absent.includes('releases/download'));
   assert.ok(absent.includes('/docs/getting-started/kubernetes-installation/'));
+  assert.ok(absent.includes('Separate edition for teams'));
+  assert.ok(absent.includes('href="/enterprise/"'));
 });
 
 test('both CTAs target an accessible downloads section with no-JS fallback', () => {
@@ -63,4 +66,14 @@ test('both CTAs target an accessible downloads section with no-JS fallback', () 
 test('checked-in desktop manifest conforms to the supported schema', () => {
   const manifest = JSON.parse(readFileSync(new URL('../public/desktop-downloads.json', import.meta.url), 'utf8'));
   assert.doesNotThrow(() => validateManifest(manifest));
+});
+
+
+test('page separation preserves the downloads module API and skips pages without a download section', async () => {
+  assert.deepEqual(Object.keys(downloadsApi).sort(), [
+    'detectPlatform', 'initializeDownloads', 'loadManifest', 'renderDesktopPage',
+    'renderDownloads', 'selectDownload', 'validateManifest',
+  ].sort());
+  const nav = new Proxy({}, {get() { throw Error('must not inspect platform on enterprise'); }});
+  await downloadsApi.initializeDownloads({getElementById: () => null}, nav);
 });

@@ -53,10 +53,10 @@ export async function loadManifest(fetcher = globalThis.fetch) {
 }
 export function renderDownloads(manifest, platform) {
   const {recommended, downloads} = selectDownload(manifest, platform);
-  const alternative = `<p class="download-alternative"><a class="text-link" href="${SELF_HOST}">Self-host on Kubernetes <span aria-hidden="true">↗</span></a></p>`;
+  const alternative = `<p class="download-alternative">Separate edition for teams: <a class="text-link" href="/enterprise/">Explore Umbod Enterprise</a> or <a class="text-link" href="${SELF_HOST}">self-host on Kubernetes <span aria-hidden="true">↗</span></a>. This is not the desktop app.</p>`;
   if (!downloads.length) {
-    let message = 'Desktop downloads could not be verified. Please try again, or self-host Umbod today.';
-    try { if (validateManifest(manifest).status === 'unavailable') message = 'Desktop downloads are not available yet. You can self-host Umbod today.'; } catch {}
+    let message = 'Desktop downloads could not be verified. Please try again later.';
+    try { if (validateManifest(manifest).status === 'unavailable') message = 'Desktop downloads are not available yet.'; } catch {}
     return `<p>${message}</p>` + alternative;
   }
   // All interpolated values are fixed strings or validated version/hash/allowlisted URLs.
