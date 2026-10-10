@@ -22,6 +22,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - name: Install website test and build dependencies
+        working-directory: website
+        run: bun install --frozen-lockfile
       - run: python3 -m unittest discover -s desktop/tests -v
       - run: node --test website/tests/*.test.mjs
       - name: Existing Kubernetes release invariants
@@ -29,14 +35,9 @@ jobs:
         run: |
           python3 -m pip install pytest pyyaml
           python3 -m pytest scripts/tests/test_release_versions.py scripts/tests/test_release_workflow.py -q
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: '1.4.2'
       - name: Website build
         working-directory: website
-        run: |
-          bun install --frozen-lockfile
-          bun run build
+        run: bun run build
   macos:
     runs-on: macos-15
     timeout-minutes: 45
