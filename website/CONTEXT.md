@@ -2,15 +2,25 @@
 
 ## Purpose
 
-The Umbod website is one landing page for platform teams evaluating self-hosted agent
-infrastructure on Kubernetes. Its immediate purpose is to help engineers understand
-Umbod, try it locally, and give useful feedback. Local installation is the primary
-call to action; feedback and collaboration with Computerlove are secondary.
+The website has two conversion paths under one restrained Umbod identity:
 
-Explain connectors, group permissions, and independence from agent vendors in concrete
-terms. Keep documentation accessible and distinguish current beta capabilities from
-future plans. Avoid sales language, pricing tiers, and claims of production readiness.
-The local evaluation path does not need a separate landing page for individuals.
+- `/` introduces the native desktop app to individuals. Lead with the local MCP
+  gateway, shared per-tool permissions across local clients, and desktop downloads.
+  State availability, OS/architecture support and prerelease signing limits honestly.
+  Do not present cluster installation, group administration or the platform video as
+  desktop capabilities. A labeled connection diagram is preferable to a fake screenshot.
+- `/enterprise/` introduces the self-hosted platform to platform teams. Keep the
+  existing connectors, group permissions, Kubernetes walkthrough and beta limits here.
+  Lead with contact and self-hosting docs, and retain the local cluster evaluation guide.
+
+The shared navigation includes Docs, Enterprise and Download. Download always returns
+to `/#downloads`. This follows Orca's separation of individual and enterprise journeys,
+not its copy, visual identity, testimonials or unsupported product claims.
+
+Keep documentation accessible and distinguish current beta capabilities from future
+plans. Avoid pricing tiers, invented customers, compliance claims and promises of
+production readiness. Build navigation, metadata and primary content into each HTML
+entry so direct links and JavaScript-disabled visits work.
 
 ## Product strategy
 
@@ -20,13 +30,15 @@ Umbod has two deliberately connected products:
   individual, easy to run across developer platforms, and capable of creating users, ambassadors,
   connector authors, policy authors, and community knowledge. It is not merely a limited enterprise
   trial.
-- **Enterprise Umbod is the operational and revenue product.** It takes the same connector, policy,
-  identity, and audit model into shared cloud-native environments with organizational identity,
-  administration, reliability, compliance, support, and managed operations.
+- **Enterprise Umbod is the operational and revenue product.** It manages shared
+  connectors and group access in cloud-native environments, with organizational
+  authentication and administration. Reliability, compliance, support and managed
+  operations are longer-term product goals, not present-day guarantees.
 
-The local and enterprise editions must share a portable core rather than becoming separate product
-implementations. A successful local configuration should promote into a team or enterprise
-environment without being rebuilt.
+Portability is a product direction, not a shipped capability. Today Desktop uses a
+Rust gateway with native SwiftUI/WPF interfaces, while the platform uses separate
+Kubernetes services. Configuration promotion between editions is not implemented.
+Do not market a shared runtime or automatic local-to-enterprise migration.
 
 ## Reference projects
 

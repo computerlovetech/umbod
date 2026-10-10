@@ -99,6 +99,7 @@ See the [development guide](umbod/README.md) for local setup and checks.
 
 - [`umbod/`](umbod/) — API, MCP server, admin interface, and Helm chart.
 - [`packages/umbod-sdk/`](packages/umbod-sdk/) — Python SDK for connector authors.
+- [`desktop/`](desktop/) — Native macOS and Windows app, independently versioned builds and prereleases.
 - [`website/`](website/) — Landing page and documentation publishing.
 
 Built at [Computerlove](https://computerlove.tech).

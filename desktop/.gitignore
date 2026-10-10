@@ -1,0 +1,9 @@
+/target/
+/native/.build/
+/dist/
+/windows/**/bin/
+/windows/**/obj/
+__pycache__/
+.DS_Store
+*.dmg
+/.build-local/
