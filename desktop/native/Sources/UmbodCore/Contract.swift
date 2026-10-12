@@ -36,6 +36,23 @@ public enum JSONText {
         String(decoding: try JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]), as: UTF8.self)
     }
 }
+public enum ConnectorIconSource: Equatable {
+    case remote(URL)
+    case embedded(Data)
+
+    public init?(_ value: String) {
+        if value.hasPrefix("data:image/"),
+           let comma = value.firstIndex(of: ","),
+           value[..<comma].hasSuffix(";base64"),
+           let data = Data(base64Encoded: String(value[value.index(after: comma)...])),
+           !data.isEmpty {
+            self = .embedded(data)
+            return
+        }
+        guard let url = URL(string: value), ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
+        self = .remote(url)
+    }
+}
 public enum ClientConfiguration {
     public static func bridge(bundlePath: String, environment: AppEnvironment = .release, executable: URL? = nil) throws -> String {
         try JSONText.encode(["mcpServers": [environment.serverName: ["command": executable?.path ?? bundlePath + "/Contents/MacOS/umbod-desktop", "args": ["bridge", "--profile", environment.rawValue]]]])

@@ -44,6 +44,9 @@ import Foundation
             let detail = try await send("GET", connector(id))
             var server = saved.values.first { $0["id"] as? String == id } ?? ["transport": "http", "url": detail["endpoint_url"] ?? ""]
             server["id"] = id; server["name"] = item["display_name"]
+            if let iconURL = item["icon_url"] as? String, !iconURL.isEmpty {
+                server["icon_url"] = iconURL
+            }
             servers.append(server)
             if let key = server["host_id"] as? String { oauthStatuses[id] = hostOAuth[key] ?? (server["oauth"] as? Bool == true ? "signed_in" : "signed_out") }
             let health = item["health"] as? [String: Any] ?? [:]

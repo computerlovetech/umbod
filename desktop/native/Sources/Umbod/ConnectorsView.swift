@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import UmbodCore
 
 private enum ConnectorSheet: Identifiable {
@@ -37,8 +38,10 @@ struct ServersView: View {
                             HStack(spacing: 16) {
                                 Button { selectedConnector = id } label: {
                                     HStack(spacing: 14) {
-                                        Image(systemName: server["transport"] as? String == "stdio" ? "terminal" : "network")
-                                            .font(.system(size: 20)).foregroundStyle(Brand.accent).frame(width: 38, height: 38).background(Brand.accentSoft, in: RoundedRectangle(cornerRadius: 10))
+                                        ConnectorIconView(
+                                            source: server["icon_url"] as? String,
+                                            fallbackSystemName: server["transport"] as? String == "stdio" ? "terminal" : "network"
+                                        )
                                         VStack(alignment: .leading, spacing: 6) {
                                             Text(server["name"] as? String ?? "Connector").font(.system(size: 15, weight: .semibold))
                                             Text(model.statuses[id] ?? "Disconnected").font(.caption).foregroundStyle(Brand.muted)
@@ -79,6 +82,44 @@ struct ServersView: View {
                 removal = nil
             }
         }
+    }
+}
+private struct ConnectorIconView: View {
+    let source: String?
+    let fallbackSystemName: String
+
+    var body: some View {
+        Group {
+            if let source, let icon = ConnectorIconSource(source) {
+                switch icon {
+                case .embedded(let data):
+                    if let image = NSImage(data: data) {
+                        Image(nsImage: image).resizable().scaledToFit()
+                    } else {
+                        fallback
+                    }
+                case .remote(let url):
+                    AsyncImage(url: url) { phase in
+                        if let image = phase.image {
+                            image.resizable().scaledToFit()
+                        } else {
+                            fallback
+                        }
+                    }
+                }
+            } else {
+                fallback
+            }
+        }
+        .frame(width: 38, height: 38)
+        .background(Brand.accentSoft, in: RoundedRectangle(cornerRadius: 10))
+        .clipShape(RoundedRectangle(cornerRadius: 10))
+    }
+
+    private var fallback: some View {
+        Image(systemName: fallbackSystemName)
+            .font(.system(size: 20))
+            .foregroundStyle(Brand.accent)
     }
 }
 struct ConnectorManagementView: View {
