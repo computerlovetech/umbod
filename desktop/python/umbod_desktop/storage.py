@@ -5,6 +5,10 @@ import os
 import tempfile
 from pathlib import Path
 
+from pydantic import ValidationError
+
+from .settings import DesktopSettings
+
 
 def atomic_json(path: Path, value: object) -> None:
     atomic_bytes(path, json.dumps(value).encode())
@@ -31,8 +35,20 @@ class DesktopState:
             if self.path.exists()
             else {"version": 2, "servers": {}}
         )
-        if self.data.get("version") != 2:
+        if not isinstance(self.data, dict) or self.data.get("version") != 2:
             raise ValueError("Unsupported desktop state version")
+        try:
+            self.settings
+        except ValidationError:
+            raise ValueError(
+                "Desktop settings in desktop-v2.json are invalid. Restore valid settings "
+                "(gateway, flat or codemode and a boolean administrator switch), then restart. "
+                "Your profile has not been reset."
+            ) from None
+
+    @property
+    def settings(self) -> DesktopSettings:
+        return DesktopSettings.model_validate(self.data.get("settings", {}))
 
     def save(self) -> None:
         atomic_json(self.path, self.data)

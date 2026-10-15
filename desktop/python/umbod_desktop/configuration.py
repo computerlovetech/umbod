@@ -6,9 +6,11 @@ from umbod.config import AppConfig
 from umbod.config.secret_derivation import derive_secret
 
 from .security import DESKTOP_GROUP
+from .storage import DesktopState
 
 
 def desktop_settings(directory: Path, origin: str, root_secret: str) -> AppConfig:
+    advanced = DesktopState(directory).settings
     return AppConfig.model_validate(
         {
             "runtime": {
@@ -28,7 +30,7 @@ def desktop_settings(directory: Path, origin: str, root_secret: str) -> AppConfi
                 "auth_mode": "none",
                 "messaging_transport": "sql",
                 "permission_group_claim": "groups",
-                "connector_tool_exposure_mode": "gateway",
+                "connector_tool_exposure_mode": advanced.connector_tool_exposure_mode,
                 "downstream_oauth_enabled": True,
             },
             "admin_authentication": {
@@ -54,7 +56,9 @@ def desktop_settings(directory: Path, origin: str, root_secret: str) -> AppConfi
                 "directory": str(directory / "oauth"),
                 "encryption_key": derive_secret(root_secret, "oauth-token-storage"),
             },
-            "feature_toggles": {"mcp_administrator_enabled": False},
+            "feature_toggles": {
+                "mcp_administrator_enabled": advanced.mcp_administrator_enabled
+            },
             "cors": {"origins": []},
         }
     )
