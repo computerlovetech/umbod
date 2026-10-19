@@ -6,7 +6,7 @@ Verified desktop releases are available from https://umbod.ai/download/. Local b
 
 ## Build and test
 
-Run from the monorepo root unless a command explicitly changes directory. Build prerequisites: uv, Python 3.11+, Swift 6 and Apple developer tools on macOS. Packaging downloads a pinned CPython 3.14.3 runtime and verifies its SHA-256. No command below installs or launches the production app.
+Run from the monorepo root unless a command explicitly changes directory. Build prerequisites: uv, Python 3.14.3, Swift 6 and Apple developer tools on macOS. Host verification and CI select Python 3.14.3 through `python/.python-version` so locked dependencies can use compatible wheels instead of compiling for a newer interpreter. Packaging downloads a pinned CPython 3.14.3 runtime and verifies its SHA-256. No command below installs or launches the production app.
 
 ```sh
 cd desktop

@@ -54,8 +54,11 @@ jobs:
           swift --version | grep -E "Swift version 6\."
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.12'
+          python-version-file: desktop/python/.python-version
       - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          cache-dependency-glob: desktop/python/uv.lock
       - name: Python host, packaged bridge, and Swift logic tests
         run: bash scripts/verify.sh
       - name: Build unsigned prerelease DMG
