@@ -2,18 +2,19 @@ import asyncio
 import json
 import socket
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import httpx
 import pytest
 import uvicorn
 from test_runtime import MemoryVault
 
-from umbod_desktop.configuration import desktop_settings
+from umbod_desktop.backend_integration.configuration import desktop_settings
 from umbod_desktop.runtime import create_desktop_app
 from umbod_desktop.storage import DesktopState
 
 
-def test_existing_profile_defaults_ignore_operator_environment(tmp_path, monkeypatch):
+def test_existing_profile_defaults_ignore_operator_environment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     original = {
         "version": 2,
         "servers": {},
@@ -25,13 +26,13 @@ def test_existing_profile_defaults_ignore_operator_environment(tmp_path, monkeyp
     path.write_text(json.dumps(original))
     monkeypatch.setenv("UMBOD_MCP_TOOL_EXPOSURE", "flat")
     monkeypatch.setenv("UMBOD_FEATURE_MCP_ADMINISTRATOR_ENABLED", "true")
-    config = desktop_settings(tmp_path, "http://127.0.0.1:8000", "test-root")
+    config = desktop_settings(tmp_path, "http://127.0.0.1:8000", "test-root", DesktopState(tmp_path).settings)
     assert config.mcp.connector_tool_exposure_mode == "gateway"
     assert config.feature_toggles.mcp_administrator_enabled is False
     assert DesktopState(tmp_path).data == original
 
 
-def test_saved_settings_drive_backend_composition(tmp_path):
+def test_saved_settings_drive_backend_composition(tmp_path: Path) -> None:
     original = {
         "version": 2,
         "servers": {"saved": {"id": "keep"}},
@@ -43,7 +44,7 @@ def test_saved_settings_drive_backend_composition(tmp_path):
         "legacy_agent_hashes": ["keep"],
     }
     (tmp_path / "desktop-v2.json").write_text(json.dumps(original))
-    config = desktop_settings(tmp_path, "http://127.0.0.1:8000", "test-root")
+    config = desktop_settings(tmp_path, "http://127.0.0.1:8000", "test-root", DesktopState(tmp_path).settings)
     assert config.mcp.connector_tool_exposure_mode == "flat"
     assert config.feature_toggles.mcp_administrator_enabled is True
     assert DesktopState(tmp_path).data == original

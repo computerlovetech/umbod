@@ -10,7 +10,7 @@ root = Path(__file__).resolve().parents[2]
 app = Path(sys.argv[1])
 resources = app / 'Contents/Resources'
 
-def output(*args):
+def output(*args: str) -> str:
     return subprocess.check_output(args, text=True, cwd=root).strip()
 
 metadata = {
@@ -23,8 +23,8 @@ metadata = {
     'python': output(str(resources / 'python/bin/python3'), '-I', '-B', '--version'),
     'pythonBuild': (resources / 'python/BUILD').read_text().strip(),
     'uv': output('uv', '--version'),
-    'swift': output('swift', '--version'),
-    'xcode': output('xcodebuild', '-version'),
+    'swift': output('/usr/bin/xcrun', '--toolchain', 'XcodeDefault', '--sdk', 'macosx', 'swift', '--version'),
+    'xcode': output('/usr/bin/xcodebuild', '-version'),
     'lockSha256': hashlib.sha256((root / 'desktop/python/uv.lock').read_bytes()).hexdigest(),
 }
 (resources / 'build-metadata.json').write_text(json.dumps(metadata, indent=2) + '\n')

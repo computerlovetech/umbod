@@ -1,16 +1,15 @@
-"""Explicit desktop composition: never load operator .env or development defaults."""
-
 from pathlib import Path
 
-from umbod.config import AppConfig
 from umbod.config.secret_derivation import derive_secret
+from umbod.hosting import AppConfig
 
-from .security import DESKTOP_GROUP
-from .storage import DesktopState
+from ..contracts import DESKTOP_GROUP
+from ..settings import DesktopSettings
 
 
-def desktop_settings(directory: Path, origin: str, root_secret: str) -> AppConfig:
-    advanced = DesktopState(directory).settings
+def desktop_settings(
+    directory: Path, origin: str, root_secret: str, advanced: DesktopSettings
+) -> AppConfig:
     return AppConfig.model_validate(
         {
             "runtime": {

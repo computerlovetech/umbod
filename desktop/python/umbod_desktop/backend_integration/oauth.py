@@ -1,4 +1,7 @@
-"""macOS Keychain and loopback transport adapters for shared OAuth."""
+from collections.abc import Awaitable, Callable
+from typing import TYPE_CHECKING
+
+from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
     AuthorizationDocument,
@@ -6,9 +9,12 @@ from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
     SignInRequired,
 )
 from umbod.core.connectors.downstream_mcp.oauth.ports import OAuthConnection
-from umbod.core.connectors.downstream_mcp.oauth.service import OAuthService
+from umbod.hosting import OAuthService
 
-from .security import CredentialVault
+from ..ports import CredentialVault
+
+if TYPE_CHECKING:
+    from .transports import DesktopUpstreams
 
 
 class KeychainOAuthStorage(ConnectorOAuthStorage):
@@ -36,11 +42,11 @@ class KeychainOAuthStorage(ConnectorOAuthStorage):
 
 
 class DesktopOAuthHost:
-    def __init__(self, upstreams):
+    def __init__(self, upstreams: "DesktopUpstreams") -> None:
         self.upstreams = upstreams
         self.statuses = getattr(upstreams, "authentication_status", {})
 
-    def resolve(self, connector_id):
+    def resolve(self, connector_id: str) -> str:
         servers = self.upstreams.state.data["servers"]
         if connector_id.startswith("pending:"):
             key = connector_id.removeprefix("pending:")
@@ -51,35 +57,36 @@ class DesktopOAuthHost:
                 return key
         raise KeyError(connector_id)
 
-    def connection(self, key):
+    def connection(self, key: str) -> OAuthConnection:
         server = self.upstreams.state.data["servers"][key]
         if server.get("transport", "http") != "http":
             raise ValueError("Browser sign-in requires an HTTPS connector")
         return OAuthConnection(server["url"], server.get("oauth_scopes", ""))
 
-    def storage(self, key):
+    def storage(self, key: str) -> KeychainOAuthStorage:
         return KeychainOAuthStorage(self.upstreams.vault, key, self.connection(key).endpoint_url)
 
-    def callback_url(self, key, *, shared):
+    def callback_url(self, key: str, *, shared: bool) -> str:
         return f"{self.upstreams.origin}/desktop/oauth/callback" + ("" if shared else f"/{key}")
 
-    def set_scopes(self, key, scopes):
+    def set_scopes(self, key: str, scopes: str) -> None:
         self.upstreams.state.data["servers"][key]["oauth_scopes"] = scopes
         self.upstreams.state.save()
 
-    def set_authorized(self, key, authorized):
+    def set_authorized(self, key: str, authorized: bool) -> None:
         self.upstreams.state.data["servers"][key]["oauth"] = authorized
         self.upstreams.state.save()
 
-    async def delete_authorization(self, key):
+    async def delete_authorization(self, key: str) -> None:
         self.upstreams.vault.delete(f"python:oauth:{key}")
 
-    async def reconnect(self, key):
+    async def reconnect(self, key: str) -> None:
         await self.upstreams.start(key, self.upstreams.state.data["servers"][key])
 
 
-def callback_transport(oauth: OAuthService):
-    async def callback(request):
+def callback_transport(oauth: OAuthService) -> Callable[[Request], Awaitable[PlainTextResponse]]:
+    async def callback(request: Request) -> PlainTextResponse:
         result = await oauth.callback(request.path_params.get("nonce"), dict(request.query_params))
         return PlainTextResponse(result.content, status_code=result.status_code)
     return callback
+

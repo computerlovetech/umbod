@@ -2,43 +2,57 @@
 
 import os
 import sys
+from collections.abc import AsyncIterator, Callable
 from contextlib import AsyncExitStack, asynccontextmanager
-from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 from fastapi import FastAPI, HTTPException, Request
 from starlette.applications import Starlette
 from starlette.routing import Route
-from umbod.core.connectors.downstream_mcp.oauth.service import OAuthService
-from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
-from umbod.mcp.public_app import (
-    build_starlette_app,
-    create_runtime_context,
-    load_configured_public_app_config,
+from starlette.types import ASGIApp
+from umbod.hosting import (
+    InMemoryGroupConnectorToolPermissions,
+    OAuthService,
+    create_mcp_app,
+    create_rest_app,
 )
-from umbod.rest.main import create_app
 
-from .client_setup import ClientSetup
-from .configuration import desktop_settings
-from .legacy import saved_agent_hashes
-from .migration import DesktopMigration
-from .oauth import DesktopOAuthHost, callback_transport
-from .security import (
-    CredentialVault,
+from .backend_integration.administration import BackendAdministration
+from .backend_integration.authentication import (
     DesktopAdminVerifier,
     DesktopAgentVerifier,
+)
+from .backend_integration.configuration import desktop_settings
+from .backend_integration.naming import BackendToolNamingPolicy
+from .backend_integration.oauth import (
+    DesktopOAuthHost,
+    callback_transport,
+)
+from .backend_integration.transports import DesktopUpstreams
+from .backend_integration.usage import DesktopUsageSink
+from .backward_compatibility.adapters.administration import BackendPrefixRepair
+from .backward_compatibility.adapters.oauth import KeychainLegacyAuthorizationImporter
+from .backward_compatibility.authentication import LegacyAgentCredentials
+from .backward_compatibility.migration import DesktopMigration
+from .backward_compatibility.profile import saved_agent_hashes
+from .backward_compatibility.tool_names import DesktopToolNames
+from .client_setup import ClientSetup
+from .contracts import UpstreamInput
+from .security import (
+    CredentialVault,
     LoopbackAuthentication,
     persistent_secret,
 )
 from .settings import DesktopSettings
 from .storage import DesktopState, atomic_json
-from .upstreams import DesktopUpstreams
-from .usage import DesktopUsageSink
+from .usage import DesktopUsageRecorder
 
 
 async def create_desktop_app(
-    directory: Path, profile: str, origin: str, vault: CredentialVault, shutdown
-):
+    directory: Path, profile: str, origin: str, vault: CredentialVault,
+    shutdown: Callable[[], None],
+) -> tuple[ASGIApp, str]:
     declaration = directory / "native-connectors.json"
     atomic_json(declaration, {"connectors": []})
     os.environ["UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH"] = str(declaration)
@@ -52,8 +66,9 @@ async def create_desktop_app(
     admin_token = persistent_secret(vault, "python:admin-token")
     agent_token = persistent_secret(vault, "python:agent-token")
     upstream_token = persistent_secret(vault, "python:upstream-token")
-    settings = desktop_settings(directory, origin, root)
     state = DesktopState(directory)
+    effective_settings = state.settings
+    settings = desktop_settings(directory, origin, root, effective_settings)
     if state.data.get("profile", profile) != profile:
         raise ValueError("Desktop profile does not match its data directory")
     state.data["profile"] = profile
@@ -69,32 +84,34 @@ async def create_desktop_app(
         routes=[Route("/desktop/oauth/callback/{nonce}", callback),
         Route("/desktop/oauth/callback", callback)]
     )
-    api = create_app(settings, admin_verifier=DesktopAdminVerifier(admin_token), oauth_service=oauth)
-    migration = DesktopMigration(directory, state, upstreams, api, admin_token)
-    config = await load_configured_public_app_config(settings)
-    config = replace(
-        config,
-        invocation_log_sink=DesktopUsageSink(state),
+    api = create_rest_app(settings, connector_registrations=None, admin_verifier=DesktopAdminVerifier(admin_token), oauth_service=oauth)
+    administration = BackendAdministration(api, admin_token)
+    tool_names = DesktopToolNames(administration, BackendToolNamingPolicy(), BackendPrefixRepair(administration.client))
+    migration = DesktopMigration(
+        directory, state, upstreams, administration, tool_names,
+        KeychainLegacyAuthorizationImporter(vault),
+    )
+    mcp = await create_mcp_app(
+        settings,
+        invocation_log_sink=DesktopUsageSink(DesktopUsageRecorder(state)),
         auth_provider=DesktopAgentVerifier(
-            agent_token, tuple(state.data["legacy_agent_hashes"])
+            agent_token, LegacyAgentCredentials(tuple(state.data["legacy_agent_hashes"]))
         ),
         group_permission_runtime_state=InMemoryGroupConnectorToolPermissions(
             group_claim_fields=("groups",)
         ),
     )
-    context = await create_runtime_context(config)
-    mcp = await build_starlette_app(context)
 
     @asynccontextmanager
-    async def lifespan(app):
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         async with AsyncExitStack() as stack:
             await stack.enter_async_context(api.router.lifespan_context(api))
-            await migration.tool_names.repair(state)
+            await tool_names.repair(state)
             await stack.enter_async_context(mcp.router.lifespan_context(mcp))
             await upstreams.restore()
             stack.push_async_callback(upstreams.close)
             stack.push_async_callback(oauth.close)
-            stack.push_async_callback(migration.close)
+            stack.push_async_callback(administration.close)
             yield
 
     host = FastAPI(docs_url=None, openapi_url=None, lifespan=lifespan)
@@ -113,11 +130,6 @@ async def create_desktop_app(
             if (Path(sys.executable).parent.parent.parent / "runtime-id").exists()
             else "development",
         }
-
-    effective_settings = DesktopSettings(
-        connector_tool_exposure_mode=settings.mcp.connector_tool_exposure_mode,
-        mcp_administrator_enabled=settings.feature_toggles.mcp_administrator_enabled,
-    )
 
     @host.get("/desktop/settings")
     async def read_settings():
@@ -152,9 +164,9 @@ async def create_desktop_app(
         return state.data
 
     @host.post("/desktop/upstreams")
-    async def prepare(request: Request):
+    async def prepare(request: Request) -> dict[str, Any]:
         try:
-            return await upstreams.prepare(await request.json())
+            return (await upstreams.prepare(UpstreamInput(await request.json()))).model_dump()
         except (ValueError, KeyError):
             raise HTTPException(
                 422, "Invalid desktop connector or missing credential"

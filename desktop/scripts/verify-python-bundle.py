@@ -28,11 +28,19 @@ def verify_installation(prefix, paths, distributions):
                 require_bundled(pth.parent / line, prefix)
 
 
-def main():
+def main() -> None:
     prefix = Path(sys.prefix)
     verify_installation(prefix, sys.path, importlib.metadata.distributions())
     # Exercise the real CLI import graph as well as REST/MCP entry points.
-    for name in ("umbod_desktop.main", "umbod.core", "umbod.rest.main", "umbod.mcp.public_app", "umbod_sdk"):
+    for name in (
+        "umbod_desktop.main",
+        "umbod_desktop.runtime",
+        "umbod.hosting",
+        "umbod.core",
+        "umbod.rest.main",
+        "umbod.mcp.public_app",
+        "umbod_sdk",
+    ):
         module = importlib.import_module(name)
         if module.__file__:
             require_bundled(module.__file__, prefix)

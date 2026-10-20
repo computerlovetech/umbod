@@ -1,16 +1,22 @@
 import json
+from pathlib import Path
+from typing import Any
 
 import pytest
 from umbod.rest.authentication.authorization import JwtVerificationError
 
+from umbod_desktop.backend_integration.authentication import (
+    DesktopAdminVerifier,
+    DesktopAgentVerifier,
+)
+from umbod_desktop.backend_integration.configuration import desktop_settings
 from umbod_desktop.client_setup import ClientSetup
-from umbod_desktop.configuration import desktop_settings
-from umbod_desktop.security import DesktopAdminVerifier, DesktopAgentVerifier
+from umbod_desktop.contracts import UpstreamInput
 from umbod_desktop.storage import DesktopState
 
 
-def test_desktop_configuration_never_uses_development_authentication(tmp_path):
-    settings = desktop_settings(tmp_path, "http://127.0.0.1:12345", "unique-secret" * 5)
+def test_desktop_configuration_never_uses_development_authentication(tmp_path: Path) -> None:
+    settings = desktop_settings(tmp_path, "http://127.0.0.1:12345", "unique-secret" * 5, DesktopState(tmp_path).settings)
     assert settings.runtime.auth == "desktop"
     assert settings.admin_authentication.mode == "jwt"
     assert settings.admin_authentication.environment == "production"
@@ -70,10 +76,17 @@ def test_client_setup_rejects_symlinks(tmp_path):
         )
 
 
-async def test_legacy_agent_credentials_keep_only_agent_access(tmp_path):
+async def test_legacy_agent_credentials_keep_only_agent_access(tmp_path: Path) -> None:
     import hashlib
 
-    from umbod_desktop.legacy import saved_agent_hashes, saved_port
+    from umbod_desktop.backward_compatibility.authentication import (
+        LegacyAgentCredentials,
+    )
+    from umbod_desktop.backward_compatibility.profile import (
+        saved_agent_hashes,
+        saved_legacy_port,
+    )
+    from umbod_desktop.endpoint import saved_port
 
     old_token = "existing-private-agent-token"
     document = {
@@ -87,14 +100,14 @@ async def test_legacy_agent_credentials_keep_only_agent_access(tmp_path):
     (tmp_path / "config.json").write_text(json.dumps(document))
     hashes = saved_agent_hashes(tmp_path)
     assert len(hashes) == 1
-    verifier = DesktopAgentVerifier("new-token", tuple(hashes))
+    verifier = DesktopAgentVerifier("new-token", LegacyAgentCredentials(tuple(hashes)))
     assert await verifier.verify_token(old_token) is not None
     assert await verifier.verify_token("wrong-token") is None
     with pytest.raises(JwtVerificationError):
         DesktopAdminVerifier("admin-token").verify(old_token)
-    assert saved_port(tmp_path) == 19432
+    assert saved_port(tmp_path, saved_legacy_port) == 19432
     (tmp_path / "python-endpoint.json").write_text('{"port":19433}')
-    assert saved_port(tmp_path) == 19433
+    assert saved_port(tmp_path, saved_legacy_port) == 19433
 
 
 async def test_existing_encrypted_database_never_generates_replacement_key(tmp_path):
@@ -198,35 +211,29 @@ async def test_moved_profile_stops_host_even_when_replacement_exists(tmp_path):
     assert replacement_record.read_text() == '{"pid": 123}'
 
 
-async def test_renaming_upstream_preserves_live_transport(tmp_path):
+async def test_renaming_upstream_preserves_live_transport(tmp_path: Path) -> None:
     from test_runtime import MemoryVault
 
-    from umbod_desktop.upstreams import DesktopUpstreams
+    from umbod_desktop.backend_integration.transports import DesktopUpstreams
 
     host = DesktopUpstreams(
         DesktopState(tmp_path), MemoryVault(), "fixture", "http://127.0.0.1:1"
     )
     starts = []
 
-    async def start(key, server):
+    async def start(key: str, server: dict[str, Any]) -> None:
         starts.append(key)
 
     host.start = start
-    prepared = await host.prepare(
-        {"name": "Original", "transport": "stdio", "command": "/usr/bin/python3"}
-    )
-    key = prepared["host_id"]
-    renamed = await host.prepare({**host.state.data["servers"][key], "name": "Renamed"})
-    assert renamed["connection_changed"] is False
+    prepared = await host.prepare(UpstreamInput({"name": "Original", "transport": "stdio", "command": "/usr/bin/python3"}))
+    key = prepared.host_id
+    renamed = await host.prepare(UpstreamInput({**host.state.data["servers"][key], "name": "Renamed"}))
+    assert renamed.connection_changed is False
     assert len(starts) == 1
-    changed = await host.prepare(
-        {**host.state.data["servers"][key], "command": "/different/python"}
-    )
-    assert changed["connection_changed"] is True
+    changed = await host.prepare(UpstreamInput({**host.state.data["servers"][key], "command": "/different/python"}))
+    assert changed.connection_changed is True
     assert len(starts) == 2
-    refreshed = await host.prepare(
-        {**host.state.data["servers"][key], "reconnect": True}
-    )
-    assert refreshed["connection_changed"] is True
+    refreshed = await host.prepare(UpstreamInput({**host.state.data["servers"][key], "reconnect": True}))
+    assert refreshed.connection_changed is True
     assert len(starts) == 3
     assert "reconnect" not in host.state.data["servers"][key]

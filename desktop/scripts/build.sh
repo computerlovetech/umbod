@@ -9,10 +9,11 @@ case "$CHANNEL" in
   release) APP_NAME="Umbod"; BUNDLE_ID="app.umbod.desktop"; APP="$OUTPUT/Umbod-$VERSION.app" ;;
   *) echo "Usage: scripts/build.sh [dev|release]" >&2; exit 1 ;;
 esac
+bash scripts/check-macos-toolchain.sh
 FINAL_APP="$APP"
 APP="${FINAL_APP}.building-$(python3 -c 'import uuid; print(uuid.uuid4())')"
 trap 'rm -rf "$APP"' EXIT
-swift build --package-path native -c release --product Umbod
+/usr/bin/xcrun --toolchain XcodeDefault --sdk macosx swift build --package-path native -c release --product Umbod
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 scripts/bundle-python.sh "$APP/Contents/Resources"
 python3 -c 'import uuid; print(uuid.uuid4())' > "$APP/Contents/Resources/runtime-id"
@@ -32,7 +33,7 @@ chmod +x "$APP/Contents/MacOS/umbod-desktop"
 # Existing agent configurations can keep the old command path; no Rust is bundled.
 cp "$APP/Contents/MacOS/umbod-desktop" "$APP/Contents/MacOS/umbod-gateway"
 cp native/.build/release/Umbod "$APP/Contents/MacOS/Umbod"
-swift scripts/icon.swift "$OUTPUT/Umbod-$CHANNEL.iconset" "$CHANNEL"
+/usr/bin/xcrun --toolchain XcodeDefault --sdk macosx swift scripts/icon.swift "$OUTPUT/Umbod-$CHANNEL.iconset" "$CHANNEL"
 iconutil -c icns "$OUTPUT/Umbod-$CHANNEL.iconset" -o "$APP/Contents/Resources/UmbodBrand.icns"
 rm -f "$APP/Contents/MacOS/umbod-profile"
 printf '%s\n' "$CHANNEL" > "$APP/Contents/Resources/umbod-profile"
