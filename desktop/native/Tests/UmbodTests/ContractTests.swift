@@ -5,6 +5,7 @@ import UmbodCore
     @MainActor static func main() async throws {
         toolPermissionQueueTests()
         try updateTests()
+        try await advancedSettingsTests()
         try await connectorEditorTests()
         precondition(AdministrationClient.errorMessage(["detail": ["code": "auth_rejected", "message": "The downstream server rejected authentication."]], statusCode: 422) == "The downstream server rejected authentication. Sign in with browser from the connector page, or check its authentication credentials.")
         precondition(AdministrationClient.errorMessage(["detail": ["code": "unreachable", "message": "The downstream MCP server could not be reached."]], statusCode: 422) == "The downstream MCP server could not be reached.")
@@ -158,6 +159,23 @@ import UmbodCore
         restoredAgent.standardOutput = FileHandle.nullDevice
         try restoredAgent.run(); restoredAgent.waitUntilExit()
         precondition(restoredAgent.terminationStatus == 0, "Persisted permissions and transport must survive restart")
+        let advanced = AdvancedSettingsModel()
+        try await advanced.load { try await secondUI.request($0) }
+        precondition(advanced.effective == DesktopBackendSettings())
+        advanced.draft.exposureMode = .flat
+        advanced.requestAdministrator(true)
+        advanced.acceptAdministrator()
+        let beforeAdvancedRestart = secondUI.processID
+        await advanced.saveAndRestart(request: { try await secondUI.request($0) }, stop: {
+            try await secondUI.shutdown()
+        }, start: {
+            try await secondUI.start(executable: executable, directory: persistentDirectory, persistent: true, environment: environment, testCredentials: true)
+        })
+        precondition(advanced.error.isEmpty && advanced.effective == advanced.draft && !advanced.hasPendingChanges)
+        precondition(secondUI.processID != beforeAdvancedRestart && secondUI.gateway == persistentEndpoint)
+        let afterAdvancedRestart = try await secondUI.request(["action": "status"])
+        precondition((afterAdvancedRestart["allowed_tools"] as? [String])?.contains(toolName) == true)
+        log("PASS: native settings save/restart verifies health, effective values and preserved grants through the packaged backend")
         var retainedDraft = server
         retainedDraft.name = "Retained connector"
         let retainedEditor = ConnectorEditor(draft: retainedDraft)

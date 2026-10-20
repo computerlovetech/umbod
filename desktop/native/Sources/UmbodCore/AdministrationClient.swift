@@ -198,6 +198,8 @@ import Foundation
                 if let scopes = body["scopes"] { payload["scopes"] = scopes }
             }
             return try await send("POST", path + "/" + operation, payload)
+        case "settings_get": return try await send("GET", "/desktop/settings")
+        case "settings_save": return try await send("PUT", "/desktop/settings", body["settings"] as? [String: Any] ?? [:])
         case "health": return try await send("GET", "/desktop/health")
         case "shutdown": return try await send("POST", "/desktop/shutdown")
         case "status": return try await status()

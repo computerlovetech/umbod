@@ -30,6 +30,7 @@ from .security import (
     LoopbackAuthentication,
     persistent_secret,
 )
+from .settings import DesktopSettings
 from .storage import DesktopState, atomic_json
 from .upstreams import DesktopUpstreams
 from .usage import DesktopUsageSink
@@ -56,6 +57,7 @@ async def create_desktop_app(
     if state.data.get("profile", profile) != profile:
         raise ValueError("Desktop profile does not match its data directory")
     state.data["profile"] = profile
+    state.data.setdefault("settings", state.settings.model_dump())
     if "legacy_agent_hashes" not in state.data:
         state.data["legacy_agent_hashes"] = saved_agent_hashes(directory)
     state.save()
@@ -111,6 +113,29 @@ async def create_desktop_app(
             if (Path(sys.executable).parent.parent.parent / "runtime-id").exists()
             else "development",
         }
+
+    effective_settings = DesktopSettings(
+        connector_tool_exposure_mode=settings.mcp.connector_tool_exposure_mode,
+        mcp_administrator_enabled=settings.feature_toggles.mcp_administrator_enabled,
+    )
+
+    @host.get("/desktop/settings")
+    async def read_settings():
+        pending = state.settings
+        return {
+            "pending": pending.model_dump(),
+            "effective": effective_settings.model_dump(),
+            "restart_required": pending != effective_settings,
+        }
+
+    @host.put("/desktop/settings")
+    async def save_settings(pending: DesktopSettings):
+        # Persist before publishing the new pending value. Failed writes leave both
+        # the running configuration and in-memory metadata untouched.
+        updated = {**state.data, "settings": pending.model_dump()}
+        atomic_json(state.path, updated)
+        state.data = updated
+        return await read_settings()
 
     @host.post("/desktop/shutdown")
     async def stop():

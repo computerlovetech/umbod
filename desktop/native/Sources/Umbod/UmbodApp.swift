@@ -5,6 +5,7 @@ import UmbodCore
 @MainActor final class AppModel: ObservableObject {
     static let shared = AppModel()
     let backend = Backend()
+    let advancedSettings = AdvancedSettingsModel()
     let updates = UpdateModel()
     @Published var activation = ActivationState([:])
     @Published var diagnostics: [String: Any] = [:]
@@ -511,10 +512,10 @@ struct ConnectionView: View {
     }
 }
 enum SettingsSection: String, CaseIterable {
-    case general = "General", mcp = "MCP"
-    var symbol: String { self == .general ? "slider.horizontal.3" : "point.3.connected.trianglepath.dotted" }
+    case general = "General", mcp = "MCP", advanced = "Advanced"
+    var symbol: String { self == .advanced ? "gearshape.2" : (self == .general ? "slider.horizontal.3" : "point.3.connected.trianglepath.dotted") }
     var subtitle: String {
-        self == .general ? "Keep Umbod up to date and ready to use." : "Connect your agent to Umbod. Choose either method below."
+        self == .advanced ? "Backend settings apply together after an explicit restart." : (self == .general ? "Keep Umbod up to date and ready to use." : "Connect your agent to Umbod. Choose either method below.")
     }
 }
 struct SettingsMenuButton: View {
@@ -582,7 +583,11 @@ struct SettingsView: View {
                     }
                     Text(model.settingsSection.subtitle).font(.system(size: 15)).foregroundStyle(Brand.muted)
                     StatusMessages()
-                    if model.settingsSection == .mcp { ConnectionView() } else { GeneralSettingsView() }
+                    switch model.settingsSection {
+                    case .mcp: ConnectionView()
+                    case .general: GeneralSettingsView()
+                    case .advanced: AdvancedSettingsView(settings: model.advancedSettings)
+                    }
                 }.padding(40).frame(maxWidth: 900, alignment: .leading).frame(maxWidth: .infinity, alignment: .leading)
             }.background(Brand.canvas)
         }.modifier(BrandAppearance())
