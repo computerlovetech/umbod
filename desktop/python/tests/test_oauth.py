@@ -1,6 +1,8 @@
 import asyncio
 import time
+from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from urllib.parse import parse_qs
 
 import httpx2
@@ -20,14 +22,15 @@ from umbod.core.connectors.downstream_mcp.oauth.provider import (
 )
 from umbod.core.connectors.downstream_mcp.oauth.service import OAuthService
 
-from umbod_desktop.oauth import (
+from umbod_desktop.backend_integration.oauth import (
     DesktopOAuthHost,
     KeychainOAuthStorage,
     callback_transport,
 )
+from umbod_desktop.contracts import UpstreamInput
 
 
-def desktop_oauth(upstreams):
+def desktop_oauth(upstreams: Any) -> OAuthService:
     return OAuthService(DesktopOAuthHost(upstreams))
 
 
@@ -56,12 +59,12 @@ async def test_fresh_authorization_keeps_saved_tokens_and_hosted_identity():
     assert auth.token_received
 
 
-async def test_explicit_scopes_limit_browser_request_after_discovery():
+async def test_explicit_scopes_limit_browser_request_after_discovery() -> None:
     from urllib.parse import urlsplit
 
     from mcp.client.auth import AuthorizationCodeResult
 
-    from umbod_desktop.models import DesktopServer
+    from umbod_desktop.backend_integration.models import DesktopServer
 
     query = {}
 
@@ -349,11 +352,11 @@ async def test_declined_browser_consent_finishes_pending_callback():
         await future
 
 
-async def test_runtime_reauthentication_is_reported_and_persisted(tmp_path):
+async def test_runtime_reauthentication_is_reported_and_persisted(tmp_path: Path) -> None:
     from umbod.core.connectors.downstream_mcp.oauth.provider import RuntimeOAuth
 
+    from umbod_desktop.backend_integration.transports import DesktopUpstreams
     from umbod_desktop.storage import DesktopState
-    from umbod_desktop.upstreams import DesktopUpstreams
 
     vault = MemoryVault()
     upstreams = DesktopUpstreams(
@@ -386,7 +389,7 @@ async def test_runtime_reauthentication_is_reported_and_persisted(tmp_path):
     assert restored.authentication_status["fixture"] == "sign_in_required"
 
 
-async def test_http_challenge_and_success_update_connection_status(tmp_path):
+async def test_http_challenge_and_success_update_connection_status(tmp_path: Path) -> None:
     import socket
 
     import uvicorn
@@ -394,8 +397,8 @@ async def test_http_challenge_and_success_update_connection_status(tmp_path):
     from fastmcp.client.transports import StreamableHttpTransport
     from fastmcp.server.auth import AccessToken, TokenVerifier
 
+    from umbod_desktop.backend_integration.transports import DesktopUpstreams
     from umbod_desktop.storage import DesktopState
-    from umbod_desktop.upstreams import DesktopUpstreams
 
     class FixtureVerifier(TokenVerifier):
         async def verify_token(self, token):
@@ -424,10 +427,8 @@ async def test_http_challenge_and_success_update_connection_status(tmp_path):
             async with asyncio.timeout(15):
                 while not server.started:
                     await asyncio.sleep(0.01)
-                prepared = await upstreams.prepare(
-                    {"name": "Protected", "transport": "http", "url": url}
-                )
-                key = prepared["host_id"]
+                prepared = await upstreams.prepare(UpstreamInput({"name": "Protected", "transport": "http", "url": url}))
+                key = prepared.host_id
                 proxy = upstreams.apps[key]
 
                 def transport():
@@ -444,15 +445,13 @@ async def test_http_challenge_and_success_update_connection_status(tmp_path):
                         await client.list_tools()
                 assert upstreams.authentication_status[key] == "sign_in_required"
                 upstreams.vault.set("upstream:fixture", "Bearer fixture-token")
-                await upstreams.prepare(
-                    {
+                await upstreams.prepare(UpstreamInput({
                         "host_id": key,
                         "name": "Protected",
                         "transport": "http",
                         "url": url,
                         "headers": {"Authorization": "upstream:fixture"},
-                    }
-                )
+                    }))
                 proxy = upstreams.apps[key]
                 async with Client(transport()) as client:
                     assert [tool.name for tool in await client.list_tools()] == ["echo"]

@@ -6,7 +6,7 @@ Verified desktop releases are available from https://umbod.ai/download/. Local b
 
 ## Build and test
 
-Run from the monorepo root unless a command explicitly changes directory. Build prerequisites: uv, Python 3.11+, Swift 6 and Apple developer tools on macOS. Packaging downloads a pinned CPython 3.14.3 runtime and verifies its SHA-256. No command below installs or launches the production app.
+Run from the monorepo root unless a command explicitly changes directory. Build prerequisites: uv, Python 3.11+, and full Xcode with Swift 6 or newer on Apple Silicon macOS; Command Line Tools alone are insufficient. Install Xcode and open it to finish first-launch setup and accept its license. Select the installation with `DEVELOPER_DIR` or `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`. Run `bash desktop/scripts/check-macos-toolchain.sh` to verify the selection and SwiftUI macros before building. On Apple Silicon macOS, `nix develop .#desktop` supplies the normal repository tools and pinned Python/uv environment and checks the external Apple compiler and SDK; it does not install Swift, Xcode, or an SDK. The general `nix develop` shell has no Xcode requirement. Packaging downloads a pinned CPython 3.14.3 runtime and verifies its SHA-256. No command below installs or launches the production app.
 
 ```sh
 cd desktop
@@ -55,11 +55,15 @@ OAuth supports native public clients with loopback callbacks, discovery, PKCE an
 
 Older installed versions that require a Windows asset in update metadata cannot read new macOS-only manifests. Download the first macOS-only release manually from the website; its updater accepts both historical and macOS-only manifests. Existing published releases are not changed.
 
+## Shared composition
+
+The Python host uses the backend-owned [`umbod.hosting`](../umbod/api/src/umbod/hosting/README.md) API also used by the separate Kubernetes REST/MCP services. Native lifecycle and credential ownership remain desktop-specific. Desktop migration and tool-name repair live exclusively in the removable [`backward_compatibility`](python/umbod_desktop/backward_compatibility/README.md) package, alongside old-host retirement, historical profile fallback, OAuth conversion and migrated token matching. Compatibility orchestration and permanent usage recording depend on desktop-owned typed ports; concrete shared HTTP, hosting, transport and OAuth adapters live in `python/umbod_desktop/backend_integration/`. The Python index documents the exact remaining naming, configuration and OAuth persistence coupling; the compatibility index owns historical formats, lifecycle entrypoints and concrete removal steps.
+
 ## Code and release index
 
 - [`python/`](python/README.md): macOS host, transport adapters, Keychain, migration and tests; reuses `umbod/api` and `packages/umbod-sdk`.
 - `native/`: SwiftUI app and Swift contract/lifecycle tests; `UmbodCore/AdvancedSettings.swift` owns backend-reported pending/effective settings, confirmation and verified restart/recovery, while `Umbod/AdvancedSettingsView.swift` presents Settings → Advanced; Settings provides compact update controls and generic stdio/HTTP connection details, with the bearer token masked and available only through an explicit copy action. Connector authentication stays optional and credentials remain in Keychain; `UmbodCore/ConnectorEditor.swift` owns the actual editor submission and retry state; `UmbodCore/ToolPermissionQueue.swift` owns optimistic permission edits, ordered save state, and stale-refresh protection; `UmbodCore/DesktopUpdate.swift` validates update metadata and `Umbod/UpdatesView.swift` owns update preferences and the install guidance.
-- `scripts/`: local builds, packaging, isolated fixtures, and release policy/metadata.
+- `scripts/`: local builds, packaging, isolated fixtures, and release policy/metadata; `check-macos-toolchain.sh` owns the shared full-Xcode, Swift 6, SDK and SwiftUI macro preflight used by builds, verification, acceptance preparation and the desktop Nix shell.
 - `VERSION`: independent desktop version; the single source for bundle and package versions.
 - [Release procedure](docs/RELEASING.md), [manifest application](docs/APPLY-MANIFEST.md), and [import provenance and audit](docs/PROVENANCE.md).
 - [0.2.4 release candidate](docs/releases/0.2.4.md): announcement draft and release-owner acceptance checklist; not a publication record.

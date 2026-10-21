@@ -12,23 +12,26 @@ from fastmcp.client.transports import StreamableHttpTransport
 from fastmcp.exceptions import ToolError
 from umbod.mcp.agent_instructions import AGENT_INSTRUCTIONS, AGENT_INSTRUCTIONS_URI
 
+from umbod_desktop.backward_compatibility.adapters.administration import (
+    BackendPrefixRepair,
+)
+from umbod_desktop.backward_compatibility.tool_names import DesktopToolNames
 from umbod_desktop.runtime import create_desktop_app
 from umbod_desktop.security import DESKTOP_GROUP, persistent_secret
 from umbod_desktop.storage import DesktopState
-from umbod_desktop.tool_names import DesktopToolNames
 
 
 class MemoryVault:
-    def __init__(self):
-        self.values = {}
+    def __init__(self) -> None:
+        self.values: dict[str, str] = {}
 
-    def get(self, reference):
+    def get(self, reference: str) -> str | None:
         return self.values.get(reference)
 
-    def set(self, reference, value):
+    def set(self, reference: str, value: str) -> None:
         self.values[reference] = value
 
-    def delete(self, reference):
+    def delete(self, reference: str) -> None:
         self.values.pop(reference, None)
 
 
@@ -39,7 +42,7 @@ async def discovered_names(agent):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("transport", ["http", "stdio", "legacy_stdio"])
-async def test_shared_backend_connector_flow(tmp_path, transport, monkeypatch):
+async def test_shared_backend_connector_flow(tmp_path: Path, transport: str, monkeypatch: pytest.MonkeyPatch) -> None:
     fixture = FastMCP("fixture")
 
     @fixture.tool
@@ -265,14 +268,20 @@ async def test_shared_backend_connector_flow(tmp_path, transport, monkeypatch):
                         while legacy_prefix + "_echo" not in await discovered_names(agent):
                             await asyncio.sleep(0.1)
 
-                    async def admin_request(method, path, body=None):
-                        response = await client.request(method, "/api/admin" + path, json=body)
-                        response.raise_for_status()
-                        return response.json()
+                    from umbod_desktop.backend_integration.administration import (
+                        BackendAdministration,
+                    )
+                    from umbod_desktop.backend_integration.naming import (
+                        BackendToolNamingPolicy,
+                    )
 
-                    names = DesktopToolNames(admin_request)
-                    await names.repair(DesktopState(tmp_path))
-                    await names.repair(DesktopState(tmp_path))
+                    administration = BackendAdministration(app, token)
+                    names = DesktopToolNames(administration, BackendToolNamingPolicy(), BackendPrefixRepair(administration.client))
+                    try:
+                        await names.repair(DesktopState(tmp_path))
+                        await names.repair(DesktopState(tmp_path))
+                    finally:
+                        await administration.close()
                     async with asyncio.timeout(15):
                         while "Fixture_echo" not in await discovered_names(agent):
                             await asyncio.sleep(0.1)
@@ -319,7 +328,9 @@ async def test_shared_backend_connector_flow(tmp_path, transport, monkeypatch):
                     )
                 ).status_code == 401
 
-                from umbod_desktop.migration import DesktopMigration
+                from umbod_desktop.backend_integration.administration import (
+                    BackendAdministration,
+                )
 
                 legacy = {
                     "servers": [{**draft, "id": "legacy"}],
@@ -328,17 +339,17 @@ async def test_shared_backend_connector_flow(tmp_path, transport, monkeypatch):
                 }
                 source = json.dumps(legacy)
                 (tmp_path / "config.json").write_text(source)
-                original_request = DesktopMigration.request
+                original_discover = BackendAdministration.discover
                 failed_once = False
 
-                async def fail_discovery_once(migration, method, path, body=None):
+                async def fail_discovery_once(administration: BackendAdministration, connector_id: str) -> None:
                     nonlocal failed_once
-                    if path.endswith("/discoveries") and not failed_once:
+                    if not failed_once:
                         failed_once = True
                         raise OSError("fixture interrupted")
-                    return await original_request(migration, method, path, body)
+                    await original_discover(administration, connector_id)
 
-                monkeypatch.setattr(DesktopMigration, "request", fail_discovery_once)
+                monkeypatch.setattr(BackendAdministration, "discover", fail_discovery_once)
                 interrupted = await client.post("/desktop/migration")
                 assert interrupted.json()["status"] == "needs_attention"
                 resumed = await client.post("/desktop/migration")

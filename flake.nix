@@ -11,8 +11,7 @@
       devShells = nixpkgs.lib.genAttrs systems (system:
         let
           pkgs = import nixpkgs { inherit system; };
-        in {
-          default = pkgs.mkShell {
+          shellInputs = {
             packages = with pkgs; [
               bashInteractive
               git
@@ -33,6 +32,14 @@
             UV_PYTHON = "${pkgs.python314}/bin/python3.14";
             UV_PYTHON_DOWNLOADS = "never";
           };
+        in {
+          default = pkgs.mkShell shellInputs;
+        } // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
+          desktop = pkgs.mkShellNoCC (shellInputs // {
+            shellHook = ''
+              ${pkgs.bash}/bin/bash ${./desktop/scripts/check-macos-toolchain.sh} || exit $?
+            '';
+          });
         });
     };
 }

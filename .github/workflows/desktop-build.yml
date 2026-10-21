@@ -1,10 +1,10 @@
 name: Desktop native builds
 on:
   pull_request:
-    paths: ['umbod/api/**', 'packages/umbod-sdk/**', 'desktop/**', 'website/**', '.github/workflows/desktop-*.yml', '.dockerignore']
+    paths: ['umbod/api/**', 'packages/umbod-sdk/**', 'desktop/**', 'website/**', '.github/workflows/desktop-*.yml', '.dockerignore', 'flake.nix', 'flake.lock']
   push:
     branches: [main, feat/desktop-monorepo-releases]
-    paths: ['umbod/api/**', 'packages/umbod-sdk/**', 'desktop/**', 'website/**', '.github/workflows/desktop-*.yml', '.dockerignore']
+    paths: ['umbod/api/**', 'packages/umbod-sdk/**', 'desktop/**', 'website/**', '.github/workflows/desktop-*.yml', '.dockerignore', 'flake.nix', 'flake.lock']
   workflow_dispatch:
   workflow_call:
 permissions:
@@ -48,10 +48,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Verify native Apple Silicon runner and Swift 6
-        run: |
-          test "$(uname -m)" = arm64
-          swift --version | grep -E "Swift version 6\."
+      - name: Verify full Xcode and SwiftUI toolchain
+        run: bash scripts/check-macos-toolchain.sh
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'

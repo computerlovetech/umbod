@@ -266,14 +266,18 @@ async def load_configured_public_app_config(settings: AppConfig) -> PublicAppCon
     private_api_base_url = settings.endpoints.private_api_base_url.strip()
     api_base_url = settings.endpoints.api_base_url.strip()
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
-    await persistence_runtime.readiness.ensure_ready()
-    if isinstance(settings.connector_store, InMemoryConnectorStoreConfig):
-        configured_source_strategy = HttpConnectorRuntimeStateSourceStrategy()
-    elif isinstance(settings.connector_store, SQLiteConnectorStoreConfig):
-        configured_source_strategy = StoreBackedConnectorRuntimeStateSourceStrategy()
-    else:
-        raise TypeError('unsupported connector store configuration')
-    return PublicAppConfig(settings=settings, connector_runtime=await DefaultConnectorRuntimeFactory(load_connector_plugins, partial(create_encrypted_connector_configuration_store, persistence_runtime.database), ConfiguredConnectorPublishingStoreFactory(persistence_runtime.database)).create(settings), source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=configured_source_strategy, stateless_http=settings.mcp.stateless_http, api_base_url=private_api_base_url or api_base_url or None, persistence_runtime=persistence_runtime)
+    try:
+        await persistence_runtime.readiness.ensure_ready()
+        if isinstance(settings.connector_store, InMemoryConnectorStoreConfig):
+            configured_source_strategy = HttpConnectorRuntimeStateSourceStrategy()
+        elif isinstance(settings.connector_store, SQLiteConnectorStoreConfig):
+            configured_source_strategy = StoreBackedConnectorRuntimeStateSourceStrategy()
+        else:
+            raise TypeError('unsupported connector store configuration')
+        return PublicAppConfig(settings=settings, connector_runtime=await DefaultConnectorRuntimeFactory(load_connector_plugins, partial(create_encrypted_connector_configuration_store, persistence_runtime.database), ConfiguredConnectorPublishingStoreFactory(persistence_runtime.database)).create(settings), source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=configured_source_strategy, stateless_http=settings.mcp.stateless_http, api_base_url=private_api_base_url or api_base_url or None, persistence_runtime=persistence_runtime)
+    except BaseException:
+        await persistence_runtime.shutdown()
+        raise
 
 async def create_runtime_context(config: PublicAppConfig) -> PublicAppRuntimeContext:
     install_umbod_consent_screen()
@@ -335,11 +339,14 @@ async def build_starlette_app(context: PublicAppRuntimeContext) -> Starlette:
     return Starlette(routes=[Route(_HEALTH_ROUTE, health_response, methods=['GET']), Route('/.well-known/mcp/server-card.json', lambda _request: JSONResponse(server_card, headers=_CORS_HEADERS), methods=['GET']), Route(_LOGO_ROUTE, lambda _request: FileResponse(_LOGO_FILE, media_type='image/png'), methods=['GET']), Mount('/', app=DynamicPublicMcpDispatcher(context.http_app, downstream_stores.definitions, downstream_stores.publishing))], lifespan=_create_public_http_lifespan(context))
 
 async def create_production_app() -> Starlette:
-    return await create_configured_production_app(load_app_config('.env'))
+    from umbod.hosting import create_mcp_app
+
+    return await create_mcp_app(load_app_config('.env'), auth_provider=None, group_permission_runtime_state=None, invocation_log_sink=None)
 
 async def create_configured_production_app(settings: AppConfig) -> Starlette:
-    config = await load_configured_public_app_config(settings)
-    return await build_starlette_app(await create_runtime_context(config))
+    from umbod.hosting import create_mcp_app
+
+    return await create_mcp_app(settings, auth_provider=None, group_permission_runtime_state=None, invocation_log_sink=None)
 
 def runtime_state_synchronizer_options(context: PublicAppRuntimeContext) -> ConnectorRuntimeStateSynchronizerOptions | None:
     if context.api_base_url is None:

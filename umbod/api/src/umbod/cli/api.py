@@ -47,7 +47,7 @@ class ServeCommand:
         configure_logging(settings.runtime.app_name, settings.runtime.log_level)
         configured_port = settings.rest.port if kwargs["port"] is None else int(kwargs["port"])
         uvicorn.run(
-            "umbod.rest.main:create_app",
+            "umbod.hosting.rest_service:create_app",
             host=str(kwargs["host"]),
             port=configured_port,
             reload=bool(kwargs["reload"]),

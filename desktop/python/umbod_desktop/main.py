@@ -12,7 +12,9 @@ from pathlib import Path
 
 import uvicorn
 
-from .legacy import retire_legacy_host, saved_port
+from .backward_compatibility.adapters.legacy_host import retire_legacy_host
+from .backward_compatibility.profile import saved_legacy_port
+from .endpoint import saved_port
 from .models import loopback_origin
 from .security import KeychainVault, persistent_secret
 from .storage import atomic_json
@@ -98,7 +100,7 @@ async def serve(arguments) -> None:
         endpoint_path = directory / "python-endpoint.json"
         with socket.socket() as listener:
             listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            listener.bind(("127.0.0.1", saved_port(directory)))
+            listener.bind(("127.0.0.1", saved_port(directory, saved_legacy_port)))
             listener.listen(128)
             port = listener.getsockname()[1]
             origin = f"http://127.0.0.1:{port}"

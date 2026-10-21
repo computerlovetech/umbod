@@ -7,7 +7,7 @@ import sys
 import tempfile
 
 
-def main():
+def main() -> None:
     desktop = Path(__file__).resolve().parents[1]
     archive = Path(sys.argv[1]).resolve()
     with tempfile.TemporaryDirectory(prefix="umbod-test-install-") as temporary:
@@ -24,7 +24,7 @@ def main():
         subprocess.run([str(app / "Contents/Resources/python/bin/python3"), "-I", "-B", str(desktop / "scripts/verify-python-bundle.py")], check=True)
         environment = {**os.environ, "UMBOD_TEST_APP": str(app)}
         # Swift drives the tests; every backend and agent process uses the installed interpreter.
-        subprocess.run(["swift", "run", "--package-path", str(desktop / "native"), "UmbodTests"], env=environment, check=True)
+        subprocess.run(["/usr/bin/xcrun", "--toolchain", "XcodeDefault", "--sdk", "macosx", "swift", "run", "--package-path", str(desktop / "native"), "UmbodTests"], env=environment, check=True)
         subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True)
         print("PASS: DMG install, packaged agent flow, and persistence")
 

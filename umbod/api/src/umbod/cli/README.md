@@ -4,6 +4,10 @@
 
 **Read when working with:** Command-line arguments, service startup commands, configuration validation, or terminal output.
 
+## Service composition
+
+REST targets `umbod.hosting.rest_service:create_app` with the Uvicorn factory flag. MCP targets `umbod.hosting.mcp_service:app`. Both use the backend-owned [hosting API](../hosting/README.md); process configuration, reload and port behavior remain unchanged.
+
 ## Modules
 
 ### `api.py`

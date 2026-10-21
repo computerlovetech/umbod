@@ -48,7 +48,7 @@ Setup is compensated, not transactional: failures after creation attempt both cr
 
 Downstream MCP responses also describe saved `oauth` authorizations. Shared OAuth administration lives in `connectors/downstream_mcp/oauth.py` under `/api/admin/connectors/mcp/oauth`: `GET /status`, `GET /{connector_id}`, and `POST /{connector_id}/{discover,begin,cancel,refresh,logout}`. Begin accepts optional `client_id` and `scopes`; omitted scopes preserve the saved choice. Details expose saved authorization, granted/requested/available scopes, registration mode, bounded redacted diagnostics, and separate authorization/discovery outcomes. Admin authentication and cookie safeguards apply to every route.
 
-Deployment composition supplies `create_app(oauth_service=OAuthService(host))`. The host implements shared storage, connector lookup, callback addresses, and transport reconnection ports; it does not implement OAuth policy. Desktop supplies Keychain and loopback adapters, including lookup of local drafts. The composing host must close the service during shutdown. Existing callback paths remain stable for registered clients.
+Deployment composition supplies an `OAuthService` through `umbod.hosting.create_rest_app`. The host implements shared storage, connector lookup, callback addresses, and transport reconnection ports; it does not implement OAuth policy. Desktop supplies Keychain and loopback adapters, including lookup of local drafts. The composing host must close the service during shutdown. Existing callback paths remain stable for registered clients.
 
 Without a configured host, these routes return `503` with `detail.code=oauth_host_unavailable`. This change does not enable browser sign-in in multi-worker Enterprise deployments: credential ownership and callback/session coordination must be supplied explicitly before enabling it. Saved server authorizations continue to use shared runtime/storage support in `core/connectors/downstream_mcp/adapters/fastmcp/oauth.py`, with the same public-client policy as Desktop.
 
@@ -78,4 +78,6 @@ Without a configured host, these routes return `503` with `detail.code=oauth_hos
 
 ## Embedded host composition
 
-`create_app(settings, admin_verifier=...)` supplies the same deployment verifier to authentication middleware and the request-scoped current-user dependency. Normal verifier selection and profile enrichment remain unchanged. The macOS host owns its loopback bearer-token policy outside this package.
+Supported hosts use [`umbod.hosting`](../hosting/README.md), including `create_rest_app`. `main.py:create_app` remains the unchanged legacy compatibility entrypoint. The service factory is `umbod.hosting.rest_service:create_app`.
+
+The `admin_verifier` hook on `create_rest_app` supplies the same deployment verifier to authentication middleware and the request-scoped current-user dependency. Normal verifier selection and profile enrichment remain unchanged. The macOS host owns its loopback bearer-token policy outside this package.

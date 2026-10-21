@@ -1,30 +1,13 @@
 """Owner-only durable host metadata, separate from shared connector storage."""
 
 import json
-import os
-import tempfile
 from pathlib import Path
 
 from pydantic import ValidationError
 
+from .persistence import atomic_bytes as atomic_bytes
+from .persistence import atomic_json as atomic_json
 from .settings import DesktopSettings
-
-
-def atomic_json(path: Path, value: object) -> None:
-    atomic_bytes(path, json.dumps(value).encode())
-
-
-def atomic_bytes(path: Path, value: bytes) -> None:
-    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
-    try:
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(value)
-            stream.flush()
-            os.fsync(stream.fileno())
-        os.replace(temporary, path)
-    finally:
-        if os.path.exists(temporary):
-            os.unlink(temporary)
 
 
 class DesktopState:

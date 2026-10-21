@@ -2,6 +2,10 @@
 
 Minimal FastAPI, FastMCP, and Typer scaffold for Umbod.
 
+## Hosting boundary
+
+[`umbod.hosting`](src/umbod/hosting/README.md) is the supported Python application-composition API. Desktop embeds its REST and MCP applications in one process; Kubernetes runs separate REST and MCP services through the same API. Its contract documents supported injections, resource ownership, compatibility checks, and remaining HTTP and persistence coupling.
+
 ## Telemetry ingestion
 
 The REST boundary exposes authenticated OTLP JSON logs, metrics, and traces under `/v1`. Accepted exports use the shared structured stdout logger with checked write acknowledgements; ingestion is disabled by default. See [telemetry ingestion](../docs/reference/telemetry-ingestion.md) for operator settings and deployment paths, and `src/umbod/rest/telemetry/README.md` for module responsibilities.

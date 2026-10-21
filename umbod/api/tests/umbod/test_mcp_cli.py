@@ -38,4 +38,4 @@ def test_serve_preserves_explicit_cli_port(monkeypatch: MonkeyPatch) -> None:
 def test_serve_starts_the_mcp_application(monkeypatch: MonkeyPatch) -> None:
     invocation = _run(monkeypatch, configured_port=9100)
 
-    assert invocation["args"] == ("umbod.mcp.main:app",)
+    assert invocation["args"] == ("umbod.hosting.mcp_service:app",)

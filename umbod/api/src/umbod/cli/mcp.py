@@ -47,7 +47,7 @@ class ServeCommand:
         configure_logging(settings.runtime.app_name, settings.runtime.log_level)
         configured_port = settings.mcp.port if kwargs["port"] is None else int(kwargs["port"])
         uvicorn.run(
-            "umbod.mcp.main:app",
+            "umbod.hosting.mcp_service:app",
             host=str(kwargs["host"]),
             port=configured_port,
             reload=bool(kwargs["reload"]),

@@ -1,7 +1,6 @@
-"""Adapt desktop-owned transports to the shared downstream HTTP connector API."""
-
 import asyncio
 import sys
+from typing import Any
 from uuid import uuid4
 
 import httpx2
@@ -10,21 +9,26 @@ from fastmcp.server import create_proxy
 from starlette.responses import JSONResponse
 from starlette.types import Receive, Scope, Send
 
+from ..contracts import (
+    ConnectorBinding,
+    PreparedUpstream,
+    ProxyConfiguration,
+    UpstreamInput,
+)
+from ..ports import CredentialVault
+from ..security import LoopbackAuthentication
+from ..storage import DesktopState
 from .models import DesktopServer
-from .security import CredentialVault, LoopbackAuthentication
-from .storage import DesktopState
 
 
 class ProxyLifetime:
-    """Enter and exit ASGI lifespan in one task (required by AnyIO/ContextVars)."""
-
-    def __init__(self, app):
+    def __init__(self, app: Any) -> None:
         self.app = app
         self.ready = asyncio.get_running_loop().create_future()
         self.stopped = asyncio.Event()
         self.task = asyncio.create_task(self.run())
 
-    async def run(self):
+    async def run(self) -> None:
         try:
             async with self.app.lifespan(self.app):
                 self.ready.set_result(None)
@@ -34,14 +38,14 @@ class ProxyLifetime:
                 self.ready.set_exception(error)
             raise
 
-    async def start(self):
+    async def start(self) -> None:
         try:
             await self.ready
         except BaseException:
             await asyncio.gather(self.task, return_exceptions=True)
             raise
 
-    async def aclose(self):
+    async def aclose(self) -> None:
         self.stopped.set()
         await self.task
 
@@ -94,7 +98,7 @@ class DesktopUpstreams:
                     lambda: self.set_authentication_status(key, "sign_in_required")
                 )
 
-            async def observe_response(response):
+            async def observe_response(response: httpx2.Response) -> None:
                 if str(response.request.url).rstrip("/") != server["url"].rstrip("/"):
                     return
                 from umbod.core.connectors.downstream_mcp.oauth.provider import (
@@ -105,7 +109,7 @@ class DesktopUpstreams:
                     self.authentication_status[key] = status
                     self.state.save()
 
-            def http_client(**kwargs):
+            def http_client(**kwargs: Any) -> httpx2.AsyncClient:
                 kwargs.setdefault("timeout", httpx2.Timeout(30.0, read=300.0))
                 return httpx2.AsyncClient(
                     **kwargs, event_hooks={"response": [observe_response]}
@@ -142,8 +146,8 @@ class DesktopUpstreams:
             raise ValueError("A connector credential is missing from Keychain")
         return value
 
-    async def prepare(self, server: dict) -> dict:
-        draft = DesktopServer.model_validate(server)
+    async def prepare(self, server: UpstreamInput) -> PreparedUpstream:
+        draft = DesktopServer.model_validate(server.root)
         server = draft.model_dump()
         key = server.get("host_id") or uuid4().hex
         if key not in self.state.data["servers"] and server.get("host_id"):
@@ -170,7 +174,6 @@ class DesktopUpstreams:
                 await self.start(key, server)
                 self.state.data.setdefault("transport_errors", {}).pop(key, None)
         except ValueError, OSError:
-            # Keep editable offline drafts, but stop the previously configured transport.
             old = self.lifetimes.pop(key, None)
             self.apps.pop(key, None)
             if old:
@@ -180,16 +183,23 @@ class DesktopUpstreams:
             )
         self.state.data["servers"][key] = {**server, "host_id": key}
         self.state.save()
-        return {
-            "host_id": key,
-            "connection_changed": connection_changed,
-            "configuration": {
-                "auth_mode": "static_bearer",
-                "endpoint_url": f"{self.origin}/desktop/upstreams/{key}/mcp",
-                "header_type": "bearer",
-                "bearer_token": self.token,
-            },
-        }
+        return PreparedUpstream(
+            host_id=key,
+            connection_changed=connection_changed,
+            configuration=self.proxy_configuration(key),
+        )
+
+    def proxy_configuration(self, host_id: str) -> ProxyConfiguration:
+        return ProxyConfiguration(
+            auth_mode="static_bearer",
+            endpoint_url=f"{self.origin}/desktop/upstreams/{host_id}/mcp",
+            header_type="bearer",
+            bearer_token=self.token,
+        )
+
+    def bind(self, binding: ConnectorBinding) -> None:
+        self.state.data["servers"][binding.host_id]["id"] = binding.connector_id
+        self.state.save()
 
     async def restore(self) -> None:
         errors = self.state.data.setdefault("transport_errors", {})
