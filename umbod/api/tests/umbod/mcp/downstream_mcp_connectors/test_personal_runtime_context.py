@@ -6,7 +6,7 @@ from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 
 from tests.umbod.mcp.test_personal_canonical_principal import _settings
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
-from umbod.mcp.downstream_mcp_connectors.personal_runtime import McpPersonalRuntimeContextProvider, personal_tool_permission_check
+from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalRuntimeContextProvider, personal_tool_permission_check
 
 
 @pytest.mark.asyncio

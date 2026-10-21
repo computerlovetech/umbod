@@ -3,14 +3,14 @@ from typing import cast
 import pytest
 from pydantic import JsonValue, ValidationError
 
-from umbod.mcp.connectors.tools.deployment_modes.codemode.sandbox import (
+from umbod.mcp.connectors.native.tools.deployment_modes.codemode.sandbox import (
     FastMcpMontyCodeModeAdapter,
     OpenApiCodeModeInvocation,
 )
-from umbod.mcp.connectors.tools.infrastructure.authorization import (
+from umbod.mcp.connectors.native.tools.infrastructure.authorization import (
     UnrestrictedConnectorTools,
 )
-from umbod.mcp.connectors.tools.runtime.registry import RuntimeConnectorToolRegistry
+from umbod.mcp.connectors.native.tools.runtime.registry import RuntimeConnectorToolRegistry
 
 
 def test_openapi_invocation_is_strict_and_frozen() -> None:

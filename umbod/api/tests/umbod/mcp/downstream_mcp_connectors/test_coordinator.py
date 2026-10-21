@@ -17,10 +17,10 @@ from umbod.core.activation import ActivationStatus
 from umbod.core.connectors.downstream_mcp.models import ConnectorHealthy, ConnectorUnhealthy, DiscoveredPrompt, DiscoveredToolWithoutOutputSchema, DiscoveryFailed, DiscoveryResult, DiscoverySucceeded, NoAuthConnectorDefinition, NoAuthCredentialState, ToolCatalogSnapshot, ToolIdentity
 from umbod.core.connectors.downstream_mcp.stores import ConnectorHealthFound, ConnectorIdQuery, ReplaceToolCatalog, SaveConnectorDefinition, SaveCredential, ToolCatalogFound
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
-from umbod.mcp.connectors.tools import install_tool_list_changed_notifier
+from umbod.mcp.connectors.native.tools import install_tool_list_changed_notifier
 from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
-from umbod.mcp.downstream_mcp_connectors import ConnectorAwareDownstreamMcpToolProvider, UnrestrictedDownstreamToolPermissionPolicy
-from umbod.mcp.downstream_mcp_connectors.coordinator import DownstreamDiscoveryAdapters, DownstreamDiscoveryCoordinatorOptions, DownstreamDiscoveryStores, create_downstream_discovery_coordinator
+from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolProvider, UnrestrictedDownstreamToolPermissionPolicy
+from umbod.mcp.connectors.downstream_mcp.coordinator import DownstreamDiscoveryAdapters, DownstreamDiscoveryCoordinatorOptions, DownstreamDiscoveryStores, create_downstream_discovery_coordinator
 from umbod.mcp.logging import McpToolInvocationCompleted
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
 from fastmcp import Client, FastMCP

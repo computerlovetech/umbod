@@ -6,7 +6,7 @@ from typing import Literal
 
 import pytest
 
-from umbod.mcp.connectors.tools import (
+from umbod.mcp.connectors.native.tools import (
     ConnectorToolChangePollingSynchronizer,
     ConnectorToolRuntimeStateSynchronizer,
     RuntimeReconciliationResult,

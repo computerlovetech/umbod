@@ -33,10 +33,10 @@ from umbod.core.connectors.downstream_mcp.stores import (
 )
 from umbod.core.invocation import ConnectorInvocation, PermitAllConnectorInvocationPolicy
 from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
-from umbod.mcp.downstream_mcp_connectors import (
+from umbod.mcp.connectors.downstream_mcp import (
     ConnectorAwareDownstreamMcpToolProvider,
 )
-from umbod.mcp.downstream_mcp_connectors.discovery_execution import (
+from umbod.mcp.connectors.downstream_mcp.discovery_execution import (
     ConnectorDiscoveryExecutionDependencies,
     ConnectorDiscoveryExecutor,
 )

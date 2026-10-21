@@ -8,11 +8,11 @@ from starlette.applications import Starlette
 from umbod.core.connectors.native.runtime import ConnectorRuntime
 from umbod.core.persistence import Database, PersistenceRuntime
 from umbod.mcp.auth import MCPAuthProvider
-from umbod.mcp.connectors import (
+from umbod.mcp.connectors.native import (
     ConnectorRuntimeStateReader,
     ConnectorRuntimeStateSynchronizationSource,
 )
-from umbod.mcp.connectors.tools import InMemoryConnectorToolRuntimeStateStore
+from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.runtime_options import (
     ConnectorRuntimeSourceStores,

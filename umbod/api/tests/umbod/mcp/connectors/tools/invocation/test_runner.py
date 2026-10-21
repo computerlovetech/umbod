@@ -16,12 +16,12 @@ from umbod.core.invocation import (
     PermitAllConnectorInvocationPolicy,
 )
 from umbod.core.invocation.tools.execution import create_tool_execution_pipeline
-from umbod.mcp.connectors.tools.invocation.errors import (
+from umbod.mcp.connectors.native.tools.invocation.errors import (
     ConnectorToolErrorFormatter,
     ConnectorToolFailureResult,
 )
-from umbod.mcp.connectors.tools.invocation.runner import ConnectorToolInvocationRunner
-from umbod.mcp.connectors.tools.invocation.telemetry import (
+from umbod.mcp.connectors.native.tools.invocation.runner import ConnectorToolInvocationRunner
+from umbod.mcp.connectors.native.tools.invocation.telemetry import (
     ConnectorTelemetryInterceptor,
 )
 from umbod.mcp.metrics import (
@@ -291,7 +291,7 @@ async def test_success_records_metrics_with_external_identity_and_duration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "umbod.mcp.connectors.tools.invocation.lifecycle.ConnectorInvocationLifecycle._duration_ms",
+        "umbod.mcp.connectors.native.tools.invocation.lifecycle.ConnectorInvocationLifecycle._duration_ms",
         lambda self: 250.0,
     )
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())

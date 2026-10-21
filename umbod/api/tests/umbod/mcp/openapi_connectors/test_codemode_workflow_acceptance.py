@@ -27,7 +27,7 @@ from umbod.core.connectors.openapi.catalog import StoreBackedOpenApiCapabilityCa
 from umbod.core.permissions import CapabilityPermissionCatalog, ConnectorPermissionUpdate, ConnectorToolRef, SaveGroupPermissionsRequest, ToolPermissionUpdate, UpdateGroupPermissionsRequest
 from umbod.core.permissions.management import GroupPermissionManagementService
 from umbod.mcp.auth import MCPAuthProviderFactory
-from umbod.mcp.connectors import create_default_mcp_connector_runtime
+from umbod.mcp.connectors.native import create_default_mcp_connector_runtime
 from umbod.mcp.public_app import OpenApiRuntimeAdapters, build_mcp, build_mcp_with_openapi_adapters
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings

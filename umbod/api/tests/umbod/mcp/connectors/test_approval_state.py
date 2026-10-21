@@ -6,7 +6,7 @@ from umbod.core.invocation import (
     ConnectorInvocation,
     ConnectorInvocationDenied,
 )
-from umbod.mcp.connectors import ApprovalStateCodec
+from umbod.mcp.connectors.native import ApprovalStateCodec
 
 
 def _invocation(arguments: Mapping[str, object] = {"amount": 10}) -> ConnectorInvocation:

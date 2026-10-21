@@ -367,8 +367,12 @@ def _visible_group_ids(registry: PermissionGroupListing) -> tuple[str, ...]:
 
 
 @pytest.fixture
-def dsl(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> ApplicationPermissionGroupsDsl:
-    driver = _create_admin_driver(tmp_path, monkeypatch)
+def dsl(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    prepared_connector_store_database: Path,
+) -> ApplicationPermissionGroupsDsl:
+    driver = _create_admin_driver(tmp_path, monkeypatch, prepared_connector_store_database)
     return ApplicationPermissionGroupsDsl(
         registry=PermissionGroupAdminPorts(
             listing=driver, reader=driver, registration=driver, deletion=driver
@@ -458,7 +462,7 @@ def test_application_layer_group_deletion_does_not_affect_identity_provider_grou
 
 
 def _create_admin_driver(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, database_path: Path
 ) -> FastApiPermissionGroupDriver:
     client = _create_client(
         tmp_path,
@@ -467,7 +471,7 @@ def _create_admin_driver(
             admin_authentication={"mode": "simulation", "simulated_admin": True},
             connector_store={
                 "type": "sqlite",
-                "sqlite_path": str(tmp_path / "umbod.sqlite3"),
+                "sqlite_path": str(database_path),
             },
         ),
     )

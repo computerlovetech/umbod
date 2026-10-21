@@ -1,7 +1,7 @@
 from tests.persistence_runtime import create_inmemory_runtime
 import pytest
 from umbod.core.permissions import SaveGroupPermissionsRequest
-from umbod.mcp.openapi_connectors import DatabaseGroupPermissionReaderFactory
+from umbod.mcp.connectors.openapi import DatabaseGroupPermissionReaderFactory
 
 @pytest.mark.asyncio
 async def test_group_permission_readers_share_runtime_database_state() -> None:

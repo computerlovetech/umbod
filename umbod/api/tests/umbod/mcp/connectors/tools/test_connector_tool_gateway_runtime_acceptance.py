@@ -14,7 +14,7 @@ from umbod.proxies import Model
 from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
-from umbod.mcp.connectors.tools import InMemoryConnectorToolRuntimeStateStore, RuntimeConnectorToolRegistry
+from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore, RuntimeConnectorToolRegistry
 from umbod.mcp.settings import MCPAppSettings, MCPSettings
 from tests.support.connector_plugins import SlackAdminConfiguration
 from tests.mcp_fixtures import build_test_mcp

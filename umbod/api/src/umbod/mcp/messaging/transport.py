@@ -6,7 +6,7 @@ from umbod.core.configuration.events import ConnectorRuntimeStateStreamEvent
 from umbod.core.activation.events import ConnectorToolChangedStreamEvent
 from umbod.core.persistence import Database
 from umbod.core.messaging import DatabaseEventCheckpointStore, DatabaseEventStream
-from umbod.mcp.connectors import (
+from umbod.mcp.connectors.native import (
     ConnectorCapabilityDescriptionOverrideStreamReader,
     ConnectorPublicationStreamReader,
     ConnectorRuntimeStateStreamReader,
@@ -14,7 +14,7 @@ from umbod.mcp.connectors import (
     HttpConnectorPublicationStreamReader,
     HttpConnectorRuntimeStateStreamReader,
 )
-from umbod.mcp.connectors.tools import (
+from umbod.mcp.connectors.native.tools import (
     ConnectorToolChangeStreamReader,
     HttpConnectorToolChangeStreamReader,
 )

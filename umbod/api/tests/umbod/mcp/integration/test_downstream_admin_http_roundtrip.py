@@ -18,7 +18,7 @@ from umbod.core.connectors.downstream_mcp.probe import DiscoveredCapabilities, D
 from umbod.core.permissions import ConnectorToolRef, SaveGroupPermissionsRequest
 from umbod.mcp import public_app
 from umbod.mcp.context import PublicAppRuntimeContext
-from umbod.mcp.downstream_mcp_connectors.provider import UnrestrictedDownstreamToolPermissionPolicy
+from umbod.mcp.connectors.downstream_mcp.provider import UnrestrictedDownstreamToolPermissionPolicy
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_connector_probe
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings

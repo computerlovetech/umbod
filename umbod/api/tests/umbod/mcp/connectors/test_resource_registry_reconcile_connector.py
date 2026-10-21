@@ -4,7 +4,7 @@ from typing import Any
 import pytest
 
 from umbod.core.activation import ActivationStatus, CapabilityRef, InMemoryActivationStore
-from umbod.mcp.connectors.resources.registry import RuntimeConnectorResourceRegistry
+from umbod.mcp.connectors.native.resources.registry import RuntimeConnectorResourceRegistry
 from umbod.proxies import Model
 
 

@@ -19,6 +19,11 @@ uv sync
 uv run umbod api serve --reload
 uv run umbod mcp serve --reload
 ```
+
+## Tests
+
+See [backend tests](tests/README.md) for the full-suite command and shared persistence fixture ownership.
+
 # Python distribution
 
 This application is distributed as `umbod` (Python 3.14+). The public

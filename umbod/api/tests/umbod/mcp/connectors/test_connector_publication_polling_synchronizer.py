@@ -3,7 +3,7 @@ from tests.connector_event_adapters import (
 )
 import pytest
 
-from umbod.mcp.connectors import (
+from umbod.mcp.connectors.native import (
     CONNECTOR_PUBLICATION_POLLING_BATCH_LIMIT,
     CONNECTOR_PUBLICATION_POLLING_INTERVAL_SECONDS,
     ConnectorPublicationPollingSynchronizer,

@@ -17,10 +17,10 @@ from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntim
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
-from umbod.mcp.connectors.tools import InMemoryConnectorToolRuntimeStateStore, RuntimeConnectorToolRegistry
-from umbod.mcp.connectors.tools.infrastructure.authorization import UnrestrictedConnectorTools
-from umbod.mcp.downstream_mcp_connectors.personal_runtime import PersonalToolReservationMiddleware
-from umbod.mcp.downstream_mcp_connectors.provider import reset_request_connector_scope, set_request_connector_scope
+from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore, RuntimeConnectorToolRegistry
+from umbod.mcp.connectors.native.tools.infrastructure.authorization import UnrestrictedConnectorTools
+from umbod.mcp.connectors.downstream_mcp.personal_runtime import PersonalToolReservationMiddleware
+from umbod.mcp.connectors.downstream_mcp.provider import reset_request_connector_scope, set_request_connector_scope
 from umbod.mcp.settings import MCPAppSettings, MCPSettings
 
 __all__ = ["runtime_case"]

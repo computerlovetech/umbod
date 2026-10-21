@@ -9,7 +9,7 @@ from umbod.proxies import Model
 from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.registry import InMemoryConnectorRegistry
 from tests.support.connector_plugins import TestConnectorPlugin as test_connector
-from umbod.mcp.connectors import (
+from umbod.mcp.connectors.native import (
     CONNECTOR_PUBLICATION_POLLING_BATCH_LIMIT,
     CONNECTOR_PUBLICATION_POLLING_INTERVAL_SECONDS,
     ConnectorPublicationPollingSynchronizer,

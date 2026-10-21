@@ -36,7 +36,7 @@ async def test_gateway_search_excludes_tool_not_authorized_for_authenticated_gro
     mcp = await builder.build()
 
     monkeypatch.setattr(
-        "umbod.mcp.connectors.tools.infrastructure.dependencies.get_access_token",
+        "umbod.mcp.connectors.native.tools.infrastructure.dependencies.get_access_token",
         lambda: SimpleNamespace(claims={"groups": ["engineering"]}),
     )
 
@@ -65,7 +65,7 @@ async def test_gateway_manifest_is_request_local_without_cross_principal_leakage
     )
     active_groups = ["engineering"]
     monkeypatch.setattr(
-        "umbod.mcp.connectors.tools.infrastructure.dependencies.get_access_token",
+        "umbod.mcp.connectors.native.tools.infrastructure.dependencies.get_access_token",
         lambda: SimpleNamespace(claims={"groups": active_groups}),
     )
 
@@ -100,7 +100,7 @@ async def test_gateway_direct_execution_denies_tool_not_authorized_for_authentic
     )
     mcp = await builder.build()
     monkeypatch.setattr(
-        "umbod.mcp.connectors.tools.infrastructure.dependencies.get_access_token",
+        "umbod.mcp.connectors.native.tools.infrastructure.dependencies.get_access_token",
         lambda: SimpleNamespace(claims={"groups": ["engineering"]}),
     )
 
@@ -122,7 +122,7 @@ async def test_gateway_permission_grant_becomes_searchable_and_executable_withou
     builder = ConnectorToolExposureMcpBuilder().in_gateway_mode().with_permissions(permissions)
     mcp = await builder.build()
     monkeypatch.setattr(
-        "umbod.mcp.connectors.tools.infrastructure.dependencies.get_access_token",
+        "umbod.mcp.connectors.native.tools.infrastructure.dependencies.get_access_token",
         lambda: SimpleNamespace(claims={"groups": ["engineering"]}),
     )
     assert await _search(mcp) == []
@@ -153,7 +153,7 @@ async def test_gateway_permission_revoke_removes_search_and_denies_previously_di
     builder = ConnectorToolExposureMcpBuilder().in_gateway_mode().with_permissions(permissions)
     mcp = await builder.build()
     monkeypatch.setattr(
-        "umbod.mcp.connectors.tools.infrastructure.dependencies.get_access_token",
+        "umbod.mcp.connectors.native.tools.infrastructure.dependencies.get_access_token",
         lambda: SimpleNamespace(claims={"groups": ["engineering"]}),
     )
     assert {match["tool_name"] for match in await _search(mcp)} == {"slack_list_readable_channels"}

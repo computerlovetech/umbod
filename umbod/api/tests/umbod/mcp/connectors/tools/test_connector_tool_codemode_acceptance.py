@@ -4,9 +4,9 @@ from typing import Any, cast
 import pytest
 from fastmcp import FastMCP
 
-from umbod.mcp.connectors.tools.deployment_modes.resolver import connector_tool_deployment_factory
-from umbod.mcp.connectors.tools.file_input import DEFAULT_MAXIMUM_UPLOADED_FILE_BYTES
-from umbod.mcp.connectors.tools.runtime.registry import RuntimeConnectorToolRegistry
+from umbod.mcp.connectors.native.tools.deployment_modes.resolver import connector_tool_deployment_factory
+from umbod.mcp.connectors.native.tools.file_input import DEFAULT_MAXIMUM_UPLOADED_FILE_BYTES
+from umbod.mcp.connectors.native.tools.runtime.registry import RuntimeConnectorToolRegistry
 from tests.umbod.mcp.connectors.tools.codemode_acceptance import ConnectorCodeMode
 
 

@@ -5,8 +5,8 @@ from typing import cast
 from fastmcp import FastMCP
 from starlette.applications import Starlette
 from umbod.mcp.auth import MCPAuthProvider, MCPAuthProviderFactory
-from umbod.mcp.connectors import create_default_mcp_connector_runtime
-from umbod.mcp.connectors.tools import InMemoryConnectorToolRuntimeStateStore
+from umbod.mcp.connectors.native import create_default_mcp_connector_runtime
+from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore
 from umbod.mcp.context import PublicAppConfig
 from umbod.mcp.public_app import build_mcp, build_starlette_app, create_runtime_context
 from umbod.mcp.runtime_options import ConnectorRuntimeOptions, ConnectorRuntimeSourceStores, HttpConnectorRuntimeStateSourceStrategy, resolve_connector_runtime

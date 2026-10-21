@@ -1,4 +1,4 @@
-from umbod.mcp.connectors.tools.discovery.search import (
+from umbod.mcp.connectors.native.tools.discovery.search import (
     ConnectorToolSearch,
     ConnectorToolSearchCandidate,
     ConnectorToolSearchInput,

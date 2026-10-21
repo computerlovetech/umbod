@@ -18,7 +18,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.ports import (
     CanonicalPrincipalProvider,
 )
 from umbod.core.connectors.downstream_mcp.personal_connections import VerifiedClaimsPrincipalProvider
-from umbod.mcp.downstream_mcp_connectors.principal import McpCanonicalPrincipalProvider
+from umbod.mcp.connectors.downstream_mcp.principal import McpCanonicalPrincipalProvider
 
 pytestmark = pytest.mark.anyio
 

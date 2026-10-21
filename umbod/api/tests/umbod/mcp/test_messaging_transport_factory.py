@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from umbod.config import AppConfig, ConnectorStoreConfig, McpConfig
-from umbod.mcp.connectors import HttpConnectorPublicationStreamReader
+from umbod.mcp.connectors.native import HttpConnectorPublicationStreamReader
 from umbod.mcp.messaging import DatabaseDomainEventReader, McpMessagingAdapterFactory
 from umbod.rest.factories import ConfiguredEventStreamFactory
 from messaging.in_memory import InMemoryEventCheckpointStore, InMemoryEventStream

@@ -16,9 +16,9 @@ from umbod.core.connectors.downstream_mcp.models import DiscoveredPrompt, Discov
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, ReplaceToolCatalog, SaveConnectorDefinition, SaveCredential, ToolCatalogFound
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.core.permissions import ConnectorCapabilityPermission, ConnectorToolPermission, InMemoryGroupConnectorToolPermissions
-from umbod.mcp.connectors import ModernConnectorApprovalRequired
+from umbod.mcp.connectors.native import ModernConnectorApprovalRequired
 from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
-from umbod.mcp.downstream_mcp_connectors import ConnectorAwareDownstreamMcpToolProvider, GroupDownstreamToolPermissionPolicy, NativeCapabilityProviderView, UnrestrictedDownstreamToolPermissionPolicy
+from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolProvider, GroupDownstreamToolPermissionPolicy, NativeCapabilityProviderView, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.logging import ConnectorToolInvocationLogger, McpAuditEvent, McpAuditRecorder, McpToolInvocationCompleted, create_default_connector_tool_invocation_logger
 from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
@@ -313,7 +313,7 @@ async def test_prompt_and_resources_require_publication_and_activation(monkeypat
         },
     )
     provider._permission_policy = GroupDownstreamToolPermissionPolicy(permissions)
-    monkeypatch.setattr('umbod.mcp.downstream_mcp_connectors.provider.get_access_token', lambda : SimpleNamespace(claims={'groups': ['support']}))
+    monkeypatch.setattr('umbod.mcp.connectors.downstream_mcp.provider.get_access_token', lambda : SimpleNamespace(claims={'groups': ['support']}))
     await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id='weather', capability_kind="tool", capability_key='forecast'), ActivationStatus.DISABLED)
     await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id='weather', capability_kind="prompt", capability_key='weather_prompt'), ActivationStatus.DISABLED)
     await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id='weather', capability_kind="resource", capability_key='data://weather/weather'), ActivationStatus.DISABLED)
@@ -402,7 +402,7 @@ async def test_group_permission_filters_listing_and_denies_direct_lookup_and_sta
     permissions = InMemoryGroupConnectorToolPermissions(group_claim_fields=('groups',))
     permissions.replace_group_permissions({'engineering': ('weather',), 'support': ()}, {'engineering': (ConnectorToolPermission('weather', 'forecast'),), 'support': ()})
     provider._permission_policy = GroupDownstreamToolPermissionPolicy(permissions)
-    monkeypatch.setattr('umbod.mcp.downstream_mcp_connectors.provider.get_access_token', lambda : SimpleNamespace(claims={'groups': ['engineering']}))
+    monkeypatch.setattr('umbod.mcp.connectors.downstream_mcp.provider.get_access_token', lambda : SimpleNamespace(claims={'groups': ['engineering']}))
     stale_tool = await provider.get_tool('weather_forecast')
     assert stale_tool is not None
     public = FastMCP('public', providers=[provider])
@@ -410,7 +410,7 @@ async def test_group_permission_filters_listing_and_denies_direct_lookup_and_sta
         assert [tool.name for tool in await client.list_tools()] == ['weather_forecast']
         result = await client.call_tool_mcp('weather_forecast', {'city': 'Copenhagen'})
         assert result.structured_content == {'city': 'Copenhagen'}
-    monkeypatch.setattr('umbod.mcp.downstream_mcp_connectors.provider.get_access_token', lambda : SimpleNamespace(claims={'groups': ['support']}))
+    monkeypatch.setattr('umbod.mcp.connectors.downstream_mcp.provider.get_access_token', lambda : SimpleNamespace(claims={'groups': ['support']}))
     async with Client(public) as client:
         assert await client.list_tools() == []
         denied = await client.call_tool_mcp('weather_forecast', {'city': 'Copenhagen'})

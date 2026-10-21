@@ -16,7 +16,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.authorization_mod
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolResult
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolRuntimeService
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
-from umbod.mcp.downstream_mcp_connectors.personal_runtime import McpPersonalRuntimeContextProvider
+from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalRuntimeContextProvider
 
 __all__ = ["runtime_case"]
 

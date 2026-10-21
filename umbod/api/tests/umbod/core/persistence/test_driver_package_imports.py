@@ -305,7 +305,7 @@ def test_infrastructure_has_no_domain_store_or_factory_packages() -> None:
 
 def test_permission_composition_has_no_sqlite_or_backend_config_dependencies() -> None:
     source_root = Path(__file__).parents[4] / 'src' / 'umbod'
-    paths = (source_root / 'rest' / 'mcp_permissions' / 'dependencies.py', source_root / 'mcp' / 'openapi_connectors' / 'factories.py')
+    paths = (source_root / 'rest' / 'mcp_permissions' / 'dependencies.py', source_root / 'mcp' / 'connectors' / 'openapi' / 'factories.py')
     violations: list[str] = []
     for path in paths:
         tree = ast.parse(path.read_text(), filename=str(path))

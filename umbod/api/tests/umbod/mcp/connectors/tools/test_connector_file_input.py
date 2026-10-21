@@ -8,10 +8,10 @@ from fastmcp.tools import ToolResult
 from pydantic import ValidationError
 
 from umbod.core.connectors.native.runtime.tools import ConcreteConnectorToolMapping
-from umbod.mcp.connectors.tools.deployment_modes.flat.exposure import FastMcpConnectorToolExposureLifecycle
-from umbod.mcp.connectors.tools.file_app import ConnectorFileAppRegistration, FastMcpConnectorFileToolRegistrar
-from umbod.mcp.connectors.tools.file_input import DEFAULT_MAXIMUM_UPLOADED_FILE_BYTES, StrictUploadedFilePayloadAdapter, UploadedFilePayloadConverter, UploadedFileWirePayload
-from umbod.mcp.connectors.tools.invocation.runner import _arguments_without_file_data
+from umbod.mcp.connectors.native.tools.deployment_modes.flat.exposure import FastMcpConnectorToolExposureLifecycle
+from umbod.mcp.connectors.native.tools.file_app import ConnectorFileAppRegistration, FastMcpConnectorFileToolRegistrar
+from umbod.mcp.connectors.native.tools.file_input import DEFAULT_MAXIMUM_UPLOADED_FILE_BYTES, StrictUploadedFilePayloadAdapter, UploadedFilePayloadConverter, UploadedFileWirePayload
+from umbod.mcp.connectors.native.tools.invocation.runner import _arguments_without_file_data
 from umbod_sdk.connectors.api.registration import _validate_uploaded_file_declaration
 from umbod_sdk.connectors.plugin_api import UploadedFile
 from umbod_sdk.connectors.uploaded_file import create_uploaded_file

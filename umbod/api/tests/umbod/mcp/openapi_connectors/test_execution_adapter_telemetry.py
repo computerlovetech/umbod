@@ -11,7 +11,7 @@ from umbod.core.connectors.openapi.execution import (
     OpenApiCapabilityExecutionResult,
     OpenApiExecutionResponse,
 )
-from umbod.mcp.connectors.tools.deployment_modes.codemode import (
+from umbod.mcp.connectors.native.tools.deployment_modes.codemode import (
     OpenApiCodeModeInvocation,
 )
 from umbod.mcp.logging import (
@@ -23,7 +23,7 @@ from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
-from umbod.mcp.openapi_connectors import OpenApiCodeModeExecutionAdapter
+from umbod.mcp.connectors.openapi import OpenApiCodeModeExecutionAdapter
 
 
 class RecordingAuditSink:

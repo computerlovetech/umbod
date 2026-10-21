@@ -26,7 +26,7 @@ from umbod.core.activation import (
 )
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
-from umbod.mcp.connectors.tools import ConnectorToolRuntimeStateSynchronizer, InMemoryConnectorToolRuntimeStateStore
+from umbod.mcp.connectors.native.tools import ConnectorToolRuntimeStateSynchronizer, InMemoryConnectorToolRuntimeStateStore
 from umbod.mcp.context import PublicAppConfig, PublicAppRuntimeContext
 from umbod.mcp.public_app import build_starlette_app, create_runtime_context
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, LocalConnectorRuntimeStateSourceStrategy

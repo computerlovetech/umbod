@@ -8,7 +8,7 @@ from typing import Any
 import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
-from umbod.mcp.connectors import (
+from umbod.mcp.connectors.native import (
     ConnectorRuntimeState,
     ConnectorRuntimeStateSynchronizer,
     HttpConnectorRuntimeStateSynchronizationSource,
@@ -21,7 +21,7 @@ from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
 from tests.support import connector_plugins as test_admin_configuration
-from umbod.mcp.connectors.tools import ConnectorToolChangePollingSynchronizer, ConnectorToolRuntimeStateSynchronizer, InMemoryConnectorToolRuntimeStateStore
+from umbod.mcp.connectors.native.tools import ConnectorToolChangePollingSynchronizer, ConnectorToolRuntimeStateSynchronizer, InMemoryConnectorToolRuntimeStateStore
 from umbod.mcp.context import ConnectorRuntimeStateSynchronizerOptions, PublicAppConfig
 from umbod.mcp.public_app import create_connector_publication_synchronizer, create_connector_runtime_state_change_synchronizer, create_connector_runtime_state_synchronizer, create_connector_tool_change_synchronizer, create_connector_tool_runtime_state_synchronizer, create_group_permission_change_synchronizer, create_runtime_context, runtime_state_synchronizer_options
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, ConnectorStorePair, HttpConnectorRuntimeStateSourceStrategy

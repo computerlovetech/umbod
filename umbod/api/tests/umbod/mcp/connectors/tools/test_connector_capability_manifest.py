@@ -1,8 +1,8 @@
-from umbod.mcp.connectors.tools.discovery.manifest import (
+from umbod.mcp.connectors.native.tools.discovery.manifest import (
     ConnectorCapabilityManifestFormatter,
     ConnectorCapabilityManifestService,
 )
-from umbod.mcp.connectors.tools.discovery.search import ConnectorToolSearchCandidate
+from umbod.mcp.connectors.native.tools.discovery.search import ConnectorToolSearchCandidate
 
 
 def _candidate(

@@ -6,7 +6,7 @@ from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizat
 from tests.umbod.mcp.downstream_mcp_connectors.test_personal_execution_pipeline import InvocationLog
 from umbod.core.capabilities.descriptions import SystemConnectorCapabilityDescriptionOverrideStore
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
-from umbod.mcp.downstream_mcp_connectors import UnrestrictedDownstreamToolPermissionPolicy
+from umbod.mcp.connectors.downstream_mcp import UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
 from umbod.mcp.public_app import _register_downstream_mcp_provider
 from umbod.mcp.settings import MCPAppSettings, MCPSettings

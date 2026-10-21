@@ -20,7 +20,7 @@ from umbod.core.invocation import (
     ConnectorInvocationDenied,
     DirectInvocationDecision,
 )
-from umbod.mcp.connectors import (
+from umbod.mcp.connectors.native import (
     ApprovalStateCodec,
     CurrentInvocationApprovalPrincipalProvider,
     McpConnectorInvocationApprovalPolicy,

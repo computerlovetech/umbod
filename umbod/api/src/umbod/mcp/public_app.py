@@ -8,7 +8,7 @@ from umbod.core.connectors.downstream_mcp.adapters.composition import create_dow
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.factory import create_personal_mcp_transport
 from umbod.core.connectors.downstream_mcp.management import utc_clock
 from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalToolRuntime, PersonalToolRuntimeService
-from umbod.mcp.downstream_mcp_connectors.personal_runtime import McpPersonalRuntimeContextProvider, PersonalToolReservationMiddleware, personal_tool_permission_check
+from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalRuntimeContextProvider, PersonalToolReservationMiddleware, personal_tool_permission_check
 
 from umbod.core.capabilities.descriptions.factories import ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory
 from umbod.core.configuration.persistence.factories import create_encrypted_connector_configuration_store
@@ -57,7 +57,7 @@ from umbod.mcp.auth.debug_middleware import MCPAuthDebugMiddleware
 from umbod.mcp.context import ConnectorRuntimeStateSynchronizerOptions, PublicAppConfig, PublicAppRuntimeContext
 from umbod.core.invocation import DatabaseApprovalNonceStore
 from umbod.core.invocation import DatabaseConnectorInvocationPolicyStore
-from umbod.mcp.connectors import (
+from umbod.mcp.connectors.native import (
     APPROVAL_TTL_SECONDS,
     CONNECTOR_PUBLICATION_POLLING_BATCH_LIMIT,
     CONNECTOR_PUBLICATION_POLLING_INTERVAL_SECONDS,
@@ -74,9 +74,9 @@ from umbod.mcp.connectors import (
     StoreBackedConnectorRuntimeStateSynchronizationSource,
     random_approval_token,
 )
-from umbod.mcp.connectors.prompts import ConnectorPromptRegistrationOptions, register_connector_prompts
-from umbod.mcp.connectors.resources import ConnectorResourceRegistrationOptions, register_connector_resources
-from umbod.mcp.connectors.tools import (
+from umbod.mcp.connectors.native.prompts import ConnectorPromptRegistrationOptions, register_connector_prompts
+from umbod.mcp.connectors.native.resources import ConnectorResourceRegistrationOptions, register_connector_resources
+from umbod.mcp.connectors.native.tools import (
     ConnectorToolChangePollingSynchronizer,
     ConnectorToolRuntimeStateSynchronizer,
     HttpConnectorToolRuntimeStateReader,
@@ -94,12 +94,12 @@ from umbod.core.persistence import Database, PersistenceRuntime
 from umbod.core.connectors.downstream_mcp.adapters.settings import (
     downstream_mcp_infrastructure_settings_from_app_config,
 )
-from umbod.mcp.downstream_mcp_connectors.coordinator import DownstreamDiscoveryAdapters, DownstreamDiscoveryCoordinator, DownstreamDiscoveryCoordinatorOptions, DownstreamDiscoveryStores, create_downstream_discovery_coordinator
-from umbod.mcp.downstream_mcp_connectors.provider import ConnectorAwareDownstreamMcpToolProvider, GroupDownstreamToolPermissionPolicy, NativeCapabilityProviderView, UnrestrictedDownstreamToolPermissionPolicy
+from umbod.mcp.connectors.downstream_mcp.coordinator import DownstreamDiscoveryAdapters, DownstreamDiscoveryCoordinator, DownstreamDiscoveryCoordinatorOptions, DownstreamDiscoveryStores, create_downstream_discovery_coordinator
+from umbod.mcp.connectors.downstream_mcp.provider import ConnectorAwareDownstreamMcpToolProvider, GroupDownstreamToolPermissionPolicy, NativeCapabilityProviderView, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.live_permission_updates import DatabaseGroupPermissionReader, GROUP_PERMISSION_CHANGE_POLL_BATCH_LIMIT, GROUP_PERMISSION_CHANGE_POLL_INTERVAL_SECONDS, GroupPermissionChangePollingSynchronizer, GroupPermissionStateReloader, HttpGroupPermissionReader, RuntimeGroupPermissionSynchronizer
 from umbod.core.connectors.openapi.execution import OutboundHttpClientFactory
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions, connector_tool_permission_check
-from umbod.mcp.openapi_connectors import DatabaseGroupPermissionReaderFactory, OutboundHttpClientFactoryPort, build_openapi_codemode_executor
+from umbod.mcp.connectors.openapi import DatabaseGroupPermissionReaderFactory, OutboundHttpClientFactoryPort, build_openapi_codemode_executor
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, ConnectorStorePair, HttpConnectorRuntimeStateSourceStrategy, LocalConnectorRuntimeStateSourceStrategy, StoreBackedConnectorRuntimeStateSourceStrategy, resolve_connector_runtime_state_source_strategy
 from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
 from umbod.config import AppConfig, InMemoryConnectorStoreConfig, SQLiteConnectorStoreConfig, load_app_config
@@ -327,7 +327,7 @@ class DynamicPublicMcpDispatcher:
         if not isinstance(result, ConnectorDefinitionFound) or not await self._publishing.is_published(result.definition.connector_id):
             await JSONResponse({'detail': 'Not found'}, status_code=404)(scope, receive, send)
             return
-        from umbod.mcp.downstream_mcp_connectors.provider import reset_request_connector_scope, set_request_connector_scope
+        from umbod.mcp.connectors.downstream_mcp.provider import reset_request_connector_scope, set_request_connector_scope
         token = set_request_connector_scope(result.definition.connector_id)
         rewritten_path = f'{_MCP_HTTP_PATH}{downstream_subpath}'
         rewritten_scope = {**scope, 'path': rewritten_path, 'raw_path': rewritten_path.encode()}

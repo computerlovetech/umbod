@@ -3,11 +3,11 @@ from dataclasses import dataclass
 import pytest
 
 from umbod.core.activation import ActivationStatus, CapabilityRef, InMemoryActivationStore
-from umbod.mcp.connectors.prompts.eligibility import (
+from umbod.mcp.connectors.native.prompts.eligibility import (
     ConnectorPromptEligibilityContext,
     is_connector_prompt_eligible,
 )
-from umbod.mcp.connectors.resources.eligibility import (
+from umbod.mcp.connectors.native.resources.eligibility import (
     ConnectorResourceEligibilityContext,
     is_connector_resource_eligible,
 )

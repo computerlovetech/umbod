@@ -1,4 +1,4 @@
-from umbod.mcp.connectors.tools import InMemoryConnectorToolRuntimeStateStore
+from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
 

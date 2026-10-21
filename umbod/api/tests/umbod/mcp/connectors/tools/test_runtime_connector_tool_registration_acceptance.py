@@ -14,7 +14,7 @@ from fastmcp import Client, FastMCP
 from fastmcp.client.messages import MessageHandler
 from pydantic import ConfigDict, SecretStr
 from umbod.proxies import Model
-from umbod.mcp.connectors.tools import InMemoryConnectorToolRuntimeStateStore, RuntimeConnectorToolRegistry, register_connector_tools
+from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore, RuntimeConnectorToolRegistry, register_connector_tools
 from umbod.mcp.logging import McpAuditRecorder, StdoutMcpAuditEventSink, StructuredMcpAuditFormatter, create_default_mcp_tool_invocation_log_sink
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import StdoutMcpToolInvocationLogSink
