@@ -2,12 +2,15 @@ import json
 import os
 import sys
 
+from check_secret_logs import check_secret_logs
+
 
 _EXPECTED_SIGNALS = {"logs": "resourceLogs", "metrics": "resourceMetrics", "traces": "resourceSpans"}
 
 
 def main() -> None:
     output = sys.stdin.read()
+    check_secret_logs(output)
     token = os.environ["UMBOD_TEST_OTLP_BEARER_TOKEN"]
     if token in output:
         raise SystemExit("Telemetry credentials appeared in API stdout")

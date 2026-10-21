@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+from umbod.core.capabilities.tools.names import PublicToolIdentitySource
 from umbod.core.configuration.events import connector_configuration_changed_event
 from umbod.core.publishing.events import connector_publication_changed_event
 from umbod.core.publishing import ConnectorPublishingStore
@@ -43,6 +44,7 @@ class DownstreamConnectorCatalogLifecycle:
         events: EventStream,
         unit_of_work: DownstreamConnectorUnitOfWork,
         queries: DownstreamConnectorQueries,
+        identity_source: PublicToolIdentitySource,
     ) -> None:
         self._credentials = credentials
         self._catalogs = catalogs
@@ -51,6 +53,7 @@ class DownstreamConnectorCatalogLifecycle:
         self._events = events
         self._unit_of_work = unit_of_work
         self._queries = queries
+        self._identity_source = identity_source
 
     async def refresh(self, connector_id: str) -> DiscoveryResult:
         definition = await self._queries.get(connector_id)
@@ -65,6 +68,7 @@ class DownstreamConnectorCatalogLifecycle:
         catalog, health, operation_names = self._discovery_mutations(connector_id, result)
         await self._unit_of_work.apply_discovery(
             ApplyDiscoveredCatalog(
+                native_identities=await self._identity_source.identities(),
                 connector_id=connector_id,
                 catalog=catalog,
                 health=health,

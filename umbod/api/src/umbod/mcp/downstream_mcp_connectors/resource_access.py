@@ -5,7 +5,7 @@ from fastmcp.resources import Resource, ResourceTemplate
 from fastmcp.resources.base import ResourceResult
 
 
-class OwnershipCheckedResource(Resource):
+class AccessCheckedResource(Resource):
     _backend: Resource
     _ensure_access: Callable[[], Awaitable[None]]
 
@@ -21,7 +21,7 @@ class OwnershipCheckedResource(Resource):
         return await self._backend.read()
 
 
-class OwnershipCheckedTemplate(ResourceTemplate):
+class AccessCheckedTemplate(ResourceTemplate):
     _backend: ResourceTemplate
     _ensure_access: Callable[[], Awaitable[None]]
 
@@ -35,4 +35,4 @@ class OwnershipCheckedTemplate(ResourceTemplate):
     async def create_resource(self, uri: str, params: dict[str, Any]) -> Resource:
         await self._ensure_access()
         resource = await self._backend.create_resource(uri, params)
-        return OwnershipCheckedResource(resource, self._ensure_access)
+        return AccessCheckedResource(resource, self._ensure_access)

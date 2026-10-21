@@ -1,4 +1,6 @@
+from .personal_runtime_authorizations import EncryptedPersonalRuntimeAuthorizationStore, load_personal_runtime_target
 from umbod.core.connectors.downstream_mcp.stores.personal_connections import (
+    load_personal_connection,
     DefinitionBoundPersonalConnectionStore,
     EncryptedPersonalConnectionStore,
 )
@@ -48,6 +50,9 @@ from umbod.core.connectors.downstream_mcp.stores.schema import (
 )
 
 __all__ = [
+    "EncryptedPersonalRuntimeAuthorizationStore",
+    "load_personal_runtime_target",
+    "load_personal_connection",
     "DefinitionBoundPersonalConnectionStore",
     "EncryptedPersonalConnectionStore",
     "PERSONAL_CONNECTION_TABLE",

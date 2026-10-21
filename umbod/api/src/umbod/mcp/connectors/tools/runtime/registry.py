@@ -63,7 +63,9 @@ from umbod.mcp.logging import (
 class ConnectorToolGatewayProvider(Protocol):
     async def eligible_search_candidates(self) -> list[ConnectorToolSearchCandidate]: ...
 
-    def owns_tool(self, tool_name: str) -> bool: ...
+    async def configured_tool_name_claims(self) -> tuple[str, ...]: ...
+
+    async def owns_tool(self, tool_name: str) -> bool: ...
 
     async def execute_tool(self, tool_name: str, arguments: Mapping[str, Any]) -> ToolResult: ...
 
@@ -269,12 +271,28 @@ class _RegistryGateway:
     def add_gateway_provider(self, provider: ConnectorToolGatewayProvider) -> None:
         self._state.gateway_providers.append(provider)
 
+    async def _validate_configured_name_claims(self) -> None:
+        names: set[str] = set()
+        for capability in await self._state.native.catalog.list_capabilities():
+            if capability.identity.capability_kind != "tool":
+                continue
+            name = self._state.native.catalog.resolve_binding(capability.identity).public_tool_name
+            if name in names:
+                raise ToolError("Tool is not available")
+            names.add(name)
+        for provider in self._state.gateway_providers:
+            for name in await provider.configured_tool_name_claims():
+                if name in names:
+                    raise ToolError("Tool is not available")
+                names.add(name)
+
     async def execute_tool(
         self,
         tool_name: str,
         arguments: Mapping[str, Any],
         authorization_scope: ConnectorToolAuthorizationScope,
     ) -> ToolResult:
+        await self.eligible_search_candidates(authorization_scope)
         result = await self._state.native.execute(tool_name, arguments, authorization_scope)
         if result is not None:
             return result
@@ -287,6 +305,7 @@ class _RegistryGateway:
         self,
         authorization_scope: ConnectorToolAuthorizationScope,
     ) -> list[ConnectorToolSearchCandidate]:
+        await self._validate_configured_name_claims()
         candidates = await self._state.search.candidates(authorization_scope)
         for provider in self._state.gateway_providers:
             candidates.extend(await provider.eligible_search_candidates())

@@ -5,6 +5,10 @@ import secrets
 import time
 
 from umbod.core.connectors.downstream_mcp.adapters.composition import create_downstream_mcp_connections
+from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.factory import create_personal_mcp_transport
+from umbod.core.connectors.downstream_mcp.management import utc_clock
+from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalToolRuntime, PersonalToolRuntimeService
+from umbod.mcp.downstream_mcp_connectors.personal_runtime import McpPersonalRuntimeContextProvider, PersonalToolReservationMiddleware, personal_tool_permission_check
 
 from umbod.core.capabilities.descriptions.factories import ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory
 from umbod.core.configuration.persistence.factories import create_encrypted_connector_configuration_store
@@ -134,7 +138,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     tool_invocation_logger = create_default_connector_tool_invocation_logger(invocation_log_sink, audit_recorder)
     middleware: list[Middleware] = [McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
     if group_permission_runtime_state is not None:
-        auth_check = connector_tool_permission_check(group_permission_runtime_state)
+        auth_check = personal_tool_permission_check(connector_tool_permission_check(group_permission_runtime_state))
         if settings.mcp.auth_debug_enabled:
             middleware.append(MCPAuthDebugMiddleware(auth=auth_check, permission_group_claim=settings.mcp.permission_group_claim))
         else:
@@ -215,8 +219,12 @@ async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettin
         infrastructure_settings.credential_secret, database
     )
     connections = create_downstream_mcp_connections(infrastructure_settings, stores.credentials)
-    provider = ConnectorAwareDownstreamMcpToolProvider(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=connections.client_factory, permission_policy=permission_policy, connector_scope='', capability_description_overrides=mcp.capability_description_overrides, tool_invocation_logger=mcp.connector_tool_invocation_logger, metrics_recorder=mcp.metrics_recorder, invocation_policy=invocation_policy)
+    personal_runtime: PersonalToolRuntime = DisabledPersonalToolRuntime()
+    if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled:
+        personal_runtime = PersonalToolRuntimeService(McpPersonalRuntimeContextProvider(settings), stores.definitions, stores.personal_tool_access, create_personal_mcp_transport(), utc_clock)
+    provider = ConnectorAwareDownstreamMcpToolProvider(personal_runtime=personal_runtime, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=connections.client_factory, permission_policy=permission_policy, connector_scope='', capability_description_overrides=mcp.capability_description_overrides, tool_invocation_logger=mcp.connector_tool_invocation_logger, metrics_recorder=mcp.metrics_recorder, invocation_policy=invocation_policy)
     mcp.downstream_mcp_tool_provider = provider
+    mcp.add_middleware(PersonalToolReservationMiddleware(provider))
     if settings.mcp.connector_tool_exposure_mode == 'flat':
         mcp.add_provider(provider)
     else:

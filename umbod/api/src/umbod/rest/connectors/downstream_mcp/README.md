@@ -4,6 +4,8 @@ This module owns downstream MCP REST delivery. Administrator routes, authenticat
 
 `personal_connections/` owns personal catalogue, enablement, disconnect and durable OAuth routes. Its [index](personal_connections/README.md) describes request-scoped composition and callback protections. `rest/main.py` mounts these separately from administration; they are not included in the administrator router exported by this package.
 
+`personal_tools.py` exposes revision-checked administrator tool-contract approval. `GET`/`PUT /{connector_id}/personal-tools` read or replace complete approved tool definitions, using their connector-bound identities and explicit output-schema states. Only administrator-supplied metadata enters the global catalogue projection. Changed or removed contracts reset activation and capability grants, retaining connector grants and enablement. Existing activation and permission APIs apply; approval alone never enables execution. The configuration route wrapper sanitizes validation failures for both OAuth and tool policy writes.
+
 ## Administration
 
 `routes.py` exposes connector creation, projections, publication, deletion and capability administration under `/api/admin/connectors/mcp`. `schemas.py` defines strict request and response contracts; `dependencies.py` creates request-scoped application services.

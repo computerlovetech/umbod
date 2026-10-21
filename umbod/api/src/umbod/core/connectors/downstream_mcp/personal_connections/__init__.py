@@ -1,3 +1,13 @@
+from .authorization_models import (
+    AbsentPersonalRefreshToken,
+    ExpiringPersonalToken,
+    PersonalOAuthGrant,
+    PresentPersonalRefreshToken,
+    UnknownPersonalTokenLifetime,
+    authorize_personal_grant,
+)
+from .runtime_models import PersonalRuntimeAuthorizationQuery, PersonalRuntimeTarget, PersonalRuntimeUnavailable
+from .runtime_ports import PersonalMcpTransport, PersonalRuntimeAuthorizationStore
 from .inmemory import InMemoryPersonalConnectionStore
 from .inventory import PersonalConnectorInventoryService
 from .inventory_models import (
@@ -28,6 +38,17 @@ from .principal import VerifiedClaimsPrincipalProvider
 from .service import PersonalConnectionService
 
 __all__ = [
+    "AbsentPersonalRefreshToken",
+    "ExpiringPersonalToken",
+    "PersonalOAuthGrant",
+    "PresentPersonalRefreshToken",
+    "UnknownPersonalTokenLifetime",
+    "authorize_personal_grant",
+    "PersonalRuntimeAuthorizationQuery",
+    "PersonalRuntimeTarget",
+    "PersonalRuntimeUnavailable",
+    "PersonalMcpTransport",
+    "PersonalRuntimeAuthorizationStore",
     "Authorized",
     "Authorization",
     "CanonicalPrincipal",

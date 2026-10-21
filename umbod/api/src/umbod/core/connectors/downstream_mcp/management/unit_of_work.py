@@ -101,12 +101,18 @@ class CreatePersonalOAuthConnectorAggregate(DomainModel):
 
 
 class ReplaceDownstreamConnectorAggregate(DomainModel):
+    native_identities: tuple[PublicToolIdentity, ...]
     definition: ConnectorDefinition
     credential: CredentialMutation
     catalog: CatalogMutation
     health: HealthMutation
     activation: ActivationMutation
     publication: PublicationMutation
+
+
+class PublishDownstreamConnectorAggregate(DomainModel):
+    connector_id: str
+    native_identities: tuple[PublicToolIdentity, ...]
 
 
 class UpdatePublishedConnectorPrefix(DomainModel):
@@ -124,6 +130,7 @@ class InvalidateDownstreamConnectorAggregate(DomainModel):
 
 
 class ApplyDiscoveredCatalog(DomainModel):
+    native_identities: tuple[PublicToolIdentity, ...]
     connector_id: str
     catalog: ToolCatalogSnapshot | DeleteCatalog
     health: ConnectorHealth
@@ -136,6 +143,8 @@ class DownstreamConnectorUnitOfWork(Protocol):
     async def create_personal_oauth(self, command: CreatePersonalOAuthConnectorAggregate) -> None: ...
 
     async def replace(self, command: ReplaceDownstreamConnectorAggregate) -> None: ...
+
+    async def publish(self, command: PublishDownstreamConnectorAggregate) -> bool: ...
 
     async def update_published_prefix(self, command: UpdatePublishedConnectorPrefix) -> None: ...
 

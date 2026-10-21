@@ -2,12 +2,21 @@ import base64
 import hashlib
 import json
 import re
+from datetime import timedelta
 from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import anyio
 from pydantic import SecretStr
 
+from ...personal_connections.authorization_models import (
+    AbsentPersonalRefreshToken,
+    ExpiringPersonalToken,
+    PersonalOAuthGrant,
+    PresentPersonalRefreshToken,
+    UnknownPersonalTokenLifetime,
+    authorize_personal_grant,
+)
 from ...personal_connections.models import Authorized
 from ...personal_connections.oauth_models import (
     ExchangePersonalOAuth,
@@ -242,21 +251,20 @@ class DiscoveredPersonalOAuthProvider:
             or not re.fullmatch(r"[A-Za-z0-9._~+/-]+=*", token.access_token.get_secret_value())
         ):
             raise ValueError("Unsupported token")
-        authorization: dict[str, object] = {
-            "access_token": token.access_token.get_secret_value(), "token_type": "Bearer",
-            "issuer": context.issuer, "resource": context.resource,
-            "client_id": context.client_id, "token_endpoint": context.token_endpoint,
-            "redirect_uri": context.redirect_uri,
-            "requested_scopes": list(policy.requested_scopes), "granted_scopes": list(granted_scopes),
-            "configuration_revision": policy.revision,
-        }
-        if "refresh_token" in raw_token:
-            if (
-                not token.refresh_token.get_secret_value()
-                or any(ord(character) < 32 or ord(character) == 127 for character in token.refresh_token.get_secret_value())
-            ):
-                raise ValueError("Invalid refresh token")
-            authorization["refresh_token"] = token.refresh_token.get_secret_value()
-        if "expires_in" in raw_token:
-            authorization["expires_in"] = token.expires_in
-        return Authorized(authorization=SecretStr(json.dumps(authorization)))
+        lifetime = (
+            ExpiringPersonalToken(expires_at=attempt.query.now + timedelta(seconds=token.expires_in))
+            if "expires_in" in raw_token else UnknownPersonalTokenLifetime()
+        )
+        refresh_token = (
+            PresentPersonalRefreshToken(token=token.refresh_token)
+            if "refresh_token" in raw_token else AbsentPersonalRefreshToken()
+        )
+        return authorize_personal_grant(PersonalOAuthGrant(
+            version=2, key=attempt.query.key, issued_at=attempt.query.now, lifetime=lifetime,
+            access_token=token.access_token, refresh_token=refresh_token,
+            issuer=context.issuer, resource=context.resource, client_id=context.client_id,
+            token_endpoint=context.token_endpoint, redirect_uri=context.redirect_uri,
+            client_mode=context.client_mode, token_endpoint_auth_method=context.token_endpoint_auth_method,
+            requested_scopes=policy.requested_scopes, granted_scopes=granted_scopes,
+            configuration_revision=policy.revision,
+        ))

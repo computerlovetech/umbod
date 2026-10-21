@@ -1,5 +1,5 @@
 from umbod.mcp.downstream_mcp_connectors.ports import DownstreamClientFactory
-from umbod.mcp.downstream_mcp_connectors.resource_access import OwnershipCheckedTemplate
+from umbod.mcp.downstream_mcp_connectors.resource_access import AccessCheckedTemplate
 
 import logging
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -13,7 +13,7 @@ from fastmcp.prompts import Prompt
 from fastmcp.resources import Resource, ResourceTemplate
 from fastmcp.exceptions import ToolError
 from fastmcp.server.providers.base import Provider
-from fastmcp.server.providers.proxy import ProxyPrompt, ProxyProvider, ProxyResource, ProxyTemplate, ProxyTool
+from fastmcp.server.providers.proxy import ProxyPrompt, ProxyResource, ProxyTemplate, ProxyTool
 from fastmcp.tools import ToolResult
 from fastmcp.tools.base import Tool
 from mcp.types import Prompt as McpPrompt, Resource as McpResource, ResourceTemplate as McpResourceTemplate, Tool as McpTool
@@ -35,13 +35,15 @@ from umbod.core.connectors.downstream_mcp.catalog import DownstreamCapabilityRec
 from umbod.core.connectors.downstream_mcp.models import DiscoveredPrompt, DiscoveredResource, DiscoveredResourceTemplate, DiscoveredTool, uses_personal_oauth
 from umbod.core.connectors.downstream_mcp.stores import ConnectorDefinitionFound, ConnectorDefinitionStore, ConnectorIdQuery, CredentialFound, EncryptedCredentialStore, ToolCatalogFound, ToolCatalogStore
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
+from umbod.core.connectors.downstream_mcp.runtime import DownstreamRuntimeResolver, DownstreamRuntimeUnavailable, SharedDownstreamRuntimeResolver
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.connectors.tools import (
     ConnectorTelemetryInterceptor,
     ConnectorToolInvocationIdentity,
     ConnectorToolSearchCandidate,
 )
-from umbod.mcp.downstream_mcp_connectors.tool_invocation import AuthorizedDownstreamProxyTool
+from umbod.mcp.downstream_mcp_connectors.tool_invocation import AuthorizedDownstreamProxyTool, AuthorizedPersonalTool
+from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolRuntime, PersonalToolRecord
 from umbod.mcp.logging import ConnectorToolInvocationLogger
 from umbod.mcp.metrics import McpMetricsRecorder
 logger = logging.getLogger(__name__)
@@ -249,7 +251,7 @@ async def _effective_descriptions(store: ConnectorCapabilityDescriptionOverrideS
 
 class DownstreamMcpToolRuntimeProvider(Provider):
 
-    def __init__(self, *, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, publishing: ConnectorPublishingStore, activations: ActivationStore, client_factory: DownstreamClientFactory, permission_policy: DownstreamToolPermissionPolicy, connector_scope: str, capability_description_overrides: ConnectorCapabilityDescriptionOverrideStore, tool_invocation_logger: ConnectorToolInvocationLogger, metrics_recorder: McpMetricsRecorder, invocation_policy: ConnectorInvocationPolicy) -> None:
+    def __init__(self, *, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, publishing: ConnectorPublishingStore, activations: ActivationStore, client_factory: DownstreamClientFactory, permission_policy: DownstreamToolPermissionPolicy, connector_scope: str, capability_description_overrides: ConnectorCapabilityDescriptionOverrideStore, tool_invocation_logger: ConnectorToolInvocationLogger, metrics_recorder: McpMetricsRecorder, invocation_policy: ConnectorInvocationPolicy, personal_runtime: PersonalToolRuntime) -> None:
         self._stores = ConnectorStoreService(definitions, credentials, catalogs, publishing, activations)
         self._capabilities = StoreBackedDownstreamCapabilityCatalog(definitions, catalogs)
         self._permission_policy = permission_policy
@@ -261,42 +263,50 @@ class DownstreamMcpToolRuntimeProvider(Provider):
         self._tool_invocation_logger = tool_invocation_logger
         self._metrics_recorder = metrics_recorder
         self._invocation_policy = invocation_policy
-        self._connector_proxies: dict[str, ProxyProvider] = {}
+        self._personal_runtime = personal_runtime
+        self._runtime: DownstreamRuntimeResolver = SharedDownstreamRuntimeResolver(self._availability, definitions, credentials)
         super().__init__()
 
-    async def _ensure_shared_connector(self, connector_id: str) -> None:
-        result = await self._stores.definitions.get(ConnectorIdQuery(connector_id=connector_id))
-        if not isinstance(result, ConnectorDefinitionFound) or uses_personal_oauth(result.definition):
-            raise ToolError('Downstream connector is not available')
+    async def _ensure_capability_access(self, identity: CapabilityIdentity) -> None:
+        try:
+            await self._runtime.resolve(identity)
+        except DownstreamRuntimeUnavailable as error:
+            raise ToolError("Downstream capability is not available") from error
 
-    async def _create_client(self, connector_id: str) -> Client:
-        command = await self._stores.prepare(connector_id)
-        if command is None:
-            raise ToolError('Downstream connector is not available')
-        return self._downstream_client_factory.create(command)
-
-    async def _create_authorized_client(self, connector_id: str, operation_name: str) -> Client:
-        return await self._create_client(connector_id)
-
-    async def _create_capability_client(self, connector_id: str) -> Client:
-        return await self._create_client(connector_id)
-
-    def _proxy_for(self, connector_id: str) -> ProxyProvider:
-        proxy = self._connector_proxies.get(connector_id)
-        if proxy is None:
-            proxy = ProxyProvider(partial(self._create_client, connector_id), cache_ttl=0)
-            self._connector_proxies[connector_id] = proxy
-        return proxy
+    async def _create_capability_client(self, identity: CapabilityIdentity) -> Client:
+        try:
+            shared = await self._runtime.resolve(identity)
+        except DownstreamRuntimeUnavailable as error:
+            raise ToolError("Downstream capability is not available") from error
+        return self._downstream_client_factory.create(shared.command)
 
     def _active_scope(self) -> str:
         return self._connector_scope or _REQUEST_CONNECTOR_SCOPE.get()
 
     def _materialize_tool(self, connector_id: str, tool_name_prefix: str, catalog_tool: DiscoveredTool, connector_name: str) -> Tool:
         raw_tool = self._catalog_mcp_tool(catalog_tool)
-        proxy = self._proxy_for(connector_id)
-        backend_tool = ProxyTool.from_mcp_tool(proxy.client_factory, raw_tool)
+        identity = CapabilityIdentity(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="tool", capability_key=catalog_tool.identity.downstream_name)
+        client_factory = partial(self._create_capability_client, identity)
+        backend_tool = ProxyTool.from_mcp_tool(client_factory, raw_tool)
         public_name = self._public_tool_name(connector_id, tool_name_prefix, backend_tool.name)
-        return AuthorizedDownstreamProxyTool(identity=self._invocation_identity(connector_id, connector_name, catalog_tool, public_name), backend_tool=backend_tool, client_factory=partial(self._create_authorized_client, connector_id, catalog_tool.identity.downstream_name), public_name=public_name, invocation_policy=self._invocation_policy, telemetry_interceptor=self._telemetry_interceptor(connector_name))
+        return AuthorizedDownstreamProxyTool(identity=self._invocation_identity(connector_id, connector_name, catalog_tool, public_name), backend_tool=backend_tool, client_factory=client_factory, public_name=public_name, invocation_policy=self._invocation_policy, telemetry_interceptor=self._telemetry_interceptor(connector_name))
+
+    def _materialize_personal_tool(self, record: PersonalToolRecord) -> AuthorizedPersonalTool:
+        definition = record.definition
+        catalog = record.tool
+        public_name = self._public_tool_name(definition.connector_id, definition.tool_name_prefix, catalog.identity.downstream_name)
+        options = {
+            "title": catalog.title,
+            "description": catalog.description,
+            "parameters": catalog.input_schema,
+            "meta": {**catalog.meta, "connector_id": definition.connector_id, "operation_name": catalog.identity.downstream_name},
+            "annotations": catalog.annotations,
+            "icons": list(catalog.icons),
+            "execution": catalog.execution or None,
+        }
+        if catalog.output_schema_status == "present":
+            options["output_schema"] = catalog.output_schema
+        return AuthorizedPersonalTool(identity=self._invocation_identity(definition.connector_id, definition.display_name, catalog, public_name), record=record, runtime=self._personal_runtime, public_name=public_name, invocation_policy=self._invocation_policy, telemetry_interceptor=self._telemetry_interceptor(definition.display_name), options=options)
 
     @staticmethod
     def _invocation_identity(connector_id: str, connector_name: str, catalog_tool: DiscoveredTool, public_name: str) -> ConnectorToolInvocationIdentity:
@@ -314,7 +324,27 @@ class DownstreamMcpToolRuntimeProvider(Provider):
     def _catalog_mcp_tool(catalog_tool: DiscoveredTool) -> McpTool:
         return McpTool(name=catalog_tool.identity.downstream_name, title=catalog_tool.title, description=catalog_tool.description, inputSchema=catalog_tool.input_schema, outputSchema=catalog_tool.output_schema if catalog_tool.output_schema_status == 'present' else None, annotations=catalog_tool.annotations or None, icons=list(catalog_tool.icons), _meta=catalog_tool.meta or None, execution=catalog_tool.execution or None)
 
+    async def _configured_tool_records(self) -> tuple[DownstreamCapabilityRecord, ...]:
+        scope = self._active_scope()
+        scoped = tuple(record for record in await self._capabilities.list_records() if record.source_tool is not None and record.capability.identity.capability_kind == "tool" and (not scope or record.definition.connector_id == scope))
+        shared_ids = {record.definition.connector_id for record in scoped if not uses_personal_oauth(record.definition)}
+        published = {connector_id for connector_id in shared_ids if await self._stores.publishing.is_published(connector_id)}
+        records = tuple(record for record in scoped if uses_personal_oauth(record.definition) or record.definition.connector_id in published)
+        _validate_public_identities([_public_identity(record) for record in records])
+        names = tuple(self._public_tool_name(record.definition.connector_id, record.definition.tool_name_prefix, record.capability.identity.capability_key) for record in records)
+        if len(set(names)) != len(names):
+            raise ToolError("public_tool_name_conflict")
+        return records
+
+    async def configured_tool_name_claims(self) -> tuple[str, ...]:
+        return tuple(self._public_tool_name(record.definition.connector_id, record.definition.tool_name_prefix, record.capability.identity.capability_key) for record in await self._configured_tool_records())
+
+    async def personal_tool_name_claims(self) -> tuple[str, ...]:
+        return tuple(self._public_tool_name(record.definition.connector_id, record.definition.tool_name_prefix, record.capability.identity.capability_key) for record in await self._configured_tool_records() if uses_personal_oauth(record.definition))
+
     async def owns_tool(self, tool_name: str) -> bool:
+        if tool_name in await self.personal_tool_name_claims():
+            return True
         return any((candidate.tool_name == tool_name for candidate in await self.eligible_search_candidates()))
 
 def _public_identity(record: DownstreamCapabilityRecord) -> PublicToolIdentity:
@@ -338,6 +368,7 @@ def _search_candidate(record: DownstreamCapabilityRecord, capability_description
 class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
 
     async def _list_tools(self) -> Sequence[Tool]:
+        await self._configured_tool_records()
         tools: list[Tool] = []
         identities: list[PublicToolIdentity] = []
         active_scope = self._active_scope()
@@ -352,14 +383,25 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
             identities.append(_public_identity(record))
             definition = record.definition
             tools.append(self._materialize_tool(definition.connector_id, definition.tool_name_prefix, record.source_tool, definition.display_name))
-        if not active_scope:
-            _validate_public_identities(identities)
+        for record in await self._personal_runtime.list_tools():
+            definition = record.definition
+            if active_scope and definition.connector_id != active_scope:
+                continue
+            identities.append(PublicToolIdentity(connector_id=definition.connector_id, tool_name_prefix=definition.tool_name_prefix, operation_name=record.tool.identity.downstream_name))
+            tools.append(self._materialize_personal_tool(record))
+        _validate_public_identities(identities)
+        if len({tool.name for tool in tools}) != len(tools):
+            raise ToolError("public_tool_name_conflict")
         return tools
 
     async def eligible_search_candidates(self) -> list[ConnectorToolSearchCandidate]:
+        await self._configured_tool_records()
         eligible: list[DownstreamCapabilityRecord] = []
+        active_scope = self._active_scope()
         for record in await self._capabilities.list_records():
-            if record.capability.identity.capability_kind != "tool":
+            if active_scope and record.definition.connector_id != active_scope:
+                continue
+            if uses_personal_oauth(record.definition) or record.capability.identity.capability_kind != "tool":
                 continue
             if await self._availability.is_available(record.capability.identity):
                 eligible.append(record)
@@ -367,26 +409,22 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
         descriptions = await _effective_descriptions(self._capability_description_overrides, records)
         identities = [_public_identity(record) for record in records]
         _validate_public_identities(identities)
-        return [_search_candidate(record, descriptions[record.definition.connector_id]) for record in records]
+        candidates = [_search_candidate(record, descriptions[record.definition.connector_id]).model_copy(update={"tool_name": self._public_tool_name(record.definition.connector_id, record.definition.tool_name_prefix, record.capability.identity.capability_key)}) for record in records]
+        for record in await self._personal_runtime.list_tools():
+            definition = record.definition
+            if active_scope and definition.connector_id != active_scope:
+                continue
+            identities.append(PublicToolIdentity(connector_id=definition.connector_id, tool_name_prefix=definition.tool_name_prefix, operation_name=record.tool.identity.downstream_name))
+            candidates.append(ConnectorToolSearchCandidate(tool_name=self._public_tool_name(definition.connector_id, definition.tool_name_prefix, record.tool.identity.downstream_name), description=record.tool.description, connector_id=definition.connector_id, connector_display_name=definition.display_name, connector_capability_description=definition.capability_description, operation_name=record.tool.identity.downstream_name, input_schema=record.tool.input_schema, search_hints=(record.tool.title,)))
+        _validate_public_identities(identities)
+        return candidates
 
     async def execute_tool(self, tool_name: str, arguments: Mapping[str, Any]) -> ToolResult:
-        matched = next(
-            (
-                record
-                for record in await self._capabilities.list_records()
-                if record.capability.identity.capability_kind == "tool"
-                and _public_tool_name(record) == tool_name
-            ),
-            None,
-        )
-        if matched is None or matched.source_tool is None:
-            raise ToolError(f"Unknown tool: '{tool_name}'")
-        record = await self._capabilities.resolve_record(matched.capability.identity)
-        if not await self._availability.is_available(record.capability.identity):
-            raise ToolError('Downstream connector tool is not available')
-        definition = record.definition
-        tool = self._materialize_tool(definition.connector_id, definition.tool_name_prefix, record.source_tool, definition.display_name)
-        return await tool.run(dict(arguments))
+        tools = await self._list_tools()
+        matches = tuple(tool for tool in tools if tool.name == tool_name)
+        if len(matches) != 1:
+            raise ToolError("Unknown tool or tool not available")
+        return await matches[0].run(dict(arguments))
 
     async def _eligible_catalogs(self) -> list[tuple[str, ToolCatalogFound]]:
         catalogs: list[tuple[str, ToolCatalogFound]] = []
@@ -409,7 +447,7 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
             "operation_name": prompt.name,
         }
         raw_prompt = McpPrompt(name=prompt.name, title=prompt.title, description=prompt.description, arguments=[argument.model_dump(exclude_none=True) for argument in prompt.arguments], icons=list(prompt.icons), _meta=meta)
-        backend = ProxyPrompt.from_mcp_prompt(partial(self._create_capability_client, connector_id), raw_prompt)
+        backend = ProxyPrompt.from_mcp_prompt(partial(self._create_capability_client, CapabilityIdentity(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="prompt", capability_key=prompt.name)), raw_prompt)
         backend._backend_name = prompt.name
         backend.name = mangle_public_tool_name(connector_id, prompt.name)
         return backend
@@ -423,7 +461,7 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
             "operation_name": resource.uri,
         }
         raw_resource = McpResource(name=resource.name, title=resource.title, uri=resource.uri, description=resource.description, mimeType=resource.mime_type or None, size=resource.size or None, icons=list(resource.icons), annotations=resource.annotations or None, _meta=meta)
-        return ProxyResource.from_mcp_resource(partial(self._create_capability_client, connector_id), raw_resource)
+        return ProxyResource.from_mcp_resource(partial(self._create_capability_client, CapabilityIdentity(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="resource", capability_key=resource.uri)), raw_resource)
 
     def _materialize_template(self, connector_id: str, template: DiscoveredResourceTemplate) -> ResourceTemplate:
         meta = {
@@ -434,8 +472,9 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
             "operation_name": template.uri_template,
         }
         raw_template = McpResourceTemplate(name=template.name, title=template.title, uriTemplate=template.uri_template, description=template.description, mimeType=template.mime_type or None, icons=list(template.icons), annotations=template.annotations or None, _meta=meta)
-        backend = ProxyTemplate.from_mcp_template(partial(self._create_capability_client, connector_id), raw_template)
-        return OwnershipCheckedTemplate(backend, partial(self._ensure_shared_connector, connector_id))
+        identity = CapabilityIdentity(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="resource_template", capability_key=template.uri_template)
+        backend = ProxyTemplate.from_mcp_template(partial(self._create_capability_client, identity), raw_template)
+        return AccessCheckedTemplate(backend, partial(self._ensure_capability_access, identity))
 
     async def _list_resources(self) -> Sequence[Resource]:
         index = DownstreamCapabilityIndex(await self._eligible_catalogs())
@@ -495,5 +534,6 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
         return DownstreamCapabilityIndex(catalogs).native_projection()
 
     async def is_eligible(self, connector_id: str, operation_name: str) -> bool:
-        return await self._availability.is_available(CapabilityIdentity(connector_kind='downstream_mcp', connector_id=connector_id, capability_kind="tool",
-            capability_key=operation_name))
+        if self._active_scope() and self._active_scope() != connector_id:
+            return False
+        return any(candidate.connector_id == connector_id and candidate.operation_name == operation_name for candidate in await self.eligible_search_candidates())

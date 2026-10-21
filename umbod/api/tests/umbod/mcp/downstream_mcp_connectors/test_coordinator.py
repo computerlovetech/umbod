@@ -18,6 +18,7 @@ from umbod.core.connectors.downstream_mcp.models import ConnectorHealthy, Connec
 from umbod.core.connectors.downstream_mcp.stores import ConnectorHealthFound, ConnectorIdQuery, ReplaceToolCatalog, SaveConnectorDefinition, SaveCredential, ToolCatalogFound
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.mcp.connectors.tools import install_tool_list_changed_notifier
+from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
 from umbod.mcp.downstream_mcp_connectors import ConnectorAwareDownstreamMcpToolProvider, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.downstream_mcp_connectors.coordinator import DownstreamDiscoveryAdapters, DownstreamDiscoveryCoordinatorOptions, DownstreamDiscoveryStores, create_downstream_discovery_coordinator
 from umbod.mcp.logging import McpToolInvocationCompleted
@@ -314,7 +315,7 @@ async def test_catalog_reconciliation_notifies_connected_session_and_updates_exp
         return 'alerts'
     public = FastMCP('public')
     notifier = install_tool_list_changed_notifier(public)
-    public.add_provider(ConnectorAwareDownstreamMcpToolProvider(definitions=fixture.definitions, credentials=fixture.credentials, catalogs=fixture.catalogs, publishing=fixture.publishing, activations=fixture.activations, client_factory=InMemoryClientFactory(downstream), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), tool_invocation_logger=NullToolInvocationLogger(), metrics_recorder=InMemoryMcpMetricsRecorder(), invocation_policy=PermitAllConnectorInvocationPolicy()))
+    public.add_provider(ConnectorAwareDownstreamMcpToolProvider(personal_runtime=DisabledPersonalToolRuntime(), definitions=fixture.definitions, credentials=fixture.credentials, catalogs=fixture.catalogs, publishing=fixture.publishing, activations=fixture.activations, client_factory=InMemoryClientFactory(downstream), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), tool_invocation_logger=NullToolInvocationLogger(), metrics_recorder=InMemoryMcpMetricsRecorder(), invocation_policy=PermitAllConnectorInvocationPolicy()))
     fixture.coordinator._components.native_monitor._notifier = notifier
     fixture.discovery.results['weather'].append(_success('weather', 'alerts'))
     handler = RecordingToolListChangedHandler()

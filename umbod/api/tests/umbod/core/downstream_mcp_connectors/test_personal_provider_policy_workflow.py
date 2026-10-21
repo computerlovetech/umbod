@@ -1,5 +1,8 @@
 import asyncio
 import json
+from datetime import UTC, datetime, timedelta
+
+from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery
 from urllib.parse import parse_qs, urlsplit
 from unittest.mock import AsyncMock
 
@@ -60,7 +63,7 @@ async def start_configured(case: AttemptCase, method: str) -> tuple[str, str]:
 async def test_configured_workflow_completes_on_recreated_worker_with_scoped_callback(case: AttemptCase, method: str) -> None:
     state, revision = await start_configured(case, method)
     recreated = await create_downstream_mcp_stores("test-secret", case.database)
-    transport = InMemoryOAuthHttpTransport([response({"access_token": "user-access-token", "token_type": "Bearer"})])
+    transport = InMemoryOAuthHttpTransport([response({"access_token": "user-access-token", "token_type": "Bearer", "expires_in": 3600})])
     callback = PersonalOAuthCallbackService(recreated.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(transport), case.clock)
     await callback.finish(state, "authorization-code", "https://issuer.example", "", "read")
     connection = await recreated.personal_connections.get(case.query.key)
@@ -68,6 +71,9 @@ async def test_configured_workflow_completes_on_recreated_worker_with_scoped_cal
     saved = json.loads(connection.authorization.authorization.get_secret_value())
     assert saved["granted_scopes"] == ["read"]
     assert saved["configuration_revision"] == revision
+    target = await recreated.personal_runtime_authorizations.resolve(PersonalRuntimeAuthorizationQuery(key=case.query.key, group_ids=("team",), now=datetime.now(UTC)))
+    assert target.access_token.get_secret_value() == "user-access-token"
+    assert target.expires_at == datetime.fromisoformat(saved["issued_at"]) + timedelta(hours=1)
     assert len(transport.requests) == 1
     assert "client-secret" not in connection.authorization.authorization.get_secret_value()
 

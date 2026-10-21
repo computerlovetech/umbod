@@ -55,7 +55,12 @@ def _command() -> CreateDownstreamConnectorAggregate:
 async def _inmemory(_: Path, fault: Callable[[str], None]) -> AggregateHarness:
     from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import EncryptedPersonalOAuthConfigurationStore
 
+    from umbod.core.connectors.downstream_mcp.stores.personal_tool_policies import PersonalToolPolicyStoreService
+    from umbod.core.connectors.downstream_mcp.stores.personal_tool_access import EncryptedPersonalToolAccessStore
+
     definition_database = create_inmemory_runtime().database
+    personal_policies = PersonalToolPolicyStoreService(definition_database, utc_clock, fault)
+    personal_access = EncryptedPersonalToolAccessStore(definition_database, AuthenticatedTextCipher('unit-of-work-secret'))
     definitions = ConnectorDefinitionStoreService(definition_database, CONNECTOR_DEFINITION_TABLE)
     configurations = EncryptedPersonalOAuthConfigurationStore(definition_database, AuthenticatedTextCipher('unit-of-work-secret'))
     credentials = EncryptedCredentialStoreService(create_inmemory_runtime().database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('unit-of-work-secret'))
@@ -65,7 +70,7 @@ async def _inmemory(_: Path, fault: Callable[[str], None]) -> AggregateHarness:
     activations = CapabilityActivationStoreService(database, CAPABILITY_ACTIVATION_STATE_TABLE)
     publishing = ConnectorPublishingStoreService(database, PUBLICATION_STATE_TABLE)
     personal = InMemoryPersonalConnectionStore()
-    return Harness(InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activations, publishing, fault, personal, configurations), definitions, credentials, catalogs, health, publishing, activations, personal)
+    return Harness(InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activations, publishing, fault, personal, configurations, personal_policies, personal_access), definitions, credentials, catalogs, health, publishing, activations, personal)
 
 async def _sqlite(path: Path, fault: Callable[[str], None]) -> AggregateHarness:
     definitions = ConnectorDefinitionStoreService(create_sqlite_runtime(path).database, CONNECTOR_DEFINITION_TABLE)
@@ -192,7 +197,7 @@ async def test_reconnect_preserves_tool_choices(
     for _ in range(2):
         if interruption == "discovery_failure":
             await harness.unit_of_work.apply_discovery(ApplyDiscoveredCatalog(
-                connector_id="alpha", catalog=DeleteCatalog(), health=health, operation_names=(),
+                native_identities=(), connector_id="alpha", catalog=DeleteCatalog(), health=health, operation_names=(),
             ))
         else:
             await harness.unit_of_work.invalidate(InvalidateDownstreamConnectorAggregate(connector_id="alpha", health=health))
@@ -207,7 +212,7 @@ async def test_reconnect_preserves_tool_choices(
     )})
     for _ in range(2):
         await harness.unit_of_work.apply_discovery(ApplyDiscoveredCatalog(
-            connector_id="alpha", catalog=snapshot, health=command.health.health,
+            native_identities=(), connector_id="alpha", catalog=snapshot, health=command.health.health,
             operation_names=("search", "disabled", "new"),
         ))
         assert await harness.activations.get_status(enabled) == ActivationStatus.ENABLED

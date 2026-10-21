@@ -4,7 +4,12 @@ from typing import Any
 from fastmcp.server.dependencies import get_context
 from fastmcp.server.providers.proxy import ProxyTool
 from fastmcp.tools import ToolResult
+from fastmcp.tools.base import Tool
+from umbod.core.connectors.downstream_mcp.personal_tools import InvokePersonalTool, PersonalToolRecord, PersonalToolRuntime
 from jsonschema.validators import validator_for
+from jsonschema import Draft202012Validator
+from referencing import Registry
+from umbod.core.connectors.downstream_mcp.personal_tools import validate_contract_schema
 
 from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.invocation import (
@@ -35,19 +40,17 @@ class _InitialDownstreamContext:
         return getattr(self._context, name)
 
 
-class AuthorizedDownstreamProxyTool(ProxyTool):
+class AuthorizedDownstreamTool(Tool):
     def __init__(
         self,
         *,
         identity: ConnectorToolInvocationIdentity,
-        backend_tool: ProxyTool,
-        client_factory: object,
+        options: dict[str, Any],
         public_name: str,
         invocation_policy: ConnectorInvocationPolicy,
         telemetry_interceptor: ConnectorTelemetryInterceptor,
     ) -> None:
-        super().__init__(**_proxy_tool_options(backend_tool, client_factory, public_name))
-        self._backend_name = backend_tool.name
+        super().__init__(name=public_name, **options)
         self._identity = identity
         self._execution_pipeline = create_tool_execution_pipeline(
             invocation_policy, (telemetry_interceptor,)
@@ -100,9 +103,19 @@ class AuthorizedDownstreamProxyTool(ProxyTool):
         validator(self.parameters).validate(arguments)
 
     async def _invoke_downstream(self, arguments: dict[str, Any]) -> ToolResult:
+        raise NotImplementedError
+
+
+class AuthorizedDownstreamProxyTool(AuthorizedDownstreamTool):
+    def __init__(self, *, identity: ConnectorToolInvocationIdentity, backend_tool: ProxyTool, client_factory: object, public_name: str, invocation_policy: ConnectorInvocationPolicy, telemetry_interceptor: ConnectorTelemetryInterceptor) -> None:
+        options = _proxy_tool_options(backend_tool)
+        super().__init__(identity=identity, options=options, public_name=public_name, invocation_policy=invocation_policy, telemetry_interceptor=telemetry_interceptor)
+        self._backend_tool = backend_tool
+
+    async def _invoke_downstream(self, arguments: dict[str, Any]) -> ToolResult:
         context = get_context()
         try:
-            result = await super().run(
+            result = await self._backend_tool.run(
                 arguments,
                 context=_InitialDownstreamContext(context),
             )
@@ -115,9 +128,33 @@ def _safe_downstream_failure() -> ToolResult:
     return ToolResult(content="Tool invocation failed", is_error=True)
 
 
-def _proxy_tool_options(
-    backend_tool: ProxyTool, client_factory: object, public_name: str
-) -> dict[str, Any]:
+class AuthorizedPersonalTool(AuthorizedDownstreamTool):
+    def __init__(self, *, identity: ConnectorToolInvocationIdentity, record: PersonalToolRecord, runtime: PersonalToolRuntime, public_name: str, invocation_policy: ConnectorInvocationPolicy, telemetry_interceptor: ConnectorTelemetryInterceptor, options: dict[str, Any]) -> None:
+        super().__init__(identity=identity, options=options, public_name=public_name, invocation_policy=invocation_policy, telemetry_interceptor=telemetry_interceptor)
+        self._runtime = runtime
+        self._command = InvokePersonalTool(identity=CapabilityIdentity(connector_kind="downstream_mcp", connector_id=record.definition.connector_id, capability_kind="tool", capability_key=record.tool.identity.downstream_name), contract_revision=record.contract_revision, fingerprint=record.fingerprint, arguments={})
+
+    def _validate_arguments(self, arguments: dict[str, Any]) -> None:
+        try:
+            validate_contract_schema(self.parameters)
+            Draft202012Validator(self.parameters, registry=Registry()).validate(arguments)
+            return
+        except Exception:
+            pass
+        raise RuntimeError("Personal tool unavailable")
+
+    async def is_authorized(self) -> bool:
+        return any(record.definition.connector_id == self._command.identity.connector_id and record.tool.identity.downstream_name == self._command.identity.capability_key and record.contract_revision == self._command.contract_revision and record.fingerprint == self._command.fingerprint for record in await self._runtime.list_tools())
+
+    async def _invoke_downstream(self, arguments: dict[str, Any]) -> ToolResult:
+        try:
+            result = await self._runtime.execute(self._command.model_copy(update={"arguments": arguments}))
+            return ToolResult(**{"content": result.result["content"], **({"structured_content": result.result["structuredContent"]} if "structuredContent" in result.result else {})})
+        except Exception:
+            return _safe_downstream_failure()
+
+
+def _proxy_tool_options(backend_tool: Tool) -> dict[str, Any]:
     field_names = (
         "version",
         "title",
@@ -134,4 +171,4 @@ def _proxy_tool_options(
         "timeout",
     )
     options = {name: getattr(backend_tool, name) for name in field_names}
-    return {"client_factory": client_factory, "name": public_name, **options}
+    return options

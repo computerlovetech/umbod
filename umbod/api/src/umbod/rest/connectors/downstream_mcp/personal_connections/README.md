@@ -3,11 +3,13 @@
 Downstream MCP-owned delivery for authenticated user selection under `/api/me`, separate from administrator authorization. The public OAuth callback remains independently state-bound. Package nesting does not change URLs, middleware or mounts.
 
 - `routes.py`: eligible catalogue, personal state, strict enablement and disconnect endpoints.
-- `schemas.py`: secret-free user projections with explicit runtime-unavailable status.
+- `schemas.py`: secret-free user projections with truthful current-owner runtime status.
+- `runtime.py`: request-scoped current-context/runtime composition. Selection responses check current approved, observed, activated and granted tools in storage without discovery or network calls; disabled profiles remain unavailable.
 - `dependencies.py`: request-scoped canonical principal, verified group membership and inventory composition through core ports and the shared persistence runtime. Verified identity mapping uses `VerifiedClaimsPrincipalProvider` from `core/connectors/downstream_mcp/personal_connections`.
 - `oauth_routes.py` and `oauth_schemas.py`: bounded strict initiation bodies, safe attempt projections and owner-scoped status/cancellation.
 - `oauth_dependencies.py`: request-scoped provider resources and authorization/callback service composition.
 - `oauth_callback.py`: strict public callback parsing, namespace query redaction and fixed secret-free responses.
+- `tools.py`: authenticated strict-empty `POST /connectors/mcp/{id}/tools/discovery`, request-scoped transport/service composition and fixed secret-free failures. Discovery uses only the verified owner's authorization and saves encrypted approved-contract intersections; it never approves tools, updates global user-derived metadata or executes them.
 - `__init__.py`: router export.
 
 `rest/main.py` mounts this application when the resolved personal identity policy is enabled. Operator configuration enables it automatically once a namespace and safe authentication are supplied; explicit `false` opts out. Authentication-only middleware verifies credentials once and retains claims on request state; identity mapping rejects unmappable claims before personal storage access. Cookie safeguards are identical to administration, but administrator membership is not required or sufficient for catalogue eligibility.

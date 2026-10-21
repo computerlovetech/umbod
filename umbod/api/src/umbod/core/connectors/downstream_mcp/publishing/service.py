@@ -1,10 +1,8 @@
 from umbod.core.publishing.events import connector_publication_changed_event
 from umbod.core.publishing import ConnectorPublishingStore
-from umbod.core.capabilities.tools.names import PublicToolIdentity, PublicToolIdentitySource, PublicToolNameValidator
-from umbod.core.connectors.downstream_mcp.errors import DownstreamConnectorUnavailableError
+from umbod.core.capabilities.tools.names import PublicToolIdentitySource
 from umbod.core.connectors.downstream_mcp.management.queries import DownstreamConnectorQueries
-from umbod.core.connectors.downstream_mcp.stores.ports import ToolCatalogFound
-from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
+from umbod.core.connectors.downstream_mcp.management.unit_of_work import DownstreamConnectorUnitOfWork, PublishDownstreamConnectorAggregate
 from messaging.ports import EventStream
 
 
@@ -14,37 +12,24 @@ class DownstreamConnectorPublisher:
         publishing: ConnectorPublishingStore,
         events: EventStream,
         queries: DownstreamConnectorQueries,
-        tool_name_validator: PublicToolNameValidator,
+        unit_of_work: DownstreamConnectorUnitOfWork,
         identity_source: PublicToolIdentitySource,
     ) -> None:
         self._publishing = publishing
         self._events = events
         self._queries = queries
-        self._tool_name_validator = tool_name_validator
+        self._unit_of_work = unit_of_work
         self._identity_source = identity_source
 
     async def publish(self, connector_id: str) -> None:
-        definition = await self._queries.get(connector_id)
-        if not uses_personal_oauth(definition):
-            await self._validate_shared_publication(connector_id)
-        if not await self._publishing.is_published(connector_id):
-            await self._publishing.publish_connector(connector_id)
+        changed = await self._unit_of_work.publish(PublishDownstreamConnectorAggregate(
+            connector_id=connector_id,
+            native_identities=await self._identity_source.identities(),
+        ))
+        if changed:
             await self._events.append(
                 connector_publication_changed_event(connector_id, "published")
             )
-
-    async def _validate_shared_publication(self, connector_id: str) -> None:
-        catalog = await self._queries.catalog(connector_id)
-        if not isinstance(catalog, ToolCatalogFound) or not any(
-            (
-                catalog.snapshot.tools,
-                catalog.snapshot.prompts,
-                catalog.snapshot.resources,
-                catalog.snapshot.resource_templates,
-            )
-        ):
-            raise DownstreamConnectorUnavailableError(connector_id)
-        self._tool_name_validator.validate_unique(await self._public_identities(connector_id))
 
     async def unpublish(self, connector_id: str) -> None:
         await self._queries.get(connector_id)
@@ -53,22 +38,3 @@ class DownstreamConnectorPublisher:
             await self._events.append(
                 connector_publication_changed_event(connector_id, "unpublished")
             )
-
-    async def _public_identities(self, connector_id: str) -> tuple[PublicToolIdentity, ...]:
-        identities = list(await self._identity_source.identities())
-        for definition in (await self._queries.list()).definitions:
-            if definition.connector_id != connector_id and not await self._publishing.is_published(
-                definition.connector_id
-            ):
-                continue
-            catalog = await self._queries.catalog(definition.connector_id)
-            if isinstance(catalog, ToolCatalogFound):
-                identities.extend(
-                    PublicToolIdentity(
-                        connector_id=tool.identity.connector_id,
-                        tool_name_prefix=definition.tool_name_prefix,
-                        operation_name=tool.identity.downstream_name,
-                    )
-                    for tool in catalog.snapshot.tools
-                )
-        return tuple(identities)

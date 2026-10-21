@@ -1,4 +1,7 @@
 import json
+from datetime import timedelta
+
+from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import PersonalOAuthGrant, ExpiringPersonalToken
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -47,12 +50,20 @@ async def test_preparation_and_exchange_resume_with_only_persisted_context(
         "expires_in": 3600, "untrusted_extra": "must-not-persist",
     })])
     resumed: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(transport=exchange_transport)
-    authorized = await resumed.exchange(exchange_command(preparation, prepared))
+    command = exchange_command(preparation, prepared)
+    authorized = await resumed.exchange(command)
     stored = json.loads(authorized.authorization.get_secret_value())
     assert stored["access_token"] == "actual-access"
-    assert stored["refresh_token"] == "actual-refresh"
+    assert stored["refresh_token"] == {"kind": "present", "token": "actual-refresh"}
     assert stored["token_type"] == "Bearer"
-    assert stored["expires_in"] == 3600
+    grant = PersonalOAuthGrant.model_validate_json(authorized.authorization.get_secret_value())
+    assert grant.version == 2
+    assert grant.key == command.attempt.query.key
+    assert grant.issued_at == command.attempt.query.now
+    assert isinstance(grant.lifetime, ExpiringPersonalToken)
+    assert grant.lifetime.expires_at == command.attempt.query.now + timedelta(seconds=3600)
+    assert "actual-access" not in grant.model_dump_json()
+    assert "actual-refresh" not in grant.model_dump_json()
     assert "untrusted_extra" not in stored
     assert "**********" not in authorized.authorization.get_secret_value()
     token_request = parse_qs(exchange_transport.requests[0].body.get_secret_value())
@@ -186,7 +197,7 @@ async def test_exchange_bindings_fail_before_network(
 @pytest.mark.parametrize(("field", "value"), [
     ("scope", "read"), ("scope", " "), ("scope", None), ("token_type", "Basic"),
     ("access_token", ""), ("access_token", "token\nsecret"), ("access_token", "masked token"),
-    ("expires_in", -1), ("expires_in", True), ("expires_in", "3600"),
+    ("expires_in", -1), ("expires_in", True), ("expires_in", "3600"), ("expires_in", 10**100),
     ("refresh_token", ""), ("refresh_token", "secret\nunsafe"), ("error", "provider-sensitive-message"),
 ])
 async def test_invalid_token_response_fails_once_without_leaking_provider_messages(

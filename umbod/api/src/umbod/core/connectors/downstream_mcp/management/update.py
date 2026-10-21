@@ -192,6 +192,7 @@ class DownstreamConnectorUpdater:
             )
         )
         aggregate = ReplaceDownstreamConnectorAggregate(
+            native_identities=await self._identity_source.identities(),
             definition=prepared.definition,
             credential=credential_mutation,
             catalog=catalog_mutation,

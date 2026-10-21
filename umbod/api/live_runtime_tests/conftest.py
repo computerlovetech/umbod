@@ -1,5 +1,5 @@
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 
@@ -8,7 +8,7 @@ import pytest
 class RuntimeEndpoints:
     api_base_url: str
     mcp_url: str
-    bearer_token: str
+    bearer_token: str = field(repr=False)
 
 
 @pytest.fixture(scope="session")

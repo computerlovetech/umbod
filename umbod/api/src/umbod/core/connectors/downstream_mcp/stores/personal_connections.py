@@ -43,6 +43,33 @@ from umbod.core.persistence import (
 )
 
 
+async def load_personal_connection(
+    session: DatabaseSession, cipher: TextCipher, key: PersonalConnectionKey
+) -> PersonalConnectionState:
+    row = await session.find_one(
+        PERSONAL_CONNECTION_TABLE,
+        Query(
+            filter=AllOf(
+                (
+                    Equals(PERSONAL_CONNECTION_NAMESPACE, key.principal.namespace),
+                    Equals(PERSONAL_CONNECTION_SUBJECT, key.principal.subject),
+                    Equals(PERSONAL_CONNECTION_CONNECTOR_ID, key.connector_id),
+                )
+            ),
+            projection=AllFields(),
+            ordering=Unordered(),
+        ),
+    )
+    if row is None:
+        return MissingPersonalConnection(key=key)
+    state = PersonalConnection.model_validate_json(cipher.decrypt(row.document))
+    expected = (key.principal.namespace, key.principal.subject, key.connector_id)
+    stored = (row.namespace, row.subject, row.connector_id)
+    if stored != expected or state.key != key:
+        raise ValueError("Personal connection ownership mismatch")
+    return state
+
+
 class EncryptedPersonalConnectionStore:
     def __init__(self, database: Database, cipher: TextCipher) -> None:
         self._database = database
@@ -51,30 +78,7 @@ class EncryptedPersonalConnectionStore:
     async def _get(
         self, session: DatabaseSession, key: PersonalConnectionKey
     ) -> PersonalConnectionState:
-        row = await session.find_one(
-            PERSONAL_CONNECTION_TABLE,
-            Query(
-                filter=AllOf(
-                    (
-                        Equals(PERSONAL_CONNECTION_NAMESPACE, key.principal.namespace),
-                        Equals(PERSONAL_CONNECTION_SUBJECT, key.principal.subject),
-                        Equals(PERSONAL_CONNECTION_CONNECTOR_ID, key.connector_id),
-                    )
-                ),
-                projection=AllFields(),
-                ordering=Unordered(),
-            ),
-        )
-        if row is None:
-            return MissingPersonalConnection(key=key)
-        state = PersonalConnection.model_validate_json(
-            self._cipher.decrypt(row.document)
-        )
-        expected = (key.principal.namespace, key.principal.subject, key.connector_id)
-        stored = (row.namespace, row.subject, row.connector_id)
-        if stored != expected or state.key != key:
-            raise ValueError("Personal connection ownership mismatch")
-        return state
+        return await load_personal_connection(session, self._cipher, key)
 
     async def get(self, key: PersonalConnectionKey) -> PersonalConnectionState:
         async with self._database.session(mode=TransactionMode.READ_WRITE) as session:

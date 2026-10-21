@@ -1,6 +1,8 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 
+from ..stores.personal_tools_schema import PERSONAL_TOOL_POLICY_TABLE, PERSONAL_TOOL_POLICY_CONNECTOR_ID, PERSONAL_TOOL_OBSERVATION_TABLE, PERSONAL_TOOL_OBSERVATION_CONNECTOR_ID
+
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationUnavailable
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import install_personal_oauth_configuration
@@ -26,7 +28,8 @@ from umbod.core.activation.stores.schema import (
     CAPABILITY_ACTIVATION_STATE_CONNECTOR_KIND,
     CAPABILITY_ACTIVATION_STATE_TABLE,
 )
-from umbod.core.connectors.downstream_mcp.models import ConnectorHealth, ToolCatalogSnapshot
+from umbod.core.connectors.downstream_mcp.errors import DownstreamConnectorNotFoundError, DownstreamConnectorUnavailableError
+from umbod.core.connectors.downstream_mcp.models import ConnectorDefinition, ConnectorHealth, ToolCatalogSnapshot
 from umbod.core.connectors.downstream_mcp.stores.catalogs import find_catalog_record, replace_catalog
 from umbod.core.connectors.downstream_mcp.stores.credentials import save_credential
 from umbod.core.connectors.downstream_mcp.stores.ports import (
@@ -66,6 +69,7 @@ from umbod.core.connectors.downstream_mcp.management.unit_of_work import (
     KeepHealth,
     PreserveActivation,
     PreservePublication,
+    PublishDownstreamConnectorAggregate,
     ReplaceCatalog,
     ReplaceCredential,
     ReplaceDownstreamConnectorAggregate,
@@ -314,12 +318,47 @@ async def _replace(
     await _replace_activation(session, command, context.fault)
     if not isinstance(command.publication, PreservePublication):
         await _replace_publication(session, command, context.fault, context.clock)
+    if isinstance(command, ReplaceDownstreamConnectorAggregate):
+        await _validate_published_namespace(session, command.native_identities)
 
 
 async def _published_identities(
-    session: DatabaseSession, command: UpdatePublishedConnectorPrefix
+    session: DatabaseSession,
+    definition: ConnectorDefinition,
+    native_identities: tuple[PublicToolIdentity, ...],
+    include_candidate: bool,
 ) -> list[PublicToolIdentity]:
-    identities = list(command.native_identities)
+    identities = list(native_identities)
+    definitions = await session.find_many(
+        CONNECTOR_DEFINITION_TABLE,
+        Query(filter=NoFilter(), projection=AllFields(), ordering=Unordered()),
+    )
+    for record in definitions:
+        publication = await _publication(session, record.connector_id)
+        candidate = record.connector_id == definition.connector_id
+        if not (include_candidate and candidate) and (publication is None or not publication.published):
+            continue
+        catalog = await find_catalog_record(session, TOOL_CATALOG_TABLE, record.connector_id)
+        if catalog is None:
+            continue
+        current = CONNECTOR_DEFINITION_ADAPTER.validate_python(record.document)
+        snapshot = ToolCatalogSnapshot.model_validate(catalog.snapshot)
+        prefix = definition.tool_name_prefix if candidate else current.tool_name_prefix
+        identities.extend(
+            PublicToolIdentity(
+                connector_id=tool.identity.connector_id,
+                tool_name_prefix=prefix,
+                operation_name=tool.identity.downstream_name,
+            )
+            for tool in snapshot.tools
+        )
+    return identities
+
+
+async def _validate_published_namespace(
+    session: DatabaseSession, native_identities: tuple[PublicToolIdentity, ...]
+) -> None:
+    identities = list(native_identities)
     definitions = await session.find_many(
         CONNECTOR_DEFINITION_TABLE,
         Query(filter=NoFilter(), projection=AllFields(), ordering=Unordered()),
@@ -333,18 +372,57 @@ async def _published_identities(
             continue
         definition = CONNECTOR_DEFINITION_ADAPTER.validate_python(record.document)
         snapshot = ToolCatalogSnapshot.model_validate(catalog.snapshot)
-        prefix = command.definition.tool_name_prefix if (
-            definition.connector_id == command.definition.connector_id
-        ) else definition.tool_name_prefix
         identities.extend(
             PublicToolIdentity(
-                connector_id=tool.identity.connector_id,
-                tool_name_prefix=prefix,
+                connector_id=record.connector_id,
+                tool_name_prefix=definition.tool_name_prefix,
                 operation_name=tool.identity.downstream_name,
             )
             for tool in snapshot.tools
         )
-    return identities
+    PublicToolNameValidator().validate_unique(tuple(identities))
+
+
+async def _publish(
+    session: DatabaseSession,
+    command: PublishDownstreamConnectorAggregate,
+    context: MutationContext,
+) -> bool:
+    row = await session.find_one(
+        CONNECTOR_DEFINITION_TABLE,
+        Query(filter=Equals(CONNECTOR_DEFINITION_CONNECTOR_ID, command.connector_id), projection=AllFields(), ordering=Unordered()),
+    )
+    if row is None:
+        raise DownstreamConnectorNotFoundError(command.connector_id)
+    current = await _publication(session, command.connector_id)
+    if current is not None and current.published:
+        return False
+    definition = CONNECTOR_DEFINITION_ADAPTER.validate_python(row.document)
+    catalog = await find_catalog_record(session, TOOL_CATALOG_TABLE, command.connector_id)
+    if not uses_personal_oauth(definition):
+        if catalog is None:
+            raise DownstreamConnectorUnavailableError(command.connector_id)
+        snapshot = ToolCatalogSnapshot.model_validate(catalog.snapshot)
+        if not any((snapshot.tools, snapshot.prompts, snapshot.resources, snapshot.resource_templates)):
+            raise DownstreamConnectorUnavailableError(command.connector_id)
+    PublicToolNameValidator().validate_unique(tuple(await _published_identities(
+        session, definition, command.native_identities, True
+    )))
+    context.fault("publication")
+    await session.upsert(
+        PUBLICATION_STATE_TABLE,
+        UpsertCommand(
+            key=PublicationStateKey(connector_id=command.connector_id),
+            row=PublicationStateRecord(
+                connector_id=command.connector_id,
+                published=True,
+                previously_published=True,
+                revision=1 if current is None else current.revision + 1,
+                updated_at=context.clock().isoformat(),
+            ),
+        ),
+    )
+    return True
 
 
 async def _update_published_prefix(
@@ -352,8 +430,11 @@ async def _update_published_prefix(
     command: UpdatePublishedConnectorPrefix,
     context: MutationContext,
 ) -> None:
-    PublicToolNameValidator().validate_unique(tuple(await _published_identities(session, command)))
+    PublicToolNameValidator().validate_unique(tuple(await _published_identities(
+        session, command.definition, command.native_identities, False
+    )))
     replacement = ReplaceDownstreamConnectorAggregate(
+        native_identities=command.native_identities,
         definition=command.definition,
         credential=KeepCredential(),
         catalog=KeepCatalog(),
@@ -372,6 +453,8 @@ async def _delete(
     await delete_connector_invocation_policies(session, "downstream_mcp", command.connector_id)
     for phase, table, field in (
         ("activation", CAPABILITY_ACTIVATION_STATE_TABLE, CAPABILITY_ACTIVATION_STATE_CONNECTOR_ID),
+        ("personal_tool_policy", PERSONAL_TOOL_POLICY_TABLE, PERSONAL_TOOL_POLICY_CONNECTOR_ID),
+        ("personal_tool_observations", PERSONAL_TOOL_OBSERVATION_TABLE, PERSONAL_TOOL_OBSERVATION_CONNECTOR_ID),
         ("personal_connections", PERSONAL_CONNECTION_TABLE, PERSONAL_CONNECTION_CONNECTOR_ID),
         ("personal_oauth_attempts", PERSONAL_OAUTH_ATTEMPT_TABLE, PERSONAL_OAUTH_ATTEMPT_CONNECTOR_ID),
         ("personal_oauth_configuration", PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID),
@@ -413,6 +496,10 @@ class DownstreamConnectorUnitOfWorkService:
     async def replace(self, command: ReplaceDownstreamConnectorAggregate) -> None:
         await self._run(lambda session: _replace(session, command, self._context))
 
+    async def publish(self, command: PublishDownstreamConnectorAggregate) -> bool:
+        async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
+            return await _publish(session, command, self._context)
+
     async def update_published_prefix(self, command: UpdatePublishedConnectorPrefix) -> None:
         await self._run(
             lambda session: _update_published_prefix(session, command, self._context)
@@ -444,6 +531,7 @@ class DownstreamConnectorUnitOfWorkService:
                     TOOL_CATALOG_TABLE,
                     ReplaceToolCatalog(snapshot=command.catalog),
                 )
+            await _validate_published_namespace(session, command.native_identities)
             await _write_health(session, command.health, self._context.fault)
             # A failed discovery is not an authoritative empty tool catalog.
             if not isinstance(command.catalog, DeleteCatalog):

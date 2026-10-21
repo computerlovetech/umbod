@@ -12,8 +12,8 @@ class PersonalEnablementRequest(BaseModel):
 
 
 class PersonalConnectorResponse(PersonalConnectorSelection):
-    runtime_available: Literal[False]
-    runtime_unavailable_reason: Literal["personal_oauth_not_supported"]
+    runtime_available: bool
+    runtime_unavailable_reason: Literal["", "personal_oauth_not_supported"]
 
 
 class PersonalConnectorListResponse(BaseModel):
@@ -22,9 +22,9 @@ class PersonalConnectorListResponse(BaseModel):
     connectors: tuple[PersonalConnectorResponse, ...]
 
 
-def present_personal_connector(selection: PersonalConnectorSelection) -> PersonalConnectorResponse:
+def present_personal_connector(selection: PersonalConnectorSelection, available_connector_ids: frozenset[str]) -> PersonalConnectorResponse:
     return PersonalConnectorResponse(
         **selection.model_dump(),
-        runtime_available=False,
-        runtime_unavailable_reason="personal_oauth_not_supported",
+        runtime_available=selection.connector_id in available_connector_ids,
+        runtime_unavailable_reason="" if selection.connector_id in available_connector_ids else "personal_oauth_not_supported",
     )

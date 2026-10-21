@@ -17,6 +17,7 @@ from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, Replac
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.core.permissions import ConnectorCapabilityPermission, ConnectorToolPermission, InMemoryGroupConnectorToolPermissions
 from umbod.mcp.connectors import ModernConnectorApprovalRequired
+from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
 from umbod.mcp.downstream_mcp_connectors import ConnectorAwareDownstreamMcpToolProvider, GroupDownstreamToolPermissionPolicy, NativeCapabilityProviderView, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.logging import ConnectorToolInvocationLogger, McpAuditEvent, McpAuditRecorder, McpToolInvocationCompleted, create_default_connector_tool_invocation_logger
 from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter
@@ -86,7 +87,7 @@ async def _provider(servers: dict[str, FastMCP], options: ProviderOptions=Provid
         await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="prompt", capability_key='weather_prompt'), ActivationStatus.ENABLED)
         await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="resource", capability_key=f'data://{connector_id}/weather'), ActivationStatus.ENABLED)
         await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="resource_template", capability_key=f'data://{connector_id}/{{city}}'), ActivationStatus.ENABLED)
-    return (ConnectorAwareDownstreamMcpToolProvider(definitions=definitions, credentials=credentials, catalogs=catalogs, publishing=publishing, activations=activations, client_factory=factory, permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), tool_invocation_logger=options.tool_invocation_logger or NullToolInvocationLogger(), metrics_recorder=InMemoryMcpMetricsRecorder(), invocation_policy=invocation_policy), factory, publishing, activations, catalogs)
+    return (ConnectorAwareDownstreamMcpToolProvider(personal_runtime=DisabledPersonalToolRuntime(), definitions=definitions, credentials=credentials, catalogs=catalogs, publishing=publishing, activations=activations, client_factory=factory, permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), tool_invocation_logger=options.tool_invocation_logger or NullToolInvocationLogger(), metrics_recorder=InMemoryMcpMetricsRecorder(), invocation_policy=invocation_policy), factory, publishing, activations, catalogs)
 
 def _downstream(calls: list[str] | None=None, *, is_error: bool=False) -> FastMCP:
     server = FastMCP('downstream')

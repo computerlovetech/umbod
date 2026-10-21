@@ -1,5 +1,12 @@
 from dataclasses import dataclass
 
+from ..personal_tools import PersonalToolAccessStore, PersonalToolPolicyStore
+from .personal_tool_access import EncryptedPersonalToolAccessStore
+from .personal_tool_policies import PersonalToolPolicyStoreService
+
+from ..personal_connections.runtime_ports import PersonalRuntimeAuthorizationStore
+from .personal_runtime_authorizations import EncryptedPersonalRuntimeAuthorizationStore
+
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import EncryptedPersonalOAuthConfigurationStore
 
@@ -53,6 +60,9 @@ class DownstreamMcpStores:
     publishing: ConnectorPublishingStore
     activations: ActivationStore
     unit_of_work: DownstreamConnectorUnitOfWork
+    personal_tool_policies: PersonalToolPolicyStore
+    personal_tool_access: PersonalToolAccessStore
+    personal_runtime_authorizations: PersonalRuntimeAuthorizationStore
     personal_connections: PersonalConnectionStore
     personal_oauth_attempts: PersonalOAuthAttemptStore
     personal_oauth_configurations: PersonalOAuthConfigurationStore
@@ -63,6 +73,9 @@ async def create_downstream_mcp_stores(
     database: Database,
 ) -> DownstreamMcpStores:
     return DownstreamMcpStores(
+        personal_tool_policies=PersonalToolPolicyStoreService(database, utc_clock, no_downstream_connector_mutation_fault),
+        personal_tool_access=EncryptedPersonalToolAccessStore(database, AuthenticatedTextCipher(credential_secret)),
+        personal_runtime_authorizations=EncryptedPersonalRuntimeAuthorizationStore(database, AuthenticatedTextCipher(credential_secret)),
         personal_oauth_configurations=EncryptedPersonalOAuthConfigurationStore(database, AuthenticatedTextCipher(credential_secret)),
         personal_oauth_attempts=EncryptedPersonalOAuthAttemptStore(
             database, AuthenticatedTextCipher(credential_secret), utc_clock

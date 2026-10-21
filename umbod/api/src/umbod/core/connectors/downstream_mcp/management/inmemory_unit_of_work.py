@@ -1,13 +1,18 @@
 import asyncio
 
+from ..personal_tools import PersonalToolAccessStore, PersonalToolPolicyStore
+
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore, ReplacePersonalOAuthConfiguration
 from umbod.core.connectors.downstream_mcp.management.unit_of_work import CreatePersonalOAuthConnectorAggregate
 
 from umbod.core.connectors.downstream_mcp.personal_connections import PersonalConnectionStore
 from copy import deepcopy
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TypeVar
 
+from umbod.core.connectors.downstream_mcp.errors import DownstreamConnectorNotFoundError, DownstreamConnectorUnavailableError
+from umbod.core.connectors.downstream_mcp.models import ConnectorDefinition, uses_personal_oauth
+from umbod.core.connectors.downstream_mcp.stores.ports import ConnectorDefinitionFound, ToolCatalogFound
 from umbod.core.publishing import ConnectorPublishingStore
 from umbod.core.capabilities.tools.names import PublicToolIdentity, PublicToolNameValidator
 from umbod.core.activation import ActivationStore
@@ -37,6 +42,7 @@ from umbod.core.connectors.downstream_mcp.management import (
     KeepHealth,
     PreserveActivation,
     PreservePublication,
+    PublishDownstreamConnectorAggregate,
     ReconcileActivation,
     ReplaceCatalog,
     ReplaceCredential,
@@ -45,6 +51,9 @@ from umbod.core.connectors.downstream_mcp.management import (
     UnpublishConnector,
     UpdatePublishedConnectorPrefix,
 )
+
+
+MutationResult = TypeVar("MutationResult")
 
 
 class InMemoryDownstreamConnectorUnitOfWork:
@@ -59,6 +68,8 @@ class InMemoryDownstreamConnectorUnitOfWork:
         fault: DownstreamConnectorMutationFault,
         personal_connections: PersonalConnectionStore,
         personal_oauth_configurations: PersonalOAuthConfigurationStore,
+        personal_tool_policies: PersonalToolPolicyStore,
+        personal_tool_access: PersonalToolAccessStore,
     ) -> None:
         self._definitions = definitions
         self._credentials = credentials
@@ -69,6 +80,8 @@ class InMemoryDownstreamConnectorUnitOfWork:
         self._fault = fault
         self._personal_connections = personal_connections
         self._personal_oauth_configurations = personal_oauth_configurations
+        self._personal_tool_policies = personal_tool_policies
+        self._personal_tool_access = personal_tool_access
         self._lock = asyncio.Lock()
 
     async def create(self, command: CreateDownstreamConnectorAggregate) -> None:
@@ -89,33 +102,56 @@ class InMemoryDownstreamConnectorUnitOfWork:
     async def replace(self, command: ReplaceDownstreamConnectorAggregate) -> None:
         await self._atomic(lambda: self._replace(command))
 
+    async def publish(self, command: PublishDownstreamConnectorAggregate) -> bool:
+        async def mutate() -> bool:
+            definition = await self._definition(command.connector_id)
+            if await self._publishing.is_published(command.connector_id):
+                return False
+            catalog = await self._catalogs.get(ConnectorIdQuery(connector_id=command.connector_id))
+            if not uses_personal_oauth(definition):
+                if not isinstance(catalog, ToolCatalogFound) or not any((
+                    catalog.snapshot.tools, catalog.snapshot.prompts,
+                    catalog.snapshot.resources, catalog.snapshot.resource_templates,
+                )):
+                    raise DownstreamConnectorUnavailableError(command.connector_id)
+            await self._validate_namespace(definition, command.native_identities, True)
+            self._phase("publication")
+            await self._publishing.publish_connector(command.connector_id)
+            return True
+
+        return await self._atomic(mutate)
+
+    async def _validate_namespace(
+        self,
+        candidate: ConnectorDefinition,
+        native_identities: tuple[PublicToolIdentity, ...],
+        include_candidate: bool,
+    ) -> None:
+        identities = list(native_identities)
+        for definition in (await self._definitions.list()).definitions:
+            is_candidate = definition.connector_id == candidate.connector_id
+            if not (include_candidate and is_candidate) and not await self._publishing.is_published(definition.connector_id):
+                continue
+            catalog = await self._catalogs.get(ConnectorIdQuery(connector_id=definition.connector_id))
+            if not isinstance(catalog, ToolCatalogFound):
+                continue
+            prefix = candidate.tool_name_prefix if is_candidate else definition.tool_name_prefix
+            identities.extend(
+                PublicToolIdentity(
+                    connector_id=definition.connector_id,
+                    tool_name_prefix=prefix,
+                    operation_name=tool.identity.downstream_name,
+                )
+                for tool in catalog.snapshot.tools
+            )
+        PublicToolNameValidator().validate_unique(tuple(identities))
+
     async def update_published_prefix(self, command: UpdatePublishedConnectorPrefix) -> None:
         async def mutate() -> None:
-            identities = list(command.native_identities)
-            for definition in (await self._definitions.list()).definitions:
-                if not await self._publishing.is_published(definition.connector_id):
-                    continue
-                catalog = await self._catalogs.get(
-                    ConnectorIdQuery(connector_id=definition.connector_id)
-                )
-                if not hasattr(catalog, "snapshot"):
-                    continue
-                prefix = (
-                    command.definition.tool_name_prefix
-                    if definition.connector_id == command.definition.connector_id
-                    else definition.tool_name_prefix
-                )
-                identities.extend(
-                    PublicToolIdentity(
-                        connector_id=tool.identity.connector_id,
-                        tool_name_prefix=prefix,
-                        operation_name=tool.identity.downstream_name,
-                    )
-                    for tool in catalog.snapshot.tools
-                )
-            PublicToolNameValidator().validate_unique(tuple(identities))
+            await self._validate_namespace(command.definition, command.native_identities, False)
             await self._replace(
                 ReplaceDownstreamConnectorAggregate(
+                    native_identities=command.native_identities,
                     definition=command.definition,
                     credential=KeepCredential(),
                     catalog=KeepCatalog(),
@@ -132,6 +168,9 @@ class InMemoryDownstreamConnectorUnitOfWork:
             query = ConnectorIdQuery(connector_id=command.connector_id)
             self._phase("activation")
             await self._activations.reconcile("downstream_mcp", command.connector_id, "tool", ())
+            self._phase("personal_tool_policy")
+            await self._personal_tool_policies.delete_connector(command.connector_id)
+            self._phase("personal_tool_observations")
             self._phase("personal_oauth_configuration")
             await self._personal_oauth_configurations.delete_connector(command.connector_id)
             self._phase("personal_connections")
@@ -150,31 +189,37 @@ class InMemoryDownstreamConnectorUnitOfWork:
         await self._atomic(mutate)
 
     async def invalidate(self, command: InvalidateDownstreamConnectorAggregate) -> None:
-        replacement = ReplaceDownstreamConnectorAggregate(
-            definition=await self._definition(command.connector_id),
-            credential=KeepCredential(),
-            catalog=DeleteCatalog(),
-            health=ReplaceHealth(health=command.health),
-            activation=PreserveActivation(),
-            publication=UnpublishConnector(),
-        )
-        await self.replace(replacement)
+        async def mutate() -> None:
+            await self._replace(ReplaceDownstreamConnectorAggregate(
+                native_identities=(),
+                definition=await self._definition(command.connector_id),
+                credential=KeepCredential(),
+                catalog=DeleteCatalog(),
+                health=ReplaceHealth(health=command.health),
+                activation=PreserveActivation(),
+                publication=UnpublishConnector(),
+            ))
+
+        await self._atomic(mutate)
 
     async def apply_discovery(self, command: ApplyDiscoveredCatalog) -> None:
-        catalog = command.catalog
-        replacement = ReplaceDownstreamConnectorAggregate(
-            definition=await self._definition(command.connector_id),
-            credential=KeepCredential(),
-            catalog=DeleteCatalog()
-            if isinstance(catalog, DeleteCatalog)
-            else ReplaceCatalog(snapshot=catalog),
-            health=ReplaceHealth(health=command.health),
-            activation=PreserveActivation()
-            if isinstance(catalog, DeleteCatalog)
-            else ReconcileActivation(operation_names=command.operation_names),
-            publication=PreservePublication(),
-        )
-        await self.replace(replacement)
+        async def mutate() -> None:
+            catalog = command.catalog
+            await self._replace(ReplaceDownstreamConnectorAggregate(
+                native_identities=command.native_identities,
+                definition=await self._definition(command.connector_id),
+                credential=KeepCredential(),
+                catalog=DeleteCatalog()
+                if isinstance(catalog, DeleteCatalog)
+                else ReplaceCatalog(snapshot=catalog),
+                health=ReplaceHealth(health=command.health),
+                activation=PreserveActivation()
+                if isinstance(catalog, DeleteCatalog)
+                else ReconcileActivation(operation_names=command.operation_names),
+                publication=PreservePublication(),
+            ))
+
+        await self._atomic(mutate)
 
     async def _replace(
         self, command: CreateDownstreamConnectorAggregate | ReplaceDownstreamConnectorAggregate
@@ -214,25 +259,30 @@ class InMemoryDownstreamConnectorUnitOfWork:
             elif isinstance(command.publication, DeletePublication):
                 await self._publishing.delete_connector(command.definition.connector_id)
 
-    async def _definition(self, connector_id: str) -> Any:
+        if isinstance(command, ReplaceDownstreamConnectorAggregate):
+            await self._validate_namespace(command.definition, command.native_identities, False)
+
+    async def _definition(self, connector_id: str) -> ConnectorDefinition:
         result = await self._definitions.get(ConnectorIdQuery(connector_id=connector_id))
-        if not hasattr(result, "definition"):
-            raise KeyError(connector_id)
+        if not isinstance(result, ConnectorDefinitionFound):
+            raise DownstreamConnectorNotFoundError(connector_id)
         return result.definition
 
     def _phase(self, phase: str) -> None:
         self._fault(phase)
 
-    async def _atomic(self, mutation: Callable[[], Awaitable[None]]) -> None:
+    async def _atomic(self, mutation: Callable[[], Awaitable[MutationResult]]) -> MutationResult:
         async with self._lock:
-            await self._atomic_locked(mutation)
+            return await self._atomic_locked(mutation)
 
-    async def _atomic_locked(self, mutation: Callable[[], Awaitable[None]]) -> None:
+    async def _atomic_locked(self, mutation: Callable[[], Awaitable[MutationResult]]) -> MutationResult:
         targets = tuple(
             target
             for target in (
                 self._personal_connections,
                 self._personal_oauth_configurations,
+                self._personal_tool_policies,
+                self._personal_tool_access,
                 self._definitions,
                 self._credentials,
                 self._catalogs,
@@ -244,7 +294,7 @@ class InMemoryDownstreamConnectorUnitOfWork:
         )
         states = deepcopy(tuple(target.__dict__ for target in targets))
         try:
-            await mutation()
+            return await mutation()
         except BaseException:
             for target, state in zip(targets, states, strict=True):
                 target.__dict__.clear()

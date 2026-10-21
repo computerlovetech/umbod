@@ -78,7 +78,8 @@ from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
     PreconfiguredPublicOAuthClient,
     ReplacePersonalOAuthConfiguration,
 )
-from umbod.rest.connectors.downstream_mcp.personal_validation import PersonalOAuthValidationRoute
+from umbod.rest.connectors.downstream_mcp.personal_validation import PersonalConfigurationValidationRoute
+from umbod.rest.connectors.downstream_mcp.personal_tools import router as personal_tools_router
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.connectors.dependencies import (
     get_capability_activation_store,
@@ -147,8 +148,9 @@ from umbod.rest.connectors.downstream_mcp.schemas import (
 
 router = APIRouter(
     prefix="/connectors/mcp", tags=["downstream-mcp-connectors"],
-    route_class=PersonalOAuthValidationRoute,
+    route_class=PersonalConfigurationValidationRoute,
 )
+router.include_router(personal_tools_router)
 ConfigurationStore = Annotated[
     PersonalOAuthConfigurationStore, Depends(get_personal_oauth_configuration_store)
 ]
