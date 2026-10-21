@@ -16,7 +16,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClie
     availability.write_text(json.dumps({"connectors": []}), encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability))
     settings = APISettings(
-        rest={"metrics_port": 19587},
+        rest={"metrics_enabled": False},
         admin_authentication={
             "mode": "jwt",
             "environment": "development",

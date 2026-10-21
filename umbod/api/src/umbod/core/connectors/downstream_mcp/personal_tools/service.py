@@ -1,7 +1,8 @@
 from collections.abc import Callable
 from datetime import datetime
 
-from ..personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalRuntimeUnavailable
+from ..personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalRuntimeAuthorizationQuery, PersonalRuntimeUnavailable
+from ..personal_connections.health_models import RejectPersonalAuthorization
 from ..personal_connections.runtime_ports import PersonalMcpTransport, PersonalRuntimeAuthorizationStore
 from ..stores.ports import ConnectorIdQuery
 from .contract_validation import contract_fingerprint
@@ -29,7 +30,13 @@ class PersonalToolDiscoveryService:
         if not isinstance(policy, PersonalToolPolicy):
             raise PersonalRuntimeUnavailable("Personal tool policy unavailable")
         target = await self._authorizations.resolve(query)
-        inventory = await self._transport.list_tools(target)
+        try:
+            inventory = await self._transport.list_tools(target)
+        except PersonalAuthorizationRejected:
+            await self._authorizations.reject_authorization(RejectPersonalAuthorization(
+                key=target.key, expected_connection_revision=target.authorization_revision,
+            ))
+            raise PersonalRuntimeUnavailable("Personal discovery unavailable") from None
         approved = {tool.identity.downstream_name: contract_fingerprint(tool) for tool in policy.tools}
         matches = tuple(
             PersonalToolMatch(name=tool.identity.downstream_name, fingerprint=contract_fingerprint(tool))

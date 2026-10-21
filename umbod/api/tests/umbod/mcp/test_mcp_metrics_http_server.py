@@ -1,17 +1,23 @@
-import socket
-
 import httpx
 import pytest
 from starlette.testclient import TestClient
+from uvicorn import Config, Server
 
 from umbod.mcp.metrics.http_server import McpMetricsHttpServer, create_metrics_app
 from umbod.mcp.metrics.prometheus import PrometheusMcpMetricsRecorder
 
 
-def _available_port() -> int:
-    with socket.socket() as listener:
-        listener.bind(("127.0.0.1", 0))
-        return int(listener.getsockname()[1])
+@pytest.fixture
+def uvicorn_servers(monkeypatch: pytest.MonkeyPatch) -> list[Server]:
+    servers: list[Server] = []
+
+    def create_server(config: Config) -> Server:
+        server = Server(config)
+        servers.append(server)
+        return server
+
+    monkeypatch.setattr("umbod.mcp.metrics.http_server.Server", create_server)
+    return servers
 
 
 def test_metrics_app_serves_only_prometheus_metrics_route() -> None:
@@ -28,20 +34,24 @@ def test_metrics_app_serves_only_prometheus_metrics_route() -> None:
 
 
 @pytest.mark.asyncio
-async def test_metrics_server_starts_and_stops_on_configured_port() -> None:
-    port = _available_port()
+async def test_metrics_server_starts_and_stops_on_configured_port(
+    uvicorn_servers: list[Server],
+) -> None:
     server = McpMetricsHttpServer(
         PrometheusMcpMetricsRecorder(),
-        port,
+        0,
         host="127.0.0.1",
     )
 
     await server.start()
-    async with httpx.AsyncClient() as client:
-        response = await client.get(f"http://127.0.0.1:{port}/metrics")
-    await server.stop()
-
-    assert response.status_code == 200
-    with pytest.raises(httpx.ConnectError):
+    try:
+        assert uvicorn_servers[0].config.port == 0
+        listener = uvicorn_servers[0].servers[0]
+        port = listener.sockets[0].getsockname()[1]
         async with httpx.AsyncClient() as client:
-            await client.get(f"http://127.0.0.1:{port}/metrics")
+            response = await client.get(f"http://127.0.0.1:{port}/metrics")
+        assert response.status_code == 200
+    finally:
+        await server.stop()
+
+    assert not listener.is_serving()

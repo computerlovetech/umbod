@@ -78,6 +78,7 @@ def test_file_import_replaces_current_catalog_with_document_and_multiple_hosts(
     client = TestClient(create_app(settings=_settings(database_path), connector_registrations=[]))
     connector_id = _create(client)
     document = _document()
+    document["info"]["description"] = "upload-body-token-canary"
 
     response = _upload(
         client,
@@ -90,11 +91,26 @@ def test_file_import_replaces_current_catalog_with_document_and_multiple_hosts(
     assert response.json()["approved_hosts"] == ["api.example.com", "cdn.example.com"]
     assert response.json()["operation_ids"] == ["listItems"]
     assert response.json()["selected_server_url"] == "https://api.example.com"
+    assert _has_current_catalog(client, connector_id)
 
     recreated = TestClient(
         create_app(settings=_settings(database_path), connector_registrations=[])
     )
     assert _has_current_catalog(recreated, connector_id)
+    tools = recreated.get(f"/api/admin/connectors/openapi/{connector_id}/tools")
+    assert tools.status_code == 200
+    assert tools.json()["tools"] == [
+        {
+            "operation_id": "listItems",
+            "method": "GET",
+            "path": "/items",
+            "summary": "",
+            "description": "",
+            "activation_status": "disabled",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+            "output_schema_status": "absent",
+        }
+    ]
 
 
 def test_file_import_normalizes_deduplicates_and_ignores_blank_approved_hosts(
@@ -131,33 +147,6 @@ def test_file_import_rejects_all_blank_approved_hosts(tmp_path: Path) -> None:
 
     assert response.status_code == 422
     assert response.json()["detail"]["message"] == "Approved hosts must contain exact hostnames"
-
-
-def test_file_import_exposes_operations_after_application_restart(tmp_path: Path) -> None:
-    database_path = tmp_path / "api.sqlite3"
-    client = TestClient(create_app(settings=_settings(database_path), connector_registrations=[]))
-    connector_id = _create(client)
-
-    response = _upload(client, connector_id, json.dumps(_document()).encode())
-
-    assert response.status_code == 201
-    recreated = TestClient(
-        create_app(settings=_settings(database_path), connector_registrations=[])
-    )
-    tools = recreated.get(f"/api/admin/connectors/openapi/{connector_id}/tools")
-    assert tools.status_code == 200
-    assert tools.json()["tools"] == [
-        {
-            "operation_id": "listItems",
-            "method": "GET",
-            "path": "/items",
-            "summary": "",
-            "description": "",
-            "activation_status": "disabled",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-            "output_schema_status": "absent",
-        }
-    ]
 
 
 def test_tool_catalog_exposes_flattened_operation_parameters_and_request_body(
@@ -211,17 +200,6 @@ def test_tool_catalog_exposes_flattened_operation_parameters_and_request_body(
         },
         "required": ["body", "requestBody"],
     }
-
-
-def test_file_import_persists_catalog_from_uploaded_document(tmp_path: Path) -> None:
-    database_path = tmp_path / "api.sqlite3"
-    client = TestClient(create_app(settings=_settings(database_path), connector_registrations=[]))
-    connector_id = _create(client)
-    document = _document()
-    document["info"]["description"] = "upload-body-token-canary"
-
-    assert _upload(client, connector_id, json.dumps(document).encode()).status_code == 201
-    assert _has_current_catalog(client, connector_id)
 
 
 def test_file_import_accepts_case_insensitive_json_extension(tmp_path: Path) -> None:

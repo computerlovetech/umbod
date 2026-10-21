@@ -1,5 +1,7 @@
 from typing import Protocol
 
+from umbod.core.connectors.downstream_mcp.personal_connections.health_models import RejectPersonalAuthorization
+
 from ..personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalToolResult
 from ..stores.ports import ConnectorIdQuery
 from .models import (
@@ -35,6 +37,8 @@ class PersonalToolPolicyStore(Protocol):
 
 
 class PersonalToolAccessStore(Protocol):
+    async def reject_authorization(self, command: RejectPersonalAuthorization) -> None: ...
+
     async def list_available(self, query: PersonalRuntimeAuthorizationQuery) -> tuple[PersonalToolRecord, ...]: ...
 
     async def save_observation(self, command: SavePersonalToolObservation) -> None: ...

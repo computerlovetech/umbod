@@ -43,10 +43,13 @@ async def build_test_mcp(settings: MCPAppSettings | None=None, auth_provider: MC
     return await build_mcp(resolved_settings, resolved_auth_provider, resolved_runtime, persistence_runtime, connector_tool_runtime_state_store, group_permission_runtime_state)
 
 def create_test_mcp_http_app(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None=None) -> Starlette:
+    resolved_settings = settings.model_copy(
+        update={"mcp": settings.mcp.model_copy(update={"metrics_enabled": False})}
+    )
 
     async def _build() -> Starlette:
-        persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
+        persistence_runtime = ConfiguredPersistenceRuntimeProvider(resolved_settings.connector_store).create()
         await persistence_runtime.readiness.ensure_ready()
-        config = PublicAppConfig(settings=settings, connector_runtime=await create_default_mcp_connector_runtime(settings, persistence_runtime), auth_provider=auth_provider, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=HttpConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime)
+        config = PublicAppConfig(settings=resolved_settings, connector_runtime=await create_default_mcp_connector_runtime(resolved_settings, persistence_runtime), auth_provider=auth_provider, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=HttpConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime)
         return await build_starlette_app(await create_runtime_context(config))
     return asyncio.run(_build())

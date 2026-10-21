@@ -2,6 +2,7 @@ import ast
 import re
 import subprocess
 import sys
+from functools import cache
 from pathlib import Path
 import umbod.infrastructure as infrastructure
 import umbod.core.connectors.downstream_mcp as downstream_mcp
@@ -21,6 +22,16 @@ from umbod.infrastructure.persistence.sqlite.compiler import CompiledStatement, 
 from umbod.infrastructure.persistence.sqlite.database import SQLiteDatabase
 from umbod.infrastructure.persistence.sqlite.value_mapping import SQLiteValueMapper
 
+@cache
+def _read_source(path: Path) -> str:
+    return path.read_text()
+
+
+@cache
+def _parse_source(path: Path) -> ast.Module:
+    return ast.parse(_read_source(path), filename=str(path))
+
+
 def test_downstream_mcp_package_exports_domain_and_application_interface() -> None:
     for name in downstream_mcp.__all__:
         assert hasattr(downstream_mcp, name)
@@ -38,7 +49,7 @@ def test_downstream_mcp_adapters_package_does_not_export_implementations() -> No
         / "adapters"
         / "__init__.py"
     )
-    assert path.read_text() == ""
+    assert _read_source(path) == ""
 
 
 def test_downstream_mcp_core_contracts_do_not_import_fastmcp() -> None:
@@ -54,7 +65,7 @@ def test_downstream_mcp_core_contracts_do_not_import_fastmcp() -> None:
     for path in root.rglob("*.py"):
         if "adapters" in path.parts:
             continue
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = _parse_source(path)
         for node in ast.walk(tree):
             modules: list[str] = []
             if isinstance(node, ast.ImportFrom):
@@ -129,7 +140,7 @@ def test_external_modules_do_not_deep_import_infrastructure() -> None:
                 pass
             if path == Path(__file__):
                 continue
-            tree = ast.parse(path.read_text(), filename=str(path))
+            tree = _parse_source(path)
             for node in ast.walk(tree):
                 if isinstance(node, ast.ImportFrom):
                     module = node.module or ''
@@ -146,7 +157,7 @@ def test_messaging_composition_uses_runtime_database_without_sqlite_paths() -> N
     paths = (source_root / 'rest' / 'factories.py', source_root / 'mcp' / 'messaging' / 'transport.py')
     violations: list[str] = []
     for path in paths:
-        source = path.read_text()
+        source = _read_source(path)
         if 'SQLiteEvent' in source:
             violations.append(f'{path}:SQLiteEvent')
         if 'connector_store.sqlite_path' in source:
@@ -161,7 +172,7 @@ def test_core_does_not_depend_on_infrastructure() -> None:
     core_root = Path(__file__).parents[4] / 'src' / 'umbod' / 'core'
     violations: list[str] = []
     for path in core_root.rglob('*.py'):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = _parse_source(path)
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and (node.module or '').startswith('umbod.infrastructure'):
                 violations.append(f'{path}:{node.lineno}')
@@ -194,7 +205,7 @@ def test_connector_event_wrappers_are_absent_from_core() -> None:
     forbidden_names = {'InMemoryConnectorPublicationEventCheckpointStore', 'InMemoryConnectorPublicationEventStream', 'InMemoryConnectorRuntimeStateEventStream', 'InMemoryConnectorToolChangeEventCheckpointStore', 'InMemoryConnectorToolChangeEventStream'}
     defined_names: set[str] = set()
     for events_path in event_paths:
-        tree = ast.parse(events_path.read_text(), filename=str(events_path))
+        tree = _parse_source(events_path)
         defined_names.update(node.name for node in ast.walk(tree) if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)))
     assert defined_names.isdisjoint(forbidden_names)
 
@@ -203,7 +214,7 @@ def test_core_has_no_thin_backend_named_store_aliases() -> None:
     forbidden_names = {'InMemoryEncryptedConnectorConfigurationStore', 'SQLiteEncryptedConnectorConfigurationStore', 'InMemoryConnectorDefinitionStore', 'InMemoryConnectorHealthStore', 'SQLiteConnectorDefinitionStore', 'SQLiteConnectorHealthStore', 'InMemoryConnectorPublishingStore', 'SQLiteConnectorPublishingStore', 'SQLiteActivationStore', 'InMemoryOpenApiConnectorStore', 'SQLiteOpenApiConnectorStore', 'InMemoryGroupPermissionStore', 'SQLiteGroupPermissionStore', 'InMemoryConnectorCapabilityDescriptionOverrideStore', 'SQLiteConnectorCapabilityDescriptionOverrideStore'}
     violations: list[str] = []
     for path in core_root.rglob('*.py'):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = _parse_source(path)
         for node in ast.walk(tree):
             if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
                 if node.name in forbidden_names:
@@ -214,7 +225,7 @@ def test_connector_publishing_core_package_only_imports_core_modules() -> None:
     publishing_root = Path(__file__).parents[4] / 'src' / 'umbod' / 'core' / 'publishing'
     violations: list[str] = []
     for path in publishing_root.rglob('*.py'):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = _parse_source(path)
         for node in ast.walk(tree):
             imported_modules: list[str] = []
             if isinstance(node, ast.ImportFrom):
@@ -244,7 +255,7 @@ def test_domain_store_factories_originate_in_core() -> None:
 
 def test_downstream_connector_health_service_only_imports_core_modules() -> None:
     service_path = Path(__file__).parents[4] / 'src' / 'umbod' / 'core' / 'connectors' / 'downstream_mcp' / 'stores' / 'health.py'
-    tree = ast.parse(service_path.read_text(), filename=str(service_path))
+    tree = _parse_source(service_path)
     imported_modules = [node.module or '' for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)]
     assert all((not module.startswith('umbod.') or module.startswith('umbod.core.') for module in imported_modules))
 
@@ -308,7 +319,7 @@ def test_permission_composition_has_no_sqlite_or_backend_config_dependencies() -
     paths = (source_root / 'rest' / 'mcp_permissions' / 'dependencies.py', source_root / 'mcp' / 'connectors' / 'openapi' / 'factories.py')
     violations: list[str] = []
     for path in paths:
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = _parse_source(path)
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and 'sqlite' in (node.module or '').lower():
                 violations.append(f'{path}:{node.lineno}:{node.module}')
@@ -325,7 +336,7 @@ def test_store_factories_do_not_call_ensure_schema() -> None:
     paths = (source_root / 'publishing' / 'factories.py', source_root / 'permissions' / 'factories.py', source_root / 'connectors' / 'downstream_mcp' / 'stores' / 'factory.py', source_root / 'configuration' / 'persistence' / 'factories.py', source_root / 'activation' / 'factories.py')
     violations: list[str] = []
     for path in paths:
-        source = path.read_text()
+        source = _read_source(path)
         if 'ensure_schema' in source:
             violations.append(str(path))
     assert violations == []
@@ -339,7 +350,7 @@ def test_obsolete_persistence_compatibility_facades_are_absent() -> None:
     violations: list[str] = []
     for source_root in (api_root / 'src', api_root / 'tests'):
         for path in source_root.rglob('*.py'):
-            source = path.read_text()
+            source = _read_source(path)
             for forbidden_name in forbidden_names:
                 if forbidden_name in source and path != Path(__file__):
                     violations.append(f'{path}:{forbidden_name}')
@@ -349,7 +360,7 @@ def test_messaging_package_does_not_import_umbod() -> None:
     messaging_root = Path(__file__).parents[4] / 'src' / 'messaging'
     violations: list[str] = []
     for path in messaging_root.rglob('*.py'):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = _parse_source(path)
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and (node.module or '').startswith('umbod'):
                 violations.append(f'{path}:{node.lineno}:{node.module}')
@@ -379,9 +390,9 @@ def test_database_messaging_stores_live_in_core() -> None:
 def test_sqlite_readiness_uses_current_schema_preparation_and_schema_inventory() -> None:
     api_root = Path(__file__).parents[4]
     persistence_root = api_root / 'src' / 'umbod' / 'infrastructure' / 'persistence'
-    runtime_source = (persistence_root / 'runtime.py').read_text()
-    schema_source = (persistence_root / 'schema_preparation.py').read_text()
-    sqlite_schema_source = (persistence_root / 'sqlite' / 'schema_preparation.py').read_text()
+    runtime_source = _read_source(persistence_root / 'runtime.py')
+    schema_source = _read_source(persistence_root / 'schema_preparation.py')
+    sqlite_schema_source = _read_source(persistence_root / 'sqlite' / 'schema_preparation.py')
     assert 'SQLiteCurrentSchemaPreparation(self._database).execute()' in runtime_source
     assert 'APPLICATION_PERSISTENCE_TABLES' in schema_source
     assert 'LEGACY_CATALOG_TABLE' not in schema_source
@@ -389,16 +400,11 @@ def test_sqlite_readiness_uses_current_schema_preparation_and_schema_inventory()
     assert not (persistence_root / 'sqlite' / 'migrations').exists()
     assert not (persistence_root / 'sqlite' / 'persistence_plan.py').exists()
 
-def test_downstream_mcp_factory_has_no_database_path() -> None:
-    source = (Path(__file__).parents[4] / 'src' / 'umbod' / 'core' / 'connectors' / 'downstream_mcp' / 'stores' / 'factory.py').read_text()
-    assert 'database_path' not in source
-    assert 'sqlite_path' not in source
-
 def test_only_mcp_top_level_loader_constructs_persistence_runtime() -> None:
     mcp_root = Path(__file__).parents[4] / 'src' / 'umbod' / 'mcp'
     violations: list[str] = []
     for path in mcp_root.rglob('*.py'):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = _parse_source(path)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -419,7 +425,7 @@ def test_nested_mcp_composition_does_not_inspect_persistence_backend_config() ->
     mcp_root = Path(__file__).parents[4] / 'src' / 'umbod' / 'mcp'
     violations: list[str] = []
     for path in mcp_root.rglob('*.py'):
-        tree = ast.parse(path.read_text(), filename=str(path))
+        tree = _parse_source(path)
         for node in ast.walk(tree):
             if not isinstance(node, ast.Attribute) or node.attr not in {'sqlite_path', 'connector_store', 'type'}:
                 continue
@@ -432,13 +438,13 @@ def test_nested_mcp_composition_does_not_inspect_persistence_backend_config() ->
     assert violations == []
 
 def test_mcp_public_app_has_no_connector_store_type_branching() -> None:
-    source = (Path(__file__).parents[4] / 'src' / 'umbod' / 'mcp' / 'public_app.py').read_text()
+    source = _read_source(Path(__file__).parents[4] / 'src' / 'umbod' / 'mcp' / 'public_app.py')
     assert 'connector_store.type == "sqlite"' not in source
     assert 'connector_store.type' not in source
 
 def test_downstream_mcp_composition_has_no_application_or_backend_awareness() -> None:
     path = Path(__file__).parents[4] / 'src' / 'umbod' / 'core' / 'connectors' / 'downstream_mcp' / 'stores' / 'factory.py'
-    source = path.read_text()
+    source = _read_source(path)
     forbidden_names = {'AppConfig', 'PersistenceConfig', 'connector_store', 'sqlite_path', 'database_path', 'SQLiteDatabase', 'InMemoryDatabase', 'ConfiguredPersistenceRuntimeProvider'}
     assert all((name not in source for name in forbidden_names))
 
@@ -449,8 +455,7 @@ def test_core_persistence_is_backend_and_driver_neutral() -> None:
     boundary_names = {'path', 'database_path', 'connection', 'connection_string', 'cursor', 'driver', 'execute', 'executemany', 'commit', 'rollback'}
     violations: list[str] = []
     for path in persistence_root.rglob('*.py'):
-        source = path.read_text()
-        tree = ast.parse(source, filename=str(path))
+        tree = _parse_source(path)
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom):
                 module = node.module or ''

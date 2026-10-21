@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import hashlib
 import json
@@ -22,8 +23,10 @@ RESOURCE = ISSUER + "/mcp"
 identity_codes: dict[str, dict[str, str]] = {}
 codes: dict[str, dict[str, str]] = {}
 tokens: dict[str, str] = {}
-counters: dict[str, int] = {"calls": 0, "exchanges": 0, "refreshes": 0, "unauthorized": 0}
+refresh_tokens: dict[str, str] = {}
+counters: dict[str, int] = {"calls": 0, "exchanges": 0, "refreshes": 0, "unauthorized": 0, "discoveries": 0}
 modes: dict[str, str] = {}
+refresh_release: dict[str, asyncio.Event] = {}
 
 
 def owner_server(owner: str) -> FastMCP:
@@ -63,7 +66,7 @@ async def metadata(request: Request) -> Response:
         return JSONResponse({"error": "not_found"}, status_code=404)
     if "oauth-protected-resource" in request.url.path:
         return JSONResponse({"resource": RESOURCE, "authorization_servers": [ISSUER], "scopes_supported": ["read"], "bearer_methods_supported": ["header"]})
-    return JSONResponse({"issuer": ISSUER, "authorization_endpoint": ISSUER + "/authorize", "token_endpoint": ISSUER + "/token", "response_types_supported": ["code"], "grant_types_supported": ["authorization_code"], "token_endpoint_auth_methods_supported": ["none"], "code_challenge_methods_supported": ["S256"], "authorization_response_iss_parameter_supported": True})
+    return JSONResponse({"issuer": ISSUER, "authorization_endpoint": ISSUER + "/authorize", "token_endpoint": ISSUER + "/token", "response_types_supported": ["code"], "grant_types_supported": ["authorization_code", "refresh_token"], "token_endpoint_auth_methods_supported": ["none"], "code_challenge_methods_supported": ["S256"], "authorization_response_iss_parameter_supported": True})
 
 
 async def identity_authorize(request: Request) -> Response:
@@ -115,8 +118,26 @@ async def authorize(request: Request) -> Response:
 
 async def exchange(request: Request) -> Response:
     parameters = {key: values[0] for key, values in parse_qs((await request.body()).decode()).items()}
-    if parameters.get("grant_type") != "authorization_code":
+    if parameters.get("grant_type") == "refresh_token":
         counters["refreshes"] += 1
+        owner = refresh_tokens.pop(parameters.get("refresh_token", ""), "")
+        if not owner or parameters.get("client_id") != "kind-personal-client" or parameters.get("resource") != RESOURCE or "scope" in parameters:
+            return JSONResponse({"error": "invalid_grant"}, status_code=400)
+        mode = modes.get(owner, "normal")
+        if mode == "refresh_hold":
+            await refresh_release[owner].wait()
+        if mode == "refresh_slow":
+            await asyncio.sleep(2)
+        if mode == "refresh_denied":
+            return JSONResponse({"error": "invalid_grant"}, status_code=400)
+        if mode == "refresh_uncertain":
+            return JSONResponse({"error": "temporarily_unavailable"}, status_code=503)
+        token = "kind-personal-downstream-token-" + secrets.token_urlsafe(32)
+        refresh = "kind-personal-refresh-token-" + secrets.token_urlsafe(32)
+        tokens[token] = owner
+        refresh_tokens[refresh] = owner
+        return JSONResponse({"access_token": token, "token_type": "Bearer", "expires_in": 3600, "scope": "read", "refresh_token": refresh})
+    if parameters.get("grant_type") != "authorization_code":
         return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
     saved = codes.pop(parameters.get("code", ""), {})
     digest = base64.urlsafe_b64encode(hashlib.sha256(parameters.get("code_verifier", "").encode()).digest()).rstrip(b"=").decode()
@@ -125,13 +146,20 @@ async def exchange(request: Request) -> Response:
     counters["exchanges"] += 1
     token = "kind-personal-downstream-token-" + secrets.token_urlsafe(32)
     tokens[token] = saved["owner"]
-    return JSONResponse({"access_token": token, "token_type": "Bearer", "expires_in": 3600, "scope": "read"})
+    refresh = "kind-personal-refresh-token-" + secrets.token_urlsafe(32)
+    refresh_tokens[refresh] = saved["owner"]
+    return JSONResponse({"access_token": token, "token_type": "Bearer", "expires_in": 3600, "scope": "read", "refresh_token": refresh})
 
 
 async def control(request: Request) -> Response:
     if request.method == "POST":
         payload = await request.json()
-        modes[payload["owner"]] = payload["mode"]
+        owner = payload["owner"]
+        modes[owner] = payload["mode"]
+        if payload["mode"] == "refresh_hold":
+            refresh_release[owner] = asyncio.Event()
+        elif owner in refresh_release:
+            refresh_release[owner].set()
     return JSONResponse(counters)
 
 
@@ -146,6 +174,25 @@ async def application(scope: dict[str, Any], receive: Any, send: Any) -> None:
             counters["unauthorized"] += 1
             response = JSONResponse({"error": "invalid_token"}, status_code=401, headers={"WWW-Authenticate": f'Bearer resource_metadata="{ISSUER}/.well-known/oauth-protected-resource/mcp"'})
             await response(scope, receive, send)
+            return
+        if scope["method"] == "POST":
+            body = await Request(scope, receive).body()
+            try:
+                if json.loads(body).get("method") == "tools/list":
+                    counters["discoveries"] += 1
+            except (ValueError, AttributeError):
+                pass
+
+            body_delivered = False
+
+            async def replay_body() -> dict[str, Any]:
+                nonlocal body_delivered
+                if body_delivered:
+                    return await receive()
+                body_delivered = True
+                return {"type": "http.request", "body": body, "more_body": False}
+
+            await apps[owner](scope, replay_body, send)
             return
         await apps[owner](scope, receive, send)
         return

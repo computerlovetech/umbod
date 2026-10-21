@@ -12,4 +12,8 @@
 
 `runtime/` defines the capability-identity runtime resolver port, validated frozen shared connection model, explicit unavailable error, and explicit-map in-memory adapter. Its shared resolver checks current capability availability and rereads definitions and credentials, rejecting missing and personal definitions even when shared credentials exist. It has no protocol or infrastructure dependencies; boundaries compose readiness and permissions.
 
+`stores/personal_authorization_health.py` exposes owner-scoped local authorization facts independently of enablement and tool eligibility. `personal_authorization_rejections.py` persists encrypted owner-bound full-authorization fingerprints using captured-revision serialized writes. The factory exposes `personal_authorization_health`; the adapters use the same database port for in-memory and durable SQLite execution. Matching rejection blocks resolution, observations, availability and retained admissions without rotating credentials or revisions. Disconnect and aggregate deletion clean markers transactionally.
+
+`stores/personal_refresh.py` implements the owner-scoped refresh-store port using encrypted claims from `personal_refresh_records.py` and `personal_refresh_schema.py`. The factory exposes `personal_refresh`. Active refresh excludes OAuth initiation and new runtime admission; expired exchanging work stays uncertain without retry. Successful refresh forces a fresh connection revision, invalidating observations without automatic discovery. OAuth completion, disconnect and aggregate deletion clear refresh records transactionally; late workers cannot change replacement authorization.
+
 The administration boundary is indexed in `rest/connectors/downstream_mcp/README.md`.

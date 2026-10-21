@@ -1,12 +1,13 @@
-from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any
 
 import pytest
 from fastmcp import FastMCP
 
-from umbod.mcp.connectors.native.tools.deployment_modes.resolver import connector_tool_deployment_factory
-from umbod.mcp.connectors.native.tools.file_input import DEFAULT_MAXIMUM_UPLOADED_FILE_BYTES
-from umbod.mcp.connectors.native.tools.runtime.registry import RuntimeConnectorToolRegistry
+from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from umbod.core.invocation import PermitAllConnectorInvocationPolicy
+from umbod.mcp.connectors.native.tools import register_connector_tools
+from umbod.mcp.logging import create_default_mcp_tool_invocation_log_sink
+from tests.umbod.mcp.connectors.tools.test_connector_tool_exposure_mode_acceptance import InMemoryConnectorPublishingStore
 from tests.umbod.mcp.connectors.tools.codemode_acceptance import ConnectorCodeMode
 
 
@@ -34,28 +35,30 @@ async def test_codemode_instructs_agents_to_discover_external_capabilities() -> 
     assert "follow each input_schema" in descriptions["execute_code"]
 
 
-def test_codemode_registration_does_not_mutate_unrelated_tools(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+@pytest.mark.asyncio
+async def test_codemode_registration_does_not_mutate_unrelated_tools() -> None:
     mcp = FastMCP("codemode-test")
-    removed_tool_names: list[str] = []
-    monkeypatch.setattr(
-        mcp.local_provider,
-        "remove_tool",
-        lambda tool_name: removed_tool_names.append(tool_name),
-    )
-    registry = cast(RuntimeConnectorToolRegistry, SimpleNamespace())
 
-    connector_tool_deployment_factory(
-        "codemode",
-        30.0,
-        DEFAULT_MAXIMUM_UPLOADED_FILE_BYTES,
-    ).register_fixed_tools(
+    @mcp.tool
+    def unrelated_tool() -> dict[str, str]:
+        return {"status": "still callable"}
+
+    await register_connector_tools(
         mcp,
-        registry,
+        invocation_policy=PermitAllConnectorInvocationPolicy(),
+        connector_registrations=[],
+        connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(),
+        connector_publishing_store=InMemoryConnectorPublishingStore(),
+        connector_tool_mappings=[],
+        connector_tool_exposure_mode="codemode",
+        tool_invocation_log_sink=create_default_mcp_tool_invocation_log_sink(),
     )
 
-    assert removed_tool_names == []
+    tool_names = {tool.name for tool in await mcp.list_tools()}
+    result = await mcp.call_tool("unrelated_tool", {})
+
+    assert {"unrelated_tool", "search_tools", "execute_code"} <= tool_names
+    assert result.structured_content == {"status": "still callable"}
 
 
 @pytest.mark.asyncio

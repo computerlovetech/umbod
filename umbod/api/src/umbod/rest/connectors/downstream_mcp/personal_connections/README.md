@@ -3,11 +3,14 @@
 Downstream MCP-owned delivery for authenticated user selection under `/api/me`, separate from administrator authorization. The public OAuth callback remains independently state-bound. Package nesting does not change URLs, middleware or mounts.
 
 - `routes.py`: eligible catalogue, personal state, strict enablement and disconnect endpoints.
+- `authorization.py`: request-scoped no-store `GET /connectors/mcp/{id}/authorization`, using the same non-enumerating inventory eligibility as detail and the verified owner. It reports local authorization facts without provider, discovery or runtime calls, preserves selection DTOs and sanitizes operational failures as 503. Authorized/expired variants require `expires_at` and `refresh_supported`; refreshing exposes `deadline` only; reconnect-required reasons are `provider_rejected`, `refresh_denied` or `refresh_uncertain`. Other variants remain not-authorized and unsupported. Refresh capability is independent of current enablement and live provider acceptance.
 - `schemas.py`: secret-free user projections with truthful current-owner runtime status.
 - `runtime.py`: request-scoped current-context/runtime composition. Selection responses check current approved, observed, activated and granted tools in storage without discovery or network calls; disabled profiles remain unavailable.
 - `dependencies.py`: request-scoped canonical principal, verified group membership and inventory composition through core ports and the shared persistence runtime. Verified identity mapping uses `VerifiedClaimsPrincipalProvider` from `core/connectors/downstream_mcp/personal_connections`.
 - `oauth_routes.py` and `oauth_schemas.py`: bounded strict initiation bodies, safe attempt projections and owner-scoped status/cancellation.
 - `oauth_dependencies.py`: request-scoped provider resources and authorization/callback service composition.
+- `refresh_routes.py`: authenticated strict-empty, bounded `POST /connectors/mcp/{id}/authorization/refresh`; success returns only `status=refreshed` and `discovery_required=true`, with no-store responses and fixed 409/422/503 errors.
+- `refresh_dependencies.py`: request-scoped refresh provider and core orchestration composition through ports. Refresh never performs discovery or resumes tools.
 - `oauth_callback.py`: strict public callback parsing, namespace query redaction and fixed secret-free responses.
 - `tools.py`: authenticated strict-empty `POST /connectors/mcp/{id}/tools/discovery`, request-scoped transport/service composition and fixed secret-free failures. Discovery uses only the verified owner's authorization and saves encrypted approved-contract intersections; it never approves tools, updates global user-derived metadata or executes them.
 - `__init__.py`: router export.

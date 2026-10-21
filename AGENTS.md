@@ -24,8 +24,10 @@ Start at the boundary exposing the behavior, use that module's `README.md` as it
 
 Run the checks applicable to the changed area:
 
-- MCP: `cd umbod/api && uv run pytest tests -k mcp`
-- API: `cd umbod/api && uv run pytest tests -k "not mcp"`
+- Complete backend suite: `cd umbod/api && uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal`
+- MCP: `cd umbod/api && uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal -k mcp`
+- API: `cd umbod/api && uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal -k "not mcp"`
+- Serial execution/debugging: `cd umbod/api && uv run --locked pytest tests -q -n 0`. Use serial execution for small focused selections to avoid worker startup overhead. Parallel execution is explicit, not a global pytest default; keep Kind/live-runtime tests serial. Do not use uncapped `-n auto` or launch several full-suite runs concurrently.
 - Python lint: `cd umbod/api && uv run ruff check .`
 - Frontend tests: `cd umbod/frontend && bun run test`
 - Frontend type and Svelte checks: `cd umbod/frontend && bun run check`

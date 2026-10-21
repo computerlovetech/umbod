@@ -72,6 +72,14 @@ def main() -> None:
     for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
         secondary[probe]["httpGet"]["port"] = "http-mcp-b"
     pod["containers"].append(secondary)
+    secondary_api = copy.deepcopy(next(container for container in pod["containers"] if container["name"] == "api"))
+    secondary_api["name"] = "api-b"
+    secondary_api["env"] = [entry for entry in secondary_api["env"] if entry["name"] not in ("UMBOD_REST_PORT", "UMBOD_REST_METRICS_PORT", "PORT")]
+    secondary_api["env"].extend([{"name": "UMBOD_REST_PORT", "value": "8015"}, {"name": "UMBOD_REST_METRICS_PORT", "value": "8016"}])
+    secondary_api["ports"] = [{"name": "http-api-b", "containerPort": 8015}, {"name": "metrics-api-b", "containerPort": 8016}]
+    for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
+        secondary_api[probe]["httpGet"]["port"] = "http-api-b"
+    pod["containers"].append(secondary_api)
     for container in pod["containers"]:
         identity_environment = {"UMBOD_PROFILE": "production", "UMBOD_AUTH": "auth0", "UMBOD_OIDC_DOMAIN": "identity.personal-runtime.kind.invalid", "UMBOD_OIDC_CLIENT_ID": "kind-client", "UMBOD_OIDC_AUDIENCE": "kind-client", "UMBOD_OIDC_ISSUER_URL": "https://identity.personal-runtime.kind.invalid/", "UMBOD_ADMIN_MEMBERSHIP_CLAIM": "groups", "UMBOD_MCP_PERMISSION_CLAIM": "groups", "SSL_CERT_FILE": "/personal-ca/ca.crt", "UMBOD_PUBLIC_API_ORIGIN": "https://umbod-runtime.kind.invalid"}
         container["env"] = [entry for entry in container["env"] if entry["name"] not in (*identity_environment, "UMBOD_OIDC_CLIENT_SECRET", "UMBOD_MCP_TEST_BEARER_TOKEN")]

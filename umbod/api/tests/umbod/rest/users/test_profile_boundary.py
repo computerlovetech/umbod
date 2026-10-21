@@ -42,7 +42,7 @@ def client(
     monkeypatch.setattr(PyJWKClient, "get_signing_key_from_jwt", trusted_key)
     monkeypatch.setattr(PyJWKClient, "get_signing_keys", trusted_keys)
     config = AppConfig(
-        rest={"metrics_port": 19688},
+        rest={"metrics_enabled": False},
         admin_authentication={
             "mode": "jwt",
             "environment": "production",

@@ -17,6 +17,7 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.Fixt
     deployment.write_text('{"connectors": []}', encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
     settings = APISettings(
+        rest={"metrics_enabled": False},
         connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "policy.sqlite")},
         connector_security={"configuration_secret": getattr(request, "param", "policy-encryption-key")},
         personal_connections={"enabled": True, "identity_namespace": "test:policy"},

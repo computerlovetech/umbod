@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
+from unittest.mock import AsyncMock, Mock
 
 import httpx2
 import jwt
@@ -142,6 +143,7 @@ def settings(
         connector_store={"type": "sqlite", "sqlite_path": str(database_path)},
         openapi_connectors={"json_import_max_bytes": 4096},
         mcp=McpConfig(
+            metrics_enabled=False,
             auth_mode="single_test_user",
             test_bearer_token=token,
             permission_group_claim="groups",
@@ -342,6 +344,8 @@ async def test_administrator_read_records_one_internal_log_audit_and_metric(
     monkeypatch.setattr(public_app, "create_default_mcp_tool_invocation_log_sink", lambda: invocation_sink)
     monkeypatch.setattr(public_app, "create_default_mcp_audit_recorder", lambda server_name: McpAuditRecorder(audit_sink, server_name))
     monkeypatch.setattr(public_app, "PrometheusMcpMetricsRecorder", CapturingPrometheusMetricsRecorder)
+    metrics_server = Mock(start=AsyncMock(), stop=AsyncMock())
+    monkeypatch.setattr(public_app, "McpMetricsHttpServer", Mock(return_value=metrics_server))
     configuration = AdminConnectorConfigurationDsl(
         await create_journey(tmp_path, monkeypatch, administrator())
     )
@@ -349,6 +353,8 @@ async def test_administrator_read_records_one_internal_log_audit_and_metric(
     result = await configuration.read()
 
     assert result.is_error is False
+    metrics_server.start.assert_not_awaited()
+    metrics_server.stop.assert_not_awaited()
     records = invocation_sink.invocation_records()
     assert len(records) == 1
     assert records[0].attributes["mcp.tool.name"] == READ_TOOL
@@ -716,36 +722,6 @@ async def test_stale_description_revision_reports_conflict_without_write(
 
 
 @pytest.mark.asyncio
-async def test_stale_invocation_policy_revision_reports_conflict_without_write(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
-    )
-    before = await configuration.read()
-    result = await configuration.upsert_raw(
-        {
-            "operations": [
-                {
-                    "operation": "set_capability_invocation_policy",
-                    "capability_kind": "tool",
-                    "capability_key": "listItems",
-                    "mode": "direct",
-                    "expected_revision": 0,
-                }
-            ]
-        }
-    )
-    after = await configuration.read()
-
-    assert result.is_error is True
-    assert "tool/listItems/invocation_policy" in str(result)
-    assert "expected revision 0" in str(result)
-    assert "current revision 1" in str(result)
-    assert after.structured_content == before.structured_content
-
-
-@pytest.mark.asyncio
 async def test_unknown_activation_targets_are_rejected_before_any_write(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -890,6 +866,8 @@ async def test_combined_stale_request_rolls_back_every_configuration_dimension(
 
     assert rejected.is_error is True
     assert "tool/listItems/invocation_policy" in str(rejected)
+    assert "expected revision 0" in str(rejected)
+    assert "current revision 1" in str(rejected)
     assert after.structured_content == before.structured_content
 
 

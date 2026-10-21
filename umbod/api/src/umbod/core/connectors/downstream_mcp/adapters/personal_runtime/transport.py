@@ -12,6 +12,7 @@ from pydantic import TypeAdapter
 
 from umbod.core.connectors.downstream_mcp.models import DiscoveredTool
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import (
+    PersonalAuthorizationRejected,
     PersonalRuntimeLimits,
     PersonalRuntimeTarget,
     PersonalRuntimeUnavailable,
@@ -60,9 +61,10 @@ class FastMCPPersonalMcpTransport:
         budget = min(self._limits.operation_timeout_seconds, (target.expires_at - self._clock()).total_seconds() - 0.1)
         if budget <= 0:
             raise PersonalRuntimeUnavailable("Personal MCP unavailable")
+        scope = anyio.CancelScope(deadline=anyio.current_time() + budget)
+        wire = OperationState(target, self._limits, self._clock, scope, operation)
         try:
-            with anyio.fail_after(budget) as scope:
-                wire = OperationState(target, self._limits, self._clock, scope, operation)
+            with scope:
                 bridge = self._bridge(wire)
                 client = self._client(bridge, target, budget)
                 result = await self._session(client, bridge, wire)
@@ -72,6 +74,8 @@ class FastMCPPersonalMcpTransport:
             return result
         except Exception:
             pass
+        if wire.authorization_rejected:
+            raise PersonalAuthorizationRejected("Personal MCP unavailable")
         raise PersonalRuntimeUnavailable("Personal MCP unavailable")
 
     def _bridge(self, wire: OperationState) -> PersonalHttpTransport:
@@ -113,6 +117,7 @@ class FastMCPPersonalMcpTransport:
                 wire.fail()
             return result
         finally:
+            wire.cleaning_up = True
             try:
                 with anyio.move_on_after(0.25, shield=True):
                     await client.close()

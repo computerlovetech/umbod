@@ -73,7 +73,7 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FastAPI:
         "UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability)
     )
     config = AppConfig(
-        rest={"metrics_port": 19788},
+        rest={"metrics_enabled": False},
         admin_authentication={
             "mode": "jwt",
             "environment": "production",

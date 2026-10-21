@@ -39,6 +39,10 @@ existing logo. `AdminShell` provides the inline-size container used by
 
 **Read when working with:** Read-only Instance settings, friendly value presentation, technical details or raw-value copying. See `admin/instance-configuration/README.md`.
 
+### `personal-connections/`
+
+`PersonalConnections.svelte` owns the mounted page lifecycle; `ConnectionCard.svelte` presents explicit enablement, owner authorization health, manual status checks and renewal, manual attempt inspection, discovery and confirmed disconnect. Local health and renewal capability remain separate from tool eligibility; recovery never resumes an earlier operation automatically. Reactive behavior and user API ports live in `$lib/personal-connections/`, not administration state.
+
 ### `feedback/`
 
 **Read when working with:** Toasts and user feedback state or presentation.

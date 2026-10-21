@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.factory import create_personal_mcp_transport
 from umbod.core.connectors.downstream_mcp.management import utc_clock
 from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipalProvider, PersonalConnectionKey, VerifiedGroupMembership
+from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalRuntimeUnavailable
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolDiscoveryService, PersonalToolPolicyUnavailable
@@ -67,6 +68,8 @@ async def discover_personal_tools(
         raise HTTPException(status_code=403, detail={"code": "personal_identity_unavailable"})
     try:
         await discovery.discover(PersonalRuntimeAuthorizationQuery(key=PersonalConnectionKey(principal=owner, connector_id=connector_id), group_ids=groups.group_ids, now=utc_clock()))
+    except PersonalAuthorizationHealthUnavailable:
+        raise HTTPException(status_code=503, detail={"code": "personal_authorization_health_unavailable"}, headers={"Cache-Control": "no-store"}) from None
     except (PersonalRuntimeUnavailable, PersonalToolPolicyUnavailable):
         raise HTTPException(status_code=409, detail={"code": "personal_tool_discovery_unavailable"}) from None
     return Response(status_code=204, headers={"Cache-Control": "no-store"})

@@ -1,7 +1,9 @@
 # Resumable personal OAuth provider
 
-- `factory.py`: async provider lifetime and production transport composition.
+- `factory.py`: request-scoped authorization and refresh provider lifetimes over the production transport.
 - `provider.py`: protected-resource and issuer discovery, public registration or pinned preconfigured-client selection, scoped S256 authorization preparation, and bound one-shot token exchange.
+- `refresh.py`: one-shot exchange of a stored refresh token for preconfigured clients, bound to the existing issuer, resource, client and approved configuration. Returned scopes may only narrow the previous granted set; omitted scope and refresh-token fields preserve their previous values only after definite success. New access-token expiry is required. Fixed denied/uncertain outcomes reveal no provider payloads.
+- `refresh_logging.py`: context-local suppression of HTTP networking diagnostics during refresh, including unsafe reflected headers. The filter leaves unrelated request contexts unchanged.
 - `validation.py`: strict supported wire models, durable provider context, URL and public-address validation, and bounded duplicate-safe JSON parsing.
 - `transport.py`: validated HTTP port bundles and the in-memory adapter.
 - `network.py`: TLS-verified, redirect-free bounded HTTP and connection-time DNS validation with literal-address pinning.

@@ -81,7 +81,7 @@ async def _post(client: httpx.AsyncClient, path: str, payload: dict[str, Any]) -
 async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_path: Path) -> None:
     database_path = str(tmp_path / 'request-scope.sqlite3')
     await _persist_catalog(database_path)
-    settings = MCPAppSettings(mcp=MCPSettings(connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, stateless_http=True, _env_file=None), connector_store=ConnectorStoreConfig(type='sqlite', sqlite_path=database_path), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
+    settings = MCPAppSettings(mcp=MCPSettings(metrics_enabled=False, connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, stateless_http=True, _env_file=None), connector_store=ConnectorStoreConfig(type='sqlite', sqlite_path=database_path), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
     runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
     await persistence_runtime.readiness.ensure_ready()

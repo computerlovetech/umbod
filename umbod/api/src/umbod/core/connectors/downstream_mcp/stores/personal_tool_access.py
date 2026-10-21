@@ -24,6 +24,8 @@ from ..personal_tools import (
     SavePersonalToolObservation,
     contract_fingerprint,
 )
+from ..personal_connections.health_models import RejectPersonalAuthorization
+from .personal_authorization_rejections import record_rejection
 from .catalogs import find_catalog_record
 from .personal_runtime_authorizations import load_personal_runtime_target
 from .queries import query_all as _query
@@ -44,6 +46,9 @@ class EncryptedPersonalToolAccessStore:
     def __init__(self, database: Database, cipher: TextCipher) -> None:
         self._database = database
         self._cipher = cipher
+
+    async def reject_authorization(self, command: RejectPersonalAuthorization) -> None:
+        await record_rejection(self._database, self._cipher, command)
 
     async def save_observation(self, command: SavePersonalToolObservation) -> None:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:

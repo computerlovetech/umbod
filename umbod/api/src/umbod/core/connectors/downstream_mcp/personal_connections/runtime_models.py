@@ -49,3 +49,7 @@ class PersonalToolResult(PersonalRuntimeModel):
 
 class PersonalRuntimeUnavailable(ValueError):
     pass
+
+
+class PersonalAuthorizationRejected(PersonalRuntimeUnavailable):
+    pass

@@ -10,6 +10,7 @@ cluster_name="${UMBOD_TEST_KIND_CLUSTER_NAME:-umbod-runtime-tests}"
 kube_context="kind-${cluster_name}"
 release_name="umbod"
 cluster_created=false
+api_b_forward_pid=""
 api_forward_pid=""
 mcp_forward_pid=""
 mcp_b_forward_pid=""
@@ -26,6 +27,7 @@ export UMBOD_TEST_BEARER_TOKEN="eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJr
 export UMBOD_TEST_BEARER_TOKEN_B="$(python3 -c 'import base64,json; encode=lambda value: base64.urlsafe_b64encode(json.dumps(value).encode()).rstrip(b"=").decode(); print(encode({"alg":"none","typ":"JWT"})+"."+encode({"sub":"kind-ci-b","iss":"http://agent-central-kind.invalid","email":"kind-ci-b@example.invalid","groups":["admin"]})+".")')"
 export UMBOD_TEST_KUBE_CONTEXT="${kube_context}"
 export UMBOD_TEST_BOOTSTRAP_PATH="${script_directory}/bootstrap.py"
+export UMBOD_TEST_API_B_BASE_URL="http://127.0.0.1:${UMBOD_TEST_API_B_PORT:-28015}"
 export UMBOD_TEST_MCP_B_URL="http://127.0.0.1:${UMBOD_TEST_MCP_B_PORT:-28013}/mcp"
 export UMBOD_TEST_PERSONAL_URL="https://127.0.0.1:${UMBOD_TEST_PERSONAL_PORT:-28443}"
 
@@ -42,7 +44,7 @@ fi
 finish() {
     exit_status=$?
     trap - EXIT
-    for forward_pid in "${api_forward_pid}" "${mcp_forward_pid}" "${mcp_b_forward_pid}" "${fixture_forward_pid}"; do
+    for forward_pid in "${api_forward_pid}" "${api_b_forward_pid}" "${mcp_forward_pid}" "${mcp_b_forward_pid}" "${fixture_forward_pid}"; do
         if [[ -n "${forward_pid}" ]]; then
             kill "${forward_pid}" 2>/dev/null || true
             wait "${forward_pid}" 2>/dev/null || true
@@ -132,11 +134,14 @@ kubectl --context "${kube_context}" port-forward service/umbod-mcp "${mcp_port}:
 mcp_forward_pid=$!
 kubectl --context "${kube_context}" port-forward deployment/umbod-core "${UMBOD_TEST_MCP_B_PORT:-28013}:8013" --address 127.0.0.1 &
 mcp_b_forward_pid=$!
+kubectl --context "${kube_context}" port-forward deployment/umbod-core "${UMBOD_TEST_API_B_PORT:-28015}:8015" --address 127.0.0.1 &
+api_b_forward_pid=$!
 kubectl --context "${kube_context}" port-forward deployment/personal-runtime "${UMBOD_TEST_PERSONAL_PORT:-28443}:8443" --address 127.0.0.1 &
 fixture_forward_pid=$!
 for attempt in $(seq 1 60); do
     if curl --fail --silent "${UMBOD_TEST_API_BASE_URL}/system/health" >/dev/null \
         && curl --fail --silent "${UMBOD_TEST_MCP_URL%/mcp}/system/health" >/dev/null \
+        && curl --fail --silent "${UMBOD_TEST_API_B_BASE_URL}/system/health" >/dev/null \
         && curl --fail --silent "${UMBOD_TEST_MCP_B_URL%/mcp}/system/health" >/dev/null \
         && curl --fail --silent --cacert "${UMBOD_TEST_PERSONAL_CA}" "${UMBOD_TEST_PERSONAL_URL}/health" >/dev/null; then
         break
@@ -157,7 +162,7 @@ install_opener(opener)
 runpy.run_path(os.environ["UMBOD_TEST_BOOTSTRAP_PATH"], run_name="__main__")
 ')
 (cd "${app_directory}/api" && uv run --locked pytest --tb=line live_runtime_tests/test_running_personal_mcp_execution.py)
-for container_name in api mcp mcp-b; do
+for container_name in api api-b mcp mcp-b; do
     kubectl --context "${kube_context}" logs deployment/umbod-core --container "${container_name}" \
         | python3 "${script_directory}/check_secret_logs.py"
 done

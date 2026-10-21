@@ -1,4 +1,14 @@
 import json
+
+from .personal_refresh_records import clear_refresh
+from .personal_refresh_schema import PERSONAL_REFRESH_TABLE, PERSONAL_REFRESH_CONNECTOR_ID
+
+from .personal_authorization_health_schema import (
+    PERSONAL_AUTHORIZATION_REJECTION_TABLE,
+    PERSONAL_AUTHORIZATION_REJECTION_NAMESPACE,
+    PERSONAL_AUTHORIZATION_REJECTION_SUBJECT,
+    PERSONAL_AUTHORIZATION_REJECTION_CONNECTOR_ID,
+)
 from collections.abc import Callable
 
 from umbod.core.configuration.persistence import TextCipher
@@ -100,6 +110,13 @@ class EncryptedPersonalConnectionStore:
             await self._validate_target(session, key)
             current = await self._get(session, key)
             state = transition(current)
+            if transition is disconnected:
+                await clear_refresh(session, key)
+                await session.delete(PERSONAL_AUTHORIZATION_REJECTION_TABLE, DeleteQuery(AllOf((
+                    Equals(PERSONAL_AUTHORIZATION_REJECTION_NAMESPACE, key.principal.namespace),
+                    Equals(PERSONAL_AUTHORIZATION_REJECTION_SUBJECT, key.principal.subject),
+                    Equals(PERSONAL_AUTHORIZATION_REJECTION_CONNECTOR_ID, key.connector_id),
+                ))))
             if isinstance(state, PersonalConnection) and state != current:
                 payload = state.model_dump(mode="json")
                 if isinstance(state.authorization, Authorized):
@@ -149,6 +166,8 @@ class EncryptedPersonalConnectionStore:
                 PERSONAL_CONNECTION_TABLE,
                 DeleteQuery(Equals(PERSONAL_CONNECTION_CONNECTOR_ID, connector_id)),
             )
+            await session.delete(PERSONAL_AUTHORIZATION_REJECTION_TABLE, DeleteQuery(Equals(PERSONAL_AUTHORIZATION_REJECTION_CONNECTOR_ID, connector_id)))
+            await session.delete(PERSONAL_REFRESH_TABLE, DeleteQuery(Equals(PERSONAL_REFRESH_CONNECTOR_ID, connector_id)))
 
 
 class DefinitionBoundPersonalConnectionStore(EncryptedPersonalConnectionStore):

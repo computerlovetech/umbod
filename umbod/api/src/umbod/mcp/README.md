@@ -26,7 +26,7 @@ Registers the shared read-only `umbod://setup/agent-instructions` resource for D
 
 ### `connectors/`
 
-Connector kinds are grouped under `native/`, `openapi/`, and `downstream_mcp/`, matching the REST connector module structure.
+Connector kinds are grouped under `native/`, `openapi/`, and `downstream_mcp/`, matching the REST connector module structure. The package's public API exports only the lazily loaded `native`, `openapi`, and `downstream_mcp` namespaces. Each kind owns its public objects through its package exports; implementation helpers are not promoted to the root API. These are backend composition APIs, not a replacement for the supported `umbod.hosting` integration boundary. Tests should exercise registration and invocation behavior rather than call private helpers.
 
 ### `connectors/native/`
 

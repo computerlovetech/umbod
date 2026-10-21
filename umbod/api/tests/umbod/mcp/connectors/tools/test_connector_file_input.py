@@ -1,4 +1,6 @@
 import base64
+from collections.abc import Callable
+from hashlib import sha256
 from inspect import signature
 from typing import Annotated, Optional
 
@@ -7,14 +9,50 @@ from fastmcp import FastMCP
 from fastmcp.tools import ToolResult
 from pydantic import ValidationError
 
+from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.runtime.tools import ConcreteConnectorToolMapping
+from umbod.core.invocation import ConnectorInvocation, ConnectorInvocationPolicy, DirectInvocationDecision
+from umbod.mcp.connectors.native.tools import register_connector_tools
+from umbod.mcp.logging import create_default_mcp_tool_invocation_log_sink
 from umbod.mcp.connectors.native.tools.deployment_modes.flat.exposure import FastMcpConnectorToolExposureLifecycle
 from umbod.mcp.connectors.native.tools.file_app import ConnectorFileAppRegistration, FastMcpConnectorFileToolRegistrar
 from umbod.mcp.connectors.native.tools.file_input import DEFAULT_MAXIMUM_UPLOADED_FILE_BYTES, StrictUploadedFilePayloadAdapter, UploadedFilePayloadConverter, UploadedFileWirePayload
-from umbod.mcp.connectors.native.tools.invocation.runner import _arguments_without_file_data
-from umbod_sdk.connectors.api.registration import _validate_uploaded_file_declaration
-from umbod_sdk.connectors.plugin_api import UploadedFile
-from umbod_sdk.connectors.uploaded_file import create_uploaded_file
+from umbod_sdk.connectors.plugin_api import Connector, UploadedFile
+from umbod_sdk.connectors.proxies import Model
+from tests.umbod.mcp.connectors.tools.test_connector_tool_exposure_mode_acceptance import InMemoryConnectorPublishingStore
+
+
+def _file_connector(operation: Callable[..., object]) -> Connector:
+    connector = Connector(
+        id="files",
+        name="Files",
+        description="Process uploaded files.",
+        capability_description="Process uploaded files.",
+        configuration=Model,
+    )
+
+    @connector.configuration_check
+    def check_configuration(configuration: Model) -> bool:
+        return True
+
+    connector.tool(
+        description="Process an uploaded file.",
+        parameters={
+            name: "Uploaded file input."
+            for name in signature(operation).parameters
+            if name != "configuration"
+        },
+    )(operation)
+    return connector
+
+
+class RecordingInvocationPolicy:
+    def __init__(self) -> None:
+        self.invocations: list[ConnectorInvocation] = []
+
+    async def evaluate(self, invocation: ConnectorInvocation) -> DirectInvocationDecision:
+        self.invocations.append(invocation)
+        return DirectInvocationDecision()
 
 
 @pytest.mark.parametrize(
@@ -69,22 +107,72 @@ def test_wire_payload_rejects_empty_file() -> None:
         UploadedFileWirePayload(name="empty.pdf", type="application/pdf", size=0, data="")
 
 
-def test_safe_arguments_distinguish_files_with_identical_metadata() -> None:
-    first = create_uploaded_file("same.pdf", "application/pdf", b"%PDF-first")
-    second = create_uploaded_file("same.pdf", "application/pdf", b"%PDF-other")
+@pytest.mark.asyncio
+async def test_safe_arguments_distinguish_files_with_identical_metadata() -> None:
+    received_files: list[UploadedFile] = []
 
-    first_arguments = _arguments_without_file_data({"file": first})
-    second_arguments = _arguments_without_file_data({"file": second})
+    def upload(file: UploadedFile) -> dict[str, object]:
+        received_files.append(file)
+        return {"filename": file.filename}
 
-    assert first_arguments["file"]["sha256"] != second_arguments["file"]["sha256"]
-    assert "data" not in first_arguments["file"]
+    connector = _file_connector(upload)
+    configuration_store = InMemoryConnectorCurrentConfigurationStore()
+    await configuration_store.save_current_configuration("files", Model())
+    publishing_store = InMemoryConnectorPublishingStore()
+    await publishing_store.publish_connector("files")
+    recording_policy = RecordingInvocationPolicy()
+    policy: ConnectorInvocationPolicy = recording_policy
+    mcp = FastMCP("file-policy-test")
+    await register_connector_tools(
+        mcp,
+        invocation_policy=policy,
+        connector_registrations=[connector.registration()],
+        connector_configuration_store=configuration_store,
+        connector_publishing_store=publishing_store,
+        connector_tool_mappings=[ConcreteConnectorToolMapping(
+            connector_id="files",
+            operation_name="upload",
+            description="Process an uploaded file.",
+            operation=upload,
+            parameters={},
+        )],
+        tool_invocation_log_sink=create_default_mcp_tool_invocation_log_sink(),
+    )
+    backend_name = next(
+        tool.name for tool in await mcp.list_tools() if tool.name.startswith("submit_")
+    )
+    contents = (b"%PDF-first", b"%PDF-other")
+    for data in contents:
+        await mcp.call_tool(backend_name, {"file": {
+            "name": "same.pdf",
+            "type": "application/pdf",
+            "size": len(data),
+            "data": base64.b64encode(data).decode("ascii"),
+        }})
+
+    assert [invocation.arguments for invocation in recording_policy.invocations] == [
+        {"file": {
+            "filename": "same.pdf",
+            "media_type": "application/pdf",
+            "size": len(data),
+            "sha256": sha256(data).hexdigest(),
+        }}
+        for data in contents
+    ]
+    first, second = recording_policy.invocations
+    assert first.arguments["file"]["sha256"] != second.arguments["file"]["sha256"]
+    assert len(received_files) == 2
+    assert all(isinstance(file, UploadedFile) for file in received_files)
+    assert [file.read() for file in received_files] == list(contents)
+    assert all(file.filename == "same.pdf" for file in received_files)
+    assert all(file.media_type == "application/pdf" for file in received_files)
 
 
 def test_annotated_uploaded_file_is_allowed() -> None:
     def operation(file: Annotated[UploadedFile, "input"]) -> None:
         return None
 
-    _validate_uploaded_file_declaration(operation)
+    _file_connector(operation).registration()
 
 
 @pytest.mark.parametrize(
@@ -99,7 +187,7 @@ def test_wrapped_uploaded_file_is_rejected(annotation: object) -> None:
     operation.__signature__ = signature(operation).replace(parameters=[parameter])
 
     with pytest.raises(ValueError, match="directly"):
-        _validate_uploaded_file_declaration(operation)
+        _file_connector(operation).registration()
 
 
 def test_file_tool_with_another_public_parameter_is_rejected() -> None:
@@ -107,14 +195,14 @@ def test_file_tool_with_another_public_parameter_is_rejected() -> None:
         return None
 
     with pytest.raises(ValueError, match="no other public parameters|only one required"):
-        _validate_uploaded_file_declaration(operation)
+        _file_connector(operation).registration()
 
 
 def test_file_tool_allows_hidden_configuration_parameter() -> None:
     def operation(file: UploadedFile, configuration: object) -> None:
         return None
 
-    _validate_uploaded_file_declaration(operation)
+    _file_connector(operation).registration()
 
 
 def test_multiple_and_default_uploaded_files_are_rejected() -> None:
@@ -128,9 +216,9 @@ def test_multiple_and_default_uploaded_files_are_rejected() -> None:
     default.__signature__ = signature(default).replace(parameters=[default_parameter])
 
     with pytest.raises(ValueError, match="exactly one"):
-        _validate_uploaded_file_declaration(multiple)
+        _file_connector(multiple).registration()
     with pytest.raises(ValueError, match="required"):
-        _validate_uploaded_file_declaration(default)
+        _file_connector(default).registration()
 
 
 class RecordingInvoker:

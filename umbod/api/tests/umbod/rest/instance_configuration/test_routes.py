@@ -16,6 +16,7 @@ def admin_client(
 ) -> Iterator[TestClient]:
     _configure_connector_availability(tmp_path, monkeypatch)
     settings = AppConfig(
+        rest={"metrics_enabled": False},
         runtime=RuntimeConfig(app_name="effective-instance"),
         admin_authentication=AdminAuthConfig(mode="simulation", simulated_admin=True),
     )
@@ -67,7 +68,7 @@ def test_instance_configuration_uses_admin_authorization_policy(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _configure_connector_availability(tmp_path, monkeypatch)
-    settings = AppConfig(admin_authentication=authentication)
+    settings = AppConfig(rest={"metrics_enabled": False}, admin_authentication=authentication)
 
     with TestClient(create_app(settings=settings)) as client:
         response = client.get("/api/admin/instance-configuration")

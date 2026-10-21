@@ -42,6 +42,7 @@ class ScriptedNetwork(httpcore2.AsyncNetworkBackend):
         self.stream_call = False
         self.close_get = False
         self.session = False
+        self.cleanup_status = 200
         self.delay = 0.0
         self.tool_delay = 0.0
         self.raw_body = b""
@@ -113,7 +114,7 @@ class ScriptedStream(httpcore2.AsyncNetworkStream):
             response_headers["content-type"] = "text/event-stream"
             response_headers["transfer-encoding"] = "chunked"
         elif rpc_method == "notifications/initialized" or method == "DELETE":
-            status = 200 if method == "DELETE" else 202
+            status = self.network.cleanup_status if method == "DELETE" else 202
             payload = b""
         elif rpc_method == "tools/call" and self.network.stream_call:
             payload = b"id: resume-secret\nretry: 0\ndata: \n\n"

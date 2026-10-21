@@ -158,8 +158,12 @@ async def owner_result(client: Client[Any], name: str, owner: str) -> None:
 async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(runtime_endpoints: RuntimeEndpoints) -> None:
     with personal_clients(runtime_endpoints) as (alice, bob, fixture, connector_id):
         initial_counters = checked(fixture.get("/control"))
+        health_url = f"/api/me/connectors/mcp/{connector_id}/authorization"
+        assert checked(alice.get(health_url)) == {"state": "not_authorized"}
         authorize(alice, fixture, connector_id, "alice")
         authorize(bob, fixture, connector_id, "bob")
+        assert checked(alice.get(health_url))["state"] == "authorized"
+        assert checked(bob.get(health_url))["state"] == "authorized"
         assert checked(fixture.get("/control"))["exchanges"] == initial_counters["exchanges"] + 2
         tools = [contract(connector_id, name) for name in ("echo_owner", "exclusive_alice")]
         alice_mcp_token = proxy_token(runtime_endpoints.mcp_url, runtime_endpoints.bearer_token, fixture)
@@ -186,6 +190,40 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
             assert await find_tool(b, "echo_owner") == name
             await owner_result(a, name, "alice")
             await owner_result(b, name, "bob")
+            refresh_url = health_url + "/refresh"
+            before_refresh = checked(fixture.get("/control"))
+            assert checked(alice.get(health_url))["refresh_supported"] is True
+            checked(fixture.post("/control", json={"owner": "alice", "mode": "refresh_hold"}))
+            pending_refresh = asyncio.create_task(asyncio.to_thread(alice.post, refresh_url, json={}))
+            try:
+                with httpx.Client(base_url=os.environ["UMBOD_TEST_API_B_BASE_URL"], headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"}, timeout=30) as second_worker:
+                    for _ in range(50):
+                        if checked(second_worker.get(health_url))["state"] == "refreshing":
+                            break
+                        await asyncio.sleep(0.1)
+                    else:
+                        raise AssertionError("Second REST worker did not observe durable refresh claim")
+                    conflicting = second_worker.post(refresh_url, json={})
+                    assert conflicting.status_code == 409
+                    assert conflicting.json() == {"detail": {"code": "personal_refresh_conflict"}}
+                    assert second_worker.post(f"/api/me/connectors/mcp/{connector_id}/oauth/attempts", json={}).status_code == 409
+                    assert checked(second_worker.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is False
+                    await denied(a, name, fixture)
+                    assert checked(bob.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is True
+            finally:
+                checked(fixture.post("/control", json={"owner": "alice", "mode": "normal"}))
+            refreshed = await pending_refresh
+            assert refreshed.headers["cache-control"] == "no-store"
+            assert checked(refreshed) == {"status": "refreshed", "discovery_required": True}
+            after_refresh = checked(fixture.get("/control"))
+            assert after_refresh["refreshes"] == before_refresh["refreshes"] + 1
+            assert after_refresh["exchanges"] == before_refresh["exchanges"]
+            assert after_refresh["discoveries"] == before_refresh["discoveries"]
+            assert after_refresh["calls"] == before_refresh["calls"]
+            assert checked(alice.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is False
+            await denied(a, name, fixture)
+            discover(alice, connector_id)
+            await owner_result(a, name, "alice")
             await owner_result(a, exclusive, "alice")
             assert not any(tool.name == exclusive for tool in await b.list_tools())
             await denied(b, exclusive, fixture)
@@ -224,7 +262,19 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
             assert after["calls"] == before["calls"]
             assert after["refreshes"] == before["refreshes"]
             assert after["exchanges"] == before["exchanges"]
+            rejected_health = bob.get(health_url)
+            assert rejected_health.headers["cache-control"] == "no-store"
+            assert checked(rejected_health) == {"state": "reconnect_required", "reason": "provider_rejected"}
+            assert checked(bob.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is False
+            assert checked(alice.get(health_url)) == {"state": "not_authorized"}
             checked(fixture.post("/control", json={"owner": "bob", "mode": "normal"}))
+            await denied(b, name, fixture)
+            authorize(bob, fixture, connector_id, "bob")
+            assert checked(bob.get(health_url))["state"] == "authorized"
+            assert checked(bob.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is False
+            await denied(b, name, fixture)
+            discover(bob, connector_id)
+            await owner_result(b, name, "bob")
             policy_url = f"/api/admin/connectors/mcp/{connector_id}/personal-oauth"
             policy = checked(alice.get(policy_url))
             settings = {"requested_scopes": [], "client": {"kind": "preconfigured_public", "issuer_url": ISSUER, "client_id": "kind-personal-client"}}

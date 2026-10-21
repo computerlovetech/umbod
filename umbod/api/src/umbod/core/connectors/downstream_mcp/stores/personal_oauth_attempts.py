@@ -1,6 +1,12 @@
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationUnavailable
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import load_personal_oauth_configuration
 
+from uuid import uuid4
+
+from .personal_refresh_records import clear_refresh, matching_refresh
+
+from .personal_authorization_rejections import clear_rejection
+
 import hashlib
 import hmac
 import json
@@ -327,7 +333,10 @@ class EncryptedPersonalOAuthAttemptStore:
             now = max(command.created_at, self._clock())
             if command.expires_at <= now:
                 raise PersonalOAuthUnavailable()
-            await self._eligible(session, command)
+            connection = await self._eligible(session, command)
+            refresh = await matching_refresh(session, self._cipher, connection, now)
+            if refresh is not None and refresh.status in ("preparing", "exchanging") and refresh.deadline > now:
+                raise PersonalOAuthConflict()
             rows = await session.find_many(
                 PERSONAL_OAUTH_ATTEMPT_TABLE,
                 _query(
@@ -478,6 +487,7 @@ class EncryptedPersonalOAuthAttemptStore:
                 ),
             )
             self._require_unexpired(attempt, command.query.now)
+            replacement = replacement.model_copy(update={"revision": uuid4().hex})
             payload = replacement.model_dump(mode="json")
             payload["authorization"]["authorization"] = (
                 command.authorization.authorization.get_secret_value()
@@ -498,6 +508,8 @@ class EncryptedPersonalOAuthAttemptStore:
                     ),
                 ),
             )
+            await clear_rejection(session, attempt.key)
+            await clear_refresh(session, attempt.key)
             terminal = _terminal(attempt, "completed")
             await self._save(session, terminal)
             return _view(terminal)

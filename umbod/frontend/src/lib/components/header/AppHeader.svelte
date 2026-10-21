@@ -7,6 +7,7 @@
 
 <header class="app-header" aria-label="Application header">
   <a class="brand" href="/">Umbod</a>
+  <nav aria-label="Personal settings"><a href="/settings/connections">Connections</a></nav>
 
   {#if accountIdentity.kind === 'visible'}
     <section class="account" aria-label="Current account">
@@ -28,6 +29,7 @@
     border-bottom: 1px solid var(--admin-border);
     box-sizing: border-box;
     display: flex;
+    flex-wrap: wrap;
     gap: 1rem;
     justify-content: space-between;
     min-height: 4.5rem;
@@ -36,6 +38,10 @@
     top: 0;
     z-index: 10;
   }
+
+  nav { margin-right: auto; }
+  nav a { color: var(--admin-ink); text-underline-offset: 0.2em; }
+  nav a:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
 
   .brand {
     align-items: center;

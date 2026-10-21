@@ -117,6 +117,9 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
         self._state.fail()
 
     def _response(self, request: httpx2.Request, response: httpcore2.Response) -> httpx2.Response:
+        if response.status == 401 and request.method != "DELETE" and not self._state.cleaning_up:
+            self._state.authorization_rejected = True
+            self._state.fail()
         incoming = self._response_headers(response)
         raw = BoundedResponseStream(response, self._state)
         media_type = incoming.get("content-type", "").partition(";")[0].strip().lower()

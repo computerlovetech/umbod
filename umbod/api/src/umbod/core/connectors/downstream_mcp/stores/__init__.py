@@ -1,3 +1,5 @@
+from .personal_authorization_health import EncryptedPersonalAuthorizationHealthStore
+from .personal_authorization_health_schema import PERSONAL_AUTHORIZATION_REJECTION_TABLE
 from .personal_runtime_authorizations import EncryptedPersonalRuntimeAuthorizationStore, load_personal_runtime_target
 from umbod.core.connectors.downstream_mcp.stores.personal_connections import (
     load_personal_connection,
@@ -50,6 +52,8 @@ from umbod.core.connectors.downstream_mcp.stores.schema import (
 )
 
 __all__ = [
+    "EncryptedPersonalAuthorizationHealthStore",
+    "PERSONAL_AUTHORIZATION_REJECTION_TABLE",
     "EncryptedPersonalRuntimeAuthorizationStore",
     "load_personal_runtime_target",
     "load_personal_connection",

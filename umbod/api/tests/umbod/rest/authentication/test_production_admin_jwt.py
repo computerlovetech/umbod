@@ -30,7 +30,7 @@ def client(signing_key: rsa.RSAPrivateKey, tmp_path: Path, monkeypatch: pytest.M
 
     monkeypatch.setattr(PyJWKClient, "get_signing_key_from_jwt", trusted_key)
     settings = APISettings(
-        rest={"metrics_port": 19588},
+        rest={"metrics_enabled": False},
         admin_authentication={"mode": "jwt", "environment": "production", "jwt_header_name": "X-Auth-Request-Access-Token", "jwks_url": "https://identity.example.com/jwks"},
         oidc={"issuer_url": "https://identity.example.com/", "audience": "umbod-api"},
     )

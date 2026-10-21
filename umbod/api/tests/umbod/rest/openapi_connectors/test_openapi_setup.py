@@ -24,7 +24,7 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FastAPI:
     availability = tmp_path / "availability.json"
     availability.write_text(json.dumps({"connectors": []}), encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability))
-    return create_app(APISettings(rest={"metrics_port": 19589}, admin_authentication={"mode": "simulation", "simulated_admin": True}), [])
+    return create_app(APISettings(rest={"metrics_enabled": False}, admin_authentication={"mode": "simulation", "simulated_admin": True}), [])
 
 
 @pytest.fixture

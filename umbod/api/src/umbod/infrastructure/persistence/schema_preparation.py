@@ -1,5 +1,9 @@
 from collections.abc import Sequence
 
+from umbod.core.connectors.downstream_mcp.stores.personal_refresh_schema import PERSONAL_REFRESH_TABLE
+
+from umbod.core.connectors.downstream_mcp.stores.personal_authorization_health_schema import PERSONAL_AUTHORIZATION_REJECTION_TABLE
+
 from umbod.core.connectors.downstream_mcp.stores.personal_tools_schema import PERSONAL_TOOL_POLICY_TABLE, PERSONAL_TOOL_OBSERVATION_TABLE
 
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configuration_schema import PERSONAL_OAUTH_CONFIGURATION_TABLE
@@ -56,6 +60,8 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
     CONNECTOR_DEFINITION_TABLE,
     CONNECTOR_CREDENTIAL_TABLE,
     PERSONAL_CONNECTION_TABLE,
+    PERSONAL_AUTHORIZATION_REJECTION_TABLE,
+    PERSONAL_REFRESH_TABLE,
     PERSONAL_OAUTH_ATTEMPT_TABLE,
     PERSONAL_OAUTH_CONFIGURATION_TABLE,
     PERSONAL_TOOL_POLICY_TABLE,

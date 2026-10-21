@@ -14,6 +14,7 @@ from umbod.core.connectors.openapi.execution import (
     HttpxSpecificationFetcher,
     OutboundHttpClientFactory,
     OutboundNetworkError,
+    OutboundOperationTransport,
     OutboundPolicyError,
     OutboundRedirectError,
     OutboundRequest,
@@ -285,13 +286,28 @@ async def test_outbound_transport_preserves_typed_errors() -> None:
 
 @pytest.mark.asyncio
 async def test_outbound_transport_strips_all_forbidden_headers_case_insensitively() -> None:
-    forbidden = HttpxOutboundOperationAdapter._forbidden_request_headers
+    forbidden = (
+        "authorization",
+        "cookie",
+        "proxy-authorization",
+        "host",
+        "connection",
+        "keep-alive",
+        "proxy-authenticate",
+        "te",
+        "trailer",
+        "transfer-encoding",
+        "upgrade",
+        "forwarded",
+        "x-forwarded-for",
+        "x-forwarded-host",
+        "x-forwarded-proto",
+    )
     headers = {name.swapcase(): "credential-canary" for name in forbidden} | {"X-Safe": "safe"}
     client = RecordingAsyncHttpClient(FakeStreamResponse(200, {}, ()))
 
-    await HttpxOutboundOperationAdapter(client).send(
-        _outbound_request(False).model_copy(update={"headers": headers})
-    )
+    transport: OutboundOperationTransport = HttpxOutboundOperationAdapter(client)
+    await transport.send(_outbound_request(False).model_copy(update={"headers": headers}))
 
     assert client.calls[0][2]["headers"] == {"X-Safe": "safe"}
 
@@ -337,15 +353,24 @@ async def test_outbound_transport_enforces_response_limit(
 
 @pytest.mark.asyncio
 async def test_outbound_transport_returns_only_allowlisted_normalized_response_headers() -> None:
-    headers = {
-        name.swapcase(): name for name in HttpxOutboundOperationAdapter._safe_response_headers
-    } | {"Set-Cookie": "credential-canary", "Content-Type": "text/plain"}
-    response = await HttpxOutboundOperationAdapter(
-        RecordingAsyncHttpClient(FakeStreamResponse(200, headers, ()))
-    ).send(_outbound_request(False))
-    assert response.headers == {
-        name: name for name in HttpxOutboundOperationAdapter._safe_response_headers
+    expected_headers = {
+        "cache-control": "cache-control",
+        "content-language": "content-language",
+        "etag": "etag",
+        "expires": "expires",
+        "last-modified": "last-modified",
+        "retry-after": "retry-after",
     }
+    headers = {name.swapcase(): value for name, value in expected_headers.items()} | {
+        "Set-Cookie": "credential-canary",
+        "Content-Type": "text/plain",
+        "X-Unexpected": "unexpected-canary",
+    }
+    transport: OutboundOperationTransport = HttpxOutboundOperationAdapter(
+        RecordingAsyncHttpClient(FakeStreamResponse(200, headers, ()))
+    )
+    response = await transport.send(_outbound_request(False))
+    assert response.headers == expected_headers
 
 
 def test_outbound_http_client_factory_configures_hardened_client() -> None:

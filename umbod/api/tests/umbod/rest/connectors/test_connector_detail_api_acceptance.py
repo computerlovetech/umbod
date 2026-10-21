@@ -31,6 +31,8 @@ def test_api_consumer_views_available_connector_with_agent_facing_tools(client: 
     )
     assert body["extension"] == {"source": "built-in", "package": None}
     assert body["publication_status"] == "unconfigured"
+    assert {tool["operation_name"] for tool in body["tools"]} == {"get_default_response", "echo"}
+    assert "api_key" not in json.dumps(body)
 
     echo_tool = _tool_by_operation_name(body, "echo")
     assert echo_tool["operation_name"] == "echo"
@@ -141,18 +143,6 @@ def test_registered_but_unavailable_connector_returns_helpful_not_found(
     assert response.json() == {
         "detail": "Connector slack is registered but not available in this deployment"
     }
-
-
-def test_unconfigured_available_connector_still_exposes_tool_metadata_without_secrets(
-    client: TestClient,
-) -> None:
-    response = client.get("/api/admin/connectors/catalog/test")
-
-    assert response.status_code == 200
-    body = response.json()
-    assert body["publication_status"] == "unconfigured"
-    assert {tool["operation_name"] for tool in body["tools"]} == {"get_default_response", "echo"}
-    assert "api_key" not in json.dumps(body)
 
 
 def _tool_by_operation_name(body: dict[str, Any], operation_name: str) -> dict[str, Any]:

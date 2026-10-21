@@ -1,3 +1,10 @@
+from .health_models import (
+    PersonalAuthorizationHealth,
+    PersonalAuthorizationHealthQuery,
+    PersonalAuthorizationHealthUnavailable,
+    RejectPersonalAuthorization,
+)
+from .health_ports import PersonalAuthorizationHealthStore
 from .authorization_models import (
     AbsentPersonalRefreshToken,
     ExpiringPersonalToken,
@@ -6,7 +13,7 @@ from .authorization_models import (
     UnknownPersonalTokenLifetime,
     authorize_personal_grant,
 )
-from .runtime_models import PersonalRuntimeAuthorizationQuery, PersonalRuntimeTarget, PersonalRuntimeUnavailable
+from .runtime_models import PersonalAuthorizationRejected, PersonalRuntimeAuthorizationQuery, PersonalRuntimeTarget, PersonalRuntimeUnavailable
 from .runtime_ports import PersonalMcpTransport, PersonalRuntimeAuthorizationStore
 from .inmemory import InMemoryPersonalConnectionStore
 from .inventory import PersonalConnectorInventoryService
@@ -38,6 +45,12 @@ from .principal import VerifiedClaimsPrincipalProvider
 from .service import PersonalConnectionService
 
 __all__ = [
+    "PersonalAuthorizationHealth",
+    "PersonalAuthorizationHealthQuery",
+    "PersonalAuthorizationHealthUnavailable",
+    "RejectPersonalAuthorization",
+    "PersonalAuthorizationHealthStore",
+    "PersonalAuthorizationRejected",
     "AbsentPersonalRefreshToken",
     "ExpiringPersonalToken",
     "PersonalOAuthGrant",

@@ -18,7 +18,7 @@ from umbod.core.connectors.downstream_mcp.probe import DiscoveredCapabilities, D
 from umbod.core.permissions import ConnectorToolRef, SaveGroupPermissionsRequest
 from umbod.mcp import public_app
 from umbod.mcp.context import PublicAppRuntimeContext
-from umbod.mcp.connectors.downstream_mcp.provider import UnrestrictedDownstreamToolPermissionPolicy
+from umbod.mcp.connectors.downstream_mcp import UnrestrictedDownstreamToolPermissionPolicy
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_connector_probe
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
@@ -66,7 +66,7 @@ class DownstreamHttpJourney:
         return StreamableHttpTransport('http://localhost/mcp', headers={'Authorization': f'Bearer {self.token}'}, httpx_client_factory=create_http_client)
 
 def _settings(database_path: Path, token: str) -> AppConfig:
-    return AppConfig(connector_store={'type': 'sqlite', 'sqlite_path': str(database_path)}, mcp=McpConfig(auth_mode='single_test_user', test_bearer_token=token, permission_group_claim='groups', connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, stateless_http=True), endpoints={'mcp_base_url': 'http://localhost'}, admin_authentication={'mode': 'simulation', 'simulated_admin': True}, connector_security={'configuration_secret': 'integration-configuration-secret', 'approval_state_key': 'integration-approval-state-key-with-sufficient-entropy'})
+    return AppConfig(connector_store={'type': 'sqlite', 'sqlite_path': str(database_path)}, mcp=McpConfig(metrics_enabled=False, auth_mode='single_test_user', test_bearer_token=token, permission_group_claim='groups', connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, stateless_http=True), endpoints={'mcp_base_url': 'http://localhost'}, admin_authentication={'mode': 'simulation', 'simulated_admin': True}, connector_security={'configuration_secret': 'integration-configuration-secret', 'approval_state_key': 'integration-approval-state-key-with-sufficient-entropy'})
 
 async def _grant_permission(database_path: Path, connector_id: str) -> None:
     runtime = ConfiguredPersistenceRuntimeProvider(_settings(database_path, 'unused').connector_store).create()

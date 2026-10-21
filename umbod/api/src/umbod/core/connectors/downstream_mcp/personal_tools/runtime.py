@@ -2,6 +2,8 @@ from collections.abc import Callable
 from datetime import datetime
 
 from ..models import DiscoveredTool, uses_personal_oauth
+from ..personal_connections.health_models import RejectPersonalAuthorization, PersonalAuthorizationHealthUnavailable
+from ..personal_connections.runtime_models import PersonalAuthorizationRejected
 from ..personal_connections.models import PersonalConnectionKey
 from ..personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolResult
 from ..personal_connections.runtime_ports import PersonalMcpTransport
@@ -76,14 +78,23 @@ class PersonalToolRuntimeService:
                 fingerprint=command.fingerprint,
             ))
             validate_arguments(admission.tool, command.arguments)
-            result = await self._transport.call_tool(PersonalToolCall(
-                target=admission.target,
-                tool_name=command.identity.capability_key,
-                expected_fingerprint=command.fingerprint,
-                arguments=command.arguments,
-            ))
+            try:
+                result = await self._transport.call_tool(PersonalToolCall(
+                    target=admission.target,
+                    tool_name=command.identity.capability_key,
+                    expected_fingerprint=command.fingerprint,
+                    arguments=command.arguments,
+                ))
+            except PersonalAuthorizationRejected:
+                await self._access.reject_authorization(RejectPersonalAuthorization(
+                    key=admission.target.key,
+                    expected_connection_revision=admission.target.authorization_revision,
+                ))
+                raise PersonalRuntimeUnavailable("Personal tool unavailable") from None
             _validate_result(admission.tool, result)
             return result
+        except PersonalAuthorizationHealthUnavailable:
+            raise
         except Exception:
             pass
         raise PersonalRuntimeUnavailable("Personal tool unavailable")

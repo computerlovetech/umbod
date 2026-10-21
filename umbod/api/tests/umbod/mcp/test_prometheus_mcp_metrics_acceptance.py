@@ -1,384 +1,126 @@
-from enum import StrEnum
-from typing import Mapping, Protocol, Sequence
+from collections.abc import Iterator
 
 import pytest
-from pydantic import BaseModel, ConfigDict, PositiveFloat, PositiveInt
+from prometheus_client import CONTENT_TYPE_LATEST
+from prometheus_client.parser import text_string_to_metric_families
+from starlette.testclient import TestClient
 
 from umbod.mcp.metrics import (
-    CompletedToolInvocation as RecorderCompletedToolInvocation,
+    CompletedToolInvocation,
+    InMemoryMcpMetricsRecorder,
+    InvocationOutcome,
+    McpMetricsRecorder,
+    PrometheusMcpMetricsRecorder,
 )
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
-from umbod.mcp.metrics import InvocationOutcome as RecorderInvocationOutcome
-
-
-INVOCATION_COUNT_METRIC = "umbod_mcp_tool_invocations_total"
-INVOCATION_DURATION_COUNT_METRIC = "umbod_mcp_tool_invocation_duration_seconds_count"
-
-
-class InvocationOutcome(StrEnum):
-    SUCCESS = "success"
-    FAILURE = "failure"
-
-
-class MetricsAccess(StrEnum):
-    PRIVATE_NETWORK = "private_network"
-    PUBLIC_INGRESS = "public_ingress"
-
-
-class CompletedToolInvocation(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    connector_name: str
-    tool_name: str
-    outcome: InvocationOutcome
-    duration_seconds: PositiveFloat
-
-
-class ToolInvocationResult(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    outcome: InvocationOutcome
-
-
-class MetricSample(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    name: str
-    labels: Mapping[str, str]
-    value: float
-
-
-class MetricsResponse(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    accessible: bool
-    prometheus_compatible: bool
-    samples: Sequence[MetricSample]
-
-
-class ServiceEndpoints(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    mcp_port: PositiveInt
-    metrics_port: PositiveInt
-    metrics_path: str
-
-
-class McpMetricsAcceptanceBoundary(Protocol):
-    async def complete_invocation(
-        self,
-        invocation: CompletedToolInvocation,
-    ) -> ToolInvocationResult: ...
-
-    async def read_metrics(self, access: MetricsAccess) -> MetricsResponse: ...
-
-    async def service_endpoints(self) -> ServiceEndpoints: ...
-
-    async def restart_mcp_process(self) -> None: ...
-
-
-class InMemoryMcpMetricsProtocolDriver:
-    def __init__(self, recorder: InMemoryMcpMetricsRecorder) -> None:
-        self._recorder = recorder
-
-    async def complete_invocation(
-        self,
-        invocation: CompletedToolInvocation,
-    ) -> ToolInvocationResult:
-        self._recorder.record_completed_invocation(
-            RecorderCompletedToolInvocation(
-                connector_name=invocation.connector_name,
-                tool_name=invocation.tool_name,
-                outcome=RecorderInvocationOutcome(invocation.outcome.value),
-                duration_seconds=invocation.duration_seconds,
-            )
-        )
-        return ToolInvocationResult(outcome=invocation.outcome)
-
-    async def read_metrics(self, access: MetricsAccess) -> MetricsResponse:
-        if access is MetricsAccess.PUBLIC_INGRESS:
-            return MetricsResponse(
-                accessible=False,
-                prometheus_compatible=False,
-                samples=(),
-            )
-        invocation_samples = tuple(
-            MetricSample(name=sample.name, labels=sample.labels, value=sample.value)
-            for sample in self._recorder.metric_samples()
-        )
-        base_samples = (
-            MetricSample(name=INVOCATION_COUNT_METRIC, labels={}, value=0),
-            MetricSample(name=INVOCATION_DURATION_COUNT_METRIC, labels={}, value=0),
-            MetricSample(name="process_start_time_seconds", labels={}, value=0),
-            MetricSample(name="python_info", labels={}, value=1),
-        )
-        return MetricsResponse(
-            accessible=True,
-            prometheus_compatible=True,
-            samples=base_samples + invocation_samples,
-        )
-
-    async def service_endpoints(self) -> ServiceEndpoints:
-        return ServiceEndpoints(mcp_port=8000, metrics_port=8001, metrics_path="/metrics")
-
-    async def restart_mcp_process(self) -> None:
-        self._recorder.reset()
-
-
-class McpMetricsDsl:
-    def __init__(self, boundary: McpMetricsAcceptanceBoundary) -> None:
-        self._boundary = boundary
-
-    async def complete_invocation(
-        self,
-        connector_name: str,
-        tool_name: str,
-        outcome: InvocationOutcome,
-        duration_seconds: float = 0.25,
-    ) -> ToolInvocationResult:
-        return await self._boundary.complete_invocation(
-            CompletedToolInvocation(
-                connector_name=connector_name,
-                tool_name=tool_name,
-                outcome=outcome,
-                duration_seconds=duration_seconds,
-            )
-        )
-
-    async def private_metrics(self) -> MetricsResponse:
-        return await self._boundary.read_metrics(MetricsAccess.PRIVATE_NETWORK)
-
-    async def public_metrics(self) -> MetricsResponse:
-        return await self._boundary.read_metrics(MetricsAccess.PUBLIC_INGRESS)
-
-    async def service_endpoints(self) -> ServiceEndpoints:
-        return await self._boundary.service_endpoints()
-
-    async def restart_mcp_process(self) -> None:
-        await self._boundary.restart_mcp_process()
+from umbod.mcp.metrics.http_server import create_metrics_app
 
 
 @pytest.fixture
-def mcp_metrics() -> McpMetricsDsl:
-    boundary = InMemoryMcpMetricsProtocolDriver(InMemoryMcpMetricsRecorder())
-    return McpMetricsDsl(boundary)
-
-
-@pytest.mark.asyncio
-async def test_successful_invocation_is_reflected_in_metrics(
-    mcp_metrics: McpMetricsDsl,
-) -> None:
-    await mcp_metrics.complete_invocation("github", "create_issue", InvocationOutcome.SUCCESS)
-
-    metrics = await mcp_metrics.private_metrics()
-
-    assert _sample_value(metrics, INVOCATION_COUNT_METRIC, "github", "create_issue", "success") == 1
-    assert (
-        _sample_value(
-            metrics, INVOCATION_DURATION_COUNT_METRIC, "github", "create_issue", "success"
+def invocations() -> tuple[CompletedToolInvocation, ...]:
+    return tuple(
+        CompletedToolInvocation(
+            connector_name=connector,
+            tool_name=tool,
+            outcome=outcome,
+            duration_seconds=0.25,
         )
-        == 1
+        for connector, tool, outcome in (
+            ("github", "create_issue", InvocationOutcome.SUCCESS),
+            ("github", "create_issue", InvocationOutcome.SUCCESS),
+            ("github", "create_issue", InvocationOutcome.FAILURE),
+            ("github", "search", InvocationOutcome.SUCCESS),
+            ("jira", "create_issue", InvocationOutcome.SUCCESS),
+        )
     )
 
 
-@pytest.mark.asyncio
-async def test_failed_invocation_is_reflected_in_metrics(mcp_metrics: McpMetricsDsl) -> None:
-    await mcp_metrics.complete_invocation("jira", "create_ticket", InvocationOutcome.FAILURE)
-
-    metrics = await mcp_metrics.private_metrics()
-
-    assert _sample_value(metrics, INVOCATION_COUNT_METRIC, "jira", "create_ticket", "failure") == 1
-    assert (
-        _sample_value(metrics, INVOCATION_DURATION_COUNT_METRIC, "jira", "create_ticket", "failure")
-        == 1
-    )
-
-
-@pytest.mark.asyncio
-async def test_metrics_are_exposed_in_prometheus_format(mcp_metrics: McpMetricsDsl) -> None:
-    metrics = await mcp_metrics.private_metrics()
-
-    assert metrics.accessible is True
-    assert metrics.prometheus_compatible is True
-    assert _has_metric(metrics, INVOCATION_COUNT_METRIC)
-    assert _has_metric(metrics, INVOCATION_DURATION_COUNT_METRIC)
-
-
-@pytest.mark.asyncio
-async def test_standard_process_and_runtime_metrics_are_exposed(
-    mcp_metrics: McpMetricsDsl,
-) -> None:
-    metrics = await mcp_metrics.private_metrics()
-
-    assert _has_metric_with_prefix(metrics, "process_")
-    assert _has_metric_with_prefix(metrics, "python_")
-
-
-@pytest.mark.asyncio
-async def test_repeated_invocations_accumulate(mcp_metrics: McpMetricsDsl) -> None:
-    for _ in range(3):
-        await mcp_metrics.complete_invocation("test", "echo", InvocationOutcome.SUCCESS)
-
-    metrics = await mcp_metrics.private_metrics()
-
-    assert _sample_value(metrics, INVOCATION_COUNT_METRIC, "test", "echo", "success") == 3
-    assert _sample_value(metrics, INVOCATION_DURATION_COUNT_METRIC, "test", "echo", "success") == 3
-
-
-@pytest.mark.asyncio
-async def test_success_and_failure_outcomes_remain_distinct(mcp_metrics: McpMetricsDsl) -> None:
-    await mcp_metrics.complete_invocation("test", "echo", InvocationOutcome.SUCCESS)
-    await mcp_metrics.complete_invocation("test", "echo", InvocationOutcome.SUCCESS)
-    await mcp_metrics.complete_invocation("test", "echo", InvocationOutcome.FAILURE)
-
-    metrics = await mcp_metrics.private_metrics()
-
-    assert _sample_value(metrics, INVOCATION_COUNT_METRIC, "test", "echo", "success") == 2
-    assert _sample_value(metrics, INVOCATION_COUNT_METRIC, "test", "echo", "failure") == 1
-
-
-@pytest.mark.asyncio
-async def test_identically_named_tools_on_different_connectors_remain_distinct(
-    mcp_metrics: McpMetricsDsl,
-) -> None:
-    await mcp_metrics.complete_invocation("primary", "search", InvocationOutcome.SUCCESS)
-    await mcp_metrics.complete_invocation("secondary", "search", InvocationOutcome.SUCCESS)
-
-    metrics = await mcp_metrics.private_metrics()
-
-    assert _sample_value(metrics, INVOCATION_COUNT_METRIC, "primary", "search", "success") == 1
-    assert _sample_value(metrics, INVOCATION_COUNT_METRIC, "secondary", "search", "success") == 1
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("outcome", list(InvocationOutcome))
-async def test_metrics_recording_preserves_tool_outcome(
-    mcp_metrics: McpMetricsDsl,
-    outcome: InvocationOutcome,
-) -> None:
-    result = await mcp_metrics.complete_invocation("test", "echo", outcome)
-
-    assert result.outcome is outcome
-
-
-@pytest.mark.asyncio
-async def test_metrics_are_reachable_from_private_service_network(
-    mcp_metrics: McpMetricsDsl,
-) -> None:
-    metrics = await mcp_metrics.private_metrics()
-
-    assert metrics.accessible is True
-    assert metrics.prometheus_compatible is True
-
-
-@pytest.mark.asyncio
-async def test_metrics_are_not_reachable_through_public_ingress(
-    mcp_metrics: McpMetricsDsl,
-) -> None:
-    metrics = await mcp_metrics.public_metrics()
-
-    assert metrics.accessible is False
-
-
-@pytest.mark.asyncio
-async def test_metrics_expose_only_approved_invocation_labels(
-    mcp_metrics: McpMetricsDsl,
-) -> None:
-    await mcp_metrics.complete_invocation("crm", "create_contact", InvocationOutcome.SUCCESS)
-
-    metrics = await mcp_metrics.private_metrics()
-    sample = _sample(metrics, INVOCATION_COUNT_METRIC, "crm", "create_contact", "success")
-
-    assert sample.labels == {
-        "connector_name": "crm",
-        "tool_name": "create_contact",
-        "outcome": "success",
+@pytest.fixture
+def expected_counts() -> dict[tuple[str, str, str], int]:
+    return {
+        ("github", "create_issue", "success"): 2,
+        ("github", "create_issue", "failure"): 1,
+        ("github", "search", "success"): 1,
+        ("jira", "create_issue", "success"): 1,
     }
 
 
-@pytest.mark.asyncio
-async def test_invocation_metrics_are_isolated_by_connector_tool_and_outcome(
-    mcp_metrics: McpMetricsDsl,
+def _record_invocations(
+    recorder: McpMetricsRecorder, invocations: tuple[CompletedToolInvocation, ...]
 ) -> None:
-    await mcp_metrics.complete_invocation("github", "search", InvocationOutcome.SUCCESS)
-    await mcp_metrics.complete_invocation("github", "create_issue", InvocationOutcome.FAILURE)
-    await mcp_metrics.complete_invocation("jira", "search", InvocationOutcome.FAILURE)
-
-    metrics = await mcp_metrics.private_metrics()
-
-    assert _sample_value(metrics, INVOCATION_COUNT_METRIC, "github", "search", "success") == 1
-    assert _sample_value(metrics, INVOCATION_COUNT_METRIC, "github", "create_issue", "failure") == 1
-    assert _sample_value(metrics, INVOCATION_COUNT_METRIC, "jira", "search", "failure") == 1
+    for invocation in invocations:
+        recorder.record_completed_invocation(invocation)
 
 
-@pytest.mark.asyncio
-async def test_invocation_metrics_reset_after_process_restart(mcp_metrics: McpMetricsDsl) -> None:
-    await mcp_metrics.complete_invocation("test", "echo", InvocationOutcome.SUCCESS)
+@pytest.fixture
+def metrics_client(
+    invocations: tuple[CompletedToolInvocation, ...],
+) -> Iterator[TestClient]:
+    recorder = PrometheusMcpMetricsRecorder()
+    _record_invocations(recorder, invocations)
+    with TestClient(create_metrics_app(recorder)) as client:
+        yield client
 
-    await mcp_metrics.restart_mcp_process()
-    metrics = await mcp_metrics.private_metrics()
 
-    assert not _has_sample(metrics, INVOCATION_COUNT_METRIC, "test", "echo", "success")
-
-
-@pytest.mark.asyncio
-async def test_metrics_endpoint_uses_a_port_separate_from_mcp_traffic(
-    mcp_metrics: McpMetricsDsl,
+def test_completed_invocations_are_scraped_with_approved_dimensions(
+    metrics_client: TestClient, expected_counts: dict[tuple[str, str, str], int]
 ) -> None:
-    endpoints = await mcp_metrics.service_endpoints()
-
-    assert endpoints.metrics_port != endpoints.mcp_port
-    assert endpoints.metrics_path == "/metrics"
-
-
-def _sample(
-    response: MetricsResponse,
-    metric_name: str,
-    connector_name: str,
-    tool_name: str,
-    outcome: str,
-) -> MetricSample:
-    matching_samples = [
+    response = metrics_client.get("/metrics")
+    assert response.status_code == 200
+    assert response.headers["content-type"] == CONTENT_TYPE_LATEST
+    samples = tuple(
         sample
-        for sample in response.samples
-        if sample.name == metric_name
-        and sample.labels.get("connector_name") == connector_name
-        and sample.labels.get("tool_name") == tool_name
-        and sample.labels.get("outcome") == outcome
-    ]
-    assert len(matching_samples) == 1
-    return matching_samples[0]
+        for family in text_string_to_metric_families(response.text)
+        for sample in family.samples
+    )
+    for metric_name, multiplier in (
+        ("umbod_mcp_tool_invocations_total", 1),
+        ("umbod_mcp_tool_invocation_duration_seconds_count", 1),
+        ("umbod_mcp_tool_invocation_duration_seconds_sum", 0.25),
+    ):
+        matching = tuple(sample for sample in samples if sample.name == metric_name)
+        assert {
+            (sample.labels["connector_name"], sample.labels["tool_name"], sample.labels["outcome"]): sample.value
+            for sample in matching
+        } == {labels: count * multiplier for labels, count in expected_counts.items()}
+        assert all(
+            set(sample.labels) == {"connector_name", "tool_name", "outcome"}
+            for sample in matching
+        )
 
 
-def _sample_value(
-    response: MetricsResponse,
-    metric_name: str,
-    connector_name: str,
-    tool_name: str,
-    outcome: str,
-) -> float:
-    return _sample(response, metric_name, connector_name, tool_name, outcome).value
-
-
-def _has_sample(
-    response: MetricsResponse,
-    metric_name: str,
-    connector_name: str,
-    tool_name: str,
-    outcome: str,
-) -> bool:
-    return any(
-        sample.name == metric_name
-        and sample.labels.get("connector_name") == connector_name
-        and sample.labels.get("tool_name") == tool_name
-        and sample.labels.get("outcome") == outcome
-        for sample in response.samples
+def test_inmemory_recorder_aggregates_the_same_approved_dimensions(
+    invocations: tuple[CompletedToolInvocation, ...],
+    expected_counts: dict[tuple[str, str, str], int],
+) -> None:
+    recorder = InMemoryMcpMetricsRecorder()
+    _record_invocations(recorder, invocations)
+    samples = recorder.metric_samples()
+    for metric_name in (
+        "umbod_mcp_tool_invocations_total",
+        "umbod_mcp_tool_invocation_duration_seconds_count",
+    ):
+        assert {
+            (sample.labels["connector_name"], sample.labels["tool_name"], sample.labels["outcome"]): sample.value
+            for sample in samples
+            if sample.name == metric_name
+        } == expected_counts
+    assert all(
+        set(sample.labels) == {"connector_name", "tool_name", "outcome"} for sample in samples
     )
 
 
-def _has_metric(response: MetricsResponse, metric_name: str) -> bool:
-    return any(sample.name == metric_name for sample in response.samples)
+def test_inmemory_recorder_reset_clears_only_its_own_samples(
+    invocations: tuple[CompletedToolInvocation, ...],
+) -> None:
+    first = InMemoryMcpMetricsRecorder()
+    second = InMemoryMcpMetricsRecorder()
+    _record_invocations(first, invocations)
+    assert second.metric_samples() == ()
+    _record_invocations(second, invocations)
+    original_samples = second.metric_samples()
+    assert original_samples
 
+    first.reset()
 
-def _has_metric_with_prefix(response: MetricsResponse, prefix: str) -> bool:
-    return any(sample.name.startswith(prefix) for sample in response.samples)
+    assert first.metric_samples() == ()
+    assert second.metric_samples() == original_samples

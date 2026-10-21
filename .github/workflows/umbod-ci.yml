@@ -108,7 +108,7 @@ jobs:
         run: uv sync --locked
 
       - name: Run complete backend test suite
-        run: uv run --locked pytest tests
+        run: uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal
 
       - name: Test release version resolution
         env:

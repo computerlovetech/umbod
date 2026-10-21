@@ -7,6 +7,7 @@
 - `+layout.ts` loads validated public configuration from `/app-config.json` before application requests.
 - `admin/+layout.ts` resolves account identity through the authenticated backend `/admin/users` adapter and maps rejected authentication and forbidden access to safe 401/403 errors.
 - `+error.svelte` catches route and admin layout load failures, presents safe access-denied or generic error text, and offers explicit sign-in only for 401 plus user-triggered logout for both 401 and 403. Logout remains available without account identity or a working configuration fetch, with a fixed gateway-only recovery destination.
+- `settings/connections/+page.svelte` composes the owner-scoped personal connections UI, including local authorization status and explicit renewal recovery, without the admin layout or account authorization endpoint.
 - `admin/+page.ts` composes the administration overview through browser API adapters.
 - Administration `+page.ts` modules load lists, selected details, permissions, instance settings, and MCP setup data.
 - Connector detail routes redirect to the corresponding workspace selection.

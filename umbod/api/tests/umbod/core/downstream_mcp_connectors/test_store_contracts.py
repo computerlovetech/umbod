@@ -3,7 +3,7 @@ from umbod.core.connectors.downstream_mcp.stores import CONNECTOR_CREDENTIAL_TAB
 from tests.persistence_runtime import create_inmemory_runtime, create_sqlite_runtime, prepared_sqlite_runtime
 import asyncio
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 import pytest
@@ -11,33 +11,37 @@ from pydantic import SecretStr, ValidationError
 from umbod.core.configuration.exceptions import ConnectorConfigurationDecryptionError
 from umbod.core.connectors.downstream_mcp.models import ConnectorHealthy, DiscoveredPrompt, DiscoveredToolWithOutputSchema, DiscoveredResource, DiscoveredResourceTemplate, NoAuthConnectorDefinition, PromptArgument, StaticBearerConnectorDefinition, StaticBearerCredentialState, ToolCatalogSnapshot, ToolIdentity
 from umbod.core.connectors.downstream_mcp.stores import ConnectorDefinitionFound, ConnectorDefinitionMissing, ConnectorDefinitionStore, ConnectorHealthFound, ConnectorHealthMissing, ConnectorHealthStore, ConnectorIdQuery, PublicPathQuery, CredentialFound, CredentialMissing, EncryptedCredentialStore, ReplaceToolCatalog, SaveConnectorDefinition, SaveConnectorHealth, SaveCredential, ToolCatalogFound, ToolCatalogStore
-DefinitionStoreFactory = Callable[[Path], ConnectorDefinitionStore]
-CredentialStoreFactory = Callable[[Path], EncryptedCredentialStore]
-CatalogStoreFactory = Callable[[Path], ToolCatalogStore]
-HealthStoreFactory = Callable[[Path], ConnectorHealthStore]
+DefinitionStoreFactory = Callable[[Path], Awaitable[ConnectorDefinitionStore]]
+CredentialStoreFactory = Callable[[Path], Awaitable[EncryptedCredentialStore]]
+CatalogStoreFactory = Callable[[Path], Awaitable[ToolCatalogStore]]
+HealthStoreFactory = Callable[[Path], Awaitable[ConnectorHealthStore]]
 
-def _inmemory_definition_store(path: Path) -> ConnectorDefinitionStore:
+async def _inmemory_definition_store(path: Path) -> ConnectorDefinitionStore:
     return ConnectorDefinitionStoreService(create_inmemory_runtime().database, CONNECTOR_DEFINITION_TABLE)
 
-def _sqlite_definition_store(path: Path) -> ConnectorDefinitionStore:
+async def _sqlite_definition_store(path: Path) -> ConnectorDefinitionStore:
+    await prepared_sqlite_runtime(path)
     return ConnectorDefinitionStoreService(create_sqlite_runtime(path).database, CONNECTOR_DEFINITION_TABLE)
 
-def _inmemory_credential_store(path: Path) -> EncryptedCredentialStore:
+async def _inmemory_credential_store(path: Path) -> EncryptedCredentialStore:
     return EncryptedCredentialStoreService(create_inmemory_runtime().database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('correct-key'))
 
-def _sqlite_credential_store(path: Path) -> EncryptedCredentialStore:
+async def _sqlite_credential_store(path: Path) -> EncryptedCredentialStore:
+    await prepared_sqlite_runtime(path)
     return EncryptedCredentialStoreService(create_sqlite_runtime(path).database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('correct-key'))
 
-def _inmemory_catalog_store(path: Path) -> ToolCatalogStore:
+async def _inmemory_catalog_store(path: Path) -> ToolCatalogStore:
     return ToolCatalogStoreService(create_inmemory_runtime().database, TOOL_CATALOG_TABLE)
 
-def _sqlite_catalog_store(path: Path) -> ToolCatalogStore:
+async def _sqlite_catalog_store(path: Path) -> ToolCatalogStore:
+    await prepared_sqlite_runtime(path)
     return ToolCatalogStoreService(create_sqlite_runtime(path).database, TOOL_CATALOG_TABLE)
 
-def _inmemory_health_store(path: Path) -> ConnectorHealthStore:
+async def _inmemory_health_store(path: Path) -> ConnectorHealthStore:
     return ConnectorHealthStoreService(create_inmemory_runtime().database, CONNECTOR_HEALTH_TABLE)
 
-def _sqlite_health_store(path: Path) -> ConnectorHealthStore:
+async def _sqlite_health_store(path: Path) -> ConnectorHealthStore:
+    await prepared_sqlite_runtime(path)
     return ConnectorHealthStoreService(create_sqlite_runtime(path).database, CONNECTOR_HEALTH_TABLE)
 
 def _tool(connector_id: str, name: str, description: str='description') -> DiscoveredToolWithOutputSchema:
@@ -50,8 +54,7 @@ def _snapshot(connector_id: str, *tools: DiscoveredToolWithOutputSchema) -> Tool
 @pytest.mark.asyncio
 async def test_connector_definition_store_round_trips_and_lists_without_credentials(store_factory: DefinitionStoreFactory, tmp_path: Path) -> None:
     database_path = tmp_path / 'store.db'
-    await prepared_sqlite_runtime(database_path)
-    store = store_factory(database_path)
+    store = await store_factory(database_path)
     definition = StaticBearerConnectorDefinition(connector_id='alpha', display_name='Alpha', endpoint_url='https://example.test/mcp')
     await store.save(SaveConnectorDefinition(definition=definition))
     assert await store.get(ConnectorIdQuery(connector_id='alpha')) == ConnectorDefinitionFound(definition=definition)
@@ -61,8 +64,7 @@ async def test_connector_definition_store_round_trips_and_lists_without_credenti
 @pytest.mark.asyncio
 async def test_connector_definition_store_enforces_public_path_identity_and_deletes(store_factory: DefinitionStoreFactory, tmp_path: Path) -> None:
     database_path = tmp_path / 'store.db'
-    await prepared_sqlite_runtime(database_path)
-    store = store_factory(database_path)
+    store = await store_factory(database_path)
     first = NoAuthConnectorDefinition(connector_id='zeta', display_name='Zeta', endpoint_url='https://zeta.example.test/mcp', public_path='/mcp/proxies/shared')
     second = NoAuthConnectorDefinition(connector_id='alpha', display_name='Alpha', endpoint_url='https://alpha.example.test/mcp', public_path='/mcp/proxies/shared')
     results = await asyncio.gather(store.save(SaveConnectorDefinition(definition=first)), store.save(SaveConnectorDefinition(definition=second)), return_exceptions=True)
@@ -78,16 +80,14 @@ async def test_connector_definition_store_enforces_public_path_identity_and_dele
 @pytest.mark.asyncio
 async def test_connector_definition_store_reports_missing_entries(store_factory: DefinitionStoreFactory, tmp_path: Path) -> None:
     database_path = tmp_path / 'store.db'
-    await prepared_sqlite_runtime(database_path)
-    store = store_factory(database_path)
+    store = await store_factory(database_path)
     assert await store.get(ConnectorIdQuery(connector_id='missing')) == ConnectorDefinitionMissing(connector_id='missing')
 
 @pytest.mark.parametrize('store_factory', [_inmemory_credential_store, _sqlite_credential_store], ids=['inmemory', 'sqlite'])
 @pytest.mark.asyncio
 async def test_credential_store_round_trips_and_deletes_bearer_credentials(store_factory: CredentialStoreFactory, tmp_path: Path) -> None:
     database_path = tmp_path / 'store.db'
-    await prepared_sqlite_runtime(database_path)
-    store = store_factory(database_path)
+    store = await store_factory(database_path)
     credential = StaticBearerCredentialState(connector_id='alpha', bearer_token=SecretStr('token-value'))
     await store.save(SaveCredential(credential=credential))
     found = await store.get(ConnectorIdQuery(connector_id='alpha'))
@@ -100,8 +100,7 @@ async def test_credential_store_round_trips_and_deletes_bearer_credentials(store
 @pytest.mark.asyncio
 async def test_catalog_reconciliation_classifies_added_changed_removed_and_unchanged(store_factory: CatalogStoreFactory, tmp_path: Path) -> None:
     database_path = tmp_path / 'store.db'
-    await prepared_sqlite_runtime(database_path)
-    store = store_factory(database_path)
+    store = await store_factory(database_path)
     await store.replace(ReplaceToolCatalog(snapshot=_snapshot('alpha', _tool('alpha', 'changed'), _tool('alpha', 'removed'), _tool('alpha', 'same'))))
     result = await store.replace(ReplaceToolCatalog(snapshot=_snapshot('alpha', _tool('alpha', 'added'), _tool('alpha', 'changed', 'new'), _tool('alpha', 'same'))))
     assert tuple((item.downstream_name for item in result.added)) == ('added',)
@@ -113,8 +112,7 @@ async def test_catalog_reconciliation_classifies_added_changed_removed_and_uncha
 @pytest.mark.asyncio
 async def test_invalid_replacement_preserves_last_known_good_catalog(store_factory: CatalogStoreFactory, tmp_path: Path) -> None:
     database_path = tmp_path / 'store.db'
-    await prepared_sqlite_runtime(database_path)
-    store = store_factory(database_path)
+    store = await store_factory(database_path)
     original = _snapshot('alpha', _tool('alpha', 'stable'))
     await store.replace(ReplaceToolCatalog(snapshot=original))
     with pytest.raises(ValidationError):
@@ -126,8 +124,7 @@ async def test_invalid_replacement_preserves_last_known_good_catalog(store_facto
 async def test_catalog_store_atomically_round_trips_all_discovered_capabilities(store_factory: CatalogStoreFactory, tmp_path: Path) -> None:
     snapshot = ToolCatalogSnapshot(connector_id='alpha', discovered_at=datetime(2025, 1, 1, tzinfo=UTC), tools=(_tool('alpha', 'search'),), prompts=(DiscoveredPrompt(name='summarize', title='Summarize', description='', arguments=(PromptArgument(name='article_id', required=True),)),), resources=(DiscoveredResource(name='Guide', title='Guide', uri='kb://guide', description=''),), resource_templates=(DiscoveredResourceTemplate(name='Article', title='Article', uri_template='kb://articles/{article_id}', description=''),))
     database_path = tmp_path / 'store.db'
-    await prepared_sqlite_runtime(database_path)
-    store = store_factory(database_path)
+    store = await store_factory(database_path)
     await store.replace(ReplaceToolCatalog(snapshot=snapshot))
     assert await store.get(ConnectorIdQuery(connector_id='alpha')) == ToolCatalogFound(snapshot=snapshot)
 
@@ -135,8 +132,7 @@ async def test_catalog_store_atomically_round_trips_all_discovered_capabilities(
 @pytest.mark.asyncio
 async def test_health_store_round_trips_and_deletes_health(store_factory: HealthStoreFactory, tmp_path: Path) -> None:
     database_path = tmp_path / 'store.db'
-    await prepared_sqlite_runtime(database_path)
-    store = store_factory(database_path)
+    store = await store_factory(database_path)
     health = ConnectorHealthy(connector_id='alpha', checked_at=datetime(2025, 1, 1, tzinfo=UTC))
     await store.save(SaveConnectorHealth(health=health))
     assert await store.get(ConnectorIdQuery(connector_id='alpha')) == ConnectorHealthFound(health=health)

@@ -62,7 +62,7 @@ def _echo_connector() -> Connector:
 
 async def _build_public_app(tmp_path: Path, exposure_mode: Literal['flat', 'gateway', 'codemode']='flat') -> tuple[Starlette, str, PublicAppRuntimeContext, ConnectorPublishingStoreService]:
     token = jwt.encode({'email': 'agent@example.com', 'groups': ['agents']}, key='', algorithm='none')
-    settings = MCPAppSettings(mcp=MCPSettings(auth_mode='single_test_user', test_bearer_token=token, connector_tool_exposure_mode=exposure_mode, downstream_discovery_enabled=False, stateless_http=True, _env_file=None), endpoints={'mcp_base_url': 'http://localhost'}, connector_store=ConnectorStoreConfig(type='sqlite', sqlite_path=str(tmp_path / 'agent-http-integration.sqlite3')), connector_security={'configuration_secret': 'test-secret', 'approval_state_key': 'integration-approval-state-key-with-sufficient-entropy'}, _env_file=None)
+    settings = MCPAppSettings(mcp=MCPSettings(metrics_enabled=False, auth_mode='single_test_user', test_bearer_token=token, connector_tool_exposure_mode=exposure_mode, downstream_discovery_enabled=False, stateless_http=True, _env_file=None), endpoints={'mcp_base_url': 'http://localhost'}, connector_store=ConnectorStoreConfig(type='sqlite', sqlite_path=str(tmp_path / 'agent-http-integration.sqlite3')), connector_security={'configuration_secret': 'test-secret', 'approval_state_key': 'integration-approval-state-key-with-sufficient-entropy'}, _env_file=None)
     configuration_store = InMemoryConnectorCurrentConfigurationStore()
     publishing_store = ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE)
     await configuration_store.save_current_configuration('echo', EchoConfiguration(api_token=SecretStr('valid-token')))
@@ -122,18 +122,6 @@ def _http_transport(app: Starlette, token: Optional[str], request_hook: Optional
     headers = {'Authorization': f'Bearer {token}'} if token is not None else None
     return StreamableHttpTransport('http://localhost/mcp', headers=headers, httpx_client_factory=create_http_client)
 
-@pytest.mark.asyncio
-async def test_authenticated_agent_discovers_and_invokes_published_tool_over_http(tmp_path: Path) -> None:
-    (app, token, _context, _publishing_store) = await _build_public_app(tmp_path)
-    async with app.router.lifespan_context(app):
-        async with Client(_http_transport(app, token)) as client:
-            tools = {tool.name: tool for tool in await client.list_tools()}
-            result = await client.call_tool('echo_echo_message', {'message': 'hello from an agent'})
-    assert 'echo_echo_message' in tools
-    assert tools['echo_echo_message'].input_schema['required'] == ['message']
-    assert result.is_error is False
-    assert result.structured_content == {'message': 'hello from an agent'}
-
 @pytest.mark.parametrize('presented_token', [None, 'invalid-token'], ids=['missing', 'invalid'])
 @pytest.mark.asyncio
 async def test_agent_without_valid_authentication_is_rejected_during_http_initialization(tmp_path: Path, presented_token: Optional[str]) -> None:
@@ -173,7 +161,8 @@ async def test_authenticated_agent_discovers_and_invokes_tool_in_exposure_mode(t
     (app, token, _context, _publishing_store) = await _build_public_app(tmp_path, exposure_mode)
     async with app.router.lifespan_context(app):
         async with Client(_http_transport(app, token)) as client:
-            tool_names = {tool.name for tool in await client.list_tools()}
+            tools = {tool.name: tool for tool in await client.list_tools()}
+            tool_names = set(tools)
             if exposure_mode == 'flat':
                 result = await client.call_tool('echo_echo_message', {'message': exposure_mode})
             elif exposure_mode == 'gateway':
@@ -185,6 +174,8 @@ async def test_authenticated_agent_discovers_and_invokes_tool_in_exposure_mode(t
     if exposure_mode == 'flat':
         assert 'echo_echo_message' in tool_names
         assert 'search_tools' not in tool_names
+        assert tools['echo_echo_message'].input_schema['required'] == ['message']
+        assert result.is_error is False
         assert result.structured_content == {'message': 'flat'}
     else:
         assert 'echo_echo_message' not in tool_names

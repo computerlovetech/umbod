@@ -18,6 +18,8 @@ class OperationState:
         self.operation = operation
         self.deadline = min(scope.deadline, anyio.current_time() + min(limits.operation_timeout_seconds, (target.expires_at - clock()).total_seconds() - 0.1))
         self.failed = False
+        self.authorization_rejected = False
+        self.cleaning_up = False
         self.total_bytes = 0
         self.initialized = False
         self.notifications = 0
@@ -33,8 +35,9 @@ class OperationState:
             self.fail()
 
     def fail(self) -> NoReturn:
-        self.failed = True
-        self.scope.cancel()
+        if not self.cleaning_up:
+            self.failed = True
+            self.scope.cancel()
         raise PersonalRuntimeUnavailable("Personal MCP unavailable") from None
 
     def check(self) -> None:
