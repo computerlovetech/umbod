@@ -126,6 +126,15 @@ class ConnectorStoreConfig(ConfigModel):
     type: Literal["inmemory", "sqlite"] = "inmemory"
     sqlite_path: str = defaults.CONNECTOR_STORE_SQLITE_PATH
 
+    @property
+    def is_durable_sqlite(self) -> bool:
+        return (
+            self.type == "sqlite"
+            and bool(self.sqlite_path.strip())
+            and ":memory:" not in self.sqlite_path
+            and "mode=memory" not in self.sqlite_path
+        )
+
 
 class InMemoryConnectorStoreConfig(ConnectorStoreConfig):
     type: Literal["inmemory"] = "inmemory"
@@ -184,6 +193,12 @@ class AdminAuthConfig(ConfigModel):
     debug_enabled: bool = False
 
 
+class PersonalConnectionsConfig(ConfigModel):
+    enabled: bool = False
+    identity_namespace: str = ""
+    oauth_enabled: bool = False
+
+
 class UserProfileConfig(ConfigModel):
     mode: Literal["access_claims", "id_token"] = "access_claims"
     jwt_header_name: str = "X-Auth-Request-ID-Token"
@@ -229,6 +244,69 @@ class AppConfig(ConfigModel):
     feature_toggles: FeatureTogglesConfig = Field(default_factory=FeatureTogglesConfig)
     admin_authentication: AdminAuthConfig = Field(default_factory=AdminAuthConfig)
     user_profile: UserProfileConfig = Field(default_factory=UserProfileConfig)
+    personal_connections: PersonalConnectionsConfig = Field(
+        default_factory=PersonalConnectionsConfig
+    )
+
+    @model_validator(mode="after")
+    def validate_personal_connections(self) -> "AppConfig":
+        if self.personal_connections.oauth_enabled:
+            if not self.personal_connections.enabled:
+                raise ValueError("Personal OAuth requires personal connections to be enabled")
+            if not self.connector_store.is_durable_sqlite:
+                raise ValueError("Personal OAuth requires persistent SQLite storage")
+            if not self.connector_security.configuration_secret.strip():
+                raise ValueError("Personal OAuth requires a configured encryption secret")
+        if not self.personal_connections.enabled:
+            return self
+        namespace = self.personal_connections.identity_namespace
+        if not namespace.strip() or namespace != namespace.strip():
+            raise ValueError(
+                "Personal connections require a nonblank identity namespace"
+            )
+        if self.admin_authentication.mode == "disabled" or self.mcp.auth_mode == "none":
+            raise ValueError("Personal connections require REST and MCP authentication")
+        production = (
+            self.runtime.profile == "production"
+            or self.admin_authentication.environment == "production"
+        )
+        insecure = (
+            self.runtime.auth == "dev"
+            or self.admin_authentication.environment == "development"
+            or self.admin_authentication.mode == "simulation"
+            or self.mcp.auth_mode == "single_test_user"
+        )
+        if production and insecure:
+            raise ValueError(
+                "Production personal connections require real JWT and MCP OIDC authentication"
+            )
+        if insecure:
+            if (
+                not namespace.startswith("test:")
+                or not namespace.removeprefix("test:").strip()
+            ):
+                raise ValueError(
+                    "Development personal connections require a test: identity namespace"
+                )
+            return self
+        if self.admin_authentication.mode != "jwt" or self.mcp.auth_mode != "oidc":
+            raise ValueError(
+                "Personal connections require JWT and MCP OIDC authentication"
+            )
+        if not all(
+            value.strip()
+            for value in (
+                self.oidc.issuer_url,
+                self.oidc.audience,
+                self.admin_authentication.jwks_url,
+            )
+        ):
+            raise ValueError(
+                "Personal connections require OIDC issuer, audience and JWKS"
+            )
+        if self.oidc.provider == "azure_entra_id" and not self.oidc.tenant_id.strip():
+            raise ValueError("Personal connections require an Entra tenant")
+        return self
 
     @model_validator(mode="after")
     def validate_user_profile(self) -> "AppConfig":

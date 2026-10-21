@@ -2,9 +2,9 @@
 
 Website for Umbod, computerlove.tech's open-source agent infrastructure product.
 
-The home page (`/`) serves individuals evaluating Umbod Desktop, with download
-availability as the primary path. `/enterprise/` serves platform teams evaluating
-self-hosted Umbod, with contact and installation docs as its conversion paths.
+The home page (`/`) introduces self-hosted Umbod to platform teams. Get started
+leads to the local Kubernetes walkthrough at `/#how`; contact is secondary.
+`/enterprise/` remains available with the same platform capabilities and onboarding.
 See [website context](CONTEXT.md) for positioning and tone.
 
 Update chart, image, and SDK release versions in the repository-root
@@ -13,12 +13,12 @@ in the guides and generated Helm reference; Vite substitutes them in the landing
 page during development and build. Do not edit release tags in the rendered
 `website/public/docs/` or `website/dist/` output.
 
-Vite builds three HTML entries: `index.html`, `download/index.html` and `enterprise/index.html`. Shared
-header/footer partials are inserted at build time, so both pages work without
+Vite builds two HTML entries: `index.html` and `enterprise/index.html`. Shared
+header/footer partials are inserted at build time, so navigation works without
 JavaScript. `src/site.mjs` enhances the mobile menu and command-copy buttons.
 Cloudflare Workers static assets serve `/enterprise/` and normalize `/enterprise`
-to it using default HTML handling. `public/_redirects` only redirects the legacy
-`/enterprise.html` URL to `/enterprise/`; neither enterprise URL redirects home.
+to it using default HTML handling. `public/_redirects` redirects `/enterprise.html`
+to `/enterprise/` and the retired `/download` and `/download/` routes to `/#how`.
 
 ## Development
 
@@ -84,41 +84,14 @@ In each of the `umbod.com` and `umbod.dev` Cloudflare zones:
    - `https://www.umbod.com/*` → `https://umbod.ai/${1}`
    - Use the equivalent two rules for `umbod.dev`.
 
-The homepage uses a clearly labeled connection illustration until the real desktop
-recording is available. [Issue #6](https://github.com/computerlovetech/umbod/issues/6)
-tracks recording automation in the release pipeline. Shared footer links and the
-homepage founder section provide community and founder LinkedIn destinations.
+## Verification
 
-The desktop source/build links use an immutable public source revision while this
-PR is unmerged; `main/desktop` currently returns 404. Update that revision when the
-desktop instructions change, or use `main` after it contains the desktop tree.
+Run `bun run test` for route, content, shared navigation and release-version checks.
+The tests build both entries in an isolated temporary checkout and launch local
+Wrangler to verify Enterprise deep links, legacy redirects and real 404 responses.
+No Cloudflare credentials are needed. Run `bun run build` before shipping.
 
-## Desktop downloads
-
-All Download CTAs navigate to `/download/`. That page uses
-`public/desktop-downloads.json`, independently of root release metadata. The home
-and enterprise pages never initialize desktop downloads. Only macOS Apple Silicon
-is offered publicly; Windows, Linux and Intel Mac rows say Coming soon even when
-historical release manifests contain Windows artifacts. New desktop releases are macOS-only; validation also accepts the historical two-platform format without offering its Windows download. Archived releases are unchanged. When no Mac release is available, its state is Release pending, with Enterprise
-linked as the separate edition for teams;
-do not add speculative URLs. `src/downloads.mjs` validates exact desktop tags, public
-asset URLs, hashes and platform choices. Vite renders a no-JavaScript fallback from the
-same validated manifest. Run `bun run test` for download, manifest-update and
-route/content tests. The route tests build all three entries in isolated temporary
-checkouts with available and unavailable manifests, checking metadata, navigation,
-anchors and no-JavaScript download links without changing the working manifest.
-They also launch local Wrangler on a temporary loopback port to verify enterprise
-deep links and a real 404 for unknown routes. No Cloudflare credentials are needed.
-
-Before shipping, run the full build and use local Wrangler to check `/`,
-`/download/`, `/download`, `/enterprise`, `/enterprise/`, `/enterprise.html`, docs and asset links. Inspect
-all pages at desktop and mobile widths, including the menu, keyboard focus,
-download state and JavaScript-disabled navigation. Do not advertise a release
-until the manifest procedure below succeeds.
-
-Follow [the manifest application procedure](../desktop/docs/APPLY-MANIFEST.md) to
-verify published assets and prepare the website PR. No frontend credentials are used.
-
-## Desktop OAuth identity
-
-`public/oauth/client-metadata.json` is Umbod Desktop’s public OAuth client identity for servers supporting Client ID Metadata Documents. It contains no user credentials. Native clients use PKCE and the loopback `/desktop/oauth/callback` path; RFC 8252 permits the local port to vary. Keep its exact public URL aligned with `CLIENT_METADATA_URL` in the desktop OAuth adapter. Publish this asset before enabling hosted identity sign-in in a released desktop build.
+Check `/`, `/enterprise`, `/enterprise/`, `/enterprise.html`, `/download`,
+`/download/`, docs and asset links in local Wrangler. Inspect desktop and mobile
+widths, including menu, command copying, keyboard focus and JavaScript-disabled
+navigation. Get started should always reach the home page Kubernetes walkthrough.

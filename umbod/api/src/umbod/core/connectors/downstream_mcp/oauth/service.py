@@ -12,7 +12,7 @@ from mcp.client.auth import AuthorizationCodeResult
 from mcp.shared.auth import OAuthClientInformationFull
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import SignInRequired
 from .discovery import discover, registration_mode
-from .ports import CallbackResult, OAuthHost
+from .ports import CallbackResult, OAuthConnection, OAuthHost
 from .provider import CLIENT_METADATA_URL, InteractiveConnectorOAuth, OAuthFailure
 
 
@@ -28,8 +28,14 @@ class OAuthService:
         self.stages: dict[str, str] = {}
         self.events: dict[str, list[dict]] = {}
 
+    def _shared_connection(self, key: str) -> OAuthConnection:
+        connection = self.host.connection(key)
+        if connection.authorization_mode != "shared":
+            raise ValueError("Personal OAuth cannot use shared authorization operations")
+        return connection
+
     async def begin(self, key: str, client_id: str, scopes: str | None) -> dict:
-        server = self.host.connection(key)
+        server = self._shared_connection(key)
         if urlsplit(server.endpoint_url).scheme != "https":
             raise ValueError("Browser sign-in requires an HTTPS connector")
         if key in self.tasks and not self.tasks[key].done():
@@ -38,7 +44,7 @@ class OAuthService:
             if not isinstance(scopes, str):
                 raise ValueError("OAuth scopes must be a space-separated string")
             self.host.set_scopes(key, " ".join(scopes.split()))
-            server = self.host.connection(key)
+            server = self._shared_connection(key)
         # Registration binds the client to this URI. State remains fresh per attempt;
         # the path must survive retries and application restarts.
         nonce = key
@@ -162,13 +168,14 @@ class OAuthService:
         )
         del events[:-20]
 
-    async def discover(self, key):
+    async def discover(self, key: str) -> dict:
+        server = self._shared_connection(key)
         self.record(key, "metadata", False)
-        self.previews[key] = await discover(self.host.connection(key).endpoint_url)
+        self.previews[key] = await discover(server.endpoint_url)
         return {**await self.details(key), **self.previews[key]}
 
-    async def details(self, key):
-        server = self.host.connection(key)
+    async def details(self, key: str) -> dict:
+        server = self._shared_connection(key)
         storage = self.host.storage(key)
         await storage.load()
         document = storage.document
@@ -196,7 +203,8 @@ class OAuthService:
             **self.previews.get(key, {}),
         }
 
-    async def cancel(self, key):
+    async def cancel(self, key: str) -> dict:
+        self._shared_connection(key)
         task = self.tasks.get(key)
         if task and not task.done():
             task.cancel()
@@ -254,6 +262,8 @@ class OAuthService:
             return CallbackResult(
                 "Sign-in has expired. Return to Umbod and retry.", status_code=400
             )
+        if self.host.connection(nonce).authorization_mode != "shared":
+            return CallbackResult("Personal authorization is not available here.", status_code=400)
         code, state = (
             parameters.get("code"),
             parameters.get("state"),
@@ -277,7 +287,8 @@ class OAuthService:
             "Authorization received. Return to Umbod to check the result."
         )
 
-    async def refresh(self, key):
+    async def refresh(self, key: str) -> dict:
+        self._shared_connection(key)
         self.record(key, "refresh", False)
         try:
             result = await self._refresh(key)
@@ -293,8 +304,8 @@ class OAuthService:
         self.record(key, "connected", False)
         return result
 
-    async def _refresh(self, key):
-        server = self.host.connection(key)
+    async def _refresh(self, key: str) -> dict:
+        server = self._shared_connection(key)
         storage = self.host.storage(key)
         await storage.load()
         if storage.document.tokens is None or not storage.document.tokens.refresh_token:
@@ -308,7 +319,8 @@ class OAuthService:
         await self.host.reconnect(key)
         return {"status": "refreshed"}
 
-    async def forget(self, key):
+    async def forget(self, key: str) -> None:
+        self._shared_connection(key)
         task = self.tasks.get(key)
         if task and not task.done():
             task.cancel()
@@ -321,7 +333,7 @@ class OAuthService:
         self.stages.pop(key, None)
         self.tasks.pop(key, None)
 
-    async def logout(self, key):
+    async def logout(self, key: str) -> None:
         await self.forget(key)
         self.host.set_authorized(key, False)
         self.results[key] = "sign_in_required"

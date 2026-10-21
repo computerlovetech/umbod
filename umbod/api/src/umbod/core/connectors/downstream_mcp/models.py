@@ -19,6 +19,10 @@ from pydantic.types import JsonValue
 
 from umbod.core.capabilities.descriptions.domain import CapabilityDescription
 from umbod.core.capabilities.tools.names import ToolNamePrefix, normalize_tool_name_prefix
+from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
+    PersonalOAuthSettings,
+    legacy_personal_oauth_settings,
+)
 
 
 NonEmptyString = Annotated[str, Field(min_length=1)]
@@ -161,6 +165,12 @@ class CreateConnectorDefinitionModel(DomainModel):
     public_path: PublicPath
 
 
+class CreatePersonalOAuthConnectorDefinition(CreateConnectorDefinitionModel):
+    auth_type: Literal["oauth"] = "oauth"
+    authorization_mode: Literal["personal"] = "personal"
+    oauth_configuration: PersonalOAuthSettings = Field(default_factory=legacy_personal_oauth_settings)
+
+
 class NoAuthCreateConnectorDefinition(CreateConnectorDefinitionModel):
     auth_type: Literal["none"] = "none"
 
@@ -183,9 +193,8 @@ class StaticBearerCreateConnectorDefinition(CreateConnectorDefinitionModel):
 
 
 class OAuthCreateConnectorDefinition(CreateConnectorDefinitionModel):
-    """An already authorized connection; browser interaction precedes creation."""
-
     auth_type: Literal["oauth"] = "oauth"
+    authorization_mode: Literal["shared"] = "shared"
     authorization: SecretStr
 
 
@@ -217,12 +226,20 @@ class StaticBearerConnectorDefinition(ConnectorDefinitionModel):
 
 class OAuthConnectorDefinition(ConnectorDefinitionModel):
     auth_type: Literal["oauth"] = "oauth"
+    authorization_mode: Literal["shared", "personal"] = "shared"
 
 
 ConnectorDefinition = Annotated[
     Union[NoAuthConnectorDefinition, StaticBearerConnectorDefinition, OAuthConnectorDefinition],
     Field(discriminator="auth_type"),
 ]
+
+
+def uses_personal_oauth(definition: ConnectorDefinition) -> bool:
+    return (
+        isinstance(definition, OAuthConnectorDefinition)
+        and definition.authorization_mode == "personal"
+    )
 
 
 class NoAuthCredentialState(DomainModel):

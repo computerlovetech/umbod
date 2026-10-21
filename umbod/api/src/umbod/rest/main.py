@@ -18,6 +18,13 @@ from umbod.rest.authentication import (
 )
 from umbod.rest.authentication.authorization import JwtVerifier
 from umbod.rest.authentication.middleware import SuppliedJwtVerifierFactory
+from umbod.rest.authentication.user_middleware import UserAuthenticationMiddleware
+from umbod.rest.connectors.downstream_mcp.personal_connections import router as personal_connections_router
+from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback import (
+    PersonalOAuthQueryRedactionMiddleware,
+    callback_response,
+    router as personal_oauth_callback_router,
+)
 from umbod.rest.users.deps import get_access_token_verifier
 from umbod.rest.authentication.csrf_middleware import AdminCookieCsrfMiddleware
 from umbod.rest.capability_descriptions import router as capability_description_router
@@ -63,12 +70,13 @@ class _CreateAppArguments:
     connector_registrations: Sequence[ConnectorRegistration] | None
     admin_verifier: JwtVerifier | None
     oauth_service: OAuthService | None
+    user_verifier_factory: JwtVerifierFactory
 
 
 def _resolve_create_app_arguments(*args: Any, **kwargs: Any) -> _CreateAppArguments:
     if len(args) > 2:
         raise TypeError("create_app() takes from 0 to 2 positional arguments")
-    unknown_keywords = set(kwargs) - {"settings", "connector_registrations", "admin_verifier", "oauth_service"}
+    unknown_keywords = set(kwargs) - {"settings", "connector_registrations", "admin_verifier", "oauth_service", "user_verifier"}
     if unknown_keywords:
         unknown_keyword = next(iter(unknown_keywords))
         raise TypeError(
@@ -89,6 +97,10 @@ def _resolve_create_app_arguments(*args: Any, **kwargs: Any) -> _CreateAppArgume
         settings=settings, connector_registrations=connector_registrations,
         admin_verifier=cast(JwtVerifier | None, kwargs.get("admin_verifier")),
         oauth_service=cast(OAuthService | None, kwargs.get("oauth_service")),
+        user_verifier_factory=(
+            SuppliedJwtVerifierFactory(cast(JwtVerifier, kwargs["user_verifier"]))
+            if kwargs.get("user_verifier") is not None else JwtVerifierFactory()
+        ),
     )
 
 
@@ -166,6 +178,60 @@ def _mount_admin_app(
         AdminRestMetricsMiddleware, recorder=metrics_recorder, routes=admin_routes
     )
     app.mount("/api/admin", admin_app)
+
+
+def _mount_personal_connections_app(
+    app: FastAPI,
+    settings: APISettings,
+    dependency_factories: ConnectorApiDependencyFactories,
+    verifier_factory: JwtVerifierFactory,
+) -> None:
+    if not settings.personal_connections.enabled:
+        return
+    personal_app = SubApiAppFactory(
+        title="umbod-personal-api", router=personal_connections_router
+    ).create()
+    _attach_dependency_factories(personal_app, dependency_factories)
+    personal_app.add_middleware(
+        UserAuthenticationMiddleware,
+        verifier=verifier_factory.create(settings),
+        jwt_header_name=settings.admin_authentication.jwt_header_name,
+    )
+    personal_app.add_middleware(
+        AdminCookieCsrfMiddleware,
+        site_base_url=settings.endpoints.site_base_url,
+        allowed_origins=settings.cors.origins,
+    )
+    app.mount("/api/me", personal_app)
+
+
+def _mount_personal_oauth_callback_app(
+    app: FastAPI,
+    settings: APISettings,
+    dependency_factories: ConnectorApiDependencyFactories,
+) -> None:
+    if not (settings.personal_connections.enabled and settings.personal_connections.oauth_enabled):
+        return
+    callback_app = FastAPI(
+        title="umbod-personal-oauth-callback", docs_url=None, redoc_url=None,
+        openapi_url=None, redirect_slashes=False,
+    )
+    callback_app.include_router(personal_oauth_callback_router)
+    _attach_dependency_factories(callback_app, dependency_factories)
+
+    @callback_app.middleware("http")
+    async def protect_callback_response(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        try:
+            response = await call_next(request)
+        except Exception:
+            return callback_response(400)
+        if response.status_code != 200:
+            return callback_response(400)
+        return response
+
+    app.mount("/api/oauth/downstream-mcp", callback_app)
 
 
 def _mount_system_app(
@@ -259,6 +325,11 @@ def create_app(*args: Any, **kwargs: Any) -> FastAPI:
         app, app_settings, dependency_factories, metrics_recorder, app_settings, verifier_factory,
         create_app_arguments.oauth_service,
     )
+    _mount_personal_connections_app(
+        app, app_settings, dependency_factories, create_app_arguments.user_verifier_factory
+    )
+    _mount_personal_oauth_callback_app(app, app_settings, dependency_factories)
     _mount_system_app(app, dependency_factories)
     install_telemetry_receiver(app, app_settings)
+    app.add_middleware(PersonalOAuthQueryRedactionMiddleware)
     return app

@@ -32,6 +32,8 @@ from umbod.core.activation import (
 )
 from umbod.core.connectors.downstream_mcp.models import (
     ConnectorDefinition,
+    CreatePersonalOAuthConnectorDefinition,
+    uses_personal_oauth,
     ConnectorUnhealthy,
     NoAuthCreateConnectorDefinition,
     StaticBearerCreateConnectorDefinition,
@@ -65,6 +67,18 @@ from umbod.core.connectors.downstream_mcp.stores import (
     ConnectorHealthFound,
     ToolCatalogFound,
 )
+from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
+    PersonalOAuthConfiguration,
+    PersonalOAuthConfigurationConflict,
+    PersonalOAuthConfigurationQuery,
+    PersonalOAuthConfigurationStore,
+    PersonalOAuthConfigurationUnavailable,
+    PersonalOAuthSettings,
+    PreconfiguredConfidentialOAuthClient,
+    PreconfiguredPublicOAuthClient,
+    ReplacePersonalOAuthConfiguration,
+)
+from umbod.rest.connectors.downstream_mcp.personal_validation import PersonalOAuthValidationRoute
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.connectors.dependencies import (
     get_capability_activation_store,
@@ -79,6 +93,7 @@ from umbod.rest.connectors.schemas import (
 from umbod.rest.connectors.tool_activation import list_tool_activations, put_tool_activations
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.connectors.downstream_mcp.dependencies import (
+    get_personal_oauth_configuration_store,
     get_downstream_connector_catalog_lifecycle,
     get_downstream_connector_creator,
     get_downstream_connector_deleter,
@@ -93,6 +108,11 @@ from umbod.rest.connectors.downstream_mcp.errors import (
     present_tool_not_found,
 )
 from umbod.rest.connectors.downstream_mcp.schemas import (
+    DynamicPublicClientResponse,
+    PersonalOAuthConfigurationResponse,
+    PreconfiguredConfidentialClientResponse,
+    PreconfiguredPublicClientResponse,
+    ReplacePersonalOAuthConfigurationRequest,
     BearerCreateConfigurationRequest,
     CapabilityDescriptionOverrideResponse,
     OverriddenCapabilityDescriptionOverrideResponse,
@@ -105,6 +125,7 @@ from umbod.rest.connectors.downstream_mcp.schemas import (
     ConnectorResponse,
     ConnectorSummaryResponse,
     CreateConnectorRequest,
+    CreatePersonalOAuthConnectorRequest,
     PromptActivationBatchRequest,
     PromptActivationBatchResponse,
     PromptActivationBatchResponseItem,
@@ -124,7 +145,14 @@ from umbod.rest.connectors.downstream_mcp.schemas import (
 )
 
 
-router = APIRouter(prefix="/connectors/mcp", tags=["downstream-mcp-connectors"])
+router = APIRouter(
+    prefix="/connectors/mcp", tags=["downstream-mcp-connectors"],
+    route_class=PersonalOAuthValidationRoute,
+)
+ConfigurationStore = Annotated[
+    PersonalOAuthConfigurationStore, Depends(get_personal_oauth_configuration_store)
+]
+Factories = Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)]
 Queries = Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)]
 Creator = Annotated[DownstreamConnectorCreator, Depends(get_downstream_connector_creator)]
 Updater = Annotated[DownstreamConnectorUpdater, Depends(get_downstream_connector_updater)]
@@ -240,6 +268,7 @@ async def _response(
         public_path=definition.public_path,
         public_url=f"{public_mcp_base_url}{definition.public_path}",
         auth_mode=definition.auth_type,
+        authorization_mode="personal" if uses_personal_oauth(definition) else "shared",
         header_type=(
             definition.header_type
             if isinstance(definition, StaticBearerConnectorDefinition)
@@ -283,6 +312,7 @@ async def _summary_response(
         display_name=definition.display_name,
         icon_url=icon_url,
         auth_mode=definition.auth_type,
+        authorization_mode="personal" if uses_personal_oauth(definition) else "shared",
         publication_status=(
             "published" if await queries.is_published(definition.connector_id) else "unpublished"
         ),
@@ -336,6 +366,102 @@ async def create_connector(
         raise present_downstream_mcp_error(error) from error
     except ValueError as error:
         raise present_downstream_mcp_error(error) from error
+
+
+@router.post(
+    "/personal-oauth", response_model=ConnectorResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_personal_oauth_connector(
+    request: CreatePersonalOAuthConnectorRequest,
+    creator: Creator,
+    queries: Queries,
+    public_mcp_base_url: PublicMcpBaseUrl,
+    override_store: OverrideStore,
+    factories: Annotated[
+        ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)
+    ],
+) -> ConnectorResponse:
+    _require_personal_configuration_available(factories)
+    _require_confidential_encryption(request.configuration.oauth_configuration, factories)
+    command = CreatePersonalOAuthConnectorDefinition(
+        **request.metadata.model_dump(), endpoint_url=request.configuration.endpoint_url,
+        oauth_configuration=request.configuration.oauth_configuration,
+    )
+    try:
+        definition = await creator.create_personal_oauth(command)
+    except (ConnectorIdentityConflictError, DownstreamConnectorConflictError):
+        raise HTTPException(status_code=409, detail={"code": "connector_conflict"}) from None
+    except ValueError:
+        raise HTTPException(status_code=422, detail={"code": "invalid_personal_oauth_configuration"}) from None
+    return await _response(queries, definition, public_mcp_base_url, override_store)
+
+
+def _require_personal_configuration_available(factories: ConnectorApiDependencyFactories) -> None:
+    if not factories.settings.personal_connections.enabled:
+        raise HTTPException(status_code=404, detail={"code": "personal_connections_unavailable"})
+
+
+def _require_confidential_encryption(
+    settings: PersonalOAuthSettings, factories: ConnectorApiDependencyFactories,
+) -> None:
+    if (
+        isinstance(settings.client, PreconfiguredConfidentialOAuthClient)
+        and not factories.settings.connector_security.configuration_secret.strip()
+    ):
+        raise HTTPException(status_code=422, detail={"code": "personal_oauth_encryption_required"})
+
+
+def _personal_configuration_response(
+    configuration: PersonalOAuthConfiguration,
+) -> PersonalOAuthConfigurationResponse:
+    client = configuration.policy.client
+    if isinstance(client, PreconfiguredConfidentialOAuthClient):
+        projection = PreconfiguredConfidentialClientResponse(
+            kind=client.kind, issuer_url=client.issuer_url, client_id=client.client_id,
+            token_endpoint_auth_method=client.token_endpoint_auth_method,
+            client_secret_configured=True,
+        )
+    elif isinstance(client, PreconfiguredPublicOAuthClient):
+        projection = PreconfiguredPublicClientResponse(
+            kind=client.kind, issuer_url=client.issuer_url, client_id=client.client_id,
+        )
+    else:
+        projection = DynamicPublicClientResponse(kind=client.kind)
+    return PersonalOAuthConfigurationResponse(
+        connector_id=configuration.connector_id, revision=configuration.policy.revision,
+        requested_scopes=configuration.policy.requested_scopes, client=projection,
+    )
+
+
+@router.get("/{connector_id}/personal-oauth", response_model=PersonalOAuthConfigurationResponse)
+async def get_personal_oauth_configuration(
+    connector_id: str, store: ConfigurationStore, factories: Factories,
+) -> PersonalOAuthConfigurationResponse:
+    _require_personal_configuration_available(factories)
+    try:
+        configuration = await store.get(PersonalOAuthConfigurationQuery(connector_id=connector_id))
+    except PersonalOAuthConfigurationUnavailable:
+        raise HTTPException(status_code=404, detail={"code": "personal_oauth_configuration_unavailable"}) from None
+    return _personal_configuration_response(configuration)
+
+
+@router.put("/{connector_id}/personal-oauth", response_model=PersonalOAuthConfigurationResponse)
+async def replace_personal_oauth_configuration(
+    connector_id: str, request: ReplacePersonalOAuthConfigurationRequest,
+    store: ConfigurationStore, factories: Factories,
+) -> PersonalOAuthConfigurationResponse:
+    _require_personal_configuration_available(factories)
+    _require_confidential_encryption(request.settings, factories)
+    try:
+        configuration = await store.replace(ReplacePersonalOAuthConfiguration(
+            connector_id=connector_id, expected_revision=request.expected_revision,
+            settings=request.settings,
+        ))
+    except PersonalOAuthConfigurationUnavailable:
+        raise HTTPException(status_code=404, detail={"code": "personal_oauth_configuration_unavailable"}) from None
+    except PersonalOAuthConfigurationConflict:
+        raise HTTPException(status_code=409, detail={"code": "personal_oauth_configuration_conflict"}) from None
+    return _personal_configuration_response(configuration)
 
 
 @router.get("/{connector_id}", response_model=ConnectorResponse)
@@ -616,6 +742,7 @@ async def _configuration_response(
     return ConnectorConfigurationResponse(
         endpoint_url=definition.endpoint_url,
         auth_mode=definition.auth_type,
+        authorization_mode="personal" if uses_personal_oauth(definition) else "shared",
         header_type=(
             definition.header_type
             if isinstance(definition, StaticBearerConnectorDefinition)

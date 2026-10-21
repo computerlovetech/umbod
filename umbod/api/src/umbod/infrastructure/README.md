@@ -1,8 +1,8 @@
 # Infrastructure
 
-**Module responsibility:** Adapters that implement core ports using external systems and runtime-specific technology.
+**Module responsibility:** Low-level persistence drivers and persistence runtime composition, as defined by ADR-001. Domain-specific modules and policy belong in core.
 
-**Read when working with:** External I/O, storage implementations, or dependency assembly that connects adapters to the core.
+**Read when working with:** Backend selection, database drivers, connection handling, schema preparation or persistence runtime assembly.
 
 ## Submodules
 

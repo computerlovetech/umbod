@@ -2,70 +2,47 @@
 
 ## Purpose
 
-The website has two conversion paths under one restrained Umbod identity:
+Umbod is one self-hosted, open-source platform for connecting internal APIs and MCP
+servers, managing group access, and using compatible agents on Kubernetes.
 
-- `/` introduces the native desktop app to individuals. Lead with the local MCP
-  gateway, shared per-tool permissions across local clients, and desktop downloads.
-  State availability, OS/architecture support and prerelease signing limits honestly.
-  Do not present cluster installation, group administration or the platform video as
-  desktop capabilities. Use a centered hero and large, labeled connection illustration until the real desktop recording is ready (issue #6).
-- `/download/` presents macOS Apple Silicon first; Windows, Linux and Intel Mac
-  remain Coming soon. Activate the Mac DMG link only from a verified release manifest.
-- `/enterprise/` introduces the self-hosted platform to platform teams. Keep the
-  existing connectors, group permissions, Kubernetes walkthrough and beta limits here.
-  Lead with contact and self-hosting docs, and retain the local cluster evaluation guide.
+- `/` introduces the platform and leads with Get started at `/#how`.
+- `/#how` provides a local kind cluster evaluation walkthrough and links to the
+  full installation guide.
+- `/enterprise/` remains a working platform entry with the same onboarding.
+- Legacy `/download` and `/download/` links redirect to `/#how`.
 
-The shared navigation includes Docs, Enterprise and Download. Download always returns
-to `/download/`. This follows Orca's separation of individual and enterprise journeys,
-not its copy, visual identity, testimonials or unsupported product claims.
+Shared navigation includes Docs, Enterprise and Get started. Get started always
+returns to `/#how`, including mobile and JavaScript-disabled navigation. Contact
+is the secondary conversion path; visitors should not need to contact us to try
+the platform.
 
-Keep documentation accessible and distinguish current beta capabilities from future
-plans. Avoid pricing tiers, invented customers, compliance claims and promises of
-production readiness. Build navigation, metadata and primary content into each HTML
-entry so direct links and JavaScript-disabled visits work.
+## Product boundaries
 
-## Product strategy
+Lead with connectors, group permissions, Kubernetes deployment and the platform
+walkthrough. Keep documentation accessible and distinguish current beta
+capabilities from future plans. The current chart uses a single core replica
+backed by SQLite and is for evaluation, not a claim of production readiness.
 
-Umbod has two deliberately connected products:
+Do not advertise native app downloads, separate product editions, automatic
+configuration migration, pricing tiers, invented customers, compliance guarantees
+or unshipped operational capabilities.
 
-- **Local Umbod is the distribution and community product.** It should be genuinely useful to an
-  individual, easy to run across developer platforms, and capable of creating users, ambassadors,
-  connector authors, policy authors, and community knowledge. It is not merely a limited enterprise
-  trial.
-- **Enterprise Umbod is the operational and revenue product.** It manages shared
-  connectors and group access in cloud-native environments, with organizational
-  authentication and administration. Reliability, compliance, support and managed
-  operations are longer-term product goals, not present-day guarantees.
+Build navigation, metadata and primary content into each HTML entry so direct
+links and JavaScript-disabled visits work. Keep release versions sourced from the
+repository-root `release-metadata.json`.
 
-Portability is a product direction, not a shipped capability. Today Desktop uses a
-shared Python backend with a native SwiftUI interface on macOS, while the platform uses separate
-Kubernetes services. Configuration promotion between editions is not implemented.
-The editions share backend code, but not deployment configuration or running processes.
-Do not market automatic local-to-enterprise migration.
+## Visual direction and voice
 
-## Reference projects
+Preserve the restrained, spacious layout, light background, green accents, logo
+and typography. Use product evidence such as the architecture diagram and
+Kubernetes walkthrough. Favor a direct developer voice, transparent technical
+boundaries, clear documentation and visible community destinations. Defer mascot
+branding until after launch and further public product iterations.
 
-The following open-source businesses are explicit references for positioning, visual design,
-adoption, and community practice:
-
-- T3 Code — direct developer voice, product-first demonstration, visible social proof, and a
-  prominent fork/download path.
-- Unsloth — approachable brand, strong documentation and education, broad community surfaces,
-  and rapid support for new ecosystem releases.
-- Caveman — memorable point of view, quantified proof, transparent technical boundaries, and
-  unusually explicit licensing and verification language.
-- Ollama — radical simplicity, a near-zero-friction first run, a strong model/integration
-  ecosystem, and privacy-led positioning.
-- Orca — high-fidelity product theatre, rapid public shipping, changelog discipline, broad
-  platform support, testimonials, and community distribution.
-
-Borrow Orca’s centered hero, prominent product stage, download grid and spacious
-footer while keeping Umbod’s light background, green accents, logo and typography. Preserve the restrained,
-spacious design and use product evidence, such as an architecture diagram. Defer
-mascot branding until after launch and further public product iterations.
+Reference projects include T3 Code, Unsloth, Caveman, Ollama and Orca for
+product-first demonstration, approachable education, explicit limits, simple
+onboarding and community distribution. Borrow principles, not unsupported claims
+or another project's identity.
 
 The detailed review and recommendations live in
 `docs/research/open-source-reference-projects.md`.
-
-The year-one X, Discord, word-of-mouth, and local-to-enterprise distribution strategy lives in
-`docs/strategy/x-discord-growth-strategy.md`.

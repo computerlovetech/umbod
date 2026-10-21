@@ -4,6 +4,7 @@ from umbod.core.capabilities.tools.names import PublicToolIdentity, PublicToolId
 from umbod.core.connectors.downstream_mcp.errors import DownstreamConnectorUnavailableError
 from umbod.core.connectors.downstream_mcp.management.queries import DownstreamConnectorQueries
 from umbod.core.connectors.downstream_mcp.stores.ports import ToolCatalogFound
+from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
 from messaging.ports import EventStream
 
 
@@ -23,6 +24,16 @@ class DownstreamConnectorPublisher:
         self._identity_source = identity_source
 
     async def publish(self, connector_id: str) -> None:
+        definition = await self._queries.get(connector_id)
+        if not uses_personal_oauth(definition):
+            await self._validate_shared_publication(connector_id)
+        if not await self._publishing.is_published(connector_id):
+            await self._publishing.publish_connector(connector_id)
+            await self._events.append(
+                connector_publication_changed_event(connector_id, "published")
+            )
+
+    async def _validate_shared_publication(self, connector_id: str) -> None:
         catalog = await self._queries.catalog(connector_id)
         if not isinstance(catalog, ToolCatalogFound) or not any(
             (
@@ -34,11 +45,6 @@ class DownstreamConnectorPublisher:
         ):
             raise DownstreamConnectorUnavailableError(connector_id)
         self._tool_name_validator.validate_unique(await self._public_identities(connector_id))
-        if not await self._publishing.is_published(connector_id):
-            await self._publishing.publish_connector(connector_id)
-            await self._events.append(
-                connector_publication_changed_event(connector_id, "published")
-            )
 
     async def unpublish(self, connector_id: str) -> None:
         await self._queries.get(connector_id)

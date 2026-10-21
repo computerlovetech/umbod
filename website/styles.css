@@ -179,100 +179,14 @@ footer { padding-block: 32px; }
   .walkthrough-video figcaption { flex-direction: column; gap: 4px; }
 }
 
-/* Desktop downloads share the landing page's spacing and typography. */
-#downloads { padding: 88px 0; border-top: 1px solid var(--line, #deded8); scroll-margin-top: 100px; }
-#downloads > .wrap > p { max-width: 720px; }
-.download-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; margin: 32px 0; }
-.download-card { padding: 28px; border: 1px solid var(--line, #deded8); border-radius: 12px; }
-.download-card h3 { margin-top: 0; }
-.download-card details { margin-top: 24px; }
-.download-card summary { cursor: pointer; }
-.download-card code { display: block; overflow-wrap: anywhere; margin-top: 12px; font-size: .8rem; }
-.download-alternative { margin-top: 24px; }
-#downloads a:focus-visible, #downloads summary:focus-visible { outline: 3px solid currentColor; outline-offset: 5px; }
-@media (max-width: 760px) {
-  #downloads { padding: 56px 0; }
-  .download-grid { grid-template-columns: 1fr; }
-  .download-card { padding: 20px; }
-}
-
-/* Shared navigation and desktop story; usable without JavaScript. */
 .hero-actions { margin-top: 28px; }
 .hero-note { margin: 18px 0 0; font-size: 12px; color: var(--muted); }
 .hero-note a { text-decoration: underline; text-underline-offset: 3px; }
-.desktop-diagram figcaption { margin-top: 20px; font-size: 11px; color: var(--muted); }
-.desktop-diagram small { font: 10px var(--mono); color: var(--muted); }
-.download-safety { color: var(--muted); font-size: 14px; }
-.desktop-features { background: var(--soft); }
-.capability-list { margin: 0; }
-.capability-list > div { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1fr); gap: 40px; padding: 28px 0; border-top: 1px solid var(--line); }
-.capability-list dt { font-size: 21px; font-weight: 550; letter-spacing: -.025em; }
-.capability-list dd { margin: 0; color: var(--muted); max-width: 580px; }
-.desktop-faq details { padding: 18px 0; border-top: 1px solid var(--line); }
-.desktop-faq summary { cursor: pointer; min-height: 44px; padding-block: 10px; font-size: 18px; font-weight: 550; }
-.desktop-faq details p { max-width: 800px; color: var(--muted); }
-.desktop-faq details a { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 3px; }
 .no-js-nav { display: flex; gap: 24px; flex-wrap: wrap; padding-block: 12px; }
 .no-js-nav a, .footer-links a, .nav-links a { display: inline-flex; align-items: center; min-height: 44px; }
 .nav-links a[aria-current="page"] { color: var(--teal-dark); text-decoration: underline; text-underline-offset: 6px; }
 .icon-link, .button.small { min-width: 44px; min-height: 44px; }
 .copy-btn { min-height: 44px; }
-.download-card summary { min-height: 44px; padding-block: 10px; }
-@media (max-width: 760px) {
-  .capability-list > div { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-}
-
-/* Desktop marketing: Umbod's light palette with a spacious, product-led layout. */
-.desktop-hero { text-align: center; padding-block: 100px 62px; }
-.desktop-hero .eyebrow, .centered-heading .eyebrow { justify-content: center; }
-.desktop-hero h1 { font-size: clamp(42px, 5.5vw, 72px); max-width: 1000px; margin-inline: auto; }
-.desktop-hero h1 span { color: var(--teal-dark); }
-.desktop-hero .hero-description { margin: 26px auto; max-width: 650px; font-size: 18px; line-height: 1.65; }
-.desktop-hero .actions, .closing-cta .actions { justify-content: center; }
-.button.secondary { color: var(--ink); background: #fff; border-color: var(--line); }
-.button.secondary:hover { border-color: var(--ink); background: var(--soft); }
-.product-stage { padding-block: 0 64px; }
-.connection-preview { margin: 0; overflow: hidden; border: 1px solid #cbdad1; border-radius: 16px; background: #f4f8f5; box-shadow: 0 24px 64px -30px #608c704a; }
-.preview-heading { display: flex; justify-content: space-between; gap: 12px; padding: 20px 28px; border-bottom: 1px solid var(--line); }
-.preview-label { font: 10px/1.5 var(--mono); letter-spacing: .08em; color: var(--muted); }
-.connection-canvas { display: grid; grid-template-columns: 1fr .2fr .85fr .2fr 1fr; align-items: center; gap: 12px; padding: 64px 48px; }
-.connection-column { min-width: 0; }
-.connection-item { display: flex; align-items: center; gap: 12px; padding: 18px 14px; margin-top: 12px; background: white; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; }
-.connection-symbol { color: var(--teal-dark); font-size: 21px; min-width: 26px; text-align: center; }
-.connection-column p { font-size: 11px; color: var(--muted); margin-bottom: 0; }
-.connection-wire { height: 1px; background: #9bb4a7; text-align: center; }
-.connection-wire span { position: relative; top: -27px; font: 9px var(--mono); color: var(--muted); }
-.connection-hub { text-align: center; padding: 30px 14px 18px; border: 1px solid #314b3e; border-radius: 13px; color: white; background: var(--ink); box-shadow: 0 12px 28px #14201c18; }
-.connection-hub img { display: block; margin: 0 auto 8px; filter: invert(1); }
-.connection-hub strong { display: block; font-size: 35px; letter-spacing: -.06em; }
-.connection-hub > span { display: block; margin: 8px 0 22px; color: #c5d9cd; font-size: 12px; }
-.local-indicator { display: flex; justify-content: center; align-items: center; gap: 8px; padding-top: 14px; border-top: 1px solid #3d4d43; font: 9px var(--mono); color: #d6e7dc; }
-.connection-preview figcaption { padding: 18px; text-align: center; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; }
-.product-principles { display: flex; justify-content: center; flex-wrap: wrap; gap: 16px 46px; padding-top: 35px; color: var(--muted); font-size: 12px; }
-.centered-heading { text-align: center; }
-.centered-heading > p:last-child { color: var(--muted); margin: 22px 0 0; }
-.desktop-story { padding-block: 72px 112px; }
-.story-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 46px; margin-top: 62px; }
-.story-grid article { border-top: 1px solid var(--line); padding-top: 25px; }
-.story-grid h3 { margin-top: 25px; }
-.story-grid p { color: var(--muted); font-size: 15px; }
-.community-section { background: var(--soft); border-block: 1px solid var(--line); }
-.community-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 100px; align-items: center; }
-.community-layout > div > p:not(.eyebrow) { max-width: 500px; color: var(--muted); margin-block: 24px; }
-.founder { display: flex; align-items: center; gap: 18px; padding: 25px 0; border-bottom: 1px solid var(--line); }
-.founder > span:last-child { margin-left: auto; }
-.founder strong { display: block; font-weight: 550; }
-.founder small { display: block; color: var(--muted); margin-top: 4px; font-size: 12px; }
-.founder-initials { display: grid; place-items: center; width: 56px; height: 56px; flex: none; border-radius: 50%; background: #e0eee5; color: var(--teal-dark); font: 17px var(--mono); }
-.founders > p { font-size: 13px; }
-.founders > p a { text-decoration: underline; text-underline-offset: 4px; }
-.faq-layout { display: grid; grid-template-columns: .8fr 1.2fr; gap: 90px; padding-block: 110px; }
-.desktop-faq summary { font-size: 16px; }
-.desktop-faq details p { font-size: 14px; }
-.closing-cta { text-align: center; padding-block: 48px 110px; }
-.closing-cta img { margin-bottom: 26px; }
-.closing-cta h2 { font-size: clamp(38px, 4vw, 54px); }
-.closing-cta p { color: var(--muted); margin-block: 22px 28px; }
 .site-footer { border-top: 1px solid var(--line); padding-block: 64px 26px; }
 .footer-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1fr; gap: 48px; }
 .footer-about p { font-size: 14px; color: var(--muted); }
@@ -282,76 +196,11 @@ footer { padding-block: 32px; }
 .footer-grid nav a:hover { color: var(--teal-dark); }
 .footer-bottom { display: flex; justify-content: space-between; gap: 24px; border-top: 1px solid var(--line); margin-top: 56px; padding-top: 24px; font-size: 11px; color: var(--muted); }
 .footer-bottom p { margin: 0; }
-.download-intro { padding-block: 94px 62px; }
-.download-intro h1 { font-size: clamp(44px, 5.5vw, 70px); }
-.download-intro > p:last-child { color: var(--muted); font-size: 20px; margin-top: 26px; }
-.download-platforms { padding-block: 0 80px; }
-.download-section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
-.download-section-head p { color: var(--muted); margin-bottom: 0; }
-.download-section-head > a { flex-shrink: 0; }
-.platform-grid { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--soft); }
-.platform-row { min-height: 112px; padding: 26px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.platform-row:nth-child(odd) { border-right: 1px solid var(--line); }
-.platform-row:nth-child(n+3) { border-top: 1px solid var(--line); }
-.platform-row strong { display: block; font-weight: 550; }
-.platform-row small { display: block; margin-top: 4px; color: var(--muted); font-size: 13px; }
-.platform-status { white-space: nowrap; color: var(--muted); font: 10px var(--mono); padding: 5px 8px; border: 1px solid var(--line); border-radius: 4px; }
-.platform-action { font-size: 12px; color: var(--teal-dark); white-space: nowrap; }
-.platform-ready { background: #eaf5ee; }
-.platform-ready:hover { background: #dfefe5; }
-.platform-ready:focus-visible { outline-offset: -5px; }
-.download-note, .download-release { font-size: 13px; color: var(--muted); margin-block: 20px; }
-.download-release summary { cursor: pointer; min-height: 44px; padding-block: 12px; }
-.download-release code { display: block; overflow-wrap: anywhere; font: 12px var(--mono); }
-.download-build { display: flex; align-items: center; justify-content: space-between; gap: 24px; margin-top: 32px; padding: 26px; border: 1px solid var(--line); border-radius: 12px; }
-.download-build h3 { font-size: 16px; }
-.download-build p { font-size: 13px; color: var(--muted); margin-bottom: 0; }
-.download-team { display: flex; justify-content: space-between; align-items: center; gap: 28px; padding-block: 54px 82px; border-top: 1px solid var(--line); }
-.download-team h2 { font-size: 32px; }
-.download-team p:not(.eyebrow) { color: var(--muted); }
 @media (max-width: 900px) {
-  .connection-canvas { padding: 40px 24px; gap: 8px; }
-  .connection-item { font-size: 12px; padding: 14px 10px; gap: 6px; }
-  .community-layout { gap: 40px; }
-  .platform-row { padding: 20px; gap: 12px; flex-wrap: wrap; }
   .footer-grid { gap: 28px; }
 }
 @media (max-width: 760px) {
-  .desktop-hero { padding-block: 60px 42px; }
-  .desktop-hero h1 { font-size: clamp(38px, 7.5vw, 56px); }
-  .desktop-hero .hero-description { font-size: 16px; }
-  .wide-only { display: none; }
-  .preview-heading { padding: 16px; }
-  .preview-label { font-size: 8px; }
-  .connection-canvas { grid-template-columns: 1fr; padding: 24px; gap: 22px; }
-  .connection-column { width: 100%; max-width: 340px; margin-inline: auto; }
-  .connection-column > .preview-label { display: block; text-align: center; }
-  .connection-item { font-size: 14px; padding: 12px; }
-  .connection-column p { display: none; }
-  .connection-hub { width: 100%; max-width: 340px; margin-inline: auto; padding: 20px; }
-  .connection-hub img { width: 40px; height: 40px; }
-  .connection-hub strong { font-size: 28px; }
-  .connection-hub > span { margin: 6px 0 16px; }
-  .connection-wire { width: 1px; height: 18px; margin: -12px auto; }
-  .connection-wire span { display: none; }
-  .product-principles { gap: 14px 24px; font-size: 11px; }
-  .product-stage { padding-bottom: 20px; }
-  .desktop-story { padding-block: 60px; }
-  .story-grid, .community-layout, .faq-layout { grid-template-columns: 1fr; gap: 32px; }
-  .story-grid { margin-top: 36px; }
-  .story-grid h3 { margin-top: 14px; }
-  .faq-layout { padding-block: 64px; }
-  .closing-cta { padding-block: 32px 70px; }
   .footer-grid { grid-template-columns: 1fr 1fr; gap: 32px; }
   .footer-about { grid-column: 1 / -1; }
   .footer-bottom { flex-direction: column; gap: 12px; margin-top: 32px; }
-  .download-intro { padding-block: 56px 36px; }
-  .download-intro > p:last-child { font-size: 17px; }
-  .download-section-head, .download-build, .download-team { flex-direction: column; align-items: flex-start; }
-  .platform-grid { grid-template-columns: 1fr; }
-  .platform-row:nth-child(odd) { border-right: 0; }
-  .platform-row:nth-child(n+2) { border-top: 1px solid var(--line); }
-  .platform-row { min-height: 102px; }
-  .download-platforms { padding-bottom: 48px; }
-  .download-team { padding-block: 40px 56px; }
 }

@@ -12,11 +12,16 @@ from umbod.config.app import (
     OidcConfig,
     OpenApiConnectorConfig,
     OtlpReceiverConfig,
+    PersonalConnectionsConfig,
     RestConfig,
     RuntimeConfig,
     UserProfileConfig,
 )
 from umbod.config.operator import OperatorSettings
+from umbod.config.personal_connection_policy import (
+    resolve_personal_connections_enabled,
+    resolve_personal_connections_oauth_enabled,
+)
 from umbod.config.secret_derivation import derive_secret
 from umbod.config.validate import _OIDC_AUTH_RECIPES
 
@@ -169,6 +174,17 @@ def _build_oidc(operator: OperatorSettings, auth_recipe: str) -> OidcConfig:
 
 
 def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConfig:
+    connector_store = ConnectorStoreConfig(
+        type=operator.connector_store,
+        sqlite_path=_sqlite_path(operator),
+    )
+    connector_security = ConnectorSecurityConfig(
+        configuration_secret=_purpose_secret(
+            operator.root_secret, "connector-configuration"
+        ),
+        approval_state_key=_purpose_secret(operator.root_secret, "connector-approval-state"),
+    )
+    selection_enabled = resolve_personal_connections_enabled(operator)
     return AppConfig(
         runtime=RuntimeConfig(
             app_name=operator.app_name,
@@ -191,24 +207,21 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
             allow_unauthenticated=operator.otlp_allow_unauthenticated,
             max_request_bytes=operator.otlp_max_request_bytes,
         ),
+        personal_connections=PersonalConnectionsConfig(
+            enabled=selection_enabled,
+            identity_namespace=operator.personal_connections_identity_namespace,
+            oauth_enabled=resolve_personal_connections_oauth_enabled(
+                operator, selection_enabled, connector_store, connector_security
+            ),
+        ),
         mcp=_build_mcp(operator, auth_recipe),
         oidc=_build_oidc(operator, auth_recipe),
         oauth_storage=OAuthStorageConfig(
             directory=_oauth_storage_directory(operator),
             encryption_key=_purpose_secret(operator.root_secret, "oauth-token-storage"),
         ),
-        connector_security=ConnectorSecurityConfig(
-            configuration_secret=_purpose_secret(
-                operator.root_secret, "connector-configuration"
-            ),
-            approval_state_key=_purpose_secret(
-                operator.root_secret, "connector-approval-state"
-            ),
-        ),
-        connector_store=ConnectorStoreConfig(
-            type=operator.connector_store,
-            sqlite_path=_sqlite_path(operator),
-        ),
+        connector_security=connector_security,
+        connector_store=connector_store,
         openapi_connectors=OpenApiConnectorConfig(
             json_import_max_bytes=operator.openapi_json_import_max_bytes,
             url_retrieval_timeout_seconds=operator.openapi_url_retrieval_timeout_seconds,

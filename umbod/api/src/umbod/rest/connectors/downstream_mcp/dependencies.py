@@ -5,6 +5,7 @@ from umbod.core.connectors.downstream_mcp.adapters.composition import (
 )
 from umbod.core.connectors.downstream_mcp.adapters.settings import DownstreamMcpInfrastructureSettings
 
+from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores, create_downstream_mcp_stores
 from typing import Annotated
 from uuid import uuid4
@@ -57,6 +58,12 @@ async def get_downstream_stores(settings: Annotated[DownstreamMcpInfrastructureS
     return await create_downstream_mcp_stores(
         settings.credential_secret, factories.persistence_runtime.database
     )
+
+def get_personal_oauth_configuration_store(
+    stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
+) -> PersonalOAuthConfigurationStore:
+    return stores.personal_oauth_configurations
+
 
 def get_definition_store(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)]) -> ConnectorDefinitionStore:
     return stores.definitions

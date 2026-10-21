@@ -7,6 +7,7 @@ from umbod.config import defaults
 
 Profile = str
 AuthRecipe = str
+PersonalConnectionsMode = bool | Literal["auto"]
 
 
 def _parse_comma_separated_values(value: str | list[str]) -> list[str]:
@@ -28,6 +29,9 @@ class OperatorSettings(BaseSettings):
 
     app_name: str = defaults.APP_NAME
     log_level: str = defaults.LOG_LEVEL
+    personal_connections_enabled: PersonalConnectionsMode = "auto"
+    personal_connections_oauth_enabled: PersonalConnectionsMode = "auto"
+    personal_connections_identity_namespace: str = ""
     otlp_enabled: bool = False
     otlp_bearer_token: str = Field(default="", repr=False)
     otlp_allow_unauthenticated: bool = False

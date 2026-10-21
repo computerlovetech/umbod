@@ -92,8 +92,9 @@ async def test_list_and_detail_discriminate_system_and_overridden_capability_des
     detail = client.get(f'/api/admin/connectors/mcp/{connector_id}').json()
     connector_list = client.get('/api/admin/connectors/mcp').json()
     assert detail['capability_description_override'] == expected_override
-    assert set(detail) == {'connector_id', 'display_name', 'tool_name_prefix', 'icon_url', 'capability_description', 'base_capability_description', 'effective_capability_description', 'capability_description_override', 'endpoint_url', 'public_path', 'public_url', 'auth_mode', 'header_type', 'custom_header_name', 'credential_configured', 'publication_status', 'health'}
-    assert set(connector_list['connectors'][0]) == {'connector_id', 'display_name', 'icon_url', 'auth_mode', 'publication_status', 'health'}
+    assert detail['authorization_mode'] == 'shared'
+    assert set(detail) == {'authorization_mode', 'connector_id', 'display_name', 'tool_name_prefix', 'icon_url', 'capability_description', 'base_capability_description', 'effective_capability_description', 'capability_description_override', 'endpoint_url', 'public_path', 'public_url', 'auth_mode', 'header_type', 'custom_header_name', 'credential_configured', 'publication_status', 'health'}
+    assert set(connector_list['connectors'][0]) == {'authorization_mode', 'connector_id', 'display_name', 'icon_url', 'auth_mode', 'publication_status', 'health'}
     assert 'capability_description_override' not in connector_list['connectors'][0]
 
 @pytest.mark.asyncio

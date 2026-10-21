@@ -27,12 +27,18 @@ def create_rest_app(
     connector_registrations: Optional[Sequence[ConnectorRegistration]],
     admin_verifier: Optional[JwtVerifier],
     oauth_service: Optional[OAuthService],
+    **user_authentication: object,
 ) -> FastAPI:
+    unknown_keywords = set(user_authentication) - {"user_verifier"}
+    if unknown_keywords:
+        keyword = next(iter(unknown_keywords))
+        raise TypeError(f"create_rest_app() got an unexpected keyword argument '{keyword}'")
     return _create_rest_app(
         settings,
         connector_registrations=connector_registrations,
         admin_verifier=admin_verifier,
         oauth_service=oauth_service,
+        user_verifier=user_authentication.get("user_verifier"),
     )
 
 

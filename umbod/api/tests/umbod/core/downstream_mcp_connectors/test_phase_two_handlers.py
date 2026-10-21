@@ -1,3 +1,4 @@
+from umbod.core.connectors.downstream_mcp.personal_connections import InMemoryPersonalConnectionStore
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
@@ -158,10 +159,13 @@ def definition(endpoint: str) -> StaticBearerConnectorDefinition:
     return StaticBearerConnectorDefinition(connector_id='alpha', display_name='Alpha', capability_description='Manage downstream tools', endpoint_url=endpoint)
 
 def service(definitions: Any, credentials: Any, catalogs: Any, health: Any, native_identities: tuple[Any, ...]=()) -> tuple[DownstreamConnectorFixture, Any, Any, Any, Any, ConnectorPublishingStoreService, EventStreamFake]:
+    from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import EncryptedPersonalOAuthConfigurationStore
+
+    configurations = EncryptedPersonalOAuthConfigurationStore(create_inmemory_runtime().database, AuthenticatedTextCipher('phase-two-secret'))
     publishing = ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE)
     events = EventStreamFake()
     activation = ActivationFake()
-    return (DownstreamConnectorFixture(definitions, credentials, catalogs, health, UnusedDiscovery(), activation, publishing, activation, PermissionsFake(), events, FixedIdGenerator(), AvailableIdentities(), SuccessfulDownstreamMcpProbe(), InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activation, publishing, lambda phase: None), native_identities), definitions, credentials, catalogs, health, publishing, events)
+    return (DownstreamConnectorFixture(definitions, credentials, catalogs, health, UnusedDiscovery(), activation, publishing, activation, PermissionsFake(), events, FixedIdGenerator(), AvailableIdentities(), SuccessfulDownstreamMcpProbe(), InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activation, publishing, lambda phase: None, InMemoryPersonalConnectionStore(), configurations), native_identities), definitions, credentials, catalogs, health, publishing, events)
 
 def standard_service() -> tuple[DownstreamConnectorFixture, Any, Any, Any, Any, ConnectorPublishingStoreService, EventStreamFake]:
     return service(ConnectorDefinitionStoreService(create_inmemory_runtime().database, CONNECTOR_DEFINITION_TABLE), EncryptedCredentialStoreService(create_inmemory_runtime().database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('phase-two-secret')), ToolCatalogStoreService(create_inmemory_runtime().database, TOOL_CATALOG_TABLE), ConnectorHealthStoreService(create_inmemory_runtime().database, CONNECTOR_HEALTH_TABLE))

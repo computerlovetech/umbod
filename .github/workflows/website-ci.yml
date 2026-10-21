@@ -1,0 +1,62 @@
+name: Website CI
+on:
+  pull_request:
+    paths:
+      - 'website/**'
+      - 'release-metadata.json'
+      - 'umbod/docs/**'
+      - 'umbod/docs-theme/**'
+      - 'umbod/mkdocs.yml'
+      - 'umbod/deploy/helm/umbod/**'
+      - 'umbod/scripts/release_versions.py'
+      - 'umbod/scripts/tests/test_release_versions.py'
+      - 'umbod/scripts/tests/test_release_workflow.py'
+      - '.github/workflows/umbod-release.yml'
+      - '.github/workflows/website-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - 'release-metadata.json'
+      - 'umbod/docs/**'
+      - 'umbod/docs-theme/**'
+      - 'umbod/mkdocs.yml'
+      - 'umbod/deploy/helm/umbod/**'
+      - 'umbod/scripts/release_versions.py'
+      - 'umbod/scripts/tests/test_release_versions.py'
+      - 'umbod/scripts/tests/test_release_workflow.py'
+      - '.github/workflows/umbod-release.yml'
+      - '.github/workflows/website-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  website:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - name: Install website test and build dependencies
+        working-directory: website
+        run: bun install --frozen-lockfile
+      - name: Website tests
+        working-directory: website
+        run: bun run test
+      - name: Kubernetes release invariants
+        working-directory: umbod
+        run: |
+          python3 -m pip install pytest pyyaml
+          python3 -m pytest scripts/tests/test_release_versions.py scripts/tests/test_release_workflow.py -q
+      - name: Website build
+        working-directory: website
+        run: bun run build

@@ -13,6 +13,7 @@ from umbod.core.connectors.downstream_mcp.models import (
     StaticBearerConnectorDefinition,
     StaticBearerCredentialState,
     StaticTokenHeaderType,
+    uses_personal_oauth,
 )
 
 
@@ -53,6 +54,8 @@ def connection_configuration_from_persisted_models(
     *,
     persist_refresh: bool = True,
 ) -> DownstreamMcpConnectionConfiguration:
+    if uses_personal_oauth(definition):
+        raise ValueError("Personal OAuth cannot use shared connector credentials")
     if definition.connector_id != credential.connector_id:
         raise ValueError("connector credential does not match definition")
     if isinstance(definition, NoAuthConnectorDefinition) and isinstance(

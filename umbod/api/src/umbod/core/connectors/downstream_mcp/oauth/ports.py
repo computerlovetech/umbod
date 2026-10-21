@@ -1,7 +1,7 @@
 """Deployment ports; OAuth decisions and state transitions stay in the service."""
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
     ConnectorOAuthStorage,
 )
@@ -11,6 +11,7 @@ from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
 class OAuthConnection:
     endpoint_url: str
     requested_scopes: str = ""
+    authorization_mode: Literal["shared", "personal"] = "shared"
 
 
 @dataclass(frozen=True)

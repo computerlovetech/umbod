@@ -24,6 +24,7 @@ from umbod.rest.connectors.native.dependencies import (
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.mcp_permissions.events import McpPermissionEventPublisher
+from umbod.core.connectors.downstream_mcp.permissions import PersonalDownstreamPermissionCatalog
 from umbod.core.connectors.downstream_mcp.catalog import (
     StoreBackedDownstreamCapabilityCatalog,
 )
@@ -138,7 +139,7 @@ def _downstream_permission_catalog(
         factories.downstream_mcp_definition_store.create(),
         factories.downstream_mcp_catalog_store.create(),
     )
-    return CapabilityPermissionCatalog(
+    catalog = CapabilityPermissionCatalog(
         capabilities,
         "downstream_mcp",
         ConnectorStoreCapabilityPublication("downstream_mcp", publishing),
@@ -147,6 +148,10 @@ def _downstream_permission_catalog(
         validate_connector_availability=False,
         validate_tool_availability=False,
         include_connector_without_tools=False,
+    )
+
+    return PersonalDownstreamPermissionCatalog(
+        catalog, factories.downstream_mcp_definition_store.create(), publishing
     )
 
 

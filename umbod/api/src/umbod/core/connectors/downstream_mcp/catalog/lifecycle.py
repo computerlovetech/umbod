@@ -10,6 +10,7 @@ from umbod.core.connectors.downstream_mcp.models import (
     DiscoveryResult,
     DiscoverySucceeded,
     ToolCatalogSnapshot,
+    uses_personal_oauth,
 )
 from umbod.core.connectors.downstream_mcp.management.queries import DownstreamConnectorQueries
 from umbod.core.connectors.downstream_mcp.management.unit_of_work import (
@@ -53,6 +54,8 @@ class DownstreamConnectorCatalogLifecycle:
 
     async def refresh(self, connector_id: str) -> DiscoveryResult:
         definition = await self._queries.get(connector_id)
+        if uses_personal_oauth(definition):
+            raise ValueError("Personal OAuth cannot use shared connector discovery")
         credential = await self._credentials.get(ConnectorIdQuery(connector_id=connector_id))
         if not isinstance(credential, CredentialFound):
             raise DownstreamCredentialMissingError(connector_id)

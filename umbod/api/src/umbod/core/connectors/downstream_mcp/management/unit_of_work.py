@@ -1,6 +1,7 @@
 from typing import Callable, Literal, Protocol
 
 from umbod.core.capabilities.tools.names import PublicToolIdentity
+from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthSettings
 from umbod.core.connectors.downstream_mcp.models import (
     ConnectorDefinition,
     ConnectorHealth,
@@ -91,7 +92,12 @@ class CreateDownstreamConnectorAggregate(DomainModel):
     catalog: ReplaceCatalog | DeleteCatalog
     health: ReplaceHealth | DeleteHealth
     activation: ReconcileActivation
-    publication: PreservePublication
+    publication: PreservePublication | DeletePublication
+
+
+class CreatePersonalOAuthConnectorAggregate(DomainModel):
+    aggregate: CreateDownstreamConnectorAggregate
+    configuration: PersonalOAuthSettings
 
 
 class ReplaceDownstreamConnectorAggregate(DomainModel):
@@ -126,6 +132,8 @@ class ApplyDiscoveredCatalog(DomainModel):
 
 class DownstreamConnectorUnitOfWork(Protocol):
     async def create(self, command: CreateDownstreamConnectorAggregate) -> None: ...
+
+    async def create_personal_oauth(self, command: CreatePersonalOAuthConnectorAggregate) -> None: ...
 
     async def replace(self, command: ReplaceDownstreamConnectorAggregate) -> None: ...
 

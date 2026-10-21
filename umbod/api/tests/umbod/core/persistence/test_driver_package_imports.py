@@ -273,6 +273,16 @@ def test_importing_neutral_capability_override_modules_does_not_load_drivers() -
     for module_name in ('umbod.core.capabilities.descriptions.overrides', 'umbod.core.capabilities.descriptions.stores.schema', 'umbod.core.capabilities.descriptions.stores.service'):
         _assert_import_does_not_load_persistence_drivers(module_name)
 
+def test_personal_identity_policy_does_not_load_persistence_drivers() -> None:
+    _assert_import_does_not_load_persistence_drivers('umbod.core.connectors.downstream_mcp.personal_connections.principal')
+
+
+def test_infrastructure_contains_only_persistence_composition_and_drivers() -> None:
+    infrastructure_root = Path(__file__).parents[4] / 'src' / 'umbod' / 'infrastructure'
+    source_entries = {path.relative_to(infrastructure_root).parts[0] for path in infrastructure_root.rglob('*.py')}
+    assert source_entries == {'__init__.py', 'persistence'}
+
+
 def test_driver_packages_export_adapter_types() -> None:
     assert InMemoryDatabase.__module__.startswith('umbod.infrastructure.persistence.inmemory')
     assert SQLiteDatabase.__module__.startswith('umbod.infrastructure.persistence.sqlite')

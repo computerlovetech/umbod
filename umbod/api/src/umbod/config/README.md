@@ -32,6 +32,14 @@ OIDC issuer derivation preserves an explicit `UMBOD_OIDC_ISSUER_URL`. Otherwise 
 
 **Read when working with:** Cross-field configuration constraints and startup validation. Optional profile mode, header and mapping settings are assembled explicitly in `build.py`, validated by `validate.py` and `app.py`, and exposed through the non-secret inspection catalog. The [environment reference](../../../../docs/operations/configuration.md#optional-user-profile-enrichment) defines the profile contract.
 
+### `personal_connection_policy.py`
+
+**Read when working with:** Resolving automatic personal selection and OAuth modes into runtime booleans.
+
+### Personal connections identity policy
+
+Operator settings `UMBOD_PERSONAL_CONNECTIONS_ENABLED` and `UMBOD_PERSONAL_CONNECTIONS_OAUTH_ENABLED` default to `auto` and also accept explicit `true` or `false`. Automatic selection activates when `UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE` is supplied; the namespace is never generated or derived. Supplied whitespace or malformed namespaces are validated, not silently disabled. Without a namespace, the unconfigured development deployment keeps both features unavailable. Explicit `false` opts out. Direct embedded `AppConfig.personal_connections` construction retains conservative disabled boolean defaults; operator assembly always resolves modes to booleans before runtime or inspection. Both operator assembly and direct `AppConfig` construction reject unsafe identity configurations. Production requires REST JWT verification with issuer, audience and JWKS, MCP OIDC and a supported provider. Development or simulation requires an explicit `test:` namespace. A development REST authentication environment uses semantic JWT verification even with mode `jwt` and an OIDC recipe; it is rejected in production and requires test isolation locally. Identity settings are registered in non-secret inspection. Automatic OAuth authorization requires effective selection, durable SQLite storage and a nonblank connector configuration encryption secret derived from `UMBOD_ROOT_SECRET`. Explicit OAuth `true` still requires all prerequisites and fails validation otherwise, including when selection is explicitly disabled. Storage durability uses the same predicate during policy resolution and runtime validation: blank paths, `:memory:` paths and paths containing `mode=memory` are not durable. In-memory and SQLite memory paths are rejected for exposed authorization. Runtime execution remains disabled. See the [environment reference](../../../../docs/operations/configuration.md#personal-connections-identity-policy).
+
 ### `inspection.py`
 
 **Read when working with:** Configuration inspection and display behavior.

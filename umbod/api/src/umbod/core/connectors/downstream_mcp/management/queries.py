@@ -3,6 +3,7 @@ from umbod.core.connectors.downstream_mcp.errors import DownstreamConnectorNotFo
 from umbod.core.connectors.downstream_mcp.models import (
     ConnectorDefinition,
     NoAuthConnectorDefinition,
+    uses_personal_oauth,
 )
 from umbod.core.connectors.downstream_mcp.stores.ports import (
     ConnectorDefinitionList,
@@ -49,7 +50,7 @@ class DownstreamConnectorQueries:
 
     async def credential_configured(self, connector_id: str) -> bool:
         definition = await self.get(connector_id)
-        if isinstance(definition, NoAuthConnectorDefinition):
+        if isinstance(definition, NoAuthConnectorDefinition) or uses_personal_oauth(definition):
             return False
         result = await self._credentials.get(ConnectorIdQuery(connector_id=connector_id))
         return isinstance(result, CredentialFound)

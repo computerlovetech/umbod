@@ -1,4 +1,9 @@
 import asyncio
+
+from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore, ReplacePersonalOAuthConfiguration
+from umbod.core.connectors.downstream_mcp.management.unit_of_work import CreatePersonalOAuthConnectorAggregate
+
+from umbod.core.connectors.downstream_mcp.personal_connections import PersonalConnectionStore
 from copy import deepcopy
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -52,6 +57,8 @@ class InMemoryDownstreamConnectorUnitOfWork:
         activations: ActivationStore,
         publishing: ConnectorPublishingStore,
         fault: DownstreamConnectorMutationFault,
+        personal_connections: PersonalConnectionStore,
+        personal_oauth_configurations: PersonalOAuthConfigurationStore,
     ) -> None:
         self._definitions = definitions
         self._credentials = credentials
@@ -60,10 +67,24 @@ class InMemoryDownstreamConnectorUnitOfWork:
         self._activations = activations
         self._publishing = publishing
         self._fault = fault
+        self._personal_connections = personal_connections
+        self._personal_oauth_configurations = personal_oauth_configurations
         self._lock = asyncio.Lock()
 
     async def create(self, command: CreateDownstreamConnectorAggregate) -> None:
         await self._atomic(lambda: self._replace(command))
+
+    async def create_personal_oauth(self, command: CreatePersonalOAuthConnectorAggregate) -> None:
+        async def mutate() -> None:
+            await self._replace(command.aggregate)
+            self._phase("personal_oauth_configuration")
+            await self._personal_oauth_configurations.replace(ReplacePersonalOAuthConfiguration(
+                connector_id=command.aggregate.definition.connector_id,
+                expected_revision="legacy", settings=command.configuration,
+            ))
+            self._phase("personal_oauth_configuration_saved")
+
+        await self._atomic(mutate)
 
     async def replace(self, command: ReplaceDownstreamConnectorAggregate) -> None:
         await self._atomic(lambda: self._replace(command))
@@ -111,6 +132,10 @@ class InMemoryDownstreamConnectorUnitOfWork:
             query = ConnectorIdQuery(connector_id=command.connector_id)
             self._phase("activation")
             await self._activations.reconcile("downstream_mcp", command.connector_id, "tool", ())
+            self._phase("personal_oauth_configuration")
+            await self._personal_oauth_configurations.delete_connector(command.connector_id)
+            self._phase("personal_connections")
+            await self._personal_connections.delete_connector(command.connector_id)
             self._phase("credential")
             await self._credentials.delete(query)
             self._phase("catalog")
@@ -206,6 +231,8 @@ class InMemoryDownstreamConnectorUnitOfWork:
         targets = tuple(
             target
             for target in (
+                self._personal_connections,
+                self._personal_oauth_configurations,
                 self._definitions,
                 self._credentials,
                 self._catalogs,
@@ -215,7 +242,7 @@ class InMemoryDownstreamConnectorUnitOfWork:
             )
             if hasattr(target, "__dict__")
         )
-        states = tuple(deepcopy(target.__dict__) for target in targets)
+        states = deepcopy(tuple(target.__dict__ for target in targets))
         try:
             await mutation()
         except BaseException:

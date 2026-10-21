@@ -25,15 +25,20 @@ def test_public_exports_and_explicit_keyword_only_signatures() -> None:
     assert not hasattr(hosting, "PublicAppConfig")
     assert not hasattr(hosting, "PublicAppRuntimeContext")
     for factory, expected_names in (
-        (hosting.create_rest_app, ("settings", "connector_registrations", "admin_verifier", "oauth_service")),
+        (hosting.create_rest_app, ("settings", "connector_registrations", "admin_verifier", "oauth_service", "user_authentication")),
         (hosting.create_mcp_app, ("settings", "auth_provider", "group_permission_runtime_state", "invocation_log_sink")),
     ):
         parameters = list(inspect.signature(factory).parameters.values())
         assert tuple(parameter.name for parameter in parameters) == expected_names
         assert parameters[0].kind == inspect.Parameter.POSITIONAL_OR_KEYWORD
         assert parameters[0].default is inspect.Parameter.empty
-        assert all(parameter.kind == inspect.Parameter.KEYWORD_ONLY for parameter in parameters[1:])
-        assert all(parameter.default is inspect.Parameter.empty for parameter in parameters[1:])
+        for parameter in parameters[1:]:
+            expected_kind = (
+                inspect.Parameter.VAR_KEYWORD
+                if parameter.name == "user_authentication" else inspect.Parameter.KEYWORD_ONLY
+            )
+            assert parameter.kind == expected_kind
+            assert parameter.default is inspect.Parameter.empty
 
 
 CORE = {

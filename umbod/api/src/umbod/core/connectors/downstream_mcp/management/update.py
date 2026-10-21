@@ -14,6 +14,7 @@ from umbod.core.connectors.downstream_mcp.models import (
     PreparedCatalogConnector,
     StaticBearerConnectorDefinition,
     StaticBearerCredentialState,
+    uses_personal_oauth,
 )
 from umbod.core.connectors.downstream_mcp.management.preparation import DownstreamConnectorPreparation
 from umbod.core.connectors.downstream_mcp.management.queries import DownstreamConnectorQueries
@@ -65,6 +66,8 @@ class DownstreamConnectorUpdater:
     async def update(
         self, current: ConnectorDefinition, definition: ConnectorDefinition, replacement_token: str
     ) -> ConnectorDefinition:
+        if uses_personal_oauth(current) or uses_personal_oauth(definition):
+            raise ValueError("Personal OAuth configuration is not supported yet")
         if (
             current.tool_name_prefix != definition.tool_name_prefix
             and await self._publishing.is_published(definition.connector_id)
@@ -164,6 +167,8 @@ class DownstreamConnectorUpdater:
 
     async def reauthorize(self, connector_id: str, authorization: SecretStr) -> ConnectorDefinition:
         current = await self._queries.get(connector_id)
+        if uses_personal_oauth(current):
+            raise ValueError("Personal OAuth cannot use shared connector credentials")
         if not isinstance(current, OAuthConnectorDefinition):
             raise ValueError("Only OAuth connections can be signed in again.")
         prepared = await self._preparation.prepare_update(current, OAuthCredentialState(

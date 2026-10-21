@@ -1,5 +1,6 @@
 from umbod.config.app import UserProfileConfig
 from umbod.config.operator import OperatorSettings
+from umbod.config.personal_connection_policy import resolve_personal_connections_enabled
 
 _VALID_PROFILES = ("local", "production")
 _VALID_AUTH_RECIPES = ("none", "dev", "auth0", "entra", "google")
@@ -65,6 +66,21 @@ def _validate_oidc_recipe(operator: OperatorSettings, auth_recipe: str) -> None:
 
 
 def validate_operator(operator: OperatorSettings, auth_recipe: str) -> None:
+    if resolve_personal_connections_enabled(operator):
+        namespace = operator.personal_connections_identity_namespace
+        if not namespace.strip() or namespace != namespace.strip():
+            raise ValueError(
+                "UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE is required"
+            )
+        if auth_recipe == "none":
+            raise ValueError("Personal connections require authenticated REST access")
+        if auth_recipe == "dev" and (
+            not namespace.startswith("test:")
+            or not namespace.removeprefix("test:").strip()
+        ):
+            raise ValueError(
+                "Development personal connections require a test: identity namespace"
+            )
     profile = UserProfileConfig(
         mode=operator.user_profile_mode,
         jwt_header_name=operator.user_profile_jwt_header,

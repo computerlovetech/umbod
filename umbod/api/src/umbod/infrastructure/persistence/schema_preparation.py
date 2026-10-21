@@ -1,5 +1,9 @@
 from collections.abc import Sequence
 
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configuration_schema import PERSONAL_OAUTH_CONFIGURATION_TABLE
+
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_schema import PERSONAL_OAUTH_ATTEMPT_TABLE
+
 from pydantic import BaseModel
 
 from umbod.core.activation.stores.schema import CAPABILITY_ACTIVATION_STATE_TABLE
@@ -13,6 +17,7 @@ from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.invocation import APPROVAL_NONCE_TABLE
 from umbod.core.invocation import CONNECTOR_INVOCATION_POLICY_TABLE
 from umbod.core.connectors.downstream_mcp.stores.schema import (
+    PERSONAL_CONNECTION_TABLE,
     CONNECTOR_CREDENTIAL_TABLE,
     CONNECTOR_DEFINITION_TABLE,
     CONNECTOR_HEALTH_TABLE,
@@ -48,6 +53,9 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
     CATALOG_OPERATION_TABLE,
     CONNECTOR_DEFINITION_TABLE,
     CONNECTOR_CREDENTIAL_TABLE,
+    PERSONAL_CONNECTION_TABLE,
+    PERSONAL_OAUTH_ATTEMPT_TABLE,
+    PERSONAL_OAUTH_CONFIGURATION_TABLE,
     TOOL_CATALOG_TABLE,
     CONNECTOR_HEALTH_TABLE,
     EVENT_TABLE,

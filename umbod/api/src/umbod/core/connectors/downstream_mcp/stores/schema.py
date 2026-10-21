@@ -13,6 +13,50 @@ from umbod.core.persistence import (
 )
 
 
+class PersonalConnectionRecord(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    namespace: str
+    subject: str
+    connector_id: str
+    document: str
+
+
+class PersonalConnectionRecordKey(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    namespace: str
+    subject: str
+    connector_id: str
+
+
+PERSONAL_CONNECTION_IDENTITY = TableIdentity("downstream_mcp_personal_connections")
+PERSONAL_CONNECTION_NAMESPACE = Field[PersonalConnectionRecord, str](
+    PERSONAL_CONNECTION_IDENTITY, "namespace", TextCodec()
+)
+PERSONAL_CONNECTION_SUBJECT = Field[PersonalConnectionRecord, str](
+    PERSONAL_CONNECTION_IDENTITY, "subject", TextCodec()
+)
+PERSONAL_CONNECTION_CONNECTOR_ID = Field[PersonalConnectionRecord, str](
+    PERSONAL_CONNECTION_IDENTITY, "connector_id", TextCodec()
+)
+PERSONAL_CONNECTION_DOCUMENT = Field[PersonalConnectionRecord, str](
+    PERSONAL_CONNECTION_IDENTITY, "document", TextCodec()
+)
+_PERSONAL_CONNECTION_KEY_FIELDS = cast(
+    tuple[Field[PersonalConnectionRecord, object], ...],
+    (PERSONAL_CONNECTION_NAMESPACE, PERSONAL_CONNECTION_SUBJECT, PERSONAL_CONNECTION_CONNECTOR_ID),
+)
+PERSONAL_CONNECTION_TABLE = Table(
+    PERSONAL_CONNECTION_IDENTITY,
+    RowCodec(
+        PersonalConnectionRecord,
+        (*_PERSONAL_CONNECTION_KEY_FIELDS, PERSONAL_CONNECTION_DOCUMENT),
+    ),
+    KeyCodec(PersonalConnectionRecordKey, _PERSONAL_CONNECTION_KEY_FIELDS),
+)
+
+
 class ConnectorDefinitionRecord(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

@@ -66,6 +66,36 @@ _SECRET_FIELDS: tuple[tuple[str, str], ...] = (
 )
 
 _CATALOG: tuple[ConfigurationCatalogEntry, ...] = (
+    ConfigurationCatalogEntry(
+        "personal_connections",
+        "Personal connections",
+        "personal_connections",
+        "oauth_enabled",
+        "UMBOD_PERSONAL_CONNECTIONS_OAUTH_ENABLED",
+        "Personal OAuth authorization",
+        "Whether durable personal OAuth authorization is enabled; execution remains unavailable.",
+        "boolean",
+    ),
+    ConfigurationCatalogEntry(
+        "personal_connections",
+        "Personal connections",
+        "personal_connections",
+        "enabled",
+        "UMBOD_PERSONAL_CONNECTIONS_ENABLED",
+        "Enabled",
+        "Whether authenticated personal selection is enabled; execution remains unavailable.",
+        "boolean",
+    ),
+    ConfigurationCatalogEntry(
+        "personal_connections",
+        "Personal connections",
+        "personal_connections",
+        "identity_namespace",
+        "UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE",
+        "Identity namespace",
+        "Operator-controlled canonical ownership authority.",
+        "string",
+    ),
     *tuple(
         ConfigurationCatalogEntry(
             "user_profile",

@@ -1,2 +1,0 @@
-# Preserve the exact upstream notice bytes used by sources.json checksums.
-*.txt -text

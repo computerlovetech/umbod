@@ -6,6 +6,8 @@ from umbod.core.connectors.downstream_mcp.errors import (
 from umbod.core.connectors.downstream_mcp.models import (
     ConnectorDefinition,
     CreateConnectorDefinition,
+    CreatePersonalOAuthConnectorDefinition,
+    OAuthConnectorDefinition,
     PreparedCatalogConnector,
 )
 from umbod.core.connectors.downstream_mcp.management.ports import (
@@ -15,9 +17,11 @@ from umbod.core.connectors.downstream_mcp.management.ports import (
 from umbod.core.connectors.downstream_mcp.management.preparation import DownstreamConnectorPreparation
 from umbod.core.connectors.downstream_mcp.management.unit_of_work import (
     CreateDownstreamConnectorAggregate,
+    CreatePersonalOAuthConnectorAggregate,
     DeleteCatalog,
     DeleteCredential,
     DeleteHealth,
+    DeletePublication,
     DownstreamConnectorUnitOfWork,
     PreservePublication,
     ReconcileActivation,
@@ -56,6 +60,28 @@ class DownstreamConnectorCreator:
         await self._ensure_public_path_available(prepared.definition)
         await self._unit_of_work.create(self._aggregate(prepared))
         return prepared.definition
+
+    async def create_personal_oauth(
+        self, request: CreatePersonalOAuthConnectorDefinition
+    ) -> OAuthConnectorDefinition:
+        connector_id = self._ids.new_id()
+        await self._ensure_identity_available(connector_id)
+        definition = OAuthConnectorDefinition(connector_id=connector_id, **request.model_dump(exclude={"oauth_configuration"}))
+        await self._ensure_public_path_available(definition)
+        await self._unit_of_work.create_personal_oauth(
+            CreatePersonalOAuthConnectorAggregate(
+                configuration=request.oauth_configuration,
+                aggregate=CreateDownstreamConnectorAggregate(
+                definition=definition,
+                credential=DeleteCredential(),
+                catalog=DeleteCatalog(),
+                health=DeleteHealth(),
+                activation=ReconcileActivation(operation_names=()),
+                publication=DeletePublication(),
+                ),
+            )
+        )
+        return definition
 
     async def _ensure_identity_available(self, connector_id: str) -> None:
         await self._identities.ensure_available(

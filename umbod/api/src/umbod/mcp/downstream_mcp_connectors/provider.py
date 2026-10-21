@@ -1,4 +1,5 @@
 from umbod.mcp.downstream_mcp_connectors.ports import DownstreamClientFactory
+from umbod.mcp.downstream_mcp_connectors.resource_access import OwnershipCheckedTemplate
 
 import logging
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -31,7 +32,7 @@ from umbod.core.capabilities.descriptions import ConnectorCapabilityDescriptionK
 from umbod.core.capabilities.tools.names import PublicToolIdentity, PublicToolNameConflictError, mangle_public_tool_name, validate_unique_public_tool_names
 from umbod.core.activation import ActivationStore
 from umbod.core.connectors.downstream_mcp.catalog import DownstreamCapabilityRecord, StoreBackedDownstreamCapabilityCatalog
-from umbod.core.connectors.downstream_mcp.models import DiscoveredPrompt, DiscoveredResource, DiscoveredResourceTemplate, DiscoveredTool
+from umbod.core.connectors.downstream_mcp.models import DiscoveredPrompt, DiscoveredResource, DiscoveredResourceTemplate, DiscoveredTool, uses_personal_oauth
 from umbod.core.connectors.downstream_mcp.stores import ConnectorDefinitionFound, ConnectorDefinitionStore, ConnectorIdQuery, CredentialFound, EncryptedCredentialStore, ToolCatalogFound, ToolCatalogStore
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
@@ -189,21 +190,20 @@ class ConnectorStoreService:
         self.catalogs = catalogs
         self.publishing = publishing
         self.activations = activations
-        self.prepared_connectors: dict[str, DiscoverDownstreamTools] = {}
 
-    async def prepare(self, connector_id: str) -> bool:
+    async def prepare(self, connector_id: str) -> DiscoverDownstreamTools | None:
         query = ConnectorIdQuery(connector_id=connector_id)
         definition = await self.definitions.get(query)
+        if not isinstance(definition, ConnectorDefinitionFound) or uses_personal_oauth(definition.definition):
+            return None
         credential = await self.credentials.get(query)
-        if not isinstance(definition, ConnectorDefinitionFound) or not isinstance(credential, CredentialFound):
-            self.prepared_connectors.pop(connector_id, None)
-            return False
-        self.prepared_connectors[connector_id] = DiscoverDownstreamTools(definition=definition.definition, credential=credential.credential)
-        return True
+        if not isinstance(credential, CredentialFound):
+            return None
+        return DiscoverDownstreamTools(definition=definition.definition, credential=credential.credential)
 
     async def connector_is_eligible(self, connector_id: str) -> bool:
         query = ConnectorIdQuery(connector_id=connector_id)
-        return await self.prepare(connector_id) and isinstance(await self.catalogs.get(query), ToolCatalogFound) and await self.publishing.is_published(connector_id)
+        return await self.prepare(connector_id) is not None and isinstance(await self.catalogs.get(query), ToolCatalogFound) and await self.publishing.is_published(connector_id)
 
 class _DownstreamCapabilityReadiness(CapabilityReadiness):
 
@@ -264,17 +264,22 @@ class DownstreamMcpToolRuntimeProvider(Provider):
         self._connector_proxies: dict[str, ProxyProvider] = {}
         super().__init__()
 
-    def _create_client(self, connector_id: str) -> Client:
-        command = self._stores.prepared_connectors.get(connector_id)
+    async def _ensure_shared_connector(self, connector_id: str) -> None:
+        result = await self._stores.definitions.get(ConnectorIdQuery(connector_id=connector_id))
+        if not isinstance(result, ConnectorDefinitionFound) or uses_personal_oauth(result.definition):
+            raise ToolError('Downstream connector is not available')
+
+    async def _create_client(self, connector_id: str) -> Client:
+        command = await self._stores.prepare(connector_id)
         if command is None:
             raise ToolError('Downstream connector is not available')
         return self._downstream_client_factory.create(command)
 
-    def _create_authorized_client(self, connector_id: str, operation_name: str) -> Client:
-        return self._create_client(connector_id)
+    async def _create_authorized_client(self, connector_id: str, operation_name: str) -> Client:
+        return await self._create_client(connector_id)
 
-    def _create_capability_client(self, connector_id: str) -> Client:
-        return self._create_client(connector_id)
+    async def _create_capability_client(self, connector_id: str) -> Client:
+        return await self._create_client(connector_id)
 
     def _proxy_for(self, connector_id: str) -> ProxyProvider:
         proxy = self._connector_proxies.get(connector_id)
@@ -429,7 +434,8 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
             "operation_name": template.uri_template,
         }
         raw_template = McpResourceTemplate(name=template.name, title=template.title, uriTemplate=template.uri_template, description=template.description, mimeType=template.mime_type or None, icons=list(template.icons), annotations=template.annotations or None, _meta=meta)
-        return ProxyTemplate.from_mcp_template(partial(self._create_capability_client, connector_id), raw_template)
+        backend = ProxyTemplate.from_mcp_template(partial(self._create_capability_client, connector_id), raw_template)
+        return OwnershipCheckedTemplate(backend, partial(self._ensure_shared_connector, connector_id))
 
     async def _list_resources(self) -> Sequence[Resource]:
         index = DownstreamCapabilityIndex(await self._eligible_catalogs())

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, cpSync, mkdtempSync, mkdirSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, cpSync, mkdtempSync, mkdirSync, symlinkSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,77 +11,80 @@ import { setTimeout as delay } from 'node:timers/promises';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const read = path => readFileSync(join(root, path), 'utf8');
 
-test('home and enterprise have separate audiences and truthful product evidence', () => {
-  const home = read('index.html');
-  assert.match(home, /Your tools\. Your agents\./);
-  assert.match(home, /Apple Silicon/);
-  assert.match(home, /Windows · Coming soon/);
-  assert.match(home, /Connection illustration/i);
-  assert.doesNotMatch(home, /tree\/main\/desktop/, 'desktop is not on main before this PR merges');
-  assert.doesNotMatch(home, /kind create cluster|Grant access by group|umbod-overview\.mp4/);
-  assert.ok(existsSync(join(root, 'enterprise/index.html')), 'enterprise is a real HTML entry');
-  const enterprise = read('enterprise/index.html');
-  assert.match(enterprise, /platform teams/i);
-  assert.match(enterprise, /kind create cluster/);
-  assert.match(enterprise, /Grant access by group/);
-  assert.match(enterprise, /Kubernetes edition.*overview/i);
-  assert.match(enterprise, /mailto:hello@computerlove\.tech/);
-  assert.doesNotMatch(enterprise, /desktop-download-options|data-desktop-cta/);
+const release = JSON.parse(read('../release-metadata.json'));
+const retiredAssets = [
+  'download/index.html',
+  'src/downloads.mjs',
+  'scripts/verify-desktop-manifest.mjs',
+  'public/desktop-downloads.json',
+  'public/oauth/client-metadata.json',
+];
+
+test('home and enterprise lead with Kubernetes onboarding and secondary contact', () => {
+  for (const path of ['index.html', 'enterprise/index.html']) {
+    const html = read(path);
+    assert.match(html, /platform teams/i);
+    assert.match(html, /kind create cluster/);
+    assert.match(html, /Grant access by group/);
+    assert.match(html, /Kubernetes edition.*overview/i);
+    assert.match(html, /class="button" href="\/#how">Get started/);
+    assert.match(html, /class="text-link" href="mailto:hello@computerlove\.tech/);
+    assert.doesNotMatch(html, /Umbod Desktop|desktop-download-options|data-desktop-cta|Apple Silicon|Coming soon/);
+  }
+  assert.match(read('index.html'), /<title>Umbod — Agent access for platform teams<\/title>/);
+  for (const path of retiredAssets) assert.ok(!existsSync(join(root, path)), path);
 });
 
-for (const status of ['unavailable', 'available']) {
-  test(`multi-page production build preserves routes, metadata, navigation and ${status} no-JS downloads`, async () => {
-    const temporary = mkdtempSync(join(tmpdir(), 'umbod-pages-'));
-    const site = join(temporary, 'website');
-    mkdirSync(site);
-    try {
-      for (const path of ['index.html', 'download', 'enterprise', 'src', 'partials', 'styles.css', 'vite.config.js', 'wrangler.jsonc', 'package.json', 'public']) {
-        assert.ok(existsSync(join(root, path)), `missing multi-page input: ${path}`);
-        cpSync(join(root, path), join(site, path), { recursive: true });
+test('production build preserves routes, metadata, shared navigation and release versions', async () => {
+  const temporary = mkdtempSync(join(tmpdir(), 'umbod-pages-'));
+  const site = join(temporary, 'website');
+  mkdirSync(site);
+  try {
+    for (const path of ['index.html', 'enterprise', 'src', 'partials', 'styles.css', 'vite.config.js', 'wrangler.jsonc', 'package.json', 'public']) {
+      assert.ok(existsSync(join(root, path)), `missing multi-page input: ${path}`);
+      cpSync(join(root, path), join(site, path), {recursive: true});
+    }
+    cpSync(join(root, '../release-metadata.json'), join(temporary, 'release-metadata.json'));
+    symlinkSync(join(root, 'node_modules'), join(site, 'node_modules'));
+    const result = spawnSync(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build'], {cwd: site, encoding: 'utf8', timeout: 30000});
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    const pages = ['index.html', 'enterprise/index.html'].map(path => readFileSync(join(site, 'dist', path), 'utf8'));
+    for (const [i, html] of pages.entries()) {
+      const canonical = ['https://umbod.ai/', 'https://umbod.ai/enterprise/'][i];
+      assert.ok(html.includes(`<link rel="canonical" href="${canonical}">`));
+      assert.ok(html.includes(`<meta property="og:url" content="${canonical}">`));
+      assert.match(html, /href="\/enterprise\/"/);
+      assert.match(html, /href="\/docs\/"/);
+      assert.match(html, /<noscript>\s*<style>\.menu-toggle, \.copy-btn \{ display: none; \}<\/style>/);
+      for (const region of [
+        html.match(/<nav class="wrap"[\s\S]*?<\/nav>/)[0],
+        html.match(/<nav class="mobile-menu-links"[\s\S]*?<\/nav>/)[0],
+        html.match(/<noscript>[\s\S]*?<\/noscript>/)[0],
+        html.match(/<footer[\s\S]*?<\/footer>/)[0],
+      ]) {
+        assert.match(region, /href="\/#how">Get started/);
+        assert.doesNotMatch(region, /download|desktop/i);
       }
-      cpSync(join(root, '../release-metadata.json'), join(temporary, 'release-metadata.json'));
-      symlinkSync(join(root, 'node_modules'), join(site, 'node_modules'));
-      const manifest = status === 'unavailable' ? {schemaVersion: 1, status} : {
-        schemaVersion: 1, status, version: '0.2.0', tag: 'desktop-v0.2.0', sourceCommit: 'a'.repeat(40), channel: 'unsigned-prerelease',
-        assets: Object.fromEntries([['macos-arm64', 'Umbod-0.2.0-arm64.dmg'], ['windows-x64', 'Umbod-0.2.0-release-win-x64.zip']].map(([platform, file]) => [platform, {url: `https://github.com/computerlovetech/umbod/releases/download/desktop-v0.2.0/${file}`, sha256: 'b'.repeat(64), size: 123}]))
-      };
-      writeFileSync(join(site, 'public/desktop-downloads.json'), JSON.stringify(manifest));
-      const result = spawnSync(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build'], {cwd: site, encoding: 'utf8', timeout: 30000});
-      assert.equal(result.status, 0, result.stdout + result.stderr);
-      const pages = ['index.html', 'enterprise/index.html', 'download/index.html'].map(path => readFileSync(join(site, 'dist', path), 'utf8'));
-      for (const [i, html] of pages.entries()) {
-        const canonical = ['https://umbod.ai/', 'https://umbod.ai/enterprise/', 'https://umbod.ai/download/'][i];
-        assert.ok(html.includes(`<link rel="canonical" href="${canonical}">`));
-        assert.ok(html.includes(`<meta property="og:url" content="${canonical}">`));
-        assert.match(html, /href="\/enterprise\/"/);
-        assert.match(html, /href="\/download\/"/);
-        assert.match(html, /href="\/docs\/"/);
-        assert.match(html, /<noscript>/);
-        assert.match(html, /<noscript>\s*<style>\.menu-toggle, \.copy-btn \{ display: none; \}<\/style>/, 'no inert controls without JavaScript');
-        assert.doesNotMatch(html, /\{\{\s*(?:release|partial)\./);
-        assert.equal((html.match(/<h1\b/g) || []).length, 1);
-        for (const [, fragment] of html.matchAll(/href="#([^"]+)"/g)) assert.ok(html.includes(`id="${fragment}"`), `missing anchor ${fragment}`);
-      }
-      assert.notEqual(pages[0].match(/<title>(.*?)<\/title>/)[1], pages[1].match(/<title>(.*?)<\/title>/)[1]);
-      assert.doesNotMatch(pages[1], /desktop-download-options|releases\/download/);
-      if (status === 'available') {
-        assert.ok(pages[2].includes(manifest.assets['macos-arm64'].url));
-        assert.ok(!pages[2].includes(manifest.assets['windows-x64'].url));
-        assert.match(pages[2], /Unsigned prerelease/);
-        assert.match(pages[2], /SHA-256/);
-      } else {
-        assert.match(pages[2], /not available yet/);
-        assert.doesNotMatch(pages[2], /releases\/download/);
-      }
-      const redirects = readFileSync(join(site, 'dist/_redirects'), 'utf8');
-      assert.doesNotMatch(redirects, /\/enterprise\/?\s+\/\s+301/);
-      assert.match(redirects, /\/enterprise\.html\s+\/enterprise\/\s+301/);
-      if (status === 'unavailable') await verifyCloudflareRoutes(site);
-    } finally { rmSync(temporary, {recursive: true, force: true}); }
-  });
-}
+      assert.doesNotMatch(html, /\{\{\s*(?:release|partial)\./);
+      assert.doesNotMatch(html, /desktop-download-options|releases\/download|Umbod Desktop/);
+      assert.equal((html.match(/<h1\b/g) || []).length, 1);
+      assert.ok(html.includes(`--version ${release.chartVersion}`));
+      assert.ok(html.includes(`${release.chartVersion} chart`));
+      for (const [, fragment] of html.matchAll(/href="#([^"]+)"/g)) assert.ok(html.includes(`id="${fragment}"`), `missing anchor ${fragment}`);
+    }
+    assert.notEqual(pages[0].match(/<title>(.*?)<\/title>/)[1], pages[1].match(/<title>(.*?)<\/title>/)[1]);
+    for (const path of ['download/index.html', 'desktop-downloads.json', 'oauth/client-metadata.json']) {
+      assert.ok(!existsSync(join(site, 'dist', path)), path);
+    }
+    const redirects = readFileSync(join(site, 'dist/_redirects'), 'utf8');
+    assert.doesNotMatch(redirects, /\/enterprise\/?\s+\/\s+301/);
+    assert.match(redirects, /^\/enterprise\.html\s+\/enterprise\/\s+301$/m);
+    assert.match(redirects, /^\/download\s+\/#how\s+301$/m);
+    assert.match(redirects, /^\/download\/\s+\/#how\s+301$/m);
+    await verifyCloudflareRoutes(site);
+  } finally { rmSync(temporary, {recursive: true, force: true}); }
+});
 
-// Exercise the actual deployment runtime, not Vite's development SPA fallback.
 async function verifyCloudflareRoutes(site) {
   const socket = createServer();
   await new Promise(resolve => socket.listen(0, '127.0.0.1', resolve));
@@ -109,15 +112,18 @@ async function verifyCloudflareRoutes(site) {
       assert.match(await response.text(), /Umbod Enterprise/);
     }
     for (const path of ['/download', '/download/']) {
+      const redirect = await fetch(base + path, {redirect: 'manual'});
+      assert.equal(redirect.status, 301);
+      assert.equal(new URL(redirect.headers.get('location'), base).href, base + '/#how');
       const response = await fetch(base + path);
       assert.equal(response.status, 200);
-      assert.equal(new URL(response.url).pathname, '/download/');
-      assert.match(await response.text(), /Coming soon/);
+      assert.equal(new URL(response.url).pathname, '/');
+      assert.match(await response.text(), /kind create cluster/);
     }
     const missing = await fetch(base + '/not-a-real-page');
-    assert.equal(missing.status, 404, 'unknown routes must not silently serve the desktop page');
+    assert.equal(missing.status, 404, 'unknown routes must not silently serve the home page');
     const home = await fetch(base + '/');
-    assert.match(await home.text(), /Your tools\. Your agents\./);
+    assert.match(await home.text(), /Manage agent access\./);
   } finally {
     const exited = new Promise(resolve => worker.once('exit', resolve));
     if (worker.exitCode === null) { worker.kill('SIGTERM'); await exited; }

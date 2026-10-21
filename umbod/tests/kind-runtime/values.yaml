@@ -2,9 +2,14 @@ core:
   api:
     env:
       UMBOD_OTLP_ENABLED: "true"
+      UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE: "test:kind-personal-catalogue"
+  mcp:
+    env:
+      UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE: "test:kind-personal-catalogue"
 config:
   authorization:
     adminMembershipClaim: groups
+    mcpPermissionClaim: groups
 plugins:
   availableConnectorIds:
     - test

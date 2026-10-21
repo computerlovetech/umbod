@@ -1,3 +1,7 @@
+from umbod.core.connectors.downstream_mcp.stores.personal_connections import (
+    DefinitionBoundPersonalConnectionStore,
+    EncryptedPersonalConnectionStore,
+)
 from umbod.core.connectors.downstream_mcp.stores.catalogs import ToolCatalogStoreService
 from umbod.core.connectors.downstream_mcp.stores.credentials import (
     EncryptedCredentialStoreService,
@@ -36,6 +40,7 @@ from umbod.core.connectors.downstream_mcp.stores.ports import (
     ToolCatalogStore,
 )
 from umbod.core.connectors.downstream_mcp.stores.schema import (
+    PERSONAL_CONNECTION_TABLE,
     CONNECTOR_CREDENTIAL_TABLE,
     CONNECTOR_DEFINITION_TABLE,
     CONNECTOR_HEALTH_TABLE,
@@ -43,6 +48,9 @@ from umbod.core.connectors.downstream_mcp.stores.schema import (
 )
 
 __all__ = [
+    "DefinitionBoundPersonalConnectionStore",
+    "EncryptedPersonalConnectionStore",
+    "PERSONAL_CONNECTION_TABLE",
     "CONNECTOR_CREDENTIAL_TABLE",
     "CONNECTOR_DEFINITION_ADAPTER",
     "CONNECTOR_DEFINITION_TABLE",

@@ -1,5 +1,12 @@
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+
+from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
+from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationUnavailable
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import install_personal_oauth_configuration
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configuration_schema import PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID
+
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_schema import PERSONAL_OAUTH_ATTEMPT_TABLE, PERSONAL_OAUTH_ATTEMPT_CONNECTOR_ID
 from datetime import UTC, datetime
 
 from pydantic import TypeAdapter
@@ -28,6 +35,8 @@ from umbod.core.connectors.downstream_mcp.stores.ports import (
     SaveCredential,
 )
 from umbod.core.connectors.downstream_mcp.stores.schema import (
+    PERSONAL_CONNECTION_CONNECTOR_ID,
+    PERSONAL_CONNECTION_TABLE,
     CONNECTOR_CREDENTIAL_CONNECTOR_ID,
     CONNECTOR_CREDENTIAL_TABLE,
     CONNECTOR_DEFINITION_CONNECTOR_ID,
@@ -44,6 +53,7 @@ from umbod.core.connectors.downstream_mcp.stores.schema import (
 from umbod.core.connectors.downstream_mcp.management.unit_of_work import (
     ApplyDiscoveredCatalog,
     CreateDownstreamConnectorAggregate,
+    CreatePersonalOAuthConnectorAggregate,
     DeleteCatalog,
     DeleteCredential,
     DeleteDownstreamConnectorAggregate,
@@ -362,6 +372,9 @@ async def _delete(
     await delete_connector_invocation_policies(session, "downstream_mcp", command.connector_id)
     for phase, table, field in (
         ("activation", CAPABILITY_ACTIVATION_STATE_TABLE, CAPABILITY_ACTIVATION_STATE_CONNECTOR_ID),
+        ("personal_connections", PERSONAL_CONNECTION_TABLE, PERSONAL_CONNECTION_CONNECTOR_ID),
+        ("personal_oauth_attempts", PERSONAL_OAUTH_ATTEMPT_TABLE, PERSONAL_OAUTH_ATTEMPT_CONNECTOR_ID),
+        ("personal_oauth_configuration", PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID),
         ("credential", CONNECTOR_CREDENTIAL_TABLE, CONNECTOR_CREDENTIAL_CONNECTOR_ID),
         ("catalog", TOOL_CATALOG_TABLE, TOOL_CATALOG_CONNECTOR_ID),
         ("health", CONNECTOR_HEALTH_TABLE, CONNECTOR_HEALTH_CONNECTOR_ID),
@@ -385,6 +398,17 @@ class DownstreamConnectorUnitOfWorkService:
 
     async def create(self, command: CreateDownstreamConnectorAggregate) -> None:
         await self._run(lambda session: _replace(session, command, self._context))
+
+    async def create_personal_oauth(self, command: CreatePersonalOAuthConnectorAggregate) -> None:
+        async def mutate(session: DatabaseSession) -> None:
+            if not uses_personal_oauth(command.aggregate.definition):
+                raise PersonalOAuthConfigurationUnavailable("Personal OAuth configuration unavailable")
+            await _replace(session, command.aggregate, self._context)
+            self._context.fault("personal_oauth_configuration")
+            await install_personal_oauth_configuration(session, self._context.cipher, command.aggregate.definition.connector_id, command.configuration)
+            self._context.fault("personal_oauth_configuration_saved")
+
+        await self._run(mutate)
 
     async def replace(self, command: ReplaceDownstreamConnectorAggregate) -> None:
         await self._run(lambda session: _replace(session, command, self._context))

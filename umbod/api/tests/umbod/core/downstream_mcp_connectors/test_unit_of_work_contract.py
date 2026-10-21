@@ -1,4 +1,7 @@
 from dataclasses import replace
+from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalConnectionKey, PersonalConnectionStore, SetPersonalConnectionEnabled, InMemoryPersonalConnectionStore
+from umbod.core.connectors.downstream_mcp.stores.personal_connections import EncryptedPersonalConnectionStore
+from umbod.core.connectors.downstream_mcp.management import DeleteDownstreamConnectorAggregate
 from umbod.core.activation import ActivationStatus, ActivationStore, CapabilityRef
 from umbod.core.connectors.downstream_mcp.management.unit_of_work import ApplyDiscoveredCatalog, DeleteCatalog, InvalidateDownstreamConnectorAggregate
 from umbod.core.connectors.downstream_mcp.models import ConnectorUnhealthy
@@ -25,6 +28,7 @@ from umbod.core.connectors.downstream_mcp.management import CreateDownstreamConn
 
 class AggregateHarness(Protocol):
     unit_of_work: DownstreamConnectorUnitOfWork
+    personal_connections: PersonalConnectionStore
     definitions: ConnectorDefinitionStore
     credentials: EncryptedCredentialStore
     catalogs: ToolCatalogStore
@@ -34,8 +38,9 @@ class AggregateHarness(Protocol):
 
 class Harness:
 
-    def __init__(self, unit_of_work: DownstreamConnectorUnitOfWork, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, health: ConnectorHealthStore, publishing: ConnectorPublishingStore, activations: ActivationStore) -> None:
+    def __init__(self, unit_of_work: DownstreamConnectorUnitOfWork, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, health: ConnectorHealthStore, publishing: ConnectorPublishingStore, activations: ActivationStore, personal_connections: PersonalConnectionStore) -> None:
         self.unit_of_work = unit_of_work
+        self.personal_connections = personal_connections
         self.definitions = definitions
         self.credentials = credentials
         self.catalogs = catalogs
@@ -48,14 +53,19 @@ def _command() -> CreateDownstreamConnectorAggregate:
     return CreateDownstreamConnectorAggregate(definition=StaticBearerConnectorDefinition(connector_id='alpha', display_name='Alpha', capability_description='Manage downstream tools', endpoint_url='https://example.test/mcp'), credential=ReplaceCredential(credential=StaticBearerCredentialState(connector_id='alpha', bearer_token='secret-token')), catalog=ReplaceCatalog(snapshot=ToolCatalogSnapshot(connector_id='alpha', discovered_at=checked_at, tools=())), health=ReplaceHealth(health=ConnectorHealthy(connector_id='alpha', checked_at=checked_at)), activation=ReconcileActivation(operation_names=()), publication=PreservePublication())
 
 async def _inmemory(_: Path, fault: Callable[[str], None]) -> AggregateHarness:
-    definitions = ConnectorDefinitionStoreService(create_inmemory_runtime().database, CONNECTOR_DEFINITION_TABLE)
+    from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import EncryptedPersonalOAuthConfigurationStore
+
+    definition_database = create_inmemory_runtime().database
+    definitions = ConnectorDefinitionStoreService(definition_database, CONNECTOR_DEFINITION_TABLE)
+    configurations = EncryptedPersonalOAuthConfigurationStore(definition_database, AuthenticatedTextCipher('unit-of-work-secret'))
     credentials = EncryptedCredentialStoreService(create_inmemory_runtime().database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('unit-of-work-secret'))
     catalogs = ToolCatalogStoreService(create_inmemory_runtime().database, TOOL_CATALOG_TABLE)
     health = ConnectorHealthStoreService(create_inmemory_runtime().database, CONNECTOR_HEALTH_TABLE)
     database = create_inmemory_runtime().database
     activations = CapabilityActivationStoreService(database, CAPABILITY_ACTIVATION_STATE_TABLE)
     publishing = ConnectorPublishingStoreService(database, PUBLICATION_STATE_TABLE)
-    return Harness(InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activations, publishing, fault), definitions, credentials, catalogs, health, publishing, activations)
+    personal = InMemoryPersonalConnectionStore()
+    return Harness(InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activations, publishing, fault, personal, configurations), definitions, credentials, catalogs, health, publishing, activations, personal)
 
 async def _sqlite(path: Path, fault: Callable[[str], None]) -> AggregateHarness:
     definitions = ConnectorDefinitionStoreService(create_sqlite_runtime(path).database, CONNECTOR_DEFINITION_TABLE)
@@ -65,7 +75,7 @@ async def _sqlite(path: Path, fault: Callable[[str], None]) -> AggregateHarness:
     database = (await prepared_sqlite_runtime(path)).database
     activations = await create_capability_activation_store(database)
     publishing = await create_connector_publishing_store(database)
-    return Harness(DownstreamConnectorUnitOfWorkService(create_sqlite_runtime(path).database, AuthenticatedTextCipher('unit-of-work-secret'), fault, utc_clock), definitions, credentials, catalogs, health, publishing, activations)
+    return Harness(DownstreamConnectorUnitOfWorkService(create_sqlite_runtime(path).database, AuthenticatedTextCipher('unit-of-work-secret'), fault, utc_clock), definitions, credentials, catalogs, health, publishing, activations, EncryptedPersonalConnectionStore(database, AuthenticatedTextCipher('unit-of-work-secret')))
 
 @pytest.mark.parametrize('factory', (_inmemory, _sqlite), ids=('inmemory', 'sqlite'))
 @pytest.mark.asyncio
@@ -100,6 +110,40 @@ async def test_create_failure_at_each_phase_rolls_back_all_state(tmp_path: Path,
     assert (await harness.credentials.get(query)).found is False
     assert (await harness.catalogs.get(query)).found is False
     assert (await harness.health.get(query)).found is False
+
+@pytest.mark.parametrize("factory", (_inmemory, _sqlite), ids=("inmemory", "sqlite"))
+@pytest.mark.parametrize("failed_phase", ("none", "credential", "definition", "publication"))
+@pytest.mark.asyncio
+async def test_connector_deletion_personal_cleanup_is_atomic(
+    tmp_path: Path,
+    factory: Callable[[Path, Callable[[str], None]], Awaitable[AggregateHarness]],
+    failed_phase: str,
+) -> None:
+    deleting = False
+
+    def fault(phase: str) -> None:
+        if deleting and phase == failed_phase:
+            raise RuntimeError("delete failed")
+
+    path = tmp_path / "delete.sqlite3"
+    await prepared_sqlite_runtime(path)
+    harness = await factory(path, fault)
+    await harness.unit_of_work.create(_command())
+    keys = tuple(PersonalConnectionKey(principal=CanonicalPrincipal(namespace="trusted", subject=owner), connector_id="alpha") for owner in ("one", "two"))
+    before = tuple([await harness.personal_connections.set_enabled(SetPersonalConnectionEnabled(key=key, enabled=True)) for key in keys])
+    deleting = True
+    command = DeleteDownstreamConnectorAggregate(connector_id="alpha")
+    if failed_phase == "none":
+        await harness.unit_of_work.delete(command)
+        for key in keys:
+            assert not (await harness.personal_connections.get(key)).enabled
+        assert not (await harness.definitions.get(ConnectorIdQuery(connector_id="alpha"))).found
+    else:
+        with pytest.raises(RuntimeError, match="delete failed"):
+            await harness.unit_of_work.delete(command)
+        assert tuple([await harness.personal_connections.get(key) for key in keys]) == before
+        assert (await harness.definitions.get(ConnectorIdQuery(connector_id="alpha"))).found
+
 
 def _published_prefix_command(connector_id: str, tool_name_prefix: str) -> CreateDownstreamConnectorAggregate:
     checked_at = datetime(2026, 1, 2, tzinfo=UTC)

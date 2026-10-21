@@ -34,12 +34,6 @@
           };
         in {
           default = pkgs.mkShell shellInputs;
-        } // nixpkgs.lib.optionalAttrs (system == "aarch64-darwin") {
-          desktop = pkgs.mkShellNoCC (shellInputs // {
-            shellHook = ''
-              ${pkgs.bash}/bin/bash ${./desktop/scripts/check-macos-toolchain.sh} || exit $?
-            '';
-          });
         });
     };
 }

@@ -13,6 +13,10 @@ from umbod.core.connectors.downstream_mcp.models import (
     default_tool_name_prefix,
     validate_custom_header_name,
 )
+from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
+    PersonalOAuthSettings,
+    legacy_personal_oauth_settings,
+)
 from umbod.rest.connectors.schemas import (
     ConnectorPublicationResponse,
     InitialCapabilityDescriptionOverride,
@@ -96,6 +100,52 @@ class CreateConnectorRequest(ApiModel):
     )
 
 
+class PersonalOAuthConfigurationRequest(ApiModel):
+    endpoint_url: EndpointUrl
+    oauth_configuration: PersonalOAuthSettings = Field(default_factory=legacy_personal_oauth_settings)
+
+
+class ReplacePersonalOAuthConfigurationRequest(ApiModel):
+    expected_revision: str = Field(min_length=1, max_length=128)
+    settings: PersonalOAuthSettings
+
+
+class DynamicPublicClientResponse(ApiModel):
+    kind: Literal["dynamic_public"]
+
+
+class PreconfiguredPublicClientResponse(ApiModel):
+    kind: Literal["preconfigured_public"]
+    issuer_url: str
+    client_id: str
+
+
+class PreconfiguredConfidentialClientResponse(ApiModel):
+    kind: Literal["preconfigured_confidential"]
+    issuer_url: str
+    client_id: str
+    token_endpoint_auth_method: Literal["client_secret_basic", "client_secret_post"]
+    client_secret_configured: Literal[True]
+
+
+PersonalOAuthClientResponse = Annotated[
+    DynamicPublicClientResponse | PreconfiguredPublicClientResponse | PreconfiguredConfidentialClientResponse,
+    Field(discriminator="kind"),
+]
+
+
+class PersonalOAuthConfigurationResponse(ApiModel):
+    connector_id: str
+    revision: str
+    requested_scopes: tuple[str, ...]
+    client: PersonalOAuthClientResponse
+
+
+class CreatePersonalOAuthConnectorRequest(ApiModel):
+    metadata: CreateConnectorMetadataRequest
+    configuration: PersonalOAuthConfigurationRequest
+
+
 class ConnectorMetadataPatchRequest(ApiModel):
     display_name: str | None = Field(default=None, min_length=1)
     tool_name_prefix: ToolNamePrefix | None = None
@@ -151,6 +201,7 @@ ConnectorConfigurationRequest = Annotated[
 class ConnectorConfigurationResponse(ApiModel):
     endpoint_url: str
     auth_mode: Literal["none", "static_bearer", "oauth"]
+    authorization_mode: Literal["shared", "personal"]
     header_type: StaticTokenHeaderType
     custom_header_name: str | None
     credential_configured: bool
@@ -195,6 +246,7 @@ class ConnectorResponse(ApiModel):
     public_path: str
     public_url: str
     auth_mode: Literal["none", "static_bearer", "oauth"]
+    authorization_mode: Literal["shared", "personal"]
     header_type: StaticTokenHeaderType
     custom_header_name: str | None
     credential_configured: bool
@@ -207,6 +259,7 @@ class ConnectorSummaryResponse(ApiModel):
     display_name: str
     icon_url: str = ""
     auth_mode: Literal["none", "static_bearer", "oauth"] = "none"
+    authorization_mode: Literal["shared", "personal"]
     publication_status: Literal["published", "unpublished"]
     health: ConnectorHealthResponse
 

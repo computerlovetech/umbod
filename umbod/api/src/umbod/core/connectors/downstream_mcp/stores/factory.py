@@ -1,5 +1,14 @@
 from dataclasses import dataclass
 
+from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import EncryptedPersonalOAuthConfigurationStore
+
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthAttemptStore
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_attempts import EncryptedPersonalOAuthAttemptStore
+
+from umbod.core.connectors.downstream_mcp.personal_connections import PersonalConnectionStore
+from umbod.core.connectors.downstream_mcp.stores.personal_connections import DefinitionBoundPersonalConnectionStore
+
 from umbod.core.activation import ActivationStore, CAPABILITY_ACTIVATION_STATE_TABLE
 from umbod.core.activation.stores.service import CapabilityActivationStoreService
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
@@ -44,6 +53,9 @@ class DownstreamMcpStores:
     publishing: ConnectorPublishingStore
     activations: ActivationStore
     unit_of_work: DownstreamConnectorUnitOfWork
+    personal_connections: PersonalConnectionStore
+    personal_oauth_attempts: PersonalOAuthAttemptStore
+    personal_oauth_configurations: PersonalOAuthConfigurationStore
 
 
 async def create_downstream_mcp_stores(
@@ -51,6 +63,13 @@ async def create_downstream_mcp_stores(
     database: Database,
 ) -> DownstreamMcpStores:
     return DownstreamMcpStores(
+        personal_oauth_configurations=EncryptedPersonalOAuthConfigurationStore(database, AuthenticatedTextCipher(credential_secret)),
+        personal_oauth_attempts=EncryptedPersonalOAuthAttemptStore(
+            database, AuthenticatedTextCipher(credential_secret), utc_clock
+        ),
+        personal_connections=DefinitionBoundPersonalConnectionStore(
+            database, AuthenticatedTextCipher(credential_secret)
+        ),
         definitions=ConnectorDefinitionStoreService(database, CONNECTOR_DEFINITION_TABLE),
         credentials=EncryptedCredentialStoreService(
             database,

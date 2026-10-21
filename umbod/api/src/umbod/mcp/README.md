@@ -34,6 +34,10 @@ File-input connector tools keep uploaded bytes only for the current app-backend 
 
 **Read when working with:** Downstream discovery, reconciliation, publication, or invocation.
 
+`downstream_mcp_connectors/principal.py` exposes `McpCanonicalPrincipalProvider(settings)`. Each call reads the current FastMCP access-token context and delegates its verified upstream claims to core's `personal_connections.VerifiedClaimsPrincipalProvider`; it does not decode or trust the outer proxy issuer, cache principals or enable runtime execution.
+
+Personal OAuth definitions are currently unavailable to shared runtime execution and background discovery. `provider.py` resolves shared connection commands afresh when creating clients rather than caching credentials by connector ID; previously materialized tools, prompts, resources, and templates therefore recheck ownership before downstream access. `resource_access.py` also guards reads of cached resources created from templates. This is an isolation foundation, not personal OAuth execution support.
+
 ### `openapi_connectors/`
 
 **Read when working with:** MCP exposure and execution of OpenAPI-generated operations.

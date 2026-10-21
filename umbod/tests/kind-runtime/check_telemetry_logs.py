@@ -11,6 +11,17 @@ def main() -> None:
     token = os.environ["UMBOD_TEST_OTLP_BEARER_TOKEN"]
     if token in output:
         raise SystemExit("Telemetry credentials appeared in API stdout")
+    if os.environ["UMBOD_TEST_ROOT_SECRET"] in output:
+        raise SystemExit("Encryption credentials appeared in API stdout")
+    callback_sentinels = (
+        "runtime-code-must-not-be-reflected",
+        "runtime-state-must-not-be-logged",
+        "runtime-issuer-must-not-be-logged",
+        "runtime-client-secret-must-not-be-reflected",
+        "runtime-rotated-client-secret-must-not-be-reflected",
+    )
+    if any(sentinel in output for sentinel in callback_sentinels):
+        raise SystemExit("Personal OAuth callback parameters appeared in API stdout")
     observed_signals: set[str] = set()
     for line in output.splitlines():
         try:

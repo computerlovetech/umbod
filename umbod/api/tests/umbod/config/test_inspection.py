@@ -116,6 +116,7 @@ def test_catalog_order_is_deterministic_and_canonical_variables_are_unique() -> 
     assert first == second
     assert len(variables) == len(set(variables))
     assert [group["id"] for group in first["groups"]] == [
+        "personal_connections",
         "user_profile",
         "telemetry",
         "runtime",

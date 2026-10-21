@@ -6,6 +6,7 @@ from umbod.core.connectors.downstream_mcp.models import (
     DiscoveryFailed,
     DiscoveryResult,
     DiscoverySucceeded,
+    uses_personal_oauth,
 )
 from umbod.core.connectors.downstream_mcp.stores import (
     ConnectorDefinitionFound,
@@ -42,10 +43,12 @@ class ConnectorDiscoveryExecutor:
     async def execute(self, connector_id: str) -> DiscoveryResult | None:
         query = ConnectorIdQuery(connector_id=connector_id)
         definition = await self._dependencies.definitions.get(query)
-        credential = await self._dependencies.credentials.get(query)
-        if not isinstance(definition, ConnectorDefinitionFound) or not isinstance(
-            credential, CredentialFound
+        if not isinstance(definition, ConnectorDefinitionFound) or uses_personal_oauth(
+            definition.definition
         ):
+            return None
+        credential = await self._dependencies.credentials.get(query)
+        if not isinstance(credential, CredentialFound):
             return None
         return await self._dependencies.discovery.discover(
             DiscoverDownstreamTools(
