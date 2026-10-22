@@ -40,7 +40,7 @@ describe('downstream MCP schemas', () => {
 
 
   test('list and get parse distinct strict contracts while detail retains detail fields', () => {
-    const summary = { connector_id: 'one', display_name: 'One', icon_url: '', auth_mode: 'none' as const, publication_status: 'unpublished', health: { status: 'unknown', checked_at: null, reason: null } };
+    const summary = { connector_id: 'one', display_name: 'One', icon_url: '', auth_mode: 'none' as const, authorization_mode: 'shared' as const, publication_status: 'unpublished', health: { status: 'unknown', checked_at: null, reason: null } };
     const detail = { ...summary, tool_name_prefix: 'One', capability_description: 'Search records', base_capability_description: 'Search records', effective_capability_description: 'Search records', capability_description_override: { state: 'system' as const, revision: 0 }, endpoint_url: 'https://one.test/mcp', public_path: '/mcp/proxies/one', public_url: 'https://agent.test/mcp/proxies/one', header_type: 'bearer' as const, custom_header_name: null, credential_configured: false };
     expect(downstreamMcpConnectorListSchema.parse({ connectors: [summary] }).connectors[0]).toEqual(summary);
     expect(downstreamMcpConnectorListSchema.safeParse({ connectors: [detail] }).success).toBe(false);
@@ -54,10 +54,12 @@ describe('downstream MCP schemas', () => {
 });
 
 describe('downstream MCP route adapter', () => {
-  test('encodes ids and exposes publication and activation operations', () => {
+  test('encodes ids and exposes publication and activation operations', async () => {
     const { transport, calls } = recordingTransport();
     const route = new DownstreamMcpConnectorsRoute(transport);
-route.publish('a b'); route.unpublish('a b'); route.saveActivations('a b', [{ toolId: 'tool/run', activationStatus: 'enabled', invocationMode: 'ask', expectedPolicyRevision: 1 }, { toolId: 'tool/read', invocationMode: 'direct', expectedPolicyRevision: 0 }]);
+await route.publish('a b'); await route.unpublish('a b'); await route.saveActivations('a b', [{ toolId: 'tool/run', activationStatus: 'enabled', invocationMode: 'ask', expectedPolicyRevision: 1 }, { toolId: 'tool/read', invocationMode: 'direct', expectedPolicyRevision: 0 }]);
+    expect(calls.filter((call) => call.method === 'GET').map((call) => call.path)).toEqual(Array(3).fill('/admin/connectors/mcp/a%20b'));
+    calls.splice(0, calls.length, ...calls.filter((call) => call.method !== 'GET'));
     expect(calls.map((call) => [call.method, call.path])).toEqual([
       ['PUT', '/admin/connectors/mcp/a%20b/publication'],
       ['DELETE', '/admin/connectors/mcp/a%20b/publication'],

@@ -7,6 +7,7 @@
   import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
 
   type AdminShellActiveItem =
+    | 'personalMcpServers'
     | 'overview'
     | 'connectors'
     | 'groupPermissions'
@@ -33,6 +34,7 @@
   const navigationItems: { id: AdminShellActiveItem; label: string; href: string }[] = [
     { id: 'overview', label: 'Overview', href: '/admin' },
     { id: 'connectors', label: 'Connectors', href: '/admin/connectors' },
+    { id: 'personalMcpServers', label: 'Personal MCP servers', href: '/admin/personal-mcp-servers' },
     { id: 'groupPermissions', label: 'Group permissions', href: '/admin/group-permissions' },
     { id: 'mcpSetup', label: 'MCP setup guide', href: '/admin/mcp-setup' },
     {

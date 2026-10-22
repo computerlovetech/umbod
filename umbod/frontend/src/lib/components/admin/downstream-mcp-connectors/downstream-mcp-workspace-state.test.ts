@@ -10,17 +10,19 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 
 function createBundle(id: string, toolName = `${id}-tool`): DownstreamMcpWorkspaceBundle {
   return {
-    connector: { connector_id: id, display_name: id, tool_name_prefix: id, icon_url: '', capability_description: 'Manage', base_capability_description: 'Manage', effective_capability_description: 'Manage', capability_description_override: { state: 'system', revision: 0 }, endpoint_url: 'https://example.com/mcp', public_path: `/mcp/proxies/${id}`, public_url: `https://agent.test/mcp/proxies/${id}`, auth_mode: 'none', header_type: 'bearer', custom_header_name: null, credential_configured: false, publication_status: 'unpublished', health: { status: 'unknown', checked_at: null, reason: null } },
+    connector: { connector_id: id, display_name: id, tool_name_prefix: id, icon_url: '', capability_description: 'Manage', base_capability_description: 'Manage', effective_capability_description: 'Manage', capability_description_override: { state: 'system', revision: 0 }, endpoint_url: 'https://example.com/mcp', public_path: `/mcp/proxies/${id}`, public_url: `https://agent.test/mcp/proxies/${id}`, auth_mode: 'none', authorization_mode: 'shared', header_type: 'bearer', custom_header_name: null, credential_configured: false, publication_status: 'unpublished', health: { status: 'unknown', checked_at: null, reason: null } },
     catalog: { discovered_at: null, tools: [{ name: toolName, title: toolName, description: '', input_schema: {}, output_schema: null, activation_status: 'disabled' }] },
     promptCatalog: { prompts: [], available_actions: [] },
     resourceCatalog: { resources: [], availableActions: [] }
   };
 }
 
+const sharedRows = ['a', 'b', 'orders'].map((connector_id) => ({ connector_id, authorization_mode: 'shared' as const }));
+
 describe('DownstreamMcpWorkspaceState', () => {
   test('uses a coherent initial bundle without requesting it again', () => {
     const loader = vi.fn();
-    const state = new DownstreamMcpWorkspaceState(undefined, undefined, createBundle('a'), loader);
+    const state = new DownstreamMcpWorkspaceState(undefined, undefined, createBundle('a'), loader, undefined, undefined, sharedRows);
     expect(state.bundle?.connector.connector_id).toBe('a');
     expect(state.bundle?.catalog.tools[0]?.name).toBe('a-tool');
     expect(loader).not.toHaveBeenCalled();
@@ -28,7 +30,7 @@ describe('DownstreamMcpWorkspaceState', () => {
 
   test('loads all uncached bundle catalogs and reuses the cache', async () => {
     const loader = vi.fn(async (id: string) => createBundle(id));
-    const state = new DownstreamMcpWorkspaceState(undefined, undefined, createBundle('a'), loader);
+    const state = new DownstreamMcpWorkspaceState(undefined, undefined, createBundle('a'), loader, undefined, undefined, sharedRows);
     state.selectConnector('b');
     expect(state.detailLoading).toBe(true);
     await vi.waitFor(() => expect(state.bundle?.connector.connector_id).toBe('b'));
@@ -40,7 +42,7 @@ describe('DownstreamMcpWorkspaceState', () => {
 
   test('exposes bundle failure and retries', async () => {
     const loader = vi.fn().mockRejectedValueOnce(new BrowserRequestError(undefined, new Error('failed'))).mockResolvedValueOnce(createBundle('b'));
-    const state = new DownstreamMcpWorkspaceState(undefined, undefined, createBundle('a'), loader);
+    const state = new DownstreamMcpWorkspaceState(undefined, undefined, createBundle('a'), loader, undefined, undefined, sharedRows);
     state.selectConnector('b');
     await vi.waitFor(() => expect(state.detailFailed).toBe(true));
     state.retrySelected();
@@ -53,7 +55,7 @@ describe('DownstreamMcpWorkspaceState', () => {
     const b = deferred<DownstreamMcpWorkspaceBundle>();
     const newerA = deferred<DownstreamMcpWorkspaceBundle>();
     const loader = vi.fn().mockReturnValueOnce(firstA.promise).mockReturnValueOnce(b.promise).mockReturnValueOnce(newerA.promise);
-    const state = new DownstreamMcpWorkspaceState(undefined, undefined, undefined, loader);
+    const state = new DownstreamMcpWorkspaceState(undefined, undefined, undefined, loader, undefined, undefined, sharedRows);
     state.selectConnector('a');
     state.selectConnector('b');
     firstA.resolve(createBundle('a', 'stale-success'));
@@ -66,7 +68,7 @@ describe('DownstreamMcpWorkspaceState', () => {
 
     const olderA = deferred<DownstreamMcpWorkspaceBundle>();
     const sameIdLoader = vi.fn().mockReturnValueOnce(olderA.promise).mockReturnValueOnce(newerA.promise);
-    const state2 = new DownstreamMcpWorkspaceState(undefined, undefined, undefined, sameIdLoader);
+    const state2 = new DownstreamMcpWorkspaceState(undefined, undefined, undefined, sameIdLoader, undefined, undefined, sharedRows);
     state2.selectConnector('a');
     state2.retrySelected();
     newerA.resolve(createBundle('a', 'newer'));
@@ -84,10 +86,25 @@ describe('DownstreamMcpWorkspaceState', () => {
     expect(state.bundle?.catalog.tools[0]?.activation_status).toBe('enabled');
   });
 
+  test('rejects personal initial bundles and configuration forms', () => {
+    const personal = createBundle('personal');
+    personal.connector.authorization_mode = 'personal';
+    personal.connector.auth_mode = 'oauth';
+    const loader = vi.fn();
+    const state = new DownstreamMcpWorkspaceState(undefined, undefined, personal, loader);
+    state.selectConnector('personal');
+    state.selectConnector('unknown');
+    expect(loader).not.toHaveBeenCalled();
+    expect(state.selectedConnectorId).toBeNull();
+    expect(state.bundle).toBeNull();
+    state.open('configure', { focus() {} } as unknown as HTMLElement, personal.connector);
+    expect(state.modal).toBeNull();
+  });
+
   test('shows the bearer credential field only for bearer authentication', () => {
     const state = new DownstreamMcpWorkspaceState();
     state.open('configure', { focus() {} } as unknown as HTMLElement, {
-      connector_id: 'payments', display_name: 'Payments', tool_name_prefix: 'Payments', icon_url: '', capability_description: 'Manage payments', base_capability_description: 'Manage payments', effective_capability_description: 'Manage payments', capability_description_override: { state: 'system', revision: 0 }, endpoint_url: 'https://example.com/mcp', public_path: '/mcp/proxies/payments', public_url: 'https://agent.test/mcp/proxies/payments', auth_mode: 'static_bearer', header_type: 'bearer', custom_header_name: null, credential_configured: true, publication_status: 'unpublished', health: { status: 'unknown', checked_at: null, reason: null }
+      connector_id: 'payments', display_name: 'Payments', tool_name_prefix: 'Payments', icon_url: '', capability_description: 'Manage payments', base_capability_description: 'Manage payments', effective_capability_description: 'Manage payments', capability_description_override: { state: 'system', revision: 0 }, endpoint_url: 'https://example.com/mcp', public_path: '/mcp/proxies/payments', public_url: 'https://agent.test/mcp/proxies/payments', auth_mode: 'static_bearer', authorization_mode: 'shared', header_type: 'bearer', custom_header_name: null, credential_configured: true, publication_status: 'unpublished', health: { status: 'unknown', checked_at: null, reason: null }
     });
     expect(state.authMode).toBe('static_bearer');
     state.setAuthMode('none');
@@ -98,7 +115,7 @@ describe('DownstreamMcpWorkspaceState', () => {
 
   test('opens a connector-keyed capability description modal and closes the menu', () => {
     const loader = async (): Promise<DownstreamMcpWorkspaceBundle> => { throw new BrowserRequestError(404); };
-    const state = new DownstreamMcpWorkspaceState(undefined, undefined, undefined, loader);
+    const state = new DownstreamMcpWorkspaceState(undefined, undefined, undefined, loader, undefined, undefined, sharedRows);
     const trigger = { focus() {} } as unknown as HTMLElement;
     state.setMenuOpen(true);
 

@@ -16,6 +16,10 @@
 
 ## Submodules
 
+### `personal-mcp-servers/`
+
+**Read when working with:** The personal server allowlist administration port, strict request and nonsecret OAuth policy schemas in `domain/`, in-memory behavior, and the guarded HTTP route adapter. Registration, revision-checked policy replacement, publication and deletion remain separate from owner authorization and tool contract approval.
+
 ### `overview/`
 
 **Read when working with:** Administration dashboard counts, source availability, attention aggregation, or bounded tool activation loading. See `overview/README.md`.

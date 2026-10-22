@@ -322,6 +322,14 @@ export class GroupPermissionsState {
 
     return stagedPermissionSetFromState(this.pageData, this.selectedGroupId) ?? persistedPermissionSetFromState(this.pageData, this.selectedGroupId) ?? emptyPermissionSet(this.selectedGroupId);
   });
+  unavailableGrantedConnectorIds = $derived.by((): string[] => {
+    const assignableIds = new Set(this.connectors.map((connector) => connector.id));
+    const grantedIds = new Set([
+      ...(this.selectedPermissionSet?.connectorIds ?? []),
+      ...(this.selectedPermissionSet?.capabilities ?? []).map((capability) => capability.connectorId)
+    ]);
+    return [...grantedIds].filter((connectorId) => !assignableIds.has(connectorId)).sort();
+  });
   selectedPermissionSetJson = $derived(JSON.stringify(this.selectedPermissionSet ?? { groupId: '', connectorIds: [], capabilities: [] }));
   selectedPermissionChangesJson = $derived.by(() => {
     if (this.selectedGroupId === null || this.selectedPermissionSet === null) {
@@ -502,6 +510,13 @@ export class GroupPermissionsState {
     this.saveMessage = message;
     this.targetsCache = null;
     if (this.selectedGroupId === groupId) void this.loadSelection(groupId);
+  };
+
+  removeUnavailableConnectorGrants = (connectorId: string): void => {
+    if (this.editorStatus !== 'ready' || this.selectedGroupId === null || !this.unavailableGrantedConnectorIds.includes(connectorId)) {
+      return;
+    }
+    this.setConnectorPermission(connectorId, false);
   };
 
   setConnectorPermission = (connectorId: string, checked: boolean): void => {

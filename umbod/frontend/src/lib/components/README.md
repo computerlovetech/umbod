@@ -27,6 +27,14 @@ existing logo. `AdminShell` provides the inline-size container used by
 
 **Read when working with:** Administration shell, connectors, permissions, OpenAPI, or downstream MCP interfaces. Mutation forms dispatch typed browser operations through `$lib/admin/operations/browser-submit`; callbacks preserve reconciliation and register pending-state cleanup.
 
+### `admin/personal-mcp-servers/`
+
+`PersonalServersPage.svelte` owns the mounted allowlist lifecycle and scoped administration state. `PolicyFields.svelte` and `PolicyForm` keep fresh confidential secrets transient. Explicit confirmations separate policy invalidation, publication, withdrawal and deletion; conflicts and unknown writes require manual reload without replay. Server registration paths are identifiers, not shared personal proxy connections. Shared MCP workspaces exclude personal definitions before loading capability bundles.
+
+### `admin/group-permissions/`
+
+`GroupPermissionsManager.svelte` presents assignable targets and saved grants for unavailable connectors, including capability-only grants. Removal stages explicit disabled changes for the existing Save permissions action; it does not republish connectors or automatically revoke grants. The personal MCP server selected metadata exposes Server ID for matching these grants.
+
 ### `admin/mcp-setup/`
 
 `McpSetupGuide.svelte` provides connection instructions and a copyable prompt referring to the shared `umbod://setup/agent-instructions` MCP resource for user-scoped agent discovery setup.

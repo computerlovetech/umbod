@@ -33,7 +33,8 @@ export const downstreamMcpConnectorSchema = z.object({
   endpoint_url: z.string().url(),
   public_path: downstreamMcpPublicPathSchema,
   public_url: z.string().url(),
-  auth_mode: downstreamMcpAuthModeSchema,
+  auth_mode: downstreamMcpResponseAuthModeSchema,
+  authorization_mode: z.enum(['shared', 'personal']),
   header_type: downstreamMcpHeaderTypeSchema,
   custom_header_name: z.string().nullable(),
   credential_configured: z.boolean(),
@@ -45,6 +46,7 @@ export const downstreamMcpConnectorSummarySchema = z.object({
   display_name: z.string().min(1),
   icon_url: z.string(),
   auth_mode: downstreamMcpResponseAuthModeSchema,
+  authorization_mode: z.enum(['shared', 'personal']),
   publication_status: z.enum(['published', 'unpublished']),
   health: downstreamMcpHealthSchema
 }).strict();
@@ -84,7 +86,7 @@ export const downstreamMcpConnectorCreateInputSchema = z.object({
 }).strict();
 export const downstreamMcpConnectorMetadataPatchSchema = z.object({ display_name: z.string().min(1).optional(), tool_name_prefix: downstreamMcpToolNamePrefixSchema.optional(), capability_description: downstreamMcpCapabilityDescriptionSchema.optional(), public_path: downstreamMcpPublicPathSchema.optional() }).strict().refine((value) => Object.keys(value).length > 0, 'at least one metadata field is required');
 export const downstreamMcpConnectorConfigurationInputSchema = configurationSchema;
-export const downstreamMcpConnectorConfigurationSchema = z.object({ endpoint_url: z.string().url(), auth_mode: downstreamMcpAuthModeSchema, header_type: downstreamMcpHeaderTypeSchema, custom_header_name: z.string().nullable(), credential_configured: z.boolean() }).strict();
+export const downstreamMcpConnectorConfigurationSchema = z.object({ endpoint_url: z.string().url(), auth_mode: downstreamMcpResponseAuthModeSchema, authorization_mode: z.enum(['shared', 'personal']), header_type: downstreamMcpHeaderTypeSchema, custom_header_name: z.string().nullable(), credential_configured: z.boolean() }).strict();
 export const downstreamMcpToolSchema = z.object({
   name: z.string().min(1), title: z.string().min(1), description: z.string(), input_schema: z.record(z.string(), z.unknown()), output_schema: z.record(z.string(), z.unknown()).nullable(), activation_status: z.enum(['enabled', 'disabled'])
 }).strict();

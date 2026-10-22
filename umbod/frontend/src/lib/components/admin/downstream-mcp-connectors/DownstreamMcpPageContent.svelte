@@ -52,6 +52,7 @@
 <AdminShell activeItem="connectors" accountIdentity={data.accountIdentity ?? fallbackAccountIdentity} contentWidth="wide">
   <div class="admin-page">
     <ConnectorPageHeader title="MCP proxy connectors" lede="Connect downstream MCP servers, discover their tools, and control what is available through public proxy endpoints." addLabel="Add MCP proxy connector" onadd={(trigger) => state.open('create', trigger)} />
+    <p><a href="/admin/personal-mcp-servers">Personal MCP servers</a> manages the personal server allowlist separately from shared proxy connectors.</p>
     <ConnectorTabs activeTab="downstream-mcp" capability={parseConnectorCapability(page.url.searchParams.get('capability'))} />
     <DownstreamMcpWorkspace connectors={data.connectors} selected={state.bundle?.connector} catalog={state.bundle?.catalog} promptCatalog={state.bundle?.promptCatalog} resourceCatalog={state.bundle?.resourceCatalog} invocationPolicies={state.bundle?.invocationPolicies ?? []} {form} {state} />
   </div>

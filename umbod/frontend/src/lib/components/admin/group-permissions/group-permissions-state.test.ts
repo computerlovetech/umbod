@@ -54,6 +54,106 @@ const ready = async (state: GroupPermissionsState): Promise<void> => {
   await vi.waitFor(() => expect(state.editorStatus).toBe('ready'));
 };
 
+const unavailableGrantData = (): GroupPermissionsInitialData => ({
+  ...data(['a', 'b']),
+  preloadedGroup: {
+    groupId: 'a',
+    connectorIds: ['z-unavailable', 'available', 'other-unavailable'],
+    capabilities: [
+      { connectorId: 'z-unavailable', kind: 'tool', key: 'removed-tool' },
+      { connectorId: 'z-unavailable', kind: 'prompt', key: 'removed-prompt' },
+      { connectorId: 'capability-only', kind: 'resource', key: 'removed-resource' },
+      { connectorId: 'available', kind: 'tool', key: 'retained-tool' },
+      { connectorId: 'other-unavailable', kind: 'prompt', key: 'retained-prompt' }
+    ]
+  },
+  assignableTargets: targets('available')
+});
+
+describe('unavailable saved connector grants', () => {
+  test('derives sorted unique IDs including capability-only grants without synthesizing permissions', () => {
+    const initial = unavailableGrantData();
+    const loader = new ControllableLoader();
+    const state = new GroupPermissionsState(initial, null, null, loader);
+
+    expect(state.unavailableGrantedConnectorIds).toEqual(['capability-only', 'other-unavailable', 'z-unavailable']);
+    expect(state.selectedPermissionSet).toEqual(initial.preloadedGroup);
+    expect(state.hasUnsavedChanges).toBe(false);
+    expect(JSON.parse(state.selectedPermissionChangesJson)).toEqual({ connectors: [], capabilities: [] });
+    expect(loader.groupCalls).toEqual([]);
+    expect(loader.targetCalls).toBe(0);
+  });
+
+  test('stages only disabled changes for the requested connector and all its capabilities', () => {
+    const initial = unavailableGrantData();
+    const state = new GroupPermissionsState(initial, null, null, new ControllableLoader());
+    const otherGroups = state.groups.filter((group) => group.groupId !== 'a');
+
+    state.removeUnavailableConnectorGrants('z-unavailable');
+
+    expect(state.unavailableGrantedConnectorIds).toEqual(['capability-only', 'other-unavailable']);
+    expect(state.selectedPermissionSet).toEqual({
+      ...initial.preloadedGroup,
+      connectorIds: ['available', 'other-unavailable'],
+      capabilities: initial.preloadedGroup?.capabilities.filter((capability) => capability.connectorId !== 'z-unavailable')
+    });
+    expect(state.groups.find((group) => group.groupId === 'a')).toEqual(initial.preloadedGroup);
+    expect(state.groups.filter((group) => group.groupId !== 'a')).toEqual(otherGroups);
+    expect(state.hasUnsavedChanges).toBe(true);
+    expect(JSON.parse(state.selectedPermissionChangesJson)).toEqual({
+      connectors: [{ connector_id: 'z-unavailable', permission_status: 'disabled' }],
+      capabilities: [
+        { connector_id: 'z-unavailable', capability_kind: 'prompt', capability_key: 'removed-prompt', permission_status: 'disabled' },
+        { connector_id: 'z-unavailable', capability_kind: 'tool', capability_key: 'removed-tool', permission_status: 'disabled' }
+      ]
+    });
+  });
+
+  test('capability-only removal does not synthesize a connector disable or enable', () => {
+    const state = new GroupPermissionsState(unavailableGrantData(), null, null, new ControllableLoader());
+    state.removeUnavailableConnectorGrants('capability-only');
+
+    expect(state.unavailableGrantedConnectorIds).toEqual(['other-unavailable', 'z-unavailable']);
+    expect(JSON.parse(state.selectedPermissionChangesJson)).toEqual({
+      connectors: [],
+      capabilities: [{ connector_id: 'capability-only', capability_kind: 'resource', capability_key: 'removed-resource', permission_status: 'disabled' }]
+    });
+    const changes = state.selectedPermissionChangesJson;
+    state.removeUnavailableConnectorGrants('capability-only');
+    expect(state.selectedPermissionChangesJson).toBe(changes);
+  });
+
+  test.each(['available', 'unknown'])('does not remove or create grants for %s targets', (connectorId) => {
+    const initial = unavailableGrantData();
+    const state = new GroupPermissionsState(initial, null, null, new ControllableLoader());
+    state.removeUnavailableConnectorGrants(connectorId);
+    expect(state.selectedPermissionSet).toEqual(initial.preloadedGroup);
+    expect(state.hasUnsavedChanges).toBe(false);
+  });
+
+  test.each(['loading', 'failed'] as const)('does not stage removal while editor is %s', async (status) => {
+    const initial = unavailableGrantData();
+    const loader = new ControllableLoader();
+    loader.targetFailure = true;
+    const state = new GroupPermissionsState(initial, null, null, loader);
+    state.markGroupSaveRejected('a', 'Reload targets');
+    if (status === 'failed') await vi.waitFor(() => expect(state.editorStatus).toBe('failed'));
+    expect(state.editorStatus).toBe(status);
+    state.removeUnavailableConnectorGrants('z-unavailable');
+    expect(state.selectedPermissionSet).toEqual(initial.preloadedGroup);
+    expect(state.hasUnsavedChanges).toBe(false);
+  });
+
+  test('does not stage removal without a selected group', () => {
+    const state = new GroupPermissionsState(data(['a']), null, null, new ControllableLoader());
+    state.removeUnavailableConnectorGrants('unknown');
+    expect(state.editorStatus).toBe('unselected');
+    expect(state.unavailableGrantedConnectorIds).toEqual([]);
+    expect(state.selectedPermissionSet).toBeNull();
+    expect(state.hasUnsavedChanges).toBe(false);
+  });
+});
+
 describe('GroupPermissionsState public behavior', () => {
   test('uses server-preloaded selection without hydration requests', () => {
     const loader = new ControllableLoader();

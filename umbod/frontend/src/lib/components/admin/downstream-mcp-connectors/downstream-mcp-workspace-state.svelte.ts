@@ -58,14 +58,20 @@ export class DownstreamMcpWorkspaceState {
   get selectedConnectorId(): string | null { return this.selection.selectedId; }
 
   constructor(failedMode?: string, values?: DownstreamMcpCreateValues, initialBundle?: DownstreamMcpWorkspaceBundle, bundleLoader: DownstreamBundleLoader = loadDownstreamBundle, initialConnectorId?: string, initialDetailFailed?: boolean, connectors: { connector_id: string }[] = initialBundle ? [initialBundle.connector] : [], selectionUrl: SelectionUrlPort = new InMemorySelectionUrlAdapter()) {
+    initialBundle = initialBundle?.connector.authorization_mode === 'shared' ? initialBundle : undefined;
+    const sharedBundleLoader: DownstreamBundleLoader = async (id, signal) => {
+      const bundle = await bundleLoader(id, signal);
+      if (bundle.connector.authorization_mode !== 'shared') throw new Error('Shared connector ownership is required');
+      return bundle;
+    };
     this.selection = new SelectionDetailController({
-      items: connectors,
+      items: connectors.filter((connector) => 'authorization_mode' in connector && connector.authorization_mode === 'shared'),
       itemId: (connector) => connector.connector_id,
       selectedId: initialBundle?.connector.connector_id ?? initialConnectorId,
       initialDetail: initialBundle,
       initialDetailFailed,
-      loadDetail: bundleLoader,
-      allowUnknownSelection: true,
+      loadDetail: sharedBundleLoader,
+      allowUnknownSelection: false,
       url: selectionUrl,
       onSelectionChange: () => {
         this.capabilityDescriptionConnectorId = null;
@@ -84,8 +90,9 @@ export class DownstreamMcpWorkspaceState {
   }
 
   open = (modal: Exclude<DownstreamMcpModal, null>, trigger: HTMLElement, connector?: DownstreamMcpConnector): void => {
+    if (connector && connector.authorization_mode !== 'shared') return;
     this.returnFocus = trigger;
-    this.authMode = connector?.auth_mode ?? 'none';
+    this.authMode = connector?.auth_mode === 'static_bearer' ? 'static_bearer' : 'none';
     this.headerType = connector?.header_type ?? 'bearer';
     this.customHeaderName = connector?.custom_header_name ?? '';
     if (modal === 'create') {
@@ -198,8 +205,9 @@ export class DownstreamMcpWorkspaceState {
 async function loadDownstreamBundle(connectorId: string, signal?: AbortSignal): Promise<DownstreamMcpWorkspaceBundle> {
   const transport = browserTransport();
   const api = new AdminApi({ request: (options) => transport.request({ ...options, signal }) }).downstreamMcpConnectors;
+  const definition = await api.get(connectorId);
   const [connector, catalog, promptCatalog, resources, activation] = await Promise.all([
-    api.get(connectorId), api.tools(connectorId), api.prompts(connectorId), api.resources(connectorId), api.listActivations(connectorId)
+    Promise.resolve(definition), api.tools(connectorId), api.prompts(connectorId), api.resources(connectorId), api.listActivations(connectorId)
   ]);
   return { connector, catalog, promptCatalog, resourceCatalog: mapResourceCatalog(resources), invocationPolicies: activation.tools.map((tool) => ({ tool_id: tool.tool_id, mode: tool.invocation_mode, revision: tool.policy_revision })) };
 }

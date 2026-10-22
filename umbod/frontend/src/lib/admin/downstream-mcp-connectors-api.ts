@@ -1,3 +1,4 @@
+import type { z } from 'zod';
 import type { Transport } from './infrastructure/transport';
 import { downstreamPromptCatalogSchema, downstreamResourceCatalogWireSchema, promptActivationBatchRequestSchema, promptActivationBatchResponseSchema, resourceActivationBatchRequestSchema, resourceActivationBatchResponseSchema, type PromptActivationBatchRequest, type ResourceActivationBatchRequest } from './capability-catalogs';
 import {
@@ -17,43 +18,51 @@ import type { ToolActivationCapability, ToolActivationChange } from './tool-acti
 export class DownstreamMcpConnectorsRoute implements ToolActivationCapability {
   constructor(private readonly transport: Transport) {}
 
-  list() {
-    return this.transport.request({ method: 'GET', path: '/admin/connectors/mcp', outputSchema: downstreamMcpConnectorListSchema });
+  async list(): Promise<z.infer<typeof downstreamMcpConnectorListSchema>> {
+    const result = await this.transport.request({ method: 'GET', path: '/admin/connectors/mcp', outputSchema: downstreamMcpConnectorListSchema });
+    return { connectors: result.connectors.filter((connector) => connector.authorization_mode === 'shared') };
   }
 
-  get(connectorId: string) {
-    return this.transport.request({ method: 'GET', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}`, outputSchema: downstreamMcpConnectorSchema });
+  get(connectorId: string): Promise<z.infer<typeof downstreamMcpConnectorSchema>> {
+    return this.transport.request({ method: 'GET', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}`, outputSchema: downstreamMcpConnectorSchema.refine((connector) => connector.authorization_mode === 'shared') });
   }
 
-  create(body: DownstreamMcpConnectorCreateInput) {
+  create(body: DownstreamMcpConnectorCreateInput): Promise<z.infer<typeof downstreamMcpConnectorSchema>> {
     return this.transport.request({ method: 'POST', path: '/admin/connectors/mcp', body, inputSchema: downstreamMcpConnectorCreateInputSchema, outputSchema: downstreamMcpConnectorSchema });
   }
 
-  patchMetadata(connectorId: string, body: DownstreamMcpConnectorMetadataPatch) {
+  async patchMetadata(connectorId: string, body: DownstreamMcpConnectorMetadataPatch): Promise<z.infer<typeof downstreamMcpConnectorSchema>> {
+    await this.get(connectorId);
     return this.transport.request({ method: 'PATCH', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}`, body, inputSchema: downstreamMcpConnectorMetadataPatchSchema, outputSchema: downstreamMcpConnectorSchema });
   }
 
-  putConfiguration(connectorId: string, body: DownstreamMcpConnectorConfigurationInput) {
+  async putConfiguration(connectorId: string, body: DownstreamMcpConnectorConfigurationInput): Promise<z.infer<typeof downstreamMcpConnectorConfigurationSchema>> {
+    await this.get(connectorId);
     return this.transport.request({ method: 'PUT', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/configuration`, body, inputSchema: downstreamMcpConnectorConfigurationInputSchema, outputSchema: downstreamMcpConnectorConfigurationSchema });
   }
 
-  delete(connectorId: string) {
-    return this.transport.request({ method: 'DELETE', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}` });
+  async delete(connectorId: string): Promise<void> {
+    await this.get(connectorId);
+    return this.transport.request<void>({ method: 'DELETE', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}` });
   }
 
-  discover(connectorId: string) {
+  async discover(connectorId: string): Promise<z.infer<typeof downstreamMcpConnectorSchema>> {
+    await this.get(connectorId);
     return this.transport.request({ method: 'POST', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/discoveries`, outputSchema: downstreamMcpConnectorSchema });
   }
 
-  prompts(connectorId: string) {
+  async prompts(connectorId: string): Promise<z.infer<typeof downstreamPromptCatalogSchema>> {
+    await this.get(connectorId);
     return this.transport.request({ method: 'GET', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/prompts`, outputSchema: downstreamPromptCatalogSchema });
   }
 
-  resources(connectorId: string) {
+  async resources(connectorId: string): Promise<z.infer<typeof downstreamResourceCatalogWireSchema>> {
+    await this.get(connectorId);
     return this.transport.request({ method: 'GET', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/resources`, outputSchema: downstreamResourceCatalogWireSchema });
   }
 
-  savePromptActivations(connectorId: string, body: PromptActivationBatchRequest) {
+  async savePromptActivations(connectorId: string, body: PromptActivationBatchRequest): Promise<z.infer<typeof promptActivationBatchResponseSchema>> {
+    await this.get(connectorId);
     return this.transport.request({
       method: 'PUT',
       path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/prompts/activation`,
@@ -63,7 +72,8 @@ export class DownstreamMcpConnectorsRoute implements ToolActivationCapability {
     });
   }
 
-  saveResourceActivations(connectorId: string, body: ResourceActivationBatchRequest) {
+  async saveResourceActivations(connectorId: string, body: ResourceActivationBatchRequest): Promise<z.infer<typeof resourceActivationBatchResponseSchema>> {
+    await this.get(connectorId);
     return this.transport.request({
       method: 'PUT',
       path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/resources/activation`,
@@ -73,23 +83,28 @@ export class DownstreamMcpConnectorsRoute implements ToolActivationCapability {
     });
   }
 
-  tools(connectorId: string) {
+  async tools(connectorId: string): Promise<z.infer<typeof downstreamMcpToolListSchema>> {
+    await this.get(connectorId);
     return this.transport.request({ method: 'GET', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/tools`, outputSchema: downstreamMcpToolListSchema });
   }
 
-  publish(connectorId: string) {
+  async publish(connectorId: string): Promise<z.infer<typeof downstreamMcpPublicationSchema>> {
+    await this.get(connectorId);
     return this.transport.request({ method: 'PUT', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/publication`, outputSchema: downstreamMcpPublicationSchema });
   }
 
-  unpublish(connectorId: string) {
+  async unpublish(connectorId: string): Promise<z.infer<typeof downstreamMcpPublicationSchema>> {
+    await this.get(connectorId);
     return this.transport.request({ method: 'DELETE', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/publication`, outputSchema: downstreamMcpPublicationSchema });
   }
 
-  listActivations(connectorId: string) {
+  async listActivations(connectorId: string): Promise<z.infer<typeof downstreamMcpToolActivationBatchResponseSchema>> {
+    await this.get(connectorId);
     return this.transport.request({ method: 'GET', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/tools/activation`, outputSchema: downstreamMcpToolActivationBatchResponseSchema });
   }
 
-  saveActivations(connectorId: string, changes: ToolActivationChange[]) {
+  async saveActivations(connectorId: string, changes: ToolActivationChange[]): Promise<z.infer<typeof downstreamMcpToolActivationBatchResponseSchema>> {
+    await this.get(connectorId);
     const body = {
       tools: changes.map((change) => ({
         tool_id: change.toolId,

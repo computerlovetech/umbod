@@ -287,6 +287,21 @@
           </div>
         </div>
 
+        {#if state.unavailableGrantedConnectorIds.length > 0}
+          <section class="group-permissions__block" aria-labelledby="unavailable-connector-grants-heading">
+            <h3 id="unavailable-connector-grants-heading">Saved grants for unavailable connectors</h3>
+            <p>These connectors may be unpublished or otherwise unavailable for assignment. Remove their saved connector and capability grants here. Changes apply only after Save permissions.</p>
+            <ul class="group-permissions__unavailable-grants">
+              {#each state.unavailableGrantedConnectorIds as connectorId (connectorId)}
+                <li>
+                  <code>{connectorId}</code>
+                  <Button variant="secondary" aria-label={`Remove saved grants for ${connectorId}`} disabled={pendingState.isPending(savePendingKey(state.selectedGroupId))} onclick={() => state.removeUnavailableConnectorGrants(connectorId)}>Remove saved grants</Button>
+                </li>
+              {/each}
+            </ul>
+          </section>
+        {/if}
+
         {@const currentSaveFeedback = saveFeedback(state.selectedGroupId)}
         <form
           method="POST"
@@ -703,6 +718,26 @@
     margin-top: 1px;
     overflow-wrap: anywhere;
     word-break: break-word;
+  }
+
+  .group-permissions__unavailable-grants {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .group-permissions__unavailable-grants li {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: space-between;
+    padding: 10px 0;
+  }
+
+  .group-permissions__unavailable-grants code {
+    overflow-wrap: anywhere;
+    min-width: 0;
   }
 
   .group-permissions__save {
