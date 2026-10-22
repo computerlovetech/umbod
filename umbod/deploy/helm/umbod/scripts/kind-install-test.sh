@@ -52,7 +52,7 @@ if [[ ${archive_count} -ne 0 && ${archive_count} -ne 2 ]]; then
     exit 2
 fi
 
-for command_name in docker helm kind kubectl; do
+for command_name in docker helm kind kubectl python3; do
     if ! command -v "${command_name}" >/dev/null 2>&1; then
         printf '%s\n' "Required command not found: ${command_name}" >&2
         exit 1
@@ -100,6 +100,7 @@ cluster_created=true
 kind load docker-image --name "${cluster_name}" "${core_image}" "${frontend_image}"
 
 kubectl --context "${kube_context}" create secret generic umbod-ci \
+    --from-literal="UMBOD_ROOT_SECRET=$(python3 -c 'import secrets; import sys; sys.stdout.write(secrets.token_urlsafe(48))')" \
     --from-literal=UMBOD_MCP_TEST_BEARER_TOKEN=eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiJraW5kLWNpIiwiaXNzIjoiaHR0cDovL2FnZW50LWNlbnRyYWwta2luZC5pbnZhbGlkIiwiZW1haWwiOiJraW5kLWNpQGV4YW1wbGUuaW52YWxpZCIsImdyb3VwcyI6WyJhZG1pbiJdfQ.
 
 helm --kube-context "${kube_context}" install "${release_name}" "${chart_directory}" \
