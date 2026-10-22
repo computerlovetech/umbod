@@ -25,6 +25,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.models import (
     ReplacePersonalAuthorization,
     replace_authorization,
 )
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import validate_callback_binding
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
     ClaimPersonalOAuthAttempt,
     ClaimedPersonalOAuthAttempt,
@@ -448,6 +449,13 @@ class EncryptedPersonalOAuthAttemptStore:
                 expected_state.get_secret_value().encode(), state.encode(),
             ):
                 raise PersonalOAuthUnavailable()
+            try:
+                validate_callback_binding(
+                    attempt.prepared.callback_binding, attempt.reservation.preparation.redirect_uri,
+                    command.route, command.issuer,
+                )
+            except ValueError:
+                raise PersonalOAuthUnavailable() from None
             self._require_unexpired(attempt, now)
             await self._eligible(session, attempt.reservation)
             self._require_unexpired(attempt, now)

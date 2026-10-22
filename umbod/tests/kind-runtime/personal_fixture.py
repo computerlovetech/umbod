@@ -8,11 +8,12 @@ import time
 
 import jwt
 from contextlib import AsyncExitStack, asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Annotated, Any, AsyncIterator
 from urllib.parse import urlencode, parse_qs
 
 import uvicorn
 from fastmcp import FastMCP
+from pydantic import Field
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse, Response
@@ -45,7 +46,22 @@ def owner_server(owner: str) -> FastMCP:
     return server
 
 
-apps = {owner: owner_server(owner).http_app(path="/mcp", stateless_http=True, json_response=True) for owner in ("alice", "bob")}
+servers = {owner: owner_server(owner) for owner in ("alice", "bob")}
+apps = {owner: server.http_app(path="/mcp", stateless_http=True, json_response=True) for owner, server in servers.items()}
+
+
+def add_inventory_tool(description: str, changed_schema: bool) -> None:
+    if changed_schema:
+        @servers["alice"].tool(name="added_alice", description=description)
+        def changed_added_alice(message: Annotated[str, Field(min_length=1)]) -> dict[str, str]:
+            counters["calls"] += 1
+            return {"owner": "alice", "message": message}
+        return
+
+    @servers["alice"].tool(description=description)
+    def added_alice(message: str) -> dict[str, str]:
+        counters["calls"] += 1
+        return {"owner": "alice", "message": message}
 
 
 @asynccontextmanager
@@ -66,7 +82,12 @@ async def metadata(request: Request) -> Response:
         return JSONResponse({"error": "not_found"}, status_code=404)
     if "oauth-protected-resource" in request.url.path:
         return JSONResponse({"resource": RESOURCE, "authorization_servers": [ISSUER], "scopes_supported": ["read"], "bearer_methods_supported": ["header"]})
-    return JSONResponse({"issuer": ISSUER, "authorization_endpoint": ISSUER + "/authorize", "token_endpoint": ISSUER + "/token", "response_types_supported": ["code"], "grant_types_supported": ["authorization_code", "refresh_token"], "token_endpoint_auth_methods_supported": ["none"], "code_challenge_methods_supported": ["S256"], "authorization_response_iss_parameter_supported": True})
+    document = {"issuer": ISSUER, "authorization_endpoint": ISSUER + "/authorize", "token_endpoint": ISSUER + "/token", "response_types_supported": ["code"], "grant_types_supported": ["authorization_code", "refresh_token"], "token_endpoint_auth_methods_supported": ["none"], "code_challenge_methods_supported": ["S256"], "authorization_response_iss_parameter_supported": True}
+    if modes.get("metadata") == "issuer_omitted":
+        document.pop("authorization_response_iss_parameter_supported")
+    elif modes.get("metadata") == "issuer_false":
+        document["authorization_response_iss_parameter_supported"] = False
+    return JSONResponse(document)
 
 
 async def identity_authorize(request: Request) -> Response:
@@ -109,11 +130,18 @@ async def authorize(request: Request) -> Response:
         return await identity_authorize(request)
     parameters = dict(request.query_params)
     owner = parameters.pop("owner", "")
-    if owner not in apps or parameters.get("client_id") != "kind-personal-client" or parameters.get("code_challenge_method") != "S256" or parameters.get("resource") != RESOURCE or parameters.get("redirect_uri") != "https://umbod-runtime.kind.invalid/api/oauth/downstream-mcp/callback":
+    redirect_uri = "https://umbod-runtime.kind.invalid/api/oauth/downstream-mcp/callback"
+    issuer_bound = modes.get("metadata") in ("issuer_omitted", "issuer_false")
+    if issuer_bound:
+        redirect_uri += "/issuer/" + hashlib.sha256(ISSUER.encode("utf-8")).hexdigest()
+    if owner not in apps or parameters.get("client_id") != "kind-personal-client" or parameters.get("code_challenge_method") != "S256" or parameters.get("resource") != RESOURCE or parameters.get("redirect_uri") != redirect_uri:
         return JSONResponse({"error": "invalid_request"}, status_code=400)
     code = secrets.token_urlsafe(32)
     codes[code] = {**parameters, "owner": owner}
-    return RedirectResponse(parameters["redirect_uri"] + "?" + urlencode({"code": code, "state": parameters["state"], "iss": ISSUER}), status_code=302)
+    callback = {"code": code, "state": parameters["state"]}
+    if not issuer_bound:
+        callback["iss"] = ISSUER
+    return RedirectResponse(parameters["redirect_uri"] + "?" + urlencode(callback), status_code=302)
 
 
 async def exchange(request: Request) -> Response:
@@ -156,6 +184,9 @@ async def control(request: Request) -> Response:
         payload = await request.json()
         owner = payload["owner"]
         modes[owner] = payload["mode"]
+        if owner == "alice" and payload["mode"] in ("add_tool", "change_tool"):
+            description = "New private Alice inventory" if payload["mode"] == "add_tool" else "Changed private Alice inventory"
+            add_inventory_tool(description, changed_schema=payload["mode"] == "change_tool")
         if payload["mode"] == "refresh_hold":
             refresh_release[owner] = asyncio.Event()
         elif owner in refresh_release:
@@ -173,6 +204,10 @@ async def application(scope: dict[str, Any], receive: Any, send: Any) -> None:
         if owner is None or modes.get(owner) == "unauthorized":
             counters["unauthorized"] += 1
             response = JSONResponse({"error": "invalid_token"}, status_code=401, headers={"WWW-Authenticate": f'Bearer resource_metadata="{ISSUER}/.well-known/oauth-protected-resource/mcp"'})
+            await response(scope, receive, send)
+            return
+        if modes.get(owner) == "forbidden":
+            response = JSONResponse({"error": "insufficient_scope"}, status_code=403)
             await response(scope, receive, send)
             return
         if scope["method"] == "POST":

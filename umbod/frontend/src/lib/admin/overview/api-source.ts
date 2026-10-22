@@ -27,7 +27,7 @@ export class ApiOverviewSource implements OverviewSource {
         return overviewConnectorSchema.array().parse(response.connectors.map((connector) => ({ id: connector.connector_id, publicationStatus: connector.publication_status, discoveryStatus: 'unknown' })));
       }
       const response = await this.api.downstreamMcpConnectors.list();
-      return overviewConnectorSchema.array().parse(response.connectors.map((connector) => ({ id: connector.connector_id, publicationStatus: connector.publication_status, discoveryStatus: connector.health.status })));
+      return overviewConnectorSchema.array().parse(response.connectors.filter((connector) => connector.authorization_mode === 'shared').map((connector) => ({ id: connector.connector_id, publicationStatus: connector.publication_status, discoveryStatus: connector.health.status })));
     });
   }
 

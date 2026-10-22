@@ -46,45 +46,44 @@ class McpPersonalRuntimeContextProvider:
         )
 
 
-class PersonalToolNameClaims(Protocol):
-    async def personal_tool_name_claims(self) -> tuple[str, ...]: ...
+class PersonalToolNamespace(Protocol):
+    async def is_personal_tool_name(self, name: str) -> bool: ...
 
 
 class PersonalToolReservationMiddleware(Middleware):
-    def __init__(self, claims: PersonalToolNameClaims) -> None:
+    def __init__(self, claims: PersonalToolNamespace) -> None:
         self._claims = claims
 
-    async def _allows(self, tool: Tool, reserved: tuple[str, ...]) -> bool:
+    async def _allows(self, tool: Tool) -> bool:
+        reserved = await self._claims.is_personal_tool_name(tool.name)
         if isinstance(tool, AuthorizedPersonalTool):
-            return tool.name in reserved and await tool.is_authorized()
-        return tool.name not in reserved
+            return reserved and await tool.is_authorized()
+        return not reserved
 
     async def on_list_tools(self, context: MiddlewareContext[mt.ListToolsRequest], call_next: CallNext[mt.ListToolsRequest, Sequence[Tool]]) -> Sequence[Tool]:
-        reserved = await self._claims.personal_tool_name_claims()
         tools = await call_next(context)
         authorized: list[Tool] = []
         for tool in tools:
-            if not await self._allows(tool, reserved):
+            if not await self._allows(tool):
                 continue
-            if tool.name in reserved:
+            if await self._claims.is_personal_tool_name(tool.name):
                 runtime = context.fastmcp_context
                 if runtime is None:
                     continue
                 resolved = await runtime.fastmcp.get_tool(tool.name, version=_requested_version({"fastmcp": {"version": tool.version}}))
-                if resolved is None or not await self._allows(resolved, reserved):
+                if resolved is None or not await self._allows(resolved):
                     continue
             authorized.append(tool)
         return authorized
 
     async def on_call_tool(self, context: MiddlewareContext[mt.CallToolRequestParams], call_next: CallNext[mt.CallToolRequestParams, ToolResult]) -> ToolResult:
-        reserved = await self._claims.personal_tool_name_claims()
-        if context.message.name not in reserved:
+        if not await self._claims.is_personal_tool_name(context.message.name):
             return await call_next(context)
         runtime = context.fastmcp_context
         if runtime is None:
             raise ToolError("Tool is not available")
         tool = await runtime.fastmcp.get_tool(context.message.name, version=_requested_version(context.message.meta))
-        if tool is None or not await self._allows(tool, reserved):
+        if tool is None or not await self._allows(tool):
             raise ToolError("Tool is not available")
         return await call_next(context)
 

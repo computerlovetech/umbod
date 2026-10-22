@@ -11,4 +11,4 @@
 - `aggregate.ts`: Independent source aggregation and globally bounded tool requests across all connector families.
 - `aggregate.test.ts`: Public source-port aggregation coverage.
 
-Successful empty lists yield zero. A failed connector list invalidates totals requiring that list. A failed tool request invalidates its family tool subtotal and the combined tool total, not connector counts. MCP configured counts mean saved proxies; unknown discovery is not unhealthy.
+Successful empty lists yield zero. A failed connector list invalidates totals requiring that list. A failed tool request invalidates its family tool subtotal and the combined tool total, not connector counts. MCP configured counts mean saved Shared proxies; the adapter filters Personal definitions before counting or requesting global tool activations. Unknown discovery is not unhealthy.

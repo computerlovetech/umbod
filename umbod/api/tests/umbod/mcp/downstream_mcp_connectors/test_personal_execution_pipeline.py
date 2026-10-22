@@ -6,9 +6,14 @@ from fastmcp import Client, FastMCP
 from fastmcp.server.auth import AuthContext
 from fastmcp.tools import ToolResult
 
-from tests.umbod.core.downstream_mcp_connectors.personal_tools.runtime_support import ExecutionCase, execution_case
+from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import ExecutionCase, execution_case
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, runtime_case
 from umbod.core.capabilities.descriptions import SystemConnectorCapabilityDescriptionOverrideStore
+from umbod.core.connectors.downstream_mcp.models import DiscoveredToolWithOutputSchema
+from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolInventory, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal_tools.service import PersonalToolDiscoveryService
+from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, ReplaceToolCatalog
+from tests.umbod.mcp.downstream_mcp_connectors.test_provider import RecordingInvocationPolicy, _downstream, _provider
 from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, SetPersonalConnectionEnabled
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalRuntimeContext
 from umbod.core.invocation import ConnectorInvocation, ConnectorInvocationPolicy, PermitAllConnectorInvocationPolicy
@@ -71,6 +76,8 @@ class RejectingOpenApiExecutor:
 async def test_personal_exposure_modes_share_approval_and_telemetry(runtime_case: RuntimeCase, exposure: str) -> None:
     execution = await execution_case(runtime_case)
     log = InvocationLog()
+    payload = {"content": [{"type": "text", "text": "unchanged"}], "structuredContent": {"owner": "owner"}, "_meta": {"vendor": {"trace": ["unchanged"]}}}
+    execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result=payload)
     provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), log)
     public = FastMCP("personal", providers=[provider])
     if exposure == "gateway":
@@ -84,12 +91,53 @@ async def test_personal_exposure_modes_share_approval_and_telemetry(runtime_case
             assert result.final_value == {"owner": "owner"}
         else:
             result = await client.call_tool_mcp("execute_personal" if exposure == "gateway" else "Personal_read", {} if exposure == "gateway" else {"value": "same"})
-            assert result.structured_content == {"owner": "owner"}
+            assert result.structured_content == payload["structuredContent"]
+            assert result.content[0].text == "unchanged"
+            assert result.meta["vendor"] == payload["_meta"]["vendor"]
     assert len(execution.transport.calls) == 1
     assert len(log.events) == 1
     assert "owner-token" not in str(log.events)
     assert await provider.owns_tool("Personal_read")
     assert await provider.is_eligible("personal", "read")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("output_schema_present", (False, True))
+async def test_shared_and_personal_listing_preserve_same_descriptor_without_trusting_metadata(runtime_case: RuntimeCase, output_schema_present: bool) -> None:
+    execution = await execution_case(runtime_case)
+    tool = execution.transport.inventories[runtime_case.query.key].tools[0].model_copy(update={
+        "input_schema": {"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]},
+        "meta": {"connector_id": "untrusted", "operation_name": "untrusted", "vendor": {"nested": ["preserved"]}, "fastmcp": {"tags": ["catalog-tag"]}},
+        "annotations": {"readOnlyHint": True},
+        "icons": ({"src": "https://example.test/icon.png", "mimeType": "image/png"},),
+        "execution": {"taskSupport": "optional"},
+    })
+    if output_schema_present:
+        tool = DiscoveredToolWithOutputSchema(**tool.model_dump(exclude={"output_schema_status"}), output_schema={})
+    execution.transport.inventories[runtime_case.query.key] = PersonalToolInventory(tools=(tool,))
+    await PersonalToolDiscoveryService(runtime_case.store, runtime_case.bundle.personal_tool_access, execution.transport, lambda: runtime_case.query.now).discover(runtime_case.query)
+    personal_policy = RecordingInvocationPolicy([])
+    personal = provider_for(execution, personal_policy, InvocationLog())
+    shared_policy = RecordingInvocationPolicy([])
+    shared, factory, _, _, catalogs = await _provider({"weather": _downstream()}, invocation_policy=shared_policy)
+    snapshot = (await catalogs.get(ConnectorIdQuery(connector_id="weather"))).snapshot
+    shared_tool = tool.model_copy(update={"identity": tool.identity.model_copy(update={"connector_id": "weather", "downstream_name": "forecast"})})
+    await catalogs.replace(ReplaceToolCatalog(snapshot=snapshot.model_copy(update={"tools": (shared_tool,)})))
+    async with Client(FastMCP("shared", providers=[shared])) as client:
+        shared_descriptor = (await client.list_tools())[0].model_dump(mode="json", exclude={"name"})
+        assert factory.created == []
+        assert not (await client.call_tool_mcp("weather_forecast", {"city": "same"})).is_error
+    async with Client(FastMCP("personal", providers=[personal])) as client:
+        personal_descriptor = (await client.list_tools())[0].model_dump(mode="json", exclude={"name"})
+        assert not (await client.call_tool_mcp("Personal_read", {"city": "same"})).is_error
+    assert personal_descriptor == shared_descriptor
+    assert personal_descriptor["meta"]["vendor"] == {"nested": ["preserved"]}
+    assert personal_descriptor["meta"]["connector_id"] == "untrusted"
+    assert personal_descriptor["meta"]["operation_name"] == "untrusted"
+    assert personal_descriptor["meta"]["fastmcp"]["tags"] == ["catalog-tag"]
+    assert personal_descriptor["output_schema"] == ({} if output_schema_present else None)
+    assert [(item.connector_id, item.operation_name) for item in personal_policy.invocations] == [("personal", "read")]
+    assert [(item.connector_id, item.operation_name) for item in shared_policy.invocations] == [("weather", "forecast")]
 
 
 @pytest.mark.asyncio
@@ -110,7 +158,7 @@ async def test_held_personal_tool_resolves_new_owner_after_approval(runtime_case
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("revocation", ("disable", "disconnect", "publication", "activation", "capability_grant", "connector_grant", "policy"))
+@pytest.mark.parametrize("revocation", ("disable", "disconnect", "publication", "connector_grant", "membership"))
 async def test_authority_withdrawn_during_approval_prevents_call(runtime_case: RuntimeCase, revocation: str) -> None:
     execution = await execution_case(runtime_case)
 
@@ -121,17 +169,13 @@ async def test_authority_withdrawn_during_approval_prevents_call(runtime_case: R
             await runtime_case.bundle.personal_connections.disconnect(runtime_case.query.key)
         elif revocation == "publication":
             await runtime_case.bundle.publishing.unpublish_connector("personal")
-        elif revocation == "activation":
-            from umbod.core.activation import ActivationStatus, CapabilityRef
-            await runtime_case.bundle.activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id="personal", capability_kind="tool", capability_key="read"), ActivationStatus.DISABLED)
-        elif revocation == "policy":
-            from tests.umbod.core.downstream_mcp_connectors.test_personal_tools_s3_contracts import replace_policy
-            await replace_policy(runtime_case, ())
+        elif revocation == "membership":
+            execution.contexts.contexts[:] = [PersonalRuntimeContext(principal=runtime_case.query.key.principal, group_ids=())]
         else:
-            from umbod.core.permissions.stores.schema import CAPABILITY_PERMISSION_TABLE, CONNECTOR_PERMISSION_TABLE
+            from umbod.core.permissions.stores.schema import CONNECTOR_PERMISSION_TABLE
             from umbod.core.persistence import DeleteQuery, NoFilter, TransactionMode
             async with runtime_case.database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
-                await session.delete(CAPABILITY_PERMISSION_TABLE if revocation == "capability_grant" else CONNECTOR_PERMISSION_TABLE, DeleteQuery(NoFilter()))
+                await session.delete(CONNECTOR_PERMISSION_TABLE, DeleteQuery(NoFilter()))
 
     policy = ApprovalMutation(revoke)
     held = await provider_for(execution, policy, InvocationLog()).get_tool("Personal_read")

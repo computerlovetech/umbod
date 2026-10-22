@@ -37,6 +37,14 @@ export const authorizationHealthSchema = z.discriminatedUnion('state', [
   z.object({ state: z.literal('refreshing'), deadline: z.iso.datetime({ offset: true }) }).strict()
 ]);
 export const renewalResultSchema = z.object({ status: z.literal('refreshed'), discovery_required: z.literal(true) }).strict();
+export const oauthInitiationErrorSchema = z.object({
+  detail: z.object({
+    code: z.enum(['personal_oauth_provider_unsupported', 'personal_oauth_invalid_request'])
+  })
+});
+export const discoveryErrorSchema = z.object({
+  detail: z.object({ code: z.literal('personal_tool_discovery_unavailable') }).strict()
+}).strict();
 export const renewalErrorSchema = z.object({ detail: z.object({ code: z.enum([
   'personal_refresh_unsupported', 'personal_refresh_conflict', 'personal_refresh_changed',
   'personal_refresh_reconnect_required', 'personal_refresh_unavailable', 'personal_refresh_invalid_request'

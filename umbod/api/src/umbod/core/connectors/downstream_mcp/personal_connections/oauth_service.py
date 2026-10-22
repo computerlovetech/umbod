@@ -28,6 +28,7 @@ from .oauth_models import (
     CompletePersonalOAuthAttempt,
     ExchangePersonalOAuth,
     FailPersonalOAuthAttempt,
+    FinishCallback,
     PersonalOAuthAttemptQuery,
     PersonalOAuthAttemptView,
     PersonalOAuthConflict,
@@ -157,15 +158,16 @@ class PersonalOAuthCallbackService:
         self._provider = provider
         self._clock = clock
 
-    async def finish(self, state: str, code: str, issuer: str, error: str, scope: str) -> None:
+    async def finish(self, command: FinishCallback) -> None:
         attempt = await self._attempts.claim(ClaimPersonalOAuthAttempt(
-            state=SecretStr(state), claim_id=uuid4().hex, now=self._clock(),
+            state=command.state, claim_id=uuid4().hex, now=self._clock(),
+            route=command.route, issuer=command.issuer,
         ))
         try:
-            if error or not set(parse_oauth_scopes(scope)).issubset(attempt.preparation.policy.requested_scopes):
+            if command.error or not set(parse_oauth_scopes(command.scope)).issubset(attempt.preparation.policy.requested_scopes):
                 raise PersonalOAuthProviderFailure()
             authorization = await self._provider.exchange(ExchangePersonalOAuth(
-                attempt=attempt, code=SecretStr(code), issuer=issuer,
+                attempt=attempt, code=command.code, issuer=command.issuer, route=command.route,
             ))
             await self._attempts.complete(CompletePersonalOAuthAttempt(
                 query=attempt.query.model_copy(update={"now": self._clock()}),

@@ -20,6 +20,7 @@ from ...personal_connections.refresh_provider_models import (
 )
 from ...personal_oauth_configuration.models import parse_oauth_scopes
 from .refresh_logging import private_refresh_network_logs
+from .callback import CallbackURLPolicy, validate_callback_url
 from .transport import (
     BasicOAuthHttpAuthentication,
     NoOAuthHttpAuthentication,
@@ -49,7 +50,8 @@ def _definitive_denial(status: int, raw: dict[str, object]) -> bool:
 
 
 class StoredPersonalOAuthRefreshProvider:
-    def __init__(self, transport: OAuthHttpTransport) -> None:
+    def __init__(self, callback_policy: CallbackURLPolicy, transport: OAuthHttpTransport) -> None:
+        self._callback_policy = callback_policy
         self._transport = transport
 
     async def refresh(self, command: RefreshPersonalOAuth) -> Authorized:
@@ -83,7 +85,8 @@ class StoredPersonalOAuthRefreshProvider:
             raise ValueError("Unsupported refresh binding")
         if grant.client_id != client.client_id or grant.issuer != client.issuer_url:
             raise ValueError("Unsupported refresh binding")
-        for url in (grant.issuer, grant.resource, grant.token_endpoint, grant.redirect_uri):
+        validate_callback_url(grant.redirect_uri, self._callback_policy)
+        for url in (grant.issuer, grant.resource, grant.token_endpoint):
             validated_url(url)
         parameters = {
             "grant_type": "refresh_token",

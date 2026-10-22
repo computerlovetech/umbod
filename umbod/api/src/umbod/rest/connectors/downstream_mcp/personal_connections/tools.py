@@ -37,7 +37,7 @@ def get_personal_tool_discovery(
 ) -> PersonalToolDiscoveryService:
     if not factories.settings.personal_connections.oauth_enabled:
         raise HTTPException(status_code=404, detail={"code": "personal_oauth_unavailable"})
-    return PersonalToolDiscoveryService(stores.personal_tool_policies, stores.personal_runtime_authorizations, stores.personal_tool_access, transport, utc_clock)
+    return PersonalToolDiscoveryService(stores.personal_runtime_authorizations, stores.personal_tool_access, transport, utc_clock)
 
 
 router = APIRouter(prefix="/connectors/mcp", tags=["personal-mcp-connections"])

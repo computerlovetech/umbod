@@ -2,21 +2,23 @@
   import Button from '$lib/components/admin/shared/Button.svelte';
   type Props = {
     title: string;
+    headingId?: string;
     lede: string;
     addLabel: string;
+    disabled?: boolean;
     onadd: (trigger: HTMLButtonElement) => void;
   };
 
-  let { title, lede, addLabel, onadd }: Props = $props();
+  let { title, headingId, lede, addLabel, disabled = false, onadd }: Props = $props();
 </script>
 
 <div class="connector-page-header">
   <div>
     <p class="admin-eyebrow">Umbod / Connectors</p>
-    <h1 class="admin-title">{title}</h1>
+    <h1 class="admin-title" id={headingId} tabindex="-1">{title}</h1>
     <p class="admin-lede">{lede}</p>
   </div>
-  <Button aria-label={addLabel} onclick={(event) => onadd(event.currentTarget)}><span class="plus" aria-hidden="true">+</span>{addLabel}</Button>
+  <Button {disabled} aria-label={addLabel} onclick={(event) => onadd(event.currentTarget)}><span class="plus" aria-hidden="true">+</span>{addLabel}</Button>
 </div>
 
 <style>

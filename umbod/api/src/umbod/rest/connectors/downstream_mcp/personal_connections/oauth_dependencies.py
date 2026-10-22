@@ -4,6 +4,8 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException
 
+from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
+from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import local_personal_identity_enabled
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.factory import configured_personal_oauth_provider
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_service import PersonalOAuthCallbackService, PersonalOAuthService
@@ -24,10 +26,15 @@ def require_personal_oauth(factories: Factories) -> None:
         raise HTTPException(status_code=404, detail={"code": "personal_oauth_unavailable"})
 
 
+def get_personal_callback_policy(factories: Factories) -> CallbackURLPolicy:
+    return CallbackURLPolicy.LOCAL_DEVELOPMENT if local_personal_identity_enabled(factories.settings) else CallbackURLPolicy.STRICT
+
+
 async def get_personal_oauth_provider(
+    callback_policy: Annotated[CallbackURLPolicy, Depends(get_personal_callback_policy)],
     enabled: Annotated[None, Depends(require_personal_oauth)],
 ) -> AsyncIterator[PersonalOAuthProvider]:
-    async with configured_personal_oauth_provider() as provider:
+    async with configured_personal_oauth_provider(callback_policy) as provider:
         yield provider
 
 

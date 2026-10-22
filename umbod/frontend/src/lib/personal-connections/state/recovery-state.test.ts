@@ -5,7 +5,7 @@ import type { AuthorizationHealth, RenewalResult, Selection } from '../domain/sc
 import { InMemoryPersonalConnectionsApi } from '../infrastructure/in-memory-api';
 import { authorizationHealth, completedAttempt, deferred, selection } from '../test-fixtures';
 import { ConnectionState } from './connection-state.svelte';
-import { ConnectionsState } from './connections-state.svelte';
+import { createPersonalDashboard } from './dashboard-test-helper';
 
 function setup(health: AuthorizationHealth = authorizationHealth): { api: PersonalConnectionsApi; card: ConnectionState } {
   const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: health });
@@ -49,7 +49,7 @@ describe('authorization recovery through public state actions', () => {
     expect(get).toHaveBeenCalledOnce();
     expect(discover).not.toHaveBeenCalled();
     expect(enable).not.toHaveBeenCalled();
-    expect(card.message).toBe('Authorization renewed. Discover tools before using them.');
+    expect(card.message).toBe('Authorization renewed.');
     await card.discover();
     expect(discover).toHaveBeenCalledOnce();
     expect(health).toHaveBeenCalledTimes(3);
@@ -216,37 +216,37 @@ describe('authorization recovery through public state actions', () => {
 
   test('401 immediately clears owner data even if the parallel read is still pending', async (): Promise<void> => {
     const { api } = setup();
-    const page = new ConnectionsState(api);
-    await page.load();
-    const card = page.cards[0];
+    const page = createPersonalDashboard(api);
+    await page.loadCatalogue();
+    const card = page.personalCards[0];
     const pending = deferred<Selection>();
     vi.spyOn(api.connections, 'get').mockReturnValue(pending.promise);
     vi.spyOn(api.authorization, 'getHealth').mockRejectedValue(new AuthenticationRequiredError());
     const refreshing = card.refresh();
     await vi.waitFor(() => expect(page.phase).toBe('sign-in'));
-    expect(page.cards).toEqual([]);
+    expect(page.personalCards).toEqual([]);
     expect(card.health).toBeNull();
     pending.resolve(selection);
     await refreshing;
-    expect(page.cards).toEqual([]);
+    expect(page.personalCards).toEqual([]);
   });
 
   test('authentication loss wins over a concurrent failed details read', async (): Promise<void> => {
     const { api } = setup();
-    const page = new ConnectionsState(api);
-    await page.load();
+    const page = createPersonalDashboard(api);
+    await page.loadCatalogue();
     vi.spyOn(api.connections, 'get').mockRejectedValue(new HttpError(503, 'Unavailable', {}));
     vi.spyOn(api.authorization, 'getHealth').mockRejectedValue(new AuthenticationRequiredError());
-    await page.cards[0].refresh();
+    await page.personalCards[0].refresh();
     expect(page.phase).toBe('sign-in');
-    expect(page.cards).toEqual([]);
+    expect(page.personalCards).toEqual([]);
   });
 
   test.each(['health', 'renew'] as const)('401 during %s clears every card and ignores another late result', async (operation): Promise<void> => {
     const { api } = setup();
-    const page = new ConnectionsState(api);
-    await page.load();
-    const card = page.cards[0];
+    const page = createPersonalDashboard(api);
+    await page.loadCatalogue();
+    const card = page.personalCards[0];
     await card.start();
     await card.cancel();
     if (operation === 'health') vi.spyOn(api.authorization, 'getHealth').mockRejectedValue(new AuthenticationRequiredError());
@@ -254,7 +254,7 @@ describe('authorization recovery through public state actions', () => {
     if (operation === 'health') await card.refresh();
     else await card.renew();
     expect(page.phase).toBe('sign-in');
-    expect(page.cards).toEqual([]);
+    expect(page.personalCards).toEqual([]);
     expect(card.health).toBeNull();
     expect(card.authorizationUrl).toBe('');
     expect(card.selection.display_name).toBe('');

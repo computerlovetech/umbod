@@ -7,7 +7,7 @@ from typing import Any
 import pytest
 from fastmcp.tools import ToolResult
 
-from tests.umbod.core.downstream_mcp_connectors.personal_tools.runtime_support import execution_case
+from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import execution_case
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, runtime_case
 from tests.umbod.mcp.downstream_mcp_connectors.test_personal_execution_pipeline import provider_for
 from tests.umbod.mcp.downstream_mcp_connectors.test_provider import ProviderOptions, _downstream, _provider
@@ -108,7 +108,7 @@ async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: R
     elif reason == "invalid_output":
         execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result={"content": [{"type": "text", "text": SENSITIVE}], "structuredContent": SENSITIVE})
     elif reason == "downstream_tool_error":
-        execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result={"content": [{"type": "text", "text": SENSITIVE}], "isError": True})
+        execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result={"content": [{"type": "text", "text": SENSITIVE}], "isError": True, "_meta": {"secret": SENSITIVE}})
     else:
         async def fail(command: PersonalToolCall) -> PersonalToolResult:
             if reason == "authorization_rejected":

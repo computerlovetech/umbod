@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlsplit
 import pytest
 from pydantic import SecretStr
 
+from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import BasicOAuthHttpAuthentication, InMemoryOAuthHttpTransport
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported, PreparePersonalOAuth
@@ -33,7 +34,7 @@ async def test_static_clients_resume_without_registration_and_enforce_granted_sc
     server_metadata["token_endpoint_auth_methods_supported"] = [method]
     server_metadata["scopes_supported"] = ["unrelated.advertisement"]
     transport = InMemoryOAuthHttpTransport([response(resource_metadata), response(server_metadata)])
-    port: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(transport)
+    port: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
     prepared = await port.prepare(preparation)
     assert len(transport.requests) == 2
     assert parse_qs(urlsplit(prepared.authorization_url.get_secret_value()).query)["scope"] == ["read write"]
@@ -44,7 +45,7 @@ async def test_static_clients_resume_without_registration_and_enforce_granted_sc
     if scope_mode != "omitted":
         token["scope"] = scopes[scope_mode]
     exchange_transport = InMemoryOAuthHttpTransport([response(token)])
-    resumed: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(exchange_transport)
+    resumed: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, exchange_transport)
     command = exchange_command(preparation, prepared)
     if scope_mode in ("excess", "malformed"):
         with pytest.raises(PersonalOAuthProviderFailure):
@@ -79,7 +80,7 @@ async def test_configured_issuer_mismatch_fails_before_issuer_discovery(
         issuer_url="https://trusted.example", client_id="client", client_secret="private-secret", token_endpoint_auth_method="client_secret_basic",
     ))
     port_transport = InMemoryOAuthHttpTransport([response(resource_metadata)])
-    port: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(port_transport)
+    port: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, port_transport)
     with pytest.raises(PersonalOAuthProviderUnsupported):
         await port.prepare(preparation.model_copy(update={"policy": policy}))
     assert len(port_transport.requests) == 1
@@ -95,7 +96,7 @@ async def test_dynamic_registration_requests_only_admin_scopes_and_checks_return
     if registration_scope != "omitted":
         client_metadata["scope"] = registration_scope
     transport = InMemoryOAuthHttpTransport([response(resource_metadata), response(server_metadata), response(client_metadata)])
-    port: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(transport)
+    port: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
     if registration_scope in ("read", "admin"):
         with pytest.raises(PersonalOAuthProviderUnsupported):
             await port.prepare(preparation)
@@ -116,7 +117,7 @@ async def test_missing_authentication_metadata_defaults_to_basic_for_configured_
         ),
     )})
     transport = InMemoryOAuthHttpTransport([response(resource_metadata), response(server_metadata)])
-    port: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(transport)
+    port: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
     await port.prepare(preparation)
     assert len(transport.requests) == 2
 
@@ -128,7 +129,7 @@ async def test_policy_and_client_bindings_reject_context_changes_before_token_re
     client_metadata: dict[str, object], field: str, value: object,
 ) -> None:
     transport = InMemoryOAuthHttpTransport([response(resource_metadata), response(server_metadata), response(client_metadata)])
-    port: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(transport)
+    port: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
     prepared = await port.prepare(preparation)
     context = json.loads(prepared.context.get_secret_value())
     context[field] = value

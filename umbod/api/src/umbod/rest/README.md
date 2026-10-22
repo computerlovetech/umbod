@@ -16,7 +16,7 @@
 
 **Read when working with:** Administrative authentication, JWT handling, local authentication simulation, authentication-only `user_middleware.py`, or the cookie mutation boundary in `csrf_middleware.py`.
 
-Local personal identity is backend-owned: tokenless `/api/me` access is permitted only by the default simulated verifier composition under the core local/dev Test User policy. Explicit user verifiers remain strict and administrator verifiers are independent. See [`personal_connections`](connectors/downstream_mcp/personal_connections/README.md).
+Local personal identity is backend-owned: tokenless `/api/me` access uses the default simulated verifier composition under the core local/dev Test User policy. When personal support is disabled, catalogue simulation requires local/dev runtime, development simulation and a configured simulated subject without depending on personal identity configuration. Explicit user verifiers remain strict and administrator verifiers are independent. See [`personal_connections`](connectors/downstream_mcp/personal_connections/README.md).
 
 ## Administration client contract
 
@@ -60,7 +60,7 @@ Administrator-approved personal tools are configured through `GET`/`PUT /api/adm
 
 ### `connectors/downstream_mcp/personal_connections/`
 
-`/api/me` is a separately authenticated, non-admin application, mounted only when the personal identity policy is enabled. It reuses configured JWT verification and credential-header precedence without administrator membership checks. Missing/invalid credentials receive 401; a verified identity that cannot map to the configured canonical authority receives 403 before personal state access. Cookie mutations require the same trusted Origin and web-request marker as administration. Documentation and OpenAPI require authentication.
+`/api/me` is an always-mounted, separately authenticated non-admin application. Personal routes remain conditional on personal support; the general catalogue does not require canonical personal identity mapping. It reuses configured JWT verification and credential-header precedence without administrator membership checks. Missing/invalid credentials receive 401; personal routes reject a verified identity that cannot map to the configured canonical authority with 403 before personal state access. Cookie mutations require the same trusted Origin and web-request marker as administration. Documentation and OpenAPI require authentication.
 
 `GET /api/me/connectors/mcp` and `GET /api/me/connectors/mcp/{id}` expose eligible published personal definitions with explicit connector grants through the caller's `mcp.permission_group_claim`. `PUT /api/me/connectors/mcp/{id}/enablement` accepts a strict boolean `enabled`; `DELETE /api/me/connectors/mcp/{id}/authorization` disconnects with 204. No request accepts an owner or credential. Projections expose enablement and authorization presence, never endpoint details, revisions or secrets; `runtime_available` remains false with reason `personal_oauth_not_supported`.
 
@@ -89,6 +89,10 @@ When `personal_connections.oauth_enabled` is also enabled, owner-scoped POST/GET
 ### `metrics/` and `system/`
 
 **Read when working with:** API observability or health endpoints.
+
+### `user_catalogue/`
+
+**Read when working with:** Always-mounted `GET /api/me/catalogue`, safe cross-kind user projections, opaque identity keys, personal-source gating and collision filtering. The [local index](user_catalogue/README.md) describes dependencies and contracts. The `/api/me` app authenticates catalogue and documentation independently of administrator membership; existing personal routes remain conditional on personal support.
 
 ### `users/`
 

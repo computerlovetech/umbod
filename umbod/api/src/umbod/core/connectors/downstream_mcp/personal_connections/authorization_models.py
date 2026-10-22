@@ -19,6 +19,7 @@ from ..personal_oauth_configuration.models import (
     OAuthScopes,
 )
 from .models import Authorized, PersonalConnectionKey
+from .oauth_callback_models import OAuthCallbackURI
 
 
 class PersonalGrantModel(BaseModel):
@@ -60,7 +61,7 @@ class PersonalOAuthGrant(PersonalGrantModel):
     resource: OAuthIssuer
     client_id: OAuthClientId
     token_endpoint: OAuthIssuer
-    redirect_uri: OAuthIssuer
+    redirect_uri: OAuthCallbackURI
     client_mode: Literal[
         "dynamic_public", "preconfigured_public", "preconfigured_confidential"
     ]

@@ -11,6 +11,7 @@ from pydantic import SecretStr
 
 from umbod.config import AppConfig
 from umbod.core.connectors.downstream_mcp.personal_connections.models import Authorized
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericBinding, IssuerBinding, issuer_callback_uri, issuer_route_key
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
     ExchangePersonalOAuth, PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported,
     PreparePersonalOAuth, PreparedPersonalOAuth,
@@ -31,6 +32,7 @@ class FakeOAuthProvider:
         self.preparations: list[PreparePersonalOAuth] = []
         self.exchanges: list[ExchangePersonalOAuth] = []
         self.fail_exchange = False
+        self.bound_callback = False
         self.preparation_failures: list[Exception] = []
 
     async def prepare(self, command: PreparePersonalOAuth) -> PreparedPersonalOAuth:
@@ -41,6 +43,11 @@ class FakeOAuthProvider:
             authorization_url=SecretStr("https://issuer.example/authorize?" + urlencode({
                 "state": command.state.get_secret_value(),
             })), context=SecretStr("private-provider-context"),
+            callback_binding=IssuerBinding(
+                kind="issuer", expected_issuer="https://issuer.example",
+                issuer_key=issuer_route_key("https://issuer.example"),
+                redirect_uri=issuer_callback_uri(command.redirect_uri, "https://issuer.example"),
+            ) if self.bound_callback else GenericBinding(kind="generic", expected_issuer="https://issuer.example"),
         )
 
     async def exchange(self, command: ExchangePersonalOAuth) -> Authorized:
@@ -192,13 +199,22 @@ def test_callback_is_public_secret_free_and_exchanges_once(oauth_api: OAuthApi) 
     assert selection["runtime_available"] is False
 
 
-@pytest.mark.parametrize("suffix", ["&state=duplicate", "&return_url=https://evil.example", "&scope=unexpected", "&error=secret-canary", "&code=duplicate"])
+@pytest.mark.parametrize("suffix", ["&state=duplicate", "&return_url=https://evil.example", "&scope=unexpected", "&error=secret-canary", "&code=duplicate", "&iss=https://issuer.example"])
 def test_callback_rejects_ambiguous_unknown_or_scoped_responses(oauth_api: OAuthApi, suffix: str) -> None:
     oauth_api.start()
     response = oauth_api.client.get(oauth_api.callback() + suffix)
     assert response.status_code == 400
     assert response.headers["cache-control"] == "no-store"
     assert "secret-canary" not in response.text
+    assert not oauth_api.provider.exchanges
+
+
+@pytest.mark.parametrize("issuer_query", ("", "&iss="))
+def test_callback_without_nonempty_issuer_never_reaches_exchange(oauth_api: OAuthApi, issuer_query: str) -> None:
+    oauth_api.start()
+    state = oauth_api.provider.preparations[-1].state.get_secret_value()
+    response = oauth_api.client.get(CALLBACK_PATH + "?" + urlencode({"state": state, "code": "secret-code"}) + issuer_query)
+    assert response.status_code == 400
     assert not oauth_api.provider.exchanges
 
 
@@ -254,6 +270,9 @@ def anyio_backend() -> str:
 @pytest.mark.parametrize("path,root_path", [
     (CALLBACK_PATH, ""),
     (CALLBACK_PATH + "/", ""),
+    (CALLBACK_PATH + "/issuer/" + "a" * 64, ""),
+    (CALLBACK_PATH + "/issuer/%61" + "a" * 63, ""),
+    (CALLBACK_PATH + "/issuer/" + "a" * 64 + "/extra", ""),
     (CALLBACK_PATH.rsplit("/", 1)[0] + "/unknown", ""),
     (CALLBACK_PATH.rsplit("/", 1)[0], ""),
     ("/embedded" + CALLBACK_PATH, "/embedded"),

@@ -4,14 +4,13 @@ from datetime import datetime
 from pydantic import ValidationError
 
 from umbod.core.connectors.downstream_mcp.models import (
-    DiscoveredToolWithOutputSchema,
-    DiscoveredToolWithoutOutputSchema,
+    DiscoveredTool,
     DiscoveryFailed,
     DiscoveryResult,
     DiscoverySucceeded,
     ToolCatalogSnapshot,
-    ToolIdentity,
 )
+from ..tool_mapping import bind_tool
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.core.connectors.downstream_mcp.probe import (
     DiscoveredCapabilityTool,
@@ -55,9 +54,5 @@ class FastMCPDownstreamDiscovery:
             return DiscoveryFailed(connector_id=command.definition.connector_id, attempted_at=attempted_at, reason="invalid_mcp_protocol")
 
     @staticmethod
-    def _bind_tool(connector_id: str, tool: DiscoveredCapabilityTool) -> DiscoveredToolWithoutOutputSchema | DiscoveredToolWithOutputSchema:
-        shared = tool.model_dump(exclude={"name", "output_schema"})
-        shared["identity"] = ToolIdentity(connector_id=connector_id, downstream_name=tool.name)
-        if tool.output_schema is None:
-            return DiscoveredToolWithoutOutputSchema(**shared)
-        return DiscoveredToolWithOutputSchema(**shared, output_schema=tool.output_schema)
+    def _bind_tool(connector_id: str, tool: DiscoveredCapabilityTool) -> DiscoveredTool:
+        return bind_tool(connector_id, tool)

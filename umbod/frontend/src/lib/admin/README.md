@@ -8,7 +8,7 @@
 
 ### `*-api.ts`
 
-**Read when working with:** Feature-specific API routes, Zod payload schemas, or mapping between transport data and frontend models.
+**Read when working with:** Feature-specific API routes, Zod payload schemas, or mapping between transport data and frontend models. `downstream-mcp-connectors-api.ts` lists and reads both authorization modes and exposes common publication/deletion endpoints; metadata, configuration, discovery and capability operations explicitly preflight Shared ownership.
 
 ### `*.svelte.ts`
 
@@ -18,7 +18,7 @@
 
 ### `personal-mcp-servers/`
 
-**Read when working with:** The personal server allowlist administration port, strict request and nonsecret OAuth policy schemas in `domain/`, in-memory behavior, and the guarded HTTP route adapter. The pure `domain/availability.ts` projection reads resolved typed instance settings and fails closed for missing, duplicate or mistyped availability entries. Registration, revision-checked policy replacement, publication and deletion remain separate from owner authorization and tool contract approval.
+**Read when working with:** The personal server allowlist administration port, strict request and nonsecret OAuth policy schemas in `domain/`, in-memory behavior, and the guarded HTTP route adapter. The pure `domain/availability.ts` projection reads resolved typed instance settings and fails closed for missing, duplicate or mistyped availability entries. The unified MCP workspace reuses this boundary for registration and revision-checked OAuth policy replacement without introducing a second inventory. Those operations remain separate from common publication/deletion, owner authorization and private discovery.
 
 ### `overview/`
 

@@ -11,7 +11,7 @@
   } = $props();
 </script>
 
-<dialog aria-labelledby={titleId} aria-describedby={descriptionId} {@attach modalDialog(close, 'personal-servers-heading')}>
+<dialog aria-labelledby={titleId} aria-describedby={descriptionId} {@attach modalDialog(close, 'mcp-workspace-heading')}>
   <header>
     <h2 id={titleId} tabindex="-1" data-dialog-title>{title}</h2>
     <button type="button" class="close" aria-label="Close" onclick={close}>×</button>

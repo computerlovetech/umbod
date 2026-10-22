@@ -10,6 +10,8 @@ from uuid import uuid4
 
 import pytest
 import pytest_asyncio
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericRoute, PresentCallbackIssuer
+
 from pydantic import BaseModel
 
 from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
@@ -190,7 +192,7 @@ def publication(case: AttemptCase) -> PublishPersonalOAuthAttempt:
 
 def claim_command(case: AttemptCase) -> ClaimPersonalOAuthAttempt:
     return ClaimPersonalOAuthAttempt(
-        state=case.command.preparation.state,
+        route=GenericRoute(kind="generic"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), state=case.command.preparation.state,
         claim_id="exclusive-claim",
         now=case.query.now,
     )
@@ -807,7 +809,7 @@ async def test_expired_attempt_is_not_purged_by_wrong_owner_or_invalid_credentia
         else:
             await case.store.claim(
                 ClaimPersonalOAuthAttempt(
-                    state=case.command.attempt_id + ".invalid",
+                    route=GenericRoute(kind="generic"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), state=case.command.attempt_id + ".invalid",
                     claim_id="invalid",
                     now=case.query.now,
                 )

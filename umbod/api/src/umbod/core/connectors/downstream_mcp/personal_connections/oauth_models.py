@@ -5,6 +5,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr
 from ..personal_oauth_configuration import PersonalOAuthPolicy, legacy_personal_oauth_policy
 
 from .models import Authorized, PersonalConnectionKey
+from .oauth_callback_models import CallbackBinding, CallbackIssuer, CallbackRoute, LegacyGenericBinding
 
 
 class PersonalOAuthModel(BaseModel):
@@ -22,6 +23,7 @@ class PreparePersonalOAuth(PersonalOAuthModel):
 class PreparedPersonalOAuth(PersonalOAuthModel):
     authorization_url: SecretStr
     context: SecretStr
+    callback_binding: CallbackBinding = Field(default_factory=lambda: LegacyGenericBinding(kind="legacy_generic"))
 
 
 class PersonalOAuthAttemptQuery(PersonalOAuthModel):
@@ -53,7 +55,18 @@ class PublishPersonalOAuthAttempt(PersonalOAuthModel):
     prepared: PreparedPersonalOAuth
 
 
+class FinishCallback(PersonalOAuthModel):
+    state: SecretStr
+    code: SecretStr
+    issuer: CallbackIssuer
+    error: str
+    scope: str
+    route: CallbackRoute
+
+
 class ClaimPersonalOAuthAttempt(PersonalOAuthModel):
+    route: CallbackRoute
+    issuer: CallbackIssuer
     state: SecretStr
     claim_id: str = Field(min_length=1)
     now: AwareDatetime
@@ -69,7 +82,8 @@ class ClaimedPersonalOAuthAttempt(PersonalOAuthModel):
 class ExchangePersonalOAuth(PersonalOAuthModel):
     attempt: ClaimedPersonalOAuthAttempt
     code: SecretStr
-    issuer: str
+    issuer: CallbackIssuer
+    route: CallbackRoute
 
 
 class CompletePersonalOAuthAttempt(PersonalOAuthModel):

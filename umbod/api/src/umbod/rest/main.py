@@ -20,6 +20,8 @@ from umbod.rest.authentication.authorization import JwtVerifier
 from umbod.rest.authentication.middleware import SuppliedJwtVerifierFactory
 from umbod.rest.authentication.user_middleware import UserAuthenticationMiddleware
 from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import local_personal_identity_enabled
+from umbod.rest.user_catalogue import router as user_catalogue_router
+from umbod.rest.user_catalogue.identity import local_catalogue_identity_enabled
 from umbod.rest.connectors.downstream_mcp.personal_connections import router as personal_connections_router
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback import (
     PersonalOAuthQueryRedactionMiddleware,
@@ -187,10 +189,12 @@ def _mount_personal_connections_app(
     dependency_factories: ConnectorApiDependencyFactories,
     verifier_factory: JwtVerifierFactory,
 ) -> None:
-    if not settings.personal_connections.enabled:
-        return
+    user_router = APIRouter()
+    user_router.include_router(user_catalogue_router)
+    if settings.personal_connections.enabled:
+        user_router.include_router(personal_connections_router)
     personal_app = SubApiAppFactory(
-        title="umbod-personal-api", router=personal_connections_router
+        title="umbod-personal-api", router=user_router
     ).create()
     _attach_dependency_factories(personal_app, dependency_factories)
     personal_app.add_middleware(
@@ -199,7 +203,11 @@ def _mount_personal_connections_app(
         jwt_header_name=settings.admin_authentication.jwt_header_name,
         allow_missing_simulated_token=(
             type(verifier_factory) is JwtVerifierFactory
-            and local_personal_identity_enabled(settings)
+            and (
+                local_personal_identity_enabled(settings)
+                if settings.personal_connections.enabled
+                else local_catalogue_identity_enabled(settings)
+            )
         ),
     )
     personal_app.add_middleware(
@@ -207,6 +215,14 @@ def _mount_personal_connections_app(
         site_base_url=settings.endpoints.site_base_url,
         allowed_origins=settings.cors.origins,
     )
+    @personal_app.middleware("http")
+    async def prevent_user_response_caching(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        response.headers["Cache-Control"] = "no-store"
+        return response
+
     app.mount("/api/me", personal_app)
 
 

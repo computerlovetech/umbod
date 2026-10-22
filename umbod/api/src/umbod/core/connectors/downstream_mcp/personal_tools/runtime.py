@@ -86,7 +86,7 @@ class PersonalToolRuntimeService:
                     now=self._clock(),
                 ),
                 identity=command.identity,
-                contract_revision=command.contract_revision,
+                inventory_revision=command.inventory_revision,
                 fingerprint=command.fingerprint,
             ))
             stage = "arguments"

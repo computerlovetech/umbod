@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from pydantic import SecretStr
 
 from umbod.config import AppConfig
-from umbod.core.activation import ActivationStatus, CapabilityRef
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime import InMemoryPersonalMcpTransport
 from umbod.core.connectors.downstream_mcp.models import DiscoveredToolWithoutOutputSchema, ToolIdentity
 from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalConnectionKey, ReplacePersonalAuthorization
@@ -22,7 +21,6 @@ from umbod.rest.main import create_app
 from umbod.rest.connectors.downstream_mcp.personal_connections.tools import get_personal_tool_transport
 
 from test_personal_connection_routes import PersonalApi, UserVerifier, _create_connector
-from test_personal_tools_api import tool
 
 
 @pytest.fixture
@@ -71,17 +69,13 @@ async def stores_with_grants(api: PersonalApi) -> DownstreamMcpStores:
             access_token=SecretStr("test-user-token-" + subject), refresh_token=AbsentPersonalRefreshToken(),
         )
         await stores.personal_connections.replace_authorization(ReplacePersonalAuthorization(key=key, expected_revision=connection.revision, authorization=authorize_personal_grant(grant)))
-    await stores.activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=api.connector_id, capability_kind="tool", capability_key="lookup"), ActivationStatus.ENABLED)
     return stores
 
 
 def test_verified_discovery_is_private_and_does_not_approve_or_execute(discovery_api: PersonalApi) -> None:
     api = discovery_api
     policy_url = f"/api/admin/connectors/mcp/{api.connector_id}/personal-tools"
-    current = api.client.get(policy_url, headers=api.admin_headers).json()
-    api.client.put(policy_url, headers=api.admin_headers, json={"expected_revision": current["revision"], "tools": [tool(api.connector_id)]}).raise_for_status()
     stores = asyncio.run(stores_with_grants(api))
-    api.client.put("/api/admin/mcp-permissions/groups/team/permissions", headers=api.admin_headers, json={"capabilities": [{"connector_id": api.connector_id, "capability_kind": "tool", "capability_key": "lookup", "permission_status": "enabled"}]}).raise_for_status()
     transport = InMemoryPersonalMcpTransport()
     observed = DiscoveredToolWithoutOutputSchema(identity=ToolIdentity(connector_id=api.connector_id, downstream_name="lookup"), title="Private Alice title", description="private-alice-description", input_schema={"type": "object", "properties": {"query": {"type": "string"}}})
     transport.inventories[query(api, "alice").key] = PersonalToolInventory(tools=(observed,))
@@ -97,7 +91,7 @@ def test_verified_discovery_is_private_and_does_not_approve_or_execute(discovery
     assert len(asyncio.run(stores.personal_tool_access.list_available(query(api, "alice")))) == 1
     assert asyncio.run(stores.personal_tool_access.list_available(query(api, "bob"))) == ()
     catalogue = asyncio.run(stores.catalogs.get(ConnectorIdQuery(connector_id=api.connector_id)))
-    assert catalogue.snapshot.tools[0].description == "Approved lookup"
+    assert not catalogue.found
     assert "private-alice" not in api.client.get(policy_url, headers=api.admin_headers).text
     assert transport.calls == []
     list_count = len(transport.list_requests)

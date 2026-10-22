@@ -12,7 +12,7 @@
     { id: 'openapi', label: 'OpenAPI connectors', href: '/admin/openapi-connectors' },
     {
       id: 'downstream-mcp',
-      label: 'MCP proxy connectors',
+      label: 'MCP connectors',
       href: '/admin/downstream-mcp-connectors'
     }
   ];

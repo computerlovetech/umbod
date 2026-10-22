@@ -7,7 +7,7 @@ def contract(connector_id: str) -> dict[str, object]:
     return {"identity": {"connector_id": connector_id, "downstream_name": "lookup"}, "title": "Approved lookup", "description": "Administrator supplied contract", "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}}, "output_schema_status": "absent"}
 
 
-def test_personal_tool_schema_change_clears_activation_and_capability_grants(personal_policy_client: tuple[httpx.Client, str]) -> None:
+def test_personal_tool_metadata_change_preserves_activation_and_capability_grants(personal_policy_client: tuple[httpx.Client, str]) -> None:
     client, connector_id = personal_policy_client
     admin_url = f"/api/admin/connectors/mcp/{connector_id}"
     url = admin_url + "/personal-tools"
@@ -27,11 +27,11 @@ def test_personal_tool_schema_change_clears_activation_and_capability_grants(per
     assert changed.json()["revision"] != saved.json()["revision"]
     activations = client.get(admin_url + "/tools/activation")
     assert activations.status_code == 200
-    assert activations.json()["tools"][0]["activation_status"] == "disabled"
+    assert activations.json()["tools"][0]["activation_status"] == "enabled"
     permissions = client.get("/api/admin/mcp-permissions/groups/admin")
     assert permissions.status_code == 200
     assert connector_id in permissions.json()["connector_ids"]
-    assert not any(item["connector_id"] == connector_id for item in permissions.json()["capabilities"])
+    assert any(item["connector_id"] == connector_id and item["capability_key"] == "lookup" for item in permissions.json()["capabilities"])
     selection = client.get(f"/api/me/connectors/mcp/{connector_id}").json()
     assert selection["enabled"] is True
     assert selection["runtime_available"] is False

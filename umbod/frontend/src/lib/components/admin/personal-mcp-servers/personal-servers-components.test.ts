@@ -1,36 +1,92 @@
+import { Window } from 'happy-dom';
 import { render } from 'svelte/server';
 import { createRawSnippet } from 'svelte';
 import PersonalServerDialog from './PersonalServerDialog.svelte';
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
-import { policyFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
+import { policyFixture, serverFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
 import { PolicyForm } from './policy-form.svelte';
 import PolicyFields from './PolicyFields.svelte';
-import PersonalServersPage from './PersonalServersPage.svelte';
+import PersonalServerPolicyPanel from './PersonalServerPolicyPanel.svelte';
+import PersonalServerRegistration from './PersonalServerRegistration.svelte';
+import { PersonalServerFormState } from './personal-server-form-state.svelte';
+import * as formStateModule from './personal-server-form-state.svelte';
 import { configurationFixture } from '$lib/admin/personal-mcp-servers/availability.test-support';
 
 vi.mock('$app/state', () => ({ navigating: { to: null, from: null } }));
 
 describe('personal server administration presentation', () => {
-  test('renders dedicated Admin navigation, permissions link and truthful persistent guidance', () => {
-    const body = render(PersonalServersPage, { props: { accountIdentity: { kind: 'hidden' }, api: new InMemoryPersonalServers(), configuration: { get: async () => configurationFixture() } } }).body;
-    expect(body).toMatch(/href="\/admin\/personal-mcp-servers"[^>]*aria-current="page"/);
-    expect(body).toContain('Personal MCP servers');
+  test('renders a standalone selected policy panel with whole-server guidance and no second inventory', () => {
+    const body = render(PersonalServerPolicyPanel, { props: { connectorId: 'personal', api: new InMemoryPersonalServers(), configuration: { get: async () => configurationFixture() } } }).body;
     expect(body).toContain('href="/admin/group-permissions"');
-    expect(body).toContain('href="/admin/downstream-mcp-connectors"');
-    expect(body).toContain('Publication allows selection by explicitly permitted groups');
-    expect(body).toContain('Approved tool contracts (API-only in this interface), activation and tool permissions');
-    expect(body).toContain('not universal access');
-    expect(body).not.toContain('ready to use');
+    expect(body).toContain('including future tools after explicit rediscovery');
+    expect(body).toContain('No per-tool approval, activation or tool grants are required');
+    expect(body).toContain('Server details and endpoint are read-only');
+    expect(body).toContain('Reload OAuth settings');
+    expect(body).not.toContain('<nav');
+    expect(body).not.toContain('AdminShell');
     expect(body).not.toContain('ready to execute');
-    expect(body).toContain('Reload servers');
-    expect(body).toContain('Cannot confirm personal connections availability');
-    expect(body).toContain('href="/admin/instance-configuration"');
-    expect(body).toMatch(/<button[^>]*disabled[^>]*>(?:<!--.*?-->)*Register personal server/);
+  });
+  test('registration reuses validated metadata fields and policy controls without another inventory', () => {
+    const state = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null);
+    const body = render(PersonalServerRegistration, { props: { state, close: vi.fn(), reload: vi.fn() } }).body;
+    expect(body).toContain('Registration starts unpublished');
+    expect(body).toContain('No discovery, group grants, user enablement or consent');
+    expect(body).toContain('Registration path identifier');
+    expect(body).toContain('does not provide a shared proxy connection');
+    expect(body).toContain('Register unpublished server');
+    expect(body).not.toContain('<nav');
+    expect(body).not.toContain('bearerToken');
+  });
+  test('selected policy panel and registration keep labels and helper references scoped when rendered together', async () => {
+    const document = new Window().document;
+    const api = new InMemoryPersonalServers([serverFixture()], [policyFixture()]);
+    const configuration = { get: async () => configurationFixture() };
+    const selected = new PersonalServerFormState(api, configuration, 'personal');
+    await selected.reload();
+    const registration = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null);
+    for (const form of [selected.form, registration.form]) form.setKind('preconfigured_confidential');
+    const constructor = vi.spyOn(formStateModule, 'PersonalServerFormState').mockImplementation(function (): PersonalServerFormState { return selected; });
+    let panelBody: string;
+    try { panelBody = render(PersonalServerPolicyPanel, { props: { connectorId: 'personal', api, configuration } }).body; }
+    finally { constructor.mockRestore(); }
+    document.body.innerHTML = `<section data-scope="selected">${panelBody}</section><section data-scope="registration">${render(PersonalServerRegistration, { props: { state: registration, close: vi.fn(), reload: vi.fn() } }).body}</section>`;
+    const ids = [...document.querySelectorAll('[id]')].map((element) => element.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const scope of document.querySelectorAll('[data-scope]')) {
+      for (const label of scope.querySelectorAll('label[for]')) {
+        const target = document.getElementById(label.getAttribute('for')!);
+        expect(target).not.toBeNull();
+        expect(scope.contains(target!)).toBe(true);
+        expect(target?.matches('input, select')).toBe(true);
+      }
+      for (const control of scope.querySelectorAll('[aria-describedby]')) {
+        for (const id of control.getAttribute('aria-describedby')!.split(' ')) {
+          const helper = document.getElementById(id);
+          expect(helper).not.toBeNull();
+          expect(scope.contains(helper!)).toBe(true);
+        }
+      }
+      const labels = [...scope.querySelectorAll('label')].map((label) => label.textContent);
+      for (const name of ['OAuth application setup', 'Requested scopes', 'Exact HTTPS issuer URL', 'Client ID', 'Token endpoint authentication', 'Fresh client secret']) expect(labels).toContain(name);
+    }
+    const panel = readFileSync('src/lib/components/admin/personal-mcp-servers/PersonalServerPolicyPanel.svelte', 'utf8');
+    expect(panel).toContain('idPrefix={`personal-policy-${connectorId}`}');
   });
   test('dynamic clients expose no stored or shared credential controls', () => {
-    const body = render(PolicyFields, { props: { form: new PolicyForm() } }).body;
+    const body = render(PolicyFields, { props: { form: new PolicyForm(), idPrefix: 'personal' } }).body;
+    expect(body).toContain('OAuth application setup');
+    expect(body).toContain('Automatic registration');
+    expect(body).toContain('Use an existing client ID');
+    expect(body).toContain('Use an existing client ID and secret');
+    expect(body).not.toContain('Dynamic public');
+    expect(body).not.toContain('Preconfigured public');
+    expect(body).not.toContain('Preconfigured confidential');
+    expect(body).toContain("These settings identify Umbod's application, not a user's login method.");
+    expect(body).toContain('Users still connect their own accounts.');
+    expect(body).toContain("The provider registers Umbod's application automatically.");
+    expect(body).toContain('value="dynamic_public" selected');
     expect(body).toContain('Requested scopes');
     expect(body).toContain('ordinary spaces');
     expect(body).toContain('provider defaults');
@@ -41,16 +97,19 @@ describe('personal server administration presentation', () => {
   test('public clients display exact issuer and ID but no secret field', () => {
     const form = new PolicyForm();
     form.reset({ ...policyFixture(), client: { kind: 'preconfigured_public', issuer_url: 'https://Issuer.test:443/Exact/', client_id: 'public-app' } });
-    const body = render(PolicyFields, { props: { form } }).body;
+    const body = render(PolicyFields, { props: { form, idPrefix: 'personal' } }).body;
     expect(body).toContain('value="https://Issuer.test:443/Exact/"');
     expect(body).toContain('value="public-app"');
+    expect(body).toContain('An administrator provides the client ID of an existing application registered with the provider.');
+    expect(body).not.toContain("The provider registers Umbod's application automatically.");
     expect(body).not.toContain('id="personal-client-secret"');
   });
   test('confidential reads present configured status with an empty required password and both explicit methods', () => {
     const form = new PolicyForm();
     form.reset({ ...policyFixture(), client: { kind: 'preconfigured_confidential', issuer_url: 'https://issuer.test', client_id: 'app', token_endpoint_auth_method: 'client_secret_post', client_secret_configured: true } });
-    const body = render(PolicyFields, { props: { form } }).body;
+    const body = render(PolicyFields, { props: { form, idPrefix: 'personal' } }).body;
     expect(body).toContain('Client secret configured');
+    expect(body).toContain("An administrator provides an existing application's client ID and secret. The secret is not a user's password.");
     expect(body).toMatch(/id="personal-client-secret"[^>]*type="password"[^>]*autocomplete="new-password"[^>]*required[^>]*value=""/);
     expect(body).toContain('client_secret_basic');
     expect(body).toContain('client_secret_post');
@@ -58,35 +117,22 @@ describe('personal server administration presentation', () => {
     expect(body).not.toContain('Leave blank to keep');
     expect(body).not.toContain('********');
   });
-  test('registration, policy and publication confirmation copy keeps separate prerequisites explicit', () => {
-    const page = readFileSync('src/lib/components/admin/personal-mcp-servers/PersonalServersPage.svelte', 'utf8');
-    expect(page).toContain('Registration starts unpublished. No discovery, group grants, user enablement or consent is performed.');
-    expect(page).toContain("ALL users' saved authorizations and pending sign-ins");
-    expect(page).toContain('User enablement, publication and group grants persist');
-    expect(page).toContain('Remote tokens are not revoked');
-    expect(page).toContain('After the user catalogue reloads');
-    expect(page).toContain('Remove connector and tool grants first');
-    expect(page).toContain('unique, fixed registration path identifier');
-    expect(page).toContain('does not provide a shared proxy connection or authorize execution');
-    expect(page).toContain('Server details and endpoint cannot be changed after registration');
-    expect(page).toContain('<dt>Server ID</dt><dd>{state.selected.connector_id}</dd>');
-    expect(page).toContain('Review changes');
-    expect(page).not.toContain('discover(');
-    expect(page).not.toContain('configuredSecret=');
-    expect(page).not.toContain('localStorage');
-    expect(page).not.toContain('$effect');
-    expect(page).toContain('return state.dispose');
-    expect(page).toContain('<fieldset disabled={state.locked');
-  });
-  test('uses labelled native dialogs and invalid capture on both forms without disabling native validation', () => {
-    const page = readFileSync('src/lib/components/admin/personal-mcp-servers/PersonalServersPage.svelte', 'utf8');
-    expect(page.match(/captureInvalidSubmission\(state.handleNativeInvalid\)/g)).toHaveLength(2);
-    expect(page.match(/<PersonalServerDialog /g)).toHaveLength(2);
-    expect(page).not.toContain('AdminModalShell');
-    expect(page).not.toContain('novalidate');
-    expect(page).not.toContain('class:');
-    expect(page).toContain('role="alert"');
-    expect(page).toContain('id="personal-servers-heading" tabindex="-1"');
+  test('selected policy and registration retain native validation, explicit invalidation and lifecycle disposal', () => {
+    const panel = readFileSync('src/lib/components/admin/personal-mcp-servers/PersonalServerPolicyPanel.svelte', 'utf8');
+    const registration = readFileSync('src/lib/components/admin/personal-mcp-servers/PersonalServerRegistration.svelte', 'utf8');
+    expect(panel).toContain("ALL users' saved authorizations and pending sign-ins");
+    expect(panel).toContain('User enablement, publication and group grants persist');
+    expect(panel).toContain('Remote tokens are not revoked');
+    expect(panel).toContain('return state.dispose');
+    expect(registration).toContain('onDestroy(untrack(() => state.form.clearSecret))');
+    for (const form of [panel, registration]) {
+      expect(form).toContain('captureInvalidSubmission(state.handleNativeInvalid)');
+      expect(form).not.toContain('novalidate');
+      expect(form).not.toContain('$effect');
+      expect(form).not.toContain('localStorage');
+      expect(form).toContain('<PersonalServerDialog');
+      expect(form).toContain('<PolicyFields');
+    }
     const body = render(PersonalServerDialog, { props: {
       title: 'Confirm change', titleId: 'dialog-title', descriptionId: 'dialog-description', close: vi.fn(),
       children: createRawSnippet(() => ({ render: (): string => '<p id="dialog-description">Review this change.</p>' }))
@@ -97,14 +143,27 @@ describe('personal server administration presentation', () => {
     expect(body).not.toContain('autofocus');
     expect(body).not.toContain(' open');
   });
-  test('shared workspace links to the personal allowlist and thin personal route wires selected URL', () => {
-    const sharedPage = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
-    const route = readFileSync('src/routes/admin/personal-mcp-servers/+page.svelte', 'utf8');
-    expect(sharedPage).toContain('href="/admin/personal-mcp-servers"');
-    expect(route).toContain('<PersonalServersPage');
-    expect(route).toContain('{#key data}');
-    expect(route).toContain("url.searchParams.set('connector', id)");
-    expect(route).toContain('replaceState(url, {})');
-    expect(route).not.toContain('fetch(');
+  test('registration uncertainty keeps its dialog mounted and exposes full workspace reload after close', () => {
+    const page = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
+    const header = readFileSync('src/lib/components/admin/connectors/ConnectorPageHeader.svelte', 'utf8');
+    expect(page).toContain('state.operations.loseAccess, state.operations.setRegistrationLocked');
+    expect(page).toContain("state.modal === 'personal' && !state.operations.authenticationLost");
+    expect(page).not.toContain("state.modal === 'personal' && !state.operations.locked");
+    expect(page).toContain("{#if registration.blocked && state.modal !== 'personal'}");
+    expect(page).toContain('All workspace changes remain blocked until a full server reload');
+    expect(page).toContain('{#if !state.operations.registrationLocked}');
+    expect(page).toContain('if (registration.blocked) window.location.reload()');
+    expect(page).toContain('disabled={state.operations.locked}');
+    expect(header).toContain('<Button {disabled}');
+  });
+  test('the old route has no UI and the surviving workspace owns both mode choices', () => {
+    const workspace = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
+    const shell = readFileSync('src/lib/components/admin/AdminShell.svelte', 'utf8');
+    expect(workspace).toContain('>Shared</Button>');
+    expect(workspace).toContain('>Personal</Button>');
+    expect(workspace).toContain('disabled={!registration.canRegister}');
+    expect(workspace).toContain('<PersonalServerRegistration');
+    expect(workspace).not.toContain('/admin/personal-mcp-servers');
+    expect(shell).not.toContain('personalMcpServers');
   });
 });

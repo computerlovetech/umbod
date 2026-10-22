@@ -54,11 +54,21 @@ def personal_policy_client(
             }]}).status_code == 200
             yield client, connector_id
         finally:
-            client.put(permissions_url, json={"connectors": [{
+            permissions = client.get("/api/admin/mcp-permissions/groups/admin")
+            assert permissions.status_code == 200
+            retained = [{
+                "connector_id": connector_id,
+                "capability_kind": capability["capability_kind"],
+                "capability_key": capability["capability_key"],
+                "permission_status": "disabled",
+            } for capability in permissions.json()["capabilities"] if capability["connector_id"] == connector_id]
+            if retained:
+                assert client.put(permissions_url, json={"capabilities": retained}).status_code == 200
+            assert client.put(permissions_url, json={"connectors": [{
                 "connector_id": connector_id, "permission_status": "disabled",
-            }]})
-            client.delete(admin_url + "/publication")
-            client.delete(admin_url)
+            }]}).status_code == 200
+            assert client.delete(admin_url + "/publication").status_code == 200
+            assert client.delete(admin_url).status_code == 204
 
 
 def test_personal_oauth_policy_rotation_is_revision_bound_and_secret_free(

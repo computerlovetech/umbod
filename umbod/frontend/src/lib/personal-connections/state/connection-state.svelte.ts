@@ -20,7 +20,7 @@ export class ConnectionState {
   private revision = 0;
   private active = true;
 
-  constructor(selection: Selection, private readonly api: PersonalConnectionsApi, private readonly authenticationLost: () => void) {
+  constructor(selection: Selection, private readonly api: PersonalConnectionsApi, private readonly authenticationLost: () => void, private readonly onChanged: () => Promise<void> = async (): Promise<void> => {}) {
     this.selection = $state.raw(selection);
   }
 
@@ -63,6 +63,13 @@ export class ConnectionState {
   get renewalInProgress(): boolean {
     return this.healthPhase === 'ready' && this.health?.state === 'refreshing';
   }
+
+  reconcileSelection = async (selection: Selection): Promise<void> => {
+    if (!this.active || this.busy || this.checking) return;
+    this.selection = selection;
+    if (!selection.enabled) this.clearAttempt();
+    await this.loadHealth();
+  };
 
   loadHealth = async (): Promise<void> => {
     if (!this.active || this.busy) return;
@@ -122,10 +129,8 @@ export class ConnectionState {
       try {
         await this.api.authorization.renew(this.selection.connector_id, {});
         if (!this.current(revision)) return;
-        await this.readDetails(revision);
-        if (!this.current(revision)) return;
         this.confirmingDisconnect = false;
-        this.message = 'Authorization renewed. Discover tools before using them.';
+        await this.refreshAfterChange(revision, 'Authorization renewed.');
       } catch (error) {
         if (!this.current(revision)) return;
         if (requiresSignIn(error)) this.authenticationLost();
@@ -137,6 +142,32 @@ export class ConnectionState {
         if (this.current(revision)) this.renewing = false;
       }
     });
+  };
+
+  private notifyChanged = async (revision: number): Promise<void> => {
+    if (!this.current(revision)) return;
+    try {
+      await this.onChanged();
+    } catch {
+      if (this.current(revision) && !this.error) this.error = "Couldn't refresh connectors. Refresh the dashboard.";
+    }
+  };
+
+  private refreshAfterChange = async (revision: number, message: string, read: () => Promise<void> = (): Promise<void> => this.readDetails(revision)): Promise<void> => {
+    try {
+      await read();
+    } catch (error) {
+      if (!this.current(revision)) return;
+      if (requiresSignIn(error)) {
+        this.authenticationLost();
+        return;
+      }
+      this.needsRefresh = true;
+      this.error = "Couldn't refresh personal access. Check authorization status before another action.";
+    }
+    if (!this.current(revision)) return;
+    this.message = message;
+    await this.notifyChanged(revision);
   };
 
   private clearAttempt = (): void => {
@@ -180,9 +211,10 @@ export class ConnectionState {
       await this.readDetails(revision);
       if (!this.current(revision)) return;
       this.needsRefresh = false;
-      this.message = 'Authorization status checked. This does not check a sign-in attempt.';
+      this.message = 'Authorization status checked.';
     } finally {
       if (this.current(revision)) this.readingDetails = false;
+      await this.notifyChanged(revision);
     }
   }, false);
 
@@ -192,13 +224,15 @@ export class ConnectionState {
     const selection = await this.api.connections.setEnablement(this.selection.connector_id, { enabled });
     if (!this.current(revision)) return;
     this.selection = selection;
-    try {
-      const health = await this.api.authorization.getHealth(this.selection.connector_id);
-      if (this.current(revision)) this.installHealth(health);
-    } catch (error) {
-      if (this.current(revision)) this.healthPhase = 'unavailable';
-      throw error;
-    }
+    await this.refreshAfterChange(revision, enabled ? 'Personal access enabled.' : 'Personal access disabled.', async (): Promise<void> => {
+      try {
+        const health = await this.api.authorization.getHealth(this.selection.connector_id);
+        if (this.current(revision)) this.installHealth(health);
+      } catch (error) {
+        if (this.current(revision)) this.healthPhase = 'unavailable';
+        throw error;
+      }
+    });
   }, true, this.selection.enabled && (this.renewing || this.readingDetails));
 
   start = async (): Promise<void> => {
@@ -241,10 +275,9 @@ export class ConnectionState {
       return;
     }
     this.clearAttempt();
-    this.message = `Sign-in ${attempt.status}. Previous authorization is preserved unless successfully replaced.`;
+    this.message = `Sign-in ${attempt.status}. Saved authorization unchanged.`;
     if (attempt.status !== 'completed') return;
-    await this.readDetails(revision);
-    if (this.current(revision)) this.message = 'Authorization saved. Discover tools explicitly to establish current tool eligibility.';
+    await this.refreshAfterChange(revision, 'Authorization saved.');
   };
 
   requestDisconnect = (): void => {
@@ -262,13 +295,14 @@ export class ConnectionState {
       this.clearAttempt();
       await this.api.connections.disconnect(this.selection.connector_id);
       if (!this.current(revision)) return;
-      const result = await this.api.connections.list();
-      if (!this.current(revision)) return;
-      const selection = result.connectors.find((item) => item.connector_id === this.selection.connector_id);
-      if (!selection) throw new Error('Connection unavailable');
-      this.selection = selection;
-      this.installHealth({ state: 'not_authorized' });
-      this.message = 'Disconnected. Authorization removed and connection disabled.';
+      await this.refreshAfterChange(revision, 'Disconnected. Authorization removed and personal access disabled.', async (): Promise<void> => {
+        const result = await this.api.connections.list();
+        if (!this.current(revision)) return;
+        const selection = result.connectors.find((item) => item.connector_id === this.selection.connector_id);
+        if (!selection) throw new Error('MCP server unavailable');
+        this.selection = selection;
+        this.installHealth({ state: 'not_authorized' });
+      });
     }, true, this.renewing || this.readingDetails);
   };
 
@@ -277,8 +311,7 @@ export class ConnectionState {
     await this.run(async (revision) => {
       await this.api.connections.discover(this.selection.connector_id, {});
       if (!this.current(revision)) return;
-      await this.readDetails(revision);
-      if (this.current(revision)) this.message = 'Discovery completed. Approval and permissions remain independent.';
+      await this.refreshAfterChange(revision, 'Discovery completed.');
     });
   };
 }

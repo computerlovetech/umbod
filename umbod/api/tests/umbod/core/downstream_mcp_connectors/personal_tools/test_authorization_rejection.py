@@ -44,7 +44,7 @@ async def test_discovery_records_only_resolved_target_rejections(runtime_case: R
         raise PersonalRuntimeUnavailable("Personal MCP unavailable")
 
     monkeypatch.setattr(execution.transport, "list_tools", failing_list)
-    discovery = PersonalToolDiscoveryService(runtime_case.bundle.personal_tool_policies, runtime_case.store, runtime_case.bundle.personal_tool_access, execution.transport, lambda: runtime_case.query.now)
+    discovery = PersonalToolDiscoveryService(runtime_case.store, runtime_case.bundle.personal_tool_access, execution.transport, lambda: runtime_case.query.now)
     with pytest.raises(PersonalRuntimeUnavailable):
         await discovery.discover(runtime_case.query)
     assert (await runtime_case.bundle.personal_authorization_health.get(health_query(runtime_case))).state == ("reconnect_required" if specific else "authorized")

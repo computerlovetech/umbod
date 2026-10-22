@@ -28,6 +28,10 @@
 
 **Read when working with:** Connector publish/unpublish state, publication persistence, or publication events.
 
+### `user_catalogue/`
+
+**Read when working with:** Safe authenticated-user catalogue models, source/reader ports, in-memory acceptance and explicit shared capability-grant filtering. The [local index](user_catalogue/README.md) describes request-scoped projection responsibilities.
+
 ### `capabilities/`
 
 **Read when working with:** Shared capability vocabulary (identity, catalog, availability), capability description overrides, or public tool naming/schemas.

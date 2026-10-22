@@ -1,5 +1,5 @@
 import json
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import AwareDatetime, Field, model_validator
 
@@ -19,7 +19,7 @@ class PersonalRuntimeContext(DomainModel):
 
 class InvokePersonalTool(DomainModel):
     identity: CapabilityIdentity
-    contract_revision: str = Field(min_length=1)
+    inventory_revision: str = Field(min_length=1)
     fingerprint: str = Field(pattern="^[0-9a-f]{64}$")
     arguments: ValidatedJsonObject
 
@@ -88,39 +88,57 @@ class PersonalToolPolicyReplacement(DomainModel):
     revoked_grants: tuple[PersonalToolGrantRevocation, ...]
 
 
-class PersonalToolMatch(DomainModel):
-    name: str = Field(min_length=1, max_length=128)
-    fingerprint: str = Field(pattern="^[0-9a-f]{64}$")
+class MissingInventoryRevision(DomainModel):
+    kind: Literal["missing"]
+
+
+class PresentInventoryRevision(DomainModel):
+    kind: Literal["present"]
+    revision: str = Field(min_length=1)
+
+
+PersonalInventoryRevision = Annotated[MissingInventoryRevision | PresentInventoryRevision, Field(discriminator="kind")]
 
 
 class PersonalToolObservation(DomainModel):
+    version: Literal[2]
     key: PersonalConnectionKey
     authorization_revision: str = Field(min_length=1)
     configuration_revision: str = Field(min_length=1)
-    contract_revision: str = Field(min_length=1)
-    matches: tuple[PersonalToolMatch, ...] = Field(max_length=256)
+    inventory_revision: str = Field(min_length=1)
+    tools: tuple[DiscoveredTool, ...] = Field(max_length=256)
     expires_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_tools(self) -> "PersonalToolObservation":
+        _validate_tools(self.key.connector_id, self.tools)
+        return self
 
 
 class SavePersonalToolObservation(DomainModel):
     query: PersonalRuntimeAuthorizationQuery
     target: PersonalRuntimeTarget
-    contract_revision: str = Field(min_length=1)
-    matches: tuple[PersonalToolMatch, ...] = Field(max_length=256)
+    expected_inventory_revision: PersonalInventoryRevision
+    tools: tuple[DiscoveredTool, ...] = Field(max_length=256)
     expires_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def validate_tools(self) -> "SavePersonalToolObservation":
+        _validate_tools(self.query.key.connector_id, self.tools)
+        return self
 
 
 class PersonalToolRecord(DomainModel):
     definition: ConnectorDefinition
     tool: DiscoveredTool
-    contract_revision: str = Field(min_length=1)
+    inventory_revision: str = Field(min_length=1)
     fingerprint: str = Field(pattern="^[0-9a-f]{64}$")
 
 
 class AdmitPersonalTool(DomainModel):
     query: PersonalRuntimeAuthorizationQuery
     identity: CapabilityIdentity
-    contract_revision: str = Field(min_length=1)
+    inventory_revision: str = Field(min_length=1)
     fingerprint: str = Field(pattern="^[0-9a-f]{64}$")
 
 
@@ -131,4 +149,4 @@ class PersonalToolAdmission(DomainModel):
 
 class PersonalToolDiscoveryResult(DomainModel):
     status: Literal["observed"]
-    matched_count: int = Field(ge=0, le=256)
+    tool_count: int = Field(ge=0, le=256)

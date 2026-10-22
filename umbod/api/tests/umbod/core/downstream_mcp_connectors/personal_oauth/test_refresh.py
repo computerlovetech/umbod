@@ -9,6 +9,8 @@ import httpcore
 import pytest
 from pydantic import SecretStr
 
+from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import issuer_callback_uri
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import PublicAddressNetworkBackend, SafeOAuthHttpTransport
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.refresh import StoredPersonalOAuthRefreshProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import (
@@ -70,6 +72,20 @@ def success_response(**changes: object) -> OAuthHttpResponse:
 
 
 @pytest.mark.asyncio
+async def test_refresh_preserves_issuer_bound_redirect_uri(refresh_command: RefreshPersonalOAuth) -> None:
+    redirect_uri = issuer_callback_uri(refresh_command.grant.redirect_uri, refresh_command.grant.issuer)
+    command = refresh_command.model_copy(update={
+        "grant": refresh_command.grant.model_copy(update={"redirect_uri": redirect_uri}),
+    })
+    transport = InMemoryOAuthHttpTransport([success_response()])
+    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, transport)
+    authorization = await provider.refresh(command)
+    renewed = PersonalOAuthGrant.model_validate_json(authorization.authorization.get_secret_value())
+    assert renewed.redirect_uri == redirect_uri
+    assert len(transport.requests) == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("method", ["none", "client_secret_basic", "client_secret_post"])
 async def test_refresh_posts_only_bound_refresh_parameters(refresh_command: RefreshPersonalOAuth, method: str) -> None:
     command = refresh_command
@@ -84,7 +100,7 @@ async def test_refresh_posts_only_bound_refresh_parameters(refresh_command: Refr
             "grant": command.grant.model_copy(update={"client_mode": client.kind, "token_endpoint_auth_method": method}),
         })
     transport = InMemoryOAuthHttpTransport([success_response()])
-    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(transport)
+    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, transport)
     authorization = await provider.refresh(command)
     renewed = PersonalOAuthGrant.model_validate_json(authorization.authorization.get_secret_value())
     assert len(transport.requests) == 1
@@ -109,9 +125,36 @@ async def test_refresh_posts_only_bound_refresh_parameters(refresh_command: Refr
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("method", ("none", "client_secret_basic", "client_secret_post"))
+@pytest.mark.parametrize("uri", ("http://localhost:18010/api/oauth/downstream-mcp/callback", "http://127.0.0.1/callback", "http://[::1]:8080/callback"))
+async def test_http_refresh_context_requires_current_local_callback_policy(
+    refresh_command: RefreshPersonalOAuth, method: str, uri: str,
+) -> None:
+    command = refresh_command.model_copy(update={"grant": refresh_command.grant.model_copy(update={"redirect_uri": uri})})
+    if method != "none":
+        client = PreconfiguredConfidentialOAuthClient.model_validate({
+            "issuer_url": command.grant.issuer, "client_id": command.grant.client_id,
+            "client_secret": "secret", "token_endpoint_auth_method": method,
+        })
+        command = command.model_copy(update={
+            "policy": command.policy.model_copy(update={"client": client}),
+            "grant": command.grant.model_copy(update={"client_mode": client.kind, "token_endpoint_auth_method": method}),
+        })
+    transport = InMemoryOAuthHttpTransport([success_response()])
+    strict: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, transport)
+    with pytest.raises(PersonalOAuthRefreshUncertain):
+        await strict.refresh(command)
+    assert not transport.requests
+    local: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.LOCAL_DEVELOPMENT, transport)
+    renewed = await local.refresh(command)
+    assert PersonalOAuthGrant.model_validate_json(renewed.authorization.get_secret_value()).redirect_uri == uri
+    assert len(transport.requests) == 1
+
+
+@pytest.mark.asyncio
 async def test_refresh_can_rotate_refresh_token_and_narrow_scopes(refresh_command: RefreshPersonalOAuth) -> None:
     transport = InMemoryOAuthHttpTransport([success_response(refresh_token="new-refresh", scope="")])
-    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(transport)
+    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, transport)
     result = await provider.refresh(refresh_command)
     renewed = PersonalOAuthGrant.model_validate_json(result.authorization.get_secret_value())
     assert renewed.refresh_token == PresentPersonalRefreshToken(token=SecretStr("new-refresh"))
@@ -127,7 +170,7 @@ async def test_refresh_can_rotate_refresh_token_and_narrow_scopes(refresh_comman
 ])
 async def test_invalid_success_is_uncertain_without_retry(refresh_command: RefreshPersonalOAuth, changes: dict[str, object]) -> None:
     transport = InMemoryOAuthHttpTransport([success_response(**changes)])
-    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(transport)
+    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, transport)
     with pytest.raises(PersonalOAuthRefreshUncertain) as caught:
         await provider.refresh(refresh_command)
     assert caught.value.__context__ is None
@@ -148,7 +191,7 @@ async def test_only_definitive_endpoint_errors_are_denied(
     refresh_command: RefreshPersonalOAuth, status: int, body: bytes, denied: bool,
 ) -> None:
     transport = InMemoryOAuthHttpTransport([OAuthHttpResponse(status=status, body=body)])
-    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(transport)
+    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, transport)
     with pytest.raises(PersonalOAuthRefreshDenied if denied else PersonalOAuthRefreshUncertain) as caught:
         await provider.refresh(refresh_command)
     assert caught.value.__context__ is None
@@ -164,7 +207,7 @@ async def test_only_definitive_endpoint_errors_are_denied(
 ])
 async def test_unsupported_bindings_do_not_call_network(refresh_command: RefreshPersonalOAuth, changes: dict[str, object]) -> None:
     transport = InMemoryOAuthHttpTransport([])
-    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(transport)
+    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, transport)
     with pytest.raises(PersonalOAuthRefreshUncertain):
         await provider.refresh(refresh_command.model_copy(update={"grant": refresh_command.grant.model_copy(update=changes)}))
     assert transport.requests == []
@@ -179,7 +222,7 @@ class FailingRefreshTransport(InMemoryOAuthHttpTransport):
 @pytest.mark.asyncio
 async def test_network_failure_has_fixed_error_without_raw_context_or_retry(refresh_command: RefreshPersonalOAuth) -> None:
     transport = FailingRefreshTransport([])
-    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(transport)
+    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, transport)
     with pytest.raises(PersonalOAuthRefreshUncertain) as caught:
         await provider.refresh(refresh_command)
     assert str(caught.value) == "Personal OAuth refresh outcome uncertain"
@@ -214,7 +257,7 @@ async def test_reflected_credentials_never_reach_debug_logs(
     async with httpcore.AsyncConnectionPool(
         network_backend=PublicAddressNetworkBackend(network), ssl_context=ssl.create_default_context(), retries=0,
     ) as pool:
-        provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(SafeOAuthHttpTransport(pool))
+        provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, SafeOAuthHttpTransport(pool))
         if status == 200:
             await provider.refresh(command)
         else:
@@ -240,7 +283,7 @@ class SlowRefreshTransport(InMemoryOAuthHttpTransport):
 @pytest.mark.asyncio
 async def test_command_deadline_bounds_refresh_without_retry(refresh_command: RefreshPersonalOAuth) -> None:
     transport = SlowRefreshTransport([])
-    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(transport)
+    provider: PersonalOAuthRefreshProvider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, transport)
     with pytest.raises(PersonalOAuthRefreshUncertain):
         await provider.refresh(refresh_command.model_copy(update={"timeout_seconds": 0.01}))
     assert len(transport.requests) == 1

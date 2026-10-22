@@ -6,6 +6,7 @@ import anyio
 import httpcore
 import pytest
 
+from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.factory import configured_personal_oauth_provider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import PublicAddressNetworkBackend, SafeOAuthHttpTransport
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
@@ -34,7 +35,7 @@ async def test_discovered_endpoints_cannot_inject_parameters(
 ) -> None:
     server_metadata[field] = str(server_metadata[field]) + "?" + query
     transport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata), response(server_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
     with pytest.raises(PersonalOAuthProviderUnsupported):
         await provider.prepare(preparation)
     assert len(transport.requests) == 2
@@ -47,7 +48,7 @@ async def test_browser_authorization_cannot_target_private_or_mapped_literals(
 ) -> None:
     server_metadata["authorization_endpoint"] = "https://" + authority + "/authorize"
     transport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata), response(server_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
     with pytest.raises(PersonalOAuthProviderUnsupported):
         await provider.prepare(preparation)
     assert len(transport.requests) == 2
@@ -61,7 +62,7 @@ async def test_factory_private_endpoint_fails_without_dns(
         raise AssertionError("DNS must not run for a private literal")
 
     monkeypatch.setattr(anyio, "getaddrinfo", unexpected_dns)
-    async with configured_personal_oauth_provider() as provider:
+    async with configured_personal_oauth_provider(CallbackURLPolicy.STRICT) as provider:
         with pytest.raises(PersonalOAuthProviderUnsupported) as caught:
             await provider.prepare(preparation.model_copy(update={"endpoint_url": "https://127.0.0.1/mcp"}))
     assert str(caught.value) == "Personal OAuth provider is unsupported"

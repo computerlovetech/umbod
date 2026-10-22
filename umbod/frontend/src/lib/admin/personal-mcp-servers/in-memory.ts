@@ -1,4 +1,4 @@
-import type { DownstreamMcpConnector, DownstreamMcpConnectorSummary } from '../downstream-mcp-connectors';
+import type { DownstreamMcpConnector } from '../downstream-mcp-connectors';
 import { HttpError } from '../infrastructure/transport';
 import type { PersonalServerAdministration } from './administration';
 import { createPersonalServerSchema, personalServerSchema, policySchema, replacePolicySchema, type PersonalPolicy, type PersonalPolicyReplace, type PersonalServerCreate, type PersonalSettings } from './domain/schemas';
@@ -11,12 +11,9 @@ export function projectClient(client: PersonalSettings['client']): PersonalPolic
 export class InMemoryPersonalServers implements PersonalServerAdministration {
   private servers = new Map<string, DownstreamMcpConnector>();
   private policies = new Map<string, PersonalPolicy>();
-  constructor(servers: DownstreamMcpConnector[] = [], policies: PersonalPolicy[] = [], private readonly grants: ReadonlySet<string> = new Set()) {
+  constructor(servers: DownstreamMcpConnector[] = [], policies: PersonalPolicy[] = []) {
     servers.forEach((server) => this.servers.set(server.connector_id, personalServerSchema.parse(server)));
     policies.forEach((policy) => this.policies.set(policy.connector_id, policySchema.parse(policy)));
-  }
-  async list(): Promise<DownstreamMcpConnectorSummary[]> {
-    return [...this.servers.values()].map(({ connector_id, display_name, icon_url, auth_mode, authorization_mode, publication_status, health }) => ({ connector_id, display_name, icon_url, auth_mode, authorization_mode, publication_status, health }));
   }
   async get(id: string): Promise<DownstreamMcpConnector> {
     const server = this.servers.get(id);
@@ -49,19 +46,5 @@ export class InMemoryPersonalServers implements PersonalServerAdministration {
     const next = { connector_id: id, revision: unchanged ? current.revision : crypto.randomUUID(), requested_scopes: parsed.settings.requested_scopes, client };
     this.policies.set(id, next);
     return structuredClone(next);
-  }
-  async publish(id: string): Promise<{ connector_id: string; publication_status: 'published' }> {
-    this.servers.set(id, { ...await this.get(id), publication_status: 'published' });
-    return { connector_id: id, publication_status: 'published' };
-  }
-  async withdraw(id: string): Promise<{ connector_id: string; publication_status: 'unpublished' }> {
-    this.servers.set(id, { ...await this.get(id), publication_status: 'unpublished' });
-    return { connector_id: id, publication_status: 'unpublished' };
-  }
-  async delete(id: string): Promise<void> {
-    await this.get(id);
-    if (this.grants.has(id)) throw new HttpError(409, '', { detail: { code: 'downstream_connector_grants_conflict' } });
-    this.servers.delete(id);
-    this.policies.delete(id);
   }
 }

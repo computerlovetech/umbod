@@ -2,7 +2,7 @@ import { Window } from 'happy-dom';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { captureInvalidSubmission } from './form-validation';
 import { modalDialog } from './modal-dialog';
-import { PersonalServersState } from './personal-servers-state.svelte';
+import { PersonalServerFormState } from './personal-server-form-state.svelte';
 import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
 import { configurationFixture } from '$lib/admin/personal-mcp-servers/availability.test-support';
 
@@ -30,7 +30,7 @@ function formFixture(): { form: HTMLFormElement; invalid: HTMLInputElement; secr
 function dialogFixture(): { dialog: HTMLDialogElement; opener: HTMLButtonElement; heading: HTMLHeadingElement; fallback: HTMLHeadingElement } {
   const opener = document.createElement('button');
   const fallback = document.createElement('h1');
-  fallback.id = 'personal-servers-heading';
+  fallback.id = 'mcp-workspace-heading';
   fallback.tabIndex = -1;
   const dialog = document.createElement('dialog');
   const heading = document.createElement('h2');
@@ -46,7 +46,7 @@ function dialogFixture(): { dialog: HTMLDialogElement; opener: HTMLButtonElement
 
 describe('personal form native invalid capture', () => {
   test.each(['registration', 'policy'])('clears state and DOM secret before submit on invalid %s fields without cancelling native feedback', async (formKind) => {
-    const state = new PersonalServersState(new InMemoryPersonalServers(), { get: async () => configurationFixture() });
+    const state = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null);
     await state.reload();
     if (formKind === 'registration') state.openCreate();
     state.form.setKind('preconfigured_confidential');
@@ -75,7 +75,7 @@ describe('personal form native invalid capture', () => {
 describe('personal modal native dialog lifecycle', () => {
   test('opens modally, focuses its non-destructive title and restores its opener after teardown', async () => {
     const { dialog, opener, heading } = dialogFixture();
-    const cleanup = modalDialog(vi.fn(), 'personal-servers-heading')(dialog);
+    const cleanup = modalDialog(vi.fn(), 'mcp-workspace-heading')(dialog);
     expect(dialog.showModal).toHaveBeenCalledTimes(1);
     expect(document.activeElement).toBe(heading);
     if (typeof cleanup === 'function') cleanup();
@@ -86,7 +86,7 @@ describe('personal modal native dialog lifecycle', () => {
   test('cancel delegates to guarded state close and prevents the browser bypassing that guard', () => {
     const { dialog } = dialogFixture();
     const close = vi.fn();
-    const cleanup = modalDialog(close, 'personal-servers-heading')(dialog);
+    const cleanup = modalDialog(close, 'mcp-workspace-heading')(dialog);
     const cancel = new window.Event('cancel', { cancelable: true }) as unknown as Event;
     dialog.dispatchEvent(cancel);
     expect(cancel.defaultPrevented).toBe(true);
@@ -99,7 +99,7 @@ describe('personal modal native dialog lifecycle', () => {
   });
   test.each(['removed', 'disabled', 'inert'])('restores the fallback heading if the opener becomes %s', async (reason) => {
     const { dialog, opener, fallback } = dialogFixture();
-    const cleanup = modalDialog(vi.fn(), 'personal-servers-heading')(dialog);
+    const cleanup = modalDialog(vi.fn(), 'mcp-workspace-heading')(dialog);
     if (reason === 'removed') opener.remove();
     if (reason === 'disabled') opener.disabled = true;
     if (reason === 'inert') opener.setAttribute('inert', '');

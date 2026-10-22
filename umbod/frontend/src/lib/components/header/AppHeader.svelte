@@ -7,7 +7,7 @@
 
 <header class="app-header" aria-label="Application header">
   <a class="brand" href="/">Umbod</a>
-  <nav aria-label="Personal settings"><a href="/settings/connections">Connections</a></nav>
+  <nav aria-label="Application navigation"><a href="/dashboard">Dashboard</a></nav>
 
   {#if accountIdentity.kind === 'visible'}
     <section class="account" aria-label="Current account">

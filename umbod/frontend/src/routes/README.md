@@ -7,9 +7,10 @@
 - `+layout.ts` loads validated public configuration from `/app-config.json` before application requests.
 - `admin/+layout.ts` resolves account identity through the authenticated backend `/admin/users` adapter and maps rejected authentication and forbidden access to safe 401/403 errors.
 - `+error.svelte` catches route and admin layout load failures, presents safe access-denied or generic error text, and offers explicit sign-in only for 401 plus user-triggered logout for both 401 and 403. Logout remains available without account identity or a working configuration fetch, with a fixed gateway-only recovery destination.
-- `settings/connections/+page.svelte` composes the owner-scoped personal connections UI, including local authorization status and explicit renewal recovery, without the admin layout or account authorization endpoint.
+- `dashboard/+page.svelte` composes the authenticated user catalogue, owner-scoped personal MCP actions, and shared compact MCP client setup outside the admin layout. Its loader reads only public endpoint configuration; `/settings/connections` has been removed without a redirect.
 - `admin/+page.ts` composes the administration overview through browser API adapters.
-- `admin/personal-mcp-servers/+page.ts` reads only the selected URL identifier; its thin page composes the component-scoped personal allowlist administration UI. Initial API reads are limited to inventory, selected definition and OAuth policy. Admin navigation and the shared MCP proxy workspace link to this separate administration boundary.
+- `admin/downstream-mcp-connectors/+page.ts` loads one Shared/Personal inventory and selection. Personal details branch before shared catalogue and activation reads; component-scoped OAuth forms remain outside cached detail bundles.
+- `admin/personal-mcp-servers/+page.ts` redirects with 307 to the unified MCP workspace, preserving valid selection and query parameters. No separate personal page or navigation remains.
 - Administration `+page.ts` modules load lists, selected details, permissions, instance settings, and MCP setup data.
 - Connector detail routes redirect to the corresponding workspace selection.
 

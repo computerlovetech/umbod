@@ -85,7 +85,7 @@ class AuthorizationServer(WireModel):
     grant_types_supported: list[str]
     response_types_supported: list[str]
     token_endpoint_auth_methods_supported: list[str] = Field(default_factory=lambda: ["client_secret_basic"])
-    authorization_response_iss_parameter_supported: bool
+    authorization_response_iss_parameter_supported: bool = False
 
 
 class RegisteredClient(WireModel):

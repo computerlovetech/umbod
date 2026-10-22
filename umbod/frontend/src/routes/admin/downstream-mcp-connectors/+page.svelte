@@ -30,7 +30,7 @@
   const form = $derived(operationState.forOwner({ route: page.url.pathname, connectorId: page.url.searchParams.get('connector') ?? data.selectedConnectorId ?? data.connectors[0]?.connector_id }) as { status?: string; message?: string; mode?: string; values?: import('$lib/components/admin/downstream-mcp-connectors/downstream-mcp-workspace-state.svelte').DownstreamMcpCreateValues } | undefined);
 </script>
 
-<svelte:head><title>MCP proxy connectors</title></svelte:head>
+<svelte:head><title>MCP connectors</title></svelte:head>
 
 {#key data}
   <DownstreamMcpPageContent {data} {form} />

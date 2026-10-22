@@ -17,6 +17,9 @@ from ...personal_connections.authorization_models import (
     UnknownPersonalTokenLifetime,
     authorize_personal_grant,
 )
+from ...personal_connections.oauth_callback_models import (
+    GenericBinding, IssuerBinding, PresentCallbackIssuer, issuer_callback_uri, issuer_route_key, validate_callback_binding,
+)
 from ...personal_connections.models import Authorized
 from ...personal_connections.oauth_models import (
     ExchangePersonalOAuth,
@@ -29,6 +32,7 @@ from ...personal_oauth_configuration.models import (
     PersonalOAuthClient,
     parse_oauth_scopes,
 )
+from .callback import CallbackURLPolicy, validate_callback_url
 from .transport import (
     BasicOAuthHttpAuthentication,
     NoOAuthHttpAuthentication,
@@ -62,7 +66,8 @@ def client_authentication_method(client: PersonalOAuthClient) -> Literal["none",
 
 
 class DiscoveredPersonalOAuthProvider:
-    def __init__(self, transport: OAuthHttpTransport) -> None:
+    def __init__(self, callback_policy: CallbackURLPolicy, transport: OAuthHttpTransport) -> None:
+        self._callback_policy = callback_policy
         self._transport = transport
 
     async def _request(
@@ -91,7 +96,7 @@ class DiscoveredPersonalOAuthProvider:
 
     async def _prepare(self, command: PreparePersonalOAuth) -> PreparedPersonalOAuth:
         endpoint = validated_url(command.endpoint_url)
-        validated_url(command.redirect_uri)
+        validate_callback_url(command.redirect_uri, self._callback_policy)
         challenge = verifier_digest(command.code_verifier)
         state_secret = command.state
         state = state_secret.get_secret_value()
@@ -130,19 +135,26 @@ class DiscoveredPersonalOAuthProvider:
             or "authorization_code" not in server.grant_types_supported
             or "code" not in server.response_types_supported
             or auth_method not in server.token_endpoint_auth_methods_supported
-            or not server.authorization_response_iss_parameter_supported
         ):
             raise ValueError("Unsupported authorization server")
         for url in (server.authorization_endpoint, server.token_endpoint):
             validated_url(url)
         await self._transport.validate_destination(OAuthDestination(url=server.authorization_endpoint))
+        binding = (
+            GenericBinding(kind="generic", expected_issuer=issuer)
+            if server.authorization_response_iss_parameter_supported else IssuerBinding(
+                kind="issuer", expected_issuer=issuer,
+                issuer_key=issuer_route_key(issuer), redirect_uri=issuer_callback_uri(command.redirect_uri, issuer),
+            )
+        )
+        redirect_uri = binding.redirect_uri if isinstance(binding, IssuerBinding) else command.redirect_uri
         if configured_client.kind == "dynamic_public":
-            client_id = await self._register(command, server)
+            client_id = await self._register(command.model_copy(update={"redirect_uri": redirect_uri}), server)
         else:
             client_id = configured_client.client_id
         authorization_parameters = {
             "response_type": "code", "client_id": client_id,
-            "redirect_uri": command.redirect_uri, "state": state,
+            "redirect_uri": redirect_uri, "state": state,
             "code_challenge": challenge, "code_challenge_method": "S256", "resource": command.endpoint_url,
         }
         if policy.requested_scopes:
@@ -150,17 +162,22 @@ class DiscoveredPersonalOAuthProvider:
         authorization_url = server.authorization_endpoint + "?" + urlencode(authorization_parameters)
         context = ProviderContext(
             issuer=issuer, resource=command.endpoint_url, token_endpoint=server.token_endpoint,
-            client_id=client_id, redirect_uri=command.redirect_uri,
+            client_id=client_id, redirect_uri=redirect_uri,
             authorization_url=authorization_url, verifier_digest=challenge,
             state_digest=hashlib.sha256(state.encode()).hexdigest(),
             policy_revision=policy.revision, requested_scopes=list(policy.requested_scopes),
             client_mode=configured_client.kind, token_endpoint_auth_method=auth_method,
         )
-        return PreparedPersonalOAuth(authorization_url=SecretStr(authorization_url), context=SecretStr(context.model_dump_json()))
+        return PreparedPersonalOAuth(
+            authorization_url=SecretStr(authorization_url), context=SecretStr(context.model_dump_json()),
+            callback_binding=binding,
+        )
 
     async def _register(self, command: PreparePersonalOAuth, server: AuthorizationServer) -> str:
         validated_url(server.registration_endpoint)
         registration: dict[str, object] = {
+            "client_name": "Umbod",
+            "application_type": "native" if command.redirect_uri.startswith("http://") else "web",
             "redirect_uris": [command.redirect_uri],
             "token_endpoint_auth_method": "none",
             "grant_types": ["authorization_code"],
@@ -179,6 +196,7 @@ class DiscoveredPersonalOAuthProvider:
             or client.redirect_uris != [command.redirect_uri]
             or client.grant_types != ["authorization_code"]
             or client.response_types != ["code"]
+            or ("application_type" in raw_client and raw_client["application_type"] != registration["application_type"])
             or ("scope" in raw_client and parse_oauth_scopes(client.scope) != command.policy.requested_scopes)
         ):
             raise ValueError("Unsupported registration")
@@ -205,10 +223,16 @@ class DiscoveredPersonalOAuthProvider:
             or (client.kind != "dynamic_public" and (client.client_id != context.client_id or client.issuer_url != context.issuer))
         ):
             raise ValueError("Invalid policy binding")
+        redirect_uri = validate_callback_binding(
+            attempt.prepared.callback_binding, attempt.preparation.redirect_uri, command.route, command.issuer,
+        )
+        binding = attempt.prepared.callback_binding
+        if binding.kind != "legacy_generic" and binding.expected_issuer != context.issuer:
+            raise ValueError("Invalid context issuer binding")
         if (
-            command.issuer != context.issuer
+            (isinstance(command.issuer, PresentCallbackIssuer) and command.issuer.value != context.issuer)
             or attempt.preparation.endpoint_url != context.resource
-            or attempt.preparation.redirect_uri != context.redirect_uri
+            or redirect_uri != context.redirect_uri
             or attempt.prepared.authorization_url.get_secret_value() != context.authorization_url
             or verifier_digest(attempt.preparation.code_verifier) != context.verifier_digest
             or hashlib.sha256(state_secret.get_secret_value().encode()).hexdigest() != context.state_digest
@@ -225,7 +249,8 @@ class DiscoveredPersonalOAuthProvider:
         captured_parameters = parse_qsl(urlsplit(context.authorization_url).query, keep_blank_values=True, strict_parsing=True)
         if len(captured_parameters) != len(authorization_parameters) or dict(captured_parameters) != authorization_parameters:
             raise ValueError("Invalid authorization parameter binding")
-        for url in (context.issuer, context.resource, context.redirect_uri, context.token_endpoint):
+        validate_callback_url(context.redirect_uri, self._callback_policy)
+        for url in (context.issuer, context.resource, context.token_endpoint):
             validated_url(url)
         token_parameters = {
             "grant_type": "authorization_code", "code": command.code.get_secret_value(),

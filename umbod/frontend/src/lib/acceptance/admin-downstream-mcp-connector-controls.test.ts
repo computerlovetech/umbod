@@ -11,6 +11,23 @@ const toolCatalog = readFileSync('src/lib/components/admin/downstream-mcp-connec
 const openApiToolToggle = readFileSync('src/lib/components/admin/openapi-connectors/OpenApiToolActivationToggle.svelte', 'utf8');
 
 describe('downstream MCP connector administration', () => {
+  test('personal selection keeps common details and actions without shared readiness, proxy instructions or catalogues', () => {
+    expect(controls).toContain("selected.authorization_mode === 'shared'");
+    expect(controls).toContain("detailSelected.authorization_mode === 'shared'");
+    expect(controls).toContain("detailSelected.authorization_mode === 'personal'");
+    expect(controls).toContain('<PersonalServerPolicyPanel');
+    expect(controls).toContain('label="Registration path"');
+    expect(controls).toContain('publicationStatus={detailSelected.publication_status}');
+    expect(controls).toContain("state.operations.request('delete'");
+    const panel = readFileSync('src/lib/components/admin/personal-mcp-servers/PersonalServerPolicyPanel.svelte', 'utf8');
+    expect(panel).toContain('href="/dashboard"');
+    expect(panel).toContain("do not show a user's authorization or private inventory");
+    expect(panel).not.toContain('DownstreamMcpToolCatalog');
+    expect(panel).not.toContain('Bearer token missing');
+    expect(panel).not.toContain('0 tools');
+    expect(panel).not.toContain('CopyableValue');
+  });
+
   test('captures and displays the connector capability description', () => {
     expect(setupModal).toContain('name="capabilityDescription"');
     expect(setupModal).toContain('label="Default capability description"');
@@ -42,7 +59,8 @@ describe('downstream MCP connector administration', () => {
 
   test('uses the shared connector sidebar without exposing connector identifiers', () => {
     expect(controls).toContain('ConnectorSidebarList');
-    expect(controls).toContain('item.connector.health.status} · {item.connector.publication_status');
+    expect(controls).toContain("item.connector.authorization_mode === 'personal' ? 'Personal' : 'Shared'");
+    expect(controls).toContain('item.connector.publication_status');
     expect(controls).not.toContain('<span>{connector.connector_id}</span>');
   });
 

@@ -1,4 +1,4 @@
-import { renewalErrorSchema } from '../domain/schemas';
+import { discoveryErrorSchema, oauthInitiationErrorSchema, renewalErrorSchema } from '../domain/schemas';
 import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
 
 export function requiresSignIn(error: unknown): boolean {
@@ -27,7 +27,20 @@ export function safeRenewalError(error: unknown): string {
 
 export function safeActionError(error: unknown): string {
   if (error instanceof NetworkError) return 'The outcome is unknown. Check authorization status before taking another action. Do not repeat a sign-in request automatically.';
-  if (error instanceof HttpError && error.status === 409) return 'An operation conflicts with current state. An existing sign-in may need to be finished or expire. Check a known attempt or check authorization status; no attempt was replaced. An unknown attempt is never cancelled or restarted here.';
-  if (isUnavailable(error)) return 'This connection or operation is not available for this account.';
-  return 'The operation could not be completed. Check authorization status before trying another explicit action.';
+  if (error instanceof HttpError && error.status === 409 && discoveryErrorSchema.safeParse(error.body).success) {
+    return 'Tool discovery could not be completed. Check authorization status before trying again.';
+  }
+  if (error instanceof HttpError && error.status === 409) return 'Another operation is in progress. Check the known sign-in attempt or authorization status. No attempt was replaced; unknown attempts cannot be cancelled or restarted here.';
+  if (isUnavailable(error)) return 'This MCP server or operation is unavailable.';
+  if (error instanceof HttpError && error.status === 422) {
+    const parsed = oauthInitiationErrorSchema.safeParse(error.body);
+    if (parsed.success) {
+      const messages = {
+        personal_oauth_provider_unsupported: 'Could not start sign-in. An administrator must check this MCP server’s OAuth compatibility.',
+        personal_oauth_invalid_request: 'Sign-in request rejected.'
+      };
+      return `${messages[parsed.data.detail.code]} Check authorization status before another action.`;
+    }
+  }
+  return 'Operation failed. Check authorization status before another action.';
 }

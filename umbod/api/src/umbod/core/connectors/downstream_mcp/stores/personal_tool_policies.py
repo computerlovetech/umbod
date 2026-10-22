@@ -2,25 +2,11 @@ from collections.abc import Callable
 from datetime import datetime
 from uuid import uuid4
 
-from umbod.core.activation.stores.schema import (
-    CAPABILITY_ACTIVATION_STATE_CAPABILITY_KEY,
-    CAPABILITY_ACTIVATION_STATE_CAPABILITY_KIND,
-    CAPABILITY_ACTIVATION_STATE_CONNECTOR_ID,
-    CAPABILITY_ACTIVATION_STATE_CONNECTOR_KIND,
-    CAPABILITY_ACTIVATION_STATE_TABLE,
-)
 from umbod.core.capabilities.tools.names import PublicToolIdentity, PublicToolNameValidator
-from umbod.core.permissions.stores.schema import (
-    CAPABILITY_PERMISSION_CONNECTOR_ID,
-    CAPABILITY_PERMISSION_KEY,
-    CAPABILITY_PERMISSION_KIND,
-    CAPABILITY_PERMISSION_TABLE,
-)
-from umbod.core.persistence import AllOf, Database, DatabaseSession, DeleteQuery, Equals, NoFilter, OneOf, TransactionMode, UpsertCommand
+from umbod.core.persistence import Database, DatabaseSession, DeleteQuery, Equals, NoFilter, TransactionMode, UpsertCommand
 
 from ..models import ToolCatalogSnapshot, uses_personal_oauth
 from ..personal_tools import (
-    PersonalToolGrantRevocation,
     PersonalToolPolicy,
     PersonalToolPolicyConflict,
     PersonalToolPolicyInvalid,
@@ -108,19 +94,11 @@ class PersonalToolPolicyStoreService:
         old = {tool.identity.downstream_name: contract_fingerprint(tool) for tool in previous.tools}
         current = {tool.identity.downstream_name: contract_fingerprint(tool) for tool in policy.tools}
         changed = tuple(sorted(name for name in old.keys() | current.keys() if old.get(name) != current.get(name)))
-        revoked: tuple[PersonalToolGrantRevocation, ...] = ()
-        if changed:
-            grants_filter = AllOf((Equals(CAPABILITY_PERMISSION_CONNECTOR_ID, command.connector_id), Equals(CAPABILITY_PERMISSION_KIND, "tool"), OneOf(CAPABILITY_PERMISSION_KEY, changed)))
-            grants = await session.find_many(CAPABILITY_PERMISSION_TABLE, _query(grants_filter))
-            revoked = tuple(PersonalToolGrantRevocation(group_id=grant.group_id, capability_key=grant.capability_key) for grant in grants)
-            await session.delete(CAPABILITY_PERMISSION_TABLE, DeleteQuery(grants_filter))
-            await session.delete(CAPABILITY_ACTIVATION_STATE_TABLE, DeleteQuery(AllOf((Equals(CAPABILITY_ACTIVATION_STATE_CONNECTOR_KIND, "downstream_mcp"), Equals(CAPABILITY_ACTIVATION_STATE_CONNECTOR_ID, command.connector_id), Equals(CAPABILITY_ACTIVATION_STATE_CAPABILITY_KIND, "tool"), OneOf(CAPABILITY_ACTIVATION_STATE_CAPABILITY_KEY, changed)))))
         self._fault("personal_tool_permissions")
-        await session.delete(PERSONAL_TOOL_OBSERVATION_TABLE, DeleteQuery(Equals(PERSONAL_TOOL_OBSERVATION_CONNECTOR_ID, command.connector_id)))
         await session.upsert(PERSONAL_TOOL_POLICY_TABLE, UpsertCommand(key=PersonalToolPolicyKey(connector_id=command.connector_id), row=PersonalToolPolicyRecord(connector_id=command.connector_id, document=policy.model_dump_json())))
         await self._project(session, policy)
         self._fault("personal_tool_policy_saved")
-        return PersonalToolPolicyReplacement(policy=policy, changed_tools=changed, revoked_grants=revoked)
+        return PersonalToolPolicyReplacement(policy=policy, changed_tools=changed, revoked_grants=())
 
     async def _project(self, session: DatabaseSession, policy: PersonalToolPolicy) -> None:
         await replace_catalog(session, TOOL_CATALOG_TABLE, ReplaceToolCatalog(snapshot=ToolCatalogSnapshot(connector_id=policy.connector_id, discovered_at=policy.approved_at, tools=policy.tools)))

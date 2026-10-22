@@ -8,6 +8,10 @@ Second iteration implemented and verified. Main Umbod only; the removed Desktop 
 
 Deliver administrator preconfiguration, approval and group eligibility, followed by authenticated non-administrator personal selection through REST. Enabling expresses user intent; it does not establish OAuth authorization or enable runtime execution.
 
+## Current personal tool permission contract
+
+A published personal server granted to the user's current group authorizes all tools exposed to that user's downstream account once enabled, signed in and explicitly discovered. Separate approved-tool contracts, tool activation and capability grants are not prerequisites. Shared/native policies remain unchanged. Discovery is owner-private and never publishes user-derived metadata globally; adding a tool requires rediscovery rather than administrator reapproval. Runtime admission still checks current server permission, ownership, authorization health, revision, expiry and the live schema fingerprint.
+
 ## Administrative contract
 
 - Add `POST /api/admin/connectors/mcp/personal-oauth` with the existing metadata shape and endpoint-only configuration. Reject submitted credentials and owner identifiers.
@@ -30,7 +34,7 @@ Personal endpoints are unavailable when identity policy is disabled. Outside the
 
 Only the `local`/`dev` runtime with development admin simulation, enabled personal connections and an exact nonempty `test:` namespace automatically uses the configured Admin Test User for personal identity. Default REST composition accepts tokenless `/api/me` requests by invoking the configured simulated verifier; caller tokens and forwarded identity headers cannot select another owner. Explicit user-verifier hooks remain token-required and never inherit the admin verifier. Personal MCP adapters require a current authenticated `single_test_user` context before projecting that same configured subject, profile and admin membership claim. Original machine claims are rejected; global MCP/shared/native claims and permissions are unchanged. A different MCP group claim receives no invented membership, and `simulated_admin=false` grants no simulated administrator membership. Production, real-provider, JWT and unauthenticated modes never receive this fallback.
 
-Preserve both `UMBOD_ADMIN_SIMULATED_USER_ID` and `UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE` across restarts to retain ownership; display names and email addresses are not ownership keys. An empty eligible catalogue is legitimate. Publication, explicit connector/tool grants, owner enablement, provider OAuth consent and explicit discovery remain mandatory; no shared credentials or root-secret generation are introduced.
+Preserve both `UMBOD_ADMIN_SIMULATED_USER_ID` and `UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE` across restarts to retain ownership; display names and email addresses are not ownership keys. An empty eligible catalogue is legitimate. Publication, an explicit connector-level group grant, owner enablement, provider OAuth consent and explicit discovery remain mandatory; no shared credentials or root-secret generation are introduced.
 
 ## User REST contract
 

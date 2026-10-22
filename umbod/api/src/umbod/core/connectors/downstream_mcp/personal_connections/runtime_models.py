@@ -1,6 +1,6 @@
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, PERSONAL_RUNTIME_FAILURE
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr, field_validator
 
 from umbod.core.connectors.downstream_mcp.models import DiscoveredTool, ValidatedJsonObject
 
@@ -47,6 +47,13 @@ class PersonalToolCall(PersonalRuntimeModel):
 
 class PersonalToolResult(PersonalRuntimeModel):
     result: ValidatedJsonObject
+
+    @field_validator("result")
+    @classmethod
+    def validate_result_metadata(cls, result: dict[str, object]) -> dict[str, object]:
+        if "_meta" in result and not isinstance(result["_meta"], dict):
+            raise ValueError("Result metadata must be a JSON object")
+        return result
 
 
 class PersonalRuntimeUnavailable(ValueError):

@@ -9,12 +9,12 @@
 
   let { children, data } = $props();
 
-  const isAdminRoute = $derived(page.url.pathname.startsWith('/admin'));
+  const hasWorkspaceShell = $derived(page.url.pathname.startsWith('/admin') || page.url.pathname === '/dashboard');
   afterNavigate(() => operationState.resetForPath(`${page.url.pathname}${page.url.search}`));
 </script>
 
 <ToastProvider>
-  {#if !isAdminRoute}
+  {#if !hasWorkspaceShell}
     <AppHeader accountIdentity={data.accountIdentity} />
   {/if}
 

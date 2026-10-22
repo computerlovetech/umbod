@@ -10,6 +10,7 @@ from fastmcp.server.dependencies import get_context
 from fastmcp.server.providers.proxy import ProxyTool
 from fastmcp.tools import ToolResult
 from fastmcp.tools.base import Tool
+from mcp.types import CallToolResult
 from umbod.core.connectors.downstream_mcp.personal_tools import InvokePersonalTool, PersonalToolRecord, PersonalToolRuntime
 from jsonschema.validators import validator_for
 from jsonschema import Draft202012Validator
@@ -146,7 +147,7 @@ class AuthorizedPersonalTool(AuthorizedDownstreamTool):
     def __init__(self, *, identity: ConnectorToolInvocationIdentity, record: PersonalToolRecord, runtime: PersonalToolRuntime, public_name: str, invocation_policy: ConnectorInvocationPolicy, telemetry_interceptor: ConnectorTelemetryInterceptor, options: dict[str, Any]) -> None:
         super().__init__(identity=identity, options=options, public_name=public_name, invocation_policy=invocation_policy, telemetry_interceptor=telemetry_interceptor)
         self._runtime = runtime
-        self._command = InvokePersonalTool(identity=CapabilityIdentity(connector_kind="downstream_mcp", connector_id=record.definition.connector_id, capability_kind="tool", capability_key=record.tool.identity.downstream_name), contract_revision=record.contract_revision, fingerprint=record.fingerprint, arguments={})
+        self._command = InvokePersonalTool(identity=CapabilityIdentity(connector_kind="downstream_mcp", connector_id=record.definition.connector_id, capability_kind="tool", capability_key=record.tool.identity.downstream_name), inventory_revision=record.inventory_revision, fingerprint=record.fingerprint, arguments={})
 
     def _validate_arguments(self, arguments: dict[str, Any]) -> None:
         try:
@@ -160,12 +161,21 @@ class AuthorizedPersonalTool(AuthorizedDownstreamTool):
         raise RuntimeError("Personal tool unavailable")
 
     async def is_authorized(self) -> bool:
-        return any(record.definition.connector_id == self._command.identity.connector_id and record.tool.identity.downstream_name == self._command.identity.capability_key and record.contract_revision == self._command.contract_revision and record.fingerprint == self._command.fingerprint for record in await self._runtime.list_tools())
+        return any(record.definition.connector_id == self._command.identity.connector_id and record.tool.identity.downstream_name == self._command.identity.capability_key and record.inventory_revision == self._command.inventory_revision and record.fingerprint == self._command.fingerprint for record in await self._runtime.list_tools())
 
     async def _invoke_downstream(self, arguments: dict[str, Any]) -> ToolResult:
         try:
             result = await self._runtime.execute(self._command.model_copy(update={"arguments": arguments}))
-            return ToolResult(**{"content": result.result["content"], **({"structured_content": result.result["structuredContent"]} if "structuredContent" in result.result else {})})
+            downstream = CallToolResult(
+                content=result.result["content"],
+                structuredContent=result.result.get("structuredContent"),
+                _meta=result.result.get("_meta"),
+            )
+            return ToolResult(
+                content=downstream.content,
+                structured_content=downstream.structured_content,
+                meta=downstream.meta,
+            )
         except PersonalAuthorizationHealthUnavailable:
             invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="authorization", reason="authorization_health_unavailable"))
         except PersonalRuntimeUnavailable as error:

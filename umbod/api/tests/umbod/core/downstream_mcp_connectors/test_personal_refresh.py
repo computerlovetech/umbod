@@ -4,6 +4,8 @@ from datetime import timedelta
 
 import pytest
 import pytest_asyncio
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericRoute, PresentCallbackIssuer
+
 from pydantic import SecretStr
 
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, install_authorization, runtime_case
@@ -250,7 +252,7 @@ async def test_successful_identical_oauth_clears_refresh_atomically_and_fences_l
     await attempts.reserve(oauth)
     query = PersonalOAuthAttemptQuery(key=oauth.key, attempt_id=oauth.attempt_id, now=runtime_case.query.now)
     await attempts.publish(PublishPersonalOAuthAttempt(query=query, prepared=PreparedPersonalOAuth(authorization_url=SecretStr("https://issuer.example/authorize"), context=SecretStr("context"))))
-    await attempts.claim(ClaimPersonalOAuthAttempt(state=oauth.preparation.state, claim_id="oauth-claim", now=runtime_case.query.now))
+    await attempts.claim(ClaimPersonalOAuthAttempt(route=GenericRoute(kind="generic"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), state=oauth.preparation.state, claim_id="oauth-claim", now=runtime_case.query.now))
     await attempts.complete(CompletePersonalOAuthAttempt(query=query, claim_id="oauth-claim", authorization=original.authorization))
     if late == "success":
         with pytest.raises(PersonalRefreshChanged):

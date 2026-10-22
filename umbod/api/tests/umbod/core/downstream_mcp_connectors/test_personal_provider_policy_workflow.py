@@ -2,11 +2,15 @@ import asyncio
 import json
 from datetime import UTC, datetime, timedelta
 
+from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery
 from urllib.parse import parse_qs, urlsplit
 from unittest.mock import AsyncMock
 
 import pytest
+from pydantic import SecretStr
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import FinishCallback
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericRoute, PresentCallbackIssuer
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport, OAuthDestination, OAuthHttpRequest, OAuthHttpResponse
@@ -49,7 +53,7 @@ async def start_configured(case: AttemptCase, method: str) -> tuple[str, str]:
     service = PersonalOAuthService(
         principals, VerifiedGroupMembership(group_ids=("team",)), inventory, case.bundle.definitions,
         case.bundle.personal_connections, case.bundle.personal_oauth_attempts,
-        DiscoveredPersonalOAuthProvider(transport), "https://umbod.example/api/oauth/downstream-mcp/callback",
+        DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), "https://umbod.example/api/oauth/downstream-mcp/callback",
         case.clock, case.bundle.personal_oauth_configurations,
     )
     started = await service.start("personal")
@@ -64,8 +68,8 @@ async def test_configured_workflow_completes_on_recreated_worker_with_scoped_cal
     state, revision = await start_configured(case, method)
     recreated = await create_downstream_mcp_stores("test-secret", case.database)
     transport = InMemoryOAuthHttpTransport([response({"access_token": "user-access-token", "token_type": "Bearer", "expires_in": 3600})])
-    callback = PersonalOAuthCallbackService(recreated.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(transport), case.clock)
-    await callback.finish(state, "authorization-code", "https://issuer.example", "", "read")
+    callback = PersonalOAuthCallbackService(recreated.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), case.clock)
+    await callback.finish(FinishCallback(state=SecretStr(state), code=SecretStr("authorization-code"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), error="", scope="read", route=GenericRoute(kind="generic")))
     connection = await recreated.personal_connections.get(case.query.key)
     assert connection.authorization.kind == "authorized"
     saved = json.loads(connection.authorization.authorization.get_secret_value())
@@ -97,8 +101,8 @@ class PausingTokenTransport:
 async def test_policy_change_during_exchange_cannot_install_old_authorization(case: AttemptCase) -> None:
     state, revision = await start_configured(case, "client_secret_basic")
     started, release = asyncio.Event(), asyncio.Event()
-    callback = PersonalOAuthCallbackService(case.bundle.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(PausingTokenTransport(started, release)), case.clock)
-    task = asyncio.create_task(callback.finish(state, "authorization-code", "https://issuer.example", "", "read"))
+    callback = PersonalOAuthCallbackService(case.bundle.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, PausingTokenTransport(started, release)), case.clock)
+    task = asyncio.create_task(callback.finish(FinishCallback(state=SecretStr(state), code=SecretStr("authorization-code"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), error="", scope="read", route=GenericRoute(kind="generic"))))
     try:
         await asyncio.wait_for(started.wait(), timeout=5)
         await case.bundle.personal_oauth_configurations.replace(ReplacePersonalOAuthConfiguration(
@@ -119,9 +123,9 @@ async def test_policy_change_during_exchange_cannot_install_old_authorization(ca
 async def test_callback_scope_escalation_or_invalid_syntax_never_exchanges_code(case: AttemptCase, callback_scope: str) -> None:
     state, _ = await start_configured(case, "client_secret_basic")
     transport = InMemoryOAuthHttpTransport([])
-    callback = PersonalOAuthCallbackService(case.bundle.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(transport), case.clock)
+    callback = PersonalOAuthCallbackService(case.bundle.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), case.clock)
     with pytest.raises(PersonalOAuthProviderFailure):
-        await callback.finish(state, "authorization-code", "https://issuer.example", "", callback_scope)
+        await callback.finish(FinishCallback(state=SecretStr(state), code=SecretStr("authorization-code"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), error="", scope=callback_scope, route=GenericRoute(kind="generic")))
     assert transport.requests == []
     assert (await case.bundle.personal_connections.get(case.query.key)).authorization.kind == "unauthorized"
     assert (await case.bundle.personal_oauth_attempts.get(case.query.model_copy(update={"attempt_id": state.split(".", 1)[0]}))).status == "failed"

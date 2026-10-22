@@ -81,8 +81,8 @@ def approve(client: httpx.Client, connector_id: str, tools: list[dict[str, Any]]
     checked(client.put(url, json={"expected_revision": current["revision"], "tools": tools}))
 
 
-def activate(client: httpx.Client, connector_id: str) -> None:
-    checked(client.put(f"/api/admin/connectors/mcp/{connector_id}/tools/activation", json={"tools": [{"tool_id": name, "activation_status": "enabled"} for name in ("echo_owner", "exclusive_alice")]}))
+def activate(client: httpx.Client, connector_id: str, status: str) -> None:
+    checked(client.put(f"/api/admin/connectors/mcp/{connector_id}/tools/activation", json={"tools": [{"tool_id": name, "activation_status": status} for name in ("echo_owner", "exclusive_alice")]}))
 
 
 def discover(client: httpx.Client, connector_id: str) -> None:
@@ -136,7 +136,7 @@ async def find_tool(client: Client[Any], suffix: str) -> str:
         if len(names) == 1:
             return names[0]
         await asyncio.sleep(0.25)
-    raise AssertionError("Approved personal tool did not become available")
+    raise AssertionError("Discovered personal tool did not become available")
 
 
 async def denied(client: Client[Any], name: str, fixture: httpx.Client) -> None:
@@ -154,6 +154,143 @@ async def owner_result(client: Client[Any], name: str, owner: str) -> None:
     assert payload == {"owner": owner, "message": "same-arguments"}
 
 
+async def assert_private_inventory(client: Client[Any], owner: str, expected: tuple[str, ...]) -> None:
+    tools = [tool for tool in await client.list_tools() if tool.name.endswith(("echo_owner", "exclusive_alice", "added_alice"))]
+    assert len(tools) == len(expected)
+    for suffix in expected:
+        tool = next(tool for tool in tools if tool.name.endswith(suffix))
+        description = {"echo_owner": f"Private inventory for {owner}", "exclusive_alice": "Private Alice inventory", "added_alice": "New private Alice inventory"}[suffix]
+        assert tool.description == description
+        assert tool.inputSchema["properties"]["message"]["type"] == "string"
+        assert tool.inputSchema["required"] == ["message"]
+        assert tool.outputSchema is not None
+        assert tool.outputSchema["type"] == "object"
+
+
+async def assert_added_tool(
+    alice: httpx.Client, fixture: httpx.Client, connector_id: str, a: Client[Any], b: Client[Any],
+) -> None:
+    before = checked(fixture.get("/control"))
+    checked(fixture.post("/control", json={"owner": "alice", "mode": "add_tool"}))
+    assert not any(tool.name.endswith("added_alice") for tool in await a.list_tools())
+    discover(alice, connector_id)
+    added = await find_tool(a, "added_alice")
+    assert checked(fixture.get("/control"))["calls"] == before["calls"]
+    await owner_result(a, added, "alice")
+    assert checked(fixture.get("/control"))["calls"] == before["calls"] + 1
+    assert not any(tool.name == added for tool in await b.list_tools())
+    await denied(b, added, fixture)
+    checked(fixture.post("/control", json={"owner": "alice", "mode": "change_tool"}))
+    await denied(a, added, fixture)
+    discover(alice, connector_id)
+    assert await find_tool(a, "added_alice") == added
+    await owner_result(a, added, "alice")
+    checked(fixture.post("/control", json={"owner": "alice", "mode": "add_tool"}))
+    await denied(a, added, fixture)
+    discover(alice, connector_id)
+    assert await find_tool(a, "added_alice") == added
+    await owner_result(a, added, "alice")
+    assert checked(alice.get(f"/api/admin/connectors/mcp/{connector_id}/tools"))["tools"] == []
+    assert checked(alice.get(f"/api/admin/connectors/mcp/{connector_id}/personal-tools"))["revision"] == "unconfigured"
+    checked(fixture.post("/control", json={"owner": "alice", "mode": "normal"}))
+
+
+async def assert_legacy_policy_is_metadata(
+    alice: httpx.Client, fixture: httpx.Client, connector_id: str, a: Client[Any], b: Client[Any],
+) -> None:
+    tools = [contract(connector_id, name) for name in ("echo_owner", "exclusive_alice")]
+    name = await find_tool(a, "echo_owner")
+    before = checked(fixture.get("/control"))
+    approve(alice, connector_id, tools)
+    activate(alice, connector_id, "enabled")
+    grant(alice, connector_id, "enabled")
+    await owner_result(a, name, "alice")
+    activate(alice, connector_id, "disabled")
+    grant(alice, connector_id, "disabled")
+    await owner_result(a, name, "alice")
+    await owner_result(b, name, "bob")
+    tools[0]["input_schema"]["properties"]["message"]["minLength"] = 100
+    approve(alice, connector_id, tools)
+    await owner_result(a, name, "alice")
+    await owner_result(b, name, "bob")
+    approve(alice, connector_id, [])
+    await owner_result(a, name, "alice")
+    await owner_result(b, name, "bob")
+    assert checked(fixture.get("/control"))["calls"] == before["calls"] + 7
+    assert checked(alice.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is True
+    await assert_private_inventory(a, "alice", ("echo_owner", "exclusive_alice", "added_alice"))
+    await assert_private_inventory(b, "bob", ("echo_owner",))
+
+
+def public_callback(endpoints: RuntimeEndpoints, path: str, query: str) -> httpx.Response:
+    return httpx.get(endpoints.api_base_url + path + "?" + query, follow_redirects=False, timeout=30)
+
+
+@pytest.mark.parametrize("metadata_mode", ("issuer_omitted", "issuer_false"))
+def test_issuer_bound_callback_accepts_absent_issuer_without_route_downgrade(
+    runtime_endpoints: RuntimeEndpoints, metadata_mode: str,
+) -> None:
+    with personal_clients(runtime_endpoints) as (alice, _, fixture, connector_id):
+        checked(fixture.post("/control", json={"owner": "metadata", "mode": metadata_mode}))
+        try:
+            personal = f"/api/me/connectors/mcp/{connector_id}"
+            before = checked(fixture.get("/control"))
+            started = checked(alice.post(personal + "/oauth/attempts", json={}), 201)
+            authorization = urlsplit(started["authorization_url"])
+            expected_path = "/api/oauth/downstream-mcp/callback/issuer/" + hashlib.sha256(ISSUER.encode("utf-8")).hexdigest()
+            assert parse_qs(authorization.query)["redirect_uri"] == ["https://umbod-runtime.kind.invalid" + expected_path]
+            consent = fixture.get(authorization.path + "?" + authorization.query + "&owner=alice")
+            assert consent.status_code == 302
+            callback = urlsplit(consent.headers["location"])
+            assert callback.path == expected_path
+            assert set(parse_qs(callback.query)) == {"code", "state"}
+            attempt_url = personal + "/oauth/attempts/" + started["attempt_id"]
+            wrong_paths = ("/api/oauth/downstream-mcp/callback", "/api/oauth/downstream-mcp/callback/issuer/" + "0" * 64)
+            for wrong_path in wrong_paths:
+                assert public_callback(runtime_endpoints, wrong_path, callback.query).status_code == 400
+                assert checked(alice.get(attempt_url))["status"] == "pending"
+            assert public_callback(runtime_endpoints, callback.path, callback.query + "&iss=" + ISSUER + "/").status_code == 400
+            assert checked(alice.get(attempt_url))["status"] == "pending"
+            assert checked(fixture.get("/control"))["exchanges"] == before["exchanges"]
+            assert public_callback(runtime_endpoints, callback.path, callback.query).status_code == 200
+            assert checked(alice.get(attempt_url))["status"] == "completed"
+            assert checked(alice.get(personal + "/authorization"))["state"] == "authorized"
+            assert checked(fixture.get("/control"))["exchanges"] == before["exchanges"] + 1
+            assert public_callback(runtime_endpoints, callback.path, callback.query).status_code == 400
+            assert checked(fixture.get("/control"))["exchanges"] == before["exchanges"] + 1
+            checked(alice.post(personal + "/authorization/refresh", json={}))
+            assert checked(fixture.get("/control"))["refreshes"] == before["refreshes"] + 1
+        finally:
+            checked(fixture.post("/control", json={"owner": "metadata", "mode": "normal"}))
+
+
+@pytest.mark.parametrize("mode,status", (("refresh_denied", 409), ("refresh_uncertain", 503)))
+def test_failed_refresh_requires_reconnect_without_provider_replay(
+    runtime_endpoints: RuntimeEndpoints, mode: str, status: int,
+) -> None:
+    with personal_clients(runtime_endpoints) as (alice, _, fixture, connector_id):
+        authorize(alice, fixture, connector_id, "alice")
+        discover(alice, connector_id)
+        personal = f"/api/me/connectors/mcp/{connector_id}"
+        health_url = personal + "/authorization"
+        before = checked(fixture.get("/control"))
+        checked(fixture.post("/control", json={"owner": "alice", "mode": mode}))
+        try:
+            response = alice.post(health_url + "/refresh", json={})
+            checked(response, status)
+            assert response.headers["cache-control"] == "no-store"
+            assert checked(alice.get(health_url)) == {"state": "reconnect_required", "reason": mode}
+            assert checked(alice.get(personal))["runtime_available"] is False
+            assert alice.post(health_url + "/refresh", json={}).status_code == 409
+            after = checked(fixture.get("/control"))
+            assert after["refreshes"] == before["refreshes"] + 1
+            assert after["exchanges"] == before["exchanges"]
+            assert after["calls"] == before["calls"]
+            assert after["discoveries"] == before["discoveries"]
+        finally:
+            checked(fixture.post("/control", json={"owner": "alice", "mode": "normal"}))
+
+
 @pytest.mark.asyncio
 async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(runtime_endpoints: RuntimeEndpoints) -> None:
     assert httpx.get(runtime_endpoints.api_base_url + "/api/me/connectors/mcp").status_code == 401
@@ -166,17 +303,12 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
         assert checked(alice.get(health_url))["state"] == "authorized"
         assert checked(bob.get(health_url))["state"] == "authorized"
         assert checked(fixture.get("/control"))["exchanges"] == initial_counters["exchanges"] + 2
-        tools = [contract(connector_id, name) for name in ("echo_owner", "exclusive_alice")]
         alice_mcp_token = proxy_token(runtime_endpoints.mcp_url, runtime_endpoints.bearer_token, fixture)
         bob_mcp_token = proxy_token(os.environ["UMBOD_TEST_MCP_B_URL"], os.environ["UMBOD_TEST_BEARER_TOKEN_B"], fixture)
         async with mcp_client(runtime_endpoints.mcp_url, alice_mcp_token) as a, mcp_client(os.environ["UMBOD_TEST_MCP_B_URL"], bob_mcp_token) as b:
             assert not any(tool.name.endswith("echo_owner") for tool in await a.list_tools())
-            approve(alice, connector_id, tools)
-            assert not any(tool.name.endswith("echo_owner") for tool in await a.list_tools())
-            activate(alice, connector_id)
-            assert not any(tool.name.endswith("echo_owner") for tool in await a.list_tools())
-            grant(alice, connector_id, "enabled")
-            assert not any(tool.name.endswith("echo_owner") for tool in await a.list_tools())
+            public_policy = checked(alice.get(f"/api/admin/connectors/mcp/{connector_id}/personal-tools"))
+            assert public_policy == {"connector_id": connector_id, "revision": "unconfigured", "tools": []}
             assert checked(alice.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is False
             assert checked(bob.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is False
             discover(alice, connector_id)
@@ -191,6 +323,12 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
             assert await find_tool(b, "echo_owner") == name
             await owner_result(a, name, "alice")
             await owner_result(b, name, "bob")
+            await assert_private_inventory(a, "alice", ("echo_owner", "exclusive_alice"))
+            await assert_private_inventory(b, "bob", ("echo_owner",))
+            catalogue = checked(alice.get(f"/api/admin/connectors/mcp/{connector_id}/tools"))
+            assert catalogue["tools"] == []
+            await assert_added_tool(alice, fixture, connector_id, a, b)
+            await assert_legacy_policy_is_metadata(alice, fixture, connector_id, a, b)
             refresh_url = health_url + "/refresh"
             before_refresh = checked(fixture.get("/control"))
             assert checked(alice.get(health_url))["refresh_supported"] is True
@@ -233,14 +371,7 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
             catalogue = checked(alice.get(f"/api/admin/connectors/mcp/{connector_id}/tools"))
             assert "Private inventory" not in json.dumps(catalogue)
             assert "Private Alice inventory" not in json.dumps(catalogue)
-            for tool in await a.list_tools():
-                if tool.name == name:
-                    assert tool.description == "Administrator approved public contract"
-            grant(alice, connector_id, "disabled")
-            await denied(a, name, fixture)
-            await denied(b, name, fixture)
-            grant(alice, connector_id, "enabled")
-            await owner_result(b, name, "bob")
+            await assert_private_inventory(a, "alice", ("echo_owner", "exclusive_alice", "added_alice"))
             grant(alice, connector_id, "disabled", connector=True)
             await denied(a, name, fixture)
             await denied(b, name, fixture)
@@ -253,6 +384,11 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
             assert checked(alice.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is False
             assert checked(bob.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is True
             await denied(a, name, fixture)
+            await owner_result(b, name, "bob")
+            checked(fixture.post("/control", json={"owner": "bob", "mode": "forbidden"}))
+            await denied(b, name, fixture)
+            assert checked(bob.get(health_url))["state"] == "authorized"
+            checked(fixture.post("/control", json={"owner": "bob", "mode": "normal"}))
             await owner_result(b, name, "bob")
             before = checked(fixture.get("/control"))
             checked(fixture.post("/control", json={"owner": "bob", "mode": "unauthorized"}))
@@ -286,10 +422,11 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
             authorize(bob, fixture, connector_id, "bob")
             discover(bob, connector_id)
             await owner_result(b, name, "bob")
-            tools[0]["input_schema"]["properties"]["message"]["minLength"] = 1
-            approve(alice, connector_id, tools)
+            checked(alice.delete(f"/api/admin/connectors/mcp/{connector_id}/publication"))
             await denied(b, name, fixture)
+            checked(alice.put(f"/api/admin/connectors/mcp/{connector_id}/publication"))
+            await owner_result(b, name, "bob")
         for token in (None, "invalid-user"):
             headers = {} if token is None else {"Authorization": "Bearer " + token}
             response = httpx.post(runtime_endpoints.mcp_url, headers=headers, json={"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
-            assert response.status_code in (401, 403)
+            assert response.status_code == 401

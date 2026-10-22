@@ -1,6 +1,6 @@
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol, cast
+from typing import Any, Protocol, cast, runtime_checkable
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
@@ -58,6 +58,11 @@ from umbod.mcp.logging import (
     McpToolInvocationLogSink,
     create_default_connector_tool_invocation_logger,
 )
+
+
+@runtime_checkable
+class PersonalToolNamespace(Protocol):
+    async def is_personal_tool_name(self, name: str) -> bool: ...
 
 
 class ConnectorToolGatewayProvider(Protocol):
@@ -280,11 +285,20 @@ class _RegistryGateway:
             if name in names:
                 raise ToolError("Tool is not available")
             names.add(name)
+        checked_providers: list[ConnectorToolGatewayProvider] = []
         for provider in self._state.gateway_providers:
+            if isinstance(provider, PersonalToolNamespace):
+                for name in names:
+                    if await provider.is_personal_tool_name(name):
+                        raise ToolError("Tool is not available")
             for name in await provider.configured_tool_name_claims():
                 if name in names:
                     raise ToolError("Tool is not available")
+                for previous in checked_providers:
+                    if isinstance(previous, PersonalToolNamespace) and await previous.is_personal_tool_name(name):
+                        raise ToolError("Tool is not available")
                 names.add(name)
+            checked_providers.append(provider)
 
     async def execute_tool(
         self,

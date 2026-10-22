@@ -1,10 +1,13 @@
 import json
 import socket
 from datetime import datetime, timezone
+from dataclasses import dataclass
 
 import anyio
 import pytest
 from pydantic import SecretStr
+
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericRoute, IssuerBinding, IssuerRoute, PresentCallbackIssuer
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import OAuthHttpResponse
 from umbod.core.connectors.downstream_mcp.personal_connections.models import (
@@ -74,13 +77,31 @@ def client_metadata(preparation: PreparePersonalOAuth) -> dict[str, object]:
     }
 
 
+@dataclass(frozen=True)
+class ProviderCase:
+    preparation: PreparePersonalOAuth
+    resource_metadata: dict[str, object]
+    server_metadata: dict[str, object]
+    client_metadata: dict[str, object]
+
+
+@pytest.fixture
+def provider_case(
+    preparation: PreparePersonalOAuth, resource_metadata: dict[str, object],
+    server_metadata: dict[str, object], client_metadata: dict[str, object],
+) -> ProviderCase:
+    return ProviderCase(preparation, resource_metadata, server_metadata, client_metadata)
+
+
 def exchange_command(preparation: PreparePersonalOAuth, prepared: PreparedPersonalOAuth) -> ExchangePersonalOAuth:
     return ExchangePersonalOAuth(
+        route=IssuerRoute(kind="issuer", issuer_key=prepared.callback_binding.issuer_key)
+        if isinstance(prepared.callback_binding, IssuerBinding) else GenericRoute(kind="generic"),
         attempt=ClaimedPersonalOAuthAttempt(
             query=PersonalOAuthAttemptQuery(
                 key=PersonalConnectionKey(
                     principal=CanonicalPrincipal(namespace="issuer", subject="owner"), connector_id="connector",
                 ), attempt_id="attempt", now=datetime.now(timezone.utc),
             ), claim_id="claim", preparation=preparation, prepared=prepared,
-        ), code=SecretStr("authorization-code"), issuer="https://issuer.example/tenant",
+        ), code=SecretStr("authorization-code"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example/tenant"),
     )

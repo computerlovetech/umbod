@@ -24,6 +24,7 @@
   import DownstreamMcpPromptCatalog from './DownstreamMcpPromptCatalog.svelte';
   import DownstreamMcpResourceCatalog from './DownstreamMcpResourceCatalog.svelte';
   import { DownstreamMcpWorkspaceState, type DownstreamMcpCreateValues } from './downstream-mcp-workspace-state.svelte';
+  import PersonalServerPolicyPanel from '../personal-mcp-servers/PersonalServerPolicyPanel.svelte';
   import { useToast } from '$lib/components/feedback';
   let { connectors, selected: detailSelected, catalog, promptCatalog, resourceCatalog, invocationPolicies = [], form, state }: { connectors: DownstreamMcpConnectorSummary[]; selected?: DownstreamMcpConnector; catalog?: DownstreamMcpToolList; promptCatalog?: PromptCatalogData; resourceCatalog?: ResourceCatalogData; invocationPolicies?: InvocationPolicyTool[]; form?: { message?: string; status?: string; mode?: string; values?: DownstreamMcpCreateValues }; state: DownstreamMcpWorkspaceState } = $props();
   type SidebarConnector = {
@@ -81,10 +82,19 @@
     };
   }
 </script>
+{#if !state.operations.authenticationLost}
 <DownstreamMcpSetupModal {state} connector={state.modal === 'configure' ? detailSelected : undefined} message={form?.message} values={form?.mode === 'create' ? form.values : undefined} />
 {#if state.capabilityDescriptionConnectorId}
   <CapabilityDescriptionOverrideModal kind="downstream_mcp" connectorId={state.capabilityDescriptionConnectorId} close={state.closeCapabilityDescription} />
 {/if}
+<PublicationConfirmationModal
+  open={Boolean(state.operations.pending)}
+  title={state.operations.pending ? `${state.operations.pending.action} ${state.operations.pending.name}?` : ''}
+  message={state.operations.pending?.action === 'publish' ? 'Publication and current Group connector access trust all provider-exposed tools, including future tools after explicit rediscovery. Only explicitly permitted groups can select this server. Publication does not provide OAuth authorization, owner enablement or discovery.' : state.operations.pending?.action === 'delete' ? 'This permanently removes the server and saved local authorizations and policy. Existing connector and tool grants must be removed explicitly in Group permissions first; deletion never removes grants automatically. Remote tokens are not revoked.' : 'After catalogue reload, withdrawal prevents new selection. It does not revoke remote tokens or disconnect owners.'}
+  confirmLabel={state.operations.pending?.action === 'delete' ? 'Delete server' : 'Confirm'}
+  onconfirm={state.operations.confirm}
+  oncancel={state.operations.cancel}
+/>
 <PublicationConfirmationModal
   open={Boolean(state.pendingPublication)}
   title={state.pendingPublication ? `${state.pendingPublication.actionLabel} ${state.pendingPublication.connectorName}?` : ''}
@@ -97,36 +107,51 @@
   <div class="backdrop" role="presentation"><div class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"><h2 id="confirm-title">Delete connector?</h2><p>This permanently removes the connector and its discovered catalog.</p><form method="POST" data-operation={state.modal} use:browserSubmit={mutationSubmit('delete', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id} /><footer><Button variant="secondary" onclick={state.close}>Cancel</Button><Button type="submit" variant="danger" disabled={state.submitting}>{state.submitting ? 'Working…' : 'Confirm'}</Button></footer></form></div></div>
 {/if}
 {#if form?.message && (form.status === 'stale' || form.status === 'conflict' || form.status === 'authentication' || form.status === 'invalid')}<p class="feedback" role="alert">{form.message}</p>{/if}
-{#if connectors.length && selected}
-<AdminSplitWorkspace ariaLabel="MCP proxy connectors workspace" sidebarLabel="MCP proxy connectors" sidebarHeading="Connectors" count={connectors.length} detailLabel="Selected MCP proxy connector detail">
+{#if state.operations.message}<p role="alert" class="feedback">{state.operations.message} <a href="/admin/group-permissions">Group permissions</a></p>{/if}
+{#if state.operations.blocked}<Button onclick={state.operations.reload}>Reload servers</Button>{/if}
+{#if connectors.length && selected && !state.operations.blocked}
+<AdminSplitWorkspace ariaLabel="MCP connectors workspace" sidebarLabel="MCP connectors" sidebarHeading="Connectors" count={connectors.length} detailLabel="Selected MCP connector detail">
  {#snippet sidebar()}
-  <ConnectorSidebarList items={sidebarConnectors} selectedId={selected.connector_id} ariaLabel="MCP proxy connectors" onselect={(connector) => state.selectConnector(connector.id)}>
+  <ConnectorSidebarList items={sidebarConnectors} selectedId={selected.connector_id} ariaLabel="MCP connectors" onselect={(connector) => state.selectConnector(connector.id)}>
    {#snippet metadata(item)}
-    <span class="connector-meta">{item.connector.health.status} · {item.connector.publication_status}</span>
+    <span class="connector-meta">{item.connector.authorization_mode === 'personal' ? 'Personal' : 'Shared'} · {item.connector.authorization_mode === 'shared' ? `${item.connector.health.status} · ` : ''}{item.connector.publication_status}</span>
    {/snippet}
    {#snippet actions(item)}
-    {#if item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}<button role="menuitem" type="button" onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem">Refresh discovery</button></form><ConnectorPublicationMenuAction connectorId={selected.connector_id} connectorName={selected.display_name} action={selected.publication_status === 'published' ? 'unpublish' : 'publish'} role="menuitem" onrequest={requestPublicationConfirmation} /><button role="menuitem" class="danger-text" type="button" onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/snippet}</AdminSidebarActionMenu>{/if}
+    {#if item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}{#if selected.authorization_mode === 'shared'}<button role="menuitem" type="button" onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem">Refresh discovery</button></form>{/if}{#if selected.authorization_mode === 'personal'}<button role="menuitem" disabled={state.operations.locked} onclick={() => state.operations.request(selected.publication_status === 'published' ? 'unpublish' : 'publish', selected.connector_id, selected.display_name)}>{selected.publication_status === 'published' ? 'Unpublish' : 'Publish'}</button><button role="menuitem" disabled={state.operations.locked} onclick={() => state.operations.request('delete', selected.connector_id, selected.display_name)}>Delete</button>{:else}<ConnectorPublicationMenuAction connectorId={selected.connector_id} connectorName={selected.display_name} action={selected.publication_status === 'published' ? 'unpublish' : 'publish'} role="menuitem" onrequest={requestPublicationConfirmation} /><button role="menuitem" class="danger-text" type="button" onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/if}{/snippet}</AdminSidebarActionMenu>{/if}
    {/snippet}
   </ConnectorSidebarList>
  {/snippet}
  {#snippet detail()}
- {#if state.detailLoading}<div class="feedback"><DelayedSpinner active label="Loading MCP proxy connector details" /></div>
+ {#if state.detailLoading}<div class="feedback"><DelayedSpinner active label="Loading MCP connector details" /></div>
  {:else if state.detailFailed}<div class="feedback" role="alert"><p>Connector details are unavailable.</p><Button onclick={state.retrySelected}>Try again</Button></div>
  {:else if selectedDetailReady && detailSelected}<ConnectorDetailSummary headingId="selected-mcp-connector-heading" title={detailSelected.display_name} iconDataUrl={detailSelected.icon_url || undefined} publicationStatus={detailSelected.publication_status}>
   {#snippet description()}<p>{detailSelected.capability_description}</p>{/snippet}
   {#snippet summary()}
+   <ConnectorDetailItem label="Authorization mode" tone="neutral">{detailSelected.authorization_mode === 'personal' ? 'Personal' : 'Shared'}</ConnectorDetailItem>
+   {#if detailSelected.authorization_mode === 'shared'}
    <ConnectorDetailItem label="Discovery health" tone={detailSelected.health.status === 'healthy' ? 'success' : detailSelected.health.status === 'unhealthy' ? 'danger' : 'warning'}>{detailSelected.health.status}</ConnectorDetailItem>
    <ConnectorDetailItem label="Authentication" tone={detailSelected.auth_mode === 'none' ? 'neutral' : detailSelected.credential_configured ? 'success' : 'warning'}>{detailSelected.auth_mode === 'none' ? 'Not required' : detailSelected.credential_configured ? 'Bearer token configured' : 'Bearer token missing'}</ConnectorDetailItem>
    <ConnectorDetailItem label="Discovered tools" tone="neutral">{catalog?.tools.length ?? 0} tools</ConnectorDetailItem>
+   {/if}
   {/snippet}
   {#snippet technicalDetails()}
-   <ConnectorDetailItem label="Connector ID" variant="detail"><code>{detailSelected.connector_id}</code></ConnectorDetailItem>
+   <ConnectorDetailItem label={detailSelected.authorization_mode === 'personal' ? 'Server ID' : 'Connector ID'} variant="detail"><code>{detailSelected.connector_id}</code></ConnectorDetailItem>
    <ConnectorDetailItem label="Downstream endpoint" variant="detail"><code>{detailSelected.endpoint_url}</code></ConnectorDetailItem>
+   <ConnectorDetailItem label="Tool name prefix" variant="detail"><code>{detailSelected.tool_name_prefix}</code></ConnectorDetailItem>
+   {#if detailSelected.authorization_mode === 'personal'}
+   <ConnectorDetailItem label="Registration path" variant="detail"><code>{detailSelected.public_path}</code></ConnectorDetailItem>
+   {:else}
    <ConnectorDetailItem label="Shared endpoint" variant="detail"><CopyableValue value={sharedMcpUri} /></ConnectorDetailItem>
    <ConnectorDetailItem label="Dedicated endpoint" variant="detail"><CopyableValue value={detailSelected.public_url} /></ConnectorDetailItem>
    <ConnectorDetailItem label="Discovery detail" variant="detail">{#if detailSelected.health.reason}{detailSelected.health.reason}{:else}No discovery issue reported{/if}</ConnectorDetailItem>
    <ConnectorDetailItem label="Last attempt / success" variant="detail"><div class="datetime-pair"><span><strong>Attempt</strong>{#if detailSelected.health.checked_at}<DateTimeView value={detailSelected.health.checked_at} />{:else}Not attempted{/if}</span><span><strong>Success</strong>{#if catalog?.discovered_at}<DateTimeView value={catalog.discovered_at} />{:else}No successful discovery{/if}</span></div></ConnectorDetailItem>
+   {/if}
   {/snippet}
+  {#if detailSelected.authorization_mode === 'personal'}
+    {#if !state.operations.pending && !state.operations.busy}
+    {#key detailSelected.connector_id}<PersonalServerPolicyPanel connectorId={detailSelected.connector_id} accessLost={state.operations.loseAccess} lockChanged={state.operations.setFormLocked} externalLocked={state.operations.busy} />{/key}
+    {/if}
+  {:else}
   <ConnectorCapabilities selected={selectedCapability} counts={capabilityCounts} currentUrl={page.url}>
    {#snippet children(activeCapability)}
    {#if activeCapability === 'tools'}
@@ -138,11 +163,13 @@
    {/if}
    {/snippet}
   </ConnectorCapabilities>
+  {/if}
  </ConnectorDetailSummary>
  {/if}
  {/snippet}
 </AdminSplitWorkspace>
-{:else}<p class="empty">No MCP proxy connectors are configured yet. Add one to publish tools from a downstream MCP server.</p>{/if}
+{:else if !state.operations.blocked}<p class="empty">No MCP connectors are configured yet. Add a shared proxy or register a personal server.</p>{/if}
+{:else}<p role="alert">Administration access was lost. Sign in again before reloading this page.</p>{/if}
 <style>
   button:not(:disabled){cursor:pointer}
   button:disabled{cursor:not-allowed}

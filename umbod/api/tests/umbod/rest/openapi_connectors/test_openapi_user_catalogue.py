@@ -1,0 +1,54 @@
+import pytest
+from fastapi.testclient import TestClient
+
+from umbod.core.connectors.downstream_mcp.adapters.settings import DownstreamMcpInfrastructureSettings
+from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
+from umbod.rest.factories import ConnectorApiDependencyFactories
+from umbod.rest.user_catalogue import dependencies
+
+from test_simplified_openapi_connector_target import (
+    _create_connector, _document, _import, _set_activation, _set_publication,
+    client as client, connector_availability as connector_availability,
+)
+
+
+def test_personal_disabled_local_catalogue_uses_explicit_current_capability_grants(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def forbidden_personal_stores(
+        settings: DownstreamMcpInfrastructureSettings, factories: ConnectorApiDependencyFactories,
+    ) -> DownstreamMcpStores:
+        raise AssertionError("Personal dependencies must remain unresolved")
+
+    monkeypatch.setattr(dependencies, "get_downstream_stores", forbidden_personal_stores)
+    connector_id = _create_connector(client)
+    _import(client, connector_id, _document(
+        ("listItems", "get", "/items", "Display title", "Public description"),
+    ))
+    _set_activation(client, connector_id, "listItems", True)
+    _set_publication(client, connector_id, True)
+    permissions = "/api/admin/mcp-permissions/groups/umbod-admins/permissions"
+    client.put(permissions, json={"connectors": [
+        {"connector_id": connector_id, "permission_status": "enabled"},
+    ]}).raise_for_status()
+    response = client.get("/api/me/catalogue")
+    assert response.status_code == 200
+    assert response.json()["personal_enabled"] is False
+    assert response.json()["connectors"] == []
+    client.put(permissions, json={"capabilities": [{
+        "connector_id": connector_id, "capability_kind": "tool",
+        "capability_key": "listItems", "permission_status": "enabled",
+    }]}).raise_for_status()
+    response = client.get("/api/me/catalogue")
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json()["connectors"] == [{
+        "connector_id": connector_id, "kind": "openapi", "display_name": "Inventory",
+        "capability_description": "Manage inventory resources", "ownership": "shared",
+        "capabilities": [{
+            "kind": "tool", "key": "listItems", "name": "Display title",
+            "description": "Public description",
+        }],
+    }]
+    _set_activation(client, connector_id, "listItems", False)
+    assert client.get("/api/me/catalogue").json()["connectors"] == []
+    assert client.get("/api/me/connectors/mcp").status_code == 404

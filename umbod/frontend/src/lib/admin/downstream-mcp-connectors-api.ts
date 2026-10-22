@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import type { Transport } from './infrastructure/transport';
+import { SchemaValidationError, type Transport } from './infrastructure/transport';
 import { downstreamPromptCatalogSchema, downstreamResourceCatalogWireSchema, promptActivationBatchRequestSchema, promptActivationBatchResponseSchema, resourceActivationBatchRequestSchema, resourceActivationBatchResponseSchema, type PromptActivationBatchRequest, type ResourceActivationBatchRequest } from './capability-catalogs';
 import {
   downstreamMcpConnectorCreateInputSchema,
@@ -20,11 +20,16 @@ export class DownstreamMcpConnectorsRoute implements ToolActivationCapability {
 
   async list(): Promise<z.infer<typeof downstreamMcpConnectorListSchema>> {
     const result = await this.transport.request({ method: 'GET', path: '/admin/connectors/mcp', outputSchema: downstreamMcpConnectorListSchema });
-    return { connectors: result.connectors.filter((connector) => connector.authorization_mode === 'shared') };
+    return result;
   }
 
   get(connectorId: string): Promise<z.infer<typeof downstreamMcpConnectorSchema>> {
-    return this.transport.request({ method: 'GET', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}`, outputSchema: downstreamMcpConnectorSchema.refine((connector) => connector.authorization_mode === 'shared') });
+    return this.transport.request({ method: 'GET', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}`, outputSchema: downstreamMcpConnectorSchema });
+  }
+
+  private async requireShared(connectorId: string): Promise<void> {
+    const connector = await this.get(connectorId);
+    if (connector.authorization_mode !== 'shared') throw new SchemaValidationError('inbound', []);
   }
 
   create(body: DownstreamMcpConnectorCreateInput): Promise<z.infer<typeof downstreamMcpConnectorSchema>> {
@@ -32,12 +37,12 @@ export class DownstreamMcpConnectorsRoute implements ToolActivationCapability {
   }
 
   async patchMetadata(connectorId: string, body: DownstreamMcpConnectorMetadataPatch): Promise<z.infer<typeof downstreamMcpConnectorSchema>> {
-    await this.get(connectorId);
+    await this.requireShared(connectorId);
     return this.transport.request({ method: 'PATCH', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}`, body, inputSchema: downstreamMcpConnectorMetadataPatchSchema, outputSchema: downstreamMcpConnectorSchema });
   }
 
   async putConfiguration(connectorId: string, body: DownstreamMcpConnectorConfigurationInput): Promise<z.infer<typeof downstreamMcpConnectorConfigurationSchema>> {
-    await this.get(connectorId);
+    await this.requireShared(connectorId);
     return this.transport.request({ method: 'PUT', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/configuration`, body, inputSchema: downstreamMcpConnectorConfigurationInputSchema, outputSchema: downstreamMcpConnectorConfigurationSchema });
   }
 
@@ -47,22 +52,22 @@ export class DownstreamMcpConnectorsRoute implements ToolActivationCapability {
   }
 
   async discover(connectorId: string): Promise<z.infer<typeof downstreamMcpConnectorSchema>> {
-    await this.get(connectorId);
+    await this.requireShared(connectorId);
     return this.transport.request({ method: 'POST', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/discoveries`, outputSchema: downstreamMcpConnectorSchema });
   }
 
   async prompts(connectorId: string): Promise<z.infer<typeof downstreamPromptCatalogSchema>> {
-    await this.get(connectorId);
+    await this.requireShared(connectorId);
     return this.transport.request({ method: 'GET', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/prompts`, outputSchema: downstreamPromptCatalogSchema });
   }
 
   async resources(connectorId: string): Promise<z.infer<typeof downstreamResourceCatalogWireSchema>> {
-    await this.get(connectorId);
+    await this.requireShared(connectorId);
     return this.transport.request({ method: 'GET', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/resources`, outputSchema: downstreamResourceCatalogWireSchema });
   }
 
   async savePromptActivations(connectorId: string, body: PromptActivationBatchRequest): Promise<z.infer<typeof promptActivationBatchResponseSchema>> {
-    await this.get(connectorId);
+    await this.requireShared(connectorId);
     return this.transport.request({
       method: 'PUT',
       path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/prompts/activation`,
@@ -73,7 +78,7 @@ export class DownstreamMcpConnectorsRoute implements ToolActivationCapability {
   }
 
   async saveResourceActivations(connectorId: string, body: ResourceActivationBatchRequest): Promise<z.infer<typeof resourceActivationBatchResponseSchema>> {
-    await this.get(connectorId);
+    await this.requireShared(connectorId);
     return this.transport.request({
       method: 'PUT',
       path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/resources/activation`,
@@ -84,7 +89,7 @@ export class DownstreamMcpConnectorsRoute implements ToolActivationCapability {
   }
 
   async tools(connectorId: string): Promise<z.infer<typeof downstreamMcpToolListSchema>> {
-    await this.get(connectorId);
+    await this.requireShared(connectorId);
     return this.transport.request({ method: 'GET', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/tools`, outputSchema: downstreamMcpToolListSchema });
   }
 
@@ -99,12 +104,12 @@ export class DownstreamMcpConnectorsRoute implements ToolActivationCapability {
   }
 
   async listActivations(connectorId: string): Promise<z.infer<typeof downstreamMcpToolActivationBatchResponseSchema>> {
-    await this.get(connectorId);
+    await this.requireShared(connectorId);
     return this.transport.request({ method: 'GET', path: `/admin/connectors/mcp/${encodeURIComponent(connectorId)}/tools/activation`, outputSchema: downstreamMcpToolActivationBatchResponseSchema });
   }
 
   async saveActivations(connectorId: string, changes: ToolActivationChange[]): Promise<z.infer<typeof downstreamMcpToolActivationBatchResponseSchema>> {
-    await this.get(connectorId);
+    await this.requireShared(connectorId);
     const body = {
       tools: changes.map((change) => ({
         tool_id: change.toolId,

@@ -8,6 +8,7 @@ from .models import (
     AdmitPersonalTool,
     InvokePersonalTool,
     PersonalRuntimeContext,
+    PersonalInventoryRevision,
     PersonalToolAdmission,
     PersonalToolPolicy,
     PersonalToolPolicyReplacement,
@@ -37,6 +38,8 @@ class PersonalToolPolicyStore(Protocol):
 
 
 class PersonalToolAccessStore(Protocol):
+    async def read_inventory_revision(self, query: PersonalRuntimeAuthorizationQuery) -> PersonalInventoryRevision: ...
+
     async def reject_authorization(self, command: RejectPersonalAuthorization) -> None: ...
 
     async def list_available(self, query: PersonalRuntimeAuthorizationQuery) -> tuple[PersonalToolRecord, ...]: ...

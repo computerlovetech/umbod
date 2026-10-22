@@ -8,7 +8,6 @@ import httpx2
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 from mcp import types
-from pydantic import TypeAdapter
 
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
 
@@ -25,6 +24,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models im
 
 from umbod.core.connectors.downstream_mcp.personal_tools.contract_validation import contract_fingerprint, validate_contract_schema
 
+from ..tool_mapping import bind_tool, map_sdk_tool
 from .http import PersonalHttpTransport
 from .network import PinnedPublicNetworkBackend, PublicAddressResolver
 from .redaction import contains_secret
@@ -152,20 +152,7 @@ class FastMCPPersonalMcpTransport:
                 if len(tools) >= 256 or tool.name in names or len(tool.name) > 128:
                     state.fail()
                 names.add(tool.name)
-                mapped = {
-                    "identity": {"connector_id": state.target.key.connector_id, "downstream_name": tool.name},
-                    "title": tool.title or tool.name,
-                    "description": tool.description or "",
-                    "input_schema": tool.input_schema,
-                    "annotations": tool.annotations.model_dump(mode="json", by_alias=True, exclude_none=True) if tool.annotations is not None else {},
-                    "icons": tuple(icon.model_dump(mode="json", by_alias=True, exclude_none=True) for icon in tool.icons or ()),
-                    "meta": tool.meta or {},
-                    "execution": tool.execution.model_dump(mode="json", by_alias=True, exclude_none=True) if tool.execution is not None else {},
-                    "output_schema_status": "absent" if tool.output_schema is None else "present",
-                }
-                if tool.output_schema is not None:
-                    mapped["output_schema"] = tool.output_schema
-                tools.append(TypeAdapter(DiscoveredTool).validate_python(mapped))
+                tools.append(bind_tool(state.target.key.connector_id, map_sdk_tool(tool)))
             if response.next_cursor is None:
                 return PersonalToolInventory(tools=tuple(tools)).model_dump(mode="json")
             if not response.next_cursor or response.next_cursor in state.cursors:

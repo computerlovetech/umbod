@@ -2,11 +2,13 @@ from .contract_validation import PersonalToolPolicyInvalid, contract_fingerprint
 from .models import (
     AdmitPersonalTool,
     InvokePersonalTool,
+    MissingInventoryRevision,
+    PresentInventoryRevision,
+    PersonalInventoryRevision,
     PersonalRuntimeContext,
     PersonalToolAdmission,
     PersonalToolDiscoveryResult,
     PersonalToolGrantRevocation,
-    PersonalToolMatch,
     PersonalToolObservation,
     PersonalToolPolicy,
     PersonalToolPolicyConflict,
@@ -22,10 +24,11 @@ from .runtime import DisabledPersonalToolRuntime, PersonalToolRuntimeService
 from .service import PersonalToolDiscoveryService
 
 __all__ = [
+    "MissingInventoryRevision", "PresentInventoryRevision", "PersonalInventoryRevision",
     "DisabledPersonalToolRuntime", "PersonalToolRuntimeService", "PersonalRuntimeContextProvider",
     "PersonalToolRuntime", "InvokePersonalTool", "PersonalRuntimeContext",
     "AdmitPersonalTool", "PersonalToolAdmission", "PersonalToolDiscoveryResult",
-    "PersonalToolDiscoveryService", "PersonalToolGrantRevocation", "PersonalToolMatch",
+    "PersonalToolDiscoveryService", "PersonalToolGrantRevocation",
     "PersonalToolObservation", "PersonalToolPolicy", "PersonalToolPolicyConflict",
     "PersonalToolPolicyInvalid", "PersonalToolPolicyReplacement", "PersonalToolPolicyUnavailable",
     "PersonalToolRecord", "ReplacePersonalToolPolicy", "SavePersonalToolObservation",

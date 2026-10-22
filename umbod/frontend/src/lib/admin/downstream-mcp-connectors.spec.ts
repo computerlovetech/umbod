@@ -1,3 +1,4 @@
+import { serverFixture } from './personal-mcp-servers/fixtures.test-support';
 import { describe, expect, test } from 'vitest';
 import type { Transport, TransportRequest } from './infrastructure/transport';
 import { DownstreamMcpConnectorsRoute } from './downstream-mcp-connectors-api';
@@ -5,7 +6,7 @@ import { downstreamMcpConnectorCreateInputSchema, downstreamMcpConnectorListSche
 
 function recordingTransport(): { transport: Transport; calls: TransportRequest<unknown>[] } {
   const calls: TransportRequest<unknown>[] = [];
-  return { calls, transport: { async request(options) { calls.push(options as TransportRequest<unknown>); return undefined as never; } } };
+  return { calls, transport: { async request(options) { calls.push(options as TransportRequest<unknown>); return (options.method === 'GET' ? { ...serverFixture('a b'), authorization_mode: 'shared', auth_mode: 'none' } : undefined) as never; } } };
 }
 
 describe('downstream MCP schemas', () => {

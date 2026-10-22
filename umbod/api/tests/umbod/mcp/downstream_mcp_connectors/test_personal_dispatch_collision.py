@@ -1,6 +1,6 @@
 import pytest
 
-from tests.umbod.core.downstream_mcp_connectors.personal_tools.runtime_support import execution_case
+from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import execution_case
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, runtime_case
 from tests.umbod.mcp.downstream_mcp_connectors.test_personal_execution_pipeline import InvocationLog, provider_for
 from umbod.core.activation import ActivationStatus, CapabilityRef

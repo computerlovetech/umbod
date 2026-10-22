@@ -5,13 +5,12 @@ from pydantic import SecretStr
 
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, install_authorization, runtime_case
 from tests.umbod.core.downstream_mcp_connectors.test_personal_tools_s3_contracts import approved_tool, replace_policy, save_matches
-from umbod.core.activation import ActivationStatus, CapabilityRef
 from umbod.core.connectors.downstream_mcp.personal_connections import Authorized, CanonicalPrincipal, PersonalConnectionKey, SetPersonalConnectionEnabled
 from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import UnknownPersonalTokenLifetime, authorize_personal_grant
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable, PersonalToolResult
-from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalRuntimeContext, PersonalToolRuntimeService
-from umbod.core.connectors.downstream_mcp.stores import create_downstream_mcp_stores
-from umbod.core.permissions.stores.schema import CAPABILITY_PERMISSION_TABLE, CONNECTOR_PERMISSION_TABLE
+from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalRuntimeContext, PersonalToolDiscoveryService, PersonalToolRuntimeService
+from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, create_downstream_mcp_stores
+from umbod.core.permissions.stores.schema import CONNECTOR_PERMISSION_TABLE
 from umbod.core.persistence import DeleteQuery, NoFilter, TransactionMode
 
 from .runtime_support import execution_case
@@ -47,7 +46,7 @@ async def test_same_connector_and_arguments_use_two_owners_tokens_and_data(runti
     execution.transport.inventories[key] = execution.transport.inventories[runtime_case.query.key]
     execution.transport.results[(key, "read")] = PersonalToolResult(result={"content": [], "structuredContent": {"owner": "second"}})
     execution.contexts.contexts[:] = [PersonalRuntimeContext(principal=key.principal, group_ids=("team",))]
-    second = await execution.runtime.execute(execution.command)
+    second = await execution.runtime.execute(execution.command.model_copy(update={"inventory_revision": (await execution.runtime.list_tools())[0].inventory_revision}))
     assert first.result["structuredContent"] == {"owner": "owner"}
     assert second.result["structuredContent"] == {"owner": "second"}
     assert [call.target.access_token.get_secret_value() for call in execution.transport.calls] == ["owner-token", "second-token"]
@@ -65,9 +64,7 @@ async def test_missing_context_and_disabled_runtime_never_fall_back(runtime_case
     assert execution.transport.calls == []
 
 
-@pytest.mark.asyncio
-@pytest.mark.parametrize("revocation", ("disable", "disconnect", "publication", "activation", "connector_grant", "capability_grant", "policy", "rotation", "expired", "unknown_lifetime", "legacy", "corrupt", "foreign"))
-async def test_current_admission_rejects_withdrawn_or_invalid_authority(runtime_case: RuntimeCase, revocation: str) -> None:
+async def assert_current_admission_rejects_withdrawn_or_invalid_authority(runtime_case: RuntimeCase, revocation: str) -> None:
     execution = await execution_case(runtime_case)
     if revocation == "disable":
         await runtime_case.bundle.personal_connections.set_enabled(SetPersonalConnectionEnabled(key=runtime_case.query.key, enabled=False))
@@ -75,13 +72,9 @@ async def test_current_admission_rejects_withdrawn_or_invalid_authority(runtime_
         await runtime_case.bundle.personal_connections.disconnect(runtime_case.query.key)
     elif revocation == "publication":
         await runtime_case.bundle.publishing.unpublish_connector("personal")
-    elif revocation == "activation":
-        await runtime_case.bundle.activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id="personal", capability_kind="tool", capability_key="read"), ActivationStatus.DISABLED)
-    elif revocation in ("connector_grant", "capability_grant"):
+    elif revocation == "connector_grant":
         async with runtime_case.database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
-            await session.delete(CONNECTOR_PERMISSION_TABLE if revocation == "connector_grant" else CAPABILITY_PERMISSION_TABLE, DeleteQuery(NoFilter()))
-    elif revocation == "policy":
-        await replace_policy(runtime_case, ())
+            await session.delete(CONNECTOR_PERMISSION_TABLE, DeleteQuery(NoFilter()))
     elif revocation == "foreign":
         execution.contexts.contexts[:] = [PersonalRuntimeContext(principal=CanonicalPrincipal(namespace="trusted", subject="stranger"), group_ids=("team",))]
     else:
@@ -104,6 +97,18 @@ async def test_current_admission_rejects_withdrawn_or_invalid_authority(runtime_
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("revocation", ("disable", "disconnect", "publication", "connector_grant", "foreign"))
+async def test_current_admission_rejects_withdrawn_authority(runtime_case: RuntimeCase, revocation: str) -> None:
+    await assert_current_admission_rejects_withdrawn_or_invalid_authority(runtime_case, revocation)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("revocation", ("rotation", "expired", "unknown_lifetime", "legacy", "corrupt"))
+async def test_current_admission_rejects_invalid_authorization(runtime_case: RuntimeCase, revocation: str) -> None:
+    await assert_current_admission_rejects_withdrawn_or_invalid_authority(runtime_case, revocation)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("invalidity", ("fingerprint", "revision", "foreign", "prompt", "arguments"))
 async def test_held_contract_identity_and_arguments_are_revalidated(runtime_case: RuntimeCase, invalidity: str) -> None:
     execution = await execution_case(runtime_case)
@@ -111,7 +116,7 @@ async def test_held_contract_identity_and_arguments_are_revalidated(runtime_case
     if invalidity == "fingerprint":
         updates["fingerprint"] = "0" * 64
     elif invalidity == "revision":
-        updates["contract_revision"] = "old"
+        updates["inventory_revision"] = "old"
     elif invalidity == "foreign":
         updates["identity"] = execution.command.identity.model_copy(update={"connector_id": "other"})
     elif invalidity == "prompt":
@@ -121,6 +126,21 @@ async def test_held_contract_identity_and_arguments_are_revalidated(runtime_case
     with pytest.raises(PersonalRuntimeUnavailable):
         await execution.runtime.execute(execution.command.model_copy(update=updates))
     assert execution.transport.calls == []
+
+
+@pytest.mark.asyncio
+async def test_explicit_rediscovery_invalidates_held_handle_without_per_tool_admin_gates(runtime_case: RuntimeCase) -> None:
+    execution = await execution_case(runtime_case)
+    assert (await runtime_case.bundle.personal_tool_policies.get(ConnectorIdQuery(connector_id="personal"))).revision == "unconfigured"
+    service = PersonalToolDiscoveryService(runtime_case.store, runtime_case.bundle.personal_tool_access, execution.transport, lambda: runtime_case.query.now)
+    await service.discover(runtime_case.query)
+    with pytest.raises(PersonalRuntimeUnavailable):
+        await execution.runtime.execute(execution.command)
+    assert execution.transport.calls == []
+    current = (await execution.runtime.list_tools())[0]
+    command = execution.command.model_copy(update={"inventory_revision": current.inventory_revision})
+    assert (await execution.runtime.execute(command)).result["structuredContent"] == {"owner": "owner"}
+    assert len(execution.transport.calls) == 1
 
 
 @pytest.mark.asyncio

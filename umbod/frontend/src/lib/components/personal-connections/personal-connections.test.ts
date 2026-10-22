@@ -5,29 +5,16 @@ import type { AuthorizationHealth } from '$lib/personal-connections/domain/schem
 import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
 import { InMemoryPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/in-memory-api';
 import { ConnectionState } from '$lib/personal-connections/state/connection-state.svelte';
-import { authorizationHealth, selection } from '$lib/personal-connections/test-fixtures';
-import AppHeader from '$lib/components/header/AppHeader.svelte';
+import { authorizationHealth, completedAttempt, selection } from '$lib/personal-connections/test-fixtures';
 import ConnectionCard from './ConnectionCard.svelte';
-import PersonalConnections from './PersonalConnections.svelte';
 
 describe('personal connections presentation', () => {
-  test('initial rendering is passive and briefly explains independent gates', () => {
-    const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
-    const list = vi.spyOn(api.connections, 'list');
-    const start = vi.spyOn(api.authorization, 'start');
-    const body = render(PersonalConnections, { props: { createApi: (): PersonalConnectionsApi => api } }).body;
-    expect(body).toContain('Loading connections');
-    expect(body).toContain('independent requirements');
-    expect(body).not.toContain('unknown attempt is never cancelled');
-    expect(list).not.toHaveBeenCalled();
-    expect(start).not.toHaveBeenCalled();
-  });
   test('saved authorization is not falsely labelled connected or diagnosed expired', () => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
     const state = new ConnectionState(selection, api, vi.fn());
     const body = render(ConnectionCard, { props: { state } }).body;
     for (const label of ['Authorization saved', 'Not available', 'Sign in again', 'Disable', 'Discover tools', 'Disconnect']) expect(body).toContain(label);
-    expect(body).toContain('not a live provider health check');
+    expect(body).toContain('Personal access');
     expect(body).not.toContain('Connected');
     expect(body).not.toContain('reconnect required');
   });
@@ -79,7 +66,7 @@ describe('personal connections presentation', () => {
     expect(body).toContain('Sign in again');
     if (health.state === 'authorized' || health.state === 'expired') {
       expect(body).toContain('Last checked:');
-      expect(body).toContain('Based on saved records. The provider may still reject authorization or renewal.');
+      expect(body).not.toContain('Based on saved records.');
       expect(body).toContain('Expires:');
     }
   });
@@ -90,18 +77,80 @@ describe('personal connections presentation', () => {
     await state.loadHealth();
     const body = render(ConnectionCard, { props: { state } }).body;
     expect(body).toContain('Authorization status unavailable');
-    expect(body).toContain('Check status');
+    expect(body).toContain('Check authorization status');
     expect(body).not.toContain('Renew authorization');
     expect(body).not.toContain('Authorization expired');
     expect(body).not.toContain('unsupported authorization');
     expect(body).not.toContain('secret');
     expect(state.canDiscover).toBe(false);
   });
-  test('header adds discoverable Connections without replacing account identity', () => {
-    const body = render(AppHeader, { props: { accountIdentity: { kind: 'visible', name: 'Alex', email: null, picture: null, hiddenValues: { id: 'owner' } } } }).body;
-    expect(body).toContain('href="/settings/connections"');
-    expect(body).toContain('Connections');
-    expect(body).toContain('Current account');
-    expect(body).toContain('Alex');
+  test('catalogue notifications follow successful operations without replacing pending state', async (): Promise<void> => {
+    const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
+    const changed = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    const state = new ConnectionState(selection, api, vi.fn(), changed);
+    await state.loadHealth();
+    await state.start();
+    expect(changed).not.toHaveBeenCalled();
+    const attempt = state.attempt;
+    await state.refresh();
+    expect(state.attempt).toEqual(attempt);
+    expect(changed).toHaveBeenCalledTimes(1);
+    vi.spyOn(api.authorization, 'get').mockResolvedValue(completedAttempt);
+    await state.check();
+    expect(changed).toHaveBeenCalledTimes(2);
+    vi.spyOn(api.authorization, 'renew').mockResolvedValue({ status: 'refreshed', discovery_required: true });
+    await state.renew();
+    expect(changed).toHaveBeenCalledTimes(3);
+    await state.discover();
+    expect(changed).toHaveBeenCalledTimes(4);
+    await state.setEnabled();
+    expect(changed).toHaveBeenCalledTimes(5);
+    state.requestDisconnect();
+    await state.disconnect();
+    expect(changed).toHaveBeenCalledTimes(6);
+  });
+  test('failed catalogue refresh cannot turn a successful mutation into an uncertain replay', async (): Promise<void> => {
+    const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
+    const changed = vi.fn<() => Promise<void>>().mockRejectedValue(new Error('private'));
+    const state = new ConnectionState(selection, api, vi.fn(), changed);
+    const enable = vi.spyOn(api.connections, 'setEnablement');
+    await state.setEnabled();
+    expect(enable).toHaveBeenCalledOnce();
+    expect(state.selection.enabled).toBe(false);
+    expect(state.message).toBe('Personal access disabled.');
+    expect(state.needsRefresh).toBe(false);
+    expect(state.error).toBe("Couldn't refresh connectors. Refresh the dashboard.");
+    expect(state.error).not.toContain('private');
+  });
+  test('successful mutations retain their outcome when the following personal read fails', async (): Promise<void> => {
+    const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
+    const changed = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
+    const state = new ConnectionState(selection, api, vi.fn(), changed);
+    const enable = vi.spyOn(api.connections, 'setEnablement');
+    vi.spyOn(api.authorization, 'getHealth').mockRejectedValue(new HttpError(503, 'private', {}));
+    await state.setEnabled();
+    await state.setEnabled();
+    expect(enable).toHaveBeenCalledOnce();
+    expect(changed).toHaveBeenCalledOnce();
+    expect(state.selection.enabled).toBe(false);
+    expect(state.message).toBe('Personal access disabled.');
+    expect(state.needsRefresh).toBe(true);
+    expect(state.error).toContain('Check authorization status');
+    expect(state.error).not.toContain('private');
+  });
+  test('embedded controls omit duplicate identity and preserve pending attempts across renders', async (): Promise<void> => {
+    const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
+    const state = new ConnectionState(selection, api, vi.fn());
+    await state.start();
+    const attempt = state.attempt;
+    const body = render(ConnectionCard, { props: { state, embedded: true } }).body;
+    expect(body).not.toContain('<article');
+    expect(body).not.toContain(selection.display_name);
+    expect(body).not.toContain(selection.capability_description);
+    expect(body).toContain('Personal access');
+    expect(body).toContain('Continue sign-in');
+    const reopened = render(ConnectionCard, { props: { state, embedded: true } }).body;
+    expect(reopened).toContain('Check sign-in status');
+    expect(state.attempt).toEqual(attempt);
   });
 });

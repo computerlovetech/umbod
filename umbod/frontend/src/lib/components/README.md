@@ -18,7 +18,7 @@ focus and feedback instead of duplicating literal colours. Keep intentional vend
 logo colors in the MCP setup guide.
 
 The shell and app header use `static/umbod-logo.svg`, copied from the website's
-existing logo. `AdminShell` provides the inline-size container used by
+existing logo. Shared `WorkspaceShell`, composed by `AdminShell` and the user dashboard, provides the inline-size container used by
 `AdminSplitWorkspace` to stack its sidebar when the content area is narrow. Its accessible Log out button uses the injected logout navigation port independently of account identity; navigation occurs only on explicit user action. Both account presentations hide only the email row when the identity email is null, retaining the name and picture. Nullable API responses require a coordinated frontend build and release because older clients require string emails.
 
 ## Submodules
@@ -29,7 +29,11 @@ existing logo. `AdminShell` provides the inline-size container used by
 
 ### `admin/personal-mcp-servers/`
 
-`PersonalServersPage.svelte` owns the mounted allowlist lifecycle and scoped administration state. It injects the separate instance-configuration port for a fail-closed registration preflight, with resolved registration and user OAuth availability shown independently. Explicit reload refreshes settings alongside inventory; startup settings remain read-only. `PolicyFields.svelte` and `PolicyForm` keep fresh confidential secrets transient. Explicit confirmations separate policy invalidation, publication, withdrawal and deletion; conflicts and unknown writes require manual reload without replay. Server registration paths are identifiers, not shared personal proxy connections. Shared MCP workspaces exclude personal definitions before loading capability bundles.
+`PersonalServerRegistration.svelte` and the connector-keyed `PersonalServerPolicyPanel.svelte` compose `PolicyFields.svelte`, `PolicyForm` and scoped `PersonalServerFormState` without an inventory or selection owner. Registration availability is checked through the read-only instance-configuration port and fails closed independently of Shared setup. Confidential secrets remain transient; policy conflicts and unknown writes require explicit authoritative reload without replay. Registration paths identify definitions, not shared proxy connections. Personal details explain whole-server group trust and point users to Dashboard for authorization and private discovery.
+
+### `admin/downstream-mcp-connectors/`
+
+`DownstreamMcpPageContent.svelte` owns the single Shared/Personal workspace selection and Add-mode choice. Mode-discriminated detail bundles load shared catalogues only for Shared definitions; personal OAuth forms are mounted and disposed separately. `DownstreamMcpWorkspace.svelte` reuses the common sidebar, detail metadata and publication/deletion action menu while hiding shared setup, readiness, discovery and capability controls for Personal definitions. `DownstreamMcpMutationState` guards personal common mutations, explicit grant-cleanup conflicts, authentication loss and unknown outcomes without mutation replay or stale-list reconciliation. Independent registration and policy lock sources gate all workspace changes; uncertain registration remains locked after dialog close until explicit full workspace reload.
 
 ### `admin/group-permissions/`
 
@@ -49,7 +53,7 @@ existing logo. `AdminShell` provides the inline-size container used by
 
 ### `personal-connections/`
 
-`PersonalConnections.svelte` owns the mounted page lifecycle; `ConnectionCard.svelte` presents explicit enablement, owner authorization health, manual status checks and renewal, manual attempt inspection, discovery and confirmed disconnect. Local health and renewal capability remain separate from tool eligibility; recovery never resumes an earlier operation automatically. Reactive behavior and user API ports live in `$lib/personal-connections/`, not administration state.
+`ConnectionCard.svelte` presents explicit personal enablement, owner authorization health, manual status checks and renewal, manual attempt inspection, discovery and confirmed disconnect. Embedded presentation lives inside the dashboard's common connector card. Local health and renewal capability remain separate from tool eligibility; recovery never resumes an earlier operation automatically. Reactive behavior and user API ports live in `$lib/personal-connections/`, not administration state.
 
 ### `feedback/`
 
@@ -63,6 +67,10 @@ existing logo. `AdminShell` provides the inline-size container used by
 
 **Read when working with:** Landing-page presentation.
 
+### `dashboard/`
+
+`Dashboard.svelte` composes the single user dashboard with the shared workspace shell, permission-filtered connector catalogue, embedded personal MCP actions and compact client setup. `ConnectorCard.svelte` supplies the common shared/personal summaries and inline read-only capability details. It has no administrator data dependencies or management navigation. State and validated clients live in `$lib/dashboard/`.
+
 ### `shared/`
 
-**Read when working with:** Cross-cutting controls and display components reused across features.
+**Read when working with:** Cross-cutting controls and display components reused across features. `workspace/` supplies the neutral navigation/account shell and logout state; `mcp-setup/` supplies the endpoint-driven full and compact client instructions used by administration and the dashboard.

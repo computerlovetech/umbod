@@ -6,6 +6,8 @@ from urllib.parse import SplitResult, urljoin, urlsplit
 import httpx2
 from mcp.types import Prompt, Resource, ResourceTemplate, Tool
 
+from ..tool_mapping import map_sdk_tool
+
 from umbod.core.connectors.downstream_mcp.models import (
     DiscoveredPrompt,
     DiscoveredResource,
@@ -96,7 +98,7 @@ class FastMCPDownstreamConnection:
 
     @staticmethod
     def _map_tool(tool: Tool) -> DiscoveredCapabilityTool:
-        return DiscoveredCapabilityTool(name=tool.name, title=tool.title or tool.name, description=tool.description or "", input_schema=tool.input_schema, output_schema=tool.output_schema, annotations=tool.annotations.model_dump(by_alias=True, exclude_none=True) if tool.annotations is not None else {}, icons=tuple(icon.model_dump(by_alias=True, exclude_none=True) for icon in tool.icons or ()), meta=tool.meta or {}, execution=tool.execution.model_dump(by_alias=True, exclude_none=True) if tool.execution is not None else {})
+        return map_sdk_tool(tool)
 
     @staticmethod
     def _map_prompt(prompt: Prompt) -> DiscoveredPrompt:

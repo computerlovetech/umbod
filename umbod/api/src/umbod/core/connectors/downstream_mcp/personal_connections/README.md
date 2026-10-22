@@ -15,6 +15,7 @@ Principal-scoped enablement and opaque authorization state, independent of share
 - `inmemory.py`: serialized in-memory storage adapter.
 - `inventory_models.py` and `inventory_ports.py`: validated catalogue queries, enablement commands, secret-free projections and public selection port.
 - `inventory.py`: published personal-definition and connector-grant eligibility, effective descriptions, explicit opt-in and owner cleanup after withdrawal.
+- `oauth_callback_models.py`: immutable generic/issuer route identities, persisted legacy/generic/issuer bindings, exact issuer SHA-256 route derivation and pure callback-binding validation; callback URI syntax includes literal loopback HTTP. Request-scoped provider policy separately requires trusted local development eligibility before preparing, exchanging or refreshing an HTTP callback.
 - `oauth_models.py` and `oauth_ports.py`: validated durable attempt, callback-claim and resumable provider contracts.
 - `oauth_service.py`: request-scoped initiation, owner-bound status/cancellation and worker-independent callback completion.
 - `refresh_models.py` and `refresh_ports.py`: immutable owner-scoped refresh reservation, fenced exchange/completion and terminal recovery contracts.

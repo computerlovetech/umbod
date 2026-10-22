@@ -1,4 +1,4 @@
-import type { DownstreamMcpConnector, DownstreamMcpConnectorSummary } from '$lib/admin/downstream-mcp-connectors';
+import type { DownstreamMcpConnector } from '$lib/admin/downstream-mcp-connectors';
 import type { PersonalServerAdministration } from '$lib/admin/personal-mcp-servers/administration';
 import { createPersonalServerSchema, type PersonalServerCreate, type PersonalSettings, type PersonalPolicy } from '$lib/admin/personal-mcp-servers/domain/schemas';
 import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
@@ -6,12 +6,10 @@ import { PolicyForm } from './policy-form.svelte';
 import type { InstanceConfigurationRoute } from '$lib/admin/instance-configuration-api';
 import { personalServerAvailability, type PersonalServerAvailability } from '$lib/admin/personal-mcp-servers/domain/availability';
 
-export type Confirmation = 'policy' | 'publish' | 'withdraw' | 'delete';
-export class PersonalServersState {
-  records = $state.raw<DownstreamMcpConnectorSummary[]>([]);
+export type Confirmation = 'policy';
+export class PersonalServerFormState {
   selected = $state.raw<DownstreamMcpConnector | null>(null);
   policy = $state.raw<PersonalPolicy | null>(null);
-  selectedId = $state<string | null>(null);
   loading = $state(false);
   busy = $state(false);
   blocked = $state(false);
@@ -25,8 +23,8 @@ export class PersonalServersState {
   readonly form = new PolicyForm();
   private epoch = 0;
   private disposed = false;
-  constructor(private readonly api: PersonalServerAdministration, private readonly configuration: InstanceConfigurationRoute, private readonly selectionChanged: (id: string | null) => void = () => {}) {}
-  get canRegister(): boolean { return !this.disposed && !this.locked && this.availability.registration === 'enabled'; }
+  constructor(private readonly api: PersonalServerAdministration, private readonly configuration: InstanceConfigurationRoute, private readonly targetId: string | null, private readonly completed: (id: string) => Promise<void> = async () => {}, private readonly accessLost: () => void = () => {}, private readonly lockChanged: (locked: boolean) => void = () => {}) {}
+  get canRegister(): boolean { return !this.targetId && !this.disposed && !this.locked && this.availability.registration === 'enabled'; }
   private async readAvailability(token: number): Promise<PersonalServerAvailability> {
     try { return personalServerAvailability(await this.configuration.get()); }
     catch (error) {
@@ -38,10 +36,8 @@ export class PersonalServersState {
   private current(token: number): boolean { return !this.disposed && token === this.epoch; }
   private clear(): void {
     this.availability = { registration: 'unknown', authorization: 'unknown' };
-    this.records = [];
     this.selected = null;
     this.policy = null;
-    this.selectedId = null;
     this.creating = false;
     this.confirmation = null;
     this.metadata = { name: '', prefix: '', description: '', path: '', endpoint: '' };
@@ -53,6 +49,7 @@ export class PersonalServersState {
       this.epoch++;
       this.clear();
       this.authenticationLost = true;
+      this.accessLost();
       this.message = 'Administration access was lost. Sign in again before reloading this page.';
       return;
     }
@@ -70,8 +67,6 @@ export class PersonalServersState {
     } else if (code === 'personal_oauth_configuration_conflict') {
       this.blocked = true;
       this.message = 'OAuth settings changed elsewhere. Reload authoritative settings before saving again. Your change was not replayed.';
-    } else if (code === 'downstream_connector_grants_conflict') {
-      this.message = 'Remove connector and tool grants in Group permissions before deleting this server. Deletion was not retried.';
     } else if (mutation && !(error instanceof HttpError && error.status >= 400 && error.status < 500) && !(error instanceof SchemaValidationError && error.direction === 'outbound')) {
       this.blocked = true;
       this.message = 'The outcome is unknown. Reload authoritative server state before any further changes. Nothing will be replayed.';
@@ -79,42 +74,34 @@ export class PersonalServersState {
       this.message = mutation ? 'The change was rejected. Check the values and permissions before trying again; confidential saves require a fresh secret.' : 'Personal MCP servers could not be loaded. Reload to try again.';
     }
   }
-  reload = async (requestedId: string | null = this.selectedId): Promise<void> => {
-    if (this.busy || this.disposed) return;
+  reload = async (): Promise<void> => {
+    if (this.busy || this.disposed || this.authenticationLost || !this.targetId && this.blocked) return;
     const token = ++this.epoch;
     this.loading = true;
-    this.availability = { registration: 'unknown', authorization: 'unknown' };
+    this.lockChanged(true);
     this.form.reset();
     this.confirmation = null;
-    this.creating = false;
     this.selected = null;
     this.policy = null;
     try {
-      const [records, availability] = await Promise.all([this.api.list(), this.readAvailability(token)]);
-      if (!this.current(token)) return;
-      this.availability = availability;
-      this.records = records;
-      const id = records.some((record) => record.connector_id === requestedId) ? requestedId : records[0]?.connector_id ?? null;
-      this.selectedId = id;
-      if (id) {
-        const selected = await this.api.get(id);
-        const policy = await this.api.policy(id);
+      if (this.targetId) {
+        const selected = await this.api.get(this.targetId);
+        const policy = await this.api.policy(this.targetId);
         if (!this.current(token)) return;
+        if (selected.connector_id !== this.targetId || policy.connector_id !== this.targetId) throw new SchemaValidationError('inbound', []);
         this.selected = selected;
         this.policy = policy;
         this.form.reset(policy);
+      } else {
+        const availability = await this.readAvailability(token);
+        if (!this.current(token)) return;
+        this.availability = availability;
       }
       this.blocked = false;
-      this.authenticationLost = false;
       this.unavailable = false;
       this.message = '';
-      this.selectionChanged(id);
     } catch (error) { if (this.current(token)) { this.blocked = true; this.fail(error, false); } }
-    finally { if (!this.disposed && token === this.epoch) this.loading = false; else if (this.authenticationLost) this.loading = false; }
-  };
-  select = async (id: string): Promise<void> => {
-    if (this.busy || this.blocked || this.disposed || this.authenticationLost || !this.records.some((record) => record.connector_id === id)) return;
-    await this.reload(id);
+    finally { if (this.current(token) || this.authenticationLost) { this.loading = false; this.lockChanged(this.locked); } }
   };
   openCreate = (): void => {
     if (!this.canRegister) return;
@@ -133,7 +120,7 @@ export class PersonalServersState {
     this.form.clearSecret();
     this.message = 'Complete all required fields before continuing. The client secret was cleared; enter a fresh secret before submitting again.';
   };
-  setMetadata = (field: keyof PersonalServersState['metadata'], value: string): void => { if (!this.locked) this.metadata[field] = value; };
+  setMetadata = (field: keyof PersonalServerFormState['metadata'], value: string): void => { if (!this.locked) this.metadata[field] = value; };
   requestConfirmation = (action: Confirmation): void => {
     if (this.locked || !this.selected || !this.policy) return;
     this.confirmation = action;
@@ -156,31 +143,26 @@ export class PersonalServersState {
   };
   confirm = async (): Promise<void> => {
     if (this.locked || !this.confirmation || !this.selected || !this.policy) return;
-    const action = this.confirmation;
     const id = this.selected.connector_id;
     const revision = this.policy.revision;
     this.confirmation = null;
-    let settings: PersonalSettings | undefined;
-    if (action === 'policy') {
-      try { settings = this.form.settings(); }
-      catch {
-        this.form.clearSecret();
-        this.message = 'Check OAuth settings. Scopes must be unique ASCII tokens separated by ordinary spaces; confidential writes require a fresh secret.';
-        return;
-      }
+    let settings: PersonalSettings;
+    try { settings = this.form.settings(); }
+    catch {
+      this.form.clearSecret();
+      this.message = 'Check OAuth settings. Scopes must be unique ASCII tokens separated by ordinary spaces; confidential writes require a fresh secret.';
+      return;
     }
     this.form.clearSecret();
     await this.mutate(async () => {
-      if (action === 'policy' && settings) await this.api.replacePolicy(id, { expected_revision: revision, settings });
-      if (action === 'publish') await this.api.publish(id);
-      if (action === 'withdraw') await this.api.withdraw(id);
-      if (action === 'delete') await this.api.delete(id);
-      return action === 'delete' ? null : id;
+      await this.api.replacePolicy(id, { expected_revision: revision, settings });
+      return id;
     });
   };
   private async mutate(operation: () => Promise<string | null>): Promise<void> {
     const token = this.epoch;
     this.busy = true;
+    this.lockChanged(true);
     this.message = '';
     let completed = false;
     let selectedId: string | null = null;
@@ -188,17 +170,25 @@ export class PersonalServersState {
       selectedId = await operation();
       completed = true;
     } catch (error) { if (this.current(token)) this.fail(error, true); }
-    finally { if (!this.disposed) this.busy = false; }
+    finally { if (!this.disposed) { this.busy = completed && !this.targetId; this.lockChanged(this.locked); } }
     if (completed && this.current(token)) {
       this.creating = false;
       this.form.reset();
-      await this.reload(selectedId);
+      if (selectedId && !this.targetId) {
+        try { await this.completed(selectedId); }
+        catch { if (this.current(token)) { this.blocked = true; this.message = 'Registration completed, but inventory could not be reconciled. Reload before making further changes.'; } }
+      } else await this.reload();
       if (!this.selected && this.blocked) this.message = 'The change completed, but state could not be reconciled. Reload before making further changes.';
+    }
+    if (this.current(token)) {
+      this.busy = false;
+      this.lockChanged(this.locked);
     }
   }
   dispose = (): void => {
     this.disposed = true;
     this.epoch++;
     this.clear();
+    this.lockChanged(false);
   };
 }

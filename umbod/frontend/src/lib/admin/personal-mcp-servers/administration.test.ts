@@ -22,22 +22,14 @@ describe('personal server administration port', () => {
     expect(server.credential_configured).toBe(false);
     const policy = await api.policy(server.connector_id);
     expect(policy.requested_scopes).toEqual(['A', 'z']);
-    expect(JSON.stringify([server, policy, await api.list()])).not.toContain('sentinel');
+    expect(JSON.stringify([server, policy, await api.get(server.connector_id)])).not.toContain('sentinel');
     if (client.kind === 'preconfigured_confidential') expect(policy.client).toMatchObject({ client_secret_configured: true, token_endpoint_auth_method: client.token_endpoint_auth_method });
   });
-  test('publication does not require tools and replacement preserves publication', async () => {
-    const api: PersonalServerAdministration = new InMemoryPersonalServers();
-    const server = await api.create(createFixture());
-    await api.publish(server.connector_id);
-    const original = await api.policy(server.connector_id);
-    const next = await api.replacePolicy(server.connector_id, { expected_revision: original.revision, settings: { requested_scopes: ['read'], client: { kind: 'dynamic_public' } } });
-    expect(next.revision).not.toBe(original.revision);
-    expect((await api.get(server.connector_id)).publication_status).toBe('published');
-    await api.withdraw(server.connector_id);
-    expect((await api.get(server.connector_id)).publication_status).toBe('unpublished');
-    await api.delete(server.connector_id);
-    expect(await api.list()).toEqual([]);
-    await expect(api.policy(server.connector_id)).rejects.toMatchObject({ status: 404 });
+  test('policy replacement preserves existing publication', async () => {
+    const api: PersonalServerAdministration = new InMemoryPersonalServers([{ ...serverFixture(), publication_status: 'published' }], [policyFixture()]);
+    const next = await api.replacePolicy('personal', { expected_revision: 'r1', settings: { requested_scopes: ['read'], client: { kind: 'dynamic_public' } } });
+    expect(next.revision).not.toBe('r1');
+    expect((await api.get('personal')).publication_status).toBe('published');
   });
   test('rejects stale concurrent policies without overwriting the winner', async () => {
     const api: PersonalServerAdministration = new InMemoryPersonalServers([serverFixture()], [policyFixture()]);
@@ -54,12 +46,7 @@ describe('personal server administration port', () => {
     const again = await api.replacePolicy('personal', { expected_revision: rotated.revision, settings: { requested_scopes: [], client: clients[2] } });
     expect(again.revision).not.toBe(rotated.revision);
   });
-  test('grant-blocked deletion leaves records and policies intact', async () => {
-    const api: PersonalServerAdministration = new InMemoryPersonalServers([serverFixture()], [policyFixture()], new Set(['personal']));
-    await expect(api.delete('personal')).rejects.toMatchObject({ status: 409, body: { detail: { code: 'downstream_connector_grants_conflict' } } });
-    expect(await api.list()).toHaveLength(1);
-    expect(await api.policy('personal')).toEqual(policyFixture());
-  });
+
 });
 
 describe('strict personal OAuth boundaries', () => {

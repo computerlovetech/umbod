@@ -1,4 +1,6 @@
 import { AdminApi } from '$lib/admin/infrastructure/admin-api';
+import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
+import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
 import { browserTransport } from '$lib/admin/infrastructure/transport';
 import { mapResourceCatalog, type PromptCatalog, type ResourceCatalog } from '$lib/admin/capability-catalogs';
 import { type DownstreamMcpConnector, type DownstreamMcpToolList } from '$lib/admin/downstream-mcp-connectors';
@@ -7,6 +9,14 @@ import { SelectionDetailController } from '$lib/components/admin/shared/selectio
 import { InMemorySelectionUrlAdapter, type SelectionUrlPort } from '$lib/components/admin/shared/selection-url-port';
 
 export type DownstreamMcpWorkspaceBundle = {
+  mode: 'personal';
+  connector: DownstreamMcpConnector;
+  catalog?: never;
+  promptCatalog?: never;
+  resourceCatalog?: never;
+  invocationPolicies?: never;
+} | {
+  mode: 'shared';
   connector: DownstreamMcpConnector;
   catalog: DownstreamMcpToolList;
   promptCatalog: PromptCatalog;
@@ -14,7 +24,7 @@ export type DownstreamMcpWorkspaceBundle = {
   invocationPolicies?: InvocationPolicyTool[];
 };
 
-export type DownstreamMcpModal = 'create' | 'configure' | 'delete' | null;
+export type DownstreamMcpModal = 'choose' | 'personal' | 'create' | 'configure' | 'delete' | null;
 export type DownstreamMcpPublicationActionLabel = 'Publish' | 'Unpublish';
 export type DownstreamMcpPendingPublication = {
   form: HTMLFormElement;
@@ -35,7 +45,10 @@ export interface DownstreamMcpCreateValues {
 
 type DownstreamBundleLoader = (connectorId: string, signal?: AbortSignal) => Promise<DownstreamMcpWorkspaceBundle>;
 
+import { DownstreamMcpMutationState } from './downstream-mcp-mutation-state.svelte';
+
 export class DownstreamMcpWorkspaceState {
+  readonly operations = new DownstreamMcpMutationState();
   modal = $state<DownstreamMcpModal>(null);
   authMode = $state<'none' | 'static_bearer'>('none');
   headerType = $state<'bearer' | 'basic' | 'custom'>('bearer');
@@ -52,30 +65,32 @@ export class DownstreamMcpWorkspaceState {
   pendingPublication = $state<DownstreamMcpPendingPublication | null>(null);
   private readonly selection: SelectionDetailController<{ connector_id: string }, DownstreamMcpWorkspaceBundle>;
 
-  get bundle(): DownstreamMcpWorkspaceBundle | null { return this.selection.detail; }
+  get bundle(): DownstreamMcpWorkspaceBundle | null { return this.operations.authenticationLost || this.operations.blocked ? null : this.selection.detail; }
   get detailLoading(): boolean { return this.selection.loading; }
   get detailFailed(): boolean { return this.selection.failed; }
   get selectedConnectorId(): string | null { return this.selection.selectedId; }
 
   constructor(failedMode?: string, values?: DownstreamMcpCreateValues, initialBundle?: DownstreamMcpWorkspaceBundle, bundleLoader: DownstreamBundleLoader = loadDownstreamBundle, initialConnectorId?: string, initialDetailFailed?: boolean, connectors: { connector_id: string }[] = initialBundle ? [initialBundle.connector] : [], selectionUrl: SelectionUrlPort = new InMemorySelectionUrlAdapter()) {
-    initialBundle = initialBundle?.connector.authorization_mode === 'shared' ? initialBundle : undefined;
-    const sharedBundleLoader: DownstreamBundleLoader = async (id, signal) => {
-      const bundle = await bundleLoader(id, signal);
-      if (bundle.connector.authorization_mode !== 'shared') throw new Error('Shared connector ownership is required');
-      return bundle;
-    };
     this.selection = new SelectionDetailController({
-      items: connectors.filter((connector) => 'authorization_mode' in connector && connector.authorization_mode === 'shared'),
+      items: connectors,
       itemId: (connector) => connector.connector_id,
       selectedId: initialBundle?.connector.connector_id ?? initialConnectorId,
       initialDetail: initialBundle,
       initialDetailFailed,
-      loadDetail: sharedBundleLoader,
+      loadDetail: async (id, signal) => {
+        try { return await bundleLoader(id, signal); }
+        catch (error) {
+          if (error instanceof AuthenticationRequiredError || error instanceof HttpError && [401, 403].includes(error.status)) this.operations.loseAccess();
+          throw error instanceof BrowserRequestError ? error : new BrowserRequestError(error instanceof HttpError ? error.status : undefined, error);
+        }
+      },
       allowUnknownSelection: false,
       url: selectionUrl,
       onSelectionChange: () => {
         this.capabilityDescriptionConnectorId = null;
         this.menuOpen = false;
+        this.modal = null;
+        this.pendingPublication = null;
       }
     });
     if (failedMode !== 'create' || !values) return;
@@ -90,7 +105,8 @@ export class DownstreamMcpWorkspaceState {
   }
 
   open = (modal: Exclude<DownstreamMcpModal, null>, trigger: HTMLElement, connector?: DownstreamMcpConnector): void => {
-    if (connector && connector.authorization_mode !== 'shared') return;
+    if (this.operations.locked) return;
+    if (modal === 'configure' && connector && connector.authorization_mode !== 'shared') return;
     this.returnFocus = trigger;
     this.authMode = connector?.auth_mode === 'static_bearer' ? 'static_bearer' : 'none';
     this.headerType = connector?.header_type ?? 'bearer';
@@ -115,6 +131,7 @@ export class DownstreamMcpWorkspaceState {
   };
 
   openCapabilityDescription = (connectorId: string, trigger: HTMLElement): void => {
+    if (this.operations.locked) return;
     this.menuOpen = false;
     this.modal = null;
     this.returnFocus = trigger;
@@ -127,6 +144,7 @@ export class DownstreamMcpWorkspaceState {
   };
 
   requestPublicationConfirmation = (form: HTMLFormElement, connectorName: string, actionLabel: DownstreamMcpPublicationActionLabel): void => {
+    if (this.operations.locked) return;
     this.pendingPublication = { form, connectorName, actionLabel };
   };
 
@@ -136,6 +154,7 @@ export class DownstreamMcpWorkspaceState {
   };
 
   confirmPublication = (): void => {
+    if (this.operations.locked) return;
     const form = this.pendingPublication?.form;
     form?.requestSubmit();
     this.pendingPublication = null;
@@ -143,6 +162,7 @@ export class DownstreamMcpWorkspaceState {
   };
 
   selectConnector = (connectorId: string): void => {
+    if (this.operations.locked) return;
     this.selection.select(connectorId);
   };
 
@@ -151,15 +171,15 @@ export class DownstreamMcpWorkspaceState {
   };
 
   reconcileTools = (connectorId: string, tools: DownstreamMcpToolList['tools']): void => {
-    this.selection.updateDetail(connectorId, (cached) => ({ ...cached, catalog: { ...cached.catalog, tools } }));
+    this.selection.updateDetail(connectorId, (cached) => cached.mode === 'shared' ? { ...cached, catalog: { ...cached.catalog, tools } } : cached);
   };
 
   reconcilePrompts = (connectorId: string, promptCatalog: PromptCatalog): void => {
-    this.selection.updateDetail(connectorId, (cached) => ({ ...cached, promptCatalog }));
+    this.selection.updateDetail(connectorId, (cached) => cached.mode === 'shared' ? { ...cached, promptCatalog } : cached);
   };
 
   reconcileResources = (connectorId: string, resourceCatalog: ResourceCatalog): void => {
-    this.selection.updateDetail(connectorId, (cached) => ({ ...cached, resourceCatalog }));
+    this.selection.updateDetail(connectorId, (cached) => cached.mode === 'shared' ? { ...cached, resourceCatalog } : cached);
   };
 
   setAuthMode = (value: string): void => {
@@ -206,10 +226,11 @@ async function loadDownstreamBundle(connectorId: string, signal?: AbortSignal): 
   const transport = browserTransport();
   const api = new AdminApi({ request: (options) => transport.request({ ...options, signal }) }).downstreamMcpConnectors;
   const definition = await api.get(connectorId);
+  if (definition.authorization_mode === 'personal') return { mode: 'personal', connector: definition };
   const [connector, catalog, promptCatalog, resources, activation] = await Promise.all([
     Promise.resolve(definition), api.tools(connectorId), api.prompts(connectorId), api.resources(connectorId), api.listActivations(connectorId)
   ]);
-  return { connector, catalog, promptCatalog, resourceCatalog: mapResourceCatalog(resources), invocationPolicies: activation.tools.map((tool) => ({ tool_id: tool.tool_id, mode: tool.invocation_mode, revision: tool.policy_revision })) };
+  return { mode: 'shared', connector, catalog, promptCatalog, resourceCatalog: mapResourceCatalog(resources), invocationPolicies: activation.tools.map((tool) => ({ tool_id: tool.tool_id, mode: tool.invocation_mode, revision: tool.policy_revision })) };
 }
 
 export function suggestedToolNamePrefix(displayName: string): string {

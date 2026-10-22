@@ -2,7 +2,7 @@
   import { tick } from 'svelte';
   import type { ConnectionState } from '$lib/personal-connections/state/connection-state.svelte';
 
-  let { state }: { state: ConnectionState } = $props();
+  let { state, embedded = false }: { state: ConnectionState; embedded?: boolean } = $props();
   const headingId = $props.id();
 
   async function act(action: () => Promise<void>): Promise<void> {
@@ -12,11 +12,15 @@
   }
 </script>
 
-<article aria-label={state.selection.display_name} aria-busy={state.busy}>
-  <h2 id={headingId} tabindex="-1">{state.selection.display_name}</h2>
-  <p>{state.selection.capability_description}</p>
+<svelte:element this={embedded ? 'section' : 'article'} class={embedded ? 'personal-access' : 'card'} aria-label={embedded ? 'Personal access' : state.selection.display_name} aria-busy={state.busy}>
+  {#if embedded}
+    <h4 id={headingId} tabindex="-1">Personal access</h4>
+  {:else}
+    <h2 id={headingId} tabindex="-1">{state.selection.display_name}</h2>
+    <p>{state.selection.capability_description}</p>
+  {/if}
   <dl>
-    <div><dt>Connection</dt><dd>{state.selection.enabled ? 'Enabled' : 'Disabled'}</dd></div>
+    <div><dt>Personal access</dt><dd>{state.selection.enabled ? 'Enabled' : 'Disabled'}</dd></div>
     <div><dt>Authorization</dt><dd>{state.selection.has_authorization ? 'Authorization saved' : 'No authorization saved'}</dd></div>
     <div><dt>Authorization status</dt><dd aria-live="polite">
       {#if state.healthPhase === 'loading'}
@@ -42,12 +46,11 @@
   {#if state.healthPhase === 'ready' && state.health}
     {#if state.health.state === 'authorized' || state.health.state === 'expired'}
       <p>Expires: <time datetime={state.health.expires_at}>{new Date(state.health.expires_at).toLocaleString()}</time></p>
-      <p class="hint">Last checked: {state.healthCheckedAt}. Based on saved records. The provider may still reject authorization or renewal.</p>
+      <p class="hint">Last checked: {state.healthCheckedAt}</p>
     {:else if state.health.state === 'reconnect_required'}
       <p>{state.health.reason === 'provider_rejected' ? 'The provider rejected this authorization.' : state.health.reason === 'refresh_denied' ? 'Authorization renewal was rejected.' : 'The renewal outcome could not be confirmed.'}</p>
     {/if}
   {/if}
-  <p class="hint">Tool availability reflects local eligibility, not a live provider health check.</p>
   <div class="actions">
     <button disabled={state.selection.enabled ? state.cleanupBlocked : state.busy || state.needsRefresh} onclick={state.setEnabled}>{state.selection.enabled ? 'Disable' : 'Enable'}</button>
     {#if state.selection.enabled}
@@ -63,7 +66,6 @@
       <button disabled={state.cleanupBlocked} onclick={state.requestDisconnect}>Disconnect</button>
     {/if}
     <button disabled={state.busy} onclick={state.refresh}>Check authorization status</button>
-    {#if state.healthPhase === 'unavailable'}<span class="hint">Check status before renewal or discovery.</span>{/if}
   </div>
   {#if state.attempt}
     <section class="attempt" aria-label="Current sign-in">
@@ -72,7 +74,6 @@
       {#if state.authorizationUrl}
         <a href={state.authorizationUrl} target="_blank" rel="noopener noreferrer">Continue sign-in <span class="hint">(opens a new tab)</span></a>
       {/if}
-      <p>After the other tab reports completion, check the status here. Leaving this page loses the known attempt; an unknown attempt is never cancelled or replaced here.</p>
       <div class="actions">
         <button disabled={state.busy || state.checking} onclick={() => act(state.check)}>Check sign-in status</button>
         <button disabled={state.busy || state.needsRefresh} onclick={() => act(state.cancel)}>Cancel sign-in</button>
@@ -81,7 +82,7 @@
   {/if}
   {#if state.confirmingDisconnect}
     <section class="confirmation" aria-label="Confirm disconnect">
-      <p>Remove saved authorization and disable this connection? Any pending sign-in cannot restore it.</p>
+      <p>Remove saved authorization and disable personal access? Any pending sign-in cannot restore it.</p>
       <div class="actions">
         <button disabled={state.cleanupBlocked} onclick={() => act(state.disconnect)}>Confirm disconnect</button>
         <button onclick={state.keepAuthorization}>Keep authorization</button>
@@ -90,12 +91,12 @@
   {/if}
   <div role="status" aria-live="polite">{state.message}</div>
   <div role="alert">{state.error}</div>
-</article>
+</svelte:element>
 
 <style>
-  article { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: clamp(1rem, 3vw, 1.5rem); min-width: 0; overflow-wrap: anywhere; }
+  .card { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: clamp(1rem, 3vw, 1.5rem); min-width: 0; overflow-wrap: anywhere; }
   h2 { margin: 0; font-size: 1.2rem; }
-  h3 { font-size: 1rem; }
+  h3, h4 { font-size: 1rem; }
   p { line-height: 1.6; }
   dl { display: grid; gap: 0.6rem; }
   dl div { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; justify-content: space-between; }

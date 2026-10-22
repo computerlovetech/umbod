@@ -1,0 +1,38 @@
+import type { LogoutNavigation } from '$lib/admin/infrastructure/logout';
+
+export interface WorkspaceNavigationItem {
+  id: string;
+  label: string;
+  href: string;
+}
+
+export interface WorkspaceNavigationContext {
+  activeItem: string;
+  navigationItems: readonly WorkspaceNavigationItem[];
+  destinationPath: string | null;
+  originPath: string | null;
+}
+
+export class WorkspaceShellState {
+  loggingOut = $state(false);
+
+  constructor(private readonly context: () => WorkspaceNavigationContext) {}
+
+  get pendingNavigationItem(): WorkspaceNavigationItem | undefined {
+    const context = this.context();
+    if (context.destinationPath === null || context.destinationPath === context.originPath) return undefined;
+    return context.navigationItems.find(
+      (item) => item.href === context.destinationPath && item.id !== context.activeItem
+    );
+  }
+
+  get displayedActiveItem(): string {
+    return this.pendingNavigationItem?.id ?? this.context().activeItem;
+  }
+
+  logout = async (navigation: LogoutNavigation): Promise<void> => {
+    if (this.loggingOut) return;
+    this.loggingOut = true;
+    await navigation.logout();
+  };
+}
