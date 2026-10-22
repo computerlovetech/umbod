@@ -23,6 +23,9 @@ class McpToolInvocationLogAttribute(StrEnum):
     INVOCATION_OUTCOME = "mcp.invocation.outcome"
     INVOCATION_DURATION_MS = "mcp.invocation.duration_ms"
     FAILURE_CATEGORY = "mcp.failure.category"
+    FAILURE_STAGE = "mcp.failure.stage"
+    FAILURE_REASON = "mcp.failure.reason"
+    EXECUTION_MODE = "mcp.execution_mode"
     ENDUSER_ID = "enduser.id"
     CLIENT_ID = "mcp.client.id"
     SESSION_ID = "mcp.session.id"
@@ -113,6 +116,10 @@ class _InvocationLogAttributesBuilder:
             self._attributes[McpToolInvocationLogAttribute.FAILURE_CATEGORY] = _enum_value(
                 event.failure_category
             )
+            if event.diagnostic is not None:
+                self._attributes[McpToolInvocationLogAttribute.FAILURE_STAGE] = event.diagnostic.stage
+                self._attributes[McpToolInvocationLogAttribute.FAILURE_REASON] = event.diagnostic.reason
+                self._attributes[McpToolInvocationLogAttribute.EXECUTION_MODE] = event.diagnostic.execution_mode
         return self
 
     def build(self) -> dict[str, StructuredAttributeValue]:

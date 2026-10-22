@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
   import { adminApi } from '$lib/admin/infrastructure/admin-api';
+  import type { InstanceConfigurationRoute } from '$lib/admin/instance-configuration-api';
   import type { PersonalServerAdministration } from '$lib/admin/personal-mcp-servers/administration';
   import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
   import AdminShell from '../AdminShell.svelte';
@@ -11,13 +12,18 @@
   import PolicyFields from './PolicyFields.svelte';
   import { PersonalServersState } from './personal-servers-state.svelte';
 
-  let { accountIdentity, api, requestedId = null, selectionChanged = () => {} }: {
+  let { accountIdentity, api, configuration, requestedId = null, selectionChanged = () => {} }: {
     accountIdentity: HeaderAccountIdentityState;
     api?: PersonalServerAdministration;
+    configuration?: InstanceConfigurationRoute;
     requestedId?: string | null;
     selectionChanged?: (id: string | null) => void;
   } = $props();
-  const state = new PersonalServersState(untrack(() => api ?? adminApi().personalServers), untrack(() => selectionChanged));
+  const dependencies = untrack(() => {
+    const composite = api && configuration ? null : adminApi();
+    return { servers: api ?? composite!.personalServers, configuration: configuration ?? composite!.instanceConfiguration };
+  });
+  const state = new PersonalServersState(dependencies.servers, dependencies.configuration, untrack(() => selectionChanged));
   onMount(() => {
     void state.reload(untrack(() => requestedId));
     return state.dispose;
@@ -38,8 +44,21 @@
     Publication allows selection by explicitly permitted groups. Approved tool contracts (API-only in this interface), activation and tool permissions are separate prerequisites before execution.
     <a href="/admin/group-permissions">Group permissions</a>
   </aside>
+  <aside class="guidance" aria-label="Personal connections availability">
+    {#if state.availability.registration === 'disabled'}
+      Personal connections are disabled. An operator must enable personal connections and configure a stable identity namespace. Startup settings cannot be edited here.
+    {:else if state.availability.registration === 'unknown'}
+      {#if state.loading}Checking personal connections availability…{:else}Cannot confirm personal connections availability. Reload servers to check before registering.{/if}
+    {/if}
+    {#if state.availability.registration === 'enabled' && state.availability.authorization === 'disabled'}
+      User OAuth authorization is unavailable. Registration is allowed, but does not authorize users or permit execution.
+    {:else if state.availability.registration === 'enabled' && state.availability.authorization === 'unknown'}
+      Cannot confirm user OAuth authorization availability. Registration does not authorize users or permit execution.
+    {/if}
+    <a href="/admin/instance-configuration">View startup settings (read-only)</a>
+  </aside>
   <div class="actions">
-    <Button disabled={state.locked} onclick={state.openCreate}>Register personal server</Button>
+    <Button disabled={!state.canRegister} onclick={state.openCreate}>Register personal server</Button>
     <Button variant="secondary" disabled={state.busy || state.loading} onclick={() => state.reload()}>Reload servers</Button>
     <a href="/admin/downstream-mcp-connectors">Shared MCP proxy connectors</a>
   </div>
@@ -95,7 +114,7 @@
       {#if state.message}<p role="alert">{state.message}</p>{/if}
       {#if state.blocked}<Button variant="secondary" disabled={state.busy || state.loading} onclick={() => state.reload()}>Reload servers</Button>{/if}
       <form {@attach captureInvalidSubmission(state.handleNativeInvalid)} onsubmit={(event) => { event.preventDefault(); void state.create(); }}>
-        <fieldset disabled={state.locked}>
+        <fieldset disabled={!state.canRegister}>
           <AdminConfigurationField id="personal-name" name="name" label="Server name" required value={state.metadata.name} oninput={(event) => state.setMetadata('name', (event.currentTarget as HTMLInputElement).value)} />
           <AdminConfigurationField id="personal-endpoint" name="endpoint" label="HTTPS MCP endpoint" required value={state.metadata.endpoint} oninput={(event) => state.setMetadata('endpoint', (event.currentTarget as HTMLInputElement).value)} />
           <AdminConfigurationField id="personal-prefix" name="prefix" label="Tool name prefix" required value={state.metadata.prefix} oninput={(event) => state.setMetadata('prefix', (event.currentTarget as HTMLInputElement).value)} />

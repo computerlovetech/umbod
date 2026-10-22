@@ -45,7 +45,7 @@ def test_personal_authorization_rejects_private_provider_without_authentication_
             assert selection.json()["runtime_available"] is False
             assert client.get(attempts_url + "/" + uuid4().hex).status_code == 404
             with httpx.Client(base_url=runtime_endpoints.api_base_url) as anonymous:
-                assert anonymous.post(attempts_url, json={}).status_code == 401
+                assert anonymous.get(personal_url).status_code == 200
         finally:
             client.put(permissions_url, json={"connectors": [{
                 "connector_id": connector_id, "permission_status": "disabled",

@@ -1,4 +1,9 @@
 from functools import partial
+
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
+from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable
+from umbod.mcp.tools.invocation.diagnostics import invocation_failure
 from typing import Any
 
 from fastmcp.server.dependencies import get_context
@@ -8,6 +13,8 @@ from fastmcp.tools.base import Tool
 from umbod.core.connectors.downstream_mcp.personal_tools import InvokePersonalTool, PersonalToolRecord, PersonalToolRuntime
 from jsonschema.validators import validator_for
 from jsonschema import Draft202012Validator
+from jsonschema.exceptions import ValidationError
+from umbod.core.connectors.downstream_mcp.personal_tools.schema_validation import PersonalToolPolicyInvalid
 from referencing import Registry
 from umbod.core.connectors.downstream_mcp.personal_tools import validate_contract_schema
 
@@ -64,6 +71,7 @@ class AuthorizedDownstreamTool(Tool):
 
     async def _execute(self, arguments: dict[str, Any]) -> ToolResult:
         request = self._execution_request(arguments)
+        diagnostic_token = invocation_failure.set(None)
         try:
             return await self._execution_pipeline.execute(
                 request,
@@ -73,6 +81,8 @@ class AuthorizedDownstreamTool(Tool):
             raise
         except ConnectorInvocationDenied as error:
             raise RuntimeError("Connector invocation denied") from error
+        finally:
+            invocation_failure.reset(diagnostic_token)
 
     def _execution_request(self, arguments: dict[str, Any]) -> ToolExecutionRequest:
         return ToolExecutionRequest(
@@ -120,8 +130,12 @@ class AuthorizedDownstreamProxyTool(AuthorizedDownstreamTool):
                 context=_InitialDownstreamContext(context),
             )
         except Exception:
+            invocation_failure.set(InvocationFailureDiagnostic(execution_mode="shared", stage="downstream", reason="downstream_exception"))
             return _safe_downstream_failure()
-        return _safe_downstream_failure() if result.is_error else result
+        if result.is_error:
+            invocation_failure.set(InvocationFailureDiagnostic(execution_mode="shared", stage="downstream", reason="downstream_tool_error"))
+            return _safe_downstream_failure()
+        return result
 
 
 def _safe_downstream_failure() -> ToolResult:
@@ -139,8 +153,10 @@ class AuthorizedPersonalTool(AuthorizedDownstreamTool):
             validate_contract_schema(self.parameters)
             Draft202012Validator(self.parameters, registry=Registry()).validate(arguments)
             return
+        except (ValidationError, PersonalToolPolicyInvalid):
+            invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="arguments", reason="invalid_arguments"))
         except Exception:
-            pass
+            invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="runtime", reason="runtime_failure"))
         raise RuntimeError("Personal tool unavailable")
 
     async def is_authorized(self) -> bool:
@@ -150,8 +166,13 @@ class AuthorizedPersonalTool(AuthorizedDownstreamTool):
         try:
             result = await self._runtime.execute(self._command.model_copy(update={"arguments": arguments}))
             return ToolResult(**{"content": result.result["content"], **({"structured_content": result.result["structuredContent"]} if "structuredContent" in result.result else {})})
+        except PersonalAuthorizationHealthUnavailable:
+            invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="authorization", reason="authorization_health_unavailable"))
+        except PersonalRuntimeUnavailable as error:
+            invocation_failure.set(error.diagnostic)
         except Exception:
-            return _safe_downstream_failure()
+            invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="runtime", reason="runtime_failure"))
+        return _safe_downstream_failure()
 
 
 def _proxy_tool_options(backend_tool: Tool) -> dict[str, Any]:

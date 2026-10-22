@@ -124,8 +124,26 @@ Configuration is driven by a small set of intent-based environment variables. Th
   `UMBOD_PUBLIC_MCP_ORIGIN`, `UMBOD_INTERNAL_API_ORIGIN`) drive the derived
   API/MCP URLs, CORS origins, OIDC discovery/JWKS URLs, and the oauth2-proxy redirect.
 
-Local runs need no `.env`: `docker compose up` starts the `local`/`dev` profile with a
-SQLite store and a simulated admin. `.env.example` is the production checklist.
+All API and MCP server profiles require a nonblank `UMBOD_ROOT_SECRET`. Configure your own
+persistent secret in the environment or `.env`, keep it stable across restarts, and use the
+same value for API and MCP. No secret is generated. With that configured, `docker compose up`
+starts the `local`/`dev` profile with a SQLite store and a simulated admin. Personal MCP server registration is enabled by default
+for automatic selection in this `local`/`dev` profile, using the stable `test:umbod-local`
+identity namespace when none is supplied. API and MCP derive the same authority across
+restarts; preserve any existing explicit namespace because changing it changes ownership.
+Personal REST requests automatically use the same configured Test User as Admin without a
+separate Umbod sign-in; authenticated personal MCP contexts use that same owner. Preserve
+`UMBOD_ADMIN_SIMULATED_USER_ID` as well as the namespace across restarts. This applies only
+to local/dev simulation, never production, real providers or explicit user-verifier hooks.
+An empty eligible catalogue is valid: publication, explicit connector/tool grants, user
+enablement, downstream OAuth consent and discovery remain required.
+Set `UMBOD_PERSONAL_CONNECTIONS_ENABLED=false` to opt out. Explicit `true` still requires
+an explicit namespace. Real providers and production require an explicit namespace and
+never inherit this development fallback. Owner OAuth still requires durable SQLite,
+a stable configured root secret and supported provider policy; no secret is generated,
+and development authentication does not provide real-account sign-in. See the
+[identity policy](docs/operations/configuration.md#personal-connections-identity-policy).
+`.env.example` remains the production checklist.
 
 Inspect the resolved configuration (secrets redacted):
 

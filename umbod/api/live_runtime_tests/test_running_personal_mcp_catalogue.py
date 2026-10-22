@@ -45,7 +45,7 @@ def test_personal_mcp_available_by_default_preserves_explicit_user_opt_in(
             assert client.delete(personal_url + "/authorization").status_code == 204
             assert client.get(personal_url).json()["enabled"] is False
             with httpx.Client(base_url=runtime_endpoints.api_base_url) as anonymous:
-                assert anonymous.get("/api/me/connectors/mcp").status_code == 401
+                assert anonymous.get("/api/me/connectors/mcp").status_code == 200
         finally:
             client.put(permissions_url, json={"connectors": [{
                 "connector_id": connector_id, "permission_status": "disabled",

@@ -16,6 +16,8 @@
 
 **Read when working with:** Administrative authentication, JWT handling, local authentication simulation, authentication-only `user_middleware.py`, or the cookie mutation boundary in `csrf_middleware.py`.
 
+Local personal identity is backend-owned: tokenless `/api/me` access is permitted only by the default simulated verifier composition under the core local/dev Test User policy. Explicit user verifiers remain strict and administrator verifiers are independent. See [`personal_connections`](connectors/downstream_mcp/personal_connections/README.md).
+
 ## Administration client contract
 
 `/api/admin` is the only administration API mount; legacy `/admin` API requests return 404 without redirects. Clients append resource paths such as `/users` or `/connectors/openapi/setup` to that base URL. Authentication and cookie safeguards apply to the canonical mount. `/api/admin/docs` and `/api/admin/openapi.json` require authentication; OpenAPI operation paths are relative to the mount's `servers` URL, including an upstream ASGI root prefix.

@@ -1,3 +1,5 @@
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, PERSONAL_RUNTIME_FAILURE
+
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr
 
 from umbod.core.connectors.downstream_mcp.models import DiscoveredTool, ValidatedJsonObject
@@ -48,7 +50,9 @@ class PersonalToolResult(PersonalRuntimeModel):
 
 
 class PersonalRuntimeUnavailable(ValueError):
-    pass
+    def __init__(self, message: str, *, diagnostic: InvocationFailureDiagnostic = PERSONAL_RUNTIME_FAILURE) -> None:
+        super().__init__(message)
+        self.diagnostic = diagnostic
 
 
 class PersonalAuthorizationRejected(PersonalRuntimeUnavailable):

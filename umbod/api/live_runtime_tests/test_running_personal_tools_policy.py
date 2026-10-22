@@ -66,4 +66,4 @@ def test_personal_discovery_never_substitutes_admin_client_credentials(personal_
     assert invalid.status_code == 422
     assert "runtime-client-secret-must-not-be-reflected" not in invalid.text
     with httpx.Client(base_url=str(client.base_url)) as anonymous:
-        assert anonymous.post(personal_url + "/tools/discovery", json={}).status_code == 401
+        assert anonymous.post(personal_url + "/tools/discovery", json={}).status_code == 409

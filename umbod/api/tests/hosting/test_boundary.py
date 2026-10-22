@@ -205,7 +205,7 @@ def test_import_does_not_read_environment_or_create_applications(tmp_path: Path)
     program = (
         "import os; before = dict(os.environ); "
         "import umbod.config as config; "
-        "config.load_app_config = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('config loaded')); "
+        "config.load_app_config = config.load_server_app_config = lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError('config loaded')); "
         "import umbod.hosting; import sys; "
         "assert dict(os.environ) == before; "
         "assert 'umbod.hosting.mcp_service' not in sys.modules; "

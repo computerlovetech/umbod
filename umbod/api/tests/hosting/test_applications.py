@@ -221,7 +221,7 @@ async def test_legacy_mcp_factories_delegate_to_hosting(
 ) -> None:
     build = AsyncMock(return_value=object())
     monkeypatch.setattr("umbod.hosting.create_mcp_app", build)
-    monkeypatch.setattr(public_app, "load_app_config", lambda path: settings)
+    monkeypatch.setattr(public_app, "load_server_app_config", lambda path: settings)
     assert await public_app.create_production_app() is build.return_value
     assert await public_app.create_configured_production_app(settings) is build.return_value
     assert build.await_count == 2

@@ -102,7 +102,7 @@ from umbod.core.permissions import InMemoryGroupConnectorToolPermissions, connec
 from umbod.mcp.connectors.openapi import DatabaseGroupPermissionReaderFactory, OutboundHttpClientFactoryPort, build_openapi_codemode_executor
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, ConnectorStorePair, HttpConnectorRuntimeStateSourceStrategy, LocalConnectorRuntimeStateSourceStrategy, StoreBackedConnectorRuntimeStateSourceStrategy, resolve_connector_runtime_state_source_strategy
 from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
-from umbod.config import AppConfig, InMemoryConnectorStoreConfig, SQLiteConnectorStoreConfig, load_app_config
+from umbod.config import AppConfig, InMemoryConnectorStoreConfig, SQLiteConnectorStoreConfig, load_server_app_config
 from umbod.logging import flush_logging
 from umbod.mcp.settings import MCPAppSettings
 from umbod.mcp.messaging import McpMessagingAdapterFactory
@@ -268,7 +268,7 @@ def _resolve_runtime_state(runtime_state: tuple[RuntimeStateArgument, ...]) -> R
     return (connector_tool_runtime_state_store, group_permission_runtime_state)
 
 async def load_production_public_app_config() -> PublicAppConfig:
-    return await load_configured_public_app_config(load_app_config('.env'))
+    return await load_configured_public_app_config(load_server_app_config('.env'))
 
 async def load_configured_public_app_config(settings: AppConfig) -> PublicAppConfig:
     private_api_base_url = settings.endpoints.private_api_base_url.strip()
@@ -349,7 +349,7 @@ async def build_starlette_app(context: PublicAppRuntimeContext) -> Starlette:
 async def create_production_app() -> Starlette:
     from umbod.hosting import create_mcp_app
 
-    return await create_mcp_app(load_app_config('.env'), auth_provider=None, group_permission_runtime_state=None, invocation_log_sink=None)
+    return await create_mcp_app(load_server_app_config('.env'), auth_provider=None, group_permission_runtime_state=None, invocation_log_sink=None)
 
 async def create_configured_production_app(settings: AppConfig) -> Starlette:
     from umbod.hosting import create_mcp_app

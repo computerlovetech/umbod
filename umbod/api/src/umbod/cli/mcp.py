@@ -4,7 +4,7 @@ from typing import Annotated, Any, Optional
 import typer
 import uvicorn
 
-from umbod.config import load_app_config
+from umbod.config import load_server_app_config
 from umbod.logging import configure_logging
 
 app = typer.Typer(help="MCP server commands.", no_args_is_help=True)
@@ -43,7 +43,11 @@ class ServeCommand:
     )
 
     def __call__(self, **kwargs: Any) -> None:
-        settings = load_app_config(".env")
+        try:
+            settings = load_server_app_config(".env")
+        except ValueError as error:
+            typer.echo(str(error), err=True)
+            raise typer.Exit(code=1) from None
         configure_logging(settings.runtime.app_name, settings.runtime.log_level)
         configured_port = settings.mcp.port if kwargs["port"] is None else int(kwargs["port"])
         uvicorn.run(

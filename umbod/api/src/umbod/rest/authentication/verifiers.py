@@ -6,6 +6,8 @@ from jwt.exceptions import InvalidTokenError, PyJWKClientError, PyJWKSetError
 from pydantic import ValidationError
 
 from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationError
+from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import simulated_user_claims
+from umbod.core.connectors.downstream_mcp.personal_connections.development_identity_models import SimulatedUserIdentity
 
 
 class ProductionJwksJwtVerifier:
@@ -50,14 +52,14 @@ class SimulatedJwtVerifier:
         self.simulated_admin = simulated_admin
 
     def verify(self, token: str) -> JwtClaims:
-        claims: dict[str, object] = {
-            "sub": self.user_id,
-            "email": self.email,
-            "name": self.name,
-        }
-        if self.simulated_admin:
-            claims[self.membership_claim] = [self.required_membership]
-        return JwtClaims(claims=claims)
+        return JwtClaims(claims=simulated_user_claims(SimulatedUserIdentity(
+            user_id=self.user_id,
+            email=self.email,
+            name=self.name,
+            membership_claim=self.membership_claim,
+            required_membership=self.required_membership,
+            simulated_admin=self.simulated_admin,
+        )))
 
 
 class SemanticJwtVerifier:

@@ -7,6 +7,7 @@ from umbod.mcp.connectors.native.approval import ModernConnectorApprovalRequired
 from umbod.mcp.connectors.native.tools.invocation.lifecycle import ConnectorInvocationLifecycle, ConnectorToolInvocationIdentity
 from umbod.mcp.logging import ConnectorToolInvocationLogger, McpToolInvocationFailureCategory
 from umbod.mcp.metrics import McpMetricsRecorder
+from umbod.mcp.tools.invocation.diagnostics import invocation_failure
 from umbod.mcp.tools.invocation.telemetry import McpToolInvocationObserver
 
 logger = logging.getLogger(__name__)
@@ -43,7 +44,7 @@ class ConnectorTelemetryInterceptor:
         if state is not None and not isinstance(state, ConnectorInvocationLifecycle):
             raise TypeError("Invalid connector invocation lifecycle state")
         if isinstance(outcome, ToolExecutionFailed):
-            self._observer.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR)
+            self._observer.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, invocation_failure.get())
             return
         try:
             returned_error = isinstance(outcome, ToolExecutionSucceeded) and self._result_is_error(outcome.result)
@@ -51,6 +52,6 @@ class ConnectorTelemetryInterceptor:
             logger.error("Connector tool result classification failed")
             returned_error = True
         if returned_error:
-            self._observer.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR)
+            self._observer.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, invocation_failure.get())
         else:
             self._observer.succeeded(state)

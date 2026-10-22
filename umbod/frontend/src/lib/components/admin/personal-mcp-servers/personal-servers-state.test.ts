@@ -5,13 +5,17 @@ import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memo
 import { policyFixture, serverFixture, summaryFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
 import type { PersonalPolicy } from '$lib/admin/personal-mcp-servers/domain/schemas';
 import { PersonalServersState } from './personal-servers-state.svelte';
+import type { InstanceConfigurationRoute } from '$lib/admin/instance-configuration-api';
+import type { InstanceConfiguration } from '$lib/admin/instance-configuration';
+import { configurationFixture } from '$lib/admin/personal-mcp-servers/availability.test-support';
 
-function setup(): { api: PersonalServerAdministration; state: PersonalServersState; memory: PersonalServerAdministration } {
+function setup(): { api: PersonalServerAdministration; configuration: InstanceConfigurationRoute; state: PersonalServersState; memory: PersonalServerAdministration } {
   const memory: PersonalServerAdministration = new InMemoryPersonalServers([serverFixture()], [policyFixture()]);
   const api: PersonalServerAdministration = {
     list: vi.fn(() => memory.list()), get: vi.fn((id) => memory.get(id)), policy: vi.fn((id) => memory.policy(id)), create: vi.fn((input) => memory.create(input)), replacePolicy: vi.fn((id, input) => memory.replacePolicy(id, input)), publish: vi.fn((id) => memory.publish(id)), withdraw: vi.fn((id) => memory.withdraw(id)), delete: vi.fn((id) => memory.delete(id))
   };
-  return { api, state: new PersonalServersState(api), memory };
+  const configuration: InstanceConfigurationRoute = { get: vi.fn(async () => configurationFixture()) };
+  return { api, configuration, state: new PersonalServersState(api, configuration), memory };
 }
 function confidential(state: PersonalServersState): void {
   state.form.setKind('preconfigured_confidential');
@@ -27,11 +31,110 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reje
 }
 
 describe('personal allowlist state through administration port', () => {
-  test('initial load reads only inventory, selected definition and policy', async () => {
-    const { api, state } = setup();
+  test('registration is guarded until authoritative configuration resolves', async () => {
+    const { api, configuration, state } = setup();
+    const pending = deferred<InstanceConfiguration>();
+    vi.mocked(configuration.get).mockReturnValueOnce(pending.promise);
+    expect(state.canRegister).toBe(false);
+    state.openCreate();
+    expect(state.creating).toBe(false);
+    const operation = state.reload();
+    state.openCreate();
+    await state.create();
+    expect(api.list).toHaveBeenCalledTimes(1);
+    expect(api.create).not.toHaveBeenCalled();
+    pending.resolve(configurationFixture());
+    await operation;
+    expect(state.canRegister).toBe(true);
+  });
+  test.each(['disabled', 'missing', 'mistyped', 'failed'] as const)('%s configuration blocks registration without blocking separate controls', async (mode) => {
+    const { api, configuration, state } = setup();
+    const result = configurationFixture(false);
+    if (mode === 'missing') result.groups = [];
+    if (mode === 'mistyped') result.groups[0].entries[0] = { ...result.groups[0].entries[0], type: 'string', value: 'true' };
+    if (mode === 'failed') vi.mocked(configuration.get).mockRejectedValueOnce(new Error('secret-sentinel'));
+    else vi.mocked(configuration.get).mockResolvedValueOnce(result);
+    await state.reload();
+    expect(state.canRegister).toBe(false);
+    expect(state.locked).toBe(false);
+    expect(state.selected).not.toBeNull();
+    state.openCreate();
+    expect(state.creating).toBe(false);
+    await state.create();
+    expect(api.create).not.toHaveBeenCalled();
+    expect(state.message).not.toContain('secret-sentinel');
+    state.requestConfirmation('publish');
+    await state.confirm();
+    expect(api.publish).toHaveBeenCalledTimes(1);
+  });
+  test('failed configuration supports explicit reload and OAuth-disabled registration stays allowed', async () => {
+    const { configuration, state } = setup();
+    vi.mocked(configuration.get).mockRejectedValueOnce(new Error('secret-sentinel'));
+    await state.reload();
+    expect(state.availability.registration).toBe('unknown');
+    vi.mocked(configuration.get).mockResolvedValueOnce(configurationFixture(true, false));
+    await state.reload();
+    expect(state.canRegister).toBe(true);
+    expect(state.availability.authorization).toBe('disabled');
+    state.openCreate();
+    expect(state.creating).toBe(true);
+  });
+  test.each([new AuthenticationRequiredError(), new HttpError(401, 'secret-sentinel', null)])('configuration authentication loss clears owner state and forms', async (error) => {
+    const { configuration, state } = setup();
+    await state.reload();
+    confidential(state);
+    vi.mocked(configuration.get).mockRejectedValueOnce(error);
+    await state.reload();
+    expect(state.authenticationLost).toBe(true);
+    expect(state.availability).toEqual({ registration: 'unknown', authorization: 'unknown' });
+    expect(state.selected).toBeNull();
+    expect(state.records).toEqual([]);
+    expect(state.form.secret).toBe('');
+    expect(state.metadata.name).toBe('');
+    expect(state.message).not.toContain('secret-sentinel');
+  });
+  test.each(['superseded', 'disposed'] as const)('late %s configuration cannot restore availability', async (mode) => {
+    const { configuration, state } = setup();
+    const pending = deferred<InstanceConfiguration>();
+    vi.mocked(configuration.get).mockReturnValueOnce(pending.promise);
+    const operation = state.reload();
+    if (mode === 'disposed') state.dispose();
+    else {
+      vi.mocked(configuration.get).mockResolvedValueOnce(configurationFixture(false));
+      await state.reload();
+    }
+    pending.resolve(configurationFixture());
+    await operation;
+    expect(state.availability.registration).toBe(mode === 'disposed' ? 'unknown' : 'disabled');
+    expect(state.canRegister).toBe(false);
+  });
+  test.each(['personal_connections_unavailable', 'proxy_not_found'] as const)('registration 404 %s never retries or infers settings from a generic error', async (code) => {
+    const { api, configuration, state } = setup();
+    await state.reload();
+    state.openCreate();
+    for (const [field, value] of Object.entries({ name: 'New server', prefix: 'new', description: 'Search records', path: 'new', endpoint: 'https://provider.test/mcp' })) state.setMetadata(field as keyof typeof state.metadata, value);
+    confidential(state);
+    vi.mocked(api.create).mockRejectedValueOnce(new HttpError(404, 'secret-sentinel', { detail: { code } }));
+    await state.create();
+    expect(state.availability.registration).toBe(code === 'personal_connections_unavailable' ? 'disabled' : 'unknown');
+    expect(state.canRegister).toBe(false);
+    expect(state.form.secret).toBe('');
+    expect(state.message).not.toContain('secret-sentinel');
+    await state.create();
+    state.openCreate();
+    expect(api.create).toHaveBeenCalledTimes(1);
+    expect(configuration.get).toHaveBeenCalledTimes(1);
+    await state.reload();
+    expect(state.canRegister).toBe(true);
+    expect(api.create).toHaveBeenCalledTimes(1);
+  });
+  test('initial load reads configuration, inventory, selected definition and policy', async () => {
+    const { api, configuration, state } = setup();
     await state.reload();
     expect(state.records).toEqual([summaryFixture()]);
     expect(api.list).toHaveBeenCalledTimes(1);
+    expect(configuration.get).toHaveBeenCalledTimes(1);
+    expect(state.canRegister).toBe(true);
     expect(api.get).toHaveBeenCalledTimes(1);
     expect(api.policy).toHaveBeenCalledTimes(1);
     for (const operation of [api.create, api.replacePolicy, api.publish, api.withdraw, api.delete]) expect(operation).not.toHaveBeenCalled();
@@ -200,14 +303,15 @@ describe('personal allowlist state through administration port', () => {
     expect(state.selected).not.toBeNull();
     expect(api.delete).toHaveBeenCalledTimes(1);
   });
-  test('unsupported deployment is reported without a credential fallback', async () => {
+  test('unsupported deployment is reported with operator guidance', async () => {
     const { api, state } = setup();
     vi.mocked(api.policy).mockRejectedValueOnce(new HttpError(404, '', { detail: { code: 'personal_connections_unavailable' } }));
     await state.reload();
     expect(state.unavailable).toBe(true);
     expect(state.locked).toBe(true);
     expect(state.message).toContain('unavailable in this deployment');
-    expect(state.message).toContain('No credential fallback');
+    expect(state.message).toContain('stable identity namespace');
+    expect(state.availability.registration).toBe('disabled');
   });
   test('selection changes suppress late selected policy responses', async () => {
     const { api, state } = setup();

@@ -1,4 +1,7 @@
 import logging
+from dataclasses import replace
+
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
 
 from umbod.mcp.logging import (
     ConnectorToolInvocationLogger,
@@ -34,11 +37,11 @@ class McpToolInvocationObserver:
             return
         self._record(completed, InvocationOutcome.SUCCESS)
 
-    def failed(self, lifecycle: McpToolInvocationLifecycle | None, category: McpToolInvocationFailureCategory) -> None:
+    def failed(self, lifecycle: McpToolInvocationLifecycle | None, category: McpToolInvocationFailureCategory, diagnostic: InvocationFailureDiagnostic | None = None) -> None:
         if lifecycle is None:
             return
         try:
-            completed = lifecycle.failed(category)
+            completed = replace(lifecycle.failed(category), diagnostic=diagnostic)
         except Exception:
             logger.error("MCP tool invocation failure completion failed")
             return

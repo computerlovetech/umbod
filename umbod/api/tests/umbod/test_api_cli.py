@@ -11,7 +11,7 @@ def _run(
 ) -> dict[str, Any]:
     invocation: dict[str, Any] = {}
     monkeypatch.setattr(
-        "umbod.cli.api.load_app_config",
+        "umbod.cli.api.load_server_app_config",
         lambda env_file: AppConfig(rest=RestConfig(port=configured_port)),
     )
     monkeypatch.setattr(

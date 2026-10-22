@@ -19,6 +19,10 @@ from umbod.core.connectors.downstream_mcp.personal_connections.ports import (
 )
 from umbod.core.connectors.downstream_mcp.personal_connections import VerifiedClaimsPrincipalProvider
 from umbod.mcp.connectors.downstream_mcp.principal import McpCanonicalPrincipalProvider
+from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalRuntimeContextProvider, verified_personal_runtime_context
+from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import authenticated_personal_mcp_claims
+from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
+from umbod.rest.authentication.middleware import JwtVerifierFactory
 
 pytestmark = pytest.mark.anyio
 
@@ -179,6 +183,103 @@ async def test_invalid_or_machine_only_verified_claims_are_unmappable(
         _settings(provider), claims
     )
     assert await principal.get_principal() is None
+
+
+
+def _local_settings(simulated_admin: bool = True, permission_group_claim: str = "custom-groups") -> AppConfig:
+    return AppConfig(
+        admin_authentication={
+            "simulated_user_id": "stable-configured-user",
+            "simulated_user_email": "configured@example.org",
+            "simulated_user_name": "Configured Test User",
+            "membership_claim": "custom-groups",
+            "required_membership": "configured-admins",
+            "simulated_admin": simulated_admin,
+        },
+        mcp={"auth_mode": "single_test_user", "permission_group_claim": permission_group_claim},
+        personal_connections={"enabled": True, "identity_namespace": "test:local"},
+    )
+
+
+@pytest.mark.parametrize("simulated_admin,group_claim,expected_groups", [
+    (True, "custom-groups", ("configured-admins",)),
+    (False, "custom-groups", ()),
+    (True, "different-groups", ()),
+])
+async def test_authenticated_local_mcp_matches_rest_without_mutating_global_claims(
+    simulated_admin: bool, group_claim: str, expected_groups: tuple[str, ...],
+) -> None:
+    settings = _local_settings(simulated_admin, group_claim)
+    rest_claims = JwtVerifierFactory().create(settings).verify("").claims
+    claims = {"sub": "local-test-user", "groups": ["test"], "email": "original@example.org"}
+    token = AccessToken(token="authenticated", client_id="client", scopes=[], claims=claims)
+    context = auth_context_var.set(AuthenticatedUser(token))
+    try:
+        assert authenticated_personal_mcp_claims(settings, claims) == rest_claims
+        rest = await VerifiedClaimsPrincipalProvider(settings, rest_claims).get_principal()
+        assert await McpCanonicalPrincipalProvider(settings).get_principal() == rest
+        runtime = await McpPersonalRuntimeContextProvider(settings).get_context()
+        assert runtime.principal == rest
+        assert runtime.group_ids == expected_groups
+        assert token.claims == claims
+        assert token.claims["sub"] == "local-test-user"
+        with pytest.raises(PersonalRuntimeUnavailable):
+            verified_personal_runtime_context(settings, claims)
+    finally:
+        auth_context_var.reset(context)
+
+
+@pytest.mark.parametrize("claims", [
+    {},
+    {"sub": ""},
+    {"sub": " "},
+    {"sub": "different-user"},
+    {"sub": "stable-configured-user", "iss": ""},
+    {"sub": "stable-configured-user", "iss": "https://upstream/"},
+    {"sub": "stable-configured-user", "iss": None},
+    {"sub": "stable-configured-user", "idtyp": "app"},
+    {"sub": "stable-configured-user", "email": "robot@project.iam.gserviceaccount.com"},
+])
+async def test_simulated_canonical_branch_rejects_untrusted_claims(claims: Mapping[str, object]) -> None:
+    assert await VerifiedClaimsPrincipalProvider(_local_settings(), claims).get_principal() is None
+    with pytest.raises(PersonalRuntimeUnavailable):
+        verified_personal_runtime_context(_local_settings(), claims)
+
+
+@pytest.mark.parametrize("claims", [
+    {"sub": "machine@clients"},
+    {"sub": "local-test-user", "email": "robot@project.iam.gserviceaccount.com"},
+    {"sub": "local-test-user", "idtyp": "app"},
+    {"sub": "local-test-user", "gty": "client-credentials"},
+    {"sub": "local-test-user", "grant_type": "client_credentials"},
+])
+async def test_local_mcp_rejects_original_machine_claims_before_normalization(claims: dict[str, object]) -> None:
+    token = AccessToken(token="authenticated", client_id="client", scopes=[], claims=claims)
+    context = auth_context_var.set(AuthenticatedUser(token))
+    try:
+        assert await McpCanonicalPrincipalProvider(_local_settings()).get_principal() is None
+        with pytest.raises(PersonalRuntimeUnavailable):
+            await McpPersonalRuntimeContextProvider(_local_settings()).get_context()
+    finally:
+        auth_context_var.reset(context)
+
+
+async def test_local_personal_mcp_still_requires_current_authenticated_context() -> None:
+    context = auth_context_var.set(None)
+    try:
+        assert await McpCanonicalPrincipalProvider(_local_settings()).get_principal() is None
+        with pytest.raises(PersonalRuntimeUnavailable):
+            await McpPersonalRuntimeContextProvider(_local_settings()).get_context()
+    finally:
+        auth_context_var.reset(context)
+
+
+async def test_local_mcp_normalization_requires_single_test_user_authentication() -> None:
+    settings = _local_settings()
+    settings = settings.model_copy(update={"mcp": settings.mcp.model_copy(update={"auth_mode": "oidc"})})
+    claims = {"sub": "original-subject", "groups": ["original"]}
+    assert authenticated_personal_mcp_claims(settings, claims) == claims
+    assert authenticated_personal_mcp_claims(_settings(), claims) == claims
 
 
 async def test_disabled_policy_never_maps_claims() -> None:

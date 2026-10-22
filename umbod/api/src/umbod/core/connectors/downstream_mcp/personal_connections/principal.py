@@ -2,6 +2,7 @@ from collections.abc import Mapping
 from typing import Optional
 
 from umbod.config.app import AppConfig
+from .development_identity import local_personal_identity_enabled, machine_identity
 from umbod.core.connectors.downstream_mcp.personal_connections.models import (
     CanonicalPrincipal,
 )
@@ -12,26 +13,23 @@ def _string_claim(claims: Mapping[str, object], name: str) -> str:
     return value if isinstance(value, str) and value.strip() else ""
 
 
-def _machine_identity(claims: Mapping[str, object]) -> bool:
-    subject = _string_claim(claims, "sub")
-    email = _string_claim(claims, "email")
-    return (
-        claims.get("idtyp") == "app"
-        or claims.get("gty") in ("client-credentials", "client_credentials")
-        or claims.get("grant_type") == "client_credentials"
-        or subject.endswith("@clients")
-        or email.endswith(".gserviceaccount.com")
-    )
-
-
 def canonical_principal(
     settings: AppConfig, claims: Mapping[str, object]
 ) -> Optional[CanonicalPrincipal]:
     policy = settings.personal_connections
     if not policy.enabled or not policy.identity_namespace.strip():
         return None
-    if settings.admin_authentication.mode == "disabled" or _machine_identity(claims):
+    if settings.admin_authentication.mode == "disabled" or machine_identity(claims):
         return None
+    if settings.admin_authentication.mode == "simulation":
+        subject = _string_claim(claims, "sub")
+        if (
+            not local_personal_identity_enabled(settings)
+            or "iss" in claims
+            or subject != settings.admin_authentication.simulated_user_id
+        ):
+            return None
+        return CanonicalPrincipal(namespace=policy.identity_namespace, subject=subject)
     issuer = claims.get("iss")
     if "iss" in claims:
         if not isinstance(issuer, str) or not settings.oidc.issuer_url:

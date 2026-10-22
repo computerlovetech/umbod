@@ -9,16 +9,119 @@ from umbod.config.app import (
     PersonalConnectionsConfig,
     RuntimeConfig,
 )
-from umbod.config.derive import build_app_config
+from umbod.config.derive import build_app_config, load_app_config_without_env_file
 from umbod.config.inspection import inspect_app_config
-from umbod.config.operator import OperatorSettings
+from umbod.config.operator import OperatorSettings, PersonalConnectionsMode
 
 
-def test_unconfigured_deployment_keeps_personal_connections_unavailable() -> None:
+def test_unconfigured_local_development_enables_personal_connections() -> None:
     settings = build_app_config(OperatorSettings(_env_file=None))
-    assert not settings.personal_connections.enabled
-    assert settings.personal_connections.identity_namespace == ""
+    assert settings.personal_connections.enabled
+    assert settings.personal_connections.identity_namespace == "test:umbod-local"
+    assert not settings.personal_connections.oauth_enabled
+    assert settings.connector_security.configuration_secret == ""
     assert not AppConfig().personal_connections.enabled
+    assert AppConfig().personal_connections.identity_namespace == ""
+
+
+@pytest.mark.parametrize(
+    "mode,namespace,enabled",
+    [
+        ("auto", "", True),
+        ("auto", "test:explicit", True),
+        (True, "test:explicit", True),
+        (False, "", False),
+        (False, "test:explicit", False),
+        (False, " ", False),
+    ],
+)
+def test_local_personal_connections_preserve_explicit_settings(
+    mode: PersonalConnectionsMode, namespace: str, enabled: bool
+) -> None:
+    settings = build_app_config(
+        OperatorSettings(
+            _env_file=None,
+            personal_connections_enabled=mode,
+            personal_connections_identity_namespace=namespace,
+        )
+    )
+    assert settings.personal_connections.enabled is enabled
+    assert settings.personal_connections.identity_namespace == (
+        "test:umbod-local" if mode == "auto" and namespace == "" else namespace
+    )
+
+
+@pytest.mark.parametrize("auth", [None, "dev"])
+def test_local_namespace_resolution_is_repeatable_without_mutating_operator(
+    auth: str | None,
+) -> None:
+    operator = OperatorSettings(_env_file=None, auth=auth)
+    original = operator.model_dump()
+    first = build_app_config(operator)
+    second = build_app_config(operator)
+    assert first.personal_connections == second.personal_connections
+    assert first.personal_connections.identity_namespace == "test:umbod-local"
+    assert operator.model_dump() == original
+
+
+def test_empty_compose_environment_resolves_shared_api_and_mcp_authority(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("UMBOD_PROFILE", "local")
+    monkeypatch.setenv("UMBOD_AUTH", "dev")
+    monkeypatch.setenv("UMBOD_PERSONAL_CONNECTIONS_ENABLED", "auto")
+    monkeypatch.setenv("UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE", "")
+    monkeypatch.setenv("UMBOD_CONNECTOR_STORE", "sqlite")
+    monkeypatch.setenv("UMBOD_ROOT_SECRET", "")
+    api_config = load_app_config_without_env_file()
+    mcp_config = load_app_config_without_env_file()
+    assert api_config.personal_connections == mcp_config.personal_connections
+    assert api_config.personal_connections.enabled
+    assert api_config.personal_connections.identity_namespace == "test:umbod-local"
+    assert not api_config.personal_connections.oauth_enabled
+    assert api_config.connector_security.configuration_secret == ""
+
+
+@pytest.mark.parametrize("auth", ["none", "auth0", "entra", "google"])
+def test_local_non_development_auth_has_no_personal_namespace_fallback(
+    auth: str,
+) -> None:
+    config = build_app_config(_identity_operator("local", auth))
+    assert not config.personal_connections.enabled
+    assert config.personal_connections.identity_namespace == ""
+
+
+@pytest.mark.parametrize("auth", ["auth0", "entra", "google"])
+def test_production_has_no_personal_namespace_fallback(auth: str) -> None:
+    config = build_app_config(_identity_operator("production", auth))
+    assert not config.personal_connections.enabled
+    assert config.personal_connections.identity_namespace == ""
+
+
+@pytest.mark.parametrize("auth", ["auth0", "entra", "google"])
+def test_production_preserves_explicit_personal_identity_authority(auth: str) -> None:
+    operator = _identity_operator("production", auth).model_copy(
+        update={"personal_connections_identity_namespace": "production-authority"}
+    )
+    config = build_app_config(operator)
+    assert config.personal_connections.enabled
+    assert config.personal_connections.identity_namespace == "production-authority"
+
+
+def _identity_operator(profile: str, auth: str) -> OperatorSettings:
+    return OperatorSettings(
+        _env_file=None,
+        profile=profile,
+        auth=auth,
+        root_secret="identity-policy-test-secret",
+        oidc_domain="identity.example.com",
+        oidc_tenant_id="tenant",
+        oidc_client_id="client",
+        oidc_client_secret="client-secret",
+        oidc_audience="api",
+        oidc_issuer_url="https://identity.example.com/",
+        oidc_required_scopes=["api.read"],
+    )
 
 
 def test_personal_connections_environment_and_inspection(

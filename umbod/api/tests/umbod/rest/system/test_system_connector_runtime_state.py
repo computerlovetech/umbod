@@ -19,6 +19,7 @@ class SlackAdminConfiguration(Model):
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
+    monkeypatch.setenv("UMBOD_ROOT_SECRET", "persistent-system-runtime-state-test-root")
     availability_path = tmp_path / "connector-availability.json"
     availability_path.write_text(json.dumps({"connectors": [{"id": "slack"}]}))
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability_path))

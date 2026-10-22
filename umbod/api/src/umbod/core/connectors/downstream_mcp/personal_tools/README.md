@@ -6,6 +6,8 @@
 - `service.py`: explicit owner discovery and encrypted exact-match observations without publication or invocation.
 - `runtime.py`: disabled runtime and admitted execution. Listing rereads current owner availability without network access. Execution resolves current context after invocation approval, admits the captured contract revision/fingerprint, validates input, calls the dedicated transport once and validates structured output. Missing structured output is rejected when an approved output schema requires it.
 
+Execution carries immutable bounded diagnostics from `core/invocation/diagnostics.py` on personal runtime exceptions before generic redaction. Context, admission, input, output and typed transport failures retain safe stage/reason codes without exception text or payloads. The MCP boundary uses invocation-local context to enrich the existing completion log only; diagnostics never enter client content or metadata.
+
 Execution and explicit discovery catch only the transport's typed personal authorization rejection after admission/resolution, persist against the captured owner key and connection revision through their existing storage ports, and return generic unavailable failures. Generic transport failures, 403 and tool error content do not mark authorization. Failed marker persistence remains fail-closed with a sanitized operational error.
 
 The runtime never reads shared credentials, refreshes tokens, starts consent, retries calls or caches principals/results. Authorization withdrawn before admission prevents a new downstream operation. An already admitted operation may finish within its transport deadline; revocation does not cancel already-sent work.

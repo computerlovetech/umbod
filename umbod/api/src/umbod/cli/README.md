@@ -6,7 +6,7 @@
 
 ## Service composition
 
-REST targets `umbod.hosting.rest_service:create_app` with the Uvicorn factory flag. MCP targets `umbod.hosting.mcp_service:app`. Both use the backend-owned [hosting API](../hosting/README.md); process configuration, reload and port behavior remain unchanged.
+REST targets `umbod.hosting.rest_service:create_app` with the Uvicorn factory flag. MCP targets `umbod.hosting.mcp_service:app`. Both use the backend-owned [hosting API](../hosting/README.md); server commands preflight the required nonblank `UMBOD_ROOT_SECRET` before logging or Uvicorn, including reload-parent socket binding. Failure reports a variable-naming error on stderr and exits nonzero. Configuration inspection commands retain generic loader semantics.
 
 ## Modules
 

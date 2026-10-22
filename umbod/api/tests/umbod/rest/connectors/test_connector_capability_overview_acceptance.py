@@ -15,9 +15,14 @@ from umbod.core.connectors.downstream_mcp.probe import (
 )
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_connector_probe
 from umbod.rest.main import create_app
+
 from umbod.rest.settings import APISettings
 from tests.support.connector_plugins import TestConnectorPlugin
 from tests.support.connector_capabilities import ConnectorCapabilityAdminDriver
+
+@pytest.fixture(autouse=True)
+def server_root_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("UMBOD_ROOT_SECRET", "persistent-route-acceptance-test-root")
 
 
 @pytest.fixture

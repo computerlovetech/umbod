@@ -11,6 +11,7 @@ from fastmcp.server.auth import AuthContext
 from fastmcp.server.dependencies import get_access_token
 
 from umbod.config.app import AppConfig
+from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import authenticated_personal_mcp_claims
 from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalRuntimeContext
@@ -40,7 +41,9 @@ class McpPersonalRuntimeContextProvider:
         token = get_access_token()
         if token is None or not isinstance(token.claims, Mapping):
             raise PersonalRuntimeUnavailable("Personal identity unavailable")
-        return verified_personal_runtime_context(self._settings, token.claims)
+        return verified_personal_runtime_context(
+            self._settings, authenticated_personal_mcp_claims(self._settings, token.claims)
+        )
 
 
 class PersonalToolNameClaims(Protocol):

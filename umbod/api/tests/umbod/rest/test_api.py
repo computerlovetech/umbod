@@ -7,6 +7,11 @@ from fastapi.testclient import TestClient
 from umbod.rest.main import create_app
 
 
+@pytest.fixture(autouse=True)
+def server_root_secret(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("UMBOD_ROOT_SECRET", "persistent-route-acceptance-test-root")
+
+
 def test_health_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _set_empty_deployment_file(tmp_path, monkeypatch)
     client = TestClient(create_app())

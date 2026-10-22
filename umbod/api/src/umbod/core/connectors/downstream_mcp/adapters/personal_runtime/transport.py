@@ -10,6 +10,8 @@ from fastmcp.client.transports import StreamableHttpTransport
 from mcp import types
 from pydantic import TypeAdapter
 
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+
 from umbod.core.connectors.downstream_mcp.models import DiscoveredTool
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import (
     PersonalAuthorizationRejected,
@@ -60,7 +62,7 @@ class FastMCPPersonalMcpTransport:
     ) -> dict[str, object]:
         budget = min(self._limits.operation_timeout_seconds, (target.expires_at - self._clock()).total_seconds() - 0.1)
         if budget <= 0:
-            raise PersonalRuntimeUnavailable("Personal MCP unavailable")
+            raise PersonalRuntimeUnavailable("Personal MCP unavailable", diagnostic=InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="target_expired"))
         scope = anyio.CancelScope(deadline=anyio.current_time() + budget)
         wire = OperationState(target, self._limits, self._clock, scope, operation)
         try:
@@ -70,13 +72,22 @@ class FastMCPPersonalMcpTransport:
                 result = await self._session(client, bridge, wire)
                 wire.check()
             if wire.failed or scope.cancel_called:
-                raise PersonalRuntimeUnavailable("Personal MCP unavailable")
+                wire.check()
+                raise PersonalRuntimeUnavailable("Personal MCP unavailable", diagnostic=wire.diagnostic)
             return result
+        except (TimeoutError, httpx2.TimeoutException):
+            diagnostic = InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="timeout")
+        except PersonalRuntimeUnavailable as error:
+            diagnostic = error.diagnostic
         except Exception:
-            pass
+            diagnostic = wire.diagnostic
         if wire.authorization_rejected:
-            raise PersonalAuthorizationRejected("Personal MCP unavailable")
-        raise PersonalRuntimeUnavailable("Personal MCP unavailable")
+            raise PersonalAuthorizationRejected("Personal MCP unavailable", diagnostic=InvocationFailureDiagnostic(execution_mode="personal", stage="authorization", reason="authorization_rejected")) from None
+        if wire.failed:
+            diagnostic = wire.diagnostic
+        elif anyio.current_time() >= wire.deadline:
+            diagnostic = InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="timeout")
+        raise PersonalRuntimeUnavailable("Personal MCP unavailable", diagnostic=diagnostic) from None
 
     def _bridge(self, wire: OperationState) -> PersonalHttpTransport:
         pool = httpcore2.AsyncConnectionPool(
@@ -104,7 +115,7 @@ class FastMCPPersonalMcpTransport:
                 approved = PersonalToolInventory.model_validate(inventory)
                 matches = tuple(tool for tool in approved.tools if tool.identity.downstream_name == wire.operation.tool_name)
                 if len(matches) != 1 or contract_fingerprint(matches[0]) != wire.operation.expected_fingerprint:
-                    wire.fail()
+                    wire.fail(InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="contract_mismatch"))
                 validate_contract_schema(matches[0].input_schema)
                 if matches[0].output_schema_status == "present":
                     validate_contract_schema(matches[0].output_schema)

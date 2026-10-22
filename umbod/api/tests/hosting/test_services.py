@@ -28,7 +28,7 @@ def test_rest_service_loads_environment_and_configures_logging(
     load = Mock(return_value=settings)
     configure = Mock()
     build = Mock(return_value=FastAPI())
-    monkeypatch.setattr(rest_service, "load_app_config", load)
+    monkeypatch.setattr(rest_service, "load_server_app_config", load)
     monkeypatch.setattr(rest_service, "configure_logging", configure)
     monkeypatch.setattr(rest_service, "create_rest_app", build)
     assert rest_service.create_app() is build.return_value
@@ -60,7 +60,7 @@ async def test_mcp_service_defers_composition_and_owns_forwarding_lifespan(
     load = Mock(return_value=settings)
     configure = Mock()
     build = AsyncMock(return_value=application, side_effect=RuntimeError("construction failed") if failure else None)
-    monkeypatch.setattr("umbod.config.load_app_config", load)
+    monkeypatch.setattr("umbod.config.load_server_app_config", load)
     monkeypatch.setattr("umbod.logging.configure_logging", configure)
     monkeypatch.setattr(hosting, "create_mcp_app", build)
     for name in ("umbod.hosting.mcp_service", "umbod.mcp.main"):
@@ -110,7 +110,7 @@ async def verify() -> None:
         "mcp": {"auth_mode": "none", "metrics_enabled": False},
         "connector_store": {"type": "sqlite", "sqlite_path": "backend.sqlite3"},
     })
-    umbod.config.load_app_config = lambda path: settings
+    umbod.config.load_server_app_config = lambda path: settings
     public_app._create_public_polling_synchronizers = AsyncMock(return_value=(None,) * 5)
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
@@ -148,7 +148,7 @@ def test_rest_cli_uses_hosting_factory(monkeypatch: pytest.MonkeyPatch) -> None:
     from umbod.cli import api
 
     run = Mock()
-    monkeypatch.setattr(api, "load_app_config", Mock(return_value=AppConfig()))
+    monkeypatch.setattr(api, "load_server_app_config", Mock(return_value=AppConfig()))
     monkeypatch.setattr(api, "configure_logging", Mock())
     monkeypatch.setattr(api.uvicorn, "run", run)
     result = CliRunner().invoke(api.app, [])

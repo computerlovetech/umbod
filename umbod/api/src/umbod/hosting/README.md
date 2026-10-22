@@ -20,7 +20,7 @@ MCP composition closes acquired persistence on configuration acquisition or late
 
 ## Service entrypoints
 
-`rest_service.py` is the zero-argument Uvicorn factory: it loads configuration, configures logging and constructs REST. `mcp_service.py` exports an import-safe Starlette shell; its lifespan loads configuration, composes MCP in the active event loop and enters the returned application's lifespan. HTTP forwarding is mounted only while that lifespan is active. Construction/startup failures propagate through ASGI startup.
+`rest_service.py` is the zero-argument Uvicorn factory: it loads configuration, configures logging and constructs REST. `mcp_service.py` exports an import-safe Starlette shell; its lifespan loads configuration, composes MCP in the active event loop and enters the returned application's lifespan. HTTP forwarding is mounted only while that lifespan is active. Construction/startup failures propagate through ASGI startup. Both environment-backed entrypoints require a nonblank `UMBOD_ROOT_SECRET` before composition, persistence or metrics. Explicit typed embedding remains independent of operator secrets. The supported Umbod CLI also preflights before Uvicorn reload-parent binding; external reload-parent or prebound sockets are outside the application guarantee.
 
 CLI services remain separate processes; Kubernetes chart wiring is unchanged. Legacy REST invocation forms remain supported, now with an independent optional `user_verifier` keyword. Legacy MCP factories delegate to hosting composition.
 

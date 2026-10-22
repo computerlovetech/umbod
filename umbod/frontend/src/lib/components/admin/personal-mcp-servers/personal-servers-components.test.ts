@@ -8,12 +8,13 @@ import { policyFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-sup
 import { PolicyForm } from './policy-form.svelte';
 import PolicyFields from './PolicyFields.svelte';
 import PersonalServersPage from './PersonalServersPage.svelte';
+import { configurationFixture } from '$lib/admin/personal-mcp-servers/availability.test-support';
 
 vi.mock('$app/state', () => ({ navigating: { to: null, from: null } }));
 
 describe('personal server administration presentation', () => {
   test('renders dedicated Admin navigation, permissions link and truthful persistent guidance', () => {
-    const body = render(PersonalServersPage, { props: { accountIdentity: { kind: 'hidden' }, api: new InMemoryPersonalServers() } }).body;
+    const body = render(PersonalServersPage, { props: { accountIdentity: { kind: 'hidden' }, api: new InMemoryPersonalServers(), configuration: { get: async () => configurationFixture() } } }).body;
     expect(body).toMatch(/href="\/admin\/personal-mcp-servers"[^>]*aria-current="page"/);
     expect(body).toContain('Personal MCP servers');
     expect(body).toContain('href="/admin/group-permissions"');
@@ -24,6 +25,9 @@ describe('personal server administration presentation', () => {
     expect(body).not.toContain('ready to use');
     expect(body).not.toContain('ready to execute');
     expect(body).toContain('Reload servers');
+    expect(body).toContain('Cannot confirm personal connections availability');
+    expect(body).toContain('href="/admin/instance-configuration"');
+    expect(body).toMatch(/<button[^>]*disabled[^>]*>(?:<!--.*?-->)*Register personal server/);
   });
   test('dynamic clients expose no stored or shared credential controls', () => {
     const body = render(PolicyFields, { props: { form: new PolicyForm() } }).body;

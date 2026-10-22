@@ -3,6 +3,8 @@ import type { PersonalServerAdministration } from '$lib/admin/personal-mcp-serve
 import { createPersonalServerSchema, type PersonalServerCreate, type PersonalSettings, type PersonalPolicy } from '$lib/admin/personal-mcp-servers/domain/schemas';
 import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
 import { PolicyForm } from './policy-form.svelte';
+import type { InstanceConfigurationRoute } from '$lib/admin/instance-configuration-api';
+import { personalServerAvailability, type PersonalServerAvailability } from '$lib/admin/personal-mcp-servers/domain/availability';
 
 export type Confirmation = 'policy' | 'publish' | 'withdraw' | 'delete';
 export class PersonalServersState {
@@ -15,6 +17,7 @@ export class PersonalServersState {
   blocked = $state(false);
   authenticationLost = $state(false);
   unavailable = $state(false);
+  availability = $state.raw<PersonalServerAvailability>({ registration: 'unknown', authorization: 'unknown' });
   message = $state('');
   creating = $state(false);
   confirmation = $state<Confirmation | null>(null);
@@ -22,10 +25,19 @@ export class PersonalServersState {
   readonly form = new PolicyForm();
   private epoch = 0;
   private disposed = false;
-  constructor(private readonly api: PersonalServerAdministration, private readonly selectionChanged: (id: string | null) => void = () => {}) {}
+  constructor(private readonly api: PersonalServerAdministration, private readonly configuration: InstanceConfigurationRoute, private readonly selectionChanged: (id: string | null) => void = () => {}) {}
+  get canRegister(): boolean { return !this.disposed && !this.locked && this.availability.registration === 'enabled'; }
+  private async readAvailability(token: number): Promise<PersonalServerAvailability> {
+    try { return personalServerAvailability(await this.configuration.get()); }
+    catch (error) {
+      if (this.current(token) && (error instanceof AuthenticationRequiredError || error instanceof HttpError && (error.status === 401 || error.status === 403))) this.fail(error, false);
+      return { registration: 'unknown', authorization: 'unknown' };
+    }
+  }
   get locked(): boolean { return this.busy || this.loading || this.blocked || this.authenticationLost || this.unavailable; }
   private current(token: number): boolean { return !this.disposed && token === this.epoch; }
   private clear(): void {
+    this.availability = { registration: 'unknown', authorization: 'unknown' };
     this.records = [];
     this.selected = null;
     this.policy = null;
@@ -48,7 +60,13 @@ export class PersonalServersState {
     if (error instanceof HttpError && error.status === 404) {
       this.unavailable = code === 'personal_connections_unavailable' || this.creating;
       this.blocked = true;
-      this.message = this.unavailable ? 'Personal MCP server administration is unavailable in this deployment. No credential fallback is offered.' : 'This server or its personal OAuth policy is unavailable. Reload to reconcile the inventory.';
+      if (code === 'personal_connections_unavailable') {
+        this.availability = { registration: 'disabled', authorization: 'unknown' };
+        this.message = 'Personal connections are unavailable in this deployment. An operator must enable personal connections and configure a stable identity namespace. Startup settings cannot be edited here. Reload after the deployment is configured.';
+      } else {
+        this.availability = { registration: 'unknown', authorization: 'unknown' };
+        this.message = 'This server or its personal OAuth policy is unavailable. Reload to reconcile the inventory and check registration availability.';
+      }
     } else if (code === 'personal_oauth_configuration_conflict') {
       this.blocked = true;
       this.message = 'OAuth settings changed elsewhere. Reload authoritative settings before saving again. Your change was not replayed.';
@@ -65,14 +83,16 @@ export class PersonalServersState {
     if (this.busy || this.disposed) return;
     const token = ++this.epoch;
     this.loading = true;
+    this.availability = { registration: 'unknown', authorization: 'unknown' };
     this.form.reset();
     this.confirmation = null;
     this.creating = false;
     this.selected = null;
     this.policy = null;
     try {
-      const records = await this.api.list();
+      const [records, availability] = await Promise.all([this.api.list(), this.readAvailability(token)]);
       if (!this.current(token)) return;
+      this.availability = availability;
       this.records = records;
       const id = records.some((record) => record.connector_id === requestedId) ? requestedId : records[0]?.connector_id ?? null;
       this.selectedId = id;
@@ -97,7 +117,7 @@ export class PersonalServersState {
     await this.reload(id);
   };
   openCreate = (): void => {
-    if (this.locked) return;
+    if (!this.canRegister) return;
     this.form.reset();
     this.metadata = { name: '', prefix: '', description: '', path: '', endpoint: '' };
     this.creating = true;
@@ -119,7 +139,7 @@ export class PersonalServersState {
     this.confirmation = action;
   };
   create = async (): Promise<void> => {
-    if (this.locked || !this.creating) return;
+    if (!this.canRegister || !this.creating) { this.form.clearSecret(); return; }
     let input: PersonalServerCreate;
     try {
       input = createPersonalServerSchema.parse({ metadata: { display_name: this.metadata.name, tool_name_prefix: this.metadata.prefix, capability_description: this.metadata.description, public_path: `/mcp/proxies/${this.metadata.path}` }, configuration: { endpoint_url: this.metadata.endpoint, oauth_configuration: this.form.settings() } });

@@ -41,6 +41,7 @@ def test_admin_verifier_is_never_inherited_by_personal_api(
         "signature": "trusted", "claims": {"sub": "alice", "groups": []},
     })
     with TestClient(app) as client:
+        assert client.get("/api/me/connectors/mcp").status_code == 401
         assert client.get("/api/admin/users", headers={"Authorization": "Bearer administrator-token"}).status_code == 200
         assert client.get("/api/me/connectors/mcp", headers={"Authorization": "Bearer administrator-token"}).status_code == 401
         assert client.get("/api/me/connectors/mcp", headers={"Authorization": "Bearer " + personal_token}).json() == {"connectors": []}

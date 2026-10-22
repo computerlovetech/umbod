@@ -18,7 +18,7 @@
 
 ### `personal-mcp-servers/`
 
-**Read when working with:** The personal server allowlist administration port, strict request and nonsecret OAuth policy schemas in `domain/`, in-memory behavior, and the guarded HTTP route adapter. Registration, revision-checked policy replacement, publication and deletion remain separate from owner authorization and tool contract approval.
+**Read when working with:** The personal server allowlist administration port, strict request and nonsecret OAuth policy schemas in `domain/`, in-memory behavior, and the guarded HTTP route adapter. The pure `domain/availability.ts` projection reads resolved typed instance settings and fails closed for missing, duplicate or mistyped availability entries. Registration, revision-checked policy replacement, publication and deletion remain separate from owner authorization and tool contract approval.
 
 ### `overview/`
 

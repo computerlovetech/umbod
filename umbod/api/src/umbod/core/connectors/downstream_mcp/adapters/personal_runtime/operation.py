@@ -6,6 +6,8 @@ from typing import NoReturn
 import anyio
 import httpx2
 
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall
 
 
@@ -18,6 +20,7 @@ class OperationState:
         self.operation = operation
         self.deadline = min(scope.deadline, anyio.current_time() + min(limits.operation_timeout_seconds, (target.expires_at - clock()).total_seconds() - 0.1))
         self.failed = False
+        self.diagnostic = InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="transport_failure")
         self.authorization_rejected = False
         self.cleaning_up = False
         self.total_bytes = 0
@@ -34,15 +37,21 @@ class OperationState:
         if self.url.scheme != "https" or not self.url.host or self.url.userinfo or self.url.fragment or "#" in target.endpoint_url:
             self.fail()
 
-    def fail(self) -> NoReturn:
+    def fail(self, diagnostic: InvocationFailureDiagnostic | None = None) -> NoReturn:
         if not self.cleaning_up:
+            if not self.failed and diagnostic is not None:
+                self.diagnostic = diagnostic
             self.failed = True
             self.scope.cancel()
-        raise PersonalRuntimeUnavailable("Personal MCP unavailable") from None
+        raise PersonalRuntimeUnavailable("Personal MCP unavailable", diagnostic=self.diagnostic) from None
 
     def check(self) -> None:
-        if self.failed or self.clock() >= self.target.expires_at or anyio.current_time() >= self.deadline:
+        if self.failed:
             self.fail()
+        if self.clock() >= self.target.expires_at:
+            self.fail(InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="target_expired"))
+        if anyio.current_time() >= self.deadline:
+            self.fail(InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="timeout"))
 
     def account(self, size: int, response_bytes: int) -> None:
         self.check()

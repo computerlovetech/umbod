@@ -19,6 +19,7 @@ from umbod.rest.authentication import (
 from umbod.rest.authentication.authorization import JwtVerifier
 from umbod.rest.authentication.middleware import SuppliedJwtVerifierFactory
 from umbod.rest.authentication.user_middleware import UserAuthenticationMiddleware
+from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import local_personal_identity_enabled
 from umbod.rest.connectors.downstream_mcp.personal_connections import router as personal_connections_router
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback import (
     PersonalOAuthQueryRedactionMiddleware,
@@ -48,7 +49,7 @@ from umbod.rest.metrics import (
     RestMetricsHttpServer,
     RestMetricsRecorder,
 )
-from umbod.config import AppConfig, load_app_config
+from umbod.config import AppConfig, load_server_app_config
 from umbod.logging import flush_logging
 from umbod.rest.settings import APISettings
 from umbod.rest.system import router as system_router
@@ -196,6 +197,10 @@ def _mount_personal_connections_app(
         UserAuthenticationMiddleware,
         verifier=verifier_factory.create(settings),
         jwt_header_name=settings.admin_authentication.jwt_header_name,
+        allow_missing_simulated_token=(
+            type(verifier_factory) is JwtVerifierFactory
+            and local_personal_identity_enabled(settings)
+        ),
     )
     personal_app.add_middleware(
         AdminCookieCsrfMiddleware,
@@ -301,7 +306,7 @@ def _create_configured_lifespan(
 
 def create_app(*args: Any, **kwargs: Any) -> FastAPI:
     create_app_arguments = _resolve_create_app_arguments(*args, **kwargs)
-    app_settings = create_app_arguments.settings or load_app_config(".env")
+    app_settings = create_app_arguments.settings or load_server_app_config(".env")
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(
         app_settings.connector_store
     ).create()

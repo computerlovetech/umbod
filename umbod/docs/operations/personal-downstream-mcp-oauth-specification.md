@@ -10,6 +10,12 @@ Administrators own approved MCP definitions, eligible groups, capabilities, scop
 
 A canonical principal consists of a trusted identity namespace and stable subject. REST and MCP raw issuer/subject pairs must not be assumed equivalent: the MCP OAuth proxy can issue tokens under Umbod's public MCP URL while REST verifies upstream tokens. Email and OAuth client IDs are not ownership identifiers. Boundary identity equivalence is a release gate for personal execution.
 
+## Local development identity
+
+Only the `local`/`dev` runtime with development admin simulation, enabled personal connections and an exact nonempty `test:` namespace automatically uses the configured Admin Test User for personal identity. Default REST composition accepts tokenless `/api/me` requests by invoking the configured simulated verifier; caller tokens and forwarded identity headers cannot select another owner. Explicit user-verifier hooks remain token-required and never inherit the admin verifier. Personal MCP adapters require a current authenticated `single_test_user` context before projecting that same configured subject, profile and admin membership claim. Original machine claims are rejected; global MCP/shared/native claims and permissions are unchanged. A different MCP group claim receives no invented membership, and `simulated_admin=false` grants no simulated administrator membership. Production, real-provider, JWT and unauthenticated modes never receive this fallback.
+
+Preserve both `UMBOD_ADMIN_SIMULATED_USER_ID` and `UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE` across restarts to retain ownership; display names and email addresses are not ownership keys. An empty eligible catalogue is legitimate. Publication, explicit connector/tool grants, owner enablement, provider OAuth consent and explicit discovery remain mandatory; no shared credentials or root-secret generation are introduced.
+
 ## First delivery
 
 - OAuth definitions expose `authorization_mode` as `shared` or `personal`. Legacy documents without the field remain shared.

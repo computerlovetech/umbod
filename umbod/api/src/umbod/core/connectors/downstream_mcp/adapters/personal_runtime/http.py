@@ -6,8 +6,13 @@ import anyio
 import httpcore2
 import httpx2
 
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+
 from .operation import OperationState
 from .wire_parsing import ProtocolInputValidator, ValidatedProtocolStream
+
+
+_TIMEOUT = InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="timeout")
 
 
 class ResponseBody(Protocol):
@@ -59,6 +64,8 @@ class BoundedResponseStream(httpx2.AsyncByteStream):
                     chunk = await anext(iterator)
             except StopAsyncIteration:
                 return
+            except (TimeoutError, httpx2.TimeoutException):
+                self._state.fail(_TIMEOUT)
             except Exception:
                 self._state.fail()
             self._size += len(chunk)
@@ -112,6 +119,8 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
         try:
             with anyio.fail_after(max(0, self._state.deadline - anyio.current_time())), safe_core_errors():
                 return await self._connections.handle_async_request(outgoing)
+        except (TimeoutError, httpx2.TimeoutException):
+            self._state.fail(_TIMEOUT)
         except Exception:
             pass
         self._state.fail()

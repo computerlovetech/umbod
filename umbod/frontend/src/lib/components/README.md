@@ -29,7 +29,7 @@ existing logo. `AdminShell` provides the inline-size container used by
 
 ### `admin/personal-mcp-servers/`
 
-`PersonalServersPage.svelte` owns the mounted allowlist lifecycle and scoped administration state. `PolicyFields.svelte` and `PolicyForm` keep fresh confidential secrets transient. Explicit confirmations separate policy invalidation, publication, withdrawal and deletion; conflicts and unknown writes require manual reload without replay. Server registration paths are identifiers, not shared personal proxy connections. Shared MCP workspaces exclude personal definitions before loading capability bundles.
+`PersonalServersPage.svelte` owns the mounted allowlist lifecycle and scoped administration state. It injects the separate instance-configuration port for a fail-closed registration preflight, with resolved registration and user OAuth availability shown independently. Explicit reload refreshes settings alongside inventory; startup settings remain read-only. `PolicyFields.svelte` and `PolicyForm` keep fresh confidential secrets transient. Explicit confirmations separate policy invalidation, publication, withdrawal and deletion; conflicts and unknown writes require manual reload without replay. Server registration paths are identifiers, not shared personal proxy connections. Shared MCP workspaces exclude personal definitions before loading capability bundles.
 
 ### `admin/group-permissions/`
 

@@ -1,6 +1,10 @@
 from collections.abc import Callable
 from datetime import datetime
 
+from jsonschema.exceptions import ValidationError
+
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, PERSONAL_RUNTIME_FAILURE
+
 from ..models import DiscoveredTool, uses_personal_oauth
 from ..personal_connections.health_models import RejectPersonalAuthorization, PersonalAuthorizationHealthUnavailable
 from ..personal_connections.runtime_models import PersonalAuthorizationRejected
@@ -11,18 +15,24 @@ from ..stores.ports import ConnectorDefinitionStore
 from .contract_validation import validate_arguments, validate_output
 from .models import AdmitPersonalTool, InvokePersonalTool, PersonalToolRecord
 from .ports import PersonalRuntimeContextProvider, PersonalToolAccessStore
+from .schema_validation import PersonalToolPolicyInvalid
+
+
+_INVALID_OUTPUT = InvocationFailureDiagnostic(execution_mode="personal", stage="output", reason="invalid_output")
 
 
 def _validate_result(tool: DiscoveredTool, result: PersonalToolResult) -> None:
+    if result.result.get("isError", False) is True:
+        raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=InvocationFailureDiagnostic(execution_mode="personal", stage="downstream", reason="downstream_tool_error"))
     if not isinstance(result.result.get("content"), list) or result.result.get("isError", False) is not False:
-        raise PersonalRuntimeUnavailable("Personal tool unavailable")
+        raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=_INVALID_OUTPUT)
     if "structuredContent" in result.result:
         output = result.result["structuredContent"]
         if not isinstance(output, dict):
-            raise PersonalRuntimeUnavailable("Personal tool unavailable")
+            raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=_INVALID_OUTPUT)
         validate_output(tool, output)
     elif tool.output_schema_status == "present":
-        raise PersonalRuntimeUnavailable("Personal tool unavailable")
+        raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=_INVALID_OUTPUT)
 
 
 class DisabledPersonalToolRuntime:
@@ -65,8 +75,10 @@ class PersonalToolRuntimeService:
         return tuple(records)
 
     async def execute(self, command: InvokePersonalTool) -> PersonalToolResult:
+        stage = "context"
         try:
             context = await self._contexts.get_context()
+            stage = "admission"
             admission = await self._access.admit(AdmitPersonalTool(
                 query=PersonalRuntimeAuthorizationQuery(
                     key=PersonalConnectionKey(principal=context.principal, connector_id=command.identity.connector_id),
@@ -77,7 +89,9 @@ class PersonalToolRuntimeService:
                 contract_revision=command.contract_revision,
                 fingerprint=command.fingerprint,
             ))
+            stage = "arguments"
             validate_arguments(admission.tool, command.arguments)
+            stage = "transport"
             try:
                 result = await self._transport.call_tool(PersonalToolCall(
                     target=admission.target,
@@ -90,11 +104,25 @@ class PersonalToolRuntimeService:
                     key=admission.target.key,
                     expected_connection_revision=admission.target.authorization_revision,
                 ))
-                raise PersonalRuntimeUnavailable("Personal tool unavailable") from None
+                raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=InvocationFailureDiagnostic(execution_mode="personal", stage="authorization", reason="authorization_rejected")) from None
+            stage = "output"
             _validate_result(admission.tool, result)
             return result
         except PersonalAuthorizationHealthUnavailable:
             raise
+        except PersonalRuntimeUnavailable as error:
+            diagnostic = error.diagnostic
+            if diagnostic == PERSONAL_RUNTIME_FAILURE:
+                diagnostic = {
+                    "context": InvocationFailureDiagnostic(execution_mode="personal", stage="context", reason="context_unavailable"),
+                    "admission": InvocationFailureDiagnostic(execution_mode="personal", stage="admission", reason="admission_denied"),
+                    "transport": InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="transport_failure"),
+                }.get(stage, PERSONAL_RUNTIME_FAILURE)
+        except (ValidationError, PersonalToolPolicyInvalid):
+            diagnostic = {
+                "arguments": InvocationFailureDiagnostic(execution_mode="personal", stage="arguments", reason="invalid_arguments"),
+                "output": _INVALID_OUTPUT,
+            }.get(stage, PERSONAL_RUNTIME_FAILURE)
         except Exception:
-            pass
-        raise PersonalRuntimeUnavailable("Personal tool unavailable")
+            diagnostic = PERSONAL_RUNTIME_FAILURE
+        raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=diagnostic)

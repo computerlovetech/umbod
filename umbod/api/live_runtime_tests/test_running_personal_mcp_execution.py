@@ -156,6 +156,7 @@ async def owner_result(client: Client[Any], name: str, owner: str) -> None:
 
 @pytest.mark.asyncio
 async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(runtime_endpoints: RuntimeEndpoints) -> None:
+    assert httpx.get(runtime_endpoints.api_base_url + "/api/me/connectors/mcp").status_code == 401
     with personal_clients(runtime_endpoints) as (alice, bob, fixture, connector_id):
         initial_counters = checked(fixture.get("/control"))
         health_url = f"/api/me/connectors/mcp/{connector_id}/authorization"

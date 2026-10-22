@@ -127,7 +127,7 @@ def test_personal_oauth_policy_validation_and_cookie_checks_do_not_reflect_secre
     assert unchanged.status_code == 200
     assert unchanged.json() == initial.json()
     with httpx.Client(base_url=str(client.base_url)) as anonymous:
-        assert anonymous.get(f"/api/me/connectors/mcp/{connector_id}").status_code == 401
+        assert anonymous.get(f"/api/me/connectors/mcp/{connector_id}").status_code == 200
 
 
 def test_scoped_configured_client_still_rejects_private_provider_and_user_overrides(

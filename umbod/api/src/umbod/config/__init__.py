@@ -22,6 +22,7 @@ from umbod.config.derive import (
     build_app_config,
     load_app_config,
     load_app_config_without_env_file,
+    load_server_app_config,
     redact_app_config,
     resolve_auth_recipe,
 )
@@ -61,6 +62,7 @@ __all__ = [
     "inspect_app_config",
     "load_app_config",
     "load_app_config_without_env_file",
+    "load_server_app_config",
     "redact_app_config",
     "resolve_auth_recipe",
     "safe_app_config_dump",

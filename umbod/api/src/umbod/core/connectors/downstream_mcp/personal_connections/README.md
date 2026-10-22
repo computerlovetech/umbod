@@ -8,6 +8,8 @@ Principal-scoped enablement and opaque authorization state, independent of share
 - `health_models.py` and `health_ports.py`: immutable owner-keyed authorization-health queries, secret-free discriminated facts and captured-revision rejection commands. Authorized means locally bound and known unexpired, not live provider health or tool readiness.
 - `grant_binding.py`: pure saved-grant, owner, resource and current-policy validation shared by health and runtime; it does not require enablement or tools.
 - `ports.py`: validated principal provider and personal connection storage contracts.
+- `development_identity_models.py`: immutable required-field simulated Test User identity DTO for claims projection.
+- `development_identity.py`: pure narrowly gated local Test User policy, shared simulated claims projection and authenticated personal-MCP projection; no token verification or global MCP mutation.
 - `principal.py`: pure verified-claims mapping and `VerifiedClaimsPrincipalProvider`, exported through this package. Identity policy maps Google/Auth0 subjects and tenant-scoped Entra object IDs under the configured namespace, rejecting mismatched and machine identities. Token verification stays in REST/MCP.
 - `service.py`: owner-bound operations; missing validated identity is rejected before storage access.
 - `inmemory.py`: serialized in-memory storage adapter.

@@ -24,7 +24,13 @@ Add an authenticated sibling application at `/api/me`, not an administrator-auth
 
 Canonical ownership uses a validated deployment identity policy with an operator-controlled authority namespace. The same policy must be reusable for REST and MCP. Google and Auth0 use verified nonblank string `sub`; Entra uses verified `oid` with matching configured `tid`, not its application-specific `sub`. Do not use email, client ID, nested unverified aliases, or the outer MCP proxy issuer. Current FastMCP proxy access-token context normally contains upstream verified claims; Google may omit `iss` there.
 
-Personal endpoints are unavailable when identity policy is disabled. Missing/invalid credentials return 401; authenticated but unmappable identity returns 403 before personal-store access. Insecure development/simulation policies must be explicitly isolated to test namespaces. Unauthenticated deployments must not acquire a synthetic owner. Production must reject incomplete identity policy configuration.
+Personal endpoints are unavailable when identity policy is disabled. Outside the local development exception below, missing/invalid credentials return 401; authenticated but unmappable identity returns 403 before personal-store access. Insecure development/simulation policies must be explicitly isolated to test namespaces. Unauthenticated deployments must not acquire a synthetic owner. Production must reject incomplete identity policy configuration.
+
+## Local development identity
+
+Only the `local`/`dev` runtime with development admin simulation, enabled personal connections and an exact nonempty `test:` namespace automatically uses the configured Admin Test User for personal identity. Default REST composition accepts tokenless `/api/me` requests by invoking the configured simulated verifier; caller tokens and forwarded identity headers cannot select another owner. Explicit user-verifier hooks remain token-required and never inherit the admin verifier. Personal MCP adapters require a current authenticated `single_test_user` context before projecting that same configured subject, profile and admin membership claim. Original machine claims are rejected; global MCP/shared/native claims and permissions are unchanged. A different MCP group claim receives no invented membership, and `simulated_admin=false` grants no simulated administrator membership. Production, real-provider, JWT and unauthenticated modes never receive this fallback.
+
+Preserve both `UMBOD_ADMIN_SIMULATED_USER_ID` and `UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE` across restarts to retain ownership; display names and email addresses are not ownership keys. An empty eligible catalogue is legitimate. Publication, explicit connector/tool grants, owner enablement, provider OAuth consent and explicit discovery remain mandatory; no shared credentials or root-secret generation are introduced.
 
 ## User REST contract
 
@@ -63,7 +69,7 @@ Given an enabled connection, when its approval or connector grant is removed, th
 
 ### C6: Authentication
 
-Given missing/invalid credentials, when calling user routes, then return 401. Given verified but unmappable claims, then return 403 before personal-store access. Configured credential-header precedence and cookie Origin/marker protection remain enforced. Non-admins remain forbidden from admin routes.
+Outside the local development exception above, given missing/invalid credentials, when calling user routes, then return 401. Given verified but unmappable claims, then return 403 before personal-store access. Configured credential-header precedence and cookie Origin/marker protection remain enforced. Non-admins remain forbidden from admin routes.
 
 ### C7: Identity parity
 

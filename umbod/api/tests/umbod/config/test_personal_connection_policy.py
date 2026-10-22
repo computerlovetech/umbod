@@ -28,14 +28,15 @@ def test_operator_personal_modes_default_to_automatic() -> None:
     assert operator.personal_connections_enabled == "auto"
     assert operator.personal_connections_oauth_enabled == "auto"
     config = build_app_config(operator)
-    assert config.personal_connections.enabled is False
+    assert config.personal_connections.enabled is True
+    assert config.personal_connections.identity_namespace == "test:umbod-local"
     assert config.personal_connections.oauth_enabled is False
 
 
 @pytest.mark.parametrize(
     "namespace,store,path,secret,selection,oauth",
     [
-        ("", "sqlite", "durable.sqlite", "secret", False, False),
+        ("", "sqlite", "durable.sqlite", "secret", True, True),
         ("test:local", "inmemory", "durable.sqlite", "secret", True, False),
         ("test:local", "sqlite", "", "secret", True, False),
         ("test:local", "sqlite", " ", "secret", True, False),
