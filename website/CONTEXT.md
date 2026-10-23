@@ -11,8 +11,9 @@ servers, managing group access, and using compatible agents on Kubernetes.
 - `/enterprise/` remains a working platform entry with the same onboarding.
 - Legacy `/download` and `/download/` links redirect to `/#how`.
 
-Shared navigation includes Docs, Enterprise and Get started. Get started always
-returns to `/#how`, including mobile and JavaScript-disabled navigation. Contact
+Shared navigation includes Docs and Get started; the duplicate Enterprise page is
+not linked in navigation. Get started always returns to `/#how`, including mobile
+and JavaScript-disabled navigation. Contact
 is the secondary conversion path; visitors should not need to contact us to try
 the platform.
 

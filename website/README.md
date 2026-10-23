@@ -4,7 +4,8 @@ Website for Umbod, computerlove.tech's open-source agent infrastructure product.
 
 The home page (`/`) introduces self-hosted Umbod to platform teams. Get started
 leads to the local Kubernetes walkthrough at `/#how`; contact is secondary.
-`/enterprise/` remains available with the same platform capabilities and onboarding.
+`/enterprise/` remains available for existing links with the same platform
+capabilities and onboarding, but is not included in navigation.
 See [website context](CONTEXT.md) for positioning and tone.
 
 Update chart, image, and SDK release versions in the repository-root

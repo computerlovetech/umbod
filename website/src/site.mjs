@@ -59,7 +59,3 @@
         resetTimer = setTimeout(() => { button.textContent = 'Copy'; }, 2400);
       });
     }
-
-document.querySelectorAll('a[href="/enterprise/"]').forEach(link => {
-  if (location.pathname.startsWith("/enterprise")) link.setAttribute("aria-current", "page");
-});

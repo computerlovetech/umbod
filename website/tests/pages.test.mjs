@@ -53,7 +53,7 @@ test('production build preserves routes, metadata, shared navigation and release
       const canonical = ['https://umbod.ai/', 'https://umbod.ai/enterprise/'][i];
       assert.ok(html.includes(`<link rel="canonical" href="${canonical}">`));
       assert.ok(html.includes(`<meta property="og:url" content="${canonical}">`));
-      assert.match(html, /href="\/enterprise\/"/);
+      assert.doesNotMatch(html, /href="\/enterprise\/?"/);
       assert.match(html, /href="\/docs\/"/);
       assert.match(html, /<noscript>\s*<style>\.menu-toggle, \.copy-btn \{ display: none; \}<\/style>/);
       for (const region of [
