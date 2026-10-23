@@ -16,6 +16,25 @@ vi.mock('$lib/components/feedback', () => ({
 }));
 
 describe('dashboard presentation', () => {
+  test('hides privileged navigation until the independent current-user read completes', (): void => {
+    const currentUser = vi.fn();
+    const body = render(Dashboard, { props: {
+      mcpEndpoint: 'https://umbod.test/mcp',
+      createCurrentUserApi: () => ({ currentUser }),
+      createApi: (): DashboardApi => new InMemoryDashboardApi(catalogue),
+      createPersonalApi: (): PersonalConnectionsApi => new InMemoryPersonalConnectionsApi([])
+    } }).body;
+    expect(body).toContain('aria-label="Workspace sidebar"');
+    expect(body).toContain('aria-label="Workspace navigation"');
+    expect(body).toContain('Your account');
+    expect(currentUser).not.toHaveBeenCalled();
+    expect(body).toContain('href="/dashboard"');
+    expect(body).toContain('Loading connectors');
+    for (const path of ['/admin', '/admin/connectors', '/admin/group-permissions', '/admin/mcp-setup', '/admin/instance-configuration']) {
+      expect(body.includes(`href="${path}"`)).toBe(false);
+    }
+  });
+
   test('initial render is passive, concise and contains shared shell and client setup', (): void => {
     const api: DashboardApi = new InMemoryDashboardApi(catalogue);
     const personal: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([]);

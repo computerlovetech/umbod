@@ -63,13 +63,9 @@ existing logo. Shared `WorkspaceShell`, composed by `AdminShell` and the user da
 
 **Read when working with:** Header layout and account presentation.
 
-### `home/`
-
-**Read when working with:** Landing-page presentation.
-
 ### `dashboard/`
 
-`Dashboard.svelte` composes the single user dashboard with the shared workspace shell, permission-filtered connector catalogue, embedded personal MCP actions and compact client setup. `ConnectorCard.svelte` supplies the common shared/personal summaries and inline read-only capability details. It has no administrator data dependencies or management navigation. State and validated clients live in `$lib/dashboard/`.
+`Dashboard.svelte` composes the single user dashboard with the shared workspace shell, permission-filtered connector catalogue, embedded personal MCP actions and compact client setup. `ConnectorCard.svelte` supplies the common shared/personal summaries and inline read-only capability details. It shows shared administrator navigation only when its independent current-user read resolves allowed administration access; catalogue state remains independent. State and validated clients live in `$lib/dashboard/`.
 
 ### `shared/`
 

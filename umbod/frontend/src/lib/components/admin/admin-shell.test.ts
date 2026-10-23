@@ -26,6 +26,12 @@ describe('admin shell logout', () => {
       expect(body).not.toContain('admin-id');
     }
     expect(shell.body).toContain('Log out</button>');
+    expect(shell.body).toContain('aria-label="Workspace sidebar"');
+    expect(shell.body).toContain('aria-label="Workspace navigation"');
+    expect(shell.body).toContain('href="/dashboard"');
+    expect(shell.body).toContain('Administration</a>');
+    expect(shell.body).toContain('href="/admin/connectors"');
+    expect(shell.body.indexOf('Dashboard</a>')).toBeLessThan(shell.body.indexOf('Administration</a>'));
     expect(logout).not.toHaveBeenCalled();
   });
 

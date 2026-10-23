@@ -1,10 +1,7 @@
 import type { LogoutNavigation } from '$lib/admin/infrastructure/logout';
 
-export interface WorkspaceNavigationItem {
-  id: string;
-  label: string;
-  href: string;
-}
+import type { WorkspaceNavigationItem } from '$lib/workspace/navigation';
+export type { WorkspaceNavigationItem } from '$lib/workspace/navigation';
 
 export interface WorkspaceNavigationContext {
   activeItem: string;

@@ -1,5 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { workspaceNavigation, workspacePresentation } from '$lib/workspace/navigation';
+  import type { CurrentUserApi } from '$lib/workspace/admin-access';
+  import { WorkspaceAccessState } from '$lib/workspace/workspace-access-state.svelte';
+  import { adminApi } from '$lib/admin/infrastructure/admin-api';
   import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
   import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
   import type { DashboardApi } from '$lib/dashboard/api';
@@ -14,12 +18,14 @@
 
   let {
     mcpEndpoint,
+    createCurrentUserApi = adminApi,
     accountIdentity = { kind: 'hidden' },
     createApi = browserDashboardApi,
     createPersonalApi = browserPersonalConnectionsApi,
     signIn = navigateToSignIn
   }: {
     mcpEndpoint: string;
+    createCurrentUserApi?: () => CurrentUserApi;
     accountIdentity?: HeaderAccountIdentityState;
     createApi?: () => DashboardApi;
     createPersonalApi?: () => PersonalConnectionsApi;
@@ -30,12 +36,20 @@
     return new DashboardState(createApi(), createPersonalApi());
   }
 
+  function createAccessState(): WorkspaceAccessState {
+    return new WorkspaceAccessState(createCurrentUserApi());
+  }
+
   const state = createState();
-  const navigationItems = [{ id: 'dashboard', label: 'Dashboard', href: '/dashboard' }];
+  const workspaceAccess = createAccessState();
 
   onMount(() => {
     void state.loadCatalogue();
-    return state.dispose;
+    void workspaceAccess.load();
+    return () => {
+      state.dispose();
+      workspaceAccess.dispose();
+    };
   });
 </script>
 
@@ -43,7 +57,7 @@
 <svelte:window onfocus={state.refreshOnFocus} />
 <svelte:document onvisibilitychange={() => { if (document.visibilityState === 'visible') void state.refreshOnFocus(); }} />
 
-<WorkspaceShell workspaceLabel="Workspace" homeHref="/dashboard" {navigationItems} activeItem="dashboard" {accountIdentity} accountFallback="Your account" contentWidth="wide">
+<WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(workspaceAccess.adminAccess === 'allowed')} activeItem="dashboard" accountIdentity={workspaceAccess.accountIdentity.kind === 'visible' ? workspaceAccess.accountIdentity : accountIdentity} contentWidth="wide">
   <div class="dashboard">
     <h1 class="admin-title">Dashboard</h1>
     <section class="catalogue" aria-labelledby="connectors-heading" aria-busy={state.phase === 'loading' || state.refreshing}>
