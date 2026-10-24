@@ -2,6 +2,7 @@ import logging
 from time import perf_counter
 from typing import Optional, Sequence, cast
 
+from fastapi.routing import iter_route_contexts
 from starlette.routing import BaseRoute, Match
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -22,7 +23,7 @@ class AdminRestMetricsMiddleware:
     ) -> None:
         self.app = app
         self.recorder = recorder
-        self.routes = tuple(routes)
+        self.routes = tuple(iter_route_contexts(routes))
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
