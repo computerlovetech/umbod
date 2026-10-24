@@ -13,6 +13,7 @@
   import { browserPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/personal-connections-api';
   import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
   import McpSetupGuide from '$lib/components/shared/mcp-setup/McpSetupGuide.svelte';
+  import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
   import ConnectorCard from './ConnectorCard.svelte';
   import ConnectionCard from '$lib/components/personal-connections/ConnectionCard.svelte';
 
@@ -72,7 +73,7 @@
         </div>
       {/if}
       {#if state.phase === 'loading'}
-        <p role="status">Loading connectors…</p>
+        <DelayedSpinner active label="Loading connectors…" />
       {:else if state.phase === 'sign-in'}
         <p role="alert">Sign in required</p>
         <button onclick={() => { state.dispose(); signIn(); }}>Sign in</button>

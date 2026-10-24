@@ -29,7 +29,7 @@ describe('dashboard presentation', () => {
     expect(body).toContain('Your account');
     expect(currentUser).not.toHaveBeenCalled();
     expect(body).toContain('href="/dashboard"');
-    expect(body).toContain('Loading connectors');
+    expect(body).toContain('aria-busy="true"');
     for (const path of ['/admin', '/admin/connectors', '/admin/group-permissions', '/admin/mcp-setup', '/admin/instance-configuration']) {
       expect(body.includes(`href="${path}"`)).toBe(false);
     }
@@ -46,7 +46,8 @@ describe('dashboard presentation', () => {
       createPersonalApi: (): PersonalConnectionsApi => personal
     } }).body;
     expect(body).toContain('Dashboard</h1>');
-    expect(body).toContain('Loading connectors');
+    expect(body).toContain('aria-busy="true"');
+    expect(body).not.toContain('Loading connectors');
     expect(body).toContain('MCP setup');
     expect(body).toContain('https://umbod.test/mcp');
     expect(body).not.toContain('/admin');
