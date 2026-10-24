@@ -55,6 +55,9 @@ test('production build preserves routes, metadata, shared navigation and release
       assert.ok(html.includes(`<meta property="og:url" content="${canonical}">`));
       assert.doesNotMatch(html, /href="\/enterprise\/?"/);
       assert.match(html, /href="\/docs\/"/);
+      const communityLinks = [...html.matchAll(/href="(https:\/\/discord\.gg\/[^\"]+)"/g)];
+      assert.equal(communityLinks.length, 3);
+      for (const [, href] of communityLinks) assert.equal(href, 'https://discord.gg/Njy4GnurpE');
       assert.match(html, /<noscript>\s*<style>\.menu-toggle, \.copy-btn \{ display: none; \}<\/style>/);
       for (const region of [
         html.match(/<nav class="wrap"[\s\S]*?<\/nav>/)[0],

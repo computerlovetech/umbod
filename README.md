@@ -11,7 +11,7 @@
 <p align="center">
   <a href="https://umbod.ai">Website</a> ·
   <a href="https://umbod.ai/docs/">Documentation</a> ·
-  <a href="https://discord.gg/mjrbtBYeS">Discord</a>
+  <a href="https://discord.gg/Njy4GnurpE">Discord</a>
 </p>
 
 Connect your internal APIs and MCP servers to the agents your teams use. Umbod gives you one place to configure connectors, publish tools, and control access by group—all running on your own infrastructure.
@@ -68,7 +68,7 @@ Need a custom integration? **[Build a connector →](https://umbod.ai/docs/plugi
 
 Umbod is in **early beta**. Connector administration, tool publication, group permissions, and Helm installation are available today. The current chart runs a single core replica backed by SQLite and is intended for development and evaluation.
 
-Try it with an integration your team actually needs. [Report an issue](https://github.com/computerlovetech/umbod/issues) or [join the conversation on Discord](https://discord.gg/mjrbtBYeS).
+Try it with an integration your team actually needs. [Report an issue](https://github.com/computerlovetech/umbod/issues) or [join the conversation on Discord](https://discord.gg/Njy4GnurpE).
 
 ## Feature roadmap
 

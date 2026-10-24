@@ -43,7 +43,7 @@ Install, configure, and run Umbod on your own infrastructure. Start with a local
 
 ## Early beta
 
-Umbod is in early beta. These guides cover installation, operations, and connector development. Questions or feedback? [Join the community on Discord](https://discord.gg/mjrbtBYeS) or [visit the source on GitHub](https://github.com/computerlovetech/umbod).
+Umbod is in early beta. These guides cover installation, operations, and connector development. Questions or feedback? [Join the community on Discord](https://discord.gg/Njy4GnurpE) or [visit the source on GitHub](https://github.com/computerlovetech/umbod).
 
 ## About the name
 
