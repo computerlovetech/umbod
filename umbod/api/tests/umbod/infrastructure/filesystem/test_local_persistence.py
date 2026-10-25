@@ -9,18 +9,19 @@ from threading import Event
 
 import pytest
 
-from umbod.core.virtual_filesystem import (
+from umbod.core.filesystem import (
     ContentDriver,
     NamespaceDriver,
     NodeKind,
     NodeMetadata,
     StorageFailure,
     UnspecifiedContentType,
-    VirtualFilesystem,
+    Filesystem,
 )
-from umbod.core.virtual_filesystem.adapters import LocalContent, LocalNamespace
+from umbod.infrastructure.filesystem.local_content import LocalContent
+from umbod.infrastructure.filesystem.local_namespace import LocalNamespace
 
-from tests.support.virtual_filesystem.processes import create_local_child_in_process
+from tests.support.filesystem.processes import create_local_child_in_process
 
 
 async def stream(data: bytes) -> AsyncIterator[bytes]:
@@ -31,7 +32,7 @@ async def stream(data: bytes) -> AsyncIterator[bytes]:
 async def test_reopened_adapters_preserve_root_hierarchy_metadata_and_bytes(tmp_path: Path) -> None:
     namespace_directory = tmp_path / "namespace"
     content_directory = tmp_path / "content"
-    original = VirtualFilesystem(
+    original = Filesystem(
         namespace=LocalNamespace(namespace_directory), content=LocalContent(content_directory),
     )
     root = await original.get_root()
@@ -42,7 +43,7 @@ async def test_reopened_adapters_preserve_root_hierarchy_metadata_and_bytes(tmp_
         directory.id, "Résumé.txt", NodeMetadata(content_type="text/plain", attributes={"language": "fr"}),
     )
     written = await original.write(file.id, stream(b"persisted\x00bytes"), expected_revision=file.revision)
-    reopened = VirtualFilesystem(
+    reopened = Filesystem(
         namespace=LocalNamespace(namespace_directory), content=LocalContent(content_directory),
     )
 
@@ -139,7 +140,7 @@ async def test_failed_namespace_publication_preserves_previous_snapshot(
         raise OSError("injected publication failure")
 
     with monkeypatch.context() as patch:
-        patch.setattr("umbod.core.virtual_filesystem.adapters.local_namespace.os.replace", fail_replace)
+        patch.setattr("umbod.infrastructure.filesystem.local_namespace.os.replace", fail_replace)
         with pytest.raises(StorageFailure):
             await namespace.create_node(
                 root.id, "unpublished", NodeKind.FILE,
@@ -166,7 +167,7 @@ async def test_cancelled_namespace_operation_finishes_before_returning_cancellat
         entered.set()
         original_flock(file_descriptor, operation)
 
-    monkeypatch.setattr("umbod.core.virtual_filesystem.adapters.local_namespace.fcntl.flock", observed_flock)
+    monkeypatch.setattr("umbod.infrastructure.filesystem.local_namespace.fcntl.flock", observed_flock)
     task = asyncio.create_task(namespace.create_node(
         root.id, "committed", NodeKind.FILE,
         NodeMetadata(content_type=UnspecifiedContentType(), attributes={}),

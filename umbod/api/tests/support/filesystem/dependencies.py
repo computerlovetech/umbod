@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from umbod.core.virtual_filesystem import (
+from umbod.core.filesystem import (
     ContentRef,
     NamespaceDriver,
     Node,

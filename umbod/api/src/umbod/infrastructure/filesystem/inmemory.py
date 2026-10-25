@@ -1,7 +1,7 @@
 from threading import RLock
 from uuid import uuid4
 
-from umbod.core.virtual_filesystem import (
+from umbod.core.filesystem import (
     ByteStream,
     ContentRef,
     Node,
@@ -11,7 +11,7 @@ from umbod.core.virtual_filesystem import (
     StorageFailure,
     StorageKey,
 )
-from umbod.core.virtual_filesystem.namespace import (
+from umbod.core.filesystem.namespace import (
     ROOT_ID,
     create_node,
     get_node,

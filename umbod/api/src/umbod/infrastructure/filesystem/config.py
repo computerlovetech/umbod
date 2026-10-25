@@ -43,6 +43,6 @@ ContentConfig = Annotated[
 ]
 
 
-class VirtualFilesystemConfig(AdapterConfig):
+class FilesystemConfig(AdapterConfig):
     namespace: NamespaceConfig
     content: ContentConfig

@@ -5,7 +5,7 @@ from .models import EmptyContent, Node, NodeId, NodeKind, NodeMetadata
 from .ports import ByteStream, ContentDriver, NamespaceDriver
 
 
-class VirtualFilesystem:
+class Filesystem:
     def __init__(self, *, namespace: NamespaceDriver, content: ContentDriver) -> None:
         self._namespace = namespace
         self._content = content

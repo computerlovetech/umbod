@@ -100,6 +100,16 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
     assert set(infrastructure.__all__) == {
         'AppPersistenceRuntime',
         'ConfiguredPersistenceRuntimeProvider',
+        'ContentConfig',
+        'InMemoryContentConfig',
+        'InMemoryNamespaceConfig',
+        'LocalContentConfig',
+        'LocalNamespaceConfig',
+        'NamespaceConfig',
+        'FilesystemConfig',
+        'create_content_driver',
+        'create_namespace_driver',
+        'create_filesystem',
     }
     forbidden = {
         'InMemoryDatabase',
@@ -117,6 +127,10 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
         'create_group_permission_store',
         'DatabaseConnectorToolConfigurationMutationAdapter',
         'FastMCPDownstreamClientFactory',
+        'InMemoryNamespace',
+        'InMemoryContent',
+        'LocalNamespace',
+        'LocalContent',
     }
     assert forbidden.isdisjoint(set(infrastructure.__all__))
 
@@ -288,10 +302,10 @@ def test_personal_identity_policy_does_not_load_persistence_drivers() -> None:
     _assert_import_does_not_load_persistence_drivers('umbod.core.connectors.downstream_mcp.personal_connections.principal')
 
 
-def test_infrastructure_contains_only_persistence_composition_and_drivers() -> None:
+def test_infrastructure_contains_only_approved_io_composition_and_drivers() -> None:
     infrastructure_root = Path(__file__).parents[4] / 'src' / 'umbod' / 'infrastructure'
     source_entries = {path.relative_to(infrastructure_root).parts[0] for path in infrastructure_root.rglob('*.py')}
-    assert source_entries == {'__init__.py', 'persistence'}
+    assert source_entries == {'__init__.py', 'persistence', 'filesystem'}
 
 
 def test_driver_packages_export_adapter_types() -> None:

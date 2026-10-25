@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from umbod.core.virtual_filesystem import ContentDriver, NamespaceDriver, VirtualFilesystem
+from umbod.core.filesystem import ContentDriver, NamespaceDriver, Filesystem
 
 from .dependencies import RecordingNamespace
 from .language import FilesystemDsl
@@ -24,10 +24,10 @@ async def create_acceptance_context(
     root = await namespace.get_root()
     recording = RecordingNamespace(namespace)
     driver = DirectPythonAcceptanceDriver(
-        VirtualFilesystem(namespace=recording, content=content), recording, content,
+        Filesystem(namespace=recording, content=content), recording, content,
     )
     other_driver = DirectPythonAcceptanceDriver(
-        VirtualFilesystem(namespace=recording, content=content), recording, content,
+        Filesystem(namespace=recording, content=content), recording, content,
     )
     return FilesystemAcceptanceContext(
         filesystem=FilesystemDsl(driver), other_caller=FilesystemDsl(other_driver),

@@ -3,18 +3,18 @@ from collections.abc import AsyncIterator
 
 import pytest
 
-from umbod.core.virtual_filesystem import (
+from umbod.core.filesystem import (
     Node,
     NodeKind,
     NodeMetadata,
     RevisionConflict,
     StorageFailure,
     UnspecifiedContentType,
-    VirtualFilesystem,
+    Filesystem,
     WrongNodeKind,
 )
 
-from tests.support.virtual_filesystem.adapters import AdapterFactory, AdapterPair
+from tests.support.filesystem.adapters import AdapterFactory, AdapterPair
 
 
 async def stream(data: bytes) -> AsyncIterator[bytes]:
@@ -63,7 +63,7 @@ async def test_invalid_or_missing_content_keys_fail_safely(adapters: AdapterPair
 @pytest.mark.asyncio
 async def test_failed_input_stream_does_not_publish_file_content(adapters: AdapterPair) -> None:
     file = await create_file(adapters)
-    filesystem = VirtualFilesystem(namespace=adapters.namespace, content=adapters.content)
+    filesystem = Filesystem(namespace=adapters.namespace, content=adapters.content)
     previous = await filesystem.write(file.id, stream(b"previous"), expected_revision=file.revision)
 
     async def interrupted() -> AsyncIterator[bytes]:
@@ -80,7 +80,7 @@ async def test_failed_input_stream_does_not_publish_file_content(adapters: Adapt
 @pytest.mark.asyncio
 async def test_cancelled_input_stream_preserves_file_content(adapters: AdapterPair) -> None:
     file = await create_file(adapters)
-    filesystem = VirtualFilesystem(namespace=adapters.namespace, content=adapters.content)
+    filesystem = Filesystem(namespace=adapters.namespace, content=adapters.content)
 
     async def cancelled() -> AsyncIterator[bytes]:
         yield b"partial"
@@ -98,7 +98,7 @@ async def test_replacing_content_keeps_old_objects_readable(adapters: AdapterPai
     file = await create_file(adapters)
     old = await adapters.content.put(stream(b"old bytes"))
     published = await adapters.namespace.update_node(file.id, content=old, expected_revision=file.revision)
-    filesystem = VirtualFilesystem(namespace=adapters.namespace, content=adapters.content)
+    filesystem = Filesystem(namespace=adapters.namespace, content=adapters.content)
 
     await filesystem.write(file.id, stream(b"new bytes"), expected_revision=published.revision)
 
@@ -111,8 +111,8 @@ async def test_competing_writes_have_one_revision_winner(adapter_factory: Adapte
     first_pair = adapter_factory()
     second_pair = adapter_factory()
     file = await create_file(first_pair)
-    first = VirtualFilesystem(namespace=first_pair.namespace, content=first_pair.content)
-    second = VirtualFilesystem(namespace=second_pair.namespace, content=second_pair.content)
+    first = Filesystem(namespace=first_pair.namespace, content=first_pair.content)
+    second = Filesystem(namespace=second_pair.namespace, content=second_pair.content)
 
     results = await asyncio.gather(
         first.write(file.id, stream(b"first"), expected_revision=file.revision),
@@ -129,7 +129,7 @@ async def test_competing_writes_have_one_revision_winner(adapter_factory: Adapte
 @pytest.mark.asyncio
 async def test_directory_content_operations_are_rejected_before_consuming_input(adapters: AdapterPair) -> None:
     root = await adapters.namespace.get_root()
-    filesystem = VirtualFilesystem(namespace=adapters.namespace, content=adapters.content)
+    filesystem = Filesystem(namespace=adapters.namespace, content=adapters.content)
     consumed: list[bytes] = []
 
     async def observed() -> AsyncIterator[bytes]:

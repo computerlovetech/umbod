@@ -1,6 +1,6 @@
 import pytest
 
-from tests.support.virtual_filesystem import (
+from tests.support.filesystem import (
     FilesystemAcceptanceContext,
     MetadataValue,
     NoContentReference,

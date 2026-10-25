@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Callable
 
-from umbod.core.virtual_filesystem import ContentDriver, NamespaceDriver
+from umbod.core.filesystem import ContentDriver, NamespaceDriver
 
 
 @dataclass(frozen=True)

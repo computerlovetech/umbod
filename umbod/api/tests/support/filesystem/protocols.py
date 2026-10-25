@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
-from umbod.core.virtual_filesystem import ByteStream, Node, NodeId, NodeMetadata
+from umbod.core.filesystem import ByteStream, Node, NodeId, NodeMetadata
 
 from .models import (
     ContentHandle,

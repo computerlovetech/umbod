@@ -8,7 +8,7 @@ from typing import TypeVar
 
 from pydantic import ValidationError
 
-from umbod.core.virtual_filesystem import (
+from umbod.core.filesystem import (
     ContentRef,
     Node,
     NodeId,
@@ -16,7 +16,7 @@ from umbod.core.virtual_filesystem import (
     NodeMetadata,
     StorageFailure,
 )
-from umbod.core.virtual_filesystem.namespace import (
+from umbod.core.filesystem.namespace import (
     ROOT_ID,
     NamespaceState,
     create_node,

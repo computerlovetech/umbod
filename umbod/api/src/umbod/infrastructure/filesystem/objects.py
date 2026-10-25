@@ -3,7 +3,7 @@ import stat
 from pathlib import Path
 from uuid import UUID
 
-from umbod.core.virtual_filesystem import StorageFailure, StorageKey
+from umbod.core.filesystem import StorageFailure, StorageKey
 
 CHUNK_SIZE = 64 * 1024
 

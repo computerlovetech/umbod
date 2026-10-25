@@ -3,19 +3,20 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 
-from umbod.core.virtual_filesystem import (
+from umbod.infrastructure import (
     InMemoryContentConfig,
     InMemoryNamespaceConfig,
     LocalContentConfig,
     LocalNamespaceConfig,
+    create_content_driver,
+    create_namespace_driver,
 )
-from umbod.core.virtual_filesystem.adapters import create_content_driver, create_namespace_driver
 
-from tests.support.virtual_filesystem import (
+from tests.support.filesystem import (
     FilesystemAcceptanceContext,
     create_acceptance_context,
 )
-from tests.support.virtual_filesystem.adapters import AdapterFactory, AdapterPair
+from tests.support.filesystem.adapters import AdapterFactory, AdapterPair
 
 
 @pytest.fixture(params=["inmemory", "local"])

@@ -1,39 +1,45 @@
 from typing import assert_never
 
-from ..config import (
+from umbod.core.filesystem.ports import ContentDriver, NamespaceDriver
+from umbod.core.filesystem.service import Filesystem
+
+from .config import (
     ContentConfig,
     InMemoryContentConfig,
     InMemoryNamespaceConfig,
     LocalContentConfig,
     LocalNamespaceConfig,
     NamespaceConfig,
-    VirtualFilesystemConfig,
+    FilesystemConfig,
 )
-from ..ports import ContentDriver, NamespaceDriver
-from ..service import VirtualFilesystem
-from .inmemory import InMemoryContent, InMemoryNamespace
-from .local_content import LocalContent
-from .local_namespace import LocalNamespace
 
 
 def create_namespace_driver(config: NamespaceConfig) -> NamespaceDriver:
     if isinstance(config, InMemoryNamespaceConfig):
+        from .inmemory import InMemoryNamespace
+
         return InMemoryNamespace()
     if isinstance(config, LocalNamespaceConfig):
+        from .local_namespace import LocalNamespace
+
         return LocalNamespace(config.directory)
     assert_never(config)
 
 
 def create_content_driver(config: ContentConfig) -> ContentDriver:
     if isinstance(config, InMemoryContentConfig):
+        from .inmemory import InMemoryContent
+
         return InMemoryContent()
     if isinstance(config, LocalContentConfig):
+        from .local_content import LocalContent
+
         return LocalContent(config.directory)
     assert_never(config)
 
 
-def create_virtual_filesystem(config: VirtualFilesystemConfig) -> VirtualFilesystem:
-    return VirtualFilesystem(
+def create_filesystem(config: FilesystemConfig) -> Filesystem:
+    return Filesystem(
         namespace=create_namespace_driver(config.namespace),
         content=create_content_driver(config.content),
     )

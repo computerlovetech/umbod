@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from umbod.core.virtual_filesystem import (
+from umbod.core.filesystem import (
     ContentRef,
     EmptyContent,
     InvalidName,
@@ -18,7 +18,7 @@ from umbod.core.virtual_filesystem import (
     WrongNodeKind,
 )
 
-from tests.support.virtual_filesystem.adapters import AdapterFactory, AdapterPair
+from tests.support.filesystem.adapters import AdapterFactory, AdapterPair
 
 
 def metadata() -> NodeMetadata:

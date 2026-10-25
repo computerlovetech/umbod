@@ -4,7 +4,7 @@ from functools import partial
 from pathlib import Path
 from uuid import uuid4
 
-from umbod.core.virtual_filesystem import ByteStream, ContentRef, StorageFailure, StorageKey
+from umbod.core.filesystem import ByteStream, ContentRef, StorageFailure, StorageKey
 
 from .io import complete_io
 from .objects import CHUNK_SIZE, open_regular, prepare_directory, sync_directory, validate_key

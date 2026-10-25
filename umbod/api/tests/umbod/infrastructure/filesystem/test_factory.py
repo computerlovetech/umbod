@@ -5,24 +5,24 @@ from typing import Literal
 import pytest
 from pydantic import ValidationError
 
-from umbod.core.virtual_filesystem import (
-    InMemoryContentConfig,
-    InMemoryNamespaceConfig,
-    LocalContentConfig,
-    LocalNamespaceConfig,
+from umbod.core.filesystem import (
     NodeKind,
     NodeMetadata,
     StorageFailure,
     UnspecifiedContentType,
-    VirtualFilesystemConfig,
 )
-from umbod.core.virtual_filesystem.adapters import (
+from umbod.infrastructure import (
+    InMemoryContentConfig,
+    InMemoryNamespaceConfig,
+    LocalContentConfig,
+    LocalNamespaceConfig,
+    FilesystemConfig,
     create_content_driver,
     create_namespace_driver,
-    create_virtual_filesystem,
+    create_filesystem,
 )
 
-from tests.support.virtual_filesystem.protocols import PublicFilesystem
+from tests.support.filesystem.protocols import PublicFilesystem
 
 Backend = Literal["inmemory", "local"]
 
@@ -33,7 +33,7 @@ async def stream(data: bytes) -> AsyncIterator[bytes]:
 
 def configuration(
     namespace_type: Backend, content_type: Backend, directory: Path,
-) -> VirtualFilesystemConfig:
+) -> FilesystemConfig:
     namespace = (
         LocalNamespaceConfig(type="local", directory=directory / "namespace")
         if namespace_type == "local" else InMemoryNamespaceConfig(type="inmemory")
@@ -42,7 +42,7 @@ def configuration(
         LocalContentConfig(type="local", directory=directory / "content")
         if content_type == "local" else InMemoryContentConfig(type="inmemory")
     )
-    return VirtualFilesystemConfig(namespace=namespace, content=content)
+    return FilesystemConfig(namespace=namespace, content=content)
 
 
 @pytest.mark.asyncio
@@ -52,7 +52,7 @@ async def test_configured_factory_composes_a_working_service(
     namespace_type: Backend, content_type: Backend, tmp_path: Path,
 ) -> None:
     config = configuration(namespace_type, content_type, tmp_path)
-    filesystem: PublicFilesystem = create_virtual_filesystem(config)
+    filesystem: PublicFilesystem = create_filesystem(config)
     root = await filesystem.get_root()
     file = await filesystem.create_file(
         root.id, "payload", NodeMetadata(content_type="application/octet-stream", attributes={}),
@@ -99,13 +99,13 @@ async def test_content_factory_honors_backend_persistence(backend: Backend, tmp_
 @pytest.mark.asyncio
 async def test_final_service_factory_reopens_configured_local_storage(tmp_path: Path) -> None:
     config = configuration("local", "local", tmp_path)
-    first: PublicFilesystem = create_virtual_filesystem(config)
+    first: PublicFilesystem = create_filesystem(config)
     root = await first.get_root()
     file = await first.create_file(
         root.id, "persisted", NodeMetadata(content_type="text/plain", attributes={}),
     )
     written = await first.write(file.id, stream(b"persistent"), expected_revision=file.revision)
-    reopened: PublicFilesystem = create_virtual_filesystem(config)
+    reopened: PublicFilesystem = create_filesystem(config)
 
     assert await reopened.get_root() == root
     assert await reopened.get_node(file.id) == written
@@ -127,7 +127,7 @@ async def test_final_service_factory_reopens_configured_local_storage(tmp_path: 
 ])
 def test_invalid_adapter_configuration_is_rejected(configuration_value: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
-        VirtualFilesystemConfig.model_validate(configuration_value)
+        FilesystemConfig.model_validate(configuration_value)
 
 
 def test_serialized_configuration_declares_independent_adapter_types(tmp_path: Path) -> None:
@@ -135,9 +135,9 @@ def test_serialized_configuration_declares_independent_adapter_types(tmp_path: P
         "namespace": {"type": "local", "directory": str(tmp_path / "namespace")},
         "content": {"type": "inmemory"},
     }
-    config = VirtualFilesystemConfig.model_validate(value)
+    config = FilesystemConfig.model_validate(value)
 
     assert config.namespace.type == "local"
     assert config.namespace.directory == tmp_path / "namespace"
     assert config.content.type == "inmemory"
-    assert VirtualFilesystemConfig.model_validate_json(config.model_dump_json()) == config
+    assert FilesystemConfig.model_validate_json(config.model_dump_json()) == config

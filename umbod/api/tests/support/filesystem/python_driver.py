@@ -1,7 +1,7 @@
 from typing import Sequence
 from uuid import UUID
 
-from umbod.core.virtual_filesystem import (
+from umbod.core.filesystem import (
     ByteStream,
     ContentDriver,
     EmptyContent,

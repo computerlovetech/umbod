@@ -28,9 +28,9 @@
 
 **Read when working with:** Connector publish/unpublish state, publication persistence, or publication events.
 
-### `virtual_filesystem/`
+### `filesystem/`
 
-**Read when working with:** Standalone filesystem models, namespace/content ports, shared namespace rules, driver-provided root discovery, nested node creation, and streamed content publication. Feature-local `adapters/` implements production in-memory and POSIX local storage, with a typed configuration-driven factory for independent namespace/content selection and service composition. The [local index](virtual_filesystem/README.md) describes shared contract coverage and deferred behavior. No REST/MCP or authorization wiring is included.
+**Read when working with:** Standalone filesystem models, namespace/content ports, shared namespace rules, driver-provided root discovery, nested node creation, and streamed content publication. Concrete in-memory/POSIX local storage drivers and backend configuration/factories live in infrastructure under ADR-006; callers compose through the public `umbod.infrastructure` API. Core retains only neutral models, ports, rules, and service behavior. The [local index](filesystem/README.md) describes shared contract coverage and deferred behavior. No REST/MCP or authorization wiring is included.
 
 ### `user_catalogue/`
 

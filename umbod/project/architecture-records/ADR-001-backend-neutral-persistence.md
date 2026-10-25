@@ -20,6 +20,10 @@ Backend selection occurs once in infrastructure composition. Backend-specific dr
 
 Bounded contexts own their neutral store ports, schemas, codecs, and services. They depend on the persistence kernel but never on infrastructure drivers.
 
+### Related infrastructure extension
+
+[ADR-006](ADR-006-filesystem-infrastructure-boundary.md) extends infrastructure placement to concrete filesystem storage drivers and their configuration/composition boundary. It preserves this ADR's persistence runtime ownership and inward dependency rules; it does not move domain services into infrastructure or broaden infrastructure to arbitrary connector adapters.
+
 ### Target module structure
 
 ```text
