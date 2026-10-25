@@ -166,6 +166,8 @@ describe('personal server administration presentation', () => {
     expect(workspace).not.toContain('Reload availability');
     expect(workspace).not.toContain('User OAuth availability');
     expect(workspace).toContain('>Personal</Button>');
+    expect(workspace).toMatch(/<div class="connector-mode-options">\s*<Button[^\n]+>Shared<\/Button>\s*<Button[^\n]+>Personal<\/Button>\s*<\/div>/);
+    expect(workspace).toContain('.connector-mode-options { display: grid; flex-shrink: 0; gap: .75rem; }');
     expect(workspace).toContain('disabled={!registration.canRegister}');
     expect(workspace).toContain('<PersonalServerRegistration');
     expect(workspace).not.toContain('/admin/personal-mcp-servers');

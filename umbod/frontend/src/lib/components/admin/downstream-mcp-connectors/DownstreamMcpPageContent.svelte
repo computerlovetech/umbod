@@ -87,8 +87,10 @@
 {#if state.modal === 'choose' && !state.operations.locked}
   <PersonalServerDialog title="Add MCP connector" titleId="mcp-mode-title" descriptionId="mcp-mode-description" close={state.close}>
     <p id="mcp-mode-description">Use shared credentials or let each user connect their own account.</p>
-    <Button onclick={() => state.open('create', state.returnFocus!)}>Shared</Button>
-    <Button disabled={!registration.canRegister} onclick={() => { registration.openCreate(); state.open('personal', state.returnFocus!); }}>Personal</Button>
+    <div class="connector-mode-options">
+      <Button onclick={() => state.open('create', state.returnFocus!)}>Shared</Button>
+      <Button disabled={!registration.canRegister} onclick={() => { registration.openCreate(); state.open('personal', state.returnFocus!); }}>Personal</Button>
+    </div>
     {#if registration.message}<p role="alert">{registration.message}</p>{/if}
   </PersonalServerDialog>
 {:else if state.modal === 'personal' && !state.operations.authenticationLost}
@@ -96,6 +98,7 @@
 {/if}
 
 <style>
+  .connector-mode-options { display: grid; flex-shrink: 0; gap: .75rem; }
   @media (max-width: 600px) {
     .admin-page { min-width: 0; overflow: hidden; }
   }
