@@ -47,6 +47,7 @@ export interface DownstreamMcpCreateValues {
 type DownstreamBundleLoader = (connectorId: string, signal?: AbortSignal) => Promise<DownstreamMcpWorkspaceBundle>;
 
 import { DownstreamMcpMutationState } from './downstream-mcp-mutation-state.svelte';
+import { suggestedConnectorId, suggestedToolNamePrefix } from '../shared/connector-name-suggestions';
 
 export class DownstreamMcpWorkspaceState {
   readonly operations = new DownstreamMcpMutationState();
@@ -236,14 +237,6 @@ async function loadDownstreamBundle(connectorId: string, signal?: AbortSignal): 
     Promise.resolve(definition), api.tools(connectorId), api.prompts(connectorId), api.resources(connectorId), api.listActivations(connectorId)
   ]);
   return { mode: 'shared', connector, catalog, promptCatalog, resourceCatalog: mapResourceCatalog(resources), invocationPolicies: activation.tools.map((tool) => ({ tool_id: tool.tool_id, mode: tool.invocation_mode, revision: tool.policy_revision })) };
-}
-
-export function suggestedToolNamePrefix(displayName: string): string {
-  return displayName.replace(/[^a-zA-Z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'connector';
-}
-
-export function suggestedConnectorId(displayName: string): string {
-  return displayName.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 export function publicPathSlug(publicPath: string): string {

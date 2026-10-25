@@ -39,6 +39,29 @@ describe('personal server administration presentation', () => {
     expect(body).not.toContain('<nav');
     expect(body).not.toContain('bearerToken');
   });
+  test('registration explains server fields with accessible helpers, useful placeholders and a suffix-only path', () => {
+    const state = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null);
+    const document = new Window().document;
+    document.body.innerHTML = render(PersonalServerRegistration, { props: { state, close: vi.fn(), reload: vi.fn() } }).body;
+    const endpoint = document.getElementById('personal-endpoint')!;
+    expect(endpoint.getAttribute('type')).toBe('url');
+    expect(endpoint.getAttribute('placeholder')).toBe('https://mcp.example.com/mcp');
+    for (const id of ['personal-name', 'personal-endpoint', 'personal-prefix', 'personal-description', 'personal-path']) {
+      const field = document.getElementById(id)!;
+      expect(field.getAttribute('aria-describedby')).toBe(`${id}-helper`);
+      expect(document.getElementById(`${id}-helper`)?.textContent?.length).toBeGreaterThan(30);
+    }
+    const path = document.getElementById('personal-path')!;
+    expect(path.getAttribute('value')).toBe('');
+    expect(path.getAttribute('maxlength')).toBe('63');
+    expect(path.getAttribute('pattern')).toBe('[a-z0-9][a-z0-9\\-]{0,62}');
+    expect(path.parentElement?.querySelector('[aria-hidden="true"]')?.textContent).toBe('/mcp/proxies/');
+    expect(document.getElementById('personal-path-helper')?.textContent).toContain('Enter only the unique identifier after /mcp/proxies/');
+    expect(document.getElementById('personal-path-helper')?.textContent).toContain('does not provide a shared proxy connection or authorize execution');
+    expect(document.body.textContent).toContain('cannot be changed after registration');
+    expect(document.getElementById('personal-description')?.getAttribute('maxlength')).toBe('300');
+    expect(document.body.textContent).not.toContain('Dedicated endpoint');
+  });
   test('selected policy panel and registration keep labels and helper references scoped when rendered together', async () => {
     const document = new Window().document;
     const api = new InMemoryPersonalServers([serverFixture()], [policyFixture()]);
@@ -59,7 +82,7 @@ describe('personal server administration presentation', () => {
         const target = document.getElementById(label.getAttribute('for')!);
         expect(target).not.toBeNull();
         expect(scope.contains(target!)).toBe(true);
-        expect(target?.matches('input, select')).toBe(true);
+        expect(target?.matches('input, button[role="combobox"]')).toBe(true);
       }
       for (const control of scope.querySelectorAll('[aria-describedby]')) {
         for (const id of control.getAttribute('aria-describedby')!.split(' ')) {
@@ -78,15 +101,15 @@ describe('personal server administration presentation', () => {
     const body = render(PolicyFields, { props: { form: new PolicyForm(), idPrefix: 'personal' } }).body;
     expect(body).toContain('OAuth application setup');
     expect(body).toContain('Automatic registration');
-    expect(body).toContain('Use an existing client ID');
-    expect(body).toContain('Use an existing client ID and secret');
+    expect(body).toContain('role="combobox"');
+    expect(body).not.toContain('<select');
     expect(body).not.toContain('Dynamic public');
     expect(body).not.toContain('Preconfigured public');
     expect(body).not.toContain('Preconfigured confidential');
     expect(body).toContain("These settings identify Umbod's application, not a user's login method.");
     expect(body).toContain('Users still connect their own accounts.');
     expect(body).toContain("The provider registers Umbod's application automatically.");
-    expect(body).toContain('value="dynamic_public" selected');
+    expect(body).toContain('value="dynamic_public"');
     expect(body).toContain('Requested scopes');
     expect(body).toContain('ordinary spaces');
     expect(body).toContain('provider defaults');
@@ -109,10 +132,19 @@ describe('personal server administration presentation', () => {
     form.reset({ ...policyFixture(), client: { kind: 'preconfigured_confidential', issuer_url: 'https://issuer.test', client_id: 'app', token_endpoint_auth_method: 'client_secret_post', client_secret_configured: true } });
     const body = render(PolicyFields, { props: { form, idPrefix: 'personal' } }).body;
     expect(body).toContain('Client secret configured');
+    expect(body).toContain('placeholder="https://auth.example.com"');
+    expect(body).toContain('which may differ from the MCP endpoint');
+    expect(body).toContain("This is not a user's account ID or access token.");
+    expect(body).toContain('Basic sends application credentials in an HTTP header');
     expect(body).toContain("An administrator provides an existing application's client ID and secret. The secret is not a user's password.");
     expect(body).toMatch(/id="personal-client-secret"[^>]*type="password"[^>]*autocomplete="new-password"[^>]*required[^>]*value=""/);
-    expect(body).toContain('client_secret_basic');
-    expect(body).toContain('client_secret_post');
+    const document = new Window().document;
+    document.body.innerHTML = body;
+    const authentication = document.getElementById('personal-auth-method');
+    expect(authentication?.getAttribute('role')).toBe('combobox');
+    expect(authentication?.getAttribute('value')).toBe('client_secret_post');
+    expect(authentication?.textContent).toContain('POST (client_secret_post)');
+    expect(document.querySelectorAll('select')).toHaveLength(0);
     expect(body).toContain('Required for every confidential write');
     expect(body).not.toContain('Leave blank to keep');
     expect(body).not.toContain('********');

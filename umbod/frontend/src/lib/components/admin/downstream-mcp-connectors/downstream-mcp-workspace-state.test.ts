@@ -3,7 +3,8 @@ import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationE
 import { summaryFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
 import { describe, expect, test, vi } from 'vitest';
 import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
-import { DownstreamMcpWorkspaceState, suggestedConnectorId, type DownstreamMcpWorkspaceBundle } from './downstream-mcp-workspace-state.svelte';
+import { DownstreamMcpWorkspaceState, type DownstreamMcpWorkspaceBundle } from './downstream-mcp-workspace-state.svelte';
+import { suggestedConnectorId } from '../shared/connector-name-suggestions';
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void;

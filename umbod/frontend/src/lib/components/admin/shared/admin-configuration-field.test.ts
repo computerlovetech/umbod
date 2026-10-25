@@ -46,6 +46,19 @@ describe('AdminConfigurationField', () => {
     expect(body).toMatch(/<p class="helper[^\"]*" id="endpoint-helper">Enter a secure endpoint.<\/p>/);
   });
 
+  test('renders a non-editable prefix without including it in the input value', () => {
+    const { body } = render(AdminConfigurationField, {
+      props: {
+        id: 'registration-path', name: 'path', label: 'Registration path identifier', inputPrefix: '/mcp/proxies/',
+        value: 'acme', maxlength: 63, helperText: 'Enter the identifier after /mcp/proxies/.', required: true
+      }
+    });
+    expect(body).toMatch(/<span[^>]*aria-hidden="true">\/mcp\/proxies\/<\/span>/);
+    expect(body).toMatch(/<input[^>]*maxlength="63"[^>]*value="acme"/);
+    expect(body).toContain('aria-describedby="registration-path-helper"');
+    expect(body).not.toContain('value="/mcp/proxies/acme"');
+  });
+
   test('renders required text fields and unsupported field feedback through the same API', () => {
     const supported = render(AdminConfigurationField, {
       props: { id: 'workspace', name: 'workspace', label: 'Workspace', required: true, value: 'Acme' }

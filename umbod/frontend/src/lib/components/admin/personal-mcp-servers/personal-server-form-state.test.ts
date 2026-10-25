@@ -37,6 +37,76 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reje
 }
 
 describe('personal registration and selected policy through administration port', () => {
+  test('suggests identifiers from the server name without guessing provider settings', async () => {
+    const { state, api } = setup(null);
+    await state.reload();
+    state.openCreate();
+    state.setMetadata('name', 'Payments API / EU');
+    expect(state.metadata).toEqual({ name: 'Payments API / EU', prefix: 'Payments_API_EU', path: 'payments-api-eu', endpoint: '', description: '' });
+    state.setMetadata('name', 'Acme');
+    expect(state.metadata.prefix).toBe('Acme');
+    expect(state.metadata.path).toBe('acme');
+    expect(state.form.scopes).toBe('');
+    expect(state.form.issuer).toBe('');
+    expect(state.form.clientId).toBe('');
+    expect(state.form.secret).toBe('');
+    expect(api.create).not.toHaveBeenCalled();
+  });
+  test.each([
+    { field: 'prefix', value: 'custom_tools', expected: { prefix: 'custom_tools', path: 'renamed' } },
+    { field: 'path', value: 'custom-path', expected: { prefix: 'Renamed', path: 'custom-path' } },
+    { field: 'prefix', value: '', expected: { prefix: '', path: 'renamed' } },
+    { field: 'path', value: '', expected: { prefix: 'Renamed', path: '' } }
+  ] as const)('preserves manual $field edits including "$value" independently', async ({ field, value, expected }) => {
+    const { state } = setup(null);
+    await state.reload();
+    state.openCreate();
+    state.setMetadata('name', 'Acme');
+    state.setMetadata(field, value);
+    state.setMetadata('name', 'Renamed');
+    expect(state.metadata).toMatchObject(expected);
+  });
+  test('cancel and reopen reset suggestion ownership and registration values', async () => {
+    const { state } = setup(null);
+    await state.reload();
+    state.openCreate();
+    metadata(state);
+    confidential(state);
+    state.close();
+    state.openCreate();
+    expect(state.metadata).toEqual({ name: '', prefix: '', description: '', path: '', endpoint: '' });
+    expect(state.form.secret).toBe('');
+    state.setMetadata('name', 'Fresh');
+    expect(state.metadata).toMatchObject({ prefix: 'Fresh', path: 'fresh' });
+  });
+  test.each([
+    { name: 'OAuth', prefix: 'OAuth', path: 'oauth-server' },
+    { name: 'Health', prefix: 'Health', path: 'health-server' },
+    { name: ' --- ', prefix: '---', path: '' },
+    { name: '你好', prefix: 'connector', path: '' },
+    { name: '', prefix: '', path: '' },
+    { name: 'A'.repeat(80), prefix: 'A'.repeat(80), path: 'a'.repeat(63) }
+  ])('keeps suggestions safe for "$name"', async ({ name, prefix, path }) => {
+    const { state } = setup(null);
+    await state.reload();
+    state.openCreate();
+    state.setMetadata('name', 'Previous');
+    state.setMetadata('name', name);
+    expect(state.metadata).toMatchObject({ prefix, path });
+  });
+  test('submits suggested identifiers as metadata with exactly one registration path prefix', async () => {
+    const { state, api } = setup(null);
+    await state.reload();
+    state.openCreate();
+    state.setMetadata('name', 'Acme MCP');
+    state.setMetadata('endpoint', 'https://provider.test/mcp');
+    state.setMetadata('description', 'Search projects');
+    await state.create();
+    expect(api.create).toHaveBeenCalledWith({
+      metadata: { display_name: 'Acme MCP', tool_name_prefix: 'Acme_MCP', capability_description: 'Search projects', public_path: '/mcp/proxies/acme-mcp' },
+      configuration: { endpoint_url: 'https://provider.test/mcp', oauth_configuration: { requested_scopes: [], client: { kind: 'dynamic_public' } } }
+    });
+  });
   test('unknown registration remains a workspace-wide mutation gate after close and independent policy disposal', async () => {
     const workspace = new DownstreamMcpWorkspaceState();
     const { api, state } = setup(null, workspace.operations.setRegistrationLocked);

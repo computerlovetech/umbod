@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack } from 'svelte';
+  import { tick, untrack } from 'svelte';
   import { calculateSelectOverlayGeometry, SelectState, type SelectOption } from './select-state.svelte';
 
   let { options, label, value, onchange, disabled = false, compact = false, id, name, accessibleName }: {
@@ -12,11 +12,12 @@
   const state = new SelectState(untrack(() => options), untrack(() => value));
   let triggerElement: HTMLButtonElement;
 
-  function choose(optionValue: string): void {
+  async function choose(optionValue: string): Promise<void> {
     const selectedValue = state.select(optionValue);
     if (selectedValue !== undefined) {
       onchange(selectedValue);
-      triggerElement.focus();
+      await tick();
+      document.getElementById(selectId)?.focus();
     }
   }
 
@@ -34,6 +35,7 @@
     }
     if (event.key === 'Escape' && state.isOpen) {
       event.preventDefault();
+      event.stopPropagation();
       state.close();
       triggerElement.focus();
       return;
@@ -49,7 +51,7 @@
   }
 
   function overlay(node: HTMLUListElement): () => void {
-    document.body.append(node);
+    (triggerElement.closest('dialog') ?? document.body).append(node);
     let animationFrame = 0;
     const position = (): void => {
       animationFrame = 0;
@@ -81,6 +83,7 @@
       window.visualViewport?.removeEventListener('resize', schedulePosition);
       window.visualViewport?.removeEventListener('scroll', schedulePosition);
       document.removeEventListener('pointerdown', closeOutside, true);
+      node.remove();
     };
   }
 </script>

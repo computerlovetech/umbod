@@ -1,4 +1,5 @@
-import type { DownstreamMcpConnector } from '$lib/admin/downstream-mcp-connectors';
+import { downstreamMcpProxySlugSchema, type DownstreamMcpConnector } from '$lib/admin/downstream-mcp-connectors';
+import { suggestedConnectorId, suggestedToolNamePrefix } from '../shared/connector-name-suggestions';
 import type { PersonalServerAdministration } from '$lib/admin/personal-mcp-servers/administration';
 import { createPersonalServerSchema, type PersonalServerCreate, type PersonalSettings, type PersonalPolicy } from '$lib/admin/personal-mcp-servers/domain/schemas';
 import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
@@ -21,6 +22,8 @@ export class PersonalServerFormState {
   confirmation = $state<Confirmation | null>(null);
   metadata = $state({ name: '', prefix: '', description: '', path: '', endpoint: '' });
   readonly form = new PolicyForm();
+  private prefixEdited = false;
+  private pathEdited = false;
   private epoch = 0;
   private disposed = false;
   constructor(private readonly api: PersonalServerAdministration, private readonly configuration: InstanceConfigurationRoute, private readonly targetId: string | null, private readonly completed: (id: string) => Promise<void> = async () => {}, private readonly accessLost: () => void = () => {}, private readonly lockChanged: (locked: boolean) => void = () => {}) {}
@@ -40,7 +43,7 @@ export class PersonalServerFormState {
     this.policy = null;
     this.creating = false;
     this.confirmation = null;
-    this.metadata = { name: '', prefix: '', description: '', path: '', endpoint: '' };
+    this.resetMetadata();
     this.form.reset();
   }
   private fail(error: unknown, mutation: boolean): void {
@@ -106,7 +109,7 @@ export class PersonalServerFormState {
   openCreate = (): void => {
     if (!this.canRegister) return;
     this.form.reset();
-    this.metadata = { name: '', prefix: '', description: '', path: '', endpoint: '' };
+    this.resetMetadata();
     this.creating = true;
     this.message = '';
   };
@@ -120,7 +123,23 @@ export class PersonalServerFormState {
     this.form.clearSecret();
     this.message = 'Complete all required fields before continuing. The client secret was cleared; enter a fresh secret before submitting again.';
   };
-  setMetadata = (field: keyof PersonalServerFormState['metadata'], value: string): void => { if (!this.locked) this.metadata[field] = value; };
+  private resetMetadata(): void {
+    this.metadata = { name: '', prefix: '', description: '', path: '', endpoint: '' };
+    this.prefixEdited = false;
+    this.pathEdited = false;
+  }
+  setMetadata = (field: keyof PersonalServerFormState['metadata'], value: string): void => {
+    if (this.locked || this.disposed) return;
+    this.metadata[field] = value;
+    if (field === 'prefix') this.prefixEdited = true;
+    if (field === 'path') this.pathEdited = true;
+    if (field !== 'name') return;
+    if (!this.prefixEdited) this.metadata.prefix = value.trim() ? suggestedToolNamePrefix(value) : '';
+    if (!this.pathEdited) {
+      const slug = suggestedConnectorId(value).slice(0, 63);
+      this.metadata.path = !slug || downstreamMcpProxySlugSchema.safeParse(slug).success ? slug : `${slug}-server`;
+    }
+  };
   requestConfirmation = (action: Confirmation): void => {
     if (this.locked || !this.selected || !this.policy) return;
     this.confirmation = action;
