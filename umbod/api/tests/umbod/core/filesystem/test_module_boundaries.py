@@ -15,7 +15,7 @@ def test_filesystem_core_contains_no_backend_configuration_or_adapter_package() 
 
 def test_filesystem_core_does_not_import_host_filesystem_or_infrastructure() -> None:
     root = Path(__file__).parents[4] / "src" / "umbod" / "core" / "filesystem"
-    forbidden = ("os", "fcntl", "tempfile", "pathlib", "umbod.infrastructure")
+    forbidden = ("os", "fcntl", "tempfile", "pathlib", "sqlite3", "umbod.infrastructure")
     violations: list[str] = []
     for path in root.rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
@@ -38,6 +38,11 @@ def test_filesystem_core_does_not_import_host_filesystem_or_infrastructure() -> 
     "umbod.core.filesystem.errors",
     "umbod.core.filesystem.namespace",
     "umbod.core.filesystem.service",
+    "umbod.core.filesystem.stores",
+    "umbod.core.filesystem.stores.schema",
+    "umbod.core.filesystem.stores.namespace",
+    "umbod.core.filesystem.stores.access_control",
+    "umbod.core.filesystem.stores.session",
 ])
 def test_importing_filesystem_core_does_not_load_infrastructure(module: str) -> None:
     program = (
@@ -54,8 +59,7 @@ def test_importing_infrastructure_composition_does_not_load_concrete_filesystem_
     program = (
         "import sys, umbod.infrastructure; "
         "forbidden = {'umbod.infrastructure.filesystem.inmemory', "
-        "'umbod.infrastructure.filesystem.local_content', "
-        "'umbod.infrastructure.filesystem.local_namespace'}; "
+        "'umbod.infrastructure.filesystem.local_content'}; "
         "loaded = forbidden.intersection(sys.modules); "
         "raise SystemExit(','.join(sorted(loaded)) if loaded else 0)"
     )

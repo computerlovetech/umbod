@@ -22,7 +22,7 @@ Bounded contexts own their neutral store ports, schemas, codecs, and services. T
 
 ### Related infrastructure extension
 
-[ADR-006](ADR-006-filesystem-infrastructure-boundary.md) extends infrastructure placement to concrete filesystem storage drivers and their configuration/composition boundary. It preserves this ADR's persistence runtime ownership and inward dependency rules; it does not move domain services into infrastructure or broaden infrastructure to arbitrary connector adapters.
+[ADR-006](ADR-006-filesystem-infrastructure-boundary.md) extends infrastructure placement to concrete filesystem content drivers and their configuration/composition boundary. Its database amendment places namespace/ownership/grant schemas and database-neutral stores in core, over this ADR's shared Database port and existing drivers. It preserves persistence runtime ownership and inward dependency rules; it does not create a separate filesystem database runtime, move domain services into infrastructure, or broaden infrastructure to arbitrary connector adapters.
 
 ### Target module structure
 

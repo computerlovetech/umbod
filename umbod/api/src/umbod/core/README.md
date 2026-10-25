@@ -30,7 +30,7 @@
 
 ### `filesystem/`
 
-**Read when working with:** Standalone filesystem models, namespace/content ports, shared namespace rules, driver-provided root discovery, nested node creation, and streamed content publication. Concrete in-memory/POSIX local storage drivers and backend configuration/factories live in infrastructure under ADR-006; callers compose through the public `umbod.infrastructure` API. Core retains only neutral models, ports, rules, and service behavior. The [local index](filesystem/README.md) describes shared contract coverage and deferred behavior. No REST/MCP or authorization wiring is included.
+**Read when working with:** Filesystem models, namespace/content/access-control ports, shared namespace rules, root discovery, nested creation, streamed content publication, and persisted ownership/sharing. `stores/` owns typed table declarations and database-neutral namespace/policy stores over the shared Database port, following ADR-001. Concrete persistence drivers, byte-storage adapters, configuration, and factories remain infrastructure responsibilities under ADR-006; callers compose through the public `umbod.infrastructure` API. The [local index](filesystem/README.md) describes contracts and deferred behavior. No filesystem REST/MCP or authorization wiring is included.
 
 ### `user_catalogue/`
 

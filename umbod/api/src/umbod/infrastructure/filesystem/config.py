@@ -19,14 +19,6 @@ class LocalAdapterConfig(AdapterConfig):
         return value
 
 
-class InMemoryNamespaceConfig(AdapterConfig):
-    type: Literal["inmemory"]
-
-
-class LocalNamespaceConfig(LocalAdapterConfig):
-    type: Literal["local"]
-
-
 class InMemoryContentConfig(AdapterConfig):
     type: Literal["inmemory"]
 
@@ -35,14 +27,11 @@ class LocalContentConfig(LocalAdapterConfig):
     type: Literal["local"]
 
 
-NamespaceConfig = Annotated[
-    Union[InMemoryNamespaceConfig, LocalNamespaceConfig], Field(discriminator="type"),
-]
 ContentConfig = Annotated[
-    Union[InMemoryContentConfig, LocalContentConfig], Field(discriminator="type"),
+    Union[InMemoryContentConfig, LocalContentConfig],
+    Field(discriminator="type"),
 ]
 
 
 class FilesystemConfig(AdapterConfig):
-    namespace: NamespaceConfig
     content: ContentConfig

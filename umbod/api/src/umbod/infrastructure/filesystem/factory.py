@@ -1,29 +1,28 @@
 from typing import assert_never
 
-from umbod.core.filesystem.ports import ContentDriver, NamespaceDriver
-from umbod.core.filesystem.service import Filesystem
+from umbod.core.filesystem import (
+    AccessControlDriver,
+    ContentDriver,
+    Filesystem,
+    NamespaceDriver,
+)
+from umbod.core.filesystem.stores import DatabaseAccessControl, DatabaseNamespace
+from umbod.core.persistence import Database
 
 from .config import (
     ContentConfig,
-    InMemoryContentConfig,
-    InMemoryNamespaceConfig,
-    LocalContentConfig,
-    LocalNamespaceConfig,
-    NamespaceConfig,
     FilesystemConfig,
+    InMemoryContentConfig,
+    LocalContentConfig,
 )
 
 
-def create_namespace_driver(config: NamespaceConfig) -> NamespaceDriver:
-    if isinstance(config, InMemoryNamespaceConfig):
-        from .inmemory import InMemoryNamespace
+def create_namespace_driver(*, database: Database) -> NamespaceDriver:
+    return DatabaseNamespace(database)
 
-        return InMemoryNamespace()
-    if isinstance(config, LocalNamespaceConfig):
-        from .local_namespace import LocalNamespace
 
-        return LocalNamespace(config.directory)
-    assert_never(config)
+def create_access_control_driver(*, database: Database) -> AccessControlDriver:
+    return DatabaseAccessControl(database)
 
 
 def create_content_driver(config: ContentConfig) -> ContentDriver:
@@ -38,8 +37,8 @@ def create_content_driver(config: ContentConfig) -> ContentDriver:
     assert_never(config)
 
 
-def create_filesystem(config: FilesystemConfig) -> Filesystem:
+def create_filesystem(config: FilesystemConfig, *, database: Database) -> Filesystem:
     return Filesystem(
-        namespace=create_namespace_driver(config.namespace),
+        namespace=create_namespace_driver(database=database),
         content=create_content_driver(config.content),
     )

@@ -1,5 +1,5 @@
 import asyncio
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
@@ -19,6 +19,18 @@ from umbod.core.filesystem import (
 )
 
 from tests.support.filesystem.adapters import AdapterFactory, AdapterPair
+
+
+@pytest.mark.asyncio
+async def test_fresh_namespace_supports_fixed_root_lookup_without_discovery(adapters: AdapterPair) -> None:
+    root = await adapters.namespace.get_node(UUID(int=0))
+    assert root.id == UUID(int=0)
+    assert tuple(await adapters.namespace.list_children(root.id)) == ()
+
+
+@pytest.mark.asyncio
+async def test_fresh_namespace_supports_root_listing_without_discovery(adapters: AdapterPair) -> None:
+    assert tuple(await adapters.namespace.list_children(UUID(int=0))) == ()
 
 
 def metadata() -> NodeMetadata:

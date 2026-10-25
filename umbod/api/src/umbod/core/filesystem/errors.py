@@ -1,3 +1,7 @@
+class OwnershipNotFound(Exception):
+    pass
+
+
 class MissingNode(Exception):
     pass
 

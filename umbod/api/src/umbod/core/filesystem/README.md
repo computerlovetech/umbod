@@ -1,22 +1,31 @@
 # Filesystem
 
-**Module responsibility:** Standalone storage-independent filesystem coordination. This initial slice supports discovery of a driver-provided shared root, directory/file creation, node retrieval, child listing, and streaming content reads/writes.
+**Module responsibility:** Storage-independent filesystem coordination plus database-neutral namespace and ownership/sharing persistence. Public filesystem operations support root discovery, directory/file creation, node retrieval, child listing, and streamed content reads/writes. Policy storage is independent of these operations.
 
-**Public entrypoint:** Import backend-neutral models, ports, errors, and `Filesystem` from `umbod.core.filesystem`. Import FilesystemConfig and create_filesystem from `umbod.infrastructure` for configured production composition. Core has no dependency on infrastructure.
+**Public entrypoint:** Import models, NamespaceDriver, ContentDriver, AccessControlDriver, errors, and Filesystem from `umbod.core.filesystem`. Import FilesystemConfig and composition factories from `umbod.infrastructure`, supplying the existing prepared runtime.database. Core has no infrastructure dependency.
 
-## Files
+## Files and submodules
 
-- `models.py` defines Pydantic node, metadata, immutable-content reference, and node-kind boundary values. Fields are explicit; RootParent, EmptyContent, and UnspecifiedContentType model absence as named states rather than nullable values. These states replace the original design's None representations.
-- `ports.py` defines namespace and content dependency protocols and the byte-stream type. The namespace publication operation replaces a complete content reference with an expected revision; general metadata patches and content clearing are not part of this initial port surface.
-- `errors.py` defines distinguishable namespace and storage failures.
-- `namespace.py` owns validated snapshot state and shared namespace rules for hierarchy, names, detached observations, and optimistic content publication.
-- Concrete storage adapters, backend configuration, and configured factories belong to [infrastructure](../../infrastructure/filesystem/README.md), not this core package, following ADR-006.
-- `service.py` coordinates public operations through constructor-injected dependencies. Root provisioning, IDs, timestamps, revisions, namespace atomicity, and hierarchy enforcement belong to the namespace driver. Content puts must complete before references are published. The service does not eagerly delete old or unpublished objects.
+- `models.py` defines nodes, metadata, immutable-content references, explicit absence states, principals, ownership, permissions, and access grants. Principal identity includes type, issuer, and provider ID. RootParent, EmptyContent, and UnspecifiedContentType name meaningful absent states without nullable model fields.
+- `ports.py` defines namespace, byte-content, and ownership/grant persistence protocols. AccessControlDriver stores policies; it does not resolve identities or evaluate authorization.
+- `errors.py` distinguishes namespace failures, OwnershipNotFound, and StorageFailure.
+- `namespace.py` supplies shared pure name validation, root/node construction, directory checks, and optimistic content-update rules.
+- `stores/` supplies typed per-node/policy tables and database-neutral stores over core.persistence.Database. The [stores index](stores/README.md) describes transactions and identity semantics. Concrete database drivers remain in infrastructure under ADR-001.
+- `service.py` coordinates public filesystem operations through injected namespace/content ports. Content storage must complete before revision-checked reference publication. Old or completed unpublished content is not eagerly deleted.
+- [Filesystem infrastructure](../../infrastructure/filesystem/README.md) owns configured composition and concrete content adapters under amended ADR-006. Namespace and policy stores share an explicitly supplied Database; content remains independently configurable.
+
+## Ownership and sharing
+
+Ownership assignment is separate, including for the root. Creating a node does not assign an owner. Missing ownership raises OwnershipNotFound; assignment replaces the complete owner without revision checks. Grants are keyed by node UUID and exact principal identity. Re-adding a grant replaces its entire permission set and recursive flag, including empty permission sets. Listing absent grants returns empty; removing an absent grant succeeds.
+
+Policies accept logical UUIDs independently of namespace existence, names, or byte keys. Returned observations are detached from persisted state. This persistence layer neither authenticates callers nor provides default-deny enforcement: authorization evaluation, trusted group resolution, and inherited permissions remain future integration responsibilities.
 
 ## Current boundary
 
-Both production backends run the same parametrized public-interface acceptance and contract tests. Test support only records public calls and translates the domain DSL; it no longer supplies a parallel filesystem implementation. There are no REST/MCP entrypoints, authorization wiring, or application composition here; production never imports test support.
+Namespace and policy behavior use the same neutral stores against the existing in-memory and SQLite drivers. Content has independent in-memory/local adapters. Test support translates domain language and records public operations; it does not implement a parallel filesystem.
 
-The initial H01/H02/H05 and E05 scenarios remain green. Adapter contracts additionally cover names, collisions, parent kinds, missing nodes, detached metadata, revision conflicts, immutable content, interrupted streams, and shared-root concurrency. Local-only checks cover reopening, corruption, symlink rejection, atomic publication failure, multiprocess creation, and cancellation. Names must contain Unicode scalar values; unpaired surrogate code points fail consistently as invalid names.
+Namespace checks retain exact case-sensitive Unicode-scalar names, sibling collisions, directory-only parents, sorted children, detached metadata, missing-node behavior, and optimistic revisions. Database tests cover reopening, concurrency, transaction failure, schema readiness, and shared application persistence. Local-content tests retain byte publication, symlink, and interrupted-stream/cancellation checks.
 
-Metadata replacement, moves, deletion, ownership/sharing, authorization, checksums, and deferred cleanup execution remain unimplemented. Current evidence and limits are recorded in `.atdd/features/filesystem/06-storage-adapters.md` at the repository root. The suite does not establish every scenario from the original design.
+The JSON namespace and standalone in-memory namespace are retired. No existing JSON data is read, migrated, or deleted. Metadata replacement, moves, deletion, authorization enforcement, checksums, policy cleanup, and byte garbage collection remain unimplemented. The move-dependent portion of P08 remains deferred; namespace and ownership/grants are still separate operations rather than one combined transaction.
+
+The current scope and verification are recorded in `.atdd/features/filesystem/10-database-namespace-and-policies.md` at the repository root. Earlier feature artifacts preserve implementation history; these tests do not establish all original scenarios or future backend conformance.

@@ -1,4 +1,5 @@
 from .errors import (
+    OwnershipNotFound,
     InvalidName,
     MissingNode,
     NameCollision,
@@ -7,6 +8,11 @@ from .errors import (
     WrongNodeKind,
 )
 from .models import (
+    PrincipalType,
+    Principal,
+    Permission,
+    Ownership,
+    AccessGrant,
     ContentRef,
     EmptyContent,
     Node,
@@ -17,10 +23,17 @@ from .models import (
     StorageKey,
     UnspecifiedContentType,
 )
-from .ports import ByteStream, ContentDriver, NamespaceDriver
+from .ports import AccessControlDriver, ByteStream, ContentDriver, NamespaceDriver
 from .service import Filesystem
 
 __all__ = [
+    "AccessControlDriver",
+    "PrincipalType",
+    "Principal",
+    "Permission",
+    "Ownership",
+    "AccessGrant",
+    "OwnershipNotFound",
     "ByteStream",
     "ContentDriver",
     "ContentRef",

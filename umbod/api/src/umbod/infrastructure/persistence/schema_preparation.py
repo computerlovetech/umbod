@@ -40,10 +40,14 @@ from umbod.core.permissions.stores.schema import (
     CONNECTOR_PERMISSION_TABLE,
     GROUP_TABLE,
 )
+from umbod.core.filesystem.stores.schema import NODE_TABLE, OWNER_TABLE, GRANT_TABLE
 from umbod.core.persistence import Database, Table
 from umbod.core.messaging import CHECKPOINT_TABLE, EVENT_TABLE
 
 APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
+    NODE_TABLE,
+    OWNER_TABLE,
+    GRANT_TABLE,
     CONNECTOR_CONFIGURATION_TABLE,
     PUBLICATION_STATE_TABLE,
     CAPABILITY_ACTIVATION_STATE_TABLE,

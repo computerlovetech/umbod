@@ -1,17 +1,17 @@
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
 
+from umbod.core.persistence import PersistenceRuntime
 from umbod.infrastructure import (
     InMemoryContentConfig,
-    InMemoryNamespaceConfig,
     LocalContentConfig,
-    LocalNamespaceConfig,
     create_content_driver,
     create_namespace_driver,
 )
-
+from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
 from tests.support.filesystem import (
     FilesystemAcceptanceContext,
     create_acceptance_context,
@@ -19,26 +19,41 @@ from tests.support.filesystem import (
 from tests.support.filesystem.adapters import AdapterFactory, AdapterPair
 
 
+@pytest_asyncio.fixture(params=["inmemory", "sqlite"])
+async def filesystem_runtime(
+    request: pytest.FixtureRequest, tmp_path: Path
+) -> AsyncIterator[PersistenceRuntime]:
+    runtime = (
+        await prepared_inmemory_runtime()
+        if request.param == "inmemory"
+        else await prepared_sqlite_runtime(tmp_path / "filesystem.db")
+    )
+    try:
+        yield runtime
+    finally:
+        await runtime.shutdown()
+
+
 @pytest.fixture(params=["inmemory", "local"])
-def adapter_factory(request: pytest.FixtureRequest, tmp_path: Path) -> AdapterFactory:
-    if request.param == "inmemory":
-        shared = AdapterPair(
-            create_namespace_driver(InMemoryNamespaceConfig(type="inmemory")),
-            create_content_driver(InMemoryContentConfig(type="inmemory")),
+def adapter_factory(
+    request: pytest.FixtureRequest,
+    tmp_path: Path,
+    filesystem_runtime: PersistenceRuntime,
+) -> AdapterFactory:
+    content = (
+        create_content_driver(InMemoryContentConfig(type="inmemory"))
+        if request.param == "inmemory"
+        else create_content_driver(
+            LocalContentConfig(type="local", directory=tmp_path / "content")
         )
+    )
 
-        def create_inmemory() -> AdapterPair:
-            return shared
-
-        return create_inmemory
-
-    def create_local() -> AdapterPair:
+    def create() -> AdapterPair:
         return AdapterPair(
-            create_namespace_driver(LocalNamespaceConfig(type="local", directory=tmp_path / "namespace")),
-            create_content_driver(LocalContentConfig(type="local", directory=tmp_path / "content")),
+            create_namespace_driver(database=filesystem_runtime.database), content
         )
 
-    return create_local
+    return create
 
 
 @pytest.fixture

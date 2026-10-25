@@ -9,6 +9,43 @@ NodeId = UUID
 StorageKey = str
 
 
+class PrincipalType(StrEnum):
+    USER = "user"
+    GROUP = "group"
+
+
+class Permission(StrEnum):
+    DISCOVER = "discover"
+    READ = "read"
+    WRITE = "write"
+    DELETE = "delete"
+    SHARE = "share"
+
+
+class Principal(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    type: PrincipalType
+    issuer: str
+    id: str
+
+
+class Ownership(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    node_id: NodeId
+    owner: Principal
+
+
+class AccessGrant(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    node_id: NodeId
+    principal: Principal
+    permissions: set[Permission]
+    recursive: bool
+
+
 class NodeKind(StrEnum):
     FILE = "file"
     DIRECTORY = "directory"
