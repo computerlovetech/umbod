@@ -1,7 +1,16 @@
 from typing import Sequence
 from uuid import UUID
 
-from umbod.core.virtual_filesystem import EmptyContent, RootParent, UnspecifiedContentType
+from umbod.core.virtual_filesystem import (
+    ByteStream,
+    ContentDriver,
+    EmptyContent,
+    NamespaceDriver,
+    Node,
+    NodeMetadata,
+    RootParent,
+    UnspecifiedContentType,
+)
 
 from .models import (
     ContentHandle,
@@ -13,37 +22,28 @@ from .models import (
     StoredContentView,
     UntypedMetadataValue,
 )
-from .protocols import (
-    ByteStream,
-    ContentPort,
-    MetadataFactory,
-    NamespacePort,
-    PublicFilesystem,
-    PublicMetadata,
-    PublicNode,
-)
+from .protocols import PublicFilesystem
 
 
 class DirectPythonAcceptanceDriver:
     def __init__(
-        self, filesystem: PublicFilesystem, namespace: NamespacePort,
-        content: ContentPort, metadata_factory: MetadataFactory,
+        self, filesystem: PublicFilesystem, namespace: NamespaceDriver,
+        content: ContentDriver,
     ) -> None:
         self._filesystem = filesystem
         self._namespace = namespace
         self._content = content
-        self._metadata_factory = metadata_factory
 
-    def _metadata(self, metadata: Metadata) -> PublicMetadata:
+    def _metadata(self, metadata: Metadata) -> NodeMetadata:
         content_type = (
             metadata.content_type if isinstance(metadata, MetadataValue)
             else UnspecifiedContentType()
         )
-        return self._metadata_factory(
+        return NodeMetadata(
             content_type=content_type, attributes=dict(metadata.attributes),
         )
 
-    def _view(self, node: PublicNode) -> NodeView:
+    def _view(self, node: Node) -> NodeView:
         UUID(str(node.id))
         metadata: Metadata
         if isinstance(node.metadata.content_type, UnspecifiedContentType):

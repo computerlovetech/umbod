@@ -1,3 +1,20 @@
+from .config import (
+    ContentConfig,
+    InMemoryContentConfig,
+    InMemoryNamespaceConfig,
+    LocalContentConfig,
+    LocalNamespaceConfig,
+    NamespaceConfig,
+    VirtualFilesystemConfig,
+)
+from .errors import (
+    InvalidName,
+    MissingNode,
+    NameCollision,
+    RevisionConflict,
+    StorageFailure,
+    WrongNodeKind,
+)
 from .models import (
     ContentRef,
     EmptyContent,
@@ -14,9 +31,22 @@ from .service import VirtualFilesystem
 
 __all__ = [
     "ByteStream",
+    "ContentConfig",
+    "InMemoryContentConfig",
+    "InMemoryNamespaceConfig",
+    "LocalContentConfig",
+    "LocalNamespaceConfig",
+    "NamespaceConfig",
+    "VirtualFilesystemConfig",
     "ContentDriver",
     "ContentRef",
     "EmptyContent",
+    "InvalidName",
+    "MissingNode",
+    "NameCollision",
+    "RevisionConflict",
+    "StorageFailure",
+    "WrongNodeKind",
     "NamespaceDriver",
     "Node",
     "NodeId",

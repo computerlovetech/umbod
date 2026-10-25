@@ -30,9 +30,9 @@ Tests unrelated to the metrics HTTP endpoint explicitly disable `rest.metrics_en
 
 ## Virtual filesystem acceptance
 
-`umbod/core/virtual_filesystem/` contains the initial standalone core acceptance slice for root discovery, nested creation, and streamed write/read. Its domain language, direct-Python driver, composition factory, and in-memory dependency doubles live in `support/virtual_filesystem/`. These tests target the public production service, not a simulated service. The initial production VFS slice satisfies its three original tests, with an additional empty-file regression covering explicit absence states. The original missing-SUT red run and the subsequent implementation iterations are recorded in the feature's ATDD artifacts.
+`umbod/core/virtual_filesystem/` runs shared acceptance and namespace/content contracts against production in-memory and POSIX local adapters through a parametrized fixture. The domain language, direct-Python driver, composition factory, public-call recorder, and process helper live in `support/virtual_filesystem/`; there is no parallel fake filesystem. `umbod/core/virtual_filesystem/adapters/` adds local-specific persistence, corruption, symlink, cancellation, publication-failure, and multiprocess checks, plus factory coverage for all four namespace/content combinations, configuration rejection, and composition lifetimes. The shared fixture selects adapters through the production driver factories. The original missing-SUT red run and the subsequent implementation iterations are recorded in the feature's ATDD artifacts.
 
-The scenario mapping and explicit deferrals are recorded in `.atdd/features/virtual-filesystem/04-acceptance-test-plan.md` at the repository root. This initial slice does not establish full feature coverage or conformance of future storage adapters.
+The original scenario mapping is recorded in `.atdd/features/virtual-filesystem/04-acceptance-test-plan.md` at the repository root. `.atdd/features/virtual-filesystem/06-storage-adapters.md` records the adapter scope extension and current checks. These tests do not establish full feature coverage, authorization enforcement, or conformance of future storage backends.
 
 ## Contract and architecture checks
 

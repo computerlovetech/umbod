@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 
+from .errors import WrongNodeKind
 from .models import EmptyContent, Node, NodeId, NodeKind, NodeMetadata
 from .ports import ByteStream, ContentDriver, NamespaceDriver
 
@@ -35,7 +36,9 @@ class VirtualFilesystem:
     async def write(
         self, node_id: NodeId, data: ByteStream, *, expected_revision: int,
     ) -> Node:
-        await self._namespace.get_node(node_id)
+        node = await self._namespace.get_node(node_id)
+        if node.kind != NodeKind.FILE:
+            raise WrongNodeKind(str(node_id))
         content = await self._content.put(data)
         return await self._namespace.update_node(
             node_id, content=content, expected_revision=expected_revision,
@@ -43,6 +46,8 @@ class VirtualFilesystem:
 
     async def read(self, node_id: NodeId) -> ByteStream:
         node = await self._namespace.get_node(node_id)
+        if node.kind != NodeKind.FILE:
+            raise WrongNodeKind(str(node_id))
         if isinstance(node.content, EmptyContent):
             return
         async for chunk in self._content.get(node.content.key):

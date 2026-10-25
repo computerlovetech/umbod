@@ -1,9 +1,7 @@
-from collections.abc import AsyncIterator, Sequence
-from datetime import datetime
-from typing import Mapping, Optional, Protocol
-from uuid import UUID
+from collections.abc import Sequence
+from typing import Protocol
 
-from umbod.core.virtual_filesystem import EmptyContent, RootParent, UnspecifiedContentType
+from umbod.core.virtual_filesystem import ByteStream, Node, NodeId, NodeMetadata
 
 from .models import (
     ContentHandle,
@@ -14,90 +12,21 @@ from .models import (
     StoredContentView,
 )
 
-ByteStream = AsyncIterator[bytes]
-
-
-class PublicKind(Protocol):
-    value: str
-
-
-class PublicMetadata(Protocol):
-    content_type: str | UnspecifiedContentType
-    attributes: Mapping[str, str]
-
-
-class PublicContentRef(Protocol):
-    key: str
-    size: int
-
-
-class PublicNode(Protocol):
-    id: UUID
-    parent_id: UUID | RootParent
-    name: str
-    kind: PublicKind
-    metadata: PublicMetadata
-    content: PublicContentRef | EmptyContent
-    created_at: datetime
-    updated_at: datetime
-    revision: int
-
-
-class MetadataFactory(Protocol):
-    def __call__(
-        self, *, content_type: str | UnspecifiedContentType, attributes: dict[str, str]
-    ) -> PublicMetadata: ...
-
-
-class NodeFactory(Protocol):
-    def __call__(
-        self, *, id: UUID, parent_id: UUID | RootParent, name: str,
-        kind: PublicKind, metadata: PublicMetadata, content: PublicContentRef | EmptyContent,
-        created_at: datetime, updated_at: datetime, revision: int,
-    ) -> PublicNode: ...
-
-
-class ContentRefFactory(Protocol):
-    def __call__(self, *, key: str, size: int) -> PublicContentRef: ...
-
-
-class NamespacePort(Protocol):
-    async def get_root(self) -> PublicNode: ...
-    async def get_node(self, node_id: UUID) -> PublicNode: ...
-    async def get_child(self, parent_id: UUID, name: str) -> Optional[PublicNode]: ...
-    async def list_children(self, parent_id: UUID) -> Sequence[PublicNode]: ...
-    async def create_node(
-        self, parent_id: UUID, name: str, kind: PublicKind,
-        metadata: PublicMetadata,
-    ) -> PublicNode: ...
-    async def update_node(
-        self, node_id: UUID, *, content: PublicContentRef, expected_revision: int,
-    ) -> PublicNode: ...
-
-
-class ContentPort(Protocol):
-    async def put(self, data: ByteStream) -> PublicContentRef: ...
-    def get(self, key: str) -> ByteStream: ...
-
 
 class PublicFilesystem(Protocol):
-    async def get_root(self) -> PublicNode: ...
+    async def get_root(self) -> Node: ...
     async def create_directory(
-        self, parent_id: UUID, name: str, metadata: PublicMetadata,
-    ) -> PublicNode: ...
+        self, parent_id: NodeId, name: str, metadata: NodeMetadata,
+    ) -> Node: ...
     async def create_file(
-        self, parent_id: UUID, name: str, metadata: PublicMetadata,
-    ) -> PublicNode: ...
-    async def get_node(self, node_id: UUID) -> PublicNode: ...
-    async def list_children(self, parent_id: UUID) -> Sequence[PublicNode]: ...
-    def read(self, node_id: UUID) -> ByteStream: ...
+        self, parent_id: NodeId, name: str, metadata: NodeMetadata,
+    ) -> Node: ...
+    async def get_node(self, node_id: NodeId) -> Node: ...
+    async def list_children(self, parent_id: NodeId) -> Sequence[Node]: ...
+    def read(self, node_id: NodeId) -> ByteStream: ...
     async def write(
-        self, node_id: UUID, data: ByteStream, *, expected_revision: int,
-    ) -> PublicNode: ...
-
-
-class FilesystemFactory(Protocol):
-    def __call__(self, *, namespace: NamespacePort, content: ContentPort) -> PublicFilesystem: ...
+        self, node_id: NodeId, data: ByteStream, *, expected_revision: int,
+    ) -> Node: ...
 
 
 class FilesystemLanguage(Protocol):

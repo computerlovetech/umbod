@@ -30,7 +30,7 @@
 
 ### `virtual_filesystem/`
 
-**Read when working with:** Standalone filesystem models, namespace/content ports, driver-provided shared root discovery, nested node creation, and streamed content publication. The [local index](virtual_filesystem/README.md) describes the initial acceptance slice and deferred behavior. No REST/MCP or authorization wiring is included.
+**Read when working with:** Standalone filesystem models, namespace/content ports, shared namespace rules, driver-provided root discovery, nested node creation, and streamed content publication. Feature-local `adapters/` implements production in-memory and POSIX local storage, with a typed configuration-driven factory for independent namespace/content selection and service composition. The [local index](virtual_filesystem/README.md) describes shared contract coverage and deferred behavior. No REST/MCP or authorization wiring is included.
 
 ### `user_catalogue/`
 
