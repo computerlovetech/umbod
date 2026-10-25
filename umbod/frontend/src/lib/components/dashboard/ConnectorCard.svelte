@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { CatalogueConnector } from '$lib/dashboard/domain/schemas';
+  import ConnectorIcon from '$lib/components/admin/connectors/ConnectorIcon.svelte';
 
   let { connector, children }: { connector: CatalogueConnector; children?: Snippet } = $props();
   const headingId = $props.id();
@@ -9,18 +10,20 @@
 </script>
 
 <article aria-labelledby={headingId}>
-  <header>
-    <h3 id={headingId}>{connector.display_name}</h3>
-    <div class="badges">
-      <span>{kindLabels[connector.kind]}</span>
-      {#if connector.kind === 'downstream_mcp'}
-        <span>{connector.ownership === 'personal' ? 'Personal' : 'Shared'}</span>
-      {/if}
-    </div>
-  </header>
-  {#if connector.capability_description}<p class="description">{connector.capability_description}</p>{/if}
-  <details>
-    <summary><span class="closed">Show details</span><span class="opened">Hide details</span><span class="sr-only"> for {connector.display_name}</span></summary>
+  <details class="connector-details">
+    <summary class="connector-summary">
+      <ConnectorIcon label={connector.display_name} size="medium" />
+      <span class="connector-info">
+        <span class="connector-name" id={headingId}>{connector.display_name}</span>
+        {#if connector.capability_description}<span class="description">{connector.capability_description}</span>{/if}
+        <span class="metadata">
+          <span>{kindLabels[connector.kind]}</span>
+          <span>{connector.ownership === 'personal' ? 'Personal' : 'Shared'}</span>
+          <span>{connector.capabilities.length} {connector.capabilities.length === 1 ? 'capability' : 'capabilities'}</span>
+        </span>
+      </span>
+      <span class="detail-toggle"><span class="closed">Show details</span><span class="opened">Hide details</span><span class="sr-only"> for {connector.display_name}</span><span class="chevron" aria-hidden="true">›</span></span>
+    </summary>
     {#if children}
       <div class="personal-access">
         {@render children()}
@@ -51,14 +54,27 @@
 </article>
 
 <style>
-  article { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 1.25rem; min-width: 0; overflow-wrap: anywhere; }
-  header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; }
-  h3 { margin: 0; font-size: 1.05rem; font-weight: 600; }
+  article { background: var(--admin-panel); min-width: 0; overflow-wrap: anywhere; }
   h4 { margin: 0 0 0.75rem; font-size: 0.9rem; }
-  .badges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-  .badges span { background: var(--admin-accent-soft); color: var(--admin-muted); border-radius: var(--admin-radius); font-size: 0.75rem; padding: 0.25rem 0.5rem; }
+  .connector-summary { display: flex; align-items: center; gap: 0.85rem; width: auto; padding: 1rem; color: var(--admin-ink); list-style: none; }
+  .connector-summary::-webkit-details-marker { display: none; }
+  .connector-summary:hover { background: var(--admin-accent-soft); }
+  .connector-info { display: grid; gap: 0.3rem; min-width: 0; flex: 1; }
+  .connector-name { font-size: 0.95rem; font-weight: 600; }
+  .metadata { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 0.6rem; color: var(--admin-muted); font-size: 0.75rem; }
+  .metadata > span + span::before { content: '·'; margin-right: 0.6rem; }
+  .detail-toggle { display: flex; align-items: center; gap: 0.65rem; flex-shrink: 0; color: var(--admin-muted); font-size: 0.75rem; }
+  .chevron { font-size: 1.4rem; transition: transform 120ms ease; }
+  .connector-details[open] > summary .chevron { transform: rotate(90deg); }
+  .connector-details > .capabilities, .connector-details > .personal-access { margin: 0 1rem 1rem; }
+  @media (max-width: 600px) {
+    .connector-summary { align-items: flex-start; gap: 0.65rem; }
+    .detail-toggle > .closed, .detail-toggle > .opened { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  }
   p { margin: 0.6rem 0; line-height: 1.55; }
-  .description, li p { color: var(--admin-muted); font-size: 0.9rem; white-space: pre-line; }
+  .description, li p { color: var(--admin-muted); font-size: 0.85rem; }
+  .description { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  li p { white-space: pre-line; }
   summary { color: var(--admin-accent); cursor: pointer; width: fit-content; padding: 0.6rem 0; font-size: 0.85rem; }
   summary:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; border-radius: 2px; }
   .opened, details[open] > summary .closed { display: none; }

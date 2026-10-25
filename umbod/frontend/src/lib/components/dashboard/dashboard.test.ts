@@ -69,6 +69,11 @@ describe('dashboard presentation', () => {
     const body = render(ConnectorCard, { props: { connector } }).body;
     expect(body).toContain(connector.display_name);
     expect(body).toContain(label);
+    expect(body).toContain('connector-icon medium');
+    expect(body).toContain('aria-hidden="true"');
+    expect(body).toContain(connector.capability_description);
+    expect(body).toContain(connector.ownership === 'personal' ? 'Personal' : 'Shared');
+    expect(body).toContain(`${connector.capabilities.length} ${connector.capabilities.length === 1 ? 'capability' : 'capabilities'}`);
     expect(body).toContain('Show details');
     expect(body).not.toMatch(/<details[^>]*\sopen/);
     expect(body).not.toContain('Personal access');

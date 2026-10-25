@@ -119,8 +119,9 @@
   .catalogue { margin-top: 2rem; }
   h2 { font-size: 1rem; margin: 0; }
   .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
-  .connectors { display: grid; gap: 1rem; list-style: none; padding: 0; margin: 0; }
+  .connectors { list-style: none; padding: 0; margin: 0; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); overflow: hidden; }
   li { min-width: 0; }
+  li + li { border-top: 1px solid var(--admin-border); }
   .setup { margin-top: 2rem; }
   .feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
   p { color: var(--admin-muted); line-height: 1.6; }

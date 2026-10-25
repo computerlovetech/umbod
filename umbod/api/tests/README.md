@@ -28,6 +28,12 @@ Tests unrelated to the metrics HTTP endpoint explicitly disable `rest.metrics_en
 
 `umbod/rest/test_prometheus_rest_api_metrics_acceptance.py` sends real HTTP requests through the REST metrics middleware and scrapes the production Prometheus endpoint. `umbod/mcp/test_prometheus_mcp_metrics_acceptance.py` records completed invocations through the recorder port and scrapes the production MCP metrics endpoint, with separate in-memory aggregation and reset checks. These tests do not simulate network accessibility, endpoint configuration, platform samples, or process restarts. Recorder, authentication, application composition, and listener lifecycle checks remain in their dedicated modules; deployment-level network isolation requires deployment and running-service verification.
 
+## Virtual filesystem acceptance
+
+`umbod/core/virtual_filesystem/` contains the initial standalone core acceptance slice for root discovery, nested creation, and streamed write/read. Its domain language, direct-Python driver, composition factory, and in-memory dependency doubles live in `support/virtual_filesystem/`. These tests target the public production service, not a simulated service. The production VFS module is not yet implemented, so the expected initial result is missing-SUT setup failures after successful collection.
+
+The scenario mapping and explicit deferrals are recorded in `.atdd/features/virtual-filesystem/04-acceptance-test-plan.md` at the repository root. This initial slice does not establish full feature coverage or conformance of future storage adapters.
+
 ## Contract and architecture checks
 
 Store contracts retain both in-memory and SQLite cases. Only SQLite-specific factories prepare SQLite schemas. Persistence composition checks write through one store bundle and read through independent bundles, including a separately opened database, rather than inspecting private database fields. HTTP header policy tests define independent expected policies and exercise the transport port.
