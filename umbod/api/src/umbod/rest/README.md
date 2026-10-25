@@ -18,6 +18,8 @@
 
 `caller.py` adapts successfully verified JWT claims into an immutable shared caller context containing only authentication provenance and subject identity. Middleware retains this request-local snapshot only after authentication and, for administration, membership succeed. Provenance follows the actual verifier, never token claims; the adapter does not verify credentials. `deps.py:get_caller_context` rejects requests without that snapshot. Current-user identity consumes its subject while profile enrichment retains private verified claims; existing group and personal-identity parsers remain unchanged.
 
+Personal identity dependencies capture typed facts from accepted claims and construct a narrow policy before invoking core resolution. They share claim/membership projection with MCP through the downstream feature adapters, not a REST-to-MCP import. `CallerContext` remains an observation; `CanonicalPrincipal` is the resolved business owner, with unchanged namespace/subject keys. Personal service inputs use the shared unqualified `GroupMembership` value.
+
 Local personal identity is backend-owned: tokenless `/api/me` access uses the default simulated verifier composition under the core local/dev Test User policy. When personal support is disabled, catalogue simulation requires local/dev runtime, development simulation and a configured simulated subject without depending on personal identity configuration. Explicit user verifiers remain strict and administrator verifiers are independent. See [`personal_connections`](connectors/downstream_mcp/personal_connections/README.md).
 
 ## Administration client contract

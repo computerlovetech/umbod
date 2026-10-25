@@ -1,3 +1,4 @@
+from umbod.core.callers import GroupMembership
 from umbod.core.permissions.factories import create_group_permission_store
 from umbod.core.permissions.stores.service import GroupPermissionStoreService
 from tests.persistence_runtime import prepared_sqlite_runtime
@@ -48,7 +49,7 @@ async def test_persisted_permissions_are_visible_to_runtime_after_restart(tmp_pa
     reopened_store = await create_group_permission_store(database)
     (runtime_permissions, reloader) = _new_runtime(reopened_store)
     await reloader.reload_group_permissions()
-    assert runtime_permissions.allowed_tools({'groups': ['engineering']}) == {ConnectorToolPermission('github', 'list_repositories')}
+    assert runtime_permissions.allowed_tools(GroupMembership(group_ids=('engineering',))) == {ConnectorToolPermission('github', 'list_repositories')}
 
 @pytest.mark.asyncio
 async def test_revoked_permission_is_hidden_from_runtime_after_reload(tmp_path: Path) -> None:
@@ -61,4 +62,4 @@ async def test_revoked_permission_is_hidden_from_runtime_after_reload(tmp_path: 
     await reloader.reload_group_permissions()
     await management.update_group_permissions(UpdateGroupPermissionsRequest(group_id='engineering', connectors=(), capabilities=(ToolPermissionUpdate(tool, 'disabled').as_capability_update(),)))
     await reloader.reload_group_permissions()
-    assert runtime_permissions.allowed_tools({'groups': ['engineering']}) == set()
+    assert runtime_permissions.allowed_tools(GroupMembership(group_ids=('engineering',))) == set()

@@ -1,7 +1,9 @@
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from functools import partial
+from typing import Protocol
 
+from umbod.core.callers import GroupMembership
 from umbod.core.capabilities.domain import CapabilityKind
 
 
@@ -46,13 +48,19 @@ class GroupConnectorToolPermissionState:
         }
 
 
+class RuntimeGroupPermissions(Protocol):
+    allowed_connector_ids: Callable[[GroupMembership], set[str]]
+    allowed_tools: Callable[[GroupMembership], set[ConnectorToolPermission]]
+    allowed_capabilities: Callable[[GroupMembership], set[ConnectorCapabilityPermission]]
+
+
 class InMemoryGroupConnectorToolPermissions:
     grant_connector: Callable[[str, str], None]
     grant_tool: Callable[[str, str, str], None]
     grant_capability: Callable[[str, str, CapabilityKind, str], None]
-    allowed_connector_ids: Callable[[Mapping[str, object]], set[str]]
-    allowed_tools: Callable[[Mapping[str, object]], set[ConnectorToolPermission]]
-    allowed_capabilities: Callable[[Mapping[str, object]], set[ConnectorCapabilityPermission]]
+    allowed_connector_ids: Callable[[GroupMembership], set[str]]
+    allowed_tools: Callable[[GroupMembership], set[ConnectorToolPermission]]
+    allowed_capabilities: Callable[[GroupMembership], set[ConnectorCapabilityPermission]]
     replace_group_permissions: Callable[
         [Mapping[str, Iterable[str]], Mapping[str, Iterable[ConnectorCapabilityPermission]]],
         None,
@@ -129,10 +137,10 @@ def _replace_group_permissions(
 
 
 def _allowed_connector_ids(
-    state: GroupConnectorToolPermissionState, jwt_claims: Mapping[str, object]
+    state: GroupConnectorToolPermissionState, membership: GroupMembership
 ) -> set[str]:
     connector_ids: set[str] = set()
-    for group in _groups_from_claims(state, jwt_claims):
+    for group in membership.group_ids:
         connector_ids.update(state.connector_grants_by_group.get(group, set()))
         connector_ids.update(
             permission.connector_id
@@ -143,24 +151,24 @@ def _allowed_connector_ids(
 
 def _allowed_tools(
     state: GroupConnectorToolPermissionState,
-    jwt_claims: Mapping[str, object],
+    membership: GroupMembership,
 ) -> set[ConnectorToolPermission]:
     return {
         ConnectorToolPermission(
             connector_id=permission.connector_id,
             operation_name=permission.capability_key,
         )
-        for permission in _allowed_capabilities(state, jwt_claims)
+        for permission in _allowed_capabilities(state, membership)
         if permission.capability_kind == "tool"
     }
 
 
 def _allowed_capabilities(
     state: GroupConnectorToolPermissionState,
-    jwt_claims: Mapping[str, object],
+    membership: GroupMembership,
 ) -> set[ConnectorCapabilityPermission]:
     permissions: set[ConnectorCapabilityPermission] = set()
-    for group in _groups_from_claims(state, jwt_claims):
+    for group in membership.group_ids:
         permissions.update(state.capability_grants_by_group.get(group, set()))
     return permissions
 
@@ -183,16 +191,3 @@ def _validate_connector_tool_change(
     }
     if granted_removed_tool_names:
         raise ValueError("Connector tool change would break an existing permission mapping")
-
-
-def _groups_from_claims(
-    state: GroupConnectorToolPermissionState, jwt_claims: Mapping[str, object]
-) -> set[str]:
-    groups: set[str] = set()
-    for claim_field in state.group_claim_fields:
-        claim_value = jwt_claims.get(claim_field)
-        if isinstance(claim_value, str):
-            groups.add(claim_value)
-        elif isinstance(claim_value, Iterable):
-            groups.update(value for value in claim_value if isinstance(value, str))
-    return groups

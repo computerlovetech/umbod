@@ -44,6 +44,7 @@ if TYPE_CHECKING:
         ConnectorToolPermission,
         GroupConnectorToolPermissionState,
         InMemoryGroupConnectorToolPermissions,
+        RuntimeGroupPermissions,
     )
 
 
@@ -53,6 +54,7 @@ _RUNTIME_EXPORTS = frozenset(
         "ConnectorToolPermission",
         "GroupConnectorToolPermissionState",
         "InMemoryGroupConnectorToolPermissions",
+        "RuntimeGroupPermissions",
     }
 )
 
@@ -95,6 +97,7 @@ __all__ = [
     "PermissionChangeNotifier",
     "PermissionChangeResult",
     "PermissionChangeStatus",
+    "RuntimeGroupPermissions",
     "SaveGroupPermissionsRequest",
     "ToolPermissionUpdate",
     "UpdateGroupPermissionsRequest",

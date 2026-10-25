@@ -9,6 +9,7 @@ from umbod.core.permissions import (
     ConnectorCapabilityRef,
     InMemoryGroupConnectorToolPermissions,
 )
+from umbod.mcp.auth.groups import capture_runtime_permission_groups
 
 
 def connector_capability_permission_check(
@@ -26,7 +27,9 @@ def connector_capability_permission_check(
             connector_id=ref.connector_id,
             capability_kind=ref.capability_kind,
             capability_key=ref.capability_key,
-        ) in permissions.allowed_capabilities(claims)
+        ) in permissions.allowed_capabilities(
+            capture_runtime_permission_groups(claims, permissions.group_claim_fields)
+        )
 
     return check
 

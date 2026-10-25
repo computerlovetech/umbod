@@ -12,9 +12,10 @@ from pydantic import SecretStr
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import FinishCallback
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericRoute, PresentCallbackIssuer
 
+from umbod.core.callers import GroupMembership
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport, OAuthDestination, OAuthHttpRequest, OAuthHttpResponse
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipalProvider, PersonalConnectorInventory, PersonalConnectorSelection, VerifiedGroupMembership
+from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipalProvider, PersonalConnectorInventory, PersonalConnectorSelection
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthProviderFailure, PersonalOAuthUnavailable
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_service import PersonalOAuthCallbackService, PersonalOAuthService
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import DynamicPublicOAuthClient, PersonalOAuthSettings, PreconfiguredConfidentialOAuthClient, PreconfiguredPublicOAuthClient, ReplacePersonalOAuthConfiguration
@@ -51,7 +52,7 @@ async def start_configured(case: AttemptCase, method: str) -> tuple[str, str]:
         }),
     ])
     service = PersonalOAuthService(
-        principals, VerifiedGroupMembership(group_ids=("team",)), inventory, case.bundle.definitions,
+        principals, GroupMembership(group_ids=("team",)), inventory, case.bundle.definitions,
         case.bundle.personal_connections, case.bundle.personal_oauth_attempts,
         DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), "https://umbod.example/api/oauth/downstream-mcp/callback",
         case.clock, case.bundle.personal_oauth_configurations,

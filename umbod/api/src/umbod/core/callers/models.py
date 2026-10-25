@@ -38,6 +38,12 @@ class UnavailableSubject(BaseModel):
     kind: Literal["unavailable"]
 
 
+class GroupMembership(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    group_ids: tuple[str, ...]
+
+
 class CallerContext(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

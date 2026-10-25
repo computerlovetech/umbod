@@ -15,12 +15,13 @@ from umbod.core.connectors.downstream_mcp.stores.ports import (
     ConnectorIdQuery,
 )
 
+from umbod.core.callers import GroupMembership
 from ..personal_oauth_configuration import (
     PersonalOAuthConfigurationStore, PersonalOAuthConfigurationQuery,
     PersonalOAuthConfigurationUnavailable, parse_oauth_scopes,
 )
 
-from .inventory_models import PersonalConnectorQuery, PersonalConnectorUnavailable, VerifiedGroupMembership
+from .inventory_models import PersonalConnectorQuery, PersonalConnectorUnavailable
 from .inventory_ports import PersonalConnectorInventory
 from .models import MissingCanonicalPrincipal, PersonalConnection, PersonalConnectionKey
 from .oauth_models import (
@@ -48,7 +49,7 @@ class PersonalOAuthService:
     def __init__(
         self,
         principals: CanonicalPrincipalProvider,
-        groups: VerifiedGroupMembership,
+        groups: GroupMembership,
         inventory: PersonalConnectorInventory,
         definitions: ConnectorDefinitionStore,
         connections: PersonalConnectionStore,

@@ -19,6 +19,7 @@ from umbod.rest.authentication import (
 from umbod.rest.authentication.authorization import JwtVerifier
 from umbod.rest.authentication.middleware import SuppliedJwtVerifierFactory
 from umbod.rest.authentication.user_middleware import UserAuthenticationMiddleware
+from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import local_personal_identity_enabled
 from umbod.rest.user_catalogue import router as user_catalogue_router
 from umbod.rest.user_catalogue.identity import local_catalogue_identity_enabled
@@ -204,7 +205,7 @@ def _mount_personal_connections_app(
         allow_missing_simulated_token=(
             type(verifier_factory) is JwtVerifierFactory
             and (
-                local_personal_identity_enabled(settings)
+                local_personal_identity_enabled(personal_identity_policy_from_app_config(settings))
                 if settings.personal_connections.enabled
                 else local_catalogue_identity_enabled(settings)
             )

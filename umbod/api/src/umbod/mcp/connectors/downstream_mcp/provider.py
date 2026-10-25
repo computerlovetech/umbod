@@ -46,6 +46,7 @@ from umbod.mcp.connectors.downstream_mcp.tool_invocation import AuthorizedDownst
 from umbod.mcp.connectors.downstream_mcp.tool_projection import tool_descriptor_options
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolRuntime, PersonalToolRecord
 from umbod.mcp.logging import ConnectorToolInvocationLogger
+from umbod.mcp.auth.groups import capture_runtime_permission_groups
 from umbod.mcp.metrics import McpMetricsRecorder
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,9 @@ class GroupDownstreamToolPermissionPolicy:
             connector_id=connector_id,
             capability_kind=capability_kind,  # type: ignore[arg-type]
             capability_key=capability_key,
-        ) in self._permissions.allowed_capabilities(claims)
+        ) in self._permissions.allowed_capabilities(
+            capture_runtime_permission_groups(claims, self._permissions.group_claim_fields)
+        )
 
 @dataclass(frozen=True)
 class IndexedDownstreamPrompt:

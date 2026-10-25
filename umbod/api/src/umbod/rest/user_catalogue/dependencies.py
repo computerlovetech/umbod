@@ -1,3 +1,5 @@
+from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts
+from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from typing import Annotated
 
 from fastapi import Depends
@@ -13,7 +15,7 @@ from umbod.core.connectors.downstream_mcp.catalog import StoreBackedDownstreamCa
 from umbod.core.connectors.downstream_mcp.management import utc_clock
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
 from umbod.core.connectors.downstream_mcp.personal_connections import (
-    PersonalConnectionService, PersonalConnectorInventoryService, VerifiedClaimsPrincipalProvider,
+    PersonalConnectionService, PersonalConnectorInventoryService, PersonalIdentityPrincipalProvider,
 )
 from umbod.core.connectors.downstream_mcp.user_catalogue import (
     PersonalCatalogueSource, PersonalNamespace, SharedDownstreamCatalogue, SharedDownstreamReadiness,
@@ -107,7 +109,7 @@ async def get_user_catalogue(
         )
         names[("downstream_mcp", identity.connector_id, identity.capability_kind, identity.capability_key)] = name
     if settings.personal_connections.enabled:
-        principal_provider = VerifiedClaimsPrincipalProvider(settings, claims.claims)
+        principal_provider = PersonalIdentityPrincipalProvider(personal_identity_policy_from_app_config(settings), personal_identity_facts(claims.claims))
         principal = await principal_provider.get_principal()
         if principal is not None:
             stores = await get_downstream_stores(

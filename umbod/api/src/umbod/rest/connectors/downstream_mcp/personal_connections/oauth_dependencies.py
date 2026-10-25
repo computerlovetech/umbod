@@ -1,3 +1,4 @@
+from umbod.core.callers import GroupMembership
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Annotated
@@ -5,6 +6,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
+from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import local_personal_identity_enabled
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.factory import configured_personal_oauth_provider
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthProvider
@@ -18,7 +20,7 @@ from .dependencies import (
     get_personal_group_membership,
     get_personal_principal_provider,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipalProvider, PersonalConnectorInventory, VerifiedGroupMembership
+from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipalProvider, PersonalConnectorInventory
 
 
 def require_personal_oauth(factories: Factories) -> None:
@@ -27,7 +29,7 @@ def require_personal_oauth(factories: Factories) -> None:
 
 
 def get_personal_callback_policy(factories: Factories) -> CallbackURLPolicy:
-    return CallbackURLPolicy.LOCAL_DEVELOPMENT if local_personal_identity_enabled(factories.settings) else CallbackURLPolicy.STRICT
+    return CallbackURLPolicy.LOCAL_DEVELOPMENT if local_personal_identity_enabled(personal_identity_policy_from_app_config(factories.settings)) else CallbackURLPolicy.STRICT
 
 
 async def get_personal_oauth_provider(
@@ -44,7 +46,7 @@ def oauth_clock() -> datetime:
 
 async def get_personal_oauth_service(
     principal: Annotated[CanonicalPrincipalProvider, Depends(get_personal_principal_provider)],
-    groups: Annotated[VerifiedGroupMembership, Depends(get_personal_group_membership)],
+    groups: Annotated[GroupMembership, Depends(get_personal_group_membership)],
     inventory: Annotated[PersonalConnectorInventory, Depends(get_personal_connector_inventory)],
     stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     provider: Annotated[PersonalOAuthProvider, Depends(get_personal_oauth_provider)],

@@ -11,7 +11,9 @@ from fastmcp.server.auth import AuthContext
 from fastmcp.server.dependencies import get_access_token
 
 from umbod.config.app import AppConfig
-from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import authenticated_personal_mcp_claims
+from umbod.core.connectors.downstream_mcp.adapters.identity import authenticated_personal_mcp_claims, personal_identity_facts, personal_group_membership
+from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
+from umbod.core.connectors.downstream_mcp.personal_connections.identity_models import PersonalIdentityPolicy, ResolvedPersonalIdentity
 from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalRuntimeContext
@@ -20,29 +22,30 @@ from .tool_invocation import AuthorizedPersonalTool
 
 
 def verified_personal_runtime_context(settings: AppConfig, claims: Mapping[str, object]) -> PersonalRuntimeContext:
-    principal = canonical_principal(settings, claims)
-    if principal is None:
+    return _personal_runtime_context(personal_identity_policy_from_app_config(settings), claims, settings.mcp.permission_group_claim)
+
+
+def _personal_runtime_context(policy: PersonalIdentityPolicy, claims: Mapping[str, object], group_claim: str) -> PersonalRuntimeContext:
+    resolution = canonical_principal(policy, personal_identity_facts(claims))
+    if not isinstance(resolution, ResolvedPersonalIdentity):
         raise PersonalRuntimeUnavailable("Personal identity unavailable")
-    value = claims.get(settings.mcp.permission_group_claim)
-    if isinstance(value, str):
-        groups = (value,) if value.strip() else ()
-    elif isinstance(value, (list, tuple)) and all(isinstance(item, str) for item in value):
-        groups = tuple(item for item in value if item.strip())
-    else:
-        groups = ()
-    return PersonalRuntimeContext(principal=principal, group_ids=tuple(sorted(set(groups))))
+    groups = personal_group_membership(claims.get(group_claim))
+    return PersonalRuntimeContext(principal=resolution.principal, group_ids=groups.group_ids)
 
 
 class McpPersonalRuntimeContextProvider:
     def __init__(self, settings: AppConfig) -> None:
         self._settings = settings
+        self._policy = personal_identity_policy_from_app_config(settings)
 
     async def get_context(self) -> PersonalRuntimeContext:
         token = get_access_token()
         if token is None or not isinstance(token.claims, Mapping):
             raise PersonalRuntimeUnavailable("Personal identity unavailable")
-        return verified_personal_runtime_context(
-            self._settings, authenticated_personal_mcp_claims(self._settings, token.claims)
+        return _personal_runtime_context(
+            self._policy,
+            authenticated_personal_mcp_claims(self._settings, self._policy, token.claims),
+            self._settings.mcp.permission_group_claim,
         )
 
 

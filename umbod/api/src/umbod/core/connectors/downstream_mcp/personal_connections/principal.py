@@ -1,63 +1,63 @@
-from collections.abc import Mapping
 from typing import Optional
 
-from umbod.config.app import AppConfig
-from .development_identity import local_personal_identity_enabled, machine_identity
-from umbod.core.connectors.downstream_mcp.personal_connections.models import (
-    CanonicalPrincipal,
+from .development_identity import local_personal_identity_enabled
+from .identity_models import (
+    AbsentIssuer, DeclaredIssuer, ObservedIdentityString,
+    PersonalIdentityFacts, PersonalIdentityPolicy, PersonalIdentityRejection,
+    PersonalIdentityResolution, ResolvedPersonalIdentity, UnresolvedPersonalIdentity,
 )
-
-
-def _string_claim(claims: Mapping[str, object], name: str) -> str:
-    value = claims.get(name)
-    return value if isinstance(value, str) and value.strip() else ""
+from .models import CanonicalPrincipal
 
 
 def canonical_principal(
-    settings: AppConfig, claims: Mapping[str, object]
-) -> Optional[CanonicalPrincipal]:
-    policy = settings.personal_connections
+    policy: PersonalIdentityPolicy, facts: PersonalIdentityFacts,
+) -> PersonalIdentityResolution:
     if not policy.enabled or not policy.identity_namespace.strip():
-        return None
-    if settings.admin_authentication.mode == "disabled" or machine_identity(claims):
-        return None
-    if settings.admin_authentication.mode == "simulation":
-        subject = _string_claim(claims, "sub")
+        return UnresolvedPersonalIdentity(reason=PersonalIdentityRejection.FEATURE_UNAVAILABLE)
+    if policy.authentication_mode == "disabled":
+        return UnresolvedPersonalIdentity(reason=PersonalIdentityRejection.AUTHENTICATION_DISABLED)
+    if facts.machine:
+        return UnresolvedPersonalIdentity(reason=PersonalIdentityRejection.MACHINE)
+    if policy.authentication_mode == "simulation":
         if (
-            not local_personal_identity_enabled(settings)
-            or "iss" in claims
-            or subject != settings.admin_authentication.simulated_user_id
+            not local_personal_identity_enabled(policy)
+            or not isinstance(facts.issuer, AbsentIssuer)
+            or not isinstance(facts.subject, ObservedIdentityString)
+            or facts.subject.value != policy.simulated_subject
         ):
-            return None
-        return CanonicalPrincipal(namespace=policy.identity_namespace, subject=subject)
-    issuer = claims.get("iss")
-    if "iss" in claims:
-        if not isinstance(issuer, str) or not settings.oidc.issuer_url:
-            return None
-        if issuer != settings.oidc.issuer_url:
-            return None
-    elif settings.oidc.provider != "google":
-        return None
-    subject = _string_claim(claims, "sub")
-    if settings.oidc.provider == "azure_entra_id":
-        tenant = _string_claim(claims, "tid")
-        if not tenant or tenant != settings.oidc.tenant_id:
-            return None
-        if not _string_claim(claims, "scp"):
-            return None
-        object_id = _string_claim(claims, "oid")
-        if not object_id:
-            return None
-        subject = f"{tenant}:{object_id}"
-    if not subject:
-        return None
-    return CanonicalPrincipal(namespace=policy.identity_namespace, subject=subject)
+            return UnresolvedPersonalIdentity(reason=PersonalIdentityRejection.SIMULATION_UNAVAILABLE)
+        return ResolvedPersonalIdentity(principal=CanonicalPrincipal(
+            namespace=policy.identity_namespace, subject=facts.subject.value,
+        ))
+    if isinstance(facts.issuer, DeclaredIssuer):
+        if not policy.expected_issuer or facts.issuer.value != policy.expected_issuer:
+            return UnresolvedPersonalIdentity(reason=PersonalIdentityRejection.ISSUER)
+    elif not (isinstance(facts.issuer, AbsentIssuer) and policy.provider == "google"):
+        return UnresolvedPersonalIdentity(reason=PersonalIdentityRejection.ISSUER)
+    if policy.provider == "azure_entra_id":
+        if not isinstance(facts.tenant_id, ObservedIdentityString) or facts.tenant_id.value != policy.expected_tenant or not facts.tenant_id.value.strip():
+            return UnresolvedPersonalIdentity(reason=PersonalIdentityRejection.TENANT)
+        if not facts.delegated_scope:
+            return UnresolvedPersonalIdentity(reason=PersonalIdentityRejection.DELEGATION)
+        if not isinstance(facts.object_id, ObservedIdentityString) or not facts.object_id.value.strip():
+            return UnresolvedPersonalIdentity(reason=PersonalIdentityRejection.SUBJECT)
+        subject = f"{facts.tenant_id.value}:{facts.object_id.value}"
+    else:
+        if not isinstance(facts.subject, ObservedIdentityString) or not facts.subject.value.strip():
+            return UnresolvedPersonalIdentity(reason=PersonalIdentityRejection.SUBJECT)
+        subject = facts.subject.value
+    return ResolvedPersonalIdentity(principal=CanonicalPrincipal(
+        namespace=policy.identity_namespace, subject=subject,
+    ))
 
 
-class VerifiedClaimsPrincipalProvider:
-    def __init__(self, settings: AppConfig, claims: Mapping[str, object]) -> None:
-        self._settings = settings
-        self._claims = claims
+class PersonalIdentityPrincipalProvider:
+    def __init__(self, policy: PersonalIdentityPolicy, facts: PersonalIdentityFacts) -> None:
+        self._policy = policy
+        self._facts = facts
 
     async def get_principal(self) -> Optional[CanonicalPrincipal]:
-        return canonical_principal(self._settings, self._claims)
+        resolution = canonical_principal(self._policy, self._facts)
+        if isinstance(resolution, ResolvedPersonalIdentity):
+            return resolution.principal
+        return None

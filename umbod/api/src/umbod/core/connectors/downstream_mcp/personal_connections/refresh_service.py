@@ -3,7 +3,8 @@ from collections.abc import Callable
 from datetime import datetime
 from uuid import uuid4
 
-from .inventory_models import PersonalConnectorQuery, VerifiedGroupMembership
+from umbod.core.callers import GroupMembership
+from .inventory_models import PersonalConnectorQuery
 from .inventory_ports import PersonalConnectorInventory
 from .models import MissingCanonicalPrincipal, PersonalConnectionKey
 from .ports import CanonicalPrincipalProvider
@@ -14,7 +15,7 @@ from .refresh_provider_ports import PersonalOAuthRefreshProvider
 
 
 class PersonalRefreshService:
-    def __init__(self, principal: CanonicalPrincipalProvider, groups: VerifiedGroupMembership, inventory: PersonalConnectorInventory, store: PersonalRefreshStore, provider: PersonalOAuthRefreshProvider, clock: Callable[[], datetime]) -> None:
+    def __init__(self, principal: CanonicalPrincipalProvider, groups: GroupMembership, inventory: PersonalConnectorInventory, store: PersonalRefreshStore, provider: PersonalOAuthRefreshProvider, clock: Callable[[], datetime]) -> None:
         self._principal = principal
         self._groups = groups
         self._inventory = inventory

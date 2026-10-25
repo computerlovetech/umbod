@@ -24,10 +24,10 @@ from umbod.core.connectors.downstream_mcp.personal_connections import (
     SetPersonalConnectionEnabled,
 )
 from umbod.core.connectors.downstream_mcp.personal_connections.inventory import PersonalConnectorInventoryService
+from umbod.core.callers import GroupMembership
 from umbod.core.connectors.downstream_mcp.personal_connections.inventory_models import (
     PersonalConnectorUnavailable,
     SetPersonalConnectorEnablement,
-    VerifiedGroupMembership,
 )
 from umbod.core.connectors.downstream_mcp.stores import (
     DownstreamMcpStores,
@@ -172,7 +172,7 @@ async def test_inventory_cannot_recreate_state_when_deleted_after_eligibility_ch
         stores.definitions,
         stores.publishing,
         GrantedGroups(),
-        VerifiedGroupMembership(group_ids=("team",)),
+        GroupMembership(group_ids=("team",)),
         connections,
         SystemConnectorCapabilityDescriptionOverrideStore(),
     )

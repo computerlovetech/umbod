@@ -2,6 +2,8 @@ import json
 from importlib import import_module
 from typing import Any
 
+from umbod.core.callers import GroupMembership
+
 import pytest
 
 from umbod.mcp.live_permission_updates import (
@@ -247,16 +249,16 @@ async def test_group_permission_state_reloader_refreshes_runtime_permissions_for
     reloader = module.GroupPermissionStateReloader(
         permission_reader=reader, runtime_permissions=permissions
     )
-    jwt_claims = {"groups": ["engineering"]}
+    membership = GroupMembership(group_ids=("engineering",))
 
     await reloader.reload_group_permissions()
 
-    _assert_engineering_can_see_github_create_issue(permissions, jwt_claims)
+    _assert_engineering_can_see_github_create_issue(permissions, membership)
 
     reader.permission_sets = (_empty_engineering_permissions(),)
     await reloader.reload_group_permissions()
 
-    _assert_engineering_cannot_see_github_create_issue(permissions, jwt_claims)
+    _assert_engineering_cannot_see_github_create_issue(permissions, membership)
 
 
 @pytest.mark.asyncio
@@ -334,20 +336,20 @@ def _empty_engineering_permissions() -> GroupPermissionSet:
 
 def _assert_engineering_can_see_github_create_issue(
     permissions: InMemoryGroupConnectorToolPermissions,
-    jwt_claims: dict[str, list[str]],
+    membership: GroupMembership,
 ) -> None:
-    assert permissions.allowed_connector_ids(jwt_claims) == {"github"}
-    assert permissions.allowed_tools(jwt_claims) == {
+    assert permissions.allowed_connector_ids(membership) == {"github"}
+    assert permissions.allowed_tools(membership) == {
         ConnectorToolPermission(connector_id="github", operation_name="create_issue")
     }
 
 
 def _assert_engineering_cannot_see_github_create_issue(
     permissions: InMemoryGroupConnectorToolPermissions,
-    jwt_claims: dict[str, list[str]],
+    membership: GroupMembership,
 ) -> None:
-    assert permissions.allowed_connector_ids(jwt_claims) == set()
-    assert permissions.allowed_tools(jwt_claims) == set()
+    assert permissions.allowed_connector_ids(membership) == set()
+    assert permissions.allowed_tools(membership) == set()
 
 
 @pytest.mark.asyncio

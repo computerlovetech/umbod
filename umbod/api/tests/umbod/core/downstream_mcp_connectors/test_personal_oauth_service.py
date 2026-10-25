@@ -5,10 +5,11 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import SecretStr
 
+from umbod.core.callers import GroupMembership
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore, PersonalOAuthConfiguration, legacy_personal_oauth_policy
 from umbod.core.connectors.downstream_mcp.stores.ports import ConnectorDefinitionFound, ConnectorDefinitionStore
-from umbod.core.connectors.downstream_mcp.personal_connections.inventory_models import PersonalConnectorSelection, VerifiedGroupMembership
+from umbod.core.connectors.downstream_mcp.personal_connections.inventory_models import PersonalConnectorSelection
 from umbod.core.connectors.downstream_mcp.personal_connections.inventory_ports import PersonalConnectorInventory
 from umbod.core.connectors.downstream_mcp.personal_connections.models import CanonicalPrincipal, PersonalConnection, PersonalConnectionKey, Unauthorized
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthConflict, PersonalOAuthProviderFailure, PreparedPersonalOAuth
@@ -52,7 +53,7 @@ def service_dependencies() -> tuple[PersonalOAuthService, AsyncMock, AsyncMock]:
     configurations.get.return_value = PersonalOAuthConfiguration(connector_id="connector", policy=legacy_personal_oauth_policy())
     ticks = iter((now, now + timedelta(seconds=5), now + timedelta(seconds=10)))
     return PersonalOAuthService(
-        principals, VerifiedGroupMembership(group_ids=("team",)), inventory, definitions,
+        principals, GroupMembership(group_ids=("team",)), inventory, definitions,
         connections, attempts, provider, "https://api.example/api/oauth/downstream-mcp/callback",
         lambda: next(ticks), configurations,
     ), attempts, provider

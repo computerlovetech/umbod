@@ -1,5 +1,9 @@
 # Downstream MCP connectors
 
+The package facade and `personal_connections/` expose their established public names lazily. Importing the typed personal identity resolver does not initialize deployment configuration, REST/MCP frameworks or persistence drivers. Concrete services are imported only when their public exports are requested.
+
+Personal identity policy consumes validated facts and a narrow policy through `personal_connections/identity_ports.py`. Accepted-claim capture and AppConfig translation live in `adapters/identity.py` and `adapters/settings.py`; the [personal index](personal_connections/README.md) describes resolved/rejected results and stable ownership keys.
+
 `models.py` defines connector definitions, discovery data and creation commands. Shared creation retains its discriminated `CreateConnectorDefinition` union. `CreatePersonalOAuthConnectorDefinition` is a separate personal creation operation with optional administrator-owned OAuth configuration.
 
 `management/` coordinates creation, updates, deletion and queries through the aggregate unit-of-work port. `DownstreamConnectorCreator.create_personal_oauth()` checks identity and public-path uniqueness, then atomically creates the definition while clearing shared credentials, catalogue, health and publication and reconciling an empty activation set. It does not invoke preparation or probing. Generic personal edits remain rejected; dedicated revision-checked OAuth policy replacement invalidates personal authorizations and attempts without changing publication or grants.

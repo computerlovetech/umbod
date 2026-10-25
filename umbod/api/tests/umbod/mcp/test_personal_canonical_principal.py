@@ -17,16 +17,22 @@ from umbod.config.app import (
 from umbod.core.connectors.downstream_mcp.personal_connections.ports import (
     CanonicalPrincipalProvider,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections import VerifiedClaimsPrincipalProvider
+from umbod.core.connectors.downstream_mcp.personal_connections import PersonalIdentityPrincipalProvider
+from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts
+from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from umbod.mcp.connectors.downstream_mcp.principal import McpCanonicalPrincipalProvider
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalRuntimeContextProvider, verified_personal_runtime_context
-from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import authenticated_personal_mcp_claims
+from umbod.core.connectors.downstream_mcp.adapters.identity import authenticated_personal_mcp_claims
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
 from umbod.rest.authentication.middleware import JwtVerifierFactory
 
 pytestmark = pytest.mark.anyio
 
 Provider = Literal["google", "auth0", "azure_entra_id"]
+
+
+def _principal_provider(settings: AppConfig, claims: Mapping[str, object]) -> CanonicalPrincipalProvider:
+    return PersonalIdentityPrincipalProvider(personal_identity_policy_from_app_config(settings), personal_identity_facts(claims))
 
 
 def _settings(
@@ -68,7 +74,7 @@ async def test_verified_rest_and_upstream_mcp_claims_have_identical_ownership(
 ) -> None:
     settings = _settings(provider)
     claims = _claims(provider)
-    rest: CanonicalPrincipalProvider = VerifiedClaimsPrincipalProvider(settings, claims)
+    rest: CanonicalPrincipalProvider = _principal_provider(settings, claims)
     mcp_claims = dict(claims)
     if provider == "azure_entra_id":
         mcp_claims["sub"] = "different-mcp-application-subject"
@@ -91,10 +97,10 @@ async def test_verified_rest_and_upstream_mcp_claims_have_identical_ownership(
 
 @pytest.mark.parametrize("provider", ["google", "auth0", "azure_entra_id"])
 async def test_separate_namespaces_do_not_share_ownership(provider: Provider) -> None:
-    first: CanonicalPrincipalProvider = VerifiedClaimsPrincipalProvider(
+    first: CanonicalPrincipalProvider = _principal_provider(
         _settings(provider, "first"), _claims(provider)
     )
-    second: CanonicalPrincipalProvider = VerifiedClaimsPrincipalProvider(
+    second: CanonicalPrincipalProvider = _principal_provider(
         _settings(provider, "second"), _claims(provider)
     )
     assert await first.get_principal() != await second.get_principal()
@@ -103,10 +109,10 @@ async def test_separate_namespaces_do_not_share_ownership(provider: Provider) ->
 async def test_entra_tenants_do_not_share_object_ownership() -> None:
     first_claims = _claims("azure_entra_id")
     second_claims = {**first_claims, "tid": "other"}
-    first: CanonicalPrincipalProvider = VerifiedClaimsPrincipalProvider(
+    first: CanonicalPrincipalProvider = _principal_provider(
         _settings("azure_entra_id"), first_claims
     )
-    second: CanonicalPrincipalProvider = VerifiedClaimsPrincipalProvider(
+    second: CanonicalPrincipalProvider = _principal_provider(
         _settings("azure_entra_id", tenant="other"), second_claims
     )
     assert await first.get_principal() != await second.get_principal()
@@ -179,7 +185,7 @@ async def test_entra_tenants_do_not_share_object_ownership() -> None:
 async def test_invalid_or_machine_only_verified_claims_are_unmappable(
     provider: Provider, claims: Mapping[str, object]
 ) -> None:
-    principal: CanonicalPrincipalProvider = VerifiedClaimsPrincipalProvider(
+    principal: CanonicalPrincipalProvider = _principal_provider(
         _settings(provider), claims
     )
     assert await principal.get_principal() is None
@@ -215,8 +221,8 @@ async def test_authenticated_local_mcp_matches_rest_without_mutating_global_clai
     token = AccessToken(token="authenticated", client_id="client", scopes=[], claims=claims)
     context = auth_context_var.set(AuthenticatedUser(token))
     try:
-        assert authenticated_personal_mcp_claims(settings, claims) == rest_claims
-        rest = await VerifiedClaimsPrincipalProvider(settings, rest_claims).get_principal()
+        assert authenticated_personal_mcp_claims(settings, personal_identity_policy_from_app_config(settings), claims) == rest_claims
+        rest = await _principal_provider(settings, rest_claims).get_principal()
         assert await McpCanonicalPrincipalProvider(settings).get_principal() == rest
         runtime = await McpPersonalRuntimeContextProvider(settings).get_context()
         assert runtime.principal == rest
@@ -241,7 +247,7 @@ async def test_authenticated_local_mcp_matches_rest_without_mutating_global_clai
     {"sub": "stable-configured-user", "email": "robot@project.iam.gserviceaccount.com"},
 ])
 async def test_simulated_canonical_branch_rejects_untrusted_claims(claims: Mapping[str, object]) -> None:
-    assert await VerifiedClaimsPrincipalProvider(_local_settings(), claims).get_principal() is None
+    assert await _principal_provider(_local_settings(), claims).get_principal() is None
     with pytest.raises(PersonalRuntimeUnavailable):
         verified_personal_runtime_context(_local_settings(), claims)
 
@@ -278,12 +284,12 @@ async def test_local_mcp_normalization_requires_single_test_user_authentication(
     settings = _local_settings()
     settings = settings.model_copy(update={"mcp": settings.mcp.model_copy(update={"auth_mode": "oidc"})})
     claims = {"sub": "original-subject", "groups": ["original"]}
-    assert authenticated_personal_mcp_claims(settings, claims) == claims
-    assert authenticated_personal_mcp_claims(_settings(), claims) == claims
+    assert authenticated_personal_mcp_claims(settings, personal_identity_policy_from_app_config(settings), claims) == claims
+    assert authenticated_personal_mcp_claims(_settings(), personal_identity_policy_from_app_config(_settings()), claims) == claims
 
 
 async def test_disabled_policy_never_maps_claims() -> None:
-    principal: CanonicalPrincipalProvider = VerifiedClaimsPrincipalProvider(
+    principal: CanonicalPrincipalProvider = _principal_provider(
         AppConfig(), {"sub": "account"}
     )
     assert await principal.get_principal() is None

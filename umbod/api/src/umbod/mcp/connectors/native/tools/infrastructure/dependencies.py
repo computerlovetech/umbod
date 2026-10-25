@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from fastmcp.server.dependencies import get_access_token, get_server
+from umbod.mcp.auth.groups import capture_runtime_permission_groups
 
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
@@ -34,6 +35,8 @@ def get_allowed_connector_tool_refs() -> ConnectorToolAuthorizationScope:
     return RestrictedConnectorTools(
         frozenset(
             ConnectorToolRef(permission.connector_id, permission.operation_name)
-            for permission in permissions.allowed_tools(claims)
+            for permission in permissions.allowed_tools(
+                capture_runtime_permission_groups(claims, permissions.group_claim_fields)
+            )
         )
     )

@@ -13,6 +13,7 @@ from umbod.core.capabilities.descriptions import (
 )
 from umbod.core.capabilities.descriptions.factories import ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
+from umbod.core.callers import GroupMembership
 from umbod.core.connectors.downstream_mcp.personal_connections import (
     Authorized,
     CanonicalPrincipal,
@@ -26,7 +27,6 @@ from umbod.core.connectors.downstream_mcp.personal_connections import (
     ReplacePersonalAuthorization,
     SetPersonalConnectionEnabled,
     SetPersonalConnectorEnablement,
-    VerifiedGroupMembership,
 )
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores, SaveConnectorDefinition, create_downstream_mcp_stores
 from umbod.core.permissions import GroupPermissionStore
@@ -51,7 +51,7 @@ class InventoryFixture:
     def inventory(self, subject: str = "alice", namespace: str = "trusted") -> PersonalConnectorInventory:
         return PersonalConnectorInventoryService(
             self.stores.definitions, self.stores.publishing, self.permissions,
-            VerifiedGroupMembership(group_ids=("team",)),
+            GroupMembership(group_ids=("team",)),
             PersonalConnectionService(OwnerPrincipalProvider(subject, namespace), self.stores.personal_connections),
             self.descriptions,
         )

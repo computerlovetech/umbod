@@ -6,9 +6,10 @@ from pydantic import SecretStr
 
 from tests.umbod.core.downstream_mcp_connectors.test_personal_refresh import refresh_store, reservation
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, runtime_case
+from umbod.core.callers import GroupMembership
 from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import authorize_personal_grant
 from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthQuery
-from umbod.core.connectors.downstream_mcp.personal_connections.inventory_models import PersonalConnectorQuery, PersonalConnectorSelection, VerifiedGroupMembership
+from umbod.core.connectors.downstream_mcp.personal_connections.inventory_models import PersonalConnectorQuery, PersonalConnectorSelection
 from umbod.core.connectors.downstream_mcp.personal_connections.models import Authorized, CanonicalPrincipal
 from umbod.core.connectors.downstream_mcp.personal_connections.refresh_models import PersonalRefreshConflict, PersonalRefreshReconnectRequired, PersonalRefreshUnavailable
 from umbod.core.connectors.downstream_mcp.personal_connections.refresh_ports import PersonalRefreshStore
@@ -47,7 +48,7 @@ class ControlledRefreshProvider:
 
 
 def service(case: RuntimeCase, store: PersonalRefreshStore, provider: ControlledRefreshProvider) -> PersonalRefreshService:
-    return PersonalRefreshService(FixedPrincipal(case.query.key.principal), VerifiedGroupMembership(group_ids=case.query.group_ids), AvailableInventory(), store, provider, lambda: case.query.now)
+    return PersonalRefreshService(FixedPrincipal(case.query.key.principal), GroupMembership(group_ids=case.query.group_ids), AvailableInventory(), store, provider, lambda: case.query.now)
 
 
 def success(command: RefreshPersonalOAuth) -> Authorized:

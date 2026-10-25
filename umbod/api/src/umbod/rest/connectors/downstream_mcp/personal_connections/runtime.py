@@ -1,10 +1,11 @@
+from umbod.core.callers import GroupMembership
 from typing import Annotated
 
 from fastapi import Depends
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.factory import create_personal_mcp_transport
 from umbod.core.connectors.downstream_mcp.management import utc_clock
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipalProvider, VerifiedGroupMembership
+from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipalProvider
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
 from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalRuntimeContext, PersonalToolRuntime, PersonalToolRuntimeService
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
@@ -16,7 +17,7 @@ from .dependencies import get_personal_group_membership, get_personal_principal_
 
 
 class RestPersonalRuntimeContextProvider:
-    def __init__(self, principal: CanonicalPrincipalProvider, groups: VerifiedGroupMembership) -> None:
+    def __init__(self, principal: CanonicalPrincipalProvider, groups: GroupMembership) -> None:
         self._principal = principal
         self._groups = groups
 
@@ -31,7 +32,7 @@ def get_personal_tool_runtime(
     factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
     stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     principal: Annotated[CanonicalPrincipalProvider, Depends(get_personal_principal_provider)],
-    groups: Annotated[VerifiedGroupMembership, Depends(get_personal_group_membership)],
+    groups: Annotated[GroupMembership, Depends(get_personal_group_membership)],
 ) -> PersonalToolRuntime:
     if not (factories.settings.personal_connections.enabled and factories.settings.personal_connections.oauth_enabled):
         return DisabledPersonalToolRuntime()

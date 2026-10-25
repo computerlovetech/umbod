@@ -8,6 +8,9 @@ from fastapi.testclient import TestClient
 from umbod.config.app import AppConfig
 from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import local_personal_identity_enabled
 from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
+from umbod.core.connectors.downstream_mcp.personal_connections.identity_models import ResolvedPersonalIdentity
+from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts
+from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from umbod.hosting import JwtClaims, create_rest_app
 from umbod.rest.authentication.deps import VERIFIED_ACCESS_CLAIMS_STATE_KEY
 
@@ -43,8 +46,9 @@ def local_client(local_settings: AppConfig) -> Iterator[TestClient]:
     @personal_app.get("/identity")
     def identity(request: Request) -> dict[str, object]:
         verified: JwtClaims = getattr(request.state, VERIFIED_ACCESS_CLAIMS_STATE_KEY)
-        principal = canonical_principal(local_settings, verified.claims)
-        assert principal is not None
+        resolution = canonical_principal(personal_identity_policy_from_app_config(local_settings), personal_identity_facts(verified.claims))
+        assert isinstance(resolution, ResolvedPersonalIdentity)
+        principal = resolution.principal
         return {"claims": verified.claims, "owner": principal.subject, "namespace": principal.namespace}
 
     with TestClient(app) as client:
@@ -98,7 +102,7 @@ def test_supplied_admin_verifier_does_not_control_local_personal_identity(local_
 ])
 def test_local_identity_policy_fails_closed(local_settings: AppConfig, section: str, updates: dict[str, object]) -> None:
     settings = local_settings.model_copy(update={section: getattr(local_settings, section).model_copy(update=updates)})
-    assert not local_personal_identity_enabled(settings)
+    assert not local_personal_identity_enabled(personal_identity_policy_from_app_config(settings))
     app = create_rest_app(settings, connector_registrations=[], admin_verifier=None, oauth_service=None)
     with TestClient(app) as client:
         expected_status = 401 if settings.personal_connections.enabled else 404

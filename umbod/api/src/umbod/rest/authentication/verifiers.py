@@ -6,7 +6,7 @@ from jwt.exceptions import InvalidTokenError, PyJWKClientError, PyJWKSetError
 from pydantic import ValidationError
 
 from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationError
-from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import simulated_user_claims
+from umbod.core.connectors.downstream_mcp.adapters.identity import simulated_user_claims
 from umbod.core.connectors.downstream_mcp.personal_connections.development_identity_models import SimulatedUserIdentity
 
 

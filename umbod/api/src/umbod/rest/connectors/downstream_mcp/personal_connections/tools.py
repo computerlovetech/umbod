@@ -1,3 +1,4 @@
+from umbod.core.callers import GroupMembership
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -5,7 +6,7 @@ from pydantic import BaseModel, ConfigDict
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.factory import create_personal_mcp_transport
 from umbod.core.connectors.downstream_mcp.management import utc_clock
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipalProvider, PersonalConnectionKey, VerifiedGroupMembership
+from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipalProvider, PersonalConnectionKey
 from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalRuntimeUnavailable
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
@@ -59,7 +60,7 @@ async def validate_discovery_body(request: Request) -> None:
 async def discover_personal_tools(
     connector_id: str, request: Request,
     principal: Annotated[CanonicalPrincipalProvider, Depends(get_personal_principal_provider)],
-    groups: Annotated[VerifiedGroupMembership, Depends(get_personal_group_membership)],
+    groups: Annotated[GroupMembership, Depends(get_personal_group_membership)],
     discovery: Annotated[PersonalToolDiscoveryService, Depends(get_personal_tool_discovery)],
 ) -> Response:
     await validate_discovery_body(request)

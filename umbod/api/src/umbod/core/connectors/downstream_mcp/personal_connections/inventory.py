@@ -1,3 +1,4 @@
+from umbod.core.callers import GroupMembership
 from umbod.core.capabilities.descriptions import (
     ConnectorCapabilityDescriptionKey,
     ConnectorCapabilityDescriptionOverrideStore,
@@ -18,7 +19,6 @@ from .inventory_models import (
     PersonalConnectorSelections,
     PersonalConnectorUnavailable,
     SetPersonalConnectorEnablement,
-    VerifiedGroupMembership,
 )
 from .models import Authorized, PersonalConnection
 from .service import PersonalConnectionService
@@ -30,7 +30,7 @@ class PersonalConnectorInventoryService:
         definitions: ConnectorDefinitionStore,
         publishing: ConnectorPublishingStore,
         permissions: GroupPermissionReader,
-        groups: VerifiedGroupMembership,
+        groups: GroupMembership,
         connections: PersonalConnectionService,
         descriptions: ConnectorCapabilityDescriptionOverrideStore,
     ) -> None:

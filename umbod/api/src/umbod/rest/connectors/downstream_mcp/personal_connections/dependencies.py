@@ -7,11 +7,13 @@ from umbod.core.connectors.downstream_mcp.personal_connections import (
     PersonalConnectionService,
     PersonalConnectorInventory,
     PersonalConnectorInventoryService,
-    VerifiedClaimsPrincipalProvider,
-    VerifiedGroupMembership,
+    PersonalIdentityPrincipalProvider,
 )
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.core.permissions import GroupPermissionStore
+from umbod.core.callers import GroupMembership
+from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts, personal_group_membership
+from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import get_verified_access_claims
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
@@ -27,26 +29,19 @@ Claims = Annotated[JwtClaims, Depends(get_verified_access_claims)]
 async def get_personal_principal_provider(
     factories: Factories, claims: Claims,
 ) -> CanonicalPrincipalProvider:
-    provider = VerifiedClaimsPrincipalProvider(factories.settings, claims.claims)
+    provider = PersonalIdentityPrincipalProvider(personal_identity_policy_from_app_config(factories.settings), personal_identity_facts(claims.claims))
     if await provider.get_principal() is None:
         raise HTTPException(status_code=403, detail={"code": "personal_identity_unavailable"})
     return provider
 
 
-def get_personal_group_membership(factories: Factories, claims: Claims) -> VerifiedGroupMembership:
-    value = claims.claims.get(factories.settings.mcp.permission_group_claim)
-    if isinstance(value, str):
-        groups = (value,) if value.strip() else ()
-    elif isinstance(value, (list, tuple)) and all(isinstance(item, str) for item in value):
-        groups = tuple(item for item in value if item.strip())
-    else:
-        groups = ()
-    return VerifiedGroupMembership(group_ids=tuple(sorted(set(groups))))
+def get_personal_group_membership(factories: Factories, claims: Claims) -> GroupMembership:
+    return personal_group_membership(claims.claims.get(factories.settings.mcp.permission_group_claim))
 
 
 async def get_personal_connector_inventory(
     principal: Annotated[CanonicalPrincipalProvider, Depends(get_personal_principal_provider)],
-    groups: Annotated[VerifiedGroupMembership, Depends(get_personal_group_membership)],
+    groups: Annotated[GroupMembership, Depends(get_personal_group_membership)],
     stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     permissions: Annotated[GroupPermissionStore, Depends(get_group_permission_store)],
     factories: Factories,

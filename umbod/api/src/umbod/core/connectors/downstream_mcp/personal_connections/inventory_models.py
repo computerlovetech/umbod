@@ -13,12 +13,6 @@ class SetPersonalConnectorEnablement(PersonalConnectorQuery):
     enabled: StrictBool
 
 
-class VerifiedGroupMembership(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    group_ids: tuple[str, ...]
-
-
 class PersonalConnectorSelection(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
