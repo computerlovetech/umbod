@@ -17,6 +17,7 @@
     sidebarLabel?: string;
     navigationLabel?: string;
     contentWidth?: 'default' | 'wide';
+    contentLoading?: boolean;
     children: Snippet;
     logout?: LogoutNavigation;
   };
@@ -25,7 +26,7 @@
     workspaceLabel, homeHref, navigationItems, activeItem,
     accountIdentity = { kind: 'hidden' }, accountFallback = 'Account',
     sidebarLabel = workspaceLabel + ' sidebar', navigationLabel = workspaceLabel + ' navigation',
-    contentWidth = 'default', children, logout = logoutNavigation
+    contentWidth = 'default', contentLoading = false, children, logout = logoutNavigation
   }: Props = $props();
 
   const state = new WorkspaceShellState(() => ({
@@ -69,11 +70,11 @@
     </div>
   </aside>
 
-  <section class="content-shell" aria-busy={state.pendingNavigationItem !== undefined}>
-    <div class={["content-loading", state.pendingNavigationItem !== undefined && "active"]}>
-      <DelayedSpinner active={state.pendingNavigationItem !== undefined} label="Loading page" />
+  <section class="content-shell" aria-busy={contentLoading || state.pendingNavigationItem !== undefined}>
+    <div class={["content-loading", (contentLoading || state.pendingNavigationItem !== undefined) && "active"]}>
+      <DelayedSpinner active={contentLoading || state.pendingNavigationItem !== undefined} label="Loading page" />
     </div>
-    <div class={["content-width", contentWidth === 'wide' && "wide"]} inert={state.pendingNavigationItem !== undefined}>
+    <div class={["content-width", contentWidth === 'wide' && "wide"]} inert={contentLoading || state.pendingNavigationItem !== undefined}>
       {@render children()}
     </div>
   </section>

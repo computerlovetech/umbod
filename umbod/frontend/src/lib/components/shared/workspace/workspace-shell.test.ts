@@ -32,6 +32,18 @@ describe('workspace shell public interface', () => {
     expect(logout).not.toHaveBeenCalled();
   });
 
+  test.each([false, true])('explicit content loading marks the whole main view busy: %s', (contentLoading): void => {
+    const { body } = render(WorkspaceShell, { props: {
+      workspaceLabel: 'Workspace', homeHref: '/dashboard', navigationItems,
+      activeItem: 'dashboard', contentLoading,
+      children: createRawSnippet(() => ({ render: (): string => '<p>Catalogue</p>' }))
+    } });
+    expect(body).toContain(`aria-busy="${contentLoading}"`);
+    expect(body.includes('content-loading active')).toBe(contentLoading);
+    expect(body.includes(' inert')).toBe(contentLoading);
+    expect(body).toContain('Workspace sidebar');
+  });
+
   test('pending navigation follows supplied links without marking unrelated or same-page navigation busy', () => {
     let context: WorkspaceNavigationContext = {
       activeItem: 'dashboard', navigationItems, destinationPath: null, originPath: '/dashboard'

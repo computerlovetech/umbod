@@ -1,3 +1,4 @@
+import type { PersonalServerAvailability } from '$lib/admin/personal-mcp-servers/domain/availability';
 import { AdminApi } from '$lib/admin/infrastructure/admin-api';
 import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
 import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
@@ -103,6 +104,10 @@ export class DownstreamMcpWorkspaceState {
     this.setHeaderType(values.headerType ?? 'bearer');
     this.customHeaderName = values.customHeaderName ?? '';
   }
+
+  beginCreate = (availability: PersonalServerAvailability, trigger: HTMLElement): void => {
+    this.open(availability.registration === 'enabled' ? 'choose' : 'create', trigger);
+  };
 
   open = (modal: Exclude<DownstreamMcpModal, null>, trigger: HTMLElement, connector?: DownstreamMcpConnector): void => {
     if (this.operations.locked) return;

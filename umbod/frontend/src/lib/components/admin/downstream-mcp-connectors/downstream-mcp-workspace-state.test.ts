@@ -120,6 +120,34 @@ describe('common MCP mutations through the generic administration port', () => {
 });
 
 describe('DownstreamMcpWorkspaceState', () => {
+  test.each([
+    { registration: 'disabled', authorization: 'disabled', expected: 'create' },
+    { registration: 'unknown', authorization: 'unknown', expected: 'create' },
+    { registration: 'enabled', authorization: 'enabled', expected: 'choose' },
+    { registration: 'enabled', authorization: 'disabled', expected: 'choose' }
+  ] as const)('starts $expected when registration is $registration and OAuth is $authorization', ({ registration, authorization, expected }) => {
+    const state = new DownstreamMcpWorkspaceState();
+    const focus = vi.fn();
+    const trigger = { focus } as unknown as HTMLElement;
+
+    state.beginCreate({ registration, authorization }, trigger);
+
+    expect(state.modal).toBe(expected);
+    expect(state.returnFocus).toBe(trigger);
+    state.close();
+    expect(focus).toHaveBeenCalledOnce();
+  });
+
+  test.each(['enabled', 'disabled', 'unknown'] as const)('does not start creation while locked with %s registration', (registration) => {
+    const state = new DownstreamMcpWorkspaceState();
+    state.operations.setRegistrationLocked(true);
+
+    state.beginCreate({ registration, authorization: 'enabled' }, { focus: vi.fn() } as unknown as HTMLElement);
+
+    expect(state.modal).toBeNull();
+    expect(state.returnFocus).toBeNull();
+  });
+
   test('uses a coherent initial bundle without requesting it again', () => {
     const loader = vi.fn();
     const state = new DownstreamMcpWorkspaceState(undefined, undefined, createBundle('a'), loader, undefined, undefined, sharedRows);

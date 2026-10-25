@@ -159,7 +159,12 @@ describe('personal server administration presentation', () => {
   test('the old route has no UI and the surviving workspace owns both mode choices', () => {
     const workspace = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
     const shell = readFileSync('src/lib/components/admin/AdminShell.svelte', 'utf8');
+    expect(workspace).toContain('onadd={(trigger) => state.beginCreate(registration.availability, trigger)}');
     expect(workspace).toContain('>Shared</Button>');
+    expect(workspace).not.toContain('An operator must');
+    expect(workspace).not.toContain('View startup settings');
+    expect(workspace).not.toContain('Reload availability');
+    expect(workspace).not.toContain('User OAuth availability');
     expect(workspace).toContain('>Personal</Button>');
     expect(workspace).toContain('disabled={!registration.canRegister}');
     expect(workspace).toContain('<PersonalServerRegistration');

@@ -168,7 +168,7 @@
  {/if}
  {/snippet}
 </AdminSplitWorkspace>
-{:else if !state.operations.blocked}<p class="empty">No MCP connectors are configured yet. Add a shared proxy or register a personal server.</p>{/if}
+{:else if !state.operations.blocked}<p class="empty">No MCP connectors yet.</p>{/if}
 {:else}<p role="alert">Administration access was lost. Sign in again before reloading this page.</p>{/if}
 <style>
   button:not(:disabled){cursor:pointer}

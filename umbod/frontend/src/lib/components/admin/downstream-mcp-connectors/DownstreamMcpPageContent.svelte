@@ -71,7 +71,7 @@
 
 <AdminShell activeItem="connectors" accountIdentity={data.accountIdentity ?? fallbackAccountIdentity} contentWidth="wide">
   <div class="admin-page">
-    <ConnectorPageHeader headingId="mcp-workspace-heading" title="MCP connectors" lede="Manage shared MCP proxies and personal server allowlist definitions in one workspace." addLabel="Add MCP connector" disabled={state.operations.locked} onadd={(trigger) => { if (!state.operations.locked) state.open('choose', trigger); }} />
+    <ConnectorPageHeader headingId="mcp-workspace-heading" title="MCP connectors" lede="Manage your MCP connections." addLabel="Add MCP connector" disabled={state.operations.locked} onadd={(trigger) => state.beginCreate(registration.availability, trigger)} />
 
     <ConnectorTabs activeTab="downstream-mcp" capability={parseConnectorCapability(page.url.searchParams.get('capability'))} />
     {#if registration.blocked && state.modal !== 'personal'}
@@ -86,18 +86,10 @@
 
 {#if state.modal === 'choose' && !state.operations.locked}
   <PersonalServerDialog title="Add MCP connector" titleId="mcp-mode-title" descriptionId="mcp-mode-description" close={state.close}>
-    <p id="mcp-mode-description">Shared connectors use shared credentials and catalogues. Personal servers use each user's own authorization and private discovery.</p>
+    <p id="mcp-mode-description">Use shared credentials or let each user connect their own account.</p>
     <Button onclick={() => state.open('create', state.returnFocus!)}>Shared</Button>
     <Button disabled={!registration.canRegister} onclick={() => { registration.openCreate(); state.open('personal', state.returnFocus!); }}>Personal</Button>
-    {#if registration.availability.registration !== 'enabled'}
-      <p>Personal connections are {registration.availability.registration}. An operator must enable personal connections and configure a stable identity namespace. Startup settings are read-only.</p>
-    {/if}
-    {#if registration.availability.registration === 'enabled' && registration.availability.authorization !== 'enabled'}
-      <p>User OAuth availability is {registration.availability.authorization}. Registration remains available but does not authorize users or permit execution.</p>
-    {/if}
     {#if registration.message}<p role="alert">{registration.message}</p>{/if}
-    <a href="/admin/instance-configuration">View startup settings (read-only)</a>
-    <Button variant="secondary" disabled={registration.busy || registration.loading || registration.authenticationLost} onclick={reloadRegistration}>{registration.blocked ? 'Reload servers' : 'Reload availability'}</Button>
   </PersonalServerDialog>
 {:else if state.modal === 'personal' && !state.operations.authenticationLost}
   <PersonalServerRegistration state={registration} close={closeRegistration} reload={reloadRegistration} />

@@ -13,7 +13,6 @@
   import { browserPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/personal-connections-api';
   import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
   import McpSetupGuide from '$lib/components/shared/mcp-setup/McpSetupGuide.svelte';
-  import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
   import ConnectorCard from './ConnectorCard.svelte';
   import ConnectionCard from '$lib/components/personal-connections/ConnectionCard.svelte';
 
@@ -58,10 +57,11 @@
 <svelte:window onfocus={state.refreshOnFocus} />
 <svelte:document onvisibilitychange={() => { if (document.visibilityState === 'visible') void state.refreshOnFocus(); }} />
 
-<WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(workspaceAccess.adminAccess === 'allowed')} activeItem="dashboard" accountIdentity={workspaceAccess.accountIdentity.kind === 'visible' ? workspaceAccess.accountIdentity : accountIdentity} contentWidth="wide">
+<WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(workspaceAccess.adminAccess === 'allowed')} activeItem="dashboard" accountIdentity={workspaceAccess.accountIdentity.kind === 'visible' ? workspaceAccess.accountIdentity : accountIdentity} contentWidth="wide" contentLoading={state.phase === 'loading'}>
+  {#if state.phase !== 'loading'}
   <div class="dashboard">
     <h1 class="admin-title">Dashboard</h1>
-    <section class="catalogue" aria-labelledby="connectors-heading" aria-busy={state.phase === 'loading' || state.refreshing}>
+    <section class="catalogue" aria-labelledby="connectors-heading" aria-busy={state.refreshing}>
       <div class="section-heading">
         <h2 id="connectors-heading">Connectors</h2>
         {#if state.phase === 'ready'}<button aria-label="Refresh connectors" disabled={state.refreshing} onclick={state.loadCatalogue}>Refresh</button>{/if}
@@ -72,9 +72,7 @@
           <button disabled={state.refreshing} onclick={state.loadCatalogue}>Retry</button>
         </div>
       {/if}
-      {#if state.phase === 'loading'}
-        <DelayedSpinner active label="Loading connectors…" />
-      {:else if state.phase === 'sign-in'}
+      {#if state.phase === 'sign-in'}
         <p role="alert">Sign in required</p>
         <button onclick={() => { state.dispose(); signIn(); }}>Sign in</button>
       {:else if state.phase === 'forbidden'}
@@ -113,6 +111,7 @@
       <McpSetupGuide {mcpEndpoint} compact />
     </section>
   </div>
+  {/if}
 </WorkspaceShell>
 
 <style>

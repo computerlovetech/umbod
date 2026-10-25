@@ -35,7 +35,7 @@ describe('dashboard presentation', () => {
     }
   });
 
-  test('initial render is passive, concise and contains shared shell and client setup', (): void => {
+  test('initial render keeps the whole main view loading without partial dashboard content', (): void => {
     const api: DashboardApi = new InMemoryDashboardApi(catalogue);
     const personal: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([]);
     const list = vi.spyOn(api.catalogue, 'list');
@@ -45,15 +45,17 @@ describe('dashboard presentation', () => {
       createApi: (): DashboardApi => api,
       createPersonalApi: (): PersonalConnectionsApi => personal
     } }).body;
-    expect(body).toContain('Dashboard</h1>');
+    expect(body).not.toContain('Dashboard</h1>');
+    expect(body).toContain('content-loading active');
+    expect(body).toContain('inert');
     expect(body).toContain('aria-busy="true"');
     expect(body).not.toContain('Loading connectors');
-    expect(body).toContain('MCP setup');
-    expect(body).toContain('https://umbod.test/mcp');
+    expect(body).not.toContain('MCP setup');
+    expect(body).not.toContain('https://umbod.test/mcp');
     expect(body).not.toContain('/admin');
     expect(body).not.toContain('Connections');
     expect(body).not.toContain('Manage group permissions');
-    expect((body.match(/<h1/g) ?? []).length).toBe(1);
+    expect((body.match(/<h1/g) ?? []).length).toBe(0);
     expect(list).not.toHaveBeenCalled();
     expect(personalList).not.toHaveBeenCalled();
   });
