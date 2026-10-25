@@ -3,6 +3,7 @@ from typing import Annotated
 from fastmcp import FastMCP
 from fastmcp.dependencies import CurrentFastMCP
 
+from umbod.mcp.auth.caller import caller_context_provider
 from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
 from umbod.core.permissions.ports import GroupPermissionReader
 from umbod.mcp.connectors.openapi.ports import (
@@ -24,4 +25,4 @@ async def get_group_permission_reader(server: Annotated[FastMCP, CurrentFastMCP(
 
 
 def get_current_principal_groups(server: Annotated[FastMCP, CurrentFastMCP()]) -> CurrentPrincipalGroups:
-    return JwtCurrentPrincipalGroups(server.permission_group_claim)
+    return JwtCurrentPrincipalGroups(server.permission_group_claim, caller_context_provider(server))

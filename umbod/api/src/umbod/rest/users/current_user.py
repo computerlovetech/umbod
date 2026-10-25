@@ -2,9 +2,16 @@ from typing import Protocol
 
 from fastapi import HTTPException, Request
 
+from umbod.core.callers import CallerContext, SubjectIdentity
 from umbod.rest.authentication import JwtClaims, JwtVerificationError, JwtVerifier
+from umbod.rest.authentication.caller import (
+    RestCallerContextProvider,
+    authentication_provenance,
+)
 from umbod.rest.authentication.deps import (
+    CALLER_CONTEXT_STATE_KEY,
     VERIFIED_ACCESS_CLAIMS_STATE_KEY,
+    get_caller_context,
     get_verified_access_claims,
 )
 from umbod.rest.users.profiles import UserProfileInput, UserProfileProvider
@@ -40,8 +47,13 @@ class JwtCurrentUserProvider:
                 jwt_claims = self.jwt_verifier.verify(token)
             except JwtVerificationError as error:
                 raise HTTPException(status_code=401, detail="Unauthorized") from error
-        user_id = jwt_claims.claims.get("sub")
-        if not isinstance(user_id, str):
+        if isinstance(getattr(request.state, CALLER_CONTEXT_STATE_KEY, None), CallerContext):
+            context = get_caller_context(request)
+        else:
+            context = RestCallerContextProvider(
+                jwt_claims, authentication_provenance(self.jwt_verifier)
+            ).get_context()
+        if not isinstance(context.subject, SubjectIdentity):
             raise HTTPException(status_code=401, detail="Unauthorized")
         profile = self.profile_provider.get_profile(
             UserProfileInput(
@@ -51,7 +63,7 @@ class JwtCurrentUserProvider:
             )
         )
         return CurrentUserResponse(
-            id=user_id,
+            id=context.subject.subject,
             email=profile.email or None,
             name=profile.name,
             picture=profile.picture or None,

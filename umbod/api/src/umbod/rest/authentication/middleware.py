@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
+from umbod.core.callers import AuthenticationProvenance
 from umbod.rest.authentication.authorization import (
     AdminAuthorizationPolicy,
     AdminAuthorizationService,
@@ -12,7 +13,14 @@ from umbod.rest.authentication.authorization import (
     JwtVerificationError,
     JwtVerifier,
 )
-from umbod.rest.authentication.deps import VERIFIED_ACCESS_CLAIMS_STATE_KEY
+from umbod.rest.authentication.caller import (
+    RestCallerContextProvider,
+    authentication_provenance,
+)
+from umbod.rest.authentication.deps import (
+    CALLER_CONTEXT_STATE_KEY,
+    VERIFIED_ACCESS_CLAIMS_STATE_KEY,
+)
 from umbod.rest.authentication.tokens import extract_request_jwt_token
 from umbod.rest.authentication.verifiers import (
     ProductionJwksJwtVerifier,
@@ -130,7 +138,12 @@ class JwtAdminAuthenticationStrategy:
             return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
         if not self.authorization_service.is_authorized(claims):
             return JSONResponse(status_code=403, content={"detail": "Forbidden"})
+        provenance = AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED
+        if type(self.authorization_service) is AdminAuthorizationService:
+            provenance = authentication_provenance(self.authorization_service.jwt_verifier)
+        context = RestCallerContextProvider(claims, provenance).get_context()
         setattr(request.state, VERIFIED_ACCESS_CLAIMS_STATE_KEY, claims)
+        setattr(request.state, CALLER_CONTEXT_STATE_KEY, context)
         return None
 
 

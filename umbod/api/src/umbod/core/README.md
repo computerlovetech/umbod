@@ -8,6 +8,10 @@
 
 ### Shared concepts
 
+### `callers/`
+
+**Read when working with:** Transport-neutral caller observations, explicit authentication provenance, subject/issuer availability and the caller-context provider port shared by REST and MCP. The [local index](callers/README.md) distinguishes caller facts from canonical ownership, group projections and authorization policy.
+
 ### `administrator/connector_configuration/`
 
 **Read when working with:** Shared administrator connector configuration models, explicit discriminated mutation operations, requests, results, reader and atomic mutation ports, or application service behavior. Import its public API only from `umbod.core.administrator.connector_configuration`. `reader.py` reads complete cross-kind configurable state. `mutation.py` validates and atomically persists mixed activation, invocation policy, description override, and permission operations with their durable events. `catalog.py` defines the connector inventory port.
@@ -18,7 +22,7 @@
 
 ### `permissions/`
 
-**Read when working with:** Group access, tool permissions, authorization state, or permission notifications. `stores/service.py` exposes session-bound permission reads and updates for atomic configuration writes.
+**Read when working with:** Group access, tool permissions, authorization state, or permission notifications. `stores/service.py` exposes session-bound permission reads and updates for atomic configuration writes. `runtime.py` retains neutral grant state and existing group parsing; FastMCP permission callbacks live in `umbod.mcp.authorization`.
 
 ### `invocation/`
 

@@ -129,6 +129,7 @@ async def _execute(
         invocation_sink, McpAuditRecorder(audit_sink, "test")
     )
     server = SimpleNamespace(
+        auth=None,
         openapi_connector_store_factory=ResourceFactory(store),
         group_permission_reader_factory=ResourceFactory(SimpleNamespace(close=lambda: None)),
         openapi_outbound_http_client_factory=SyncResourceFactory(

@@ -52,9 +52,13 @@ Personal OAuth definitions remain unavailable to shared runtime execution and ba
 
 ### `auth/`
 
-**Read when working with:** MCP OAuth, client storage, authorization, or consent.
+**Read when working with:** MCP OAuth, client storage, authorization, or consent. `caller.py` maps the current SDK token to `core/callers` observations through a stateless provider and an injectable FastMCP dependency. Provenance comes from the actual server authentication provider, not token claims. Missing authentication is explicit; known local test providers never claim upstream verification. Host-supplied or inherited SDK authentication is classified conservatively. Existing group and canonical-owner projections remain separate.
 
 `auth/factory.py` leaves the Google, Entra, and Auth0 OAuth proxy issuer at FastMCP's public MCP base URL default. MCP resource metadata advertises Umbod's authorization server, and authorization metadata exposes Umbod's authorize, token, and register endpoints. Shared `oidc.issuer_url` remains the upstream token issuer for REST validation; Auth0 discovery independently supplies the upstream MCP token verifier's issuer.
+
+### `authorization.py`
+
+**Read when working with:** FastMCP component identity adaptation and group-grant permission callbacks. The bridge owns tool/prompt/resource/template metadata and SDK authentication-context handling; `core/permissions` retains neutral grant decisions and legacy group parsing without importing FastMCP. Checker imports now use `umbod.mcp.authorization`, not core permission exports.
 
 ### `messaging/`
 

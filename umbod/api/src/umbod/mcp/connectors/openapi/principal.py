@@ -2,16 +2,17 @@ from collections.abc import Mapping
 
 from fastmcp.server.dependencies import get_access_token
 
+from umbod.core.callers import CallerContextProvider, SubjectIdentity
+
 
 class JwtCurrentPrincipalGroups:
-    def __init__(self, claim_name: str) -> None:
+    def __init__(self, claim_name: str, callers: CallerContextProvider) -> None:
         self._claim_name = claim_name
+        self._callers = callers
 
     def subject(self) -> str:
-        token = get_access_token()
-        claims = getattr(token, 'claims', {}) if token is not None else {}
-        subject = claims.get('sub') if isinstance(claims, Mapping) else None
-        return subject if isinstance(subject, str) and subject else 'authenticated-principal'
+        subject = self._callers.get_context().subject
+        return subject.subject if isinstance(subject, SubjectIdentity) and subject.subject else 'authenticated-principal'
 
     def groups(self) -> tuple[str, ...]:
         token = get_access_token()

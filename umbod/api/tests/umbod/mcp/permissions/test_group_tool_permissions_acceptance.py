@@ -84,12 +84,12 @@ def _new_permissions(group_claim_fields: Sequence[str]) -> Any:
 
 
 def _connector_tool_permission_check(permissions: Any) -> Any:
-    module = import_module("umbod.core.permissions")
+    module = import_module("umbod.mcp.authorization")
     return module.connector_tool_permission_check(permissions)
 
 
 def _connector_capability_permission_check(permissions: Any) -> Any:
-    module = import_module("umbod.core.permissions")
+    module = import_module("umbod.mcp.authorization")
     return module.connector_capability_permission_check(permissions)
 
 
