@@ -1,5 +1,3 @@
-from typing import Optional
-
 from .development_identity import local_personal_identity_enabled
 from .identity_models import (
     AbsentIssuer, DeclaredIssuer, ObservedIdentityString,
@@ -49,15 +47,3 @@ def canonical_principal(
     return ResolvedPersonalIdentity(principal=CanonicalPrincipal(
         namespace=policy.identity_namespace, subject=subject,
     ))
-
-
-class PersonalIdentityPrincipalProvider:
-    def __init__(self, policy: PersonalIdentityPolicy, facts: PersonalIdentityFacts) -> None:
-        self._policy = policy
-        self._facts = facts
-
-    async def get_principal(self) -> Optional[CanonicalPrincipal]:
-        resolution = canonical_principal(self._policy, self._facts)
-        if isinstance(resolution, ResolvedPersonalIdentity):
-            return resolution.principal
-        return None

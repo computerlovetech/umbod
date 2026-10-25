@@ -1,17 +1,18 @@
+from collections.abc import Mapping
 from typing import Annotated
 
 from fastmcp import FastMCP
 from fastmcp.dependencies import CurrentFastMCP
+from fastmcp.server.dependencies import get_access_token
 
-from umbod.mcp.auth.caller import caller_context_provider
+from umbod.core.callers import GroupMembership
+from umbod.mcp.auth.groups import capture_openapi_principal_groups
 from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
 from umbod.core.permissions.ports import GroupPermissionReader
 from umbod.mcp.connectors.openapi.ports import (
-    CurrentPrincipalGroups,
     GroupPermissionReaderFactory,
     OpenApiConnectorStoreFactory,
 )
-from umbod.mcp.connectors.openapi.principal import JwtCurrentPrincipalGroups
 
 
 async def get_openapi_connector_store(server: Annotated[FastMCP, CurrentFastMCP()]) -> OpenApiConnectorStore:
@@ -24,5 +25,11 @@ async def get_group_permission_reader(server: Annotated[FastMCP, CurrentFastMCP(
     return await factory.create()
 
 
-def get_current_principal_groups(server: Annotated[FastMCP, CurrentFastMCP()]) -> CurrentPrincipalGroups:
-    return JwtCurrentPrincipalGroups(server.permission_group_claim, caller_context_provider(server))
+def capture_openapi_groups(server: FastMCP) -> GroupMembership:
+    token = get_access_token()
+    if token is None:
+        return GroupMembership(group_ids=())
+    claims = getattr(token, 'claims', {})
+    if not isinstance(claims, Mapping):
+        return GroupMembership(group_ids=())
+    return capture_openapi_principal_groups(claims, server.permission_group_claim)

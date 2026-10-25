@@ -12,6 +12,12 @@ from umbod.core.invocation import (
 )
 
 
+from umbod.mcp.connectors.native.approval_principal import (
+    ApprovalActorIdentity,
+    ApprovalCallerBinding,
+)
+
+
 APPROVAL_TTL_SECONDS = 300
 
 
@@ -36,7 +42,7 @@ class ApprovalStateCodec:
         self,
         invocation: ConnectorInvocation,
         policy_revision: int,
-        principal: Mapping[str, str],
+        caller: ApprovalCallerBinding,
     ) -> str:
         payload = {
             "arguments_digest": self.arguments_digest(invocation.arguments),
@@ -46,7 +52,7 @@ class ApprovalStateCodec:
             "nonce": self._random_token(),
             "operation_name": invocation.operation_name,
             "policy_revision": policy_revision,
-            "principal": dict(principal),
+            "principal": self._serialized_identity(caller),
             "public_tool_name": invocation.public_tool_name,
         }
         return json.dumps(payload, separators=(",", ":"), sort_keys=True)
@@ -56,7 +62,7 @@ class ApprovalStateCodec:
         token: str,
         invocation: ConnectorInvocation,
         policy_revision: int,
-        principal: Mapping[str, str],
+        caller: ApprovalCallerBinding,
     ) -> VerifiedApprovalState:
         try:
             payload = json.loads(token)
@@ -68,7 +74,7 @@ class ApprovalStateCodec:
             "connector_kind": invocation.connector_kind,
             "operation_name": invocation.operation_name,
             "policy_revision": policy_revision,
-            "principal": dict(principal),
+            "principal": self._serialized_identity(caller),
             "public_tool_name": invocation.public_tool_name,
         }
         required_keys = {*expected, "expires_at", "nonce"}
@@ -85,6 +91,13 @@ class ApprovalStateCodec:
         if self._clock() > expires_at:
             raise ConnectorInvocationDenied("Connector invocation approval state expired")
         return {"nonce": nonce, "expires_at": expires_at}
+
+    @staticmethod
+    def _serialized_identity(caller: ApprovalCallerBinding) -> dict[str, str]:
+        identity = caller.identity
+        if isinstance(identity, ApprovalActorIdentity):
+            return {key: value for key, value in identity.model_dump().items() if value}
+        return {"session_id": identity.session_id}
 
     @staticmethod
     def extract_nonce(payload: Mapping[str, Any]) -> str:

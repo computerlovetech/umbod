@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from typing import Literal
+from typing import Literal, Optional
 
 import pytest
 from fastmcp.server.auth import AccessToken
@@ -14,16 +14,12 @@ from umbod.config.app import (
     PersonalConnectionsConfig,
     RuntimeConfig,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections.ports import (
-    CanonicalPrincipalProvider,
-)
-from umbod.core.connectors.downstream_mcp.personal_connections import PersonalIdentityPrincipalProvider
+from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalCaller, UnavailablePersonalCaller, ResolvedPersonalIdentity
+from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
 from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts
 from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
-from umbod.mcp.connectors.downstream_mcp.principal import McpCanonicalPrincipalProvider
-from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalRuntimeContextProvider, verified_personal_runtime_context
+from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalCallerProvider
 from umbod.core.connectors.downstream_mcp.adapters.identity import authenticated_personal_mcp_claims
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
 from umbod.rest.authentication.middleware import JwtVerifierFactory
 
 pytestmark = pytest.mark.anyio
@@ -31,8 +27,9 @@ pytestmark = pytest.mark.anyio
 Provider = Literal["google", "auth0", "azure_entra_id"]
 
 
-def _principal_provider(settings: AppConfig, claims: Mapping[str, object]) -> CanonicalPrincipalProvider:
-    return PersonalIdentityPrincipalProvider(personal_identity_policy_from_app_config(settings), personal_identity_facts(claims))
+def _resolved_principal(settings: AppConfig, claims: Mapping[str, object]) -> Optional[CanonicalPrincipal]:
+    resolution = canonical_principal(personal_identity_policy_from_app_config(settings), personal_identity_facts(claims))
+    return resolution.principal if isinstance(resolution, ResolvedPersonalIdentity) else None
 
 
 def _settings(
@@ -74,7 +71,7 @@ async def test_verified_rest_and_upstream_mcp_claims_have_identical_ownership(
 ) -> None:
     settings = _settings(provider)
     claims = _claims(provider)
-    rest: CanonicalPrincipalProvider = _principal_provider(settings, claims)
+    rest: Optional[CanonicalPrincipal] = _resolved_principal(settings, claims)
     mcp_claims = dict(claims)
     if provider == "azure_entra_id":
         mcp_claims["sub"] = "different-mcp-application-subject"
@@ -88,34 +85,35 @@ async def test_verified_rest_and_upstream_mcp_claims_have_identical_ownership(
     )
     context = auth_context_var.set(AuthenticatedUser(token))
     try:
-        mcp: CanonicalPrincipalProvider = McpCanonicalPrincipalProvider(settings)
-        assert await rest.get_principal() == await mcp.get_principal()
-        assert await rest.get_principal() is not None
+        mcp = await McpPersonalCallerProvider(settings).get_caller()
+        assert isinstance(mcp, PersonalCaller)
+        assert rest == mcp.principal
+        assert rest is not None
     finally:
         auth_context_var.reset(context)
 
 
 @pytest.mark.parametrize("provider", ["google", "auth0", "azure_entra_id"])
 async def test_separate_namespaces_do_not_share_ownership(provider: Provider) -> None:
-    first: CanonicalPrincipalProvider = _principal_provider(
+    first: Optional[CanonicalPrincipal] = _resolved_principal(
         _settings(provider, "first"), _claims(provider)
     )
-    second: CanonicalPrincipalProvider = _principal_provider(
+    second: Optional[CanonicalPrincipal] = _resolved_principal(
         _settings(provider, "second"), _claims(provider)
     )
-    assert await first.get_principal() != await second.get_principal()
+    assert first != second
 
 
 async def test_entra_tenants_do_not_share_object_ownership() -> None:
     first_claims = _claims("azure_entra_id")
     second_claims = {**first_claims, "tid": "other"}
-    first: CanonicalPrincipalProvider = _principal_provider(
+    first: Optional[CanonicalPrincipal] = _resolved_principal(
         _settings("azure_entra_id"), first_claims
     )
-    second: CanonicalPrincipalProvider = _principal_provider(
+    second: Optional[CanonicalPrincipal] = _resolved_principal(
         _settings("azure_entra_id", tenant="other"), second_claims
     )
-    assert await first.get_principal() != await second.get_principal()
+    assert first != second
 
 
 @pytest.mark.parametrize(
@@ -185,10 +183,10 @@ async def test_entra_tenants_do_not_share_object_ownership() -> None:
 async def test_invalid_or_machine_only_verified_claims_are_unmappable(
     provider: Provider, claims: Mapping[str, object]
 ) -> None:
-    principal: CanonicalPrincipalProvider = _principal_provider(
+    principal: Optional[CanonicalPrincipal] = _resolved_principal(
         _settings(provider), claims
     )
-    assert await principal.get_principal() is None
+    assert principal is None
 
 
 
@@ -222,15 +220,13 @@ async def test_authenticated_local_mcp_matches_rest_without_mutating_global_clai
     context = auth_context_var.set(AuthenticatedUser(token))
     try:
         assert authenticated_personal_mcp_claims(settings, personal_identity_policy_from_app_config(settings), claims) == rest_claims
-        rest = await _principal_provider(settings, rest_claims).get_principal()
-        assert await McpCanonicalPrincipalProvider(settings).get_principal() == rest
-        runtime = await McpPersonalRuntimeContextProvider(settings).get_context()
+        rest = _resolved_principal(settings, rest_claims)
+        runtime = await McpPersonalCallerProvider(settings).get_caller()
+        assert isinstance(runtime, PersonalCaller)
         assert runtime.principal == rest
-        assert runtime.group_ids == expected_groups
+        assert runtime.groups.group_ids == expected_groups
         assert token.claims == claims
         assert token.claims["sub"] == "local-test-user"
-        with pytest.raises(PersonalRuntimeUnavailable):
-            verified_personal_runtime_context(settings, claims)
     finally:
         auth_context_var.reset(context)
 
@@ -247,9 +243,7 @@ async def test_authenticated_local_mcp_matches_rest_without_mutating_global_clai
     {"sub": "stable-configured-user", "email": "robot@project.iam.gserviceaccount.com"},
 ])
 async def test_simulated_canonical_branch_rejects_untrusted_claims(claims: Mapping[str, object]) -> None:
-    assert await _principal_provider(_local_settings(), claims).get_principal() is None
-    with pytest.raises(PersonalRuntimeUnavailable):
-        verified_personal_runtime_context(_local_settings(), claims)
+    assert _resolved_principal(_local_settings(), claims) is None
 
 
 @pytest.mark.parametrize("claims", [
@@ -263,9 +257,7 @@ async def test_local_mcp_rejects_original_machine_claims_before_normalization(cl
     token = AccessToken(token="authenticated", client_id="client", scopes=[], claims=claims)
     context = auth_context_var.set(AuthenticatedUser(token))
     try:
-        assert await McpCanonicalPrincipalProvider(_local_settings()).get_principal() is None
-        with pytest.raises(PersonalRuntimeUnavailable):
-            await McpPersonalRuntimeContextProvider(_local_settings()).get_context()
+        assert isinstance(await McpPersonalCallerProvider(_local_settings()).get_caller(), UnavailablePersonalCaller)
     finally:
         auth_context_var.reset(context)
 
@@ -273,9 +265,7 @@ async def test_local_mcp_rejects_original_machine_claims_before_normalization(cl
 async def test_local_personal_mcp_still_requires_current_authenticated_context() -> None:
     context = auth_context_var.set(None)
     try:
-        assert await McpCanonicalPrincipalProvider(_local_settings()).get_principal() is None
-        with pytest.raises(PersonalRuntimeUnavailable):
-            await McpPersonalRuntimeContextProvider(_local_settings()).get_context()
+        assert isinstance(await McpPersonalCallerProvider(_local_settings()).get_caller(), UnavailablePersonalCaller)
     finally:
         auth_context_var.reset(context)
 
@@ -289,28 +279,28 @@ async def test_local_mcp_normalization_requires_single_test_user_authentication(
 
 
 async def test_disabled_policy_never_maps_claims() -> None:
-    principal: CanonicalPrincipalProvider = _principal_provider(
+    principal: Optional[CanonicalPrincipal] = _resolved_principal(
         AppConfig(), {"sub": "account"}
     )
-    assert await principal.get_principal() is None
+    assert principal is None
 
 
 async def test_mcp_identity_is_read_from_current_context_without_caching() -> None:
-    principal: CanonicalPrincipalProvider = McpCanonicalPrincipalProvider(_settings())
+    provider = McpPersonalCallerProvider(_settings())
     context = auth_context_var.set(None)
     try:
-        assert await principal.get_principal() is None
+        assert isinstance(await provider.get_caller(), UnavailablePersonalCaller)
         token = AccessToken(
             token="opaque", client_id="client", scopes=[], claims={"sub": "first"}
         )
         auth_context_var.set(AuthenticatedUser(token))
-        first = await principal.get_principal()
+        first = await provider.get_caller()
         token = AccessToken(
             token="opaque", client_id="client", scopes=[], claims={"sub": "second"}
         )
         auth_context_var.set(AuthenticatedUser(token))
-        assert first != await principal.get_principal()
+        assert first != await provider.get_caller()
         auth_context_var.set(None)
-        assert await principal.get_principal() is None
+        assert isinstance(await provider.get_caller(), UnavailablePersonalCaller)
     finally:
         auth_context_var.reset(context)

@@ -30,10 +30,9 @@ from umbod.mcp.connectors.native.tools.deployment_modes.codemode import (
     OpenApiCodeModeInvocation,
 )
 from umbod.mcp.logging import ConnectorToolInvocationLogger
-from umbod.mcp.auth.caller import caller_context_provider
 from umbod.mcp.connectors.openapi.availability import openapi_availability_reader
 from umbod.mcp.connectors.openapi.configuration import openapi_configuration_adapter
-from umbod.mcp.connectors.openapi.principal import JwtCurrentPrincipalGroups
+from umbod.mcp.connectors.openapi.deps import capture_openapi_groups
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +54,7 @@ class OpenApiCodeModeExecutionAdapter:
         self._tool_invocation_logger = tool_invocation_logger
 
     async def execute(self, invocation: OpenApiCodeModeInvocation) -> JsonValue:
+        groups = capture_openapi_groups(self._server)
         store = await self._server.openapi_connector_store_factory.create()
         permission_reader = await self._server.group_permission_reader_factory.create()
         client = self._server.openapi_outbound_http_client_factory.create()
@@ -73,8 +73,7 @@ class OpenApiCodeModeExecutionAdapter:
             )
             service = await self._execution_service(store, permission_reader, client, execution_pipeline)
             operation_input = self._operation_input(invocation)
-            principal = JwtCurrentPrincipalGroups(self._server.permission_group_claim, caller_context_provider(self._server))
-            result = await service.execute(operation_input, principal.groups())
+            result = await service.execute(operation_input, groups.group_ids)
             return result.model_dump(mode='json')
         finally:
             await _close_resource(client)

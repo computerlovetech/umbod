@@ -75,7 +75,7 @@ class DisconnectingTransport:
 @pytest.mark.asyncio
 async def test_operation_admitted_before_invalidation_can_finish_but_next_call_cannot(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
-    runtime = PersonalToolRuntimeService(execution.contexts, runtime_case.bundle.definitions, runtime_case.bundle.personal_tool_access, DisconnectingTransport(execution.transport, runtime_case.bundle.personal_connections), lambda: runtime_case.query.now)
+    runtime = PersonalToolRuntimeService(execution.caller, runtime_case.bundle.definitions, runtime_case.bundle.personal_tool_access, DisconnectingTransport(execution.transport, runtime_case.bundle.personal_connections), lambda: runtime_case.query.now)
     assert (await runtime.execute(execution.command)).result["structuredContent"] == {"owner": "owner"}
     with pytest.raises(PersonalRuntimeUnavailable):
         await runtime.execute(execution.command)

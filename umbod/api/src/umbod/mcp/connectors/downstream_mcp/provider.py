@@ -2,13 +2,12 @@ from umbod.mcp.connectors.downstream_mcp.ports import DownstreamClientFactory
 from umbod.mcp.connectors.downstream_mcp.resource_access import AccessCheckedTemplate
 
 import logging
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from contextvars import ContextVar, Token
 from functools import partial
-from typing import Any, Protocol
+from typing import Any
 from fastmcp.client import Client
-from fastmcp.server.dependencies import get_access_token
 from fastmcp.prompts import Prompt
 from fastmcp.resources import Resource, ResourceTemplate
 from fastmcp.exceptions import ToolError
@@ -36,7 +35,7 @@ from umbod.core.connectors.downstream_mcp.models import DiscoveredPrompt, Discov
 from umbod.core.connectors.downstream_mcp.stores import ConnectorDefinitionFound, ConnectorDefinitionStore, ConnectorIdQuery, CredentialFound, EncryptedCredentialStore, ToolCatalogFound, ToolCatalogStore
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.core.connectors.downstream_mcp.runtime import DownstreamRuntimeResolver, DownstreamRuntimeUnavailable, SharedDownstreamRuntimeResolver
-from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
+from umbod.mcp.connectors.downstream_mcp.permissions import DownstreamToolPermissionPolicy, DownstreamToolPermissionPolicySource
 from umbod.mcp.connectors.native.tools import (
     ConnectorTelemetryInterceptor,
     ConnectorToolInvocationIdentity,
@@ -46,7 +45,6 @@ from umbod.mcp.connectors.downstream_mcp.tool_invocation import AuthorizedDownst
 from umbod.mcp.connectors.downstream_mcp.tool_projection import tool_descriptor_options
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolRuntime, PersonalToolRecord
 from umbod.mcp.logging import ConnectorToolInvocationLogger
-from umbod.mcp.auth.groups import capture_runtime_permission_groups
 from umbod.mcp.metrics import McpMetricsRecorder
 logger = logging.getLogger(__name__)
 
@@ -62,50 +60,6 @@ def set_request_connector_scope(connector_id: str) -> Token[str]:
 
 def reset_request_connector_scope(token: Token[str]) -> None:
     _REQUEST_CONNECTOR_SCOPE.reset(token)
-
-class DownstreamToolPermissionPolicy(Protocol):
-
-    def allows(self, connector_id: str, operation_name: str) -> bool:
-        ...
-
-    def allows_capability(
-        self, connector_id: str, capability_kind: str, capability_key: str
-    ) -> bool:
-        ...
-
-class UnrestrictedDownstreamToolPermissionPolicy:
-
-    def allows(self, connector_id: str, operation_name: str) -> bool:
-        return True
-
-    def allows_capability(
-        self, connector_id: str, capability_kind: str, capability_key: str
-    ) -> bool:
-        return True
-
-class GroupDownstreamToolPermissionPolicy:
-
-    def __init__(self, permissions: InMemoryGroupConnectorToolPermissions) -> None:
-        self._permissions = permissions
-
-    def allows(self, connector_id: str, operation_name: str) -> bool:
-        return self.allows_capability(connector_id, "tool", operation_name)
-
-    def allows_capability(
-        self, connector_id: str, capability_kind: str, capability_key: str
-    ) -> bool:
-        token = get_access_token()
-        claims = getattr(token, 'claims', {}) if token is not None else {}
-        if not isinstance(claims, Mapping):
-            return False
-        from umbod.core.permissions.runtime import ConnectorCapabilityPermission
-        return ConnectorCapabilityPermission(
-            connector_id=connector_id,
-            capability_kind=capability_kind,  # type: ignore[arg-type]
-            capability_key=capability_key,
-        ) in self._permissions.allowed_capabilities(
-            capture_runtime_permission_groups(claims, self._permissions.group_claim_fields)
-        )
 
 @dataclass(frozen=True)
 class IndexedDownstreamPrompt:
@@ -228,11 +182,11 @@ class _DownstreamCapabilityReadiness(CapabilityReadiness):
 
 class _DownstreamCapabilityPermissions(CapabilityPermissionPolicy):
 
-    def __init__(self, policy: Callable[[], DownstreamToolPermissionPolicy]) -> None:
+    def __init__(self, policy: DownstreamToolPermissionPolicy) -> None:
         self._policy = policy
 
     async def allows(self, identity: CapabilityIdentity) -> bool:
-        return self._policy().allows_capability(
+        return self._policy.allows_capability(
             identity.connector_id, identity.capability_kind, identity.capability_key
         )
 
@@ -242,7 +196,7 @@ class _AvailabilityDependencies:
     capabilities: StoreBackedDownstreamCapabilityCatalog
     publishing: ConnectorPublishingStore
     activations: ActivationStore
-    permissions: Callable[[], DownstreamToolPermissionPolicy]
+    permissions: DownstreamToolPermissionPolicy
 
 def _availability(dependencies: _AvailabilityDependencies) -> CapabilityAvailability:
     return CapabilityAvailability(ConnectorStoreCapabilityPublication('downstream_mcp', dependencies.publishing), ConnectorStoreCapabilityActivation('downstream_mcp', dependencies.activations), _DownstreamCapabilityReadiness(dependencies.stores, dependencies.capabilities), _DownstreamCapabilityPermissions(dependencies.permissions))
@@ -255,12 +209,10 @@ async def _effective_descriptions(store: ConnectorCapabilityDescriptionOverrideS
 
 class DownstreamMcpToolRuntimeProvider(Provider):
 
-    def __init__(self, *, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, publishing: ConnectorPublishingStore, activations: ActivationStore, client_factory: DownstreamClientFactory, permission_policy: DownstreamToolPermissionPolicy, connector_scope: str, capability_description_overrides: ConnectorCapabilityDescriptionOverrideStore, tool_invocation_logger: ConnectorToolInvocationLogger, metrics_recorder: McpMetricsRecorder, invocation_policy: ConnectorInvocationPolicy, personal_runtime: PersonalToolRuntime) -> None:
+    def __init__(self, *, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, publishing: ConnectorPublishingStore, activations: ActivationStore, client_factory: DownstreamClientFactory, permission_policy: DownstreamToolPermissionPolicySource, connector_scope: str, capability_description_overrides: ConnectorCapabilityDescriptionOverrideStore, tool_invocation_logger: ConnectorToolInvocationLogger, metrics_recorder: McpMetricsRecorder, invocation_policy: ConnectorInvocationPolicy, personal_runtime: PersonalToolRuntime) -> None:
         self._stores = ConnectorStoreService(definitions, credentials, catalogs, publishing, activations)
         self._capabilities = StoreBackedDownstreamCapabilityCatalog(definitions, catalogs)
         self._permission_policy = permission_policy
-        availability_dependencies = _AvailabilityDependencies(self._stores, self._capabilities, publishing, activations, lambda : self._permission_policy)
-        self._availability = _availability(availability_dependencies)
         self._downstream_client_factory = client_factory
         self._connector_scope = connector_scope
         self._capability_description_overrides = capability_description_overrides
@@ -268,18 +220,31 @@ class DownstreamMcpToolRuntimeProvider(Provider):
         self._metrics_recorder = metrics_recorder
         self._invocation_policy = invocation_policy
         self._personal_runtime = personal_runtime
-        self._runtime: DownstreamRuntimeResolver = SharedDownstreamRuntimeResolver(self._availability, definitions, credentials)
         super().__init__()
 
+    def _operation_availability(self) -> CapabilityAvailability:
+        policy = self._permission_policy.capture()
+        dependencies = _AvailabilityDependencies(
+            self._stores, self._capabilities, self._stores.publishing, self._stores.activations, policy,
+        )
+        return _availability(dependencies)
+
+    def _operation_runtime(self) -> DownstreamRuntimeResolver:
+        return SharedDownstreamRuntimeResolver(
+            self._operation_availability(), self._stores.definitions, self._stores.credentials,
+        )
+
     async def _ensure_capability_access(self, identity: CapabilityIdentity) -> None:
+        runtime = self._operation_runtime()
         try:
-            await self._runtime.resolve(identity)
+            await runtime.resolve(identity)
         except DownstreamRuntimeUnavailable as error:
             raise ToolError("Downstream capability is not available") from error
 
     async def _create_capability_client(self, identity: CapabilityIdentity) -> Client:
+        runtime = self._operation_runtime()
         try:
-            shared = await self._runtime.resolve(identity)
+            shared = await runtime.resolve(identity)
         except DownstreamRuntimeUnavailable as error:
             raise ToolError("Downstream capability is not available") from error
         return self._downstream_client_factory.create(shared.command)
@@ -375,6 +340,7 @@ def _search_candidate(record: DownstreamCapabilityRecord, capability_description
 class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
 
     async def _list_tools(self) -> Sequence[Tool]:
+        availability = self._operation_availability()
         await self._configured_tool_records()
         tools: list[Tool] = []
         identities: list[PublicToolIdentity] = []
@@ -385,7 +351,7 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
                 continue
             if active_scope and identity.connector_id != active_scope:
                 continue
-            if not await self._availability.is_available(identity):
+            if not await availability.is_available(identity):
                 continue
             identities.append(_public_identity(record))
             definition = record.definition
@@ -403,6 +369,7 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
         return tools
 
     async def eligible_search_candidates(self) -> list[ConnectorToolSearchCandidate]:
+        availability = self._operation_availability()
         await self._configured_tool_records()
         eligible: list[DownstreamCapabilityRecord] = []
         active_scope = self._active_scope()
@@ -411,7 +378,7 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
                 continue
             if uses_personal_oauth(record.definition) or record.capability.identity.capability_kind != "tool":
                 continue
-            if await self._availability.is_available(record.capability.identity):
+            if await availability.is_available(record.capability.identity):
                 eligible.append(record)
         records = tuple(eligible)
         descriptions = await _effective_descriptions(self._capability_description_overrides, records)
@@ -486,6 +453,7 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
         return AccessCheckedTemplate(backend, partial(self._ensure_capability_access, identity))
 
     async def _list_resources(self) -> Sequence[Resource]:
+        availability = self._operation_availability()
         index = DownstreamCapabilityIndex(await self._eligible_catalogs())
         resources: list[Resource] = []
         for entry in index.resources:
@@ -495,11 +463,12 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
                 capability_kind="resource",
                 capability_key=entry.capability.uri,
             )
-            if await self._availability.is_available(identity):
+            if await availability.is_available(identity):
                 resources.append(self._materialize_resource(entry.connector_id, entry.capability))
         return resources
 
     async def _list_resource_templates(self) -> Sequence[ResourceTemplate]:
+        availability = self._operation_availability()
         index = DownstreamCapabilityIndex(await self._eligible_catalogs())
         templates: list[ResourceTemplate] = []
         for entry in index.resource_templates:
@@ -509,11 +478,12 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
                 capability_kind="resource_template",
                 capability_key=entry.capability.uri_template,
             )
-            if await self._availability.is_available(identity):
+            if await availability.is_available(identity):
                 templates.append(self._materialize_template(entry.connector_id, entry.capability))
         return templates
 
     async def _list_prompts(self) -> Sequence[Prompt]:
+        availability = self._operation_availability()
         index = DownstreamCapabilityIndex(await self._eligible_catalogs())
         prompts: list[Prompt] = []
         for entry in index.prompts:
@@ -523,20 +493,21 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
                 capability_kind="prompt",
                 capability_key=entry.capability.name,
             )
-            if await self._availability.is_available(identity):
+            if await availability.is_available(identity):
                 prompts.append(self._materialize_prompt(entry.connector_id, entry.capability))
         return prompts
 
     async def _capability_enabled(
         self, connector_id: str, capability_kind: str, capability_key: str
     ) -> bool:
+        availability = self._operation_availability()
         identity = CapabilityIdentity(
             connector_kind="downstream_mcp",
             connector_id=connector_id,
             capability_kind=capability_kind,  # type: ignore[arg-type]
             capability_key=capability_key,
         )
-        return await self._availability.is_available(identity)
+        return await availability.is_available(identity)
 
     async def native_capability_projection(self) -> tuple[tuple[object, ...], tuple[object, ...]]:
         catalogs = await self._eligible_catalogs()

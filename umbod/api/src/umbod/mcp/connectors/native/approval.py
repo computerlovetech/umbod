@@ -16,7 +16,10 @@ from umbod.core.invocation import (
     ConnectorInvocationPolicy,
     DirectInvocationDecision,
 )
-from umbod.mcp.connectors.native.approval_principal import ApprovalPrincipalProvider
+from umbod.mcp.connectors.native.approval_principal import (
+    ApprovalCallerBinding,
+    ApprovalCallerCapture,
+)
 from umbod.mcp.connectors.native.approval_state import ApprovalStateCodec
 
 
@@ -41,23 +44,23 @@ class McpConnectorInvocationApprovalPolicy(ConnectorInvocationPolicy):
         *,
         nonce_store: ApprovalNonceStore,
         state_codec: ApprovalStateCodec,
-        principal_provider: ApprovalPrincipalProvider,
+        caller_capture: ApprovalCallerCapture,
     ) -> None:
         self._policy = policy
         self._nonce_store = nonce_store
         self._state_codec = state_codec
-        self._principal_provider = principal_provider
+        self._caller_capture = caller_capture
 
     async def evaluate(self, invocation: ConnectorInvocation) -> ConnectorInvocationDecision:
         decision = await self._policy.evaluate(invocation)
         if not isinstance(decision, AskInvocationDecision):
             return decision
-        self._principal_provider()
+        caller = self._caller_capture.capture()
         context = get_context()
         if context._is_modern_protocol():
             if self._is_codemode_request(context):
                 raise ConnectorInvocationDenied("Modern codemode approval is unsupported")
-            return await self._evaluate_modern(context, invocation, decision.policy_revision)
+            return await self._evaluate_modern(context, invocation, decision.policy_revision, caller)
         elicitation = await context.elicit(
             self._message(invocation),
             bool,
@@ -70,7 +73,11 @@ class McpConnectorInvocationApprovalPolicy(ConnectorInvocationPolicy):
         return DirectInvocationDecision()
 
     async def _evaluate_modern(
-        self, context: Any, invocation: ConnectorInvocation, policy_revision: int
+        self,
+        context: Any,
+        invocation: ConnectorInvocation,
+        policy_revision: int,
+        caller: ApprovalCallerBinding,
     ) -> ConnectorInvocationDecision:
         request_state = context.request_state
         responses = context.input_responses
@@ -92,7 +99,7 @@ class McpConnectorInvocationApprovalPolicy(ConnectorInvocationPolicy):
                         )
                     },
                     requestState=self._state_codec.mint(
-                        invocation, policy_revision, self._principal_provider()
+                        invocation, policy_revision, caller
                     ),
                 )
             )
@@ -105,7 +112,7 @@ class McpConnectorInvocationApprovalPolicy(ConnectorInvocationPolicy):
         if response.content.get("value") is not True:
             raise ConnectorInvocationDenied("Connector invocation approval denied")
         state = self._state_codec.verify(
-            request_state, invocation, policy_revision, self._principal_provider()
+            request_state, invocation, policy_revision, caller
         )
         consumed = await self._nonce_store.consume(
             ApprovalNonceConsumption(nonce=state["nonce"], expires_at=state["expires_at"])

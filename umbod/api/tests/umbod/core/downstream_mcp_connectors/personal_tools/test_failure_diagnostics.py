@@ -4,7 +4,8 @@ from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizat
 from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable, RejectPersonalAuthorization
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolResult
 
-from .runtime_support import execution_case
+from .runtime_support import execution_case, runtime_for_caller
+from umbod.core.connectors.downstream_mcp.personal_connections import UnavailablePersonalCaller
 
 __all__ = ["runtime_case"]
 
@@ -14,8 +15,9 @@ __all__ = ["runtime_case"]
 async def test_runtime_preserves_safe_diagnostics_before_redaction(runtime_case: RuntimeCase, reason: str) -> None:
     execution = await execution_case(runtime_case)
     command = execution.command
+    runtime = execution.runtime
     if reason == "context_unavailable":
-        execution.contexts.contexts.clear()
+        runtime = runtime_for_caller(execution, UnavailablePersonalCaller(kind="unavailable"))
     elif reason == "admission_denied":
         await runtime_case.bundle.personal_connections.disconnect(runtime_case.query.key)
     elif reason == "invalid_arguments":
@@ -25,7 +27,7 @@ async def test_runtime_preserves_safe_diagnostics_before_redaction(runtime_case:
     else:
         execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result={"content": [], "structuredContent": "sensitive-sentinel"})
     with pytest.raises(PersonalRuntimeUnavailable) as caught:
-        await execution.runtime.execute(command)
+        await runtime.execute(command)
     assert caught.value.diagnostic.reason == reason
     assert str(caught.value) == "Personal tool unavailable"
     assert caught.value.__context__ is None

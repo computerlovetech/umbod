@@ -14,7 +14,9 @@ from ..personal_connections.runtime_ports import PersonalMcpTransport
 from ..stores.ports import ConnectorDefinitionStore
 from .contract_validation import validate_arguments, validate_output
 from .models import AdmitPersonalTool, InvokePersonalTool, PersonalToolRecord
-from .ports import PersonalRuntimeContextProvider, PersonalToolAccessStore
+from .ports import PersonalToolAccessStore
+from ..personal_connections.caller import PersonalCaller, UnavailablePersonalCaller, require_personal_caller
+from ..personal_connections.models import MissingCanonicalPrincipal
 from .schema_validation import PersonalToolPolicyInvalid
 
 
@@ -46,21 +48,27 @@ class DisabledPersonalToolRuntime:
 class PersonalToolRuntimeService:
     def __init__(
         self,
-        contexts: PersonalRuntimeContextProvider,
+        caller: PersonalCaller | UnavailablePersonalCaller,
         definitions: ConnectorDefinitionStore,
         access: PersonalToolAccessStore,
         transport: PersonalMcpTransport,
         clock: Callable[[], datetime],
     ) -> None:
-        self._contexts = contexts
+        self._caller = caller
         self._definitions = definitions
         self._access = access
         self._transport = transport
         self._clock = clock
 
+    def _capture(self) -> PersonalCaller:
+        try:
+            return require_personal_caller(self._caller)
+        except MissingCanonicalPrincipal:
+            raise PersonalRuntimeUnavailable("Personal identity unavailable") from None
+
     async def list_tools(self) -> tuple[PersonalToolRecord, ...]:
         try:
-            context = await self._contexts.get_context()
+            context = self._capture()
         except PersonalRuntimeUnavailable:
             return ()
         records: list[PersonalToolRecord] = []
@@ -69,7 +77,7 @@ class PersonalToolRuntimeService:
                 continue
             records.extend(await self._access.list_available(PersonalRuntimeAuthorizationQuery(
                 key=PersonalConnectionKey(principal=context.principal, connector_id=definition.connector_id),
-                group_ids=context.group_ids,
+                group_ids=context.groups.group_ids,
                 now=self._clock(),
             )))
         return tuple(records)
@@ -77,12 +85,12 @@ class PersonalToolRuntimeService:
     async def execute(self, command: InvokePersonalTool) -> PersonalToolResult:
         stage = "context"
         try:
-            context = await self._contexts.get_context()
+            context = self._capture()
             stage = "admission"
             admission = await self._access.admit(AdmitPersonalTool(
                 query=PersonalRuntimeAuthorizationQuery(
                     key=PersonalConnectionKey(principal=context.principal, connector_id=command.identity.connector_id),
-                    group_ids=context.group_ids,
+                    group_ids=context.groups.group_ids,
                     now=self._clock(),
                 ),
                 identity=command.identity,

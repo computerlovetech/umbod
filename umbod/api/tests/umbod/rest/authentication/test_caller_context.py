@@ -8,7 +8,6 @@ from pydantic import ValidationError
 from umbod.core.callers import (
     AuthenticationProvenance,
     CallerContext,
-    CallerContextProvider,
     DeclaredIssuer,
     SubjectIdentity,
     UnavailableIssuer,
@@ -21,7 +20,7 @@ from umbod.rest.authentication.authorization import (
     JwtVerificationError,
     JwtVerifier,
 )
-from umbod.rest.authentication.caller import RestCallerContextProvider
+from umbod.rest.authentication.caller import caller_context_from_claims
 from umbod.rest.authentication.deps import CALLER_CONTEXT_STATE_KEY, get_caller_context
 from umbod.rest.authentication.middleware import JwtAdminAuthenticationStrategy
 from umbod.rest.authentication.user_middleware import UserAuthenticationMiddleware
@@ -35,43 +34,42 @@ from umbod.rest.users.mapping import AccessClaimsUserProfileProvider, ClaimProfi
 
 
 @pytest.mark.parametrize("subject,issuer", [("", ""), (" User / A ", "https://issuer/ ")])
-def test_provider_preserves_exact_identity(subject: str, issuer: str) -> None:
-    provider: CallerContextProvider = RestCallerContextProvider(
+def test_capture_preserves_exact_identity(subject: str, issuer: str) -> None:
+    context = caller_context_from_claims(
         JwtClaims(claims={"sub": subject, "iss": issuer}),
         AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
     )
 
-    assert provider.get_context().subject == SubjectIdentity(
+    assert context.subject == SubjectIdentity(
         issuer=DeclaredIssuer(value=issuer), subject=subject
     )
 
 
 @pytest.mark.parametrize("claims", [{}, {"sub": None}, {"sub": 42}, {"sub": []}])
-def test_provider_models_unavailable_subject(claims: dict[str, object]) -> None:
-    provider: CallerContextProvider = RestCallerContextProvider(
+def test_capture_models_unavailable_subject(claims: dict[str, object]) -> None:
+    context = caller_context_from_claims(
         JwtClaims(claims=claims), AuthenticationProvenance.LOCAL_TEST
     )
 
-    assert provider.get_context().subject == UnavailableSubject(kind="unavailable")
+    assert context.subject == UnavailableSubject(kind="unavailable")
 
 
 @pytest.mark.parametrize("claims", [{"sub": "u"}, {"sub": "u", "iss": None}, {"sub": "u", "iss": 42}])
-def test_provider_models_unavailable_issuer(claims: dict[str, object]) -> None:
-    provider: CallerContextProvider = RestCallerContextProvider(
+def test_capture_models_unavailable_issuer(claims: dict[str, object]) -> None:
+    context = caller_context_from_claims(
         JwtClaims(claims=claims), AuthenticationProvenance.LOCAL_TEST
     )
 
-    assert provider.get_context().subject == SubjectIdentity(
+    assert context.subject == SubjectIdentity(
         issuer=UnavailableIssuer(kind="unavailable"), subject="u"
     )
 
 
 def test_context_is_an_immutable_snapshot_of_verified_claims() -> None:
     claims = JwtClaims(claims={"sub": "original", "iss": "issuer"})
-    provider: CallerContextProvider = RestCallerContextProvider(
+    context = caller_context_from_claims(
         claims, AuthenticationProvenance.LOCAL_TEST
     )
-    context = provider.get_context()
     claims.claims.update(sub="changed", iss="changed")
 
     assert context.subject == SubjectIdentity(

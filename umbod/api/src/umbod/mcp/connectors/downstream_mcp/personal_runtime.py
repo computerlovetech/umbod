@@ -1,4 +1,5 @@
 from collections.abc import Awaitable, Callable, Mapping, Sequence
+from datetime import datetime
 from typing import Protocol
 
 import mcp.types as mt
@@ -8,45 +9,78 @@ from fastmcp.server.middleware.authorization import _requested_version
 from fastmcp.tools import Tool, ToolResult
 
 from fastmcp.server.auth import AuthContext
-from fastmcp.server.dependencies import get_access_token
+from fastmcp.server.dependencies import get_access_token, get_server
 
 from umbod.config.app import AppConfig
 from umbod.core.connectors.downstream_mcp.adapters.identity import authenticated_personal_mcp_claims, personal_identity_facts, personal_group_membership
 from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
-from umbod.core.connectors.downstream_mcp.personal_connections.identity_models import PersonalIdentityPolicy, ResolvedPersonalIdentity
+from umbod.core.callers import AuthenticationProvenance
+from umbod.core.connectors.downstream_mcp.personal_connections.caller import PersonalCaller, PersonalCallerProvider, UnavailablePersonalCaller
+from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
+from umbod.core.connectors.downstream_mcp.personal_tools import InvokePersonalTool, PersonalToolRecord, PersonalToolRuntimeService
+from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolAccessStore
+from umbod.core.connectors.downstream_mcp.stores.ports import ConnectorDefinitionStore
+from umbod.core.connectors.downstream_mcp.personal_connections.identity_models import ResolvedPersonalIdentity
+from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
 from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalRuntimeContext
 
 from .tool_invocation import AuthorizedPersonalTool
 
 
-def verified_personal_runtime_context(settings: AppConfig, claims: Mapping[str, object]) -> PersonalRuntimeContext:
-    return _personal_runtime_context(personal_identity_policy_from_app_config(settings), claims, settings.mcp.permission_group_claim)
-
-
-def _personal_runtime_context(policy: PersonalIdentityPolicy, claims: Mapping[str, object], group_claim: str) -> PersonalRuntimeContext:
-    resolution = canonical_principal(policy, personal_identity_facts(claims))
-    if not isinstance(resolution, ResolvedPersonalIdentity):
-        raise PersonalRuntimeUnavailable("Personal identity unavailable")
-    groups = personal_group_membership(claims.get(group_claim))
-    return PersonalRuntimeContext(principal=resolution.principal, group_ids=groups.group_ids)
-
-
-class McpPersonalRuntimeContextProvider:
+class McpPersonalCallerProvider:
     def __init__(self, settings: AppConfig) -> None:
         self._settings = settings
         self._policy = personal_identity_policy_from_app_config(settings)
 
-    async def get_context(self) -> PersonalRuntimeContext:
+    async def get_caller(self) -> PersonalCaller | UnavailablePersonalCaller:
         token = get_access_token()
-        if token is None or not isinstance(token.claims, Mapping):
-            raise PersonalRuntimeUnavailable("Personal identity unavailable")
-        return _personal_runtime_context(
-            self._policy,
-            authenticated_personal_mcp_claims(self._settings, self._policy, token.claims),
-            self._settings.mcp.permission_group_claim,
+        authentication = AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED
+        try:
+            provider = getattr(get_server(), "auth", None)
+            if provider is not None:
+                authentication = authentication_provenance(provider)
+        except RuntimeError:
+            pass
+        caller = caller_context_from_access_token(token, authentication)
+        if caller.authentication == AuthenticationProvenance.UNAVAILABLE or token is None or not isinstance(token.claims, Mapping):
+            return UnavailablePersonalCaller(kind="unavailable")
+        claims = authenticated_personal_mcp_claims(self._settings, self._policy, token.claims)
+        resolution = canonical_principal(self._policy, personal_identity_facts(claims))
+        if not isinstance(resolution, ResolvedPersonalIdentity):
+            return UnavailablePersonalCaller(kind="unavailable")
+        return PersonalCaller(
+            caller=caller, principal=resolution.principal,
+            groups=personal_group_membership(claims.get(self._settings.mcp.permission_group_claim)),
         )
+
+
+class McpPersonalToolRuntime:
+    def __init__(
+        self,
+        callers: PersonalCallerProvider,
+        definitions: ConnectorDefinitionStore,
+        access: PersonalToolAccessStore,
+        transport: PersonalMcpTransport,
+        clock: Callable[[], datetime],
+    ) -> None:
+        self._callers = callers
+        self._definitions = definitions
+        self._access = access
+        self._transport = transport
+        self._clock = clock
+
+    async def _operation(self) -> PersonalToolRuntimeService:
+        caller = await self._callers.get_caller()
+        return PersonalToolRuntimeService(caller, self._definitions, self._access, self._transport, self._clock)
+
+    async def list_tools(self) -> tuple[PersonalToolRecord, ...]:
+        operation = await self._operation()
+        return await operation.list_tools()
+
+    async def execute(self, command: InvokePersonalTool) -> PersonalToolResult:
+        operation = await self._operation()
+        return await operation.execute(command)
 
 
 class PersonalToolNamespace(Protocol):

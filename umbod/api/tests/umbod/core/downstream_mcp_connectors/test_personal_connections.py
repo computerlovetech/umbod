@@ -1,7 +1,8 @@
+from umbod.core.connectors.downstream_mcp.personal_connections import UnavailablePersonalCaller
+from tests.umbod.core.downstream_mcp_connectors.personal_caller_support import captured_personal_caller
 import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
-from typing import Optional
 from unittest.mock import Mock
 
 import pytest
@@ -237,21 +238,13 @@ async def test_delete_connector_removes_all_owners_but_not_other_connectors(
     assert await store.get(remaining.key) == remaining
 
 
-class PrincipalProvider:
-    def __init__(self, principal: Optional[CanonicalPrincipal]) -> None:
-        self._principal = principal
-
-    async def get_principal(self) -> Optional[CanonicalPrincipal]:
-        return self._principal
-
-
 @pytest.mark.parametrize("operation", ("get", "enable", "disconnect", "replace"))
 @pytest.mark.asyncio
 async def test_absent_principal_denied_before_any_storage_access(
     operation: str,
 ) -> None:
     store = Mock(spec=PersonalConnectionStore)
-    service = PersonalConnectionService(PrincipalProvider(None), store)
+    service = PersonalConnectionService(UnavailablePersonalCaller(kind="unavailable"), store)
     with pytest.raises(MissingCanonicalPrincipal):
         if operation == "get":
             await service.get("alpha")
@@ -271,6 +264,6 @@ async def test_service_uses_only_validated_principal(
     store: PersonalConnectionStore,
 ) -> None:
     key = _key()
-    service = PersonalConnectionService(PrincipalProvider(key.principal), store)
+    service = PersonalConnectionService(captured_personal_caller(key.principal, ()), store)
     state = await service.set_enabled("alpha", True)
     assert state == await store.get(key)

@@ -1,5 +1,5 @@
+from tests.umbod.core.downstream_mcp_connectors.personal_caller_support import captured_personal_caller
 from dataclasses import dataclass
-from typing import Optional
 
 import pytest
 import pytest_asyncio
@@ -34,14 +34,6 @@ from umbod.core.permissions.domain import ConnectorCapabilityRef, SaveGroupPermi
 from umbod.core.permissions.factories import create_group_permission_store
 
 
-class OwnerPrincipalProvider:
-    def __init__(self, subject: str, namespace: str) -> None:
-        self._principal = CanonicalPrincipal(namespace=namespace, subject=subject)
-
-    async def get_principal(self) -> Optional[CanonicalPrincipal]:
-        return self._principal
-
-
 @dataclass(frozen=True)
 class InventoryFixture:
     stores: DownstreamMcpStores
@@ -52,7 +44,7 @@ class InventoryFixture:
         return PersonalConnectorInventoryService(
             self.stores.definitions, self.stores.publishing, self.permissions,
             GroupMembership(group_ids=("team",)),
-            PersonalConnectionService(OwnerPrincipalProvider(subject, namespace), self.stores.personal_connections),
+            PersonalConnectionService(captured_personal_caller(CanonicalPrincipal(namespace=namespace, subject=subject), ("team",)), self.stores.personal_connections),
             self.descriptions,
         )
 

@@ -1,3 +1,4 @@
+from tests.umbod.core.downstream_mcp_connectors.personal_caller_support import captured_personal_caller
 import asyncio
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -118,14 +119,6 @@ async def test_competing_mutation_and_aggregate_deletion_leave_no_personal_row(
     assert not isinstance(await stores.personal_connections.get(key), PersonalConnection)
 
 
-class PrincipalProvider:
-    def __init__(self, principal: CanonicalPrincipal) -> None:
-        self._principal = principal
-
-    async def get_principal(self) -> CanonicalPrincipal:
-        return self._principal
-
-
 class GrantedGroups:
     async def list_group_identifiers(self) -> tuple[GroupPermissionSummary, ...]:
         return (GroupPermissionSummary(group_id="team"),)
@@ -165,7 +158,7 @@ async def test_inventory_cannot_recreate_state_when_deleted_after_eligibility_ch
 ) -> None:
     await stores.publishing.publish_connector(key.connector_id)
     connections = PersonalConnectionService(
-        PrincipalProvider(key.principal),
+        captured_personal_caller(key.principal, ()),
         DeleteBeforeMutationStore(stores.personal_connections, stores.unit_of_work),
     )
     inventory = PersonalConnectorInventoryService(

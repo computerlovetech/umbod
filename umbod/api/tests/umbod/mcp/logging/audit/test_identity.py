@@ -8,6 +8,7 @@ import pytest
 from fastmcp import FastMCP
 from fastmcp.server.context import Context
 
+from umbod.core.callers import AuthenticationProvenance, CallerContext, SubjectIdentity, UnavailableIssuer
 from umbod.mcp.logging.audit.event import McpAnonymousAuditActor, McpAuthenticatedAuditActor
 from umbod.mcp.logging.audit.identity import McpAuditIdentityAdapter
 
@@ -63,6 +64,37 @@ def test_user_identity_claim_precedence(monkeypatch: pytest.MonkeyPatch) -> None
     identity = McpAuditIdentityAdapter().identity_from_request(None)
 
     assert identity.actor == McpAuthenticatedAuditActor("subject")
+
+
+def test_audit_actor_consumes_shared_caller_subject(monkeypatch: pytest.MonkeyPatch) -> None:
+    token = _Token(claims={"sub": "raw", "email": "fallback"})
+    monkeypatch.setattr("umbod.mcp.logging.audit.identity.get_access_token", lambda: token)
+
+    def capture(observed_token: object, authentication: AuthenticationProvenance) -> CallerContext:
+        assert observed_token is token
+        return CallerContext(
+            authentication=authentication,
+            subject=SubjectIdentity(issuer=UnavailableIssuer(kind="unavailable"), subject="captured"),
+        )
+
+    monkeypatch.setattr("umbod.mcp.logging.audit.identity.caller_context_from_access_token", capture)
+    actor = McpAuditIdentityAdapter().invocation_actor(None)
+    assert actor.authenticated_user_id == "captured"
+
+
+@pytest.mark.parametrize(
+    ("claims", "expected"),
+    [
+        ({"sub": "", "email": "email", "preferred_username": "username"}, "email"),
+        ({"sub": 3, "email": "", "preferred_username": "username"}, "username"),
+        ({"sub": "  ", "email": "email"}, "  "),
+    ],
+)
+def test_audit_identity_keeps_legacy_fallbacks_and_exact_subjects(
+    monkeypatch: pytest.MonkeyPatch, claims: dict[str, object], expected: str,
+) -> None:
+    monkeypatch.setattr("umbod.mcp.logging.audit.identity.get_access_token", lambda: _Token(claims=claims))
+    assert McpAuditIdentityAdapter().invocation_actor(None).authenticated_user_id == expected
 
 
 def test_client_metadata_filters_invalid_values_and_converts_request_id(

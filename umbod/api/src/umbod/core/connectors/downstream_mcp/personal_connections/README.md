@@ -7,11 +7,12 @@ Principal-scoped enablement and opaque authorization state, independent of share
 - `runtime_models.py` and `runtime_ports.py`: internal admission target, typed provider rejection and transport contracts; these do not enable public execution.
 - `health_models.py` and `health_ports.py`: immutable owner-keyed authorization-health queries, secret-free discriminated facts and captured-revision rejection commands. Authorized means locally bound and known unexpired, not live provider health or tool readiness.
 - `grant_binding.py`: pure saved-grant, owner, resource and current-policy validation shared by health and runtime; it does not require enablement or tools.
-- `ports.py`: validated principal provider and personal connection storage contracts.
+- `caller.py`: immutable captured personal callers, explicit unavailable capture, authentication guard and deferred current-operation caller port for MCP freshness.
+- `ports.py`: personal connection storage contracts.
 - `development_identity_models.py`: immutable required-field simulated Test User identity DTO for claims projection.
 - `development_identity.py`: pure narrowly gated local Test User eligibility from typed personal policy; no configuration, claims or token dependencies.
 - `identity_models.py` and `identity_ports.py`: frozen required-field identity policy, explicit observed/unavailable claim facts, issuer states and resolved/rejected results, with a pure resolver contract.
-- `principal.py`: typed `canonical_principal(policy, facts)` resolver and `PersonalIdentityPrincipalProvider` compatibility with the existing optional principal port. Identity policy maps Google/Auth0 subjects and tenant-scoped Entra object IDs under the configured namespace, rejecting mismatched and machine identities. Configuration translation, raw claim observations, membership parsing and local MCP projection live in `../adapters/settings.py` and `../adapters/identity.py`; token verification stays in REST/MCP.
+- `principal.py`: pure typed `canonical_principal(policy, facts)` resolver with explicit resolution results. Identity policy maps Google/Auth0 subjects and tenant-scoped Entra object IDs under the configured namespace, rejecting mismatched and machine identities. Configuration translation, raw claim observations, membership parsing and local MCP projection live in `../adapters/settings.py` and `../adapters/identity.py`; token verification stays in REST/MCP.
 - `service.py`: owner-bound operations; missing validated identity is rejected before storage access.
 - `inmemory.py`: serialized in-memory storage adapter.
 - `inventory_models.py` and `inventory_ports.py`: validated catalogue queries, enablement commands, secret-free projections and public selection port.

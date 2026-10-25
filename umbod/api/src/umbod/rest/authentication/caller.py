@@ -14,26 +14,22 @@ from umbod.rest.authentication.verifiers import (
 )
 
 
-class RestCallerContextProvider:
-    def __init__(
-        self, claims: JwtClaims, authentication: AuthenticationProvenance
-    ) -> None:
-        subject = claims.claims.get("sub")
-        issuer = claims.claims.get("iss")
-        self._context = CallerContext(
-            authentication=authentication,
-            subject=SubjectIdentity(
-                issuer=DeclaredIssuer(value=issuer)
-                if isinstance(issuer, str)
-                else UnavailableIssuer(kind="unavailable"),
-                subject=subject,
-            )
-            if isinstance(subject, str)
-            else UnavailableSubject(kind="unavailable"),
+def caller_context_from_claims(
+    claims: JwtClaims, authentication: AuthenticationProvenance,
+) -> CallerContext:
+    subject = claims.claims.get("sub")
+    issuer = claims.claims.get("iss")
+    return CallerContext(
+        authentication=authentication,
+        subject=SubjectIdentity(
+            issuer=DeclaredIssuer(value=issuer)
+            if isinstance(issuer, str)
+            else UnavailableIssuer(kind="unavailable"),
+            subject=subject,
         )
-
-    def get_context(self) -> CallerContext:
-        return self._context
+        if isinstance(subject, str)
+        else UnavailableSubject(kind="unavailable"),
+    )
 
 
 def authentication_provenance(verifier: JwtVerifier) -> AuthenticationProvenance:

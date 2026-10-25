@@ -1,3 +1,4 @@
+from tests.umbod.core.downstream_mcp_connectors.personal_caller_support import captured_personal_caller
 from datetime import timedelta
 
 import pytest
@@ -5,15 +6,15 @@ from pydantic import SecretStr
 
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, install_authorization, runtime_case
 from tests.umbod.core.downstream_mcp_connectors.test_personal_tools_s3_contracts import approved_tool, replace_policy, save_matches
-from umbod.core.connectors.downstream_mcp.personal_connections import Authorized, CanonicalPrincipal, PersonalConnectionKey, SetPersonalConnectionEnabled
+from umbod.core.connectors.downstream_mcp.personal_connections import Authorized, CanonicalPrincipal, UnavailablePersonalCaller, PersonalConnectionKey, SetPersonalConnectionEnabled
 from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import UnknownPersonalTokenLifetime, authorize_personal_grant
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable, PersonalToolResult
-from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalRuntimeContext, PersonalToolDiscoveryService, PersonalToolRuntimeService
+from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalToolDiscoveryService, PersonalToolRuntimeService
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, create_downstream_mcp_stores
 from umbod.core.permissions.stores.schema import CONNECTOR_PERMISSION_TABLE
 from umbod.core.persistence import DeleteQuery, NoFilter, TransactionMode
 
-from .runtime_support import execution_case
+from .runtime_support import execution_case, runtime_for_caller
 
 __all__ = ["runtime_case"]
 
@@ -45,8 +46,8 @@ async def test_same_connector_and_arguments_use_two_owners_tokens_and_data(runti
     await save_matches(other, policy)
     execution.transport.inventories[key] = execution.transport.inventories[runtime_case.query.key]
     execution.transport.results[(key, "read")] = PersonalToolResult(result={"content": [], "structuredContent": {"owner": "second"}})
-    execution.contexts.contexts[:] = [PersonalRuntimeContext(principal=key.principal, group_ids=("team",))]
-    second = await execution.runtime.execute(execution.command.model_copy(update={"inventory_revision": (await execution.runtime.list_tools())[0].inventory_revision}))
+    second_runtime = runtime_for_caller(execution, captured_personal_caller(key.principal, ("team",)))
+    second = await second_runtime.execute(execution.command.model_copy(update={"inventory_revision": (await second_runtime.list_tools())[0].inventory_revision}))
     assert first.result["structuredContent"] == {"owner": "owner"}
     assert second.result["structuredContent"] == {"owner": "second"}
     assert [call.target.access_token.get_secret_value() for call in execution.transport.calls] == ["owner-token", "second-token"]
@@ -56,8 +57,8 @@ async def test_same_connector_and_arguments_use_two_owners_tokens_and_data(runti
 @pytest.mark.asyncio
 async def test_missing_context_and_disabled_runtime_never_fall_back(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
-    execution.contexts.contexts.clear()
-    for runtime in (execution.runtime, DisabledPersonalToolRuntime()):
+    unavailable_runtime = runtime_for_caller(execution, UnavailablePersonalCaller(kind="unavailable"))
+    for runtime in (unavailable_runtime, DisabledPersonalToolRuntime()):
         assert await runtime.list_tools() == ()
         with pytest.raises(PersonalRuntimeUnavailable, match="^Personal tool unavailable$"):
             await runtime.execute(execution.command)
@@ -66,6 +67,7 @@ async def test_missing_context_and_disabled_runtime_never_fall_back(runtime_case
 
 async def assert_current_admission_rejects_withdrawn_or_invalid_authority(runtime_case: RuntimeCase, revocation: str) -> None:
     execution = await execution_case(runtime_case)
+    runtime = execution.runtime
     if revocation == "disable":
         await runtime_case.bundle.personal_connections.set_enabled(SetPersonalConnectionEnabled(key=runtime_case.query.key, enabled=False))
     elif revocation == "disconnect":
@@ -76,7 +78,7 @@ async def assert_current_admission_rejects_withdrawn_or_invalid_authority(runtim
         async with runtime_case.database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
             await session.delete(CONNECTOR_PERMISSION_TABLE, DeleteQuery(NoFilter()))
     elif revocation == "foreign":
-        execution.contexts.contexts[:] = [PersonalRuntimeContext(principal=CanonicalPrincipal(namespace="trusted", subject="stranger"), group_ids=("team",))]
+        runtime = runtime_for_caller(execution, captured_personal_caller(CanonicalPrincipal(namespace="trusted", subject="stranger"), ("team",)))
     else:
         grant = runtime_case.grant
         if revocation == "expired":
@@ -90,7 +92,7 @@ async def assert_current_admission_rejects_withdrawn_or_invalid_authority(runtim
             authorization = Authorized(authorization=SecretStr('{"access_token":"legacy-secret"}' if revocation == "legacy" else "corrupt-secret"))
         await install_authorization(runtime_case, authorization)
     with pytest.raises(PersonalRuntimeUnavailable) as caught:
-        await execution.runtime.execute(execution.command)
+        await runtime.execute(execution.command)
     assert str(caught.value) == "Personal tool unavailable"
     assert caught.value.__context__ is None
     assert execution.transport.calls == []
@@ -147,7 +149,7 @@ async def test_explicit_rediscovery_invalidates_held_handle_without_per_tool_adm
 async def test_recreated_worker_uses_persisted_authority(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
     stores = await create_downstream_mcp_stores("runtime-secret", runtime_case.database)
-    runtime = PersonalToolRuntimeService(execution.contexts, stores.definitions, stores.personal_tool_access, execution.transport, lambda: runtime_case.query.now)
+    runtime = PersonalToolRuntimeService(execution.caller, stores.definitions, stores.personal_tool_access, execution.transport, lambda: runtime_case.query.now)
     assert len(await runtime.list_tools()) == 1
     assert (await runtime.execute(execution.command)).result["structuredContent"] == {"owner": "owner"}
 

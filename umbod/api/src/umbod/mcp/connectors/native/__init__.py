@@ -3,7 +3,8 @@ from typing import Any
 
 __all__ = [
     "APPROVAL_TTL_SECONDS",
-    "ApprovalPrincipalProvider",
+    "ApprovalCallerBinding",
+    "ApprovalCallerCapture",
     "ApprovalStateCodec",
     "CONNECTOR_PUBLICATION_POLLING_BATCH_LIMIT",
     "CONNECTOR_PUBLICATION_POLLING_INTERVAL_SECONDS",
@@ -19,7 +20,7 @@ __all__ = [
     "ConnectorRuntimeStateStreamReader",
     "ConnectorRuntimeStateSynchronizationSource",
     "ConnectorRuntimeStateSynchronizer",
-    "CurrentInvocationApprovalPrincipalProvider",
+    "CurrentInvocationApprovalCallerCapture",
     "DefaultMcpConnectorRuntimeConfig",
     "HttpConnectorCapabilityDescriptionOverrideStreamReader",
     "HttpConnectorPublicationStreamReader",
@@ -41,7 +42,8 @@ __all__ = [
 
 _EXPORTS: dict[str, str] = {
     "APPROVAL_TTL_SECONDS": ".approval_state",
-    "ApprovalPrincipalProvider": ".approval_principal",
+    "ApprovalCallerBinding": ".approval_principal",
+    "ApprovalCallerCapture": ".approval_principal",
     "ApprovalStateCodec": ".approval_state",
     "CONNECTOR_PUBLICATION_POLLING_BATCH_LIMIT": ".publication_events",
     "CONNECTOR_PUBLICATION_POLLING_INTERVAL_SECONDS": ".publication_events",
@@ -57,7 +59,7 @@ _EXPORTS: dict[str, str] = {
     "ConnectorRuntimeStateStreamReader": ".publication_events",
     "ConnectorRuntimeStateSynchronizationSource": ".runtime_state",
     "ConnectorRuntimeStateSynchronizer": ".runtime_state",
-    "CurrentInvocationApprovalPrincipalProvider": ".approval_principal",
+    "CurrentInvocationApprovalCallerCapture": ".approval_principal",
     "DefaultMcpConnectorRuntimeConfig": ".default_runtime",
     "HttpConnectorCapabilityDescriptionOverrideStreamReader": ".publication_events",
     "HttpConnectorPublicationStreamReader": ".publication_events",

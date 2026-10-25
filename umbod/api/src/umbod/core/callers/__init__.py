@@ -7,12 +7,10 @@ from .models import (
     UnavailableIssuer,
     UnavailableSubject,
 )
-from .ports import CallerContextProvider
 
 __all__ = [
     "AuthenticationProvenance",
     "CallerContext",
-    "CallerContextProvider",
     "DeclaredIssuer",
     "GroupMembership",
     "SubjectIdentity",

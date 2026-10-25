@@ -1,16 +1,11 @@
-from typing import Optional, Protocol
+from typing import Protocol
 
 from .models import (
-    CanonicalPrincipal,
     PersonalConnectionKey,
     PersonalConnectionState,
     ReplacePersonalAuthorization,
     SetPersonalConnectionEnabled,
 )
-
-
-class CanonicalPrincipalProvider(Protocol):
-    async def get_principal(self) -> Optional[CanonicalPrincipal]: ...
 
 
 class PersonalConnectionStore(Protocol):

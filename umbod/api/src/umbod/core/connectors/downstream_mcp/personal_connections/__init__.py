@@ -49,7 +49,8 @@ if TYPE_CHECKING:
         StalePersonalConnectionRevision,
         Unauthorized,
     )
-    from .ports import CanonicalPrincipalProvider, PersonalConnectionStore
+    from .ports import PersonalConnectionStore
+    from .caller import PersonalCaller, UnavailablePersonalCaller, PersonalCallerProvider
     from .identity_models import (
         AbsentIssuer,
         MalformedIssuer,
@@ -64,7 +65,6 @@ if TYPE_CHECKING:
         UnresolvedPersonalIdentity,
     )
     from .identity_ports import PersonalIdentityResolver
-    from .principal import PersonalIdentityPrincipalProvider
     from .service import PersonalConnectionService
 
 
@@ -117,10 +117,11 @@ _EXPORT_MODULES = {
     "InMemoryPersonalConnectionStore": "inmemory",
     "PersonalConnectorInventoryService": "inventory",
     "PersonalConnectorInventory": "inventory_ports",
-    "CanonicalPrincipalProvider": "ports",
+    "PersonalCaller": "caller",
+    "UnavailablePersonalCaller": "caller",
+    "PersonalCallerProvider": "caller",
     "PersonalConnectionStore": "ports",
     "PersonalIdentityResolver": "identity_ports",
-    "PersonalIdentityPrincipalProvider": "principal",
     "PersonalConnectionService": "service",
 }
 
@@ -155,7 +156,9 @@ __all__ = [
     "StalePersonalConnectionRevision",
     "Unauthorized",
     "InMemoryPersonalConnectionStore",
-    "CanonicalPrincipalProvider",
+    "PersonalCaller",
+    "UnavailablePersonalCaller",
+    "PersonalCallerProvider",
     "PersonalConnectionStore",
     "PersonalConnectionService",
     "PersonalConnectorInventory",
@@ -165,7 +168,6 @@ __all__ = [
     "PersonalConnectorSelections",
     "PersonalConnectorUnavailable",
     "SetPersonalConnectorEnablement",
-    "PersonalIdentityPrincipalProvider",
     "AbsentIssuer",
     "MalformedIssuer",
     "DeclaredIssuer",

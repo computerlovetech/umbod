@@ -1,4 +1,3 @@
-from umbod.core.callers import GroupMembership
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 from typing import Annotated
@@ -17,10 +16,9 @@ from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_sto
 from .dependencies import (
     Factories,
     get_personal_connector_inventory,
-    get_personal_group_membership,
-    get_personal_principal_provider,
+    get_personal_caller,
 )
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipalProvider, PersonalConnectorInventory
+from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, PersonalConnectorInventory
 
 
 def require_personal_oauth(factories: Factories) -> None:
@@ -45,15 +43,14 @@ def oauth_clock() -> datetime:
 
 
 async def get_personal_oauth_service(
-    principal: Annotated[CanonicalPrincipalProvider, Depends(get_personal_principal_provider)],
-    groups: Annotated[GroupMembership, Depends(get_personal_group_membership)],
+    caller: Annotated[PersonalCaller, Depends(get_personal_caller)],
     inventory: Annotated[PersonalConnectorInventory, Depends(get_personal_connector_inventory)],
     stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     provider: Annotated[PersonalOAuthProvider, Depends(get_personal_oauth_provider)],
     factories: Factories,
 ) -> PersonalOAuthService:
     return PersonalOAuthService(
-        principal, groups, inventory, stores.definitions, stores.personal_connections,
+        caller, inventory, stores.definitions, stores.personal_connections,
         stores.personal_oauth_attempts, provider,
         factories.settings.endpoints.api_base_url.rstrip("/") + "/api/oauth/downstream-mcp/callback",
         oauth_clock, stores.personal_oauth_configurations,

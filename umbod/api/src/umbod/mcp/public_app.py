@@ -7,8 +7,8 @@ import time
 from umbod.core.connectors.downstream_mcp.adapters.composition import create_downstream_mcp_connections
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.factory import create_personal_mcp_transport
 from umbod.core.connectors.downstream_mcp.management import utc_clock
-from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalToolRuntime, PersonalToolRuntimeService
-from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalRuntimeContextProvider, PersonalToolReservationMiddleware, personal_tool_permission_check
+from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalToolRuntime
+from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalCallerProvider, McpPersonalToolRuntime, PersonalToolReservationMiddleware, personal_tool_permission_check
 
 from umbod.core.capabilities.descriptions.factories import ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory
 from umbod.core.configuration.persistence.factories import create_encrypted_connector_configuration_store
@@ -65,7 +65,7 @@ from umbod.mcp.connectors.native import (
     ConnectorPublicationPollingSynchronizer,
     ConnectorRuntimeStateChangePollingSynchronizer,
     ConnectorRuntimeStateSynchronizer,
-    CurrentInvocationApprovalPrincipalProvider,
+    CurrentInvocationApprovalCallerCapture,
     HttpConnectorRuntimeStateReader,
     HttpConnectorRuntimeStateSynchronizationSource,
     LocalConnectorRuntimeStateSynchronizationSource,
@@ -151,7 +151,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
         approval_state_key = secrets.token_urlsafe(48)
     mcp = FastMCP(name=settings.runtime.app_name, auth=auth_provider, middleware=middleware, request_state_security=RequestStateSecurity(keys=[approval_state_key], ttl=300.0, audience=f'{settings.runtime.app_name}:connector-approval'))
     invocation_policy_store = DatabaseConnectorInvocationPolicyStore(persistence_runtime.database)
-    invocation_policy = McpConnectorInvocationApprovalPolicy(StoredConnectorInvocationPolicy(invocation_policy_store), nonce_store=DatabaseApprovalNonceStore(persistence_runtime.database), state_codec=ApprovalStateCodec(clock=time.time, random_token=random_approval_token, ttl_seconds=APPROVAL_TTL_SECONDS), principal_provider=CurrentInvocationApprovalPrincipalProvider())
+    invocation_policy = McpConnectorInvocationApprovalPolicy(StoredConnectorInvocationPolicy(invocation_policy_store), nonce_store=DatabaseApprovalNonceStore(persistence_runtime.database), state_codec=ApprovalStateCodec(clock=time.time, random_token=random_approval_token, ttl_seconds=APPROVAL_TTL_SECONDS), caller_capture=CurrentInvocationApprovalCallerCapture())
     mcp.connector_invocation_policy = invocation_policy
     await persistence_runtime.readiness.ensure_ready()
     mcp.persistence_runtime = persistence_runtime
@@ -222,7 +222,7 @@ async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettin
     connections = create_downstream_mcp_connections(infrastructure_settings, stores.credentials)
     personal_runtime: PersonalToolRuntime = DisabledPersonalToolRuntime()
     if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled:
-        personal_runtime = PersonalToolRuntimeService(McpPersonalRuntimeContextProvider(settings), stores.definitions, stores.personal_tool_access, create_personal_mcp_transport(), utc_clock)
+        personal_runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), stores.definitions, stores.personal_tool_access, create_personal_mcp_transport(), utc_clock)
     provider = ConnectorAwareDownstreamMcpToolProvider(personal_runtime=personal_runtime, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=connections.client_factory, permission_policy=permission_policy, connector_scope='', capability_description_overrides=mcp.capability_description_overrides, tool_invocation_logger=mcp.connector_tool_invocation_logger, metrics_recorder=mcp.metrics_recorder, invocation_policy=invocation_policy)
     mcp.downstream_mcp_tool_provider = provider
     mcp.add_middleware(PersonalToolReservationMiddleware(provider))

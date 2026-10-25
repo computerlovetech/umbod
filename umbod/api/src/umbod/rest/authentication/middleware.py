@@ -14,7 +14,7 @@ from umbod.rest.authentication.authorization import (
     JwtVerifier,
 )
 from umbod.rest.authentication.caller import (
-    RestCallerContextProvider,
+    caller_context_from_claims,
     authentication_provenance,
 )
 from umbod.rest.authentication.deps import (
@@ -141,7 +141,7 @@ class JwtAdminAuthenticationStrategy:
         provenance = AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED
         if type(self.authorization_service) is AdminAuthorizationService:
             provenance = authentication_provenance(self.authorization_service.jwt_verifier)
-        context = RestCallerContextProvider(claims, provenance).get_context()
+        context = caller_context_from_claims(claims, provenance)
         setattr(request.state, VERIFIED_ACCESS_CLAIMS_STATE_KEY, claims)
         setattr(request.state, CALLER_CONTEXT_STATE_KEY, context)
         return None

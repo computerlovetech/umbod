@@ -5,7 +5,7 @@ from fastapi import HTTPException, Request
 from umbod.core.callers import CallerContext, SubjectIdentity
 from umbod.rest.authentication import JwtClaims, JwtVerificationError, JwtVerifier
 from umbod.rest.authentication.caller import (
-    RestCallerContextProvider,
+    caller_context_from_claims,
     authentication_provenance,
 )
 from umbod.rest.authentication.deps import (
@@ -50,9 +50,9 @@ class JwtCurrentUserProvider:
         if isinstance(getattr(request.state, CALLER_CONTEXT_STATE_KEY, None), CallerContext):
             context = get_caller_context(request)
         else:
-            context = RestCallerContextProvider(
+            context = caller_context_from_claims(
                 jwt_claims, authentication_provenance(self.jwt_verifier)
-            ).get_context()
+            )
         if not isinstance(context.subject, SubjectIdentity):
             raise HTTPException(status_code=401, detail="Unauthorized")
         profile = self.profile_provider.get_profile(

@@ -1,5 +1,3 @@
-from umbod.core.connectors.downstream_mcp.adapters.identity import personal_identity_facts
-from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from typing import Annotated
 
 from fastapi import Depends
@@ -15,7 +13,7 @@ from umbod.core.connectors.downstream_mcp.catalog import StoreBackedDownstreamCa
 from umbod.core.connectors.downstream_mcp.management import utc_clock
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
 from umbod.core.connectors.downstream_mcp.personal_connections import (
-    PersonalConnectionService, PersonalConnectorInventoryService, PersonalIdentityPrincipalProvider,
+    PersonalCaller, PersonalConnectionService, PersonalConnectorInventoryService, ResolvedPersonalIdentity,
 )
 from umbod.core.connectors.downstream_mcp.user_catalogue import (
     PersonalCatalogueSource, PersonalNamespace, SharedDownstreamCatalogue, SharedDownstreamReadiness,
@@ -31,27 +29,24 @@ from umbod.core.publishing import ConnectorPublishingStore
 from umbod.core.user_catalogue import CatalogueSource, UserCatalogueReader, UserCatalogueService
 from umbod.core.user_catalogue.in_memory import InMemoryCatalogueSource
 from umbod.core.user_catalogue.shared import ExplicitCapabilityPermissions, SharedCatalogueSource
-from umbod.rest.authentication.authorization import JwtClaims
-from umbod.rest.authentication.deps import get_verified_access_claims
 from umbod.rest.connectors.dependencies import (
     get_capability_activation_store, get_connector_capability_description_override_store,
     get_connector_publishing_store,
 )
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
-from umbod.rest.connectors.downstream_mcp.personal_connections.dependencies import get_personal_group_membership
 from umbod.rest.connectors.native.dependencies import get_connector_current_configuration_store, get_connector_registry
 from umbod.rest.connectors.openapi.dependencies import get_openapi_connector_store
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.mcp_permissions.dependencies import get_group_permission_store
 
-from .identity import catalogue_identity_key
+from .caller import CatalogueCaller, get_catalogue_caller
 from .projection import CapabilityNameKey, CollisionSafeSource, duplicate_names, gateway_tools_unavailable
 
 
 async def get_user_catalogue(
     factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
-    claims: Annotated[JwtClaims, Depends(get_verified_access_claims)],
+    captured: Annotated[CatalogueCaller, Depends(get_catalogue_caller)],
     registry: Annotated[ConnectorRegistry, Depends(get_connector_registry)],
     configurations: Annotated[ConnectorCurrentConfigurationStore, Depends(get_connector_current_configuration_store)],
     openapi: Annotated[OpenApiConnectorStore, Depends(get_openapi_connector_store)],
@@ -61,7 +56,7 @@ async def get_user_catalogue(
     permissions: Annotated[GroupPermissionStore, Depends(get_group_permission_store)],
 ) -> UserCatalogueReader:
     settings = factories.settings
-    groups = get_personal_group_membership(factories, claims)
+    groups = captured.groups
     policy = ExplicitCapabilityPermissions(permissions, groups.group_ids)
     definitions = factories.downstream_mcp_definition_store.create()
     credentials = factories.downstream_mcp_credential_store.create()
@@ -109,18 +104,18 @@ async def get_user_catalogue(
         )
         names[("downstream_mcp", identity.connector_id, identity.capability_kind, identity.capability_key)] = name
     if settings.personal_connections.enabled:
-        principal_provider = PersonalIdentityPrincipalProvider(personal_identity_policy_from_app_config(settings), personal_identity_facts(claims.claims))
-        principal = await principal_provider.get_principal()
-        if principal is not None:
+        resolution = captured.personal_identity
+        if isinstance(resolution, ResolvedPersonalIdentity):
+            personal_caller = PersonalCaller(caller=captured.caller, principal=resolution.principal, groups=groups)
             stores = await get_downstream_stores(
                 downstream_mcp_infrastructure_settings_from_app_config(settings), factories,
             )
             inventory = PersonalConnectorInventoryService(
                 definitions, publishing, permissions, groups,
-                PersonalConnectionService(principal_provider, stores.personal_connections), descriptions,
+                PersonalConnectionService(personal_caller, stores.personal_connections), descriptions,
             )
             personal_source = PersonalCatalogueSource(
-                inventory, stores.personal_tool_access, principal, groups.group_ids,
+                inventory, stores.personal_tool_access, personal_caller.principal, groups.group_ids,
                 settings.personal_connections.oauth_enabled, utc_clock,
             )
             personal_connectors = await personal_source.list_connectors()
@@ -150,6 +145,6 @@ async def get_user_catalogue(
         blocked = blocked.union(identity for identity in names if identity[2] == "tool")
     return UserCatalogueService(
         tuple(CollisionSafeSource(source, names, namespace, blocked) for source in sources),
-        settings.personal_connections.enabled, catalogue_identity_key(claims.claims),
+        settings.personal_connections.enabled, captured.identity_key,
     )
 

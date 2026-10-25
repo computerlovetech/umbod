@@ -1,3 +1,4 @@
+from tests.umbod.core.downstream_mcp_connectors.personal_caller_support import captured_personal_caller
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any
 
@@ -15,7 +16,6 @@ from umbod.core.connectors.downstream_mcp.personal_tools.service import Personal
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, ReplaceToolCatalog
 from tests.umbod.mcp.downstream_mcp_connectors.test_provider import RecordingInvocationPolicy, _downstream, _provider
 from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, SetPersonalConnectionEnabled
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalRuntimeContext
 from umbod.core.invocation import ConnectorInvocation, ConnectorInvocationPolicy, PermitAllConnectorInvocationPolicy
 from umbod.mcp.connectors.native.tools import ConnectorToolSearchCandidate
 from umbod.mcp.connectors.native.tools.deployment_modes.codemode.sandbox import FastMcpMontyCodeModeAdapter, OpenApiCodeModeInvocation
@@ -145,7 +145,7 @@ async def test_held_personal_tool_resolves_new_owner_after_approval(runtime_case
     execution = await execution_case(runtime_case)
 
     async def switch_owner() -> None:
-        execution.contexts.contexts[:] = [PersonalRuntimeContext(principal=CanonicalPrincipal(namespace="trusted", subject="other"), group_ids=("team",))]
+        execution.contexts.contexts[:] = [captured_personal_caller(CanonicalPrincipal(namespace="trusted", subject="other"), ("team",))]
 
     policy = ApprovalMutation(switch_owner)
     provider = provider_for(execution, policy, InvocationLog())
@@ -170,7 +170,7 @@ async def test_authority_withdrawn_during_approval_prevents_call(runtime_case: R
         elif revocation == "publication":
             await runtime_case.bundle.publishing.unpublish_connector("personal")
         elif revocation == "membership":
-            execution.contexts.contexts[:] = [PersonalRuntimeContext(principal=runtime_case.query.key.principal, group_ids=())]
+            execution.contexts.contexts[:] = [captured_personal_caller(runtime_case.query.key.principal, ())]
         else:
             from umbod.core.permissions.stores.schema import CONNECTOR_PERMISSION_TABLE
             from umbod.core.persistence import DeleteQuery, NoFilter, TransactionMode

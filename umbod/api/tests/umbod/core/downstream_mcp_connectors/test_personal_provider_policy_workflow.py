@@ -1,3 +1,4 @@
+from tests.umbod.core.downstream_mcp_connectors.personal_caller_support import captured_personal_caller
 import asyncio
 import json
 from datetime import UTC, datetime, timedelta
@@ -12,10 +13,9 @@ from pydantic import SecretStr
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import FinishCallback
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericRoute, PresentCallbackIssuer
 
-from umbod.core.callers import GroupMembership
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport, OAuthDestination, OAuthHttpRequest, OAuthHttpResponse
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipalProvider, PersonalConnectorInventory, PersonalConnectorSelection
+from umbod.core.connectors.downstream_mcp.personal_connections import PersonalConnectorInventory, PersonalConnectorSelection
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthProviderFailure, PersonalOAuthUnavailable
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_service import PersonalOAuthCallbackService, PersonalOAuthService
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import DynamicPublicOAuthClient, PersonalOAuthSettings, PreconfiguredConfidentialOAuthClient, PreconfiguredPublicOAuthClient, ReplacePersonalOAuthConfiguration
@@ -39,8 +39,6 @@ async def start_configured(case: AttemptCase, method: str) -> tuple[str, str]:
     configured = await case.bundle.personal_oauth_configurations.replace(ReplacePersonalOAuthConfiguration(
         connector_id="personal", expected_revision="legacy", settings=PersonalOAuthSettings(requested_scopes=("read",), client=configured_client),
     ))
-    principals = AsyncMock(spec=CanonicalPrincipalProvider)
-    principals.get_principal.return_value = case.query.key.principal
     inventory = AsyncMock(spec=PersonalConnectorInventory)
     inventory.get.return_value = PersonalConnectorSelection(connector_id="personal", display_name="Personal", capability_description="Personal access", enabled=True, has_authorization=False)
     transport = InMemoryOAuthHttpTransport([
@@ -52,7 +50,7 @@ async def start_configured(case: AttemptCase, method: str) -> tuple[str, str]:
         }),
     ])
     service = PersonalOAuthService(
-        principals, GroupMembership(group_ids=("team",)), inventory, case.bundle.definitions,
+        captured_personal_caller(case.query.key.principal, ("team",)), inventory, case.bundle.definitions,
         case.bundle.personal_connections, case.bundle.personal_oauth_attempts,
         DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), "https://umbod.example/api/oauth/downstream-mcp/callback",
         case.clock, case.bundle.personal_oauth_configurations,

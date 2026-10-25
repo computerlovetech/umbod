@@ -6,7 +6,14 @@ from umbod.core.invocation import (
     ConnectorInvocation,
     ConnectorInvocationDenied,
 )
-from umbod.mcp.connectors.native import ApprovalStateCodec
+from umbod.mcp.connectors.native import ApprovalCallerBinding, ApprovalStateCodec
+from umbod.mcp.connectors.native.approval_principal import ApprovalActorIdentity
+
+
+def _caller(user_id: str) -> ApprovalCallerBinding:
+    return ApprovalCallerBinding(
+        identity=ApprovalActorIdentity(agent_client_id="", authenticated_user_id=user_id)
+    )
 
 
 def _invocation(arguments: Mapping[str, object] = {"amount": 10}) -> ConnectorInvocation:
@@ -22,28 +29,28 @@ def _invocation(arguments: Mapping[str, object] = {"amount": 10}) -> ConnectorIn
 def test_codec_round_trips_bound_approval_state() -> None:
     codec = ApprovalStateCodec(clock=lambda: 1000.0, random_token=lambda: "nonce", ttl_seconds=300)
 
-    token = codec.mint(_invocation(), 4, {"authenticated_user_id": "user-1"})
+    token = codec.mint(_invocation(), 4, _caller("user-1"))
 
     assert codec.verify(
-        token, _invocation(), 4, {"authenticated_user_id": "user-1"}
+        token, _invocation(), 4, _caller("user-1")
     ) == {"nonce": "nonce", "expires_at": 1300}
 
 
 @pytest.mark.parametrize(
     ("invocation", "revision", "principal"),
     [
-        (_invocation({"amount": 11}), 4, {"authenticated_user_id": "user-1"}),
-        (_invocation(), 5, {"authenticated_user_id": "user-1"}),
-        (_invocation(), 4, {"authenticated_user_id": "user-2"}),
+        (_invocation({"amount": 11}), 4, _caller("user-1")),
+        (_invocation(), 5, _caller("user-1")),
+        (_invocation(), 4, _caller("user-2")),
     ],
 )
 def test_codec_rejects_changed_binding(
     invocation: ConnectorInvocation,
     revision: int,
-    principal: Mapping[str, str],
+    principal: ApprovalCallerBinding,
 ) -> None:
     codec = ApprovalStateCodec(clock=lambda: 1000.0, random_token=lambda: "nonce", ttl_seconds=300)
-    token = codec.mint(_invocation(), 4, {"authenticated_user_id": "user-1"})
+    token = codec.mint(_invocation(), 4, _caller("user-1"))
 
     with pytest.raises(ConnectorInvocationDenied, match="state invalid"):
         codec.verify(token, invocation, revision, principal)
@@ -52,8 +59,8 @@ def test_codec_rejects_changed_binding(
 def test_codec_rejects_expired_state() -> None:
     current_time = 1000.0
     codec = ApprovalStateCodec(clock=lambda: current_time, random_token=lambda: "nonce", ttl_seconds=300)
-    token = codec.mint(_invocation(), 4, {"authenticated_user_id": "user-1"})
+    token = codec.mint(_invocation(), 4, _caller("user-1"))
     current_time = 1301.0
 
     with pytest.raises(ConnectorInvocationDenied, match="state expired"):
-        codec.verify(token, _invocation(), 4, {"authenticated_user_id": "user-1"})
+        codec.verify(token, _invocation(), 4, _caller("user-1"))

@@ -15,7 +15,6 @@ from umbod.core.connectors.downstream_mcp.stores.ports import (
     ConnectorIdQuery,
 )
 
-from umbod.core.callers import GroupMembership
 from ..personal_oauth_configuration import (
     PersonalOAuthConfigurationStore, PersonalOAuthConfigurationQuery,
     PersonalOAuthConfigurationUnavailable, parse_oauth_scopes,
@@ -23,7 +22,7 @@ from ..personal_oauth_configuration import (
 
 from .inventory_models import PersonalConnectorQuery, PersonalConnectorUnavailable
 from .inventory_ports import PersonalConnectorInventory
-from .models import MissingCanonicalPrincipal, PersonalConnection, PersonalConnectionKey
+from .models import PersonalConnection, PersonalConnectionKey
 from .oauth_models import (
     ClaimPersonalOAuthAttempt,
     CompletePersonalOAuthAttempt,
@@ -42,14 +41,14 @@ from .oauth_models import (
     ReservePersonalOAuthAttempt,
 )
 from .oauth_ports import PersonalOAuthAttemptStore, PersonalOAuthProvider
-from .ports import CanonicalPrincipalProvider, PersonalConnectionStore
+from .caller import PersonalCaller, UnavailablePersonalCaller, require_personal_caller
+from .ports import PersonalConnectionStore
 
 
 class PersonalOAuthService:
     def __init__(
         self,
-        principals: CanonicalPrincipalProvider,
-        groups: GroupMembership,
+        caller: PersonalCaller | UnavailablePersonalCaller,
         inventory: PersonalConnectorInventory,
         definitions: ConnectorDefinitionStore,
         connections: PersonalConnectionStore,
@@ -59,8 +58,7 @@ class PersonalOAuthService:
         clock: Callable[[], datetime],
         configurations: PersonalOAuthConfigurationStore,
     ) -> None:
-        self._principals = principals
-        self._groups = groups
+        self._caller = caller
         self._inventory = inventory
         self._definitions = definitions
         self._connections = connections
@@ -71,12 +69,11 @@ class PersonalOAuthService:
         self._configurations = configurations
 
     async def _key(self, connector_id: str) -> PersonalConnectionKey:
-        principal = await self._principals.get_principal()
-        if principal is None:
-            raise MissingCanonicalPrincipal()
+        principal = require_personal_caller(self._caller).principal
         return PersonalConnectionKey(principal=principal, connector_id=connector_id)
 
     async def start(self, connector_id: str) -> PersonalOAuthStartResult:
+        key = await self._key(connector_id)
         try:
             selection = await self._inventory.get(PersonalConnectorQuery(connector_id=connector_id))
         except PersonalConnectorUnavailable:
@@ -90,7 +87,6 @@ class PersonalOAuthService:
             or result.definition.authorization_mode != "personal"
         ):
             raise PersonalOAuthUnavailable()
-        key = await self._key(connector_id)
         connection = await self._connections.get(key)
         if not isinstance(connection, PersonalConnection) or not connection.enabled:
             raise PersonalOAuthUnavailable()
@@ -115,7 +111,7 @@ class PersonalOAuthService:
                 result.definition.model_dump(mode="json"), sort_keys=True, separators=(",", ":")
             ).encode()).hexdigest(),
             endpoint_url=preparation.endpoint_url,
-            group_ids=self._groups.group_ids,
+            group_ids=require_personal_caller(self._caller).groups.group_ids,
             preparation=preparation,
             created_at=now,
             expires_at=now + timedelta(minutes=10),

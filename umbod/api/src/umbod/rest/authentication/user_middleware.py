@@ -5,7 +5,7 @@ from starlette.types import ASGIApp
 
 from umbod.rest.authentication.authorization import JwtVerificationError, JwtVerifier
 from umbod.rest.authentication.caller import (
-    RestCallerContextProvider,
+    caller_context_from_claims,
     authentication_provenance,
 )
 from umbod.rest.authentication.deps import (
@@ -36,9 +36,9 @@ class UserAuthenticationMiddleware(BaseHTTPMiddleware):
             claims = self._verifier.verify(token)
         except JwtVerificationError:
             return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
-        context = RestCallerContextProvider(
+        context = caller_context_from_claims(
             claims, authentication_provenance(self._verifier)
-        ).get_context()
+        )
         setattr(request.state, VERIFIED_ACCESS_CLAIMS_STATE_KEY, claims)
         setattr(request.state, CALLER_CONTEXT_STATE_KEY, context)
         return await call_next(request)

@@ -2,26 +2,24 @@ from pydantic import SecretStr
 
 from .models import (
     Authorized,
-    MissingCanonicalPrincipal,
     PersonalConnectionKey,
     PersonalConnectionState,
     ReplacePersonalAuthorization,
     SetPersonalConnectionEnabled,
 )
-from .ports import CanonicalPrincipalProvider, PersonalConnectionStore
+from .caller import PersonalCaller, UnavailablePersonalCaller, require_personal_caller
+from .ports import PersonalConnectionStore
 
 
 class PersonalConnectionService:
     def __init__(
-        self, principals: CanonicalPrincipalProvider, store: PersonalConnectionStore
+        self, caller: PersonalCaller | UnavailablePersonalCaller, store: PersonalConnectionStore
     ) -> None:
-        self._principals = principals
+        self._caller = caller
         self._store = store
 
     async def _key(self, connector_id: str) -> PersonalConnectionKey:
-        principal = await self._principals.get_principal()
-        if principal is None:
-            raise MissingCanonicalPrincipal()
+        principal = require_personal_caller(self._caller).principal
         return PersonalConnectionKey(principal=principal, connector_id=connector_id)
 
     async def get(self, connector_id: str) -> PersonalConnectionState:

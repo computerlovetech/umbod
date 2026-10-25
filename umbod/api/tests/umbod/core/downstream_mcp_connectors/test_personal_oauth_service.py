@@ -1,3 +1,4 @@
+from tests.umbod.core.downstream_mcp_connectors.personal_caller_support import captured_personal_caller
 import asyncio
 from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock
@@ -5,7 +6,6 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import SecretStr
 
-from umbod.core.callers import GroupMembership
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore, PersonalOAuthConfiguration, legacy_personal_oauth_policy
 from umbod.core.connectors.downstream_mcp.stores.ports import ConnectorDefinitionFound, ConnectorDefinitionStore
@@ -15,7 +15,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.models import Can
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthConflict, PersonalOAuthProviderFailure, PreparedPersonalOAuth
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthAttemptStore, PersonalOAuthProvider
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_service import PersonalOAuthService
-from umbod.core.connectors.downstream_mcp.personal_connections.ports import CanonicalPrincipalProvider, PersonalConnectionStore
+from umbod.core.connectors.downstream_mcp.personal_connections.ports import PersonalConnectionStore
 
 
 pytestmark = pytest.mark.anyio
@@ -29,9 +29,7 @@ def anyio_backend() -> str:
 @pytest.fixture
 def service_dependencies() -> tuple[PersonalOAuthService, AsyncMock, AsyncMock]:
     now = datetime(2026, 1, 1, tzinfo=UTC)
-    principals = AsyncMock(spec=CanonicalPrincipalProvider)
     principal = CanonicalPrincipal(namespace="test:oauth", subject="alice")
-    principals.get_principal.return_value = principal
     connections = AsyncMock(spec=PersonalConnectionStore)
     connections.get.return_value = PersonalConnection(
         key=PersonalConnectionKey(principal=principal, connector_id="connector"),
@@ -53,7 +51,7 @@ def service_dependencies() -> tuple[PersonalOAuthService, AsyncMock, AsyncMock]:
     configurations.get.return_value = PersonalOAuthConfiguration(connector_id="connector", policy=legacy_personal_oauth_policy())
     ticks = iter((now, now + timedelta(seconds=5), now + timedelta(seconds=10)))
     return PersonalOAuthService(
-        principals, GroupMembership(group_ids=("team",)), inventory, definitions,
+        captured_personal_caller(principal, ("team",)), inventory, definitions,
         connections, attempts, provider, "https://api.example/api/oauth/downstream-mcp/callback",
         lambda: next(ticks), configurations,
     ), attempts, provider

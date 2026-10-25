@@ -7,14 +7,9 @@ from umbod.core.capabilities.domain import CapabilityIdentity
 from umbod.core.capabilities.tools.names import PublicToolIdentity
 
 from ..models import ConnectorDefinition, DiscoveredTool, DomainModel, ValidatedJsonObject
-from ..personal_connections.models import CanonicalPrincipal, PersonalConnectionKey
+from ..personal_connections.models import PersonalConnectionKey
 from ..personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalRuntimeTarget
 from .contract_validation import PersonalToolPolicyInvalid, validate_contract_schema
-
-
-class PersonalRuntimeContext(DomainModel):
-    principal: CanonicalPrincipal
-    group_ids: tuple[str, ...]
 
 
 class InvokePersonalTool(DomainModel):

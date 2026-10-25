@@ -35,6 +35,7 @@ from umbod.core.invocation import ConnectorInvocation, PermitAllConnectorInvocat
 from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
 from umbod.mcp.connectors.downstream_mcp import (
     ConnectorAwareDownstreamMcpToolProvider,
+    DownstreamToolPermissionPolicy,
 )
 from umbod.mcp.connectors.downstream_mcp.discovery_execution import (
     ConnectorDiscoveryExecutionDependencies,
@@ -61,6 +62,9 @@ class RejectingDownstreamFactory:
 class MutablePermissionPolicy:
     def __init__(self) -> None:
         self.denied: set[tuple[str, str, str]] = set()
+
+    def capture(self) -> DownstreamToolPermissionPolicy:
+        return self
 
     def allows(self, connector_id: str, operation_name: str) -> bool:
         return self.allows_capability(connector_id, "tool", operation_name)

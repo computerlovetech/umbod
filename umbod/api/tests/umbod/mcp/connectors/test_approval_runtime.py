@@ -22,7 +22,8 @@ from umbod.core.invocation import (
 )
 from umbod.mcp.connectors.native import (
     ApprovalStateCodec,
-    CurrentInvocationApprovalPrincipalProvider,
+    ApprovalCallerBinding,
+    CurrentInvocationApprovalCallerCapture,
     McpConnectorInvocationApprovalPolicy,
     ModernConnectorApprovalRequired,
 )
@@ -104,6 +105,68 @@ def _approval_codec(clock: Callable[[], float]) -> ApprovalStateCodec:
 
 
 @pytest.mark.asyncio
+async def test_ask_captures_once_even_when_context_changes_before_mint() -> None:
+    _identity("user-1")
+    reads: list[ApprovalCallerBinding] = []
+    provider = CurrentInvocationApprovalCallerCapture()
+
+    class ChangingCallerCapture:
+        def capture(self) -> ApprovalCallerBinding:
+            value = provider.capture()
+            reads.append(value)
+            _identity("user-2")
+            return value
+
+    policy = McpConnectorInvocationApprovalPolicy(
+        FixedPolicy(AskInvocationDecision(7)),
+        nonce_store=InMemoryApprovalNonceStore(),
+        state_codec=_approval_codec(lambda: 1000.0),
+        caller_capture=ChangingCallerCapture(),
+    )
+    with pytest.raises(ModernConnectorApprovalRequired) as raised:
+        await _with_context(ApprovalContext(modern=True), lambda: policy.evaluate(_invocation()))
+
+    assert len(reads) == 1
+    assert json.loads(raised.value.result.input_required.request_state)["principal"] == {
+        "authenticated_user_id": "user-1"
+    }
+
+
+@pytest.mark.asyncio
+async def test_continuation_captures_fresh_caller_once_and_rejects_other_user() -> None:
+    reads: list[ApprovalCallerBinding] = []
+    provider = CurrentInvocationApprovalCallerCapture()
+
+    class RecordingCallerCapture:
+        def capture(self) -> ApprovalCallerBinding:
+            binding = provider.capture()
+            reads.append(binding)
+            return binding
+
+    policy = McpConnectorInvocationApprovalPolicy(
+        FixedPolicy(AskInvocationDecision(7)),
+        nonce_store=InMemoryApprovalNonceStore(),
+        state_codec=_approval_codec(lambda: 1000.0),
+        caller_capture=RecordingCallerCapture(),
+    )
+    _identity("user-1")
+    with pytest.raises(ModernConnectorApprovalRequired) as raised:
+        await _with_context(ApprovalContext(modern=True), lambda: policy.evaluate(_invocation()))
+    _identity("user-2")
+    resumed = ApprovalContext(modern=True)
+    resumed._task_request_state = raised.value.result.input_required.request_state
+    resumed._task_input_responses = {
+        "connector_approval": ElicitResult(action="accept", content={"value": True})
+    }
+
+    with pytest.raises(ConnectorInvocationDenied, match="state invalid"):
+        await _with_context(resumed, lambda: policy.evaluate(_invocation()))
+
+    assert len(reads) == 2
+    assert reads[0] != reads[1]
+
+
+@pytest.mark.asyncio
 async def test_stored_direct_decision_does_not_elicit() -> None:
     _identity()
     context = ApprovalContext(modern=False)
@@ -111,7 +174,7 @@ async def test_stored_direct_decision_does_not_elicit() -> None:
         FixedPolicy(DirectInvocationDecision()),
         nonce_store=InMemoryApprovalNonceStore(),
         state_codec=_approval_codec(lambda: 1000.0),
-        principal_provider=CurrentInvocationApprovalPrincipalProvider(),
+        caller_capture=CurrentInvocationApprovalCallerCapture(),
     )
 
     decision = await _with_context(context, lambda: policy.evaluate(_invocation()))
@@ -141,7 +204,7 @@ async def test_legacy_ask_accepts_only_explicit_true(
         FixedPolicy(AskInvocationDecision(4)),
         nonce_store=InMemoryApprovalNonceStore(),
         state_codec=_approval_codec(lambda: 1000.0),
-        principal_provider=CurrentInvocationApprovalPrincipalProvider(),
+        caller_capture=CurrentInvocationApprovalCallerCapture(),
     )
 
     if accepted:
@@ -161,7 +224,7 @@ async def test_modern_initial_result_uses_actual_mcp_wire_models_without_sensiti
         FixedPolicy(AskInvocationDecision(7)),
         nonce_store=InMemoryApprovalNonceStore(),
         state_codec=_approval_codec(lambda: 1000.0),
-        principal_provider=CurrentInvocationApprovalPrincipalProvider(),
+        caller_capture=CurrentInvocationApprovalCallerCapture(),
     )
 
     with pytest.raises(ModernConnectorApprovalRequired) as raised:
@@ -186,7 +249,7 @@ async def test_modern_acceptance_consumes_state_once_at_five_minute_boundary() -
         FixedPolicy(AskInvocationDecision(7)),
         nonce_store=InMemoryApprovalNonceStore(),
         state_codec=_approval_codec(lambda: now[0]),
-        principal_provider=CurrentInvocationApprovalPrincipalProvider(),
+        caller_capture=CurrentInvocationApprovalCallerCapture(),
     )
     initial = ApprovalContext(modern=True)
     with pytest.raises(ModernConnectorApprovalRequired) as raised:
@@ -214,7 +277,7 @@ async def test_modern_concurrent_replay_has_exactly_one_winner() -> None:
         FixedPolicy(AskInvocationDecision(2)),
         nonce_store=InMemoryApprovalNonceStore(),
         state_codec=_approval_codec(lambda: 1000.0),
-        principal_provider=CurrentInvocationApprovalPrincipalProvider(),
+        caller_capture=CurrentInvocationApprovalCallerCapture(),
     )
     initial = ApprovalContext(modern=True)
     with pytest.raises(ModernConnectorApprovalRequired) as raised:
@@ -245,7 +308,7 @@ async def test_modern_resume_rejects_changed_or_expired_approval(mutation: str) 
         FixedPolicy(AskInvocationDecision(3)),
         nonce_store=InMemoryApprovalNonceStore(),
         state_codec=_approval_codec(lambda: now[0]),
-        principal_provider=CurrentInvocationApprovalPrincipalProvider(),
+        caller_capture=CurrentInvocationApprovalCallerCapture(),
     )
     initial = ApprovalContext(modern=True)
     with pytest.raises(ModernConnectorApprovalRequired) as raised:
@@ -284,7 +347,7 @@ async def test_modern_resume_rejects_malformed_state_response_pair(
         FixedPolicy(AskInvocationDecision(1)),
         nonce_store=InMemoryApprovalNonceStore(),
         state_codec=_approval_codec(lambda: 1000.0),
-        principal_provider=CurrentInvocationApprovalPrincipalProvider(),
+        caller_capture=CurrentInvocationApprovalCallerCapture(),
     )
 
     with pytest.raises(ConnectorInvocationDenied, match="malformed"):
@@ -299,7 +362,7 @@ async def test_modern_codemode_fails_closed_before_side_effect() -> None:
         FixedPolicy(AskInvocationDecision(1)),
         nonce_store=InMemoryApprovalNonceStore(),
         state_codec=_approval_codec(lambda: 1000.0),
-        principal_provider=CurrentInvocationApprovalPrincipalProvider(),
+        caller_capture=CurrentInvocationApprovalCallerCapture(),
     )
     policy._is_codemode_request = lambda current: True
 

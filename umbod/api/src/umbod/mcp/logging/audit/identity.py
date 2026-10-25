@@ -6,6 +6,8 @@ from typing import Protocol
 
 from fastmcp.server.dependencies import get_access_token
 
+from umbod.core.callers import AuthenticationProvenance, CallerContext, SubjectIdentity
+from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
 from umbod.mcp.logging.audit.event import (
     McpAnonymousAuditActor,
     McpAuditActorState,
@@ -14,7 +16,7 @@ from umbod.mcp.logging.audit.event import (
 )
 from umbod.mcp.logging.invocation.event import McpInvocationActor
 
-_USER_ID_CLAIM_FIELDS = ("sub", "email", "preferred_username")
+_USER_ID_FALLBACK_FIELDS = ("email", "preferred_username")
 
 
 @dataclass(frozen=True)
@@ -32,6 +34,7 @@ class _RequestIdentitySnapshot:
 
 @dataclass(frozen=True)
 class _AccessTokenSnapshot:
+    caller: CallerContext
     claims: Mapping[str, object]
     client_id: str | None
 
@@ -77,24 +80,27 @@ def audit_identity_from_invocation_actor(actor: McpInvocationActor) -> McpAuditI
 
 class McpAuditIdentityAdapter:
     def identity_from_request(self, fastmcp_context: object) -> McpAuditIdentity:
-        snapshot = _normalize_request_identity(
-            _access_token_snapshot(get_access_token()),
-            _framework_context_snapshot(fastmcp_context),
-        )
+        snapshot = _request_identity_snapshot(fastmcp_context)
         return McpAuditIdentity(actor=snapshot.actor, client=snapshot.client)
 
     def invocation_actor(self, fastmcp_context: object) -> McpInvocationActor:
-        return _normalize_request_identity(
-            _access_token_snapshot(get_access_token()),
-            _framework_context_snapshot(fastmcp_context),
-        ).invocation_actor
+        return _request_identity_snapshot(fastmcp_context).invocation_actor
+
+
+def _request_identity_snapshot(fastmcp_context: object) -> _RequestIdentitySnapshot:
+    server = getattr(fastmcp_context, "fastmcp", None)
+    authentication = authentication_provenance(getattr(server, "auth", None))
+    return _normalize_request_identity(
+        _access_token_snapshot(get_access_token(), authentication),
+        _framework_context_snapshot(fastmcp_context),
+    )
 
 
 def _normalize_request_identity(
     token: _AccessTokenSnapshot,
     context: _FrameworkContextSnapshot,
 ) -> _RequestIdentitySnapshot:
-    identity = _user_identity(token.claims)
+    identity = _user_identity(token.caller, token.claims)
     user_id = identity.user_id if isinstance(identity, _AuthenticatedUserIdentity) else None
     return _RequestIdentitySnapshot(
         actor=_audit_actor(identity),
@@ -124,17 +130,22 @@ def _present_metadata(**values: str | None) -> Mapping[str, str]:
     return {key: value for key, value in values.items() if value is not None}
 
 
-def _access_token_snapshot(token: object) -> _AccessTokenSnapshot:
+def _access_token_snapshot(
+    token: object, authentication: AuthenticationProvenance,
+) -> _AccessTokenSnapshot:
     claims = getattr(token, "claims", None)
     client_id = getattr(token, "client_id", None)
     return _AccessTokenSnapshot(
+        caller=caller_context_from_access_token(token, authentication),
         claims=claims if isinstance(claims, Mapping) else {},
         client_id=client_id if isinstance(client_id, str) else None,
     )
 
 
-def _user_identity(claims: Mapping[str, object]) -> _UserIdentity:
-    for field in _USER_ID_CLAIM_FIELDS:
+def _user_identity(caller: CallerContext, claims: Mapping[str, object]) -> _UserIdentity:
+    if isinstance(caller.subject, SubjectIdentity) and caller.subject.subject:
+        return _AuthenticatedUserIdentity(caller.subject.subject)
+    for field in _USER_ID_FALLBACK_FIELDS:
         value = claims.get(field)
         if isinstance(value, str) and value:
             return _AuthenticatedUserIdentity(value)

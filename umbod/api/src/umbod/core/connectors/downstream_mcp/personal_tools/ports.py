@@ -7,7 +7,6 @@ from ..stores.ports import ConnectorIdQuery
 from .models import (
     AdmitPersonalTool,
     InvokePersonalTool,
-    PersonalRuntimeContext,
     PersonalInventoryRevision,
     PersonalToolAdmission,
     PersonalToolPolicy,
@@ -17,10 +16,6 @@ from .models import (
     SavePersonalToolObservation,
     UnconfiguredPersonalToolPolicy,
 )
-
-
-class PersonalRuntimeContextProvider(Protocol):
-    async def get_context(self) -> PersonalRuntimeContext: ...
 
 
 class PersonalToolRuntime(Protocol):

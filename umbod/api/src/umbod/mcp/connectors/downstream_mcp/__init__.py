@@ -1,12 +1,18 @@
+from umbod.mcp.connectors.downstream_mcp.permissions import (
+    DownstreamToolPermissionPolicy,
+    DownstreamToolPermissionPolicySource,
+    GroupDownstreamToolPermissionPolicy,
+    UnrestrictedDownstreamToolPermissionPolicy,
+)
 from umbod.mcp.connectors.downstream_mcp.provider import (
     ConnectorAwareDownstreamMcpToolProvider,
-    GroupDownstreamToolPermissionPolicy,
     NativeCapabilityProviderView,
-    UnrestrictedDownstreamToolPermissionPolicy,
 )
 
 __all__ = [
     "ConnectorAwareDownstreamMcpToolProvider",
+    "DownstreamToolPermissionPolicy",
+    "DownstreamToolPermissionPolicySource",
     "GroupDownstreamToolPermissionPolicy",
     "NativeCapabilityProviderView",
     "UnrestrictedDownstreamToolPermissionPolicy",

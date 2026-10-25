@@ -6,32 +6,26 @@ from umbod.mcp.connectors.openapi.codemode_execution import (
 )
 from umbod.mcp.connectors.openapi.configuration import openapi_configuration_adapter
 from umbod.mcp.connectors.openapi.deps import (
-    get_current_principal_groups,
+    capture_openapi_groups,
     get_group_permission_reader,
     get_openapi_connector_store,
 )
 from umbod.mcp.connectors.openapi.factories import DatabaseGroupPermissionReaderFactory
 from umbod.mcp.connectors.openapi.ports import (
-    CurrentPrincipal,
-    CurrentPrincipalGroups,
     GroupPermissionReaderFactory,
     OpenApiConnectorStoreFactory,
     OutboundHttpClientFactoryPort,
 )
-from umbod.mcp.connectors.openapi.principal import JwtCurrentPrincipalGroups
 
 __all__ = [
-    'CurrentPrincipal',
-    'CurrentPrincipalGroups',
     'DatabaseGroupPermissionReaderFactory',
     'GroupPermissionReaderFactory',
-    'JwtCurrentPrincipalGroups',
     'OpenApiCodeModeExecutionAdapter',
     'OpenApiCodeModeExecutionAdapterFactory',
     'OpenApiConnectorStoreFactory',
     'OutboundHttpClientFactoryPort',
     'build_openapi_codemode_executor',
-    'get_current_principal_groups',
+    'capture_openapi_groups',
     'get_group_permission_reader',
     'get_openapi_connector_store',
     'openapi_availability_reader',

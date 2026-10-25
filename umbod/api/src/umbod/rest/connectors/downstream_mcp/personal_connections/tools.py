@@ -1,4 +1,3 @@
-from umbod.core.callers import GroupMembership
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
@@ -6,7 +5,7 @@ from pydantic import BaseModel, ConfigDict
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.factory import create_personal_mcp_transport
 from umbod.core.connectors.downstream_mcp.management import utc_clock
-from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipalProvider, PersonalConnectionKey
+from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, PersonalConnectionKey
 from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalRuntimeUnavailable
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
@@ -16,7 +15,7 @@ from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_sto
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 
-from .dependencies import get_personal_group_membership, get_personal_principal_provider
+from .dependencies import get_personal_caller
 
 
 class DiscoverPersonalToolsRequest(BaseModel):
@@ -59,16 +58,13 @@ async def validate_discovery_body(request: Request) -> None:
 @router.post("/{connector_id}/tools/discovery", status_code=204)
 async def discover_personal_tools(
     connector_id: str, request: Request,
-    principal: Annotated[CanonicalPrincipalProvider, Depends(get_personal_principal_provider)],
-    groups: Annotated[GroupMembership, Depends(get_personal_group_membership)],
+    caller: Annotated[PersonalCaller, Depends(get_personal_caller)],
     discovery: Annotated[PersonalToolDiscoveryService, Depends(get_personal_tool_discovery)],
 ) -> Response:
     await validate_discovery_body(request)
-    owner = await principal.get_principal()
-    if owner is None:
-        raise HTTPException(status_code=403, detail={"code": "personal_identity_unavailable"})
+    owner = caller.principal
     try:
-        await discovery.discover(PersonalRuntimeAuthorizationQuery(key=PersonalConnectionKey(principal=owner, connector_id=connector_id), group_ids=groups.group_ids, now=utc_clock()))
+        await discovery.discover(PersonalRuntimeAuthorizationQuery(key=PersonalConnectionKey(principal=owner, connector_id=connector_id), group_ids=caller.groups.group_ids, now=utc_clock()))
     except PersonalAuthorizationHealthUnavailable:
         raise HTTPException(status_code=503, detail={"code": "personal_authorization_health_unavailable"}, headers={"Cache-Control": "no-store"}) from None
     except (PersonalRuntimeUnavailable, PersonalToolPolicyUnavailable):
