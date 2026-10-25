@@ -83,6 +83,7 @@ Try it with an integration your team actually needs. [Report an issue](https://g
 | Group permissions | ✅ Complete | 🟡 Evolving | Manage group-level access to MCP tools from the admin UI. |
 | Authentication and deployment profiles | ✅ Complete | 🟡 Evolving | Support local development authentication and production OIDC-based deployments. |
 | Helm chart for Kubernetes | ✅ Complete | 🟡 Evolving | Install and configure Umbod on Kubernetes using Helm. |
+| Virtual filesystem | ⬜ Planned | ⚪ Not assessed | Provide a unified filesystem interface for accessing connector-backed resources. |
 | Tool description overrides | ⬜ Planned | ⚪ Not assessed | Override published tool descriptions from the `/admin` interface. |
 | Configurable `toolPolicy` | ✅ Complete | 🟡 Evolving | Configure tool access policies as `allow`, `ask`, or `blocked`, controlling whether tools run directly, require approval, or cannot be used. |
 | Agent observability tools | ⬜ Planned | ⚪ Not assessed | Provide built-in tools such as `give_feedback` and `self_diagnose` for agent feedback and diagnostics. |
