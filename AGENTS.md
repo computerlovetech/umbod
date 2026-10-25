@@ -47,4 +47,5 @@ Run the checks applicable to the changed area:
 ## Semgrep
 
 - Run the shared app Semgrep rules with `cd umbod && uv run semgrep scan --config ../.semgrep.yml .`.
+- After each Semgrep run, resolve the reported issues, including pre-existing findings, and rerun the scan to verify the fixes.
 - The shared Semgrep config lives at `.semgrep.yml`; do not add app-local `.semgrep.yml` files unless the app needs an explicitly documented exception.

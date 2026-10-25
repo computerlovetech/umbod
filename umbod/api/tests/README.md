@@ -30,7 +30,7 @@ Tests unrelated to the metrics HTTP endpoint explicitly disable `rest.metrics_en
 
 ## Virtual filesystem acceptance
 
-`umbod/core/virtual_filesystem/` contains the initial standalone core acceptance slice for root discovery, nested creation, and streamed write/read. Its domain language, direct-Python driver, composition factory, and in-memory dependency doubles live in `support/virtual_filesystem/`. These tests target the public production service, not a simulated service. The production VFS module is not yet implemented, so the expected initial result is missing-SUT setup failures after successful collection.
+`umbod/core/virtual_filesystem/` contains the initial standalone core acceptance slice for root discovery, nested creation, and streamed write/read. Its domain language, direct-Python driver, composition factory, and in-memory dependency doubles live in `support/virtual_filesystem/`. These tests target the public production service, not a simulated service. The initial production VFS slice satisfies its three original tests, with an additional empty-file regression covering explicit absence states. The original missing-SUT red run and the subsequent implementation iterations are recorded in the feature's ATDD artifacts.
 
 The scenario mapping and explicit deferrals are recorded in `.atdd/features/virtual-filesystem/04-acceptance-test-plan.md` at the repository root. This initial slice does not establish full feature coverage or conformance of future storage adapters.
 

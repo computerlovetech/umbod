@@ -3,6 +3,8 @@ from datetime import datetime
 from typing import Mapping, Optional, Protocol
 from uuid import UUID
 
+from umbod.core.virtual_filesystem import EmptyContent, RootParent, UnspecifiedContentType
+
 from .models import (
     ContentHandle,
     Metadata,
@@ -20,7 +22,7 @@ class PublicKind(Protocol):
 
 
 class PublicMetadata(Protocol):
-    content_type: Optional[str]
+    content_type: str | UnspecifiedContentType
     attributes: Mapping[str, str]
 
 
@@ -31,11 +33,11 @@ class PublicContentRef(Protocol):
 
 class PublicNode(Protocol):
     id: UUID
-    parent_id: Optional[UUID]
+    parent_id: UUID | RootParent
     name: str
     kind: PublicKind
     metadata: PublicMetadata
-    content: Optional[PublicContentRef]
+    content: PublicContentRef | EmptyContent
     created_at: datetime
     updated_at: datetime
     revision: int
@@ -43,14 +45,14 @@ class PublicNode(Protocol):
 
 class MetadataFactory(Protocol):
     def __call__(
-        self, *, content_type: Optional[str], attributes: dict[str, str]
+        self, *, content_type: str | UnspecifiedContentType, attributes: dict[str, str]
     ) -> PublicMetadata: ...
 
 
 class NodeFactory(Protocol):
     def __call__(
-        self, *, id: UUID, parent_id: Optional[UUID], name: str,
-        kind: PublicKind, metadata: PublicMetadata, content: Optional[PublicContentRef],
+        self, *, id: UUID, parent_id: UUID | RootParent, name: str,
+        kind: PublicKind, metadata: PublicMetadata, content: PublicContentRef | EmptyContent,
         created_at: datetime, updated_at: datetime, revision: int,
     ) -> PublicNode: ...
 
@@ -66,7 +68,7 @@ class NamespacePort(Protocol):
     async def list_children(self, parent_id: UUID) -> Sequence[PublicNode]: ...
     async def create_node(
         self, parent_id: UUID, name: str, kind: PublicKind,
-        metadata: PublicMetadata, content: Optional[PublicContentRef] = None,
+        metadata: PublicMetadata,
     ) -> PublicNode: ...
     async def update_node(
         self, node_id: UUID, *, content: PublicContentRef, expected_revision: int,

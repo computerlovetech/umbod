@@ -1,6 +1,8 @@
 from typing import Sequence
 from uuid import UUID
 
+from umbod.core.virtual_filesystem import EmptyContent, RootParent, UnspecifiedContentType
+
 from .models import (
     ContentHandle,
     Metadata,
@@ -33,7 +35,10 @@ class DirectPythonAcceptanceDriver:
         self._metadata_factory = metadata_factory
 
     def _metadata(self, metadata: Metadata) -> PublicMetadata:
-        content_type = metadata.content_type if isinstance(metadata, MetadataValue) else None
+        content_type = (
+            metadata.content_type if isinstance(metadata, MetadataValue)
+            else UnspecifiedContentType()
+        )
         return self._metadata_factory(
             content_type=content_type, attributes=dict(metadata.attributes),
         )
@@ -41,7 +46,7 @@ class DirectPythonAcceptanceDriver:
     def _view(self, node: PublicNode) -> NodeView:
         UUID(str(node.id))
         metadata: Metadata
-        if node.metadata.content_type is None:
+        if isinstance(node.metadata.content_type, UnspecifiedContentType):
             metadata = UntypedMetadataValue(node.metadata.attributes)
         else:
             metadata = MetadataValue(node.metadata.content_type, node.metadata.attributes)
@@ -95,13 +100,13 @@ class DirectPythonAcceptanceDriver:
         return b"".join([chunk async for chunk in chunks])
 
     async def root_has_no_parent(self) -> bool:
-        return (await self._namespace.get_root()).parent_id is None
+        return isinstance((await self._namespace.get_root()).parent_id, RootParent)
 
     async def content_reference(
         self, node: NodeHandle,
     ) -> StoredContentView | NoContentReference:
         reference = (await self._namespace.get_node(UUID(node.value))).content
-        if reference is None:
+        if isinstance(reference, EmptyContent):
             return NoContentReference()
         return StoredContentView(ContentHandle(reference.key), reference.size)
 

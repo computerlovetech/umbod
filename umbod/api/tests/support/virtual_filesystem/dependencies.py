@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 from typing import Optional, Sequence
 from uuid import UUID, uuid4
 
+from umbod.core.virtual_filesystem import EmptyContent, RootParent
+
 from .protocols import (
     ByteStream,
     ContentRefFactory,
@@ -26,7 +28,7 @@ class InMemoryNamespace:
 
     @property
     def root_count(self) -> int:
-        return sum(node.parent_id is None for node in self._nodes.values())
+        return sum(isinstance(node.parent_id, RootParent) for node in self._nodes.values())
 
     async def get_root(self) -> PublicNode:
         return self._nodes[self._root_id]
@@ -49,13 +51,13 @@ class InMemoryNamespace:
 
     async def create_node(
         self, parent_id: UUID, name: str, kind: PublicKind,
-        metadata: PublicMetadata, content: Optional[PublicContentRef] = None,
+        metadata: PublicMetadata,
     ) -> PublicNode:
         self._creation_calls += 1
         timestamp = datetime.now(timezone.utc)
         node = self._node_factory(
             id=uuid4(), parent_id=parent_id, name=name, kind=kind,
-            metadata=metadata, content=content, created_at=timestamp,
+            metadata=metadata, content=EmptyContent(), created_at=timestamp,
             updated_at=timestamp, revision=1,
         )
         self._nodes[node.id] = node

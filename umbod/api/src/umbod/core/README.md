@@ -28,6 +28,10 @@
 
 **Read when working with:** Connector publish/unpublish state, publication persistence, or publication events.
 
+### `virtual_filesystem/`
+
+**Read when working with:** Standalone filesystem models, namespace/content ports, driver-provided shared root discovery, nested node creation, and streamed content publication. The [local index](virtual_filesystem/README.md) describes the initial acceptance slice and deferred behavior. No REST/MCP or authorization wiring is included.
+
 ### `user_catalogue/`
 
 **Read when working with:** Safe authenticated-user catalogue models, source/reader ports, in-memory acceptance and explicit shared capability-grant filtering. The [local index](user_catalogue/README.md) describes request-scoped projection responsibilities.
