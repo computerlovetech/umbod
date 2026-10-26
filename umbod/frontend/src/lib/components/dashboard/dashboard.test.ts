@@ -86,9 +86,17 @@ describe('dashboard presentation', () => {
     expect(body).toContain(label);
     expect(body).toContain('aria-hidden="true"');
     expect(body).toContain(connector.capability_description);
-    expect(body).toContain(connector.ownership === 'personal' ? 'Personal connection' : 'Shared connection');
+    expect(body).toMatch(new RegExp(`Authorization[\\s\\S]*?${connector.ownership === 'personal' ? 'Personal' : 'Shared'}`));
     expect(body).toContain(`${connector.capabilities.length} available`);
-    expect(body).toContain('Managed by your administrator');
+    expect(body).toContain('Organisation-managed');
+    expect(body).toContain('Your organisation controls connector settings and available capabilities.');
+    expect(body).not.toContain('Admin-managed');
+    expect(body).not.toContain('User-managed');
+    if (connector.ownership === 'personal') {
+      expect(body).toContain('You authorize access using your own account.');
+    } else {
+      expect(body).not.toContain('You authorize access using your own account.');
+    }
     expect(body).not.toContain('Personal access');
     expect(body).not.toMatch(/Publish|Unpublish|Published|Unpublished/);
     expect(body).not.toContain('Configure');
@@ -116,6 +124,11 @@ describe('dashboard presentation', () => {
     expect(body).not.toContain('href="/admin');
     expect(body).not.toContain('Shared connectors');
     expect(body).not.toContain('Personal connectors');
+    expect(body).toContain('Personal authorization');
+    expect(body).toContain('Shared authorization');
+    expect(body.match(/Organisation-managed/g)).toHaveLength(3);
+    expect(body).not.toContain('Admin-managed');
+    expect(body).not.toContain('User-managed');
   });
 
   test('selected personal connector embeds its existing personal access controls', async (): Promise<void> => {

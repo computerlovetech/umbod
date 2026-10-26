@@ -31,6 +31,10 @@ describe('personal server administration presentation', () => {
   test('registration reuses validated metadata fields and policy controls without another inventory', () => {
     const state = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null);
     const body = render(PersonalServerRegistration, { props: { state, close: vi.fn(), reload: vi.fn() } }).body;
+    expect(body).toContain('Register MCP server with personal authorization');
+    expect(body).toContain('Your organisation manages the connector; each user authorizes access using their own account.');
+    expect(body).toContain('Server details and the endpoint cannot be changed after registration; OAuth settings can be updated separately.');
+    expect(body).not.toContain('Register personal MCP server');
     expect(body).toContain('Registration starts unpublished');
     expect(body).toContain('No discovery, group grants, user enablement or consent');
     expect(body).toContain('Registration path identifier');
@@ -192,6 +196,9 @@ describe('personal server administration presentation', () => {
     const workspace = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
     const shell = readFileSync('src/lib/components/admin/AdminShell.svelte', 'utf8');
     expect(workspace).toContain('onadd={(trigger) => state.beginCreate(registration.availability, trigger)}');
+    expect(workspace).toContain('Both options are organisation-managed.');
+    expect(workspace).toContain('Choose shared authorization or personal authorization, where each user authorizes access using their own account.');
+    expect(workspace).not.toContain('User-managed');
     expect(workspace).toContain('>Shared</Button>');
     expect(workspace).not.toContain('An operator must');
     expect(workspace).not.toContain('View startup settings');

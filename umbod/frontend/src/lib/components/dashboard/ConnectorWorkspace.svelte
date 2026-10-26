@@ -24,8 +24,8 @@
     {#key state.identityKey}
     <ConnectorSidebarList items={state.connectors.map(catalogueSidebarItem)} selectedId={state.selectedId} ariaLabel="Your connectors" onselect={(item) => state.selectConnector(item.id)}>
       {#snippet metadata(item)}
-        <span class="connector-meta">{connectorKindLabels[item.kind]} · {item.ownership === 'personal' ? 'Personal connection' : 'Shared'}</span>
-        <span class="managed-label">Admin-managed</span>
+        <span class="connector-meta">{connectorKindLabels[item.kind]} · {item.ownership === 'personal' ? 'Personal authorization' : 'Shared authorization'}</span>
+        <span class="managed-label">Organisation-managed</span>
         {#if item.ownership === 'personal'}
           {@const card = state.personalCard(item.connector_id)}
           {#if card}<ConnectionStatusBadge status={personalAccessStatus(card)} compact />{/if}

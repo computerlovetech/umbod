@@ -59,7 +59,7 @@ describe('downstream MCP connector administration', () => {
 
   test('uses the shared connector sidebar without exposing connector identifiers', () => {
     expect(controls).toContain('ConnectorSidebarList');
-    expect(controls).toContain("item.connector.authorization_mode === 'personal' ? 'Personal' : 'Shared'");
+    expect(controls).toContain("item.connector.authorization_mode === 'personal' ? 'Personal authorization' : 'Shared authorization'");
     expect(controls).toContain('item.connector.publication_status');
     expect(controls).not.toContain('<span>{connector.connector_id}</span>');
   });

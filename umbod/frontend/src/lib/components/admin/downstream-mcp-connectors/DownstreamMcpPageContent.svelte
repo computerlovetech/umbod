@@ -86,7 +86,7 @@
 
 {#if state.modal === 'choose' && !state.operations.locked}
   <PersonalServerDialog title="Add MCP connector" titleId="mcp-mode-title" descriptionId="mcp-mode-description" close={state.close}>
-    <p id="mcp-mode-description">Use shared credentials or let each user connect their own account.</p>
+    <p id="mcp-mode-description">Both options are organisation-managed. Choose shared authorization or personal authorization, where each user authorizes access using their own account.</p>
     <div class="connector-mode-options">
       <Button onclick={() => state.open('create', state.returnFocus!)}>Shared</Button>
       <Button disabled={!registration.canRegister} onclick={() => { registration.openCreate(); state.open('personal', state.returnFocus!); }}>Personal</Button>

@@ -16,16 +16,16 @@
   {/snippet}
   {#snippet summary()}
     <ConnectorDetailItem label="Connector type">{connectorKindLabels[connector.kind]}</ConnectorDetailItem>
-    <ConnectorDetailItem label="Connection">{connector.ownership === 'personal' ? 'Personal connection' : 'Shared connection'}</ConnectorDetailItem>
+    <ConnectorDetailItem label="Authorization">{connector.ownership === 'personal' ? 'Personal' : 'Shared'}</ConnectorDetailItem>
     <ConnectorDetailItem label="Capabilities">{connector.capabilities.length} available</ConnectorDetailItem>
   {/snippet}
   {#snippet children()}
     <div class="managed-notice">
       <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="10" width="14" height="11" rx="2" /><path d="M8 10V7a4 4 0 0 1 8 0v3" /><path d="M12 14v3" /></svg>
       <div>
-        <h3>Managed by your administrator</h3>
-        <p>Connector settings and available capabilities are controlled by your administrator.</p>
-        {#if connector.ownership === 'personal'}<p>You manage authorization for your own personal connection.</p>{/if}
+        <h3>Organisation-managed</h3>
+        <p>Your organisation controls connector settings and available capabilities.</p>
+        {#if connector.ownership === 'personal'}<p>You authorize access using your own account.</p>{/if}
         {#if manageHref}<a href={manageHref}>Manage in Connectors <span aria-hidden="true">→</span></a>{/if}
       </div>
     </div>

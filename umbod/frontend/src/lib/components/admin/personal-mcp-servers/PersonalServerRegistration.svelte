@@ -9,7 +9,7 @@
   let { state, close, reload }: { state: PersonalServerFormState; close: () => void; reload: () => void } = $props();
   onDestroy(untrack(() => state.form.clearSecret));
 </script>
-  <PersonalServerDialog title="Register personal MCP server" titleId="personal-create-title" descriptionId="personal-create-description" {close}>
+  <PersonalServerDialog title="Register MCP server with personal authorization" titleId="personal-create-title" descriptionId="personal-create-description" {close}>
     <div class="modal-content">
       <p id="personal-create-description">Registration starts unpublished. No discovery, group grants, user enablement or consent is performed.</p>
       {#if state.message}<p role="alert">{state.message}</p>{/if}
@@ -18,7 +18,7 @@
         <fieldset disabled={!state.canRegister}>
           <div class="section-heading">
             <h3>Server details</h3>
-            <p>Each user connects their own account. Server details and the endpoint cannot be changed after registration; OAuth settings can be updated separately.</p>
+            <p>Your organisation manages the connector; each user authorizes access using their own account. Server details and the endpoint cannot be changed after registration; OAuth settings can be updated separately.</p>
           </div>
           <AdminConfigurationField id="personal-name" name="name" label="Server name" placeholder="Acme MCP" helperText="The name users see in Dashboard. Suggests the tool prefix and registration identifier until you edit them." required value={state.metadata.name} oninput={(event) => state.setMetadata('name', (event.currentTarget as HTMLInputElement).value)} />
           <AdminConfigurationField id="personal-endpoint" name="endpoint" label="HTTPS MCP endpoint" type="url" placeholder="https://mcp.example.com/mcp" helperText="The provider's MCP server address, not its website or OAuth sign-in URL. Use HTTPS without embedded credentials or a fragment." required value={state.metadata.endpoint} oninput={(event) => state.setMetadata('endpoint', (event.currentTarget as HTMLInputElement).value)} />
