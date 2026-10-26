@@ -7,6 +7,10 @@ export interface PersonalConnectionController {
   readonly authorizationOpened: boolean;
   readonly busy: boolean;
   readonly checking: boolean;
+  readonly loadingTools: boolean;
+  readonly toolsNeedLoading: boolean;
+  readonly toolsRecovery: boolean;
+  readonly monitoring: boolean;
   readonly confirmingDisconnect: boolean;
   readonly needsRefresh: boolean;
   readonly message: string;
@@ -26,11 +30,13 @@ export interface PersonalConnectionController {
   loadHealth(): Promise<void>;
   refresh(): Promise<void>;
   setEnabled(): Promise<void>;
+  connect(): Promise<void>;
   start(): Promise<void>;
   check(): Promise<void>;
   cancel(): Promise<void>;
   renew(): Promise<void>;
   discover(): Promise<void>;
+  retryLoadingTools(): Promise<void>;
   requestDisconnect(): void;
   keepAuthorization(): void;
   disconnect(): Promise<void>;

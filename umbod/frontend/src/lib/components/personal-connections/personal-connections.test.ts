@@ -1,3 +1,4 @@
+import { InMemoryAttemptScheduler } from '$lib/personal-connections/infrastructure/in-memory-attempt-scheduler';
 import { render } from 'svelte/server';
 import { describe, expect, test, vi } from 'vitest';
 import { HttpError } from '$lib/admin/infrastructure/transport';
@@ -16,7 +17,7 @@ import ConnectionCard from './ConnectionCard.svelte';
 describe('personal connections presentation', () => {
   test('saved authorization is not falsely labelled connected or diagnosed expired', () => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
-    const state = new ConnectionState(selection, api, vi.fn());
+    const state = new ConnectionState(selection, api, vi.fn(), undefined, undefined, new InMemoryAttemptScheduler());
     const body = render(ConnectionCard, { props: { state } }).body;
     for (const label of ['Authorization saved', 'Not available', 'Checking access…', 'Personal access actions for Calendar']) expect(body).toContain(label);
     expect(body).not.toContain('Ready to use');
@@ -27,12 +28,12 @@ describe('personal connections presentation', () => {
   });
   test('blocked automatic opening retains a safe sign-in fallback without exposing secondary actions', async (): Promise<void> => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
-    const state = new ConnectionState(selection, api, vi.fn());
+    const state = new ConnectionState(selection, api, vi.fn(), undefined, undefined, new InMemoryAttemptScheduler());
     await state.start();
     const body = render(ConnectionCard, { props: { state } }).body;
     expect(body).toContain('target="_blank"');
     expect(body).toContain('rel="noopener noreferrer"');
-    for (const label of ['Continue sign-in', 'Check sign-in status', 'could not be opened automatically']) expect(body).toContain(label);
+    for (const label of ['Continue sign-in', 'could not be opened automatically']) expect(body).toContain(label);
     const view: PersonalAccessViewController = new PersonalAccessViewState(() => state);
     expect(view.menuActions.find((action) => action.id === 'cancel')?.disabled).toBe(false);
     expect(body).not.toContain('Cancel sign-in');
@@ -45,19 +46,20 @@ describe('personal connections presentation', () => {
   test('automatically opened sign-in needs no additional continue-link step', async (): Promise<void> => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
     const browser: AuthorizationBrowser = new InMemoryAuthorizationBrowser();
-    const state: PersonalConnectionController = new ConnectionState(selection, api, vi.fn<() => void>(), async (): Promise<void> => {}, browser);
+    const state: PersonalConnectionController = new ConnectionState(selection, api, vi.fn<() => void>(), async (): Promise<void> => {}, browser, new InMemoryAttemptScheduler());
     await state.start();
     expect(state.authorizationOpened).toBe(true);
     const body = render(ConnectionCard, { props: { state, embedded: true } }).body;
     expect(body).toContain('Finish signing in using the browser tab');
-    expect(body).toContain('Check sign-in status');
+    expect(body).not.toContain('Check sign-in status');
+    expect(body).toContain('Waiting for sign-in');
     expect(body).not.toContain('Continue sign-in');
     expect(body).not.toContain('could not be opened automatically');
     expect(body).toContain('Open sign-in page again');
   });
   test('disconnect confirmation stays inline and separate from enablement', (): void => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
-    const state = new ConnectionState(selection, api, vi.fn());
+    const state = new ConnectionState(selection, api, vi.fn(), undefined, undefined, new InMemoryAttemptScheduler());
     state.requestDisconnect();
     const body = render(ConnectionCard, { props: { state } }).body;
     expect(body).toContain('Confirm disconnect');
@@ -78,7 +80,7 @@ describe('personal connections presentation', () => {
     { health: { state: 'refreshing', deadline: '2000-01-01T00:00:00Z' }, copy: 'Renewal is already in progress. Check status before another action.', renew: false }
   ])('presents $health.state independently of saved authorization and tools', async ({ health, copy, renew }): Promise<void> => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: health });
-    const state = new ConnectionState(selection, api, vi.fn<() => void>());
+    const state = new ConnectionState(selection, api, vi.fn<() => void>(), undefined, undefined, new InMemoryAttemptScheduler());
     await state.loadHealth();
     const body = render(ConnectionCard, { props: { state } }).body;
     expect(body).toContain(copy);
@@ -98,7 +100,7 @@ describe('personal connections presentation', () => {
   test('unavailable health exposes safe manual recovery, never expiry or unsupported claims', async (): Promise<void> => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
     vi.spyOn(api.authorization, 'getHealth').mockRejectedValue(new HttpError(503, 'secret', { detail: 'secret' }));
-    const state = new ConnectionState(selection, api, vi.fn<() => void>());
+    const state = new ConnectionState(selection, api, vi.fn<() => void>(), undefined, undefined, new InMemoryAttemptScheduler());
     await state.loadHealth();
     const body = render(ConnectionCard, { props: { state } }).body;
     expect(body).toContain('Status unavailable');
@@ -112,7 +114,7 @@ describe('personal connections presentation', () => {
   test('catalogue notifications follow successful operations without replacing pending state', async (): Promise<void> => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
     const changed = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
-    const state = new ConnectionState(selection, api, vi.fn(), changed);
+    const state = new ConnectionState(selection, api, vi.fn(), changed, undefined, new InMemoryAttemptScheduler());
     await state.loadHealth();
     await state.start();
     expect(changed).not.toHaveBeenCalled();
@@ -137,20 +139,20 @@ describe('personal connections presentation', () => {
   test('failed catalogue refresh cannot turn a successful mutation into an uncertain replay', async (): Promise<void> => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
     const changed = vi.fn<() => Promise<void>>().mockRejectedValue(new Error('private'));
-    const state = new ConnectionState(selection, api, vi.fn(), changed);
+    const state = new ConnectionState(selection, api, vi.fn(), changed, undefined, new InMemoryAttemptScheduler());
     const enable = vi.spyOn(api.connections, 'setEnablement');
     await state.setEnabled();
     expect(enable).toHaveBeenCalledOnce();
     expect(state.selection.enabled).toBe(false);
     expect(state.message).toBe('Personal access disabled.');
-    expect(state.needsRefresh).toBe(false);
-    expect(state.error).toBe("Couldn't refresh connectors. Refresh the dashboard.");
+    expect(state.needsRefresh).toBe(true);
+    expect(state.error).toBe("Couldn't refresh connectors. Check authorization status to refresh the dashboard.");
     expect(state.error).not.toContain('private');
   });
   test('successful mutations retain their outcome when the following personal read fails', async (): Promise<void> => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
     const changed = vi.fn<() => Promise<void>>().mockResolvedValue(undefined);
-    const state = new ConnectionState(selection, api, vi.fn(), changed);
+    const state = new ConnectionState(selection, api, vi.fn(), changed, undefined, new InMemoryAttemptScheduler());
     const enable = vi.spyOn(api.connections, 'setEnablement');
     vi.spyOn(api.authorization, 'getHealth').mockRejectedValue(new HttpError(503, 'private', {}));
     await state.setEnabled();
@@ -165,7 +167,7 @@ describe('personal connections presentation', () => {
   });
   test('embedded controls omit duplicate identity and preserve pending attempts across renders', async (): Promise<void> => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
-    const state = new ConnectionState(selection, api, vi.fn());
+    const state = new ConnectionState(selection, api, vi.fn(), undefined, undefined, new InMemoryAttemptScheduler());
     await state.start();
     const attempt = state.attempt;
     const body = render(ConnectionCard, { props: { state, embedded: true } }).body;
@@ -175,7 +177,7 @@ describe('personal connections presentation', () => {
     expect(body).toContain('Personal access');
     expect(body).toContain('Continue sign-in');
     const reopened = render(ConnectionCard, { props: { state, embedded: true } }).body;
-    expect(reopened).toContain('Check sign-in status');
+    expect(reopened).not.toContain('Check sign-in status');
     expect(state.attempt).toEqual(attempt);
   });
 });

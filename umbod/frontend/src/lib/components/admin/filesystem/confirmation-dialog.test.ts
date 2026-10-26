@@ -1,6 +1,7 @@
 import { Window } from 'happy-dom';
 import { describe, expect, it, vi } from 'vitest';
 import { filesystemConfirmation } from './confirmation-dialog';
+import { InMemoryGroupCatalogue } from '$lib/admin/groups/in-memory';
 import { FilesystemAccessState } from './filesystem-access-state.svelte';
 import { InMemoryFilesystemAdministration } from '$lib/admin/filesystem/in-memory';
 import { rootPolicy } from '$lib/admin/filesystem/fixtures.test-support';
@@ -22,6 +23,18 @@ function dialogFixture(): { window: Window; document: Document; dialog: HTMLDial
 }
 
 describe('filesystem native confirmation lifecycle', () => {
+  it('keeps registration modal open while an explicit registration is pending', (): void => {
+    const { dialog, window } = dialogFixture();
+    const cancel = vi.fn();
+    const cleanup = filesystemConfirmation(cancel, () => false)(dialog);
+    const event = new window.Event('cancel', { cancelable: true }) as unknown as Event;
+    dialog.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+    expect(dialog.close).not.toHaveBeenCalled();
+    expect(cancel).not.toHaveBeenCalled();
+    if (typeof cleanup === 'function') cleanup();
+  });
+
   it('opens natively modal, focuses Cancel and closes before teardown for native focus restoration', () => {
     const { document, dialog, cancel } = dialogFixture();
     const cleanup = filesystemConfirmation(vi.fn())(dialog);
@@ -35,7 +48,7 @@ describe('filesystem native confirmation lifecycle', () => {
   it('Escape closes the native dialog, cancels confirmation and preserves the draft without submitting', async () => {
     const api = new InMemoryFilesystemAdministration(rootPolicy({ status: 'ready', groups: [{ issuer: 'issuer', group_id: 'existing', permissions: ['read'] }] }));
     const replace = vi.spyOn(api, 'replaceRootAccess');
-    const state = new FilesystemAccessState(api);
+    const state = new FilesystemAccessState(api, new InMemoryGroupCatalogue());
     await state.load();
     state.remove(state.rows[0].id);
     await state.save();
@@ -54,7 +67,7 @@ describe('filesystem native confirmation lifecycle', () => {
     expect(dialog.close).toHaveBeenCalledTimes(1);
   });
   it('Escape during discard confirmation leaves edited values unchanged and removes listeners on teardown', async () => {
-    const state = new FilesystemAccessState(new InMemoryFilesystemAdministration(rootPolicy()));
+    const state = new FilesystemAccessState(new InMemoryFilesystemAdministration(rootPolicy()), new InMemoryGroupCatalogue());
     await state.load();
     state.add();
     state.edit(state.rows[0].id, 'group_id', 'keep-draft');

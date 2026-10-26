@@ -1,3 +1,4 @@
+import { InMemoryAttemptScheduler } from '../infrastructure/in-memory-attempt-scheduler';
 import { describe, expect, test, vi } from 'vitest';
 import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
 import type { PersonalConnectionsApi } from '../api';
@@ -9,7 +10,7 @@ import { createPersonalDashboard } from './dashboard-test-helper';
 
 function setup(health: AuthorizationHealth = authorizationHealth): { api: PersonalConnectionsApi; card: ConnectionState } {
   const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: health });
-  return { api, card: new ConnectionState(selection, api, vi.fn<() => void>()) };
+  return { api, card: new ConnectionState(selection, api, vi.fn<() => void>(), undefined, undefined, new InMemoryAttemptScheduler()) };
 }
 
 const nonRenewable: AuthorizationHealth[] = [

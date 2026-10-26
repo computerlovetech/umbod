@@ -113,6 +113,7 @@
   </div>
 
   <GroupPermissionsTabs activeTab="connectors" />
+  <p class="group-permissions__description">Groups are shared with filesystem access. Register a group claim value, not IdP membership. Registration is saved independently and grants no access. Delete group removes the shared catalogue entry and is blocked while connector, capability or filesystem references remain.</p>
 
   {#if state.initialTarget !== null}
     {#if state.deepLinkedTargetAvailable}
@@ -144,7 +145,6 @@
                     method="POST"
                     data-operation="deletePermissionGroup"
                     use:browserSubmit={({ onComplete }) => {
-                      state.closeGroupMenu();
                       const pendingKey = `delete-group:${group.groupId}`;
                       onComplete(() => pendingState.stop(pendingKey));
       pendingState.start(pendingKey);
@@ -154,6 +154,7 @@
                         if (actionForm.status === 'deleted') toast.success(`Deleted group ${actionForm.groupId ?? group.groupId}`);
                         else toast.error(actionForm.message ?? 'Could not delete group');
                         await update();
+                        state.closeGroupMenu();
                         pendingState.stop(pendingKey);
                       };
                     }}

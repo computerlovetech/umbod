@@ -1,3 +1,4 @@
+import { InMemoryAttemptScheduler } from '../infrastructure/in-memory-attempt-scheduler';
 import { describe, expect, test, vi } from 'vitest';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { PersonalConnectionsApi } from '../api';
@@ -18,22 +19,22 @@ interface Harness {
 function harness(health: AuthorizationHealth, overrides: Partial<Selection>): Harness {
   const current: Selection = { ...selection, runtime_available: true, runtime_unavailable_reason: '', ...overrides };
   const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([current], { calendar: health });
-  const connection: PersonalConnectionController = new ConnectionState(current, api, vi.fn<() => void>());
+  const connection: PersonalConnectionController = new ConnectionState(current, api, vi.fn<() => void>(), undefined, undefined, new InMemoryAttemptScheduler());
   return { connection, api, view: new PersonalAccessViewState(() => connection) };
 }
 
 describe('personal access presentation contract', () => {
   test.each<{ health: AuthorizationHealth; overrides: Partial<Selection>; label: string; tone: string; primary: string }>([
     { health: authorizationHealth, overrides: {}, label: 'Ready to use', tone: 'success', primary: '' },
-    { health: authorizationHealth, overrides: { enabled: false }, label: 'Disabled', tone: 'neutral', primary: 'Enable access' },
-    { health: { state: 'not_authorized' }, overrides: { has_authorization: false }, label: 'Sign-in required', tone: 'warning', primary: 'Sign in' },
-    { health: authorizationHealth, overrides: { runtime_available: false }, label: 'Tools not ready', tone: 'warning', primary: 'Refresh tools' },
+    { health: authorizationHealth, overrides: { enabled: false }, label: 'Disabled', tone: 'neutral', primary: 'Connect' },
+    { health: { state: 'not_authorized' }, overrides: { has_authorization: false }, label: 'Sign-in required', tone: 'warning', primary: 'Connect' },
+    { health: authorizationHealth, overrides: { runtime_available: false }, label: 'Tools not ready', tone: 'warning', primary: 'Retry loading tools' },
     { health: { state: 'expired', expires_at: '2030-01-01T00:00:00Z', refresh_supported: true }, overrides: {}, label: 'Authorization expired', tone: 'warning', primary: 'Renew access' },
-    { health: { state: 'expired', expires_at: '2030-01-01T00:00:00Z', refresh_supported: false }, overrides: {}, label: 'Authorization expired', tone: 'warning', primary: 'Sign in again' },
-    { health: { state: 'unsupported' }, overrides: {}, label: 'Sign-in required', tone: 'warning', primary: 'Sign in again' },
-    { health: { state: 'reconnect_required', reason: 'provider_rejected' }, overrides: {}, label: 'Sign-in required', tone: 'warning', primary: 'Sign in again' },
-    { health: { state: 'reconnect_required', reason: 'refresh_denied' }, overrides: {}, label: 'Sign-in required', tone: 'warning', primary: 'Sign in again' },
-    { health: { state: 'reconnect_required', reason: 'refresh_uncertain' }, overrides: {}, label: 'Sign-in required', tone: 'warning', primary: 'Sign in again' },
+    { health: { state: 'expired', expires_at: '2030-01-01T00:00:00Z', refresh_supported: false }, overrides: {}, label: 'Authorization expired', tone: 'warning', primary: 'Connect' },
+    { health: { state: 'unsupported' }, overrides: {}, label: 'Sign-in required', tone: 'warning', primary: 'Connect' },
+    { health: { state: 'reconnect_required', reason: 'provider_rejected' }, overrides: {}, label: 'Sign-in required', tone: 'warning', primary: 'Connect' },
+    { health: { state: 'reconnect_required', reason: 'refresh_denied' }, overrides: {}, label: 'Sign-in required', tone: 'warning', primary: 'Connect' },
+    { health: { state: 'reconnect_required', reason: 'refresh_uncertain' }, overrides: {}, label: 'Sign-in required', tone: 'warning', primary: 'Connect' },
     { health: { state: 'refreshing', deadline: '2000-01-01T00:00:00Z' }, overrides: {}, label: 'Renewal in progress', tone: 'pending', primary: 'Check authorization status' },
     { health: authorizationHealth, overrides: { has_authorization: false }, label: 'Status needs checking', tone: 'warning', primary: 'Check authorization status' }
   ])('$label provides the appropriate single next step: $primary', async ({ health, overrides, label, tone, primary }): Promise<void> => {
@@ -92,7 +93,7 @@ describe('personal access presentation contract', () => {
     await view.perform('sign-in');
     expect(view.status.label).toBe('Sign-in needs attention');
     expect(view.status.tone).toBe('warning');
-    expect(view.primaryLabel).toBe('Check sign-in status');
+    expect(view.primaryLabel).toBe('');
     expect(view.fallbackRequired).toBe(true);
     expect(view.menuActions.find((action) => action.id === 'cancel')?.disabled).toBe(false);
     await view.perform('sign-in');
@@ -138,7 +139,7 @@ describe('personal access presentation contract', () => {
     expect(view.menuActions.some((action) => action.id === 'sign-in')).toBe(false);
     await view.perform('toggle');
     expect(connection.selection.enabled).toBe(true);
-    expect(view.primaryLabel).toBe('Sign in');
+    expect(view.primaryLabel).toBe('Connect');
     expect(start).not.toHaveBeenCalled();
   });
 });

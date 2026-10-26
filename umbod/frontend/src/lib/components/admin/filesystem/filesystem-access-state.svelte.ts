@@ -1,12 +1,16 @@
+import type { GroupCatalogue } from '$lib/admin/groups/port';
+import type { CatalogueGroup } from '$lib/admin/groups/domain/schemas';
 import type { FilesystemAdministration } from '$lib/admin/filesystem/port';
 import { canonicalGroups, replaceRootAccessSchema, type ObservedGroupPolicy, type Permission, type RootAccess } from '$lib/admin/filesystem/domain/schemas';
 import { policyErrorMessage } from '$lib/admin/filesystem/errors';
 
 export type GroupDraft = ObservedGroupPolicy & { id: number };
+export type FilesystemGroup = { id: string; group_id: string; registered: boolean; grants: GroupDraft[] };
 
 export class FilesystemAccessState {
   saved = $state.raw<RootAccess | null>(null);
   rows = $state<GroupDraft[]>([]);
+  catalogue = $state.raw<CatalogueGroup[]>([]);
   loading = $state(false);
   saving = $state(false);
   error = $state('');
@@ -15,7 +19,15 @@ export class FilesystemAccessState {
   confirmation = $state<'empty' | 'reload' | null>(null);
   private nextId = 0;
   private disposed = false;
-  constructor(private readonly api: FilesystemAdministration) {}
+  constructor(private readonly api: FilesystemAdministration, readonly groupCatalogue: GroupCatalogue) {}
+  get groupEntries(): FilesystemGroup[] {
+    const ids = [...new Set([...this.catalogue.map((group) => group.group_id), ...this.rows.map((row) => row.group_id), ...(this.saved?.unmanaged_groups.map((group) => group.group_id) ?? [])])];
+    return ids.map((group_id) => ({ id: group_id, group_id, registered: this.catalogue.some((group) => group.group_id === group_id), grants: this.rows.filter((row) => row.group_id === group_id) }));
+  }
+  registerGroup = async (groupId: string): Promise<void> => {
+    await this.groupCatalogue.register(groupId);
+    if (!this.disposed && !this.catalogue.some((group) => group.group_id === groupId)) this.catalogue = [...this.catalogue, { group_id: groupId }];
+  };
   get busy(): boolean { return this.loading || this.saving; }
   get editable(): boolean { return !!this.saved && this.saved.status !== 'conflict' && !this.busy && !this.blocked; }
   get groups(): ObservedGroupPolicy[] { return this.rows.map(({ issuer, group_id, permissions }) => ({ issuer, group_id, permissions: [...permissions] })); }
@@ -36,7 +48,10 @@ export class FilesystemAccessState {
     this.loading = true;
     this.error = '';
     this.success = '';
-    try { const policy = await this.api.getRootAccess(); if (!this.disposed) this.accept(policy); }
+    try {
+      const [policy, catalogue] = await Promise.all([this.api.getRootAccess(), this.groupCatalogue.list()]);
+      if (!this.disposed) { this.catalogue = catalogue; this.accept(policy); }
+    }
     catch (error) { if (!this.disposed) this.error = policyErrorMessage(error); }
     finally { if (!this.disposed) this.loading = false; }
   };

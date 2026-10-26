@@ -7,12 +7,12 @@
 </script>
 
 <dialog aria-labelledby="filesystem-group-title" aria-describedby="filesystem-group-description" {@attach filesystemConfirmation(editor.cancel)}>
-  <h2 id="filesystem-group-title">{editor.editingId === null ? 'Add group' : 'Edit group'}</h2>
-  <p id="filesystem-group-description">Configure direct root access. Changes apply only after saving the policy.</p>
+  <h2 id="filesystem-group-title">{editor.editingId === null ? 'Assign filesystem permissions' : 'Edit filesystem permissions'}</h2>
+  <p id="filesystem-group-description">Configure direct root access. Changes apply only after Save policy.</p>
   {#if editor.draft}
     <form onsubmit={(event) => { event.preventDefault(); editor.apply(); }}>
       <label for="filesystem-group-id">Group ID</label>
-      <input id="filesystem-group-id" value={editor.draft.group_id} oninput={(event) => editor.edit('group_id', event.currentTarget.value)} autocomplete="off" spellcheck="false" placeholder="Exact group ID" />
+      <input id="filesystem-group-id" value={editor.draft.group_id} readonly={!editor.canRepairGroupId} oninput={(event) => editor.edit('group_id', event.currentTarget.value)} autocomplete="off" spellcheck="false" placeholder="Exact group ID" />
       <label for="filesystem-group-issuer">Identity issuer</label>
       <input id="filesystem-group-issuer" value={editor.draft.issuer} oninput={(event) => editor.edit('issuer', event.currentTarget.value)} autocomplete="off" spellcheck="false" placeholder="Issuer URL" />
       <fieldset>
@@ -30,7 +30,7 @@
       {#if editor.validationMessage}<p class="hint" role="status">{editor.validationMessage}</p>{/if}
       <div class="actions">
         <button type="button" data-dialog-cancel onclick={(event) => { event.currentTarget.closest('dialog')?.close(); editor.cancel(); }}>Cancel</button>
-        <Button type="submit" disabled={!!editor.validationMessage}>{editor.editingId === null ? 'Add group' : 'Apply changes'}</Button>
+        <Button type="submit" disabled={!!editor.validationMessage}>Stage permissions</Button>
       </div>
     </form>
   {/if}

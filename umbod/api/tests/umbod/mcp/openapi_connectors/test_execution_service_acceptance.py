@@ -1,6 +1,6 @@
 from umbod.core.activation import CAPABILITY_ACTIVATION_STATE_TABLE
 from umbod.core.connectors.openapi.stores import CATALOG_OPERATION_TABLE, CATALOG_SOURCE_TABLE, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, OpenApiConnectorStoreService
-from umbod.core.permissions.stores.schema import CONNECTOR_PERMISSION_TABLE, GROUP_TABLE, CAPABILITY_PERMISSION_TABLE
+from umbod.core.permissions.stores.schema import CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE
 from umbod.core.permissions.stores.service import GroupPermissionStoreService
 from umbod.core.persistence import Database
 from tests.persistence_runtime import create_inmemory_runtime
@@ -177,7 +177,7 @@ async def test_permitted_openapi_invocation_evaluates_sanitized_context_before_o
     policy = RecordingInvocationPolicy(events)
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     await _save(store, _records())
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_connector(permissions, 'engineering', 'inventory')
     compiler = RecordingCompiler(events)
     transport = RecordingTransport(events)
@@ -204,7 +204,7 @@ async def test_denied_openapi_invocation_returns_sanitized_failure_without_trans
     policy = RecordingInvocationPolicy(events, ConnectorInvocationDenied('private rationale'))
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     await _save(store, _records())
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_connector(permissions, 'engineering', 'inventory')
     (service, _) = _service(store, permissions, events, invocation_policy=policy)
     result = await service.execute(_input(), ('engineering',))
@@ -220,7 +220,7 @@ async def test_unexpected_openapi_policy_failure_hides_canary_without_transport(
     policy = RecordingInvocationPolicy(events, RuntimeError(canary))
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     await _save(store, _records())
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_connector(permissions, 'engineering', 'inventory')
     (service, _) = _service(store, permissions, events, invocation_policy=policy)
     result = await service.execute(_input(), ('engineering',))
@@ -234,7 +234,7 @@ async def test_unauthorized_openapi_invocation_skips_policy_and_transport() -> N
     policy = RecordingInvocationPolicy(events)
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     await _save(store, _records())
-    (service, _) = _service(store, GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE), events, invocation_policy=policy)
+    (service, _) = _service(store, GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE), events, invocation_policy=policy)
     assert await service.execute(_input(), ('engineering',)) == _safe_unavailable()
     assert events == []
     assert policy.invocations == []
@@ -245,7 +245,7 @@ async def test_openapi_policy_cancellation_propagates_without_transport() -> Non
     policy = RecordingInvocationPolicy(events, asyncio.CancelledError())
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     await _save(store, _records())
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_connector(permissions, 'engineering', 'inventory')
     (service, _) = _service(store, permissions, events, invocation_policy=policy)
     with pytest.raises(asyncio.CancelledError):
@@ -258,7 +258,7 @@ async def test_exact_operation_and_connector_grants_authorize(grant: str) -> Non
     events: list[str] = []
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     await _save(store, _records())
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     if grant == 'tool':
         await _grant_tool(permissions, 'engineering', ConnectorToolRef('inventory', 'getItem'))
     else:
@@ -273,7 +273,7 @@ async def test_no_groups_and_wrong_grants_are_indistinguishable(groups: tuple[st
     events: list[str] = []
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     await _save(store, _records())
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_tool(permissions, 'engineering', ConnectorToolRef('inventory', 'getItem'))
     (service, _) = _service(store, permissions, events)
     assert await service.execute(_input(operation_id), groups) == _safe_unavailable()
@@ -286,7 +286,7 @@ async def test_hidden_states_have_one_safe_outcome_and_no_downstream_calls(recor
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     if records is not None:
         await _save(store, records)
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_connector(permissions, 'engineering', 'inventory')
     (service, _) = _service(store, permissions, events)
     assert await service.execute(_input(operation_id), ('engineering',)) == _safe_unavailable()
@@ -298,7 +298,7 @@ async def test_connector_without_current_catalog_has_one_safe_outcome_and_no_dow
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     (connector, _) = _records()
     await store.save_connector(connector)
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_connector(permissions, 'engineering', 'inventory')
     (service, _) = _service(store, permissions, events)
     assert await service.execute(_input(), ('engineering',)) == _safe_unavailable()
@@ -319,7 +319,7 @@ async def test_permission_and_catalog_changes_are_visible_on_next_call() -> None
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     (connector, catalog) = _records()
     await _save(store, (connector, catalog))
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_connector(permissions, 'engineering', 'inventory')
     (service, _) = _service(store, permissions, events)
     assert (await service.execute(_input(), ('engineering',))).status == 'success'
@@ -336,7 +336,7 @@ async def test_missing_and_present_empty_json_bodies_reach_compiler_distinctly()
     events: list[str] = []
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     await _save(store, _records())
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_connector(permissions, 'engineering', 'inventory')
     (service, compiler) = _service(store, permissions, events)
     await service.execute(_input(body=MissingJsonBody()), ('engineering',))
@@ -348,7 +348,7 @@ async def test_compiler_typed_validation_failure_is_non_leaking() -> None:
     events: list[str] = []
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     await _save(store, _records())
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_connector(permissions, 'engineering', 'inventory')
     (service, _) = _service(store, permissions, events, compiler_failure=ValueError('secret-canary'))
     result = await service.execute(_input(), ('engineering',))
@@ -362,7 +362,7 @@ async def test_transport_failures_map_to_stable_non_leaking_outcomes(failure: Ba
     events: list[str] = []
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     await _save(store, _records())
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_connector(permissions, 'engineering', 'inventory')
     (service, _) = _service(store, permissions, events, transport_failure=failure)
     result = await service.execute(_input(), ('engineering',))
@@ -374,7 +374,7 @@ async def test_normalized_success_reports_normalized_status_size_and_truncation(
     events: list[str] = []
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     await _save(store, _records())
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_connector(permissions, 'engineering', 'inventory')
     (service, _) = _service(store, permissions, events)
     result = await service.execute(_input(), ('engineering',))
@@ -385,7 +385,7 @@ async def test_cancellation_propagates_without_outbound_normalize() -> None:
     events: list[str] = []
     store = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
     await _save(store, _records())
-    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
+    permissions = GroupPermissionStoreService(create_inmemory_runtime().database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE)
     await _grant_connector(permissions, 'engineering', 'inventory')
     (service, _) = _service(store, permissions, events, transport_failure=asyncio.CancelledError())
     with pytest.raises(asyncio.CancelledError):

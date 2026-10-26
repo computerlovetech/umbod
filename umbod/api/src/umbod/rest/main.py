@@ -48,6 +48,7 @@ from umbod.rest.factories import (
 from umbod.rest.instance_configuration import router as instance_configuration_router
 from umbod.rest.instance_configuration.dependencies import get_app_config
 from umbod.rest.mcp_permissions import router as mcp_permission_router
+from umbod.rest.groups import router as groups_router
 from umbod.rest.metrics import (
     AdminRestMetricsMiddleware,
     PrometheusRestMetricsRecorder,
@@ -151,6 +152,7 @@ def _mount_admin_app(
     admin_router.include_router(connector_router)
     admin_router.include_router(capability_description_router)
     admin_router.include_router(mcp_permission_router)
+    admin_router.include_router(groups_router)
     admin_router.include_router(openapi_connector_router)
     admin_router.include_router(oauth_router)
     admin_router.include_router(downstream_mcp_connector_router)
@@ -241,9 +243,9 @@ def _mount_personal_oauth_callback_app(
         try:
             response = await call_next(request)
         except Exception:
-            return callback_response(400)
+            return callback_response(400, settings.endpoints.site_base_url.rstrip("/") + "/dashboard")
         if response.status_code != 200:
-            return callback_response(400)
+            return callback_response(400, settings.endpoints.site_base_url.rstrip("/") + "/dashboard")
         return response
 
     app.mount("/api/oauth/downstream-mcp", callback_app)

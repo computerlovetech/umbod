@@ -42,7 +42,6 @@ from umbod.core.invocation import DatabaseConnectorInvocationPolicyStore
 from umbod.core.permissions.stores.schema import (
     CAPABILITY_PERMISSION_TABLE,
     CONNECTOR_PERMISSION_TABLE,
-    GROUP_TABLE,
 )
 from umbod.core.permissions.stores.service import GroupPermissionStoreService
 from umbod.mcp.administrator.tools import AdministratorConnectorConfigurationTools
@@ -98,7 +97,7 @@ async def test_mcp_configuration_roundtrip_conflict_and_isolation(
         database, CAPABILITY_DESCRIPTION_OVERRIDE_TABLE
     )
     permissions = GroupPermissionStoreService(
-        database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE
+        database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE
     )
     reader = CatalogAdministratorConnectorConfigurationReader(
         catalog, activations, policies, descriptions, permissions

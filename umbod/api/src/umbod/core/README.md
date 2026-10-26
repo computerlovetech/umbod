@@ -20,6 +20,10 @@
 
 **Read when working with:** Capability activation state (tools, prompts, resources), enable/disable workflows, or activation persistence shared by connector kinds.
 
+### `groups/`
+
+**Read when working with:** The shared exact-ID group catalogue, registration, transactional usage-checked deletion and session-bound registration helpers. The [local index](groups/README.md) separates catalogue membership from connector and issuer-qualified filesystem authorization.
+
 ### `permissions/`
 
 **Read when working with:** Group access, tool permissions, authorization state, or permission notifications. `stores/service.py` exposes session-bound permission reads and updates for atomic configuration writes. `runtime.py` evaluates typed `GroupMembership` through `RuntimeGroupPermissions`, without parsing claims. Legacy constructor claim selectors remain adapter metadata for hosting compatibility. FastMCP callbacks and policy-specific claim capture live in `umbod.mcp.authorization` and `umbod.mcp.auth.groups`.

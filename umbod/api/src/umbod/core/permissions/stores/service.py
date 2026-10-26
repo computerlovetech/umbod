@@ -1,3 +1,6 @@
+from umbod.core.groups import RegisterGroup
+from umbod.core.groups.stores.composition import create_group_management
+from umbod.core.groups.stores.registration import register_group_in_session
 from umbod.core.capabilities.domain import CapabilityKind
 from umbod.core.permissions.domain import (
     CapabilityPermissionUpdate,
@@ -12,22 +15,16 @@ from umbod.core.permissions.domain import (
 from umbod.core.permissions.stores.schema import (
     CAPABILITY_PERMISSION_CONNECTOR_ID,
     CAPABILITY_PERMISSION_GROUP_ID,
-    CAPABILITY_PERMISSION_GROUP_ID_PROJECTION,
     CAPABILITY_PERMISSION_KEY,
     CAPABILITY_PERMISSION_KIND,
     CONNECTOR_CAPABILITY_PROJECTION,
     CONNECTOR_ID_PROJECTION,
     CONNECTOR_PERMISSION_CONNECTOR_ID,
     CONNECTOR_PERMISSION_GROUP_ID,
-    CONNECTOR_PERMISSION_GROUP_ID_PROJECTION,
-    GROUP_ID,
-    GROUP_ID_PROJECTION,
     GroupCapabilityPermissionKey,
     GroupCapabilityPermissionRecord,
     GroupConnectorPermissionKey,
     GroupConnectorPermissionRecord,
-    PermissionGroupKey,
-    PermissionGroupRecord,
 )
 from umbod.core.persistence.ports import Database, DatabaseSession, TransactionMode
 from umbod.core.persistence.query import (
@@ -35,11 +32,9 @@ from umbod.core.persistence.query import (
     DeleteQuery,
     Equals,
     InsertCommand,
-    NoFilter,
     OrderBy,
     Query,
     Table,
-    Unordered,
 )
 
 
@@ -47,14 +42,12 @@ class GroupPermissionStoreService:
     def __init__(
         self,
         database: Database,
-        groups: Table[PermissionGroupRecord, PermissionGroupKey],
         connector_permissions: Table[GroupConnectorPermissionRecord, GroupConnectorPermissionKey],
         capability_permissions: Table[
             GroupCapabilityPermissionRecord, GroupCapabilityPermissionKey
         ],
     ) -> None:
         self._database = database
-        self._groups = groups
         self._connector_permissions = connector_permissions
         self._capability_permissions = capability_permissions
 
@@ -102,29 +95,8 @@ class GroupPermissionStoreService:
         )
 
     async def list_group_identifiers(self) -> tuple[GroupPermissionSummary, ...]:
-        async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
-            group_ids = {
-                row.group_id
-                for row in await session.find_many(
-                    self._groups,
-                    Query(NoFilter(), GROUP_ID_PROJECTION, Unordered()),
-                )
-            }
-            group_ids.update(
-                row.group_id
-                for row in await session.find_many(
-                    self._connector_permissions,
-                    Query(NoFilter(), CONNECTOR_PERMISSION_GROUP_ID_PROJECTION, Unordered()),
-                )
-            )
-            group_ids.update(
-                row.group_id
-                for row in await session.find_many(
-                    self._capability_permissions,
-                    Query(NoFilter(), CAPABILITY_PERMISSION_GROUP_ID_PROJECTION, Unordered()),
-                )
-            )
-        return tuple(GroupPermissionSummary(group_id=group_id) for group_id in sorted(group_ids))
+        groups = await create_group_management(self._database).list_groups()
+        return tuple(GroupPermissionSummary(group_id=group.group_id) for group in groups)
 
     async def list_all_group_permissions(self) -> tuple[GroupPermissionSet, ...]:
         permission_sets = []
@@ -133,14 +105,10 @@ class GroupPermissionStoreService:
         return tuple(permission_sets)
 
     async def register_group(self, group_id: str) -> None:
-        async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
-            await session.insert(
-                self._groups, InsertCommand(row=PermissionGroupRecord(group_id=group_id))
-            )
+        await create_group_management(self._database).register_group(RegisterGroup(group_id=group_id))
 
     async def delete_group(self, group_id: str) -> None:
-        async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
-            await session.delete(self._groups, DeleteQuery(Equals(GROUP_ID, group_id)))
+        await create_group_management(self._database).delete_group(group_id)
 
     async def update_group_permissions(self, request: UpdateGroupPermissionsRequest) -> None:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
@@ -151,19 +119,15 @@ class GroupPermissionStoreService:
         session: DatabaseSession,
         request: UpdateGroupPermissionsRequest,
     ) -> None:
-        await session.insert(
-            self._groups, InsertCommand(row=PermissionGroupRecord(group_id=request.group_id))
-        )
+        await register_group_in_session(session, request.group_id)
         for connector in request.connectors:
             await self._update_connector_permission(session, request.group_id, connector)
         for capability in request.capabilities:
             await self._update_capability_permission(session, request.group_id, capability)
 
     async def save_group_permissions(self, request: SaveGroupPermissionsRequest) -> None:
-        async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
-            await session.insert(
-                self._groups, InsertCommand(row=PermissionGroupRecord(group_id=request.group_id))
-            )
+        async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
+            await register_group_in_session(session, request.group_id)
             await session.delete(
                 self._connector_permissions,
                 DeleteQuery(Equals(CONNECTOR_PERMISSION_GROUP_ID, request.group_id)),

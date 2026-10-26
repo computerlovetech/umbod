@@ -1,3 +1,4 @@
+import { InMemoryAttemptScheduler } from '$lib/personal-connections/infrastructure/in-memory-attempt-scheduler';
 import { describe, expect, test, vi } from 'vitest';
 import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
 import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
@@ -13,7 +14,7 @@ import { DashboardState } from './dashboard-state.svelte';
 function setup(data: UserCatalogue = catalogue): { api: DashboardApi; personal: PersonalConnectionsApi; state: DashboardController } {
   const api: DashboardApi = new InMemoryDashboardApi(data);
   const personal: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
-  return { api, personal, state: new DashboardState(api, personal) };
+  return { api, personal, state: new DashboardState(api, personal, undefined, new InMemoryAttemptScheduler()) };
 }
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
@@ -327,7 +328,7 @@ describe('dashboard controller contract', () => {
     expect(state.connectors).toEqual(catalogue.connectors);
     expect(state.personalCard('calendar')).toBe(card);
     expect(card.message).toBe('Personal access disabled.');
-    expect(card.needsRefresh).toBe(false);
+    expect(card.needsRefresh).toBe(true);
     expect(state.catalogueError).toBe("Couldn't refresh connectors");
   });
 });

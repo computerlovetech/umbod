@@ -1,3 +1,4 @@
+import { GroupsRoute } from '../groups/http-route';
 import { FilesystemRoute } from '../filesystem/http-route';
 import { PersonalServersRoute } from '../personal-mcp-servers/http-route';
 import { CapabilityDescriptionsRoute } from '../capability-descriptions-api';
@@ -11,6 +12,7 @@ import { currentUserIdentitySchema, type CurrentUserIdentity } from '$lib/header
 
 
 export class AdminApi {
+  readonly groups: GroupsRoute;
   readonly filesystem: FilesystemRoute;
   readonly personalServers: PersonalServersRoute;
   readonly capabilityDescriptions: CapabilityDescriptionsRoute;
@@ -21,11 +23,12 @@ export class AdminApi {
   readonly openApiConnectors: OpenApiConnectorsApi;
 
   constructor(private readonly transport: Transport) {
+    this.groups = new GroupsRoute(transport);
     this.filesystem = new FilesystemRoute(transport);
     this.personalServers = new PersonalServersRoute(transport);
     this.capabilityDescriptions = new CapabilityDescriptionsRoute(transport);
     this.connectors = new ConnectorsApi(transport);
-    this.groupPermissions = new GroupPermissionsApi(transport);
+    this.groupPermissions = new GroupPermissionsApi(transport, this.groups);
     this.instanceConfiguration = new HttpInstanceConfigurationRoute(transport);
     this.downstreamMcpConnectors = new DownstreamMcpConnectorsRoute(transport);
     this.openApiConnectors = new OpenApiConnectorsApi(transport);

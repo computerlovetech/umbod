@@ -1,3 +1,12 @@
+from umbod.core.groups.stores.schema import (
+    GROUP_ID as GROUP_ID,
+    GROUP_IDENTITY as GROUP_IDENTITY,
+    GROUP_ID_PROJECTION as GROUP_ID_PROJECTION,
+    GROUP_TABLE as GROUP_TABLE,
+    GroupIdResult as GroupIdResult,
+    PermissionGroupKey as PermissionGroupKey,
+    PermissionGroupRecord as PermissionGroupRecord,
+)
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict
@@ -11,18 +20,6 @@ from umbod.core.persistence.query import (
     TableIdentity,
     TextCodec,
 )
-
-
-class PermissionGroupRecord(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    group_id: str
-
-
-class PermissionGroupKey(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    group_id: str
 
 
 class GroupConnectorPermissionRecord(BaseModel):
@@ -57,12 +54,6 @@ class GroupCapabilityPermissionKey(BaseModel):
     capability_key: str
 
 
-class GroupIdResult(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    group_id: str
-
-
 class ConnectorIdResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -76,22 +67,6 @@ class ConnectorCapabilityResult(BaseModel):
     capability_kind: str
     capability_key: str
 
-
-GROUP_IDENTITY = TableIdentity("mcp_permission_groups")
-GROUP_ID = Field[PermissionGroupRecord, str](GROUP_IDENTITY, "group_id", TextCodec())
-GROUP_TABLE = Table(
-    GROUP_IDENTITY,
-    RowCodec(
-        PermissionGroupRecord, cast(tuple[Field[PermissionGroupRecord, object], ...], (GROUP_ID,))
-    ),
-    KeyCodec(
-        PermissionGroupKey, cast(tuple[Field[PermissionGroupRecord, object], ...], (GROUP_ID,))
-    ),
-)
-GROUP_ID_PROJECTION = Fields(
-    GroupIdResult,
-    cast(tuple[Field[PermissionGroupRecord, object], ...], (GROUP_ID,)),
-)
 
 CONNECTOR_PERMISSION_IDENTITY = TableIdentity("mcp_group_connector_permissions")
 CONNECTOR_PERMISSION_GROUP_ID = Field[GroupConnectorPermissionRecord, str](

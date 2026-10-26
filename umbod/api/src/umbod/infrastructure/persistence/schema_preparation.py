@@ -38,8 +38,9 @@ from umbod.core.connectors.openapi.stores import (
 from umbod.core.permissions.stores.schema import (
     CAPABILITY_PERMISSION_TABLE,
     CONNECTOR_PERMISSION_TABLE,
-    GROUP_TABLE,
 )
+from umbod.core.groups.stores.schema import GROUP_TABLE
+from .group_reconciliation import reconcile_group_catalogue
 from umbod.core.filesystem.stores.schema import NODE_TABLE, OWNER_TABLE, GRANT_TABLE
 from umbod.core.persistence import Database, Table
 from umbod.core.messaging import CHECKPOINT_TABLE, EVENT_TABLE
@@ -78,3 +79,4 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
 
 async def prepare_application_schema(database: Database) -> None:
     await database.ensure_schema(APPLICATION_PERSISTENCE_TABLES)
+    await reconcile_group_catalogue(database)

@@ -1,8 +1,9 @@
+import { GroupsRoute } from './groups/http-route';
+import type { GroupCatalogue } from './groups/port';
 import { HttpError, type Transport } from './infrastructure/transport';
 import {
   apiAssignableTargetsResponseSchema,
   apiGroupPermissionSetSchema,
-  apiGroupPermissionsResponseSchema,
   exactMatchGuidance,
   mapAssignableTargets,
   mapGroupPermissionSet,
@@ -16,19 +17,18 @@ import {
   type UpdateGroupPermissionsRequest
 } from './group-permissions';
 
-const groupsPath = '/admin/mcp-permissions/groups';
+const groupPermissionsPath = '/admin/mcp-permissions/group-permissions';
 const assignableTargetsPath = '/admin/mcp-permissions/assignable-targets';
 
 function groupPath(groupId: string): string {
-  return `${groupsPath}/${encodeURIComponent(groupId)}`;
+  return `${groupPermissionsPath}?group_id=${encodeURIComponent(groupId)}`;
 }
 
 export class GroupPermissionsRoute {
-  constructor(private readonly transport: Transport) {}
+  constructor(private readonly transport: Transport, private readonly groups: GroupCatalogue) {}
 
   async list() {
-    const response = await this.transport.request({ method: 'GET', path: groupsPath, outputSchema: apiGroupPermissionsResponseSchema });
-    return response.groups.map(mapGroupPermissionSummary);
+    return (await this.groups.list()).filter((group) => group.group_id.trim().length > 0).map(mapGroupPermissionSummary);
   }
 
   async get(groupId: string): Promise<GroupPermissionSet> {
@@ -42,17 +42,17 @@ export class GroupPermissionsRoute {
   }
 
   register(groupId: string): Promise<void> {
-    return this.transport.request({ method: 'POST', path: groupPath(groupId) });
+    return this.groups.register(groupId);
   }
 
   delete(groupId: string): Promise<void> {
-    return this.transport.request({ method: 'DELETE', path: groupPath(groupId) });
+    return this.groups.delete(groupId);
   }
 
   update(groupId: string, payload: UpdateGroupPermissionsRequest) {
     return this.transport.request({
       method: 'PUT',
-      path: `${groupPath(groupId)}/permissions`,
+      path: groupPath(groupId),
       body: payload,
       inputSchema: updateGroupPermissionsRequestSchema,
       outputSchema: updateGroupPermissionsResponseSchema
@@ -63,8 +63,11 @@ export class GroupPermissionsRoute {
 export class GroupPermissionsApi {
   readonly permissions: GroupPermissionsRoute;
 
-  constructor(transport: Transport) {
-    this.permissions = new GroupPermissionsRoute(transport);
+  readonly groups: GroupCatalogue;
+
+  constructor(transport: Transport, groups: GroupCatalogue = new GroupsRoute(transport)) {
+    this.groups = groups;
+    this.permissions = new GroupPermissionsRoute(transport, groups);
   }
 }
 

@@ -5,10 +5,13 @@
   import Button from '$lib/components/admin/shared/Button.svelte';
   import GroupPermissionsTabs from '$lib/components/admin/group-permissions/GroupPermissionsTabs.svelte';
   import FilesystemGroupDialog from './FilesystemGroupDialog.svelte';
+  import GroupRegistrationDialog from '../group-permissions/shared/GroupRegistrationDialog.svelte';
+  import { GroupRegistrationState } from '../group-permissions/shared/group-registration-state.svelte';
   import { FilesystemGroupEditorState } from './filesystem-group-editor-state.svelte';
   import type { FilesystemAccessState } from './filesystem-access-state.svelte';
   let { state }: { state: FilesystemAccessState } = $props();
   const editor = new FilesystemGroupEditorState(() => state);
+  const registration = new GroupRegistrationState((groupId) => state.registerGroup(groupId), editor.select);
 </script>
 
 <div class="admin-page filesystem-page">
@@ -16,9 +19,9 @@
     <div>
       <p class="admin-eyebrow">Administration</p>
       <h1 class="admin-title">Group permissions</h1>
-      <p class="admin-lede">Add groups and see what each group’s agents can do — which filesystem permissions they have at the root.</p>
+      <p class="admin-lede">Register shared groups, then assign filesystem access separately.</p>
     </div>
-    <Button disabled={!state.editable} onclick={editor.openAdd}><span class="plus" aria-hidden="true">+</span> Add Group</Button>
+    <Button disabled={state.busy || registration.pending} onclick={registration.show}><span class="plus" aria-hidden="true">+</span> Add Group</Button>
   </header>
 
   <GroupPermissionsTabs activeTab="filesystem" />
@@ -33,10 +36,10 @@
     {/if}
 
     {#if state.saved.status === 'uninitialized'}<p class="notice">Not set up</p>{/if}
-    <AdminSplitWorkspace ariaLabel="Filesystem access workspace" sidebarLabel="Groups" sidebarHeading="Groups" count={state.rows.length} detailLabel="Group access overview">
+    <AdminSplitWorkspace ariaLabel="Filesystem access workspace" sidebarLabel="Groups" sidebarHeading="Groups" count={state.groupEntries.length} detailLabel="Group access overview">
       {#snippet sidebar()}
         <ul class="groups">
-          {#each state.rows as row (row.id)}
+          {#each state.groupEntries as row (row.id)}
             <li>
               <button class={['group-button', { selected: editor.selected?.id === row.id }]} type="button" aria-current={editor.selected?.id === row.id ? 'true' : undefined} onclick={() => editor.select(row.id)}>
                 <span class="avatar">{(row.group_id.trim() || '?').slice(0, 1).toUpperCase()}</span>
@@ -57,34 +60,43 @@
             </div>
             <span class="scope-badge">Root only</span>
           </header>
-          <p class="description">What agents in this group can do at the filesystem root. Edit the group to change its identity or permissions.</p>
-          <div class="stat-card"><strong>{row.permissions.length}<span> / {permissions.length}</span></strong><p>Permissions</p></div>
+          <p class="description">Direct root access is qualified by an exact identity issuer. Registration alone grants no access.</p>
+          {#if !row.registered}<p class="field-hint">Legacy filesystem grant: not in the shared group catalogue.</p>{/if}
           <section class="overview-block" aria-labelledby="identity-title">
             <h3 id="identity-title">Group identity</h3>
-            <dl>
-              <div><dt>Group ID</dt><dd>{row.group_id.trim() ? row.group_id : 'Blank group ID (legacy)'}</dd></div>
-              <div><dt>Identity issuer</dt><dd>{row.issuer.trim() ? row.issuer : 'Blank issuer (legacy)'}</dd></div>
-            </dl>
+            <dl><div><dt>Group ID</dt><dd>{row.group_id.trim() ? row.group_id : 'Blank group ID (legacy)'}</dd></div></dl>
           </section>
-          <section class="overview-block" aria-labelledby="permissions-title">
-            <h3 id="permissions-title">Filesystem &amp; permissions</h3>
-            {#if row.permissions.length === 0}<p class="description">No permissions</p>{/if}
-            {#each permissions as permission (permission)}
-              <div class="permission-row">
-                <span>{permissionLabels[permission]}</span>
-                <span class={['permission-status', { granted: row.permissions.includes(permission) }]}>{row.permissions.includes(permission) ? 'Allowed' : 'No access'}</span>
+          {#if row.grants.length === 0}
+            <p class="description">No direct root access. This group has no direct root permissions.</p>
+          {/if}
+          {#if state.saved?.unmanaged_groups.some((grant) => grant.group_id === row.group_id)}
+            <p class="description">This group has recursive grants. Review the read-only recursive grants below.</p>
+          {/if}
+          {#each row.grants as grant (grant.id)}
+            <section class="overview-block" aria-label="Filesystem permission grant">
+              <h3>Filesystem &amp; permissions</h3>
+              <dl><div><dt>Identity issuer</dt><dd>{grant.issuer.trim() ? grant.issuer : 'Blank issuer (legacy)'}</dd></div></dl>
+              {#if grant.permissions.length === 0}<p class="description">No permissions</p>{/if}
+              {#each permissions as permission (permission)}
+                <div class="permission-row">
+                  <span>{permissionLabels[permission]}</span>
+                  <span class={['permission-status', { granted: grant.permissions.includes(permission) }]}>{grant.permissions.includes(permission) ? 'Allowed' : 'No access'}</span>
+                </div>
+              {/each}
+              {#if grant.permissions.includes('write') && !grant.permissions.includes('discover')}<p class="field-hint">Also select Browse root to allow creation.</p>{/if}
+              <div class="detail-actions">
+                <Button variant="secondary" disabled={!state.editable} onclick={() => state.remove(grant.id)}>Remove filesystem access</Button>
+                <Button variant="secondary" disabled={!state.editable} onclick={() => editor.openEdit(grant.id)}>Edit filesystem permissions</Button>
               </div>
-            {/each}
-            {#if row.permissions.includes('write') && !row.permissions.includes('discover')}<p class="field-hint">Also select Browse root to allow creation.</p>{/if}
-          </section>
+            </section>
+          {/each}
           <div class="detail-actions">
-            <Button variant="secondary" disabled={!state.editable} onclick={() => state.remove(row.id)} aria-label="Remove group">Remove group</Button>
-            <Button variant="secondary" disabled={!state.editable} onclick={editor.openEdit}>Edit group</Button>
+            <Button variant="secondary" disabled={!state.editable || !row.group_id.trim()} onclick={editor.openAdd}>Assign filesystem permissions</Button>
           </div>
         {:else}
           <div class="empty-state">
             <h2>No groups selected</h2>
-            <p>Add a group to grant root access.</p>
+            <p>Register a group, then assign root access separately.</p>
             <span class="scope-badge">Root only</span>
           </div>
         {/if}
@@ -122,11 +134,12 @@
     </p>
     <div class="actions">
       <button class="secondary" type="button" disabled={state.busy} onclick={state.requestReload}>{state.dirty ? 'Discard changes' : 'Reload'}</button>
-      {#if state.saved}<button class="primary" type="button" disabled={!state.canSave} onclick={state.save}>{state.saving ? 'Saving…' : 'Save'}</button>{/if}
+      {#if state.saved}<button class="primary" type="button" disabled={!state.canSave} onclick={state.save}>{state.saving ? 'Saving…' : 'Save policy'}</button>{/if}
     </div>
   </footer>
 </div>
 
+{#if registration.open}<GroupRegistrationDialog {registration} />{/if}
 {#if editor.draft}<FilesystemGroupDialog {editor} />{/if}
 
 {#if state.confirmation}
@@ -159,10 +172,6 @@
   h2 { font-size: 22px; font-weight: 600; letter-spacing: -0.03em; margin: 0; overflow-wrap: anywhere; }
   .detail-heading p, .description { color: var(--admin-muted); font-size: 13px; line-height: 1.55; margin: 0; }
   .description { margin-bottom: 18px; }
-  .stat-card { border: 1px solid var(--admin-border); border-radius: 8px; display: inline-block; min-width: 118px; padding: 10px 15px; margin-bottom: 26px; }
-  .stat-card strong { font-size: 20px; }
-  .stat-card strong span { color: var(--admin-muted); font-size: 13px; font-weight: 500; }
-  .stat-card p { color: var(--admin-muted); font-size: 11px; margin: 1px 0 0; }
   .overview-block { margin-bottom: 24px; }
   h3 { color: var(--admin-muted); font-family: var(--admin-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.5px; margin: 0 0 8px; text-transform: uppercase; }
   .permission-row { align-items: center; border-bottom: 1px solid var(--admin-soft); display: flex; font-size: 13px; gap: 12px; justify-content: space-between; padding: 11px 0; }

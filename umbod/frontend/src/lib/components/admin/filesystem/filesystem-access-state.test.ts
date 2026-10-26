@@ -3,11 +3,12 @@ import { InMemoryFilesystemAdministration } from '$lib/admin/filesystem/in-memor
 import { rootPolicy } from '$lib/admin/filesystem/fixtures.test-support';
 import type { FilesystemAdministration } from '$lib/admin/filesystem/port';
 import { HttpError } from '$lib/admin/infrastructure/transport';
+import { InMemoryGroupCatalogue } from '$lib/admin/groups/in-memory';
 import { FilesystemAccessState } from './filesystem-access-state.svelte';
 
 describe('filesystem editor state', () => {
   it('loads no hidden rows or defaults, manually edits exact values and saves', async () => {
-    const state = new FilesystemAccessState(new InMemoryFilesystemAdministration(rootPolicy()));
+    const state = new FilesystemAccessState(new InMemoryFilesystemAdministration(rootPolicy()), new InMemoryGroupCatalogue());
     expect(state.canSave).toBe(false);
     await state.load();
     expect(state.rows).toEqual([]);
@@ -44,7 +45,7 @@ describe('filesystem editor state', () => {
       ],
       unmanaged_groups: unmanaged
     }));
-    const state = new FilesystemAccessState(api);
+    const state = new FilesystemAccessState(api, new InMemoryGroupCatalogue());
     await state.load();
     expect(state.error).toBe('');
     expect(state.editable).toBe(true);
@@ -68,7 +69,7 @@ describe('filesystem editor state', () => {
   });
   it('requires explicit confirmation for empty initialization and last grant revocation', async () => {
     const api: FilesystemAdministration = new InMemoryFilesystemAdministration(rootPolicy());
-    const state = new FilesystemAccessState(api);
+    const state = new FilesystemAccessState(api, new InMemoryGroupCatalogue());
     await state.load();
     await state.save();
     expect(state.confirmation).toBe('empty');
@@ -91,7 +92,7 @@ describe('filesystem editor state', () => {
     expect((await api.getRootAccess()).groups).toEqual([]);
   });
   it('prefills only the configured issuer and blocks unmanaged overlap', async () => {
-    const state = new FilesystemAccessState(new InMemoryFilesystemAdministration(rootPolicy({ suggested_issuer: 'Configured Exact Issuer', unmanaged_groups: [{ issuer: 'Configured Exact Issuer', group_id: 'recursive', permissions: ['read'] }] })));
+    const state = new FilesystemAccessState(new InMemoryFilesystemAdministration(rootPolicy({ suggested_issuer: 'Configured Exact Issuer', unmanaged_groups: [{ issuer: 'Configured Exact Issuer', group_id: 'recursive', permissions: ['read'] }] })), new InMemoryGroupCatalogue());
     await state.load();
     state.add();
     expect(state.rows[0].issuer).toBe('Configured Exact Issuer');
@@ -104,7 +105,7 @@ describe('filesystem editor state', () => {
   it('preserves stale drafts without retry and explicitly discards on reload', async () => {
     const api = new InMemoryFilesystemAdministration(rootPolicy({ status: 'ready', groups: [{ issuer: 'issuer', group_id: 'group', permissions: ['read'] }] }));
     const replace = vi.spyOn(api, 'replaceRootAccess');
-    const state = new FilesystemAccessState(api);
+    const state = new FilesystemAccessState(api, new InMemoryGroupCatalogue());
     await state.load();
     state.toggle(state.rows[0].id, 'write', true);
     await api.replaceRootAccess({ expected_revision: 'initial', groups: [] });
@@ -127,19 +128,19 @@ describe('filesystem editor state', () => {
   });
   it('disables conflicts and reports safe failures', async () => {
     const api: FilesystemAdministration = new InMemoryFilesystemAdministration(rootPolicy({ status: 'conflict' }));
-    const state = new FilesystemAccessState(api);
+    const state = new FilesystemAccessState(api, new InMemoryGroupCatalogue());
     await state.load();
     state.add();
     expect(state.rows).toEqual([]);
     expect(state.canSave).toBe(false);
-    const failed = new FilesystemAccessState({ getRootAccess: async () => { throw new HttpError(500, '', { secret: 'raw failure' }); }, replaceRootAccess: api.replaceRootAccess });
+    const failed = new FilesystemAccessState({ getRootAccess: async () => { throw new HttpError(500, '', { secret: 'raw failure' }); }, replaceRootAccess: api.replaceRootAccess }, new InMemoryGroupCatalogue());
     await failed.load();
     expect(failed.error).not.toContain('raw failure');
     expect(failed.error).toContain('Reload');
   });
   it('exposes pending load and save states and ignores results after disposal', async () => {
     const api = new InMemoryFilesystemAdministration(rootPolicy());
-    const state = new FilesystemAccessState(api);
+    const state = new FilesystemAccessState(api, new InMemoryGroupCatalogue());
     const loading = state.load();
     expect(state.loading).toBe(true);
     await loading;
@@ -148,7 +149,7 @@ describe('filesystem editor state', () => {
     expect(state.saving).toBe(true);
     expect(state.editable).toBe(false);
     await saving;
-    const disposed = new FilesystemAccessState(api);
+    const disposed = new FilesystemAccessState(api, new InMemoryGroupCatalogue());
     const pending = disposed.load();
     disposed.dispose();
     await pending;

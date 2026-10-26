@@ -1,6 +1,6 @@
 # Filesystem administration
 
-Root-only direct group access configuration through the `FilesystemAdministration` port.
+Root-only direct group access configuration through the `FilesystemAdministration` port. Grants use an explicit issuer plus exact group claim value. The independent shared catalogue lives in `../groups/`; registering a catalogue value does not create a filesystem grant.
 
 - `port.ts`: Read and revision-checked replacement operations.
 - `domain/schemas.ts`: Separate observed legacy response and strict submission Zod contracts, exact submitted identities, permissions and canonical policy comparison.

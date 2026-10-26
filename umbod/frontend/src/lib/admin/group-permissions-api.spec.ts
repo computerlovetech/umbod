@@ -16,7 +16,7 @@ function recordingTransport(): { transport: Transport; calls: TransportRequest<u
     async request(opts) {
       calls.push(opts as TransportRequest<unknown>);
       if (opts.path.endsWith('/assignable-targets')) return { connectors: [], capabilities: [] } as never;
-      if (opts.path === '/admin/mcp-permissions/groups') return { groups: [] } as never;
+      if (opts.path === '/admin/groups') return { groups: [] } as never;
       if (opts.method === 'GET') return { group_id: 'team a', connector_ids: [], capabilities: [] } as never;
       return undefined as never;
     }
@@ -44,19 +44,30 @@ describe('GroupPermissionsApi route contracts', () => {
     void api.permissions.get('team a');
     void api.permissions.listAssignableTargets();
 
-    expect(calls[0]).toMatchObject({ method: 'GET', path: '/admin/mcp-permissions/groups' });
-    expect(calls[1]).toMatchObject({ method: 'GET', path: '/admin/mcp-permissions/groups/team%20a' });
+    expect(calls[0]).toMatchObject({ method: 'GET', path: '/admin/groups' });
+    expect(calls[1]).toMatchObject({ method: 'GET', path: '/admin/mcp-permissions/group-permissions?group_id=team%20a' });
     expect(calls[2]).toMatchObject({ method: 'GET', path: '/admin/mcp-permissions/assignable-targets' });
   });
 
-  test('register and delete encode the group id', () => {
+  test.each(['.', '..', ' group / value '])('addresses exact group %s through query parameters', (groupId): void => {
+    const { transport, calls } = recordingTransport();
+    const api = new GroupPermissionsApi(transport);
+    void api.permissions.get(groupId);
+    void api.permissions.update(groupId, { connectors: [{ connector_id: 'c1', permission_status: 'enabled' }], capabilities: [] });
+    expect(calls.map((call) => call.path)).toEqual([
+      `/admin/mcp-permissions/group-permissions?group_id=${encodeURIComponent(groupId)}`,
+      `/admin/mcp-permissions/group-permissions?group_id=${encodeURIComponent(groupId)}`
+    ]);
+  });
+
+  test('register and delete carry the exact group id in JSON', () => {
     const { transport, calls } = recordingTransport();
     const api = new GroupPermissionsApi(transport);
     api.permissions.register('team a');
     api.permissions.delete('team a');
 
-    expect(calls[0]).toMatchObject({ method: 'POST', path: '/admin/mcp-permissions/groups/team%20a' });
-    expect(calls[1]).toMatchObject({ method: 'DELETE', path: '/admin/mcp-permissions/groups/team%20a' });
+    expect(calls[0]).toMatchObject({ method: 'POST', path: '/admin/groups', body: { group_id: 'team a' } });
+    expect(calls[1]).toMatchObject({ method: 'DELETE', path: '/admin/groups', body: { group_id: 'team a' } });
   });
 
   test('update PUTs only changed permissions to the partial endpoint', () => {
@@ -66,7 +77,7 @@ describe('GroupPermissionsApi route contracts', () => {
 
     expect(calls[0]).toMatchObject({
       method: 'PUT',
-      path: '/admin/mcp-permissions/groups/g1/permissions',
+      path: '/admin/mcp-permissions/group-permissions?group_id=g1',
       body: changes
     });
     expect(calls[0].inputSchema).toBe(updateGroupPermissionsRequestSchema);
@@ -78,7 +89,7 @@ describe('loadGroupPermissions', () => {
     const fetch = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
       if (path.endsWith('/groups')) return jsonResponse({ groups: [{ group_id: 'g1' }, { group_id: 'g2' }] });
-      if (path.endsWith('/groups/g1')) return jsonResponse({ group_id: 'g1', connector_ids: [], capabilities: [] });
+      if (path.endsWith('/group-permissions?group_id=g1')) return jsonResponse({ group_id: 'g1', connector_ids: [], capabilities: [] });
       return jsonResponse({ connectors: [], capabilities: [] });
     });
 
@@ -88,6 +99,19 @@ describe('loadGroupPermissions', () => {
     expect(data.preloadedGroup).toEqual({ groupId: 'g1', connectorIds: [], capabilities: [] });
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(String(fetch.mock.calls[0]?.[0])).toMatch(/\/groups$/);
+  });
+
+  test('keeps blank legacy catalogue identities out of connector selection', async (): Promise<void> => {
+    const fetch = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
+      const path = String(input);
+      if (path.endsWith('/groups')) return jsonResponse({ groups: [{ group_id: '' }, { group_id: ' ' }, { group_id: 'valid' }] });
+      if (path.endsWith('?group_id=valid')) return jsonResponse({ group_id: 'valid', connector_ids: [], capabilities: [] });
+      return jsonResponse({ connectors: [], capabilities: [] });
+    });
+    const data = await loadGroupPermissions(apiFromFetch(fetch));
+    expect(data.groups).toEqual([{ groupId: 'valid' }]);
+    expect(data.preloadedGroup?.groupId).toBe('valid');
+    expect(fetch).toHaveBeenCalledTimes(3);
   });
 
   test('does not load detail or targets when there are no groups', async () => {

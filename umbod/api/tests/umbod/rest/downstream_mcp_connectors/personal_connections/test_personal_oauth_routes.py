@@ -1,4 +1,7 @@
+import base64
+import hashlib
 import json
+import re
 from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -7,6 +10,7 @@ from urllib.parse import urlencode
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from httpx import Response
 from pydantic import SecretStr
 
 from umbod.config import AppConfig
@@ -91,6 +95,7 @@ def oauth_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[OAuth
         connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "oauth.sqlite3")},
         connector_security={"configuration_secret": "test-personal-oauth-encryption-key"},
         rest={"metrics_enabled": False},
+        endpoints={"site_base_url": "http://localhost:3010/", "api_base_url": "http://localhost:18010"},
         admin_authentication={
             "mode": "jwt", "environment": "development", "required_membership": "admins",
             "membership_claim": "groups", "jwt_header_name": "X-Access",
@@ -182,14 +187,45 @@ def test_attempt_status_and_cancel_are_owner_scoped_after_withdrawal(oauth_api: 
     assert not oauth_api.provider.exchanges
 
 
+def assert_safe_callback_page(response: Response) -> None:
+    assert response.headers["content-type"] == "text/html; charset=utf-8"
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert "location" not in response.headers
+    assert response.text.startswith('<!doctype html><html lang="en">')
+    assert '<a href="http://localhost:3010/dashboard" rel="noopener noreferrer">Return to Umbod</a>' in response.text
+    assert response.text.count("href=") == 1
+    assert "window.opener = null" in response.text
+    policy = response.headers["content-security-policy"]
+    directives = dict(directive.strip().split(" ", 1) for directive in policy.split(";"))
+    assert directives.keys() == {"default-src", "frame-ancestors", "base-uri", "form-action", "script-src", "style-src"}
+    for directive in ("default-src", "frame-ancestors", "base-uri", "form-action"):
+        assert directives[directive] == "'none'"
+    for tag, directive in (("script", "script-src"), ("style", "style-src")):
+        elements = re.findall(f"<{tag}>(.*?)</{tag}>", response.text, flags=re.DOTALL)
+        assert len(elements) == 1
+        digest = base64.b64encode(hashlib.sha256(elements[0].encode("utf-8")).digest()).decode("ascii")
+        assert directives[directive] == f"'sha256-{digest}'"
+
+
 def test_callback_is_public_secret_free_and_exchanges_once(oauth_api: OAuthApi) -> None:
     attempt = oauth_api.start()
     response = oauth_api.client.get(oauth_api.callback())
     assert response.status_code == 200
-    assert response.headers["cache-control"] == "no-store"
-    assert response.headers["referrer-policy"] == "no-referrer"
-    assert "default-src 'none'" in response.headers["content-security-policy"]
-    assert "secret-code" not in response.text
+    assert_safe_callback_page(response)
+    assert "<h1>Sign-in complete</h1>" in response.text
+    assert "Authorization processed. Tools will be loaded in your dashboard." in response.text
+    assert "If it stays open" in response.text
+    assert "window.close()" in response.text
+    assert "setTimeout(" in response.text
+    for secret in (
+        "secret-code", oauth_api.provider.preparations[-1].state.get_secret_value(),
+        "https://issuer.example", "private-provider-context", "private-token",
+        attempt["attempt_id"], oauth_api.connector_id,
+    ):
+        assert secret not in response.text
+        assert secret not in str(response.headers)
     assert oauth_api.client.get(oauth_api.callback()).status_code == 400
     assert len(oauth_api.provider.exchanges) == 1
     status = oauth_api.client.get(oauth_api.url + "/" + attempt["attempt_id"], headers={"X-Access": "alice"})
@@ -205,8 +241,33 @@ def test_callback_rejects_ambiguous_unknown_or_scoped_responses(oauth_api: OAuth
     response = oauth_api.client.get(oauth_api.callback() + suffix)
     assert response.status_code == 400
     assert response.headers["cache-control"] == "no-store"
-    assert "secret-canary" not in response.text
+    assert_safe_callback_page(response)
+    assert "<h1>Sign-in could not be completed</h1>" in response.text
+    assert "Return to the dashboard" in response.text
+    assert "window.close" not in response.text
+    for secret in ("secret-canary", "secret-code", "https://evil.example", "https://issuer.example"):
+        assert secret not in response.text
+        assert secret not in str(response.headers)
     assert not oauth_api.provider.exchanges
+
+
+@pytest.mark.parametrize("outcome", ("success", "provider_failure", "invalid_path"))
+def test_callback_return_destination_uses_trusted_site_not_request_headers(
+    oauth_api: OAuthApi, outcome: str,
+) -> None:
+    oauth_api.start()
+    oauth_api.provider.fail_exchange = outcome == "provider_failure"
+    path = oauth_api.callback() if outcome != "invalid_path" else CALLBACK_PATH + "/unknown?return_url=https://evil.example"
+    response = oauth_api.client.get(path, headers={
+        "Host": "attacker.example",
+        "X-Forwarded-Host": "forwarded-attacker.example",
+        "X-Forwarded-Proto": "https",
+    })
+    assert response.status_code == (200 if outcome == "success" else 400)
+    assert_safe_callback_page(response)
+    for untrusted in ("attacker.example", "forwarded-attacker.example", "evil.example", "localhost:18010"):
+        assert untrusted not in response.text
+        assert untrusted not in str(response.headers)
 
 
 @pytest.mark.parametrize("issuer_query", ("", "&iss="))
@@ -223,7 +284,14 @@ def test_provider_exception_is_not_echoed_and_code_is_not_retried(oauth_api: OAu
     oauth_api.provider.fail_exchange = True
     response = oauth_api.client.get(oauth_api.callback())
     assert response.status_code == 400
+    assert_safe_callback_page(response)
+    assert "<h1>Sign-in could not be completed</h1>" in response.text
+    assert "Return to the dashboard and check the existing sign-in attempt." in response.text
+    assert "Cancel it or wait for expiry before trying again." in response.text
+    assert "window.close" not in response.text
+    assert "setTimeout" not in response.text
     assert "secret-code" not in response.text
+    assert "secret-state" not in response.text
     assert "private-provider-context" not in response.text
     assert oauth_api.client.get(oauth_api.callback()).status_code == 400
     assert len(oauth_api.provider.exchanges) == 1

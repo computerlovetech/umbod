@@ -1,4 +1,5 @@
 import { render } from 'svelte/server';
+import { InMemoryAttemptScheduler } from '$lib/personal-connections/infrastructure/in-memory-attempt-scheduler';
 import { describe, expect, test, vi } from 'vitest';
 import type { ToastApi } from '$lib/components/feedback/toast-state.svelte';
 import type { DashboardApi } from '$lib/dashboard/api';
@@ -24,7 +25,9 @@ vi.mock('$lib/components/feedback', () => ({
 async function loadedController(): Promise<DashboardController> {
   const state: DashboardController = new DashboardState(
     new InMemoryDashboardApi(catalogue),
-    new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth })
+    new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth }),
+    undefined,
+    new InMemoryAttemptScheduler()
   );
   await state.loadCatalogue();
   return state;

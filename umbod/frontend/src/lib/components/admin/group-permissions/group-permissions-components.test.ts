@@ -19,6 +19,19 @@ const initialData = (): GroupPermissionsInitialData => ({
 });
 
 describe('unavailable saved grant presentation', () => {
+  test('explains shared catalogue deletion and zero-access registration separately from grants', (): void => {
+    const data = initialData();
+    data.preloadedGroup = { groupId: 'team', connectorIds: [], capabilities: [] };
+    const body = render(GroupPermissionsManager, { props: { data } }).body;
+    expect(body).toContain('Groups are shared with filesystem access');
+    expect(body).toContain('Registration is saved independently and grants no access');
+    expect(body).toContain('Delete group removes the shared catalogue entry');
+    expect(body).toContain('blocked while connector, capability or filesystem references remain');
+    expect(body).toContain('team');
+    expect(body).toContain('Available server access');
+    expect(body).not.toContain('Saved grants for unavailable connectors');
+  });
+
   test('labels unavailable connector and capability-only grants with explicit staging buttons and existing save form', () => {
     const body = render(GroupPermissionsManager, { props: { data: initialData() } }).body.replace(/<!--.*?-->/g, '');
     expect(body).toContain('aria-labelledby="unavailable-connector-grants-heading"');

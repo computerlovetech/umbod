@@ -71,7 +71,7 @@ describe('typed browser administration operations', () => {
     expect(await groupPermissionsOperations.saveGroupPermissions(api, form({ groupId: 'Engineering', permissionSet: 'invalid' }))).toMatchObject({ status: 'rejected', groupId: 'Engineering' });
     expect(transport.requests).toHaveLength(0);
     expect(await groupPermissionsOperations.registerPermissionGroup(api, form({ groupId: 'Engineering' }))).toMatchObject({ status: 'registered', groupId: 'Engineering' });
-    expect(transport.requests[0].path).toBe('/admin/mcp-permissions/groups/Engineering');
+    expect(transport.requests[0]).toMatchObject({ method: 'POST', path: '/admin/groups', body: { group_id: 'Engineering' } });
   });
   test('reconciles a failed native tool save from authoritative backend activation state', async () => {
     const transport = new InMemoryOperationTransport([new HttpError(503, 'Unavailable', null), { connector_id: 'billing', tools: [{ tool_id: 'invoice', activation_status: 'disabled', invocation_mode: 'ask', policy_revision: 2 }] }]);

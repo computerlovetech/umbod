@@ -1,6 +1,6 @@
 import type { PersonalConnectionController } from './state/port';
 
-export type ConnectionAction = 'toggle' | 'sign-in' | 'discover' | 'renew' | 'refresh' | 'check' | 'cancel' | 'disconnect';
+export type ConnectionAction = 'retry-tools' | 'connect' | 'toggle' | 'sign-in' | 'discover' | 'renew' | 'refresh' | 'check' | 'cancel' | 'disconnect';
 export type AccessTone = 'success' | 'warning' | 'neutral' | 'pending';
 
 export interface AccessStatus {
@@ -36,18 +36,20 @@ const reconnectDescriptions = {
 };
 
 export function personalAccessStatus(state: PersonalConnectionController): AccessStatus {
+  if (state.loadingTools) return { label: 'Loading tools', description: 'Loading your personal tools.', tone: 'pending', action: null };
+  if (state.toolsRecovery && state.selection.enabled && !state.busy) return { label: 'Tools not ready', description: 'Your authorization is saved. Retry loading tools to check access and continue.', tone: 'warning', action: 'retry-tools' };
   if (state.needsRefresh) return { label: 'Status needs checking', description: 'The last action could not be confirmed. Check authorization status before continuing.', tone: 'warning', action: 'refresh' };
   if (state.busy) return {
     label: state.renewing ? 'Renewing access…' : state.readingDetails ? 'Checking access…' : 'Updating access…',
     description: 'Please wait while your personal access is updated.', tone: 'pending', action: null
   };
-  if (!state.selection.enabled) return { label: 'Disabled', description: 'Personal access is turned off. Enable it when you want to use this connector.', tone: 'neutral', action: 'toggle' };
+  if (!state.selection.enabled) return { label: 'Disabled', description: 'Personal access is turned off. Enable it when you want to use this connector.', tone: 'neutral', action: 'connect' };
   if (state.attempt) {
     const fallback = Boolean(state.authorizationUrl && !state.authorizationOpened);
     return {
-      label: state.checking ? 'Checking sign-in…' : fallback ? 'Sign-in needs attention' : 'Sign-in in progress',
-      description: fallback ? 'The sign-in tab could not be opened automatically. Continue sign-in below, then check its status when you return.' : 'Finish signing in using the browser tab, then check its status here.',
-      tone: fallback && !state.checking ? 'warning' : 'pending', action: 'check'
+      label: state.checking ? 'Checking sign-in…' : fallback ? 'Sign-in needs attention' : 'Waiting for sign-in',
+      description: fallback ? 'The sign-in tab could not be opened automatically. Continue sign-in below. Your tools will load automatically when sign-in completes.' : 'Finish signing in using the browser tab, your tools will load automatically when sign-in completes.',
+      tone: fallback && !state.checking ? 'warning' : 'pending', action: state.monitoring && !state.error ? null : 'check'
     };
   }
   if (state.healthPhase === 'loading') return { label: 'Checking access…', description: 'Checking your saved authorization and tool availability.', tone: 'pending', action: null };
@@ -60,7 +62,7 @@ export function personalAccessStatus(state: PersonalConnectionController): Acces
     case 'unsupported': return { label: 'Sign-in required', description: 'Your saved authorization is no longer supported. Sign in again to replace it.', tone: 'warning', action: 'sign-in' };
     case 'reconnect_required': return { label: 'Sign-in required', description: reconnectDescriptions[health.reason], tone: 'warning', action: 'sign-in' };
     case 'refreshing': return { label: 'Renewal in progress', description: 'Renewal is already in progress. Check status before another action.', tone: 'pending', action: 'refresh' };
-    case 'authorized': return state.selection.runtime_available
+    case 'authorized': return state.selection.runtime_available && !state.toolsNeedLoading
       ? { label: 'Ready to use', description: 'Your authorization is valid and your personal tools are available.', tone: 'success', action: null }
       : { label: 'Tools not ready', description: 'Your authorization is valid, but tools are not available. Refresh tools, or contact your administrator if this continues.', tone: 'warning', action: 'discover' };
   }

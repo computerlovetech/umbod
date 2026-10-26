@@ -1,3 +1,4 @@
+from umbod.core.groups import GroupInUse
 from umbod.core.permissions.domain import (
     GroupPermissionSet,
     GroupPermissionSummary,
@@ -48,7 +49,10 @@ class GroupPermissionManagementService:
                 group_id=group_id,
                 message="Remove connector and capability permissions before deleting this group.",
             )
-        await self._store.delete_group(group_id)
+        try:
+            await self._store.delete_group(group_id)
+        except GroupInUse as error:
+            return PermissionChangeResult(status="rejected", group_id=group_id, message=str(error))
         return self._applied(group_id)
 
     async def save_group_permissions(

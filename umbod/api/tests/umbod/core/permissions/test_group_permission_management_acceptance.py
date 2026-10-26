@@ -2,7 +2,6 @@ from umbod.core.permissions.factories import create_group_permission_store
 from umbod.core.permissions.stores.schema import (
     CAPABILITY_PERMISSION_TABLE,
     CONNECTOR_PERMISSION_TABLE,
-    GROUP_TABLE,
 )
 from umbod.core.permissions.stores.service import GroupPermissionStoreService
 from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
@@ -81,7 +80,7 @@ async def store(request: pytest.FixtureRequest, tmp_path: Path) -> GroupPermissi
         return await create_group_permission_store(database)
     database = (await prepared_inmemory_runtime()).database
     return GroupPermissionStoreService(
-        database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE
+        database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE
     )
 
 

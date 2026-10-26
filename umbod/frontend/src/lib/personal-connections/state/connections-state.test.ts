@@ -1,3 +1,4 @@
+import { InMemoryAttemptScheduler } from '../infrastructure/in-memory-attempt-scheduler';
 import { describe, expect, test, vi } from 'vitest';
 import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
 import type { PersonalConnectionsApi } from '../api';
@@ -10,7 +11,7 @@ import { createPersonalDashboard } from './dashboard-test-helper';
 function setup(): { api: PersonalConnectionsApi; card: ConnectionState; authenticationLost: () => void } {
   const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
   const authenticationLost = vi.fn<() => void>();
-  return { api, card: new ConnectionState(selection, api, authenticationLost), authenticationLost };
+  return { api, card: new ConnectionState(selection, api, authenticationLost, undefined, undefined, new InMemoryAttemptScheduler()), authenticationLost };
 }
 
 describe('personal connection public state behavior', () => {
@@ -41,7 +42,7 @@ describe('personal connection public state behavior', () => {
     expect(card.selection.runtime_available).toBe(true);
     expect(card.attempt).toEqual(attempt);
     expect(card.authorizationUrl).toBe(url);
-    expect(card.needsRefresh).toBe(true);
+    expect(card.needsRefresh).toBe(false);
     expect(card.error).toBe(error);
     expect(card.health).toEqual(authorizationHealth);
   });
@@ -149,18 +150,18 @@ describe('personal connection public state behavior', () => {
     expect(card.attempt).not.toHaveProperty('authorization_url');
     expect(card.selection.has_authorization).toBe(true);
   });
-  test('completed attempt clears URL and explicitly reloads selection without discovery', async () => {
+  test('completed attempt clears URL and loads tools once after reading owner facts', async () => {
     const { card, api } = setup();
     await card.start();
     vi.spyOn(api.authorization, 'get').mockResolvedValue(completedAttempt);
     const get = vi.spyOn(api.connections, 'get');
     const discover = vi.spyOn(api.connections, 'discover');
     await card.check();
-    expect(get).toHaveBeenCalledOnce();
+    expect(get).toHaveBeenCalledTimes(2);
     expect(card.attempt).toBeNull();
     expect(card.authorizationUrl).toBe('');
-    expect(card.message).toContain('Authorization saved');
-    expect(discover).not.toHaveBeenCalled();
+    expect(card.message).toContain('Discovery completed');
+    expect(discover).toHaveBeenCalledOnce();
   });
   test.each(['failed', 'expired', 'cancelled'] as const)('terminal %s clears URL and preserves previous authorization', async (status) => {
     const { card, api } = setup();
@@ -254,7 +255,7 @@ describe('personal connection public state behavior', () => {
     const renew = vi.spyOn(api.authorization, 'renew');
     const enable = vi.spyOn(api.connections, 'setEnablement');
     await card.discover();
-    expect(card.error).toBe('Tool discovery could not be completed. Check authorization status before trying again.');
+    expect(card.error).toBe('Could not load tools. Retry loading tools to check access and try again.');
     expect(card.error).not.toMatch(/sign-in|conflict|private|https|secret|token/);
     expect(card.needsRefresh).toBe(true);
     expect(card.canDiscover).toBe(false);
@@ -293,7 +294,7 @@ describe('personal connection public state behavior', () => {
     await card.loadHealth();
     const discover = vi.spyOn(api.connections, 'discover').mockRejectedValue(new HttpError(409, 'private secret', body));
     await card.discover();
-    expect(card.error).toContain('Another operation is in progress.');
+    expect(card.error).toContain('Could not load tools.');
     expect(card.error).not.toMatch(/private|secret|personal_tool/);
     expect(card.needsRefresh).toBe(true);
     await card.discover();

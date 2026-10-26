@@ -1,3 +1,4 @@
+from umbod.core.groups.stores.registration import register_group_in_session
 from umbod.core.persistence import (
     AllFields,
     AllOf,
@@ -11,7 +12,7 @@ from umbod.core.persistence import (
     UpsertCommand,
 )
 from ..errors import OwnershipNotFound
-from ..models import AccessGrant, NodeId, Ownership, Principal
+from ..models import AccessGrant, NodeId, Ownership, Principal, PrincipalType
 from .schema import (
     GRANT_ISSUER,
     GRANT_NODE,
@@ -80,6 +81,8 @@ class SessionAccessControl:
         return record.payload.model_copy(deep=True)
 
     async def set_owner(self, ownership: Ownership) -> None:
+        if ownership.owner.type == PrincipalType.GROUP:
+            await register_group_in_session(self._session, ownership.owner.id)
         key = NodeKey(node_id=str(ownership.node_id))
         await self._session.upsert(
             OWNER_TABLE,
@@ -103,6 +106,8 @@ class SessionAccessControl:
         return [record.payload.model_copy(deep=True) for record in records]
 
     async def add_grant(self, grant: AccessGrant) -> None:
+        if grant.principal.type == PrincipalType.GROUP:
+            await register_group_in_session(self._session, grant.principal.id)
         key = grant_key(grant.node_id, grant.principal)
         await self._session.upsert(
             GRANT_TABLE,

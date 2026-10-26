@@ -1,171 +1,183 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { InMemoryFilesystemAdministration } from '$lib/admin/filesystem/in-memory';
-import { rootPolicy } from '$lib/admin/filesystem/fixtures.test-support';
+import { InMemoryGroupCatalogue } from '$lib/admin/groups/in-memory';
+import type { GroupCatalogue } from '$lib/admin/groups/port';
 import type { FilesystemAdministration } from '$lib/admin/filesystem/port';
+import { rootPolicy } from '$lib/admin/filesystem/fixtures.test-support';
+import { GroupPermissionsApi } from '$lib/admin/group-permissions-api';
+import type { Transport } from '$lib/admin/infrastructure/transport';
 import { FilesystemAccessState } from './filesystem-access-state.svelte';
 import { FilesystemGroupEditorState } from './filesystem-group-editor-state.svelte';
+import { GroupRegistrationState } from '../group-permissions/shared/group-registration-state.svelte';
 
-const groups = [
-  { issuer: 'issuer', group_id: 'readers', permissions: ['read'] as const },
-  { issuer: 'issuer', group_id: 'creators', permissions: ['write'] as const }
-].map((group) => ({ ...group, permissions: [...group.permissions] }));
+const noNetwork: Transport = { request: async (): Promise<never> => { throw new Error('Unexpected permission request'); } };
 
-describe('filesystem group modal state', () => {
-  it.each([false, true])('cancels an add draft without changing rows or dirty state when dirty is %s', async (dirty: boolean): Promise<void> => {
-    const api: FilesystemAdministration = new InMemoryFilesystemAdministration(rootPolicy({ status: 'ready', groups, suggested_issuer: 'configured-issuer' }));
-    const state = new FilesystemAccessState(api);
-    await state.load();
-    if (dirty) state.edit(state.rows[0].id, 'group_id', 'changed-readers');
-    const rows = state.groups;
-    const editor = new FilesystemGroupEditorState(() => state);
-    editor.openAdd();
-    expect(editor.draft).toEqual({ issuer: 'configured-issuer', group_id: '', permissions: [] });
-    editor.edit('group_id', 'new-group');
-    editor.toggle('read', true);
-    expect(state.groups).toEqual(rows);
-    expect(state.dirty).toBe(dirty);
-    editor.cancel();
-    expect(editor.draft).toBeNull();
-    expect(editor.editingId).toBeNull();
-    expect(state.groups).toEqual(rows);
-    expect(state.dirty).toBe(dirty);
-    expect((await api.getRootAccess()).groups).toEqual(groups);
+async function workspace(): Promise<{ access: FilesystemAccessState; editor: FilesystemGroupEditorState; catalogue: GroupCatalogue; filesystem: FilesystemAdministration }> {
+  const catalogue: GroupCatalogue = new InMemoryGroupCatalogue([{ group_id: 'readers' }, { group_id: ' zero access ' }]);
+  const filesystem: FilesystemAdministration = new InMemoryFilesystemAdministration(rootPolicy({ status: 'ready', suggested_issuer: 'configured-issuer', groups: [{ issuer: 'issuer', group_id: 'readers', permissions: ['read'] }] }));
+  const access = new FilesystemAccessState(filesystem, catalogue);
+  await access.load();
+  return { access, editor: new FilesystemGroupEditorState(() => access), catalogue, filesystem };
+}
+
+describe('shared catalogue and independent filesystem grants', () => {
+  it('reuses connector registrations with zero filesystem access and preserves exact IDs', async (): Promise<void> => {
+    const { access, editor, catalogue, filesystem } = await workspace();
+    const connectors = new GroupPermissionsApi(noNetwork, catalogue);
+    await connectors.permissions.register(' connector group ');
+    await access.load();
+    editor.select(' connector group ');
+    expect(editor.selected).toMatchObject({ group_id: ' connector group ', registered: true, grants: [] });
+    expect(access.dirty).toBe(false);
+    expect((await filesystem.getRootAccess()).groups).toHaveLength(1);
+    expect(await connectors.permissions.list()).toContainEqual({ groupId: ' zero access ' });
   });
 
-  it('cancels an edit draft without changing the selected row or its permissions', async (): Promise<void> => {
-    const api: FilesystemAdministration = new InMemoryFilesystemAdministration(rootPolicy({ status: 'ready', groups }));
-    const state = new FilesystemAccessState(api);
-    await state.load();
-    const rows = state.groups;
-    const editor = new FilesystemGroupEditorState(() => state);
-    editor.select(state.rows[1].id);
-    editor.openEdit();
-    expect(editor.draft).toEqual(rows[1]);
-    editor.edit('issuer', 'changed-issuer');
-    editor.edit('group_id', 'changed-group');
-    editor.toggle('write', false);
-    editor.toggle('share', true);
-    expect(state.groups).toEqual(rows);
-    editor.cancel();
-    expect(editor.draft).toBeNull();
-    expect(editor.editingId).toBeNull();
-    expect(editor.selected).toEqual(state.rows[1]);
-    expect(state.groups).toEqual(rows);
-    expect(state.dirty).toBe(false);
-    expect((await api.getRootAccess()).groups).toEqual(rows);
+  it('registers from filesystem immediately without policy grants and exposes the group to connectors', async (): Promise<void> => {
+    const { access, editor, catalogue, filesystem } = await workspace();
+    const registration = new GroupRegistrationState(access.registerGroup, editor.select);
+    registration.show();
+    registration.edit(' exact new group ');
+    await registration.submit();
+    expect(registration.open).toBe(false);
+    expect(editor.selected).toMatchObject({ group_id: ' exact new group ', grants: [] });
+    expect(access.dirty).toBe(false);
+    expect(await new GroupPermissionsApi(noNetwork, catalogue).permissions.list()).toContainEqual({ groupId: ' exact new group ' });
+    expect((await filesystem.getRootAccess()).groups).toHaveLength(1);
+    await access.load();
+    expect(access.catalogue).toContainEqual({ group_id: ' exact new group ' });
   });
 
-  it('applies an added row and selects it without persisting the policy', async (): Promise<void> => {
-    const api: FilesystemAdministration = new InMemoryFilesystemAdministration(rootPolicy({ status: 'ready', groups }));
-    const replace = vi.spyOn(api, 'replaceRootAccess');
-    const state = new FilesystemAccessState(api);
-    await state.load();
-    const saved = state.saved;
-    const editor = new FilesystemGroupEditorState(() => state);
+  it('cancels registration and assignment without changing the catalogue or policy', async (): Promise<void> => {
+    const { access, editor, catalogue, filesystem } = await workspace();
+    const registration = new GroupRegistrationState(access.registerGroup, editor.select);
+    registration.show();
+    registration.edit('cancelled');
+    registration.cancel();
+    expect(await catalogue.list()).not.toContainEqual({ group_id: 'cancelled' });
+    editor.select(' zero access ');
     editor.openAdd();
-    editor.edit('issuer', ' exact issuer ');
-    editor.edit('group_id', ' exact group ');
+    expect(editor.draft).toEqual({ issuer: 'configured-issuer', group_id: ' zero access ', permissions: [] });
+    editor.edit('group_id', 'must not change');
+    expect(editor.draft?.group_id).toBe(' zero access ');
     editor.toggle('read', true);
+    editor.cancel();
+    expect(access.dirty).toBe(false);
+    expect((await filesystem.getRootAccess()).groups).toHaveLength(1);
+  });
+
+  it('stages several issuer grants for one immutable group and removes access without deleting registration', async (): Promise<void> => {
+    const { access, editor, catalogue, filesystem } = await workspace();
+    editor.select('readers');
+    editor.openAdd();
+    editor.edit('issuer', ' second issuer ');
+    editor.toggle('write', true);
     editor.apply();
-    expect(state.rows).toHaveLength(3);
-    expect(editor.selected).toEqual(state.rows[2]);
-    expect(editor.selectedId).toBe(state.rows[2].id);
-    expect(editor.selected).toMatchObject({ issuer: ' exact issuer ', group_id: ' exact group ', permissions: ['read'] });
-    expect(editor.draft).toBeNull();
-    expect(state.dirty).toBe(true);
-    expect(state.canSave).toBe(true);
-    expect(state.saved).toBe(saved);
-    expect(replace).not.toHaveBeenCalled();
-    expect((await api.getRootAccess()).groups).toEqual(groups);
+    expect(editor.selected?.grants).toHaveLength(2);
+    expect(access.dirty).toBe(true);
+    expect((await filesystem.getRootAccess()).groups).toHaveLength(1);
+    await access.save();
+    expect((await filesystem.getRootAccess()).groups).toContainEqual({ issuer: ' second issuer ', group_id: 'readers', permissions: ['write'] });
+    const first = editor.selected!.grants[0];
+    editor.openEdit(first.id);
+    editor.edit('group_id', 'different');
+    editor.edit('issuer', 'revised issuer');
+    editor.apply();
+    expect(editor.selected?.grants[0]).toMatchObject({ group_id: 'readers', issuer: 'revised issuer' });
+    for (const grant of editor.selected!.grants) access.remove(grant.id);
+    expect(editor.selected?.grants).toEqual([]);
+    expect(await catalogue.list()).toContainEqual({ group_id: 'readers' });
+    await access.save();
+    expect(access.confirmation).toBe('empty');
+    await access.confirm();
+    expect((await filesystem.getRootAccess()).groups).toEqual([]);
+    expect(await catalogue.list()).toContainEqual({ group_id: 'readers' });
   });
 
-  it('applies an edit in place and keeps the updated row selected without persistence', async (): Promise<void> => {
-    const api: FilesystemAdministration = new InMemoryFilesystemAdministration(rootPolicy({ status: 'ready', groups }));
-    const replace = vi.spyOn(api, 'replaceRootAccess');
-    const state = new FilesystemAccessState(api);
-    await state.load();
-    const editor = new FilesystemGroupEditorState(() => state);
-    const id = state.rows[1].id;
-    editor.select(id);
-    editor.openEdit();
+  it.each(['direct', 'recursive'] as const)('rejects duplicate %s pairs but permits another issuer', async (kind): Promise<void> => {
+    const catalogue: GroupCatalogue = new InMemoryGroupCatalogue([{ group_id: 'readers' }]);
+    const grant = { issuer: 'issuer', group_id: 'readers', permissions: ['read' as const] };
+    const filesystem: FilesystemAdministration = new InMemoryFilesystemAdministration(rootPolicy({ status: 'ready', groups: kind === 'direct' ? [grant] : [], unmanaged_groups: kind === 'recursive' ? [grant] : [] }));
+    const access = new FilesystemAccessState(filesystem, catalogue);
+    await access.load();
+    const editor = new FilesystemGroupEditorState(() => access);
+    editor.openAdd();
+    editor.edit('issuer', 'issuer');
+    editor.toggle('read', true);
+    expect(editor.validationMessage).toBe('This issuer and group ID already have a grant.');
+    editor.apply();
+    expect(access.dirty).toBe(false);
+    editor.edit('issuer', 'different');
     expect(editor.validationMessage).toBe('');
-    editor.edit('group_id', 'updated-creators');
-    editor.toggle('discover', true);
     editor.apply();
-    expect(state.rows).toHaveLength(2);
-    expect(state.groups[0]).toEqual(groups[0]);
-    expect(editor.selectedId).toBe(id);
-    expect(editor.selected).toEqual({ id, issuer: 'issuer', group_id: 'updated-creators', permissions: ['write', 'discover'] });
-    expect(editor.draft).toBeNull();
-    expect(editor.editingId).toBeNull();
-    expect(state.dirty).toBe(true);
-    expect(replace).not.toHaveBeenCalled();
-    expect((await api.getRootAccess()).groups).toEqual(groups);
+    expect(access.dirty).toBe(true);
   });
 
-  it.each(['direct', 'recursive'] as const)('rejects a duplicate %s issuer and group pair when adding or editing', async (kind): Promise<void> => {
-    const api: FilesystemAdministration = new InMemoryFilesystemAdministration(rootPolicy({
-      status: 'ready', groups,
-      unmanaged_groups: kind === 'recursive' ? [{ issuer: 'issuer', group_id: 'recursive', permissions: ['share'] }] : []
-    }));
-    const state = new FilesystemAccessState(api);
-    await state.load();
-    const editor = new FilesystemGroupEditorState(() => state);
-    const duplicateId = kind === 'direct' ? 'readers' : 'recursive';
-    for (const editing of [false, true]) {
-      if (editing) { editor.select(state.rows[1].id); editor.openEdit(); }
-      else editor.openAdd();
-      editor.edit('issuer', 'issuer');
-      editor.edit('group_id', duplicateId);
-      editor.toggle('read', true);
-      expect(editor.validationMessage).toBe('This issuer and group ID already have a grant.');
-      editor.apply();
-      expect(editor.draft).not.toBeNull();
-      expect(state.groups).toEqual(groups);
-      expect(state.dirty).toBe(false);
-      editor.edit('issuer', 'different-issuer');
-      expect(editor.validationMessage).toBe('');
-      editor.cancel();
-    }
-    expect((await api.getRootAccess()).groups).toEqual(groups);
+  it('keeps malformed legacy grants inspectable, repairable and removable', async (): Promise<void> => {
+    const catalogue: GroupCatalogue = new InMemoryGroupCatalogue([{ group_id: 'registered' }]);
+    const filesystem: FilesystemAdministration = new InMemoryFilesystemAdministration(rootPolicy({ status: 'ready', groups: [
+      { issuer: '', group_id: 'legacy', permissions: [] },
+      { issuer: 'issuer', group_id: '', permissions: ['read'] }
+    ] }));
+    const access = new FilesystemAccessState(filesystem, catalogue);
+    await access.load();
+    const editor = new FilesystemGroupEditorState(() => access);
+    expect(access.groupEntries).toHaveLength(3);
+    editor.select('legacy');
+    editor.openEdit(editor.selected!.grants[0].id);
+    editor.edit('issuer', 'fixed');
+    editor.toggle('read', true);
+    editor.apply();
+    expect(editor.selected?.grants[0]).toMatchObject({ issuer: 'fixed', group_id: 'legacy', permissions: ['read'] });
+    editor.select('');
+    editor.openEdit(editor.selected!.grants[0].id);
+    expect(editor.canRepairGroupId).toBe(true);
+    editor.edit('group_id', 'registered');
+    editor.apply();
+    expect(editor.selected?.group_id).toBe('registered');
+    expect(access.canSave).toBe(true);
+    await access.save();
+    editor.select('legacy');
+    access.remove(editor.selected!.grants[0].id);
+    expect(access.groupEntries.some((group) => group.group_id === 'legacy')).toBe(false);
+    expect(await catalogue.list()).toEqual([{ group_id: 'registered' }]);
   });
 
-  it('requires nonblank identity fields and at least one permission before applying', async (): Promise<void> => {
-    const state = new FilesystemAccessState(new InMemoryFilesystemAdministration(rootPolicy()));
-    await state.load();
-    const editor = new FilesystemGroupEditorState(() => state);
-    editor.openAdd();
-    for (const [issuer, groupId, checked] of [['', 'group', true], ['issuer', ' ', true], ['issuer', 'group', false]] as const) {
-      editor.edit('issuer', issuer);
-      editor.edit('group_id', groupId);
-      editor.toggle('read', checked);
-      expect(editor.validationMessage).toContain('select at least one permission');
-      editor.apply();
-      expect(state.rows).toEqual([]);
-      expect(state.dirty).toBe(false);
-      expect(editor.draft).not.toBeNull();
-    }
+  it('preserves an unsaved filesystem draft when registration succeeds or is cancelled', async (): Promise<void> => {
+    const { access, editor, catalogue, filesystem } = await workspace();
+    access.toggle(access.rows[0].id, 'write', true);
+    const draft = access.groups;
+    const registration = new GroupRegistrationState(access.registerGroup, editor.select);
+    registration.show();
+    registration.edit('pending-group');
+    registration.cancel();
+    expect(access.groups).toEqual(draft);
+    expect(access.dirty).toBe(true);
+    expect(await catalogue.list()).not.toContainEqual({ group_id: 'pending-group' });
+    registration.show();
+    registration.edit('registered-group');
+    await registration.submit();
+    expect(access.groups).toEqual(draft);
+    expect(access.dirty).toBe(true);
+    expect(editor.selected?.grants).toEqual([]);
+    expect((await filesystem.getRootAccess()).groups[0].permissions).toEqual(['read']);
+    access.requestReload();
+    await access.confirm();
+    expect(access.dirty).toBe(false);
+    expect(await catalogue.list()).toContainEqual({ group_id: 'registered-group' });
   });
 
-  it('falls back to the first available row after removing the selection or reloading', async (): Promise<void> => {
-    const api: FilesystemAdministration = new InMemoryFilesystemAdministration(rootPolicy({ status: 'ready', groups }));
-    const state = new FilesystemAccessState(api);
-    await state.load();
-    const editor = new FilesystemGroupEditorState(() => state);
-    expect(editor.selected).toEqual(state.rows[0]);
-    editor.select(state.rows[1].id);
-    expect(editor.selected).toEqual(state.rows[1]);
-    state.remove(state.rows[1].id);
-    expect(editor.selected).toEqual(state.rows[0]);
-    state.remove(state.rows[0].id);
-    expect(editor.selected).toBeNull();
-    await state.load();
-    expect(editor.selected).toEqual(state.rows[0]);
-    editor.select(state.rows[1].id);
-    const previousId = editor.selectedId;
-    await state.load();
-    expect(state.rows.some((row) => row.id === previousId)).toBe(false);
-    expect(editor.selected).toEqual(state.rows[0]);
-    expect(state.dirty).toBe(false);
+  it('keeps registration failures separate from policy changes', async (): Promise<void> => {
+    const { access } = await workspace();
+    const registration = new GroupRegistrationState(async (): Promise<void> => { throw new Error('Failure'); }, (): void => {});
+    registration.show();
+    registration.edit(' ');
+    expect(registration.valid).toBe(false);
+    registration.edit('valid');
+    await registration.submit();
+    expect(registration.open).toBe(true);
+    expect(registration.pending).toBe(false);
+    expect(registration.error).toContain('could not be registered');
+    expect(access.dirty).toBe(false);
   });
 });

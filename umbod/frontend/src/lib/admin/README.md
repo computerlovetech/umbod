@@ -16,6 +16,10 @@
 
 ## Submodules
 
+### `groups/`
+
+Shared exact group-claim catalogue port, Zod contracts, in-memory adapter and HTTP registry route. Registration grants no connector or filesystem access and does not create identity-provider membership. See `groups/README.md`.
+
 ### `filesystem/`
 
 Root group access administration port, exact-identity Zod contracts, in-memory and HTTP adapters, and safe policy failure presentation. See `filesystem/README.md`.

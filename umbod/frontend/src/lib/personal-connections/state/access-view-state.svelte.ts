@@ -30,11 +30,15 @@ export class PersonalAccessViewState implements PersonalAccessViewController {
   }
 
   get primaryLabel(): string {
-    const labels: Record<ConnectionAction, string> = { toggle: 'Enable access', 'sign-in': this.signInLabel, discover: 'Refresh tools', renew: 'Renew access', refresh: 'Check authorization status', check: 'Check sign-in status', cancel: 'Cancel sign-in', disconnect: 'Disconnect' };
+    const labels: Record<ConnectionAction, string> = { 'retry-tools': 'Retry loading tools', connect: 'Connect', toggle: 'Enable access', 'sign-in': 'Connect', discover: 'Retry loading tools', renew: 'Renew access', refresh: 'Check authorization status', check: 'Check sign-in status', cancel: 'Cancel sign-in', disconnect: 'Disconnect' };
     return this.status.action ? labels[this.status.action] : '';
   }
 
   get primaryDisabled(): boolean {
+    if (this.status.action === 'connect') {
+      const state = this.connection();
+      return state.busy || state.checking || state.needsRefresh;
+    }
     return this.menuActions.find((action) => action.id === this.status.action)?.disabled ?? true;
   }
 
@@ -43,11 +47,12 @@ export class PersonalAccessViewState implements PersonalAccessViewController {
     const blockedReason = state.needsRefresh ? 'Check authorization status before another action.' : state.busy || state.checking ? 'Another action is in progress.' : state.attempt ? 'Finish or cancel the current sign-in first.' : state.renewalInProgress ? 'Renewal is in progress. Check authorization status.' : this.status.description;
     const item = (id: ConnectionAction, label: string, disabled: boolean, destructive = false): ConnectionMenuAction => ({ id, label, disabled, reason: disabled ? blockedReason : '', destructive });
     return [
+      ...(state.toolsRecovery && state.selection.enabled ? [item('retry-tools', 'Retry loading tools', state.busy || state.checking || state.attempt !== null)] : []),
       item('toggle', state.selection.enabled ? 'Disable access' : 'Enable access', state.selection.enabled ? state.cleanupBlocked : state.busy || state.needsRefresh),
       ...(state.selection.enabled ? [item('sign-in', this.signInLabel, state.busy || state.needsRefresh || state.attempt !== null || state.renewalInProgress)] : []),
       ...(state.selection.enabled && state.selection.has_authorization ? [item('discover', 'Refresh tools', !state.canDiscover)] : []),
       ...(state.renewableAuthorization ? [item('renew', 'Renew access', !state.canRenew)] : []),
-      item('refresh', 'Check authorization status', state.busy),
+      item('refresh', 'Check authorization status', state.busy || state.checking || state.loadingTools),
       ...(state.attempt ? [item('check', 'Check sign-in status', state.busy || state.checking), item('cancel', 'Cancel sign-in', state.busy || state.needsRefresh)] : []),
       ...(state.selection.has_authorization || state.attempt ? [item('disconnect', 'Disconnect', state.cleanupBlocked, true)] : [])
     ];
@@ -63,7 +68,9 @@ export class PersonalAccessViewState implements PersonalAccessViewController {
 
   performPrimary = async (): Promise<void> => {
     const action = this.status.action;
-    if (action) await this.perform(action);
+    if (!action || this.primaryDisabled) return;
+    if (action === 'connect' || action === 'sign-in') await this.connection().connect();
+    else await this.perform(action);
   };
 
   perform = async (action: ConnectionAction): Promise<void> => {
@@ -72,7 +79,7 @@ export class PersonalAccessViewState implements PersonalAccessViewController {
     if (!item || item.disabled) return;
     const state = this.connection();
     const operations: Record<ConnectionAction, () => Promise<void> | void> = {
-      toggle: () => state.setEnabled(), 'sign-in': () => state.start(), discover: () => state.discover(), renew: () => state.renew(), refresh: () => state.refresh(), check: () => state.check(), cancel: () => state.cancel(), disconnect: () => state.requestDisconnect()
+      'retry-tools': () => state.retryLoadingTools(), connect: () => state.connect(), toggle: () => state.setEnabled(), 'sign-in': () => state.start(), discover: () => state.discover(), renew: () => state.renew(), refresh: () => state.refresh(), check: () => state.check(), cancel: () => state.cancel(), disconnect: () => state.requestDisconnect()
     };
     await operations[action]();
   };

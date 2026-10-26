@@ -78,6 +78,10 @@ When `personal_connections.oauth_enabled` is also enabled, owner-scoped POST/GET
 
 `POST /api/me/connectors/mcp/{id}/tools/discovery` accepts only an empty JSON object. It requires the owner's usable authorization and current connector eligibility, checks discovered contracts against administrator approval and commits encrypted owner-bound observations only after rechecking eligibility. Success is a no-store 204; it does not enable runtime execution.
 
+### `groups/`
+
+**Read when working with:** Neutral shared group catalogue administration at `/api/admin/groups`. The [local index](groups/README.md) describes exact ID registration, usage-checked deletion and request-scoped persistence composition.
+
 ### `mcp_permissions/`
 
 **Read when working with:** Group-to-tool permission APIs and permission events.

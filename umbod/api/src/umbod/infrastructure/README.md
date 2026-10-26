@@ -10,7 +10,7 @@
 
 **Public entry:** `ConfiguredPersistenceRuntimeProvider` (also re-exported from `umbod.infrastructure`). Backend selection happens once through that provider; callers receive a neutral `PersistenceRuntime` with a `Database` port.
 
-**Internal:** `inmemory/` and `sqlite/` hold driver implementations, compilers, readiness, and schema preparation. Do not import those packages from application modules or from non-adapter tests.
+**Internal:** `schema_preparation.py` prepares the shared catalogue table once and runs idempotent `group_reconciliation.py` before readiness completes, registering existing connector/capability groups and all filesystem GROUP grants/ownership without changing grants or normalizing identities. `inmemory/` and `sqlite/` hold driver implementations, compilers, readiness, and schema preparation. Do not import those packages from application modules or from non-adapter tests.
 
 ### `filesystem/`
 

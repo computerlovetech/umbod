@@ -55,6 +55,7 @@ async def list_group_permissions(
     )
 
 
+@router.get("/group-permissions")
 @router.get("/groups/{group_id}")
 async def get_group_permissions(
     group_id: str,
@@ -95,6 +96,7 @@ async def delete_permission_group(
     return permission_change_response(result)
 
 
+@router.put("/group-permissions", response_model_exclude_defaults=True)
 @router.put("/groups/{group_id}/permissions", response_model_exclude_defaults=True)
 async def update_group_permissions(
     group_id: str,

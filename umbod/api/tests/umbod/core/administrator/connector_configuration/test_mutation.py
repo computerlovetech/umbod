@@ -43,7 +43,6 @@ from umbod.core.administrator.connector_configuration.reader import (
 from umbod.core.permissions.stores.schema import (
     CAPABILITY_PERMISSION_TABLE,
     CONNECTOR_PERMISSION_TABLE,
-    GROUP_TABLE,
 )
 from umbod.core.permissions.stores.service import GroupPermissionStoreService
 from umbod.core.persistence import DatabaseSession
@@ -96,7 +95,6 @@ async def test_mutation_port_rolls_back_prior_writes_when_persistence_fails() ->
     )
     permissions = GroupPermissionStoreService(
         database,
-        GROUP_TABLE,
         CONNECTOR_PERMISSION_TABLE,
         CAPABILITY_PERMISSION_TABLE,
     )
@@ -188,7 +186,7 @@ async def test_unknown_group_noop_does_not_persist_group_or_events(revoke: bool)
         database, CAPABILITY_DESCRIPTION_OVERRIDE_TABLE
     )
     permissions = GroupPermissionStoreService(
-        database, GROUP_TABLE, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE
+        database, CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE
     )
     reader = CatalogAdministratorConnectorConfigurationReader(
         catalog, activations, policies, descriptions, permissions

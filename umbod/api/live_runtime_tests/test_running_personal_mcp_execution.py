@@ -68,11 +68,24 @@ def authorize(client: httpx.Client, fixture: httpx.Client, connector_id: str, ow
     callback = urlsplit(consent.headers["location"])
     assert callback.hostname == "umbod-runtime.kind.invalid"
     response = client.get(callback.path + "?" + callback.query, follow_redirects=False)
-    assert response.status_code in (200, 302, 303)
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert "Sign-in complete" in response.text
+    assert "Return to Umbod" in response.text
+    assert "/dashboard" in response.text
+    assert "unsafe-inline" not in response.headers["content-security-policy"]
+    callback_parameters = parse_qs(callback.query)
+    for parameter in ("code", "state"):
+        assert callback_parameters[parameter][0] not in response.text
     selection = checked(client.get(personal))
     assert selection["has_authorization"] is True
     replay = client.get(callback.path + "?" + callback.query, follow_redirects=False)
     assert replay.status_code == 400
+    assert replay.headers["content-type"].startswith("text/html")
+    assert replay.headers["cache-control"] == "no-store"
+    assert "Return to Umbod" in replay.text
 
 
 def approve(client: httpx.Client, connector_id: str, tools: list[dict[str, Any]]) -> None:

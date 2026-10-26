@@ -1,3 +1,4 @@
+import { InMemoryAttemptScheduler } from '../infrastructure/in-memory-attempt-scheduler';
 import { describe, expect, test, vi } from 'vitest';
 import type { DashboardApi } from '$lib/dashboard/api';
 import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
@@ -16,7 +17,7 @@ import type { PersonalConnectionController } from './port';
 function setup(browser?: AuthorizationBrowser): { api: PersonalConnectionsApi; state: PersonalConnectionController; memory: InMemoryAuthorizationBrowser } {
   const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
   const memory = new InMemoryAuthorizationBrowser();
-  const state: PersonalConnectionController = new ConnectionState(selection, api, (): void => {}, undefined, browser ?? memory);
+  const state: PersonalConnectionController = new ConnectionState(selection, api, (): void => {}, undefined, browser ?? memory, new InMemoryAttemptScheduler());
   return { api, state, memory };
 }
 
@@ -172,7 +173,7 @@ describe('explicit authorization browser ownership', () => {
     const { api, memory } = setup();
     const unrelated = memory.reserve();
     const dashboardApi: DashboardApi = new InMemoryDashboardApi(catalogue);
-    const page: DashboardController = new DashboardState(dashboardApi, api, memory);
+    const page: DashboardController = new DashboardState(dashboardApi, api, memory, new InMemoryAttemptScheduler());
     await page.loadCatalogue();
     page.selectConnector('downstream_mcp:calendar');
     expect(page.selectedId).toBe('downstream_mcp:calendar');

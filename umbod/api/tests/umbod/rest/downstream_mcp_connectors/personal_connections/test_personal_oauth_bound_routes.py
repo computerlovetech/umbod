@@ -20,6 +20,9 @@ def test_issuer_callback_uses_mounted_deployment_root_without_authority_headers(
     with TestClient(application) as client:
         response = client.get(path + "?" + query, headers={"Host": "untrusted.example", "X-Forwarded-Host": "wrong.example"})
     assert response.status_code == 200
+    assert 'href="http://localhost:3010/dashboard"' in response.text
+    assert "untrusted.example" not in response.text
+    assert "wrong.example" not in response.text
     assert len(oauth_api.provider.exchanges) == 1
     assert isinstance(oauth_api.provider.exchanges[0].issuer, MissingCallbackIssuer)
 
@@ -51,7 +54,7 @@ def test_bound_callback_rejects_wrong_route_or_issuer_without_consuming_attempt(
         path += "/"
     rejected = oauth_api.client.get(path + "?" + urlencode(parameters), follow_redirects=False)
     assert rejected.status_code == 400
-    assert "Return to Connections" in rejected.text
+    assert "Return to the dashboard and check the existing sign-in attempt." in rejected.text
     assert "Cancel it or wait for expiry" in rejected.text
     assert "secret-code" not in rejected.text
     assert not oauth_api.provider.exchanges

@@ -1,5 +1,6 @@
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
+import type { AttemptScheduler } from '$lib/personal-connections/attempt-scheduler';
 import type { AuthorizationBrowser } from '$lib/personal-connections/authorization-browser';
 import { ConnectionState } from '$lib/personal-connections/state/connection-state.svelte';
 import { isUnavailable, requiresSignIn } from '$lib/personal-connections/state/errors';
@@ -21,11 +22,15 @@ export class DashboardState implements DashboardController {
   private revision = 0;
   private personalRevision = 0;
   private request: AbortController | undefined;
+  private identityValidation: Promise<void> = Promise.resolve();
+  private releaseIdentityValidation: () => void = (): void => {};
+  private identityTrusted = false;
 
   constructor(
     private readonly api: DashboardApi,
     private readonly personalApi: PersonalConnectionsApi,
-    private readonly authorizationBrowser?: AuthorizationBrowser
+    private readonly authorizationBrowser?: AuthorizationBrowser,
+    private readonly attemptScheduler?: AttemptScheduler
   ) {}
 
   get selectedConnector(): CatalogueConnector | undefined {
@@ -44,6 +49,8 @@ export class DashboardState implements DashboardController {
   };
 
   authenticationLost = (): void => {
+    this.identityTrusted = false;
+    this.releaseIdentityValidation();
     this.revision++;
     this.request?.abort();
     this.clearPersonal();
@@ -59,11 +66,29 @@ export class DashboardState implements DashboardController {
     this.personalCards.find((card) => card.selection.connector_id === id);
 
   refreshOnFocus = async (): Promise<void> => {
-    if (this.phase === 'ready' && !this.refreshing) await this.loadCatalogue();
+    if (this.phase !== 'ready' || this.refreshing) return;
+    await this.loadCatalogue();
+    if (!this.active || this.phase !== 'ready') return;
+    await Promise.all(this.personalCards.filter((card) => card.attempt).map((card) => card.check()));
+  };
+
+  private automaticWorkAllowed = async (ownerIdentity: string): Promise<boolean> => {
+    let validation: Promise<void>;
+    do {
+      validation = this.identityValidation;
+      await validation;
+    } while (validation !== this.identityValidation);
+    return this.active && this.identityTrusted && this.phase === 'ready' && this.identityKey === ownerIdentity;
   };
 
   loadCatalogue = async (): Promise<void> => {
     if (!this.active) return;
+    this.identityTrusted = false;
+    this.releaseIdentityValidation();
+    let releaseValidation: () => void = (): void => {};
+    this.identityValidation = new Promise<void>((resolve): void => { releaseValidation = resolve; });
+    this.releaseIdentityValidation = releaseValidation;
+    let identityValidated = false;
     const revision = ++this.revision;
     const hadCatalogue = this.phase === 'ready';
     this.catalogueError = '';
@@ -81,6 +106,7 @@ export class DashboardState implements DashboardController {
         this.selectedId = '';
       }
       this.identityKey = result.identity_key;
+      identityValidated = true;
       this.connectors = result.connectors;
       if (!this.selectedConnector) this.selectedId = result.connectors.length ? catalogueConnectorId(result.connectors[0]) : '';
       this.phase = 'ready';
@@ -94,6 +120,7 @@ export class DashboardState implements DashboardController {
         this.clearPersonal();
       }
     } catch (error) {
+      identityValidated = false;
       if (!this.active || revision !== this.revision) return;
       if (requiresSignIn(error)) this.authenticationLost();
       else if (error instanceof HttpError && error.status === 403) {
@@ -109,8 +136,17 @@ export class DashboardState implements DashboardController {
         this.phase = 'error';
       }
     } finally {
-      if (this.active && revision === this.revision) this.refreshing = false;
+      if (this.active && revision === this.revision) {
+        this.refreshing = false;
+        this.identityTrusted = identityValidated;
+      }
+      releaseValidation();
     }
+  };
+
+  private refreshAfterPersonalChange = async (): Promise<void> => {
+    await this.loadCatalogue();
+    if (this.catalogueError) throw new Error('Catalogue unavailable');
   };
 
   loadPersonal = async (): Promise<void> => {
@@ -123,8 +159,9 @@ export class DashboardState implements DashboardController {
       const eligible = new Set(this.connectors.filter((entry) => entry.ownership === 'personal').map((entry) => entry.connector_id));
       const available = selections.connectors.filter((selection) => eligible.has(selection.connector_id));
       const previous = new Map(this.personalCards.map((card) => [card.selection.connector_id, card]));
+      const ownerIdentity = this.identityKey;
       const cards = available.map((selection) =>
-        previous.get(selection.connector_id) ?? new ConnectionState(selection, this.personalApi, this.authenticationLost, this.loadCatalogue, this.authorizationBrowser)
+        previous.get(selection.connector_id) ?? new ConnectionState(selection, this.personalApi, this.authenticationLost, this.refreshAfterPersonalChange, this.authorizationBrowser, this.attemptScheduler, (): Promise<boolean> => this.automaticWorkAllowed(ownerIdentity))
       );
       for (const card of this.personalCards) if (!cards.includes(card)) card.dispose();
       this.personalCards = cards;
@@ -146,6 +183,8 @@ export class DashboardState implements DashboardController {
 
   dispose = (): void => {
     this.active = false;
+    this.identityTrusted = false;
+    this.releaseIdentityValidation();
     this.selectedId = '';
     this.revision++;
     this.request?.abort();
