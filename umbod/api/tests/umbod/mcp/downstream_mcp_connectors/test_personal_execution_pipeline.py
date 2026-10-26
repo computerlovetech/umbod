@@ -1,6 +1,6 @@
 from tests.umbod.core.downstream_mcp_connectors.personal_caller_support import captured_personal_caller
 from collections.abc import Awaitable, Callable, Mapping
-from typing import Any
+from typing import Any, Optional
 
 import pytest
 from fastmcp import Client, FastMCP
@@ -50,9 +50,49 @@ class ApprovalMutation:
         await self._mutation()
 
 
-def provider_for(execution: ExecutionCase, policy: ConnectorInvocationPolicy, log: InvocationLog) -> ConnectorAwareDownstreamMcpToolProvider:
+def provider_for(execution: ExecutionCase, policy: ConnectorInvocationPolicy, log: InvocationLog, metrics_recorder: Optional[InMemoryMcpMetricsRecorder]=None) -> ConnectorAwareDownstreamMcpToolProvider:
     stores = execution.case.bundle
-    return ConnectorAwareDownstreamMcpToolProvider(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=RejectingDownstreamFactory(), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope="", capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), tool_invocation_logger=log, metrics_recorder=InMemoryMcpMetricsRecorder(), invocation_policy=policy, personal_runtime=execution.runtime)
+    return ConnectorAwareDownstreamMcpToolProvider(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=RejectingDownstreamFactory(), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope="", capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), tool_invocation_logger=log, metrics_recorder=metrics_recorder or InMemoryMcpMetricsRecorder(), invocation_policy=policy, personal_runtime=execution.runtime)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("connector_scope", ("", "personal"))
+async def test_listing_personal_tools_does_not_expose_metric_identities(runtime_case: RuntimeCase, connector_scope: str) -> None:
+    execution = await execution_case(runtime_case)
+    metrics = InMemoryMcpMetricsRecorder()
+    log = InvocationLog()
+    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), log, metrics)
+    await provider.initialize_metrics()
+    assert metrics.metric_samples() == ()
+    token = set_request_connector_scope(connector_scope)
+    try:
+        tools = await provider.list_tools()
+    finally:
+        reset_request_connector_scope(token)
+    assert [tool.name for tool in tools] == ["read" if connector_scope else "Personal_read"]
+    assert metrics.metric_samples() == ()
+    assert execution.transport.calls == []
+    assert log.events == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("connector_scope", ("", "personal"))
+async def test_personal_invocation_initializes_only_invoked_metric_identity(runtime_case: RuntimeCase, connector_scope: str) -> None:
+    execution = await execution_case(runtime_case)
+    metrics = InMemoryMcpMetricsRecorder()
+    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog(), metrics)
+    token = set_request_connector_scope(connector_scope)
+    tool_name = "read" if connector_scope else "Personal_read"
+    try:
+        result = await provider.execute_tool(tool_name, {"value": "same"})
+    finally:
+        reset_request_connector_scope(token)
+    assert result.is_error is False
+    samples = metrics.metric_samples()
+    assert {sample.labels["tool_name"] for sample in samples} == {tool_name}
+    assert {sample.labels["connector_name"] for sample in samples} == {"personal"}
+    assert {sample.value for sample in samples if sample.labels["outcome"] == "success"} == {1}
+    assert {sample.value for sample in samples if sample.labels["outcome"] == "failure"} == {0}
 
 
 class ProviderGateway:

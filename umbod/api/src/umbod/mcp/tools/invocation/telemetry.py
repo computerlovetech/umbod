@@ -13,7 +13,13 @@ from umbod.mcp.logging import (
     McpToolInvocationCompleted,
     McpToolInvocationFailureCategory,
 )
-from umbod.mcp.metrics import CompletedToolInvocation, InvocationOutcome, McpMetricsRecorder
+from umbod.mcp.metrics import (
+    CompletedToolInvocation,
+    InvocationOutcome,
+    InvocationScope,
+    McpMetricsRecorder,
+    ToolInvocationMetricIdentity,
+)
 from umbod.mcp.tools.invocation.lifecycle import McpToolInvocationLifecycle
 
 logger = logging.getLogger(__name__)
@@ -23,10 +29,30 @@ def log_observation_failure(message: str, error: BaseException) -> None:
     log_safe_exception(logger, message, error)
 
 
+def initialize_invocation_metrics(
+    recorder: McpMetricsRecorder, identity: ToolInvocationMetricIdentity
+) -> None:
+    try:
+        recorder.initialize_invocation(identity)
+    except Exception as error:
+        log_observation_failure("MCP tool metrics initialization failed", error)
+
+
 class McpToolInvocationObserver:
     def __init__(self, tool_invocation_logger: ConnectorToolInvocationLogger, metrics_recorder: McpMetricsRecorder) -> None:
         self._tool_invocation_logger = tool_invocation_logger
         self._metrics_recorder = metrics_recorder
+
+    def initialize(self, identity: McpToolIdentity) -> None:
+        initialize_invocation_metrics(self._metrics_recorder, self._metric_identity(identity))
+
+    @staticmethod
+    def _metric_identity(identity: McpToolIdentity) -> ToolInvocationMetricIdentity:
+        return ToolInvocationMetricIdentity(
+            scope=InvocationScope.CONNECTOR if identity.connector_id is not None else InvocationScope.REQUEST,
+            connector_name=identity.connector_id or "internal",
+            tool_name=identity.tool_name,
+        )
 
     def start(self, identity: McpToolIdentity) -> McpToolInvocationLifecycle | None:
         try:
@@ -64,10 +90,9 @@ class McpToolInvocationObserver:
         try:
             self._metrics_recorder.record_completed_invocation(
                 CompletedToolInvocation(
-                    connector_name=identity.connector_id or "internal",
-                    tool_name=identity.tool_name,
+                    **self._metric_identity(identity).model_dump(),
                     outcome=outcome,
-                    duration_seconds=completed.duration_ms / 1000,
+                    duration_seconds=max(completed.duration_ms / 1000, 1e-12),
                 )
             )
         except Exception as error:

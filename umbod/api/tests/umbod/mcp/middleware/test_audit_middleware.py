@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import logging
 
 import mcp.types as mt
@@ -199,3 +201,54 @@ async def test_on_call_tool_denied_records_denied_and_reraises() -> None:
     assert event.outcome == McpAuditOutcome.DENIED
     assert event.failure_category == McpAuditFailureCategory.AUTHORIZATION
     assert event.target.tool_name == "slack_post"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool_name", ["search_tools", "execute_tool", "execute_code"])
+async def test_fixed_tool_exception_is_audited_once_and_reraised(tool_name: str) -> None:
+    sink = RecordingSink()
+    code = "private code"
+    message = mt.CallToolRequestParams(name=tool_name, arguments={"code": code})
+    error = RuntimeError("private failure")
+
+    with pytest.raises(RuntimeError) as raised:
+        await _middleware(sink).on_call_tool(
+            _context("tools/call", message), CallNextStub(None, error)
+        )
+
+    assert raised.value is error
+    assert len(sink.events) == 1
+    event = sink.events[0]
+    assert event.outcome == McpAuditOutcome.FAILURE
+    assert event.target.tool_name == tool_name
+    if tool_name == "execute_code":
+        assert event.target.attributes["code_hash"] == hashlib.sha256(code.encode()).hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_gateway_returned_error_is_audited_once_as_failure() -> None:
+    sink = RecordingSink()
+    message = mt.CallToolRequestParams(name="execute_tool")
+    result = ToolResult(content=[], is_error=True)
+
+    returned = await _middleware(sink).on_call_tool(
+        _context("tools/call", message), CallNextStub(result, None)
+    )
+
+    assert returned is result
+    assert len(sink.events) == 1
+    assert sink.events[0].outcome == McpAuditOutcome.FAILURE
+
+
+@pytest.mark.asyncio
+async def test_fixed_tool_cancellation_is_not_audited() -> None:
+    sink = RecordingSink()
+    message = mt.CallToolRequestParams(name="execute_code")
+
+    async def cancelled(context: MiddlewareContext[object]) -> ToolResult:
+        raise asyncio.CancelledError()
+
+    with pytest.raises(asyncio.CancelledError):
+        await _middleware(sink).on_call_tool(_context("tools/call", message), cancelled)
+
+    assert sink.events == []

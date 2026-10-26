@@ -54,7 +54,9 @@ Personal OAuth definitions remain unavailable to shared runtime execution and ba
 
 ### `connectors/openapi/`
 
-**Read when working with:** MCP exposure and execution of OpenAPI-generated operations. `deps.py` captures immutable OpenAPI membership at operation entry; discovery and codemode pass its tuple into existing core APIs. There is no generic principal/subject callback or native-to-OpenAPI caller-provider dependency.
+`connectors/openapi/metrics.py` initializes both outcome series for persisted OpenAPI connector identities before traffic, without executing operations or recording completions.
+
+**Read when working with:** MCP exposure and execution of OpenAPI-generated operations. `deps.py` captures immutable OpenAPI membership at operation entry; discovery and codemode pass its tuple into existing core APIs. There is no generic principal/subject callback or native-to-OpenAPI caller-provider dependency. `codemode_execution.py` preserves successful HTTP transport results in the public response while recording HTTP statuses >=400 as failed tool invocations with OpenAPI-origin evidence; HTTP 2xx/3xx remain telemetry successes. Returned failures include no response body or invented exception traceback.
 
 ### `auth/`
 
@@ -80,7 +82,15 @@ Authorization, list filtering, name validation, ownership, and persistence remai
 
 ### `logging/`, `metrics/`, `middleware/`, and `tools/`
 
-**Read when working with:** Audit behavior, instrumentation, protocol request handling, or observed registration of internal FastMCP tools. Failed completion logs carry `mcp.failure.origin` independently of audit categories and metric labels; exception failures include safe `exception.type` and `exception.stacktrace` snapshots, while returned failures have no invented traceback. Raw exception messages, source lines, locals and credential values are excluded. Audit/invocation actor projection consumes the shared captured subject while retaining the separate email/preferred-username fallback and client/session metadata rules. `tools/registration.py` preserves callable-derived FastMCP metadata while observing the complete `FunctionTool.run` lifecycle and attaching internal failure evidence without exception messages, source text, or locals; `tools/invocation/` contains shared invocation lifecycle and telemetry behavior.
+**Read when working with:** Audit behavior, instrumentation, protocol request handling, or observed registration of internal FastMCP tools. Failed completion logs carry `mcp.failure.origin` independently of audit categories and metric labels; exception failures include safe `exception.type` and `exception.stacktrace` snapshots, while returned failures have no invented traceback. Raw exception messages, source lines, locals and credential values are excluded. Audit/invocation actor projection consumes the shared captured subject while retaining the separate email/preferred-username fallback and client/session metadata rules. `tools/registration.py` preserves callable-derived FastMCP metadata while observing the complete `FunctionTool.run` lifecycle and attaching internal failure evidence without exception messages, source text, or locals; `tools/invocation/` contains shared invocation lifecycle and telemetry behavior. Native deployment factories receive an explicit observed registrar for `search_tools`, `execute_tool`, and `execute_code`, preserving tags, metadata, schemas, and public results. Fixed-tool completions have request scope, independently of nested connector-scoped completions. Codemode classifies structured failure and timeout outcomes without changing `is_error`. Fixed-tool observers write only invocation logs and metrics; audit middleware owns their single audit event, including ordinary exceptions, gateway returned errors, and codemode code hashes. Authorization denials retain their existing audit path; cancellation is not completed or audited.
+
+### Metric counting contract
+
+`umbod_mcp_tool_invocations_total` and its duration histogram count connector executions only. `umbod_mcp_tool_requests_total` and its duration histogram count observed built-in and orchestration tool lifecycles, independently of their nested executions. Completion logs carry `mcp.invocation.scope` (`connector` or `request`) so investigations can compare the same scope rather than all ERROR records. One gateway request can produce one connector execution; one codemode request can produce zero or many executions. A script that handles a connector failure can itself succeed.
+
+Native mapping registration, fixed-tool registration, persisted OpenAPI inventory and shared downstream inventory initialize both success and failure series with zero counts. Downstream refresh and tool materialization initialize newly known identities idempotently. Initialization does not produce completion logs, audit events or duration observations. Private inventories are not queried just to seed metrics. Dynamically introduced identities and traffic before the first scrape can still lack a preceding sampled zero; Prometheus `increase` remains a scrape-based estimate.
+
+Raised failures and returned error results count as failures. OpenAPI HTTP status 400 or higher counts as a failed connector execution while preserving its transport response. Cancellation and approval-required interruptions retain their existing no-completion behavior; authorization denials remain separately audited. Instrumentation failures are logged and do not replace invocation results.
 
 ## Embedded host composition
 

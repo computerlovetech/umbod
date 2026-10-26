@@ -45,7 +45,8 @@ from umbod.mcp.connectors.downstream_mcp.tool_invocation import AuthorizedDownst
 from umbod.mcp.connectors.downstream_mcp.tool_projection import tool_descriptor_options
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolRuntime, PersonalToolRecord
 from umbod.mcp.logging import ConnectorToolInvocationLogger
-from umbod.mcp.metrics import McpMetricsRecorder
+from umbod.mcp.metrics import InvocationScope, McpMetricsRecorder, ToolInvocationMetricIdentity
+from umbod.mcp.tools.invocation.telemetry import initialize_invocation_metrics
 logger = logging.getLogger(__name__)
 
 def _log_collisions(capability_kind: str, owners: Mapping[str, list[str]]) -> None:
@@ -222,6 +223,20 @@ class DownstreamMcpToolRuntimeProvider(Provider):
         self._personal_runtime = personal_runtime
         super().__init__()
 
+    async def initialize_metrics(self) -> None:
+        for record in await self._capabilities.list_records():
+            if uses_personal_oauth(record.definition) or record.capability.identity.capability_kind != "tool" or record.source_tool is None:
+                continue
+            connector_id = record.definition.connector_id
+            backend_name = record.source_tool.identity.downstream_name
+            self._initialize_tool_metrics(connector_id, mangle_public_tool_name(record.definition.tool_name_prefix, backend_name))
+            self._initialize_tool_metrics(connector_id, backend_name)
+
+    def _initialize_tool_metrics(self, connector_id: str, public_name: str) -> None:
+        initialize_invocation_metrics(self._metrics_recorder, ToolInvocationMetricIdentity(
+            scope=InvocationScope.CONNECTOR, connector_name=connector_id, tool_name=public_name,
+        ))
+
     def _operation_availability(self) -> CapabilityAvailability:
         policy = self._permission_policy.capture()
         dependencies = _AvailabilityDependencies(
@@ -257,6 +272,7 @@ class DownstreamMcpToolRuntimeProvider(Provider):
         client_factory = partial(self._create_capability_client, identity)
         backend_tool = ProxyTool(client_factory=client_factory, name=catalog_tool.identity.downstream_name, **tool_descriptor_options(catalog_tool))
         public_name = self._public_tool_name(connector_id, tool_name_prefix, backend_tool.name)
+        self._initialize_tool_metrics(connector_id, public_name)
         return AuthorizedDownstreamProxyTool(identity=self._invocation_identity(connector_id, connector_name, catalog_tool, public_name), backend_tool=backend_tool, client_factory=client_factory, public_name=public_name, invocation_policy=self._invocation_policy, telemetry_interceptor=self._telemetry_interceptor(connector_name))
 
     def _materialize_personal_tool(self, record: PersonalToolRecord) -> AuthorizedPersonalTool:
@@ -510,6 +526,7 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
         return await availability.is_available(identity)
 
     async def native_capability_projection(self) -> tuple[tuple[object, ...], tuple[object, ...]]:
+        await self.initialize_metrics()
         catalogs = await self._eligible_catalogs()
         return DownstreamCapabilityIndex(catalogs).native_projection()
 

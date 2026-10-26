@@ -3,7 +3,12 @@ from typing import DefaultDict, Dict, Mapping, Tuple
 
 from pydantic import BaseModel, ConfigDict
 
-from umbod.mcp.metrics.models import CompletedToolInvocation
+from umbod.mcp.metrics.models import (
+    CompletedToolInvocation,
+    InvocationOutcome,
+    InvocationScope,
+    ToolInvocationMetricIdentity,
+)
 
 
 INVOCATION_COUNT_METRIC = "umbod_mcp_tool_invocations_total"
@@ -22,11 +27,31 @@ class McpMetricSample(BaseModel):
 
 class InMemoryMcpMetricsRecorder:
     def __init__(self) -> None:
-        self._invocation_counts: DefaultDict[Tuple[str, str, str], int] = defaultdict(int)
+        self._invocation_counts: DefaultDict[
+            Tuple[InvocationScope, str, str, str], int
+        ] = defaultdict(int)
+
+    def initialize_invocation(self, identity: ToolInvocationMetricIdentity) -> None:
+        connector_name = (
+            identity.connector_name if identity.scope == InvocationScope.CONNECTOR else ""
+        )
+        for outcome in InvocationOutcome:
+            self._invocation_counts.setdefault(
+                (identity.scope, connector_name, identity.tool_name, outcome.value), 0
+            )
 
     def record_completed_invocation(self, invocation: CompletedToolInvocation) -> None:
+        self.initialize_invocation(ToolInvocationMetricIdentity(
+            scope=invocation.scope,
+            connector_name=invocation.connector_name,
+            tool_name=invocation.tool_name,
+        ))
+        connector_name = (
+            invocation.connector_name if invocation.scope == InvocationScope.CONNECTOR else ""
+        )
         key = (
-            invocation.connector_name,
+            invocation.scope,
+            connector_name,
             invocation.tool_name,
             invocation.outcome.value,
         )
@@ -34,21 +59,23 @@ class InMemoryMcpMetricsRecorder:
 
     def metric_samples(self) -> Tuple[McpMetricSample, ...]:
         samples = []
-        for (connector_name, tool_name, outcome), count in self._invocation_counts.items():
-            labels: Dict[str, str] = {
-                "connector_name": connector_name,
-                "tool_name": tool_name,
-                "outcome": outcome,
-            }
+        for (scope, connector_name, tool_name, outcome), count in self._invocation_counts.items():
+            labels: Dict[str, str] = {"tool_name": tool_name, "outcome": outcome}
+            count_metric = "umbod_mcp_tool_requests_total"
+            duration_count_metric = "umbod_mcp_tool_request_duration_seconds_count"
+            if scope == InvocationScope.CONNECTOR:
+                labels["connector_name"] = connector_name
+                count_metric = INVOCATION_COUNT_METRIC
+                duration_count_metric = INVOCATION_DURATION_COUNT_METRIC
             samples.extend(
                 (
                     McpMetricSample(
-                        name=INVOCATION_COUNT_METRIC,
+                        name=count_metric,
                         labels=labels,
                         value=float(count),
                     ),
                     McpMetricSample(
-                        name=INVOCATION_DURATION_COUNT_METRIC,
+                        name=duration_count_metric,
                         labels=labels,
                         value=float(count),
                     ),

@@ -62,6 +62,7 @@ class ConnectorTelemetryInterceptor:
                 returned_origin = {
                     "native": InvocationFailureOrigin.CONNECTOR,
                     "downstream_mcp": InvocationFailureOrigin.MCP,
+                    "openapi": InvocationFailureOrigin.OPENAPI,
                 }.get(request.identity.connector_kind, InvocationFailureOrigin.INTERNAL)
                 evidence = InvocationReturnedFailure(returned_origin)
             self._observer.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, invocation_failure.get(), evidence)

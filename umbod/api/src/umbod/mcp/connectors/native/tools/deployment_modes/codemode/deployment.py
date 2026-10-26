@@ -2,6 +2,8 @@ from collections.abc import Callable
 
 from fastmcp import FastMCP
 
+from umbod.mcp.tools.registration import McpObservedToolRegistrar
+
 from umbod.core.connectors.native.runtime.tools import ConnectorToolMapping
 from umbod.mcp.connectors.native.tools.infrastructure.client_notifications import (
     ToolListChangedClientNotifier,
@@ -36,11 +38,12 @@ class CodeModeConnectorToolDeploymentFactory:
         self,
         mcp: FastMCP,
         registry: RuntimeConnectorToolRegistry,
+        registrar: McpObservedToolRegistrar,
     ) -> None:
         setattr(mcp, "connector_tool_search", InMemoryFuzzyConnectorToolSearch())
-        register_connector_search_tool(mcp, CODEMODE_SEARCH_DESCRIPTION)
+        register_connector_search_tool(mcp, CODEMODE_SEARCH_DESCRIPTION, registrar)
         register_connector_code_mode_tool(
-            mcp,
+            registrar,
             registry,
             self._code_execution_timeout_seconds,
         )

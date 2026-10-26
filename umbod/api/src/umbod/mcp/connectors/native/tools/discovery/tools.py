@@ -1,5 +1,7 @@
 from typing import Annotated
 
+from umbod.mcp.tools.registration import McpObservedToolRegistrar
+
 from collections.abc import Sequence
 
 from fastmcp import FastMCP
@@ -129,12 +131,14 @@ class ConnectorSearchManifestTransform(Transform):
         )
 
 
-def register_connector_search_tool(mcp: FastMCP, description: str) -> None:
+def register_connector_search_tool(mcp: FastMCP, description: str, registrar: McpObservedToolRegistrar) -> None:
     scoped_description = f"{description}{_SCOPE_DESCRIPTION}"
-    mcp.tool(
+    registrar.register(
+        search_tools,
+        auth=None,
         name="search_tools",
         description=scoped_description,
         tags={"connectors", "gateway"},
         meta={"version": "1.0.0"},
-    )(search_tools)
+    )
     mcp.add_transform(ConnectorSearchManifestTransform(scoped_description, 1000))

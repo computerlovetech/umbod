@@ -23,6 +23,7 @@ from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from umbod.mcp.metrics.in_memory import INVOCATION_COUNT_METRIC, INVOCATION_DURATION_COUNT_METRIC
 from umbod.mcp.connectors.openapi import OpenApiCodeModeExecutionAdapter
 
 
@@ -97,10 +98,10 @@ class ExecutionService:
                 if self._result.status == "error":
                     raise RuntimeError("outbound failed")
                 return OpenApiExecutionResponse(
-                    status=200,
+                    status=self._result.http_status if self._result.http_status is not None else 200,
                     content_type="application/json",
                     headers={},
-                    body=b"{}",
+                    body=self._result.message.encode(),
                     truncated=False,
                 )
 
@@ -122,7 +123,7 @@ async def _execute(
     result: OpenApiCapabilityExecutionResult,
     store: ConnectorStore,
     secret: str = "secret-marker",
-) -> tuple[dict[str, Any], InMemoryMcpToolInvocationLogSink, RecordingAuditSink, ExecutionService]:
+) -> tuple[dict[str, Any], InMemoryMcpToolInvocationLogSink, RecordingAuditSink, ExecutionService, InMemoryMcpMetricsRecorder]:
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
     logger = create_default_connector_tool_invocation_logger(
@@ -161,12 +162,12 @@ async def _execute(
     )
     if service is None:
         raise RuntimeError("Execution service was not created")
-    return response, invocation_sink, audit_sink, service
+    return response, invocation_sink, audit_sink, service, server.metrics_recorder
 
 
 @pytest.mark.asyncio
 async def test_execute_records_display_name_success(monkeypatch: pytest.MonkeyPatch) -> None:
-    _, invocation_sink, audit_sink, _ = await _execute(
+    _, invocation_sink, audit_sink, _, _ = await _execute(
         monkeypatch,
         OpenApiCapabilityExecutionResult(status="success", message="done"),
         ConnectorStore("Weather API"),
@@ -179,7 +180,7 @@ async def test_execute_records_display_name_success(monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.asyncio
 async def test_execute_records_pipeline_failure(monkeypatch: pytest.MonkeyPatch) -> None:
-    _, invocation_sink, _, _ = await _execute(
+    _, invocation_sink, _, _, _ = await _execute(
         monkeypatch,
         OpenApiCapabilityExecutionResult(status="error", code="outbound_failed", message="failed"),
         ConnectorStore(),
@@ -190,7 +191,7 @@ async def test_execute_records_pipeline_failure(monkeypatch: pytest.MonkeyPatch)
 
 @pytest.mark.asyncio
 async def test_execute_uses_id_when_metadata_lookup_fails(monkeypatch: pytest.MonkeyPatch) -> None:
-    _, invocation_sink, _, service = await _execute(
+    _, invocation_sink, _, service, _ = await _execute(
         monkeypatch,
         OpenApiCapabilityExecutionResult(status="success", message="done"),
         ConnectorStore(lookup_error=RuntimeError("lookup failed")),
@@ -205,7 +206,7 @@ async def test_execute_telemetry_excludes_input_and_result_secrets(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     secret = "never-serialize-this"
-    _, invocation_sink, audit_sink, _ = await _execute(
+    _, invocation_sink, audit_sink, _, _ = await _execute(
         monkeypatch,
         OpenApiCapabilityExecutionResult(status="success", message=secret),
         ConnectorStore(),
@@ -218,3 +219,53 @@ async def test_execute_telemetry_excludes_input_and_result_secrets(
     )
     assert secret not in invocation_payload
     assert secret not in audit_payload
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("http_status", [200, 302, 400, 401, 404, 500, 503])
+async def test_execute_classifies_http_status_for_telemetry_without_changing_transport_result(
+    monkeypatch: pytest.MonkeyPatch,
+    http_status: int,
+) -> None:
+    secret = "response-body-secret"
+    result = OpenApiCapabilityExecutionResult(
+        status="success", message=secret, http_status=http_status
+    )
+    response, invocation_sink, audit_sink, service, metrics = await _execute(
+        monkeypatch, result, ConnectorStore(), secret
+    )
+
+    assert response == result.model_dump(mode="json")
+    assert service.executions == 1
+    records = invocation_sink.invocation_records()
+    assert len(records) == 1
+    attributes = records[0].attributes
+    outcome = "failure" if http_status >= 400 else "success"
+    assert attributes["mcp.invocation.outcome"] == outcome
+    if http_status >= 400:
+        assert attributes["mcp.failure.origin"] == "downstream_openapi"
+        assert "exception.type" not in attributes
+        assert "exception.stacktrace" not in attributes
+    else:
+        assert "mcp.failure.origin" not in attributes
+    all_samples = metrics.metric_samples()
+    assert len(all_samples) == 4
+    samples = tuple(sample for sample in all_samples if sample.value > 0)
+    assert len(samples) == 2
+    assert {sample.name for sample in samples} == {
+        INVOCATION_COUNT_METRIC, INVOCATION_DURATION_COUNT_METRIC
+    }
+    for sample in samples:
+        assert sample.value == 1
+        assert sample.labels == {
+            "connector_name": "weather-id",
+            "tool_name": "execute_openapi",
+            "outcome": outcome,
+        }
+    assert len(audit_sink.events) == 1
+    audit_attributes = StructuredMcpAuditFormatter().format_mcp_activity(
+        audit_sink.events[0]
+    ).attributes
+    assert secret not in json.dumps(attributes)
+    assert secret not in json.dumps(audit_attributes)
+    assert secret not in json.dumps([sample.model_dump(mode="json") for sample in samples])

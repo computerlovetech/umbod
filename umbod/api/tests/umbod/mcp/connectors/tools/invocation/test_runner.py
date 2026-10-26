@@ -497,7 +497,7 @@ async def test_native_result_adaptation_failure_is_internal() -> None:
     [
         ("native", InvocationFailureOrigin.CONNECTOR),
         ("downstream_mcp", InvocationFailureOrigin.MCP),
-        ("openapi", InvocationFailureOrigin.INTERNAL),
+        ("openapi", InvocationFailureOrigin.OPENAPI),
     ],
 )
 async def test_returned_failure_evidence_has_only_supported_origin(

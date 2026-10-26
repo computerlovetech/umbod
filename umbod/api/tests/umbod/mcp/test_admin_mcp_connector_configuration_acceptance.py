@@ -19,7 +19,7 @@ from umbod.mcp import public_app
 from umbod.mcp.logging import McpAuditEvent, McpAuditRecorder
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
-from umbod.mcp.metrics import CompletedToolInvocation, InvocationOutcome, PrometheusMcpMetricsRecorder
+from umbod.mcp.metrics import CompletedToolInvocation, InvocationOutcome, InvocationScope, PrometheusMcpMetricsRecorder
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
 
@@ -78,6 +78,7 @@ class CapturingPrometheusMetricsRecorder(PrometheusMcpMetricsRecorder):
     latest: "CapturingPrometheusMetricsRecorder"
 
     def __init__(self) -> None:
+        super().__init__()
         self.invocations: list[CompletedToolInvocation] = []
         CapturingPrometheusMetricsRecorder.latest = self
 
@@ -368,6 +369,7 @@ async def test_administrator_read_records_one_internal_log_audit_and_metric(
     invocations = CapturingPrometheusMetricsRecorder.latest.invocations
     assert invocations == [
         CompletedToolInvocation(
+            scope=InvocationScope.REQUEST,
             connector_name="internal",
             tool_name=READ_TOOL,
             outcome=InvocationOutcome.SUCCESS,

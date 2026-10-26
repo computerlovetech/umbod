@@ -6,6 +6,7 @@ from prometheus_client.samples import Sample
 from umbod.mcp.metrics import (
     CompletedToolInvocation,
     InvocationOutcome,
+    InvocationScope,
     McpMetricsRecorder,
     PrometheusMcpMetricsRecorder,
 )
@@ -14,6 +15,7 @@ from umbod.mcp.metrics import (
 def _record_invocation(recorder: McpMetricsRecorder) -> None:
     recorder.record_completed_invocation(
         CompletedToolInvocation(
+            scope=InvocationScope.CONNECTOR,
             connector_name="github",
             tool_name="create_issue",
             outcome=InvocationOutcome.SUCCESS,
@@ -41,17 +43,17 @@ def test_prometheus_recorder_records_count_and_duration_through_protocol() -> No
     invocation_count = next(
         sample
         for sample in samples["umbod_mcp_tool_invocations"]
-        if sample.name == "umbod_mcp_tool_invocations_total"
+        if sample.name == "umbod_mcp_tool_invocations_total" and sample.labels["outcome"] == "success"
     )
     duration_count = next(
         sample
         for sample in samples["umbod_mcp_tool_invocation_duration_seconds"]
-        if sample.name == "umbod_mcp_tool_invocation_duration_seconds_count"
+        if sample.name == "umbod_mcp_tool_invocation_duration_seconds_count" and sample.labels["outcome"] == "success"
     )
     duration_sum = next(
         sample
         for sample in samples["umbod_mcp_tool_invocation_duration_seconds"]
-        if sample.name == "umbod_mcp_tool_invocation_duration_seconds_sum"
+        if sample.name == "umbod_mcp_tool_invocation_duration_seconds_sum" and sample.labels["outcome"] == "success"
     )
     assert invocation_count.labels == expected_labels
     assert invocation_count.value == 1

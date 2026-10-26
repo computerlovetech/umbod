@@ -109,7 +109,10 @@ class McpAuditMiddleware(Middleware):
             result = await call_next(context)
             if context.message.name in {"search_tools", "execute_tool", "execute_code"}:
                 target = self._recorder.tool_target(_tool_identity(context.message))
-                audit_result = McpAuditSuccess()
+                audit_result = (
+                    McpAuditFailure(McpAuditFailureCategory.UNEXPECTED_ERROR)
+                    if result.is_error else McpAuditSuccess()
+                )
                 if context.message.name == "execute_code":
                     target = self._recorder.code_execution_target(_code_hash(context.message))
                     if _code_execution_failed(result):
@@ -128,6 +131,21 @@ class McpAuditMiddleware(Middleware):
                 self._recorder.tool_target(_tool_identity(context.message)),
                 correlation,
             )
+            raise
+        except Exception:
+            if context.message.name in {"search_tools", "execute_tool", "execute_code"}:
+                target = (
+                    self._recorder.code_execution_target(_code_hash(context.message))
+                    if context.message.name == "execute_code"
+                    else self._recorder.tool_target(_tool_identity(context.message))
+                )
+                self._recorder.record_tool_invocation(
+                    self._identity_source.identity_from_request(context.fastmcp_context),
+                    target,
+                    McpAuditFailure(McpAuditFailureCategory.UNEXPECTED_ERROR),
+                    correlation,
+                    time.time_ns(),
+                )
             raise
 
 

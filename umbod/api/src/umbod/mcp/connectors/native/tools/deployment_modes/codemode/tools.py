@@ -1,5 +1,7 @@
 from typing import Annotated
 
+from umbod.mcp.tools.registration import McpObservedToolRegistrar
+
 from fastmcp import FastMCP
 from fastmcp.dependencies import CurrentFastMCP
 from fastmcp.server.dependencies import get_server
@@ -72,15 +74,22 @@ async def execute_code(
     return ToolResult(structured_content=result.model_dump(mode="json"))
 
 
+def code_execution_result_is_error(result: ToolResult) -> bool:
+    return (result.structured_content or {}).get("outcome") != "success"
+
+
 def register_connector_code_mode_tool(
-    mcp: FastMCP,
+    registrar: McpObservedToolRegistrar,
     registry: RuntimeConnectorToolRegistry,
     timeout_seconds: float,
 ) -> None:
     registry.code_mode_adapter = FastMcpMontyCodeModeAdapter(timeout_seconds)
-    mcp.tool(
+    registrar.register(
+        execute_code,
+        auth=None,
+        result_is_error=code_execution_result_is_error,
         name="execute_code",
         description=CODEMODE_EXECUTE_DESCRIPTION,
         tags={"connectors", "codemode"},
         meta={"version": "2.0.0"},
-    )(execute_code)
+    )

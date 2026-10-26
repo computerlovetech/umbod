@@ -38,8 +38,17 @@ from umbod.mcp.connectors.native.tools.runtime.registry import (
     _server_name,
     create_connector_tool_invoker_factory,
 )
-from umbod.mcp.metrics import McpMetricsRecorder, PrometheusMcpMetricsRecorder
+from umbod.mcp.connectors.native.tools.definition.naming import _tool_name
+from umbod.mcp.tools.registration import McpObservedToolRegistrar
+from umbod.mcp.tools.invocation.telemetry import McpToolInvocationObserver, initialize_invocation_metrics
+from umbod.mcp.metrics import (
+    InvocationScope,
+    McpMetricsRecorder,
+    PrometheusMcpMetricsRecorder,
+    ToolInvocationMetricIdentity,
+)
 from umbod.mcp.logging import (
+    InvocationLogSinkToolInvocationLogger,
     McpAuditRecorder,
     McpToolInvocationLogSink,
     create_default_mcp_audit_recorder,
@@ -133,6 +142,15 @@ async def register_connector_tools(
             for mapping in connector_tool_mappings
         )
     )
+    for mapping in connector_tool_mappings:
+        initialize_invocation_metrics(
+            resolved_options.metrics_recorder,
+            ToolInvocationMetricIdentity(
+                scope=InvocationScope.CONNECTOR,
+                connector_name=mapping.connector_id,
+                tool_name=_tool_name(mapping),
+            )
+        )
     registry = RuntimeConnectorToolRegistry(
         mcp,
         schemas=_valid_configuration_schemas(
@@ -164,7 +182,17 @@ async def register_connector_tools(
         invocation_policy=resolved_options.invocation_policy,
     )
     setattr(mcp, "connector_tool_registry", registry)
-    deployment_factory.register_fixed_tools(mcp, registry)
+    deployment_factory.register_fixed_tools(
+        mcp,
+        registry,
+        McpObservedToolRegistrar(
+            mcp,
+            McpToolInvocationObserver(
+                InvocationLogSinkToolInvocationLogger(resolved_options.tool_invocation_log_sink),
+                resolved_options.metrics_recorder,
+            ),
+        ),
+    )
     await registry.reconcile_all()
     connector_publishing_store = resolved_options.connector_publishing_store
     if isinstance(connector_publishing_store, ConnectorPublishStateChangeSource):

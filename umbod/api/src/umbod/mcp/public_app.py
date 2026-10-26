@@ -102,6 +102,7 @@ from umbod.core.connectors.openapi.execution import OutboundHttpClientFactory
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.authorization import connector_tool_permission_check
 from umbod.mcp.connectors.openapi import DatabaseGroupPermissionReaderFactory, OutboundHttpClientFactoryPort, build_openapi_codemode_executor
+from umbod.mcp.connectors.openapi.metrics import initialize_openapi_metrics
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, ConnectorStorePair, HttpConnectorRuntimeStateSourceStrategy, LocalConnectorRuntimeStateSourceStrategy, StoreBackedConnectorRuntimeStateSourceStrategy, resolve_connector_runtime_state_source_strategy
 from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
 from umbod.config import AppConfig, InMemoryConnectorStoreConfig, SQLiteConnectorStoreConfig, load_server_app_config
@@ -220,6 +221,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     )
     await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, audit_recorder, invocation_log_sink, tool_invocation_logger, metrics_recorder, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes, invocation_policy)
     mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.connector_tool_invocation_logger)
+    await initialize_openapi_metrics(await mcp.openapi_connector_store_factory.create(), metrics_recorder)
     downstream_permission_policy = UnrestrictedDownstreamToolPermissionPolicy() if group_permission_runtime_state is None else GroupDownstreamToolPermissionPolicy(group_permission_runtime_state)
     await _register_downstream_mcp_provider(mcp, settings, downstream_permission_policy, persistence_runtime.database, invocation_policy)
     register_agent_instructions(mcp)
@@ -235,6 +237,7 @@ async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettin
     if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled:
         personal_runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), stores.definitions, stores.personal_tool_access, create_personal_mcp_transport(), utc_clock)
     provider = ConnectorAwareDownstreamMcpToolProvider(personal_runtime=personal_runtime, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=connections.client_factory, permission_policy=permission_policy, connector_scope='', capability_description_overrides=mcp.capability_description_overrides, tool_invocation_logger=mcp.connector_tool_invocation_logger, metrics_recorder=mcp.metrics_recorder, invocation_policy=invocation_policy)
+    await provider.initialize_metrics()
     mcp.downstream_mcp_tool_provider = provider
     mcp.add_middleware(PersonalToolReservationMiddleware(provider))
     if settings.mcp.connector_tool_exposure_mode == 'flat':

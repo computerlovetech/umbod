@@ -37,6 +37,10 @@ from umbod.mcp.connectors.openapi.deps import capture_openapi_groups
 logger = logging.getLogger(__name__)
 
 
+def _openapi_result_is_error(result: object) -> bool:
+    return isinstance(result, OpenApiExecutionResponse) and result.status >= 400
+
+
 async def _close_resource(resource: object) -> None:
     close = getattr(resource, 'aclose', None)
     if not callable(close):
@@ -67,7 +71,7 @@ class OpenApiCodeModeExecutionAdapter:
                         connector_name=connector_name,
                         tool_invocation_logger=self._tool_invocation_logger,
                         metrics_recorder=self._server.metrics_recorder,
-                        result_is_error=lambda result: False,
+                        result_is_error=_openapi_result_is_error,
                     ),
                 ),
             )

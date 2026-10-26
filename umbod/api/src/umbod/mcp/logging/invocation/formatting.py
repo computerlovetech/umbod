@@ -21,6 +21,7 @@ class McpToolInvocationLogAttribute(StrEnum):
     CONNECTOR_ID = "mcp.connector.id"
     CONNECTOR_NAME = "mcp.connector.name"
     OPERATION_NAME = "mcp.operation.name"
+    INVOCATION_SCOPE = "mcp.invocation.scope"
     INVOCATION_OUTCOME = "mcp.invocation.outcome"
     INVOCATION_DURATION_MS = "mcp.invocation.duration_ms"
     FAILURE_CATEGORY = "mcp.failure.category"
@@ -103,6 +104,7 @@ class _InvocationLogAttributesBuilder:
                 event.started.interaction_type
             ),
             McpToolInvocationLogAttribute.TOOL_NAME: event.started.tool.tool_name,
+            McpToolInvocationLogAttribute.INVOCATION_SCOPE: "connector" if event.started.tool.connector_id is not None else "request",
             McpToolInvocationLogAttribute.INVOCATION_OUTCOME: _enum_value(event.outcome),
             McpToolInvocationLogAttribute.INVOCATION_DURATION_MS: event.duration_ms,
         }

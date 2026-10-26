@@ -2,6 +2,8 @@ from collections.abc import Callable
 
 from fastmcp import FastMCP
 
+from umbod.mcp.tools.registration import McpObservedToolRegistrar
+
 from umbod.core.connectors.native.runtime.tools import ConnectorToolMapping
 from umbod.mcp.connectors.native.tools.infrastructure.client_notifications import (
     ToolListChangedClientNotifier,
@@ -43,5 +45,6 @@ class FlatConnectorToolDeploymentFactory:
         self,
         mcp: FastMCP,
         registry: RuntimeConnectorToolRegistry,
+        registrar: McpObservedToolRegistrar,
     ) -> None:
         return None

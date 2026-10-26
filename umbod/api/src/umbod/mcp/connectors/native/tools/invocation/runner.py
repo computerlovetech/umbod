@@ -63,6 +63,7 @@ class ConnectorToolInvocationRunner:
                 else error
             )
             return ConnectorToolFailureResult(
+                is_error=True,
                 content=self._error_formatter.format_error(
                     self._mapping.connector_id,
                     self._mapping.operation_name,

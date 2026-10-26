@@ -1,7 +1,7 @@
 import asyncio
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, TypedDict, Unpack
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import AuthorizationError, ValidationError
@@ -19,14 +19,27 @@ from umbod.mcp.logging import McpToolIdentity, McpToolInvocationFailureCategory
 from umbod.mcp.tools.invocation.telemetry import McpToolInvocationObserver, log_observation_failure
 
 
+def tool_result_is_error(result: ToolResult) -> bool:
+    return result.is_error
+
+
+class ObservedToolOptions(TypedDict, total=False):
+    tags: set[str]
+    meta: dict[str, Any]
+    result_is_error: Callable[[ToolResult], bool]
+
+
 class ObservedFunctionTool(Tool):
     _delegate: FunctionTool = PrivateAttr()
     _observer: McpToolInvocationObserver = PrivateAttr()
 
-    def __init__(self, delegate: FunctionTool, observer: McpToolInvocationObserver) -> None:
+    _result_is_error: Callable[[ToolResult], bool] = PrivateAttr()
+
+    def __init__(self, delegate: FunctionTool, observer: McpToolInvocationObserver, result_is_error: Callable[[ToolResult], bool]) -> None:
         super().__init__(**{field: getattr(delegate, field) for field in Tool.model_fields})
         self._delegate = delegate
         self._observer = observer
+        self._result_is_error = result_is_error
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
         try:
@@ -45,7 +58,7 @@ class ObservedFunctionTool(Tool):
             self._safely_fail(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
             raise
         try:
-            is_error = result.is_error
+            is_error = self._result_is_error(result)
         except Exception as error:
             log_observation_failure("MCP tool result classification failed", error)
             self._safely_fail(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
@@ -81,8 +94,13 @@ class McpObservedToolRegistrar:
         name: str,
         description: str,
         auth: Any,
+        **options: Unpack[ObservedToolOptions],
     ) -> ObservedFunctionTool:
-        delegate = FunctionTool.from_function(fn, name=name, description=description, auth=auth)
-        tool = ObservedFunctionTool(delegate, self._observer)
+        delegate = FunctionTool.from_function(
+            fn, name=name, description=description, auth=auth,
+            tags=options.get("tags", set()), meta=options.get("meta", {}),
+        )
+        self._observer.initialize(McpToolIdentity(tool_name=name, connector_id=None, operation_name=None))
+        tool = ObservedFunctionTool(delegate, self._observer, options.get("result_is_error", tool_result_is_error))
         self._mcp.add_tool(tool)
         return tool

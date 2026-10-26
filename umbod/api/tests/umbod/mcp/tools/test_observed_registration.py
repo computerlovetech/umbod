@@ -24,7 +24,7 @@ from umbod.mcp.logging import (
     McpToolInvocationFailed,
     set_mcp_invocation_context,
 )
-from umbod.mcp.metrics import CompletedToolInvocation, InvocationOutcome
+from umbod.mcp.metrics import CompletedToolInvocation, InvocationOutcome, InvocationScope
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.tools.invocation import McpToolInvocationObserver
 
@@ -127,6 +127,7 @@ async def test_success_records_internal_identity_context_duration_and_metric_onc
     _assert_internal_completion(logger.events[0])
     assert metrics.invocations == [
         CompletedToolInvocation(
+            scope=InvocationScope.REQUEST,
             connector_name="internal",
             tool_name="internal_tool",
             outcome=InvocationOutcome.SUCCESS,
