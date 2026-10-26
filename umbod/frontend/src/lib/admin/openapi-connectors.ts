@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { connectorToolOutputSchemaStateSchema, type ConnectorToolParameter } from './connectors';
-import { normalizeDeclaredToolOutputSchema, type ToolOutputSchemaState } from './tool-output-schema';
-import { mapJsonSchemaToConnectorToolParameters } from './json-schema-tool-parameters';
+import { connectorToolOutputSchemaStateSchema } from './connectors';
+import { normalizeDeclaredToolOutputSchema } from './tool-output-schema';
+import type { ToolOutputSchemaState, ToolParameter } from '$lib/components/shared/tools/presentation';
+import { mapJsonSchemaToToolParameters } from '$lib/components/shared/tools/json-schema-tool-parameters';
 import { capabilityDescriptionOverrideSchema } from './capability-descriptions';
 
 export const OPEN_API_CATALOG_FILE_MAX_BYTES = 10 * 1024 * 1024;
@@ -13,6 +14,7 @@ export const openApiToolActivationStatusSchema = z.enum(['enabled', 'disabled'])
 
 export const openApiConnectorSchema = z.object({
   connector_id: z.string().min(1),
+  icon_url: z.string(),
   display_name: z.string().min(1),
   tool_name_prefix: z.string().regex(/^[a-zA-Z0-9_-]+$/),
   capability_description: z.string().trim().min(1).max(300),
@@ -152,7 +154,7 @@ export type OpenApiOperationToolUiModel = {
   summary: string;
   description: string;
   activationStatus: OpenApiToolActivationStatus;
-  parameters?: ConnectorToolParameter[];
+  parameters?: ToolParameter[];
   outputSchema: ToolOutputSchemaState;
 };
 
@@ -195,7 +197,7 @@ export function mapOpenApiOperationTool(tool: OpenApiOperationTool): OpenApiOper
     summary: tool.summary,
     description: tool.description,
     activationStatus: tool.activation_status,
-    parameters: mapJsonSchemaToConnectorToolParameters(tool.parameters),
+    parameters: mapJsonSchemaToToolParameters(tool.parameters),
     outputSchema: normalizeDeclaredToolOutputSchema(tool)
   };
 }

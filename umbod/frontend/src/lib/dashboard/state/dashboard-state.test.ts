@@ -6,7 +6,7 @@ import { authorizationHealth, selection } from '$lib/personal-connections/test-f
 import type { DashboardApi } from '../api';
 import type { UserCatalogue } from '../domain/schemas';
 import { InMemoryDashboardApi } from '../infrastructure/in-memory-api';
-import { catalogue, sharedConnector } from '../test-fixtures';
+import { catalogue, personalConnector, sharedConnector } from '../test-fixtures';
 import type { DashboardController } from './port';
 import { DashboardState } from './dashboard-state.svelte';
 
@@ -23,6 +23,111 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 describe('dashboard controller contract', () => {
+  test('defaults to the first connector and ignores unknown selection IDs', async (): Promise<void> => {
+    const { state } = setup();
+    expect(state.selectedId).toBe('');
+    expect(state.selectedConnector).toBeUndefined();
+    await state.loadCatalogue();
+    expect(state.selectedId).toBe('downstream_mcp:shared');
+    expect(state.selectedConnector).toEqual(sharedConnector);
+    state.selectConnector('missing');
+    expect(state.selectedId).toBe('downstream_mcp:shared');
+    expect(state.selectedConnector).toEqual(sharedConnector);
+    state.selectConnector('');
+    expect(state.selectedId).toBe('downstream_mcp:shared');
+  });
+
+  test('connector kinds distinguish colliding IDs without changing catalogue order', async (): Promise<void> => {
+    const native = { ...sharedConnector, kind: 'native' as const };
+    const { state } = setup({ ...catalogue, connectors: [sharedConnector, native] });
+    await state.loadCatalogue();
+    state.selectConnector('native:shared');
+    expect(state.selectedId).toBe('native:shared');
+    expect(state.selectedConnector).toEqual(native);
+    expect(state.connectors).toEqual([sharedConnector, native]);
+    state.selectConnector('downstream_mcp:shared');
+    expect(state.selectedConnector).toEqual(sharedConnector);
+  });
+
+  test('selection is local and preserves personal authorization state across switches', async (): Promise<void> => {
+    const { state, api, personal } = setup();
+    await state.loadCatalogue();
+    const card = state.personalCard('calendar')!;
+    await card.start();
+    const attempt = card.attempt;
+    const catalogueRead = vi.spyOn(api.catalogue, 'list');
+    const personalRead = vi.spyOn(personal.connections, 'list');
+    const start = vi.spyOn(personal.authorization, 'start');
+    const discover = vi.spyOn(personal.connections, 'discover');
+    const enable = vi.spyOn(personal.connections, 'setEnablement');
+    state.selectConnector('downstream_mcp:calendar');
+    expect(state.selectedConnector).toEqual(personalConnector);
+    state.selectConnector('downstream_mcp:shared');
+    state.selectConnector('downstream_mcp:calendar');
+    expect(state.personalCard('calendar')).toBe(card);
+    expect(card.attempt).toBe(attempt);
+    for (const operation of [catalogueRead, personalRead, start, discover, enable]) {
+      expect(operation).not.toHaveBeenCalled();
+    }
+  });
+
+  test('refresh retains selection through reorder and resolves the latest connector object', async (): Promise<void> => {
+    const { state, api } = setup();
+    await state.loadCatalogue();
+    state.selectConnector('downstream_mcp:calendar');
+    const previous = state.selectedConnector;
+    const updated = { ...personalConnector, display_name: 'Updated calendar', capabilities: sharedConnector.capabilities };
+    vi.spyOn(api.catalogue, 'list').mockResolvedValue({ ...catalogue, connectors: [updated, sharedConnector] });
+    await state.loadCatalogue();
+    expect(state.selectedId).toBe('downstream_mcp:calendar');
+    expect(state.selectedConnector).toBe(state.connectors[0]);
+    expect(state.selectedConnector).not.toBe(previous);
+    expect(state.selectedConnector).toEqual(updated);
+  });
+
+  test('removal falls back to the first remaining connector and an empty catalogue clears selection', async (): Promise<void> => {
+    const { state, api } = setup();
+    await state.loadCatalogue();
+    state.selectConnector('downstream_mcp:calendar');
+    const list = vi.spyOn(api.catalogue, 'list').mockResolvedValue({ ...catalogue, connectors: [sharedConnector] });
+    await state.loadCatalogue();
+    expect(state.selectedId).toBe('downstream_mcp:shared');
+    expect(state.selectedConnector).toEqual(sharedConnector);
+    list.mockResolvedValue({ ...catalogue, connectors: [] });
+    await state.loadCatalogue();
+    expect(state.selectedId).toBe('');
+    expect(state.selectedConnector).toBeUndefined();
+  });
+
+  test('identity change resets selection even when the previous connector remains available', async (): Promise<void> => {
+    const { state, api } = setup();
+    await state.loadCatalogue();
+    state.selectConnector('downstream_mcp:calendar');
+    vi.spyOn(api.catalogue, 'list').mockResolvedValue({ ...catalogue, identity_key: 'another-account' });
+    await state.loadCatalogue();
+    expect(state.selectedId).toBe('downstream_mcp:shared');
+    expect(state.selectedConnector).toEqual(sharedConnector);
+  });
+
+  test.each(['authenticationLost', 'dispose'] as const)('%s clears a loaded selection', async (operation): Promise<void> => {
+    const { state } = setup();
+    await state.loadCatalogue();
+    state.selectConnector('downstream_mcp:calendar');
+    state[operation]();
+    expect(state.selectedId).toBe('');
+    expect(state.selectedConnector).toBeUndefined();
+  });
+
+  test('transient catalogue failure preserves the selected connector', async (): Promise<void> => {
+    const { state, api } = setup();
+    await state.loadCatalogue();
+    state.selectConnector('downstream_mcp:calendar');
+    const selected = state.selectedConnector;
+    vi.spyOn(api.catalogue, 'list').mockRejectedValue(new HttpError(503, 'private', {}));
+    await state.loadCatalogue();
+    expect(state.selectedId).toBe('downstream_mcp:calendar');
+    expect(state.selectedConnector).toBe(selected);
+  });
   test('reads the permitted catalogue without requesting administrative data or mutating personal access', async (): Promise<void> => {
     const { personal, state } = setup();
     const start = vi.spyOn(personal.authorization, 'start');
@@ -150,6 +255,8 @@ describe('dashboard controller contract', () => {
     else vi.spyOn(personal.connections, 'list').mockRejectedValue(new AuthenticationRequiredError());
     await state.loadCatalogue();
     expect(state.phase).toBe('sign-in');
+    expect(state.selectedId).toBe('');
+    expect(state.selectedConnector).toBeUndefined();
     expect(state.connectors).toEqual([]);
     expect(state.personalCards).toEqual([]);
   });
@@ -196,6 +303,8 @@ describe('dashboard controller contract', () => {
     vi.spyOn(api.catalogue, 'list').mockRejectedValue(new HttpError(403, 'private', { secret: 'private' }));
     await state.loadCatalogue();
     expect(state.phase).toBe('forbidden');
+    expect(state.selectedId).toBe('');
+    expect(state.selectedConnector).toBeUndefined();
     expect(state.connectors).toEqual([]);
     expect(state.personalCards).toEqual([]);
   });

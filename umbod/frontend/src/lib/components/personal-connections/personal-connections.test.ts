@@ -3,8 +3,13 @@ import { describe, expect, test, vi } from 'vitest';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { AuthorizationHealth } from '$lib/personal-connections/domain/schemas';
 import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
+import type { AuthorizationBrowser } from '$lib/personal-connections/authorization-browser';
+import { InMemoryAuthorizationBrowser } from '$lib/personal-connections/infrastructure/in-memory-authorization-browser';
 import { InMemoryPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/in-memory-api';
 import { ConnectionState } from '$lib/personal-connections/state/connection-state.svelte';
+import type { PersonalConnectionController } from '$lib/personal-connections/state/port';
+import { PersonalAccessViewState } from '$lib/personal-connections/state/access-view-state.svelte';
+import type { PersonalAccessViewController } from '$lib/personal-connections/presentation';
 import { authorizationHealth, completedAttempt, selection } from '$lib/personal-connections/test-fixtures';
 import ConnectionCard from './ConnectionCard.svelte';
 
@@ -13,26 +18,44 @@ describe('personal connections presentation', () => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
     const state = new ConnectionState(selection, api, vi.fn());
     const body = render(ConnectionCard, { props: { state } }).body;
-    for (const label of ['Authorization saved', 'Not available', 'Sign in again', 'Disable', 'Discover tools', 'Disconnect']) expect(body).toContain(label);
+    for (const label of ['Authorization saved', 'Not available', 'Checking access…', 'Personal access actions for Calendar']) expect(body).toContain(label);
+    expect(body).not.toContain('Ready to use');
+    expect(body).not.toContain('role="menuitem"');
     expect(body).toContain('Personal access');
     expect(body).not.toContain('Connected');
     expect(body).not.toContain('reconnect required');
   });
-  test('pending sign-in presents only a safe user-clicked external link and manual controls', async () => {
+  test('blocked automatic opening retains a safe sign-in fallback without exposing secondary actions', async (): Promise<void> => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
     const state = new ConnectionState(selection, api, vi.fn());
     await state.start();
     const body = render(ConnectionCard, { props: { state } }).body;
     expect(body).toContain('target="_blank"');
     expect(body).toContain('rel="noopener noreferrer"');
-    for (const label of ['Continue sign-in', 'Check sign-in status', 'Cancel sign-in']) expect(body).toContain(label);
+    for (const label of ['Continue sign-in', 'Check sign-in status', 'could not be opened automatically']) expect(body).toContain(label);
+    const view: PersonalAccessViewController = new PersonalAccessViewState(() => state);
+    expect(view.menuActions.find((action) => action.id === 'cancel')?.disabled).toBe(false);
+    expect(body).not.toContain('Cancel sign-in');
     expect(body).not.toContain('<iframe');
     await state.cancel();
     const terminalBody = render(ConnectionCard, { props: { state } }).body;
     expect(terminalBody).not.toContain('provider.example');
     expect(terminalBody).not.toContain('Continue sign-in');
   });
-  test('disconnect confirmation stays inline and separate from enablement', () => {
+  test('automatically opened sign-in needs no additional continue-link step', async (): Promise<void> => {
+    const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
+    const browser: AuthorizationBrowser = new InMemoryAuthorizationBrowser();
+    const state: PersonalConnectionController = new ConnectionState(selection, api, vi.fn<() => void>(), async (): Promise<void> => {}, browser);
+    await state.start();
+    expect(state.authorizationOpened).toBe(true);
+    const body = render(ConnectionCard, { props: { state, embedded: true } }).body;
+    expect(body).toContain('Finish signing in using the browser tab');
+    expect(body).toContain('Check sign-in status');
+    expect(body).not.toContain('Continue sign-in');
+    expect(body).not.toContain('could not be opened automatically');
+    expect(body).toContain('Open sign-in page again');
+  });
+  test('disconnect confirmation stays inline and separate from enablement', (): void => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
     const state = new ConnectionState(selection, api, vi.fn());
     state.requestDisconnect();
@@ -43,16 +66,16 @@ describe('personal connections presentation', () => {
     expect(state.selection.enabled).toBe(true);
   });
   test.each<{ health: AuthorizationHealth; copy: string; renew: boolean }>([
-    { health: { state: 'not_authorized' }, copy: 'Sign-in needed', renew: false },
+    { health: { state: 'not_authorized' }, copy: 'Sign-in required', renew: false },
     { health: authorizationHealth, copy: 'Authorization valid locally', renew: true },
     { health: { state: 'expired', expires_at: '2030-01-01T00:00:00Z', refresh_supported: true }, copy: 'Authorization expired', renew: true },
-    { health: { state: 'unsupported' }, copy: 'Sign in again to replace unsupported authorization', renew: false },
+    { health: { state: 'unsupported' }, copy: 'Your saved authorization is no longer supported', renew: false },
     { health: { state: 'authorized', expires_at: '2030-01-01T00:00:00Z', refresh_supported: false }, copy: 'Authorization valid locally', renew: false },
     { health: { state: 'expired', expires_at: '2030-01-01T00:00:00Z', refresh_supported: false }, copy: 'Authorization expired', renew: false },
     { health: { state: 'reconnect_required', reason: 'provider_rejected' }, copy: 'The provider rejected this authorization.', renew: false },
     { health: { state: 'reconnect_required', reason: 'refresh_denied' }, copy: 'Authorization renewal was rejected.', renew: false },
     { health: { state: 'reconnect_required', reason: 'refresh_uncertain' }, copy: 'The renewal outcome could not be confirmed.', renew: false },
-    { health: { state: 'refreshing', deadline: '2000-01-01T00:00:00Z' }, copy: 'Renewal in progress. Check status before another action.', renew: false }
+    { health: { state: 'refreshing', deadline: '2000-01-01T00:00:00Z' }, copy: 'Renewal is already in progress. Check status before another action.', renew: false }
   ])('presents $health.state independently of saved authorization and tools', async ({ health, copy, renew }): Promise<void> => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: health });
     const state = new ConnectionState(selection, api, vi.fn<() => void>());
@@ -61,13 +84,15 @@ describe('personal connections presentation', () => {
     expect(body).toContain(copy);
     expect(body).toContain('Authorization saved');
     expect(body).toContain('Not available');
-    expect(body.includes('Renew authorization')).toBe(renew);
-    expect(body).toContain('Check authorization status');
-    expect(body).toContain('Sign in again');
+    const view: PersonalAccessViewController = new PersonalAccessViewState(() => state);
+    expect(view.menuActions.some((action) => action.id === 'renew')).toBe(renew);
+    expect(view.menuActions.some((action) => action.id === 'refresh')).toBe(true);
+    expect(view.menuActions.some((action) => action.label === 'Sign in again')).toBe(true);
+    expect(body).not.toContain('role="menuitem"');
     if (health.state === 'authorized' || health.state === 'expired') {
-      expect(body).toContain('Last checked:');
+      expect(body).toContain('Last checked');
       expect(body).not.toContain('Based on saved records.');
-      expect(body).toContain('Expires:');
+      expect(body).toContain('Expires');
     }
   });
   test('unavailable health exposes safe manual recovery, never expiry or unsupported claims', async (): Promise<void> => {
@@ -76,7 +101,7 @@ describe('personal connections presentation', () => {
     const state = new ConnectionState(selection, api, vi.fn<() => void>());
     await state.loadHealth();
     const body = render(ConnectionCard, { props: { state } }).body;
-    expect(body).toContain('Authorization status unavailable');
+    expect(body).toContain('Status unavailable');
     expect(body).toContain('Check authorization status');
     expect(body).not.toContain('Renew authorization');
     expect(body).not.toContain('Authorization expired');

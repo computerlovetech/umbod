@@ -4,6 +4,9 @@ from umbod.core.connectors.downstream_mcp.adapters.composition import (
     create_downstream_mcp_discovery,
 )
 from umbod.core.connectors.downstream_mcp.adapters.settings import DownstreamMcpInfrastructureSettings
+from umbod.core.connectors.downstream_mcp.adapters.icon_discovery import FaviconDiscoveringMcpProbe
+from umbod.core.icons import FaviconDiscovery
+from umbod.rest.connectors.icons import get_favicon_discovery
 
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores, create_downstream_mcp_stores
@@ -80,8 +83,11 @@ def get_health_store(stores: Annotated[DownstreamMcpStores, Depends(get_downstre
 def get_downstream_connections(settings: Annotated[DownstreamMcpInfrastructureSettings, Depends(get_downstream_infrastructure_settings)], stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)]) -> DownstreamMcpConnections:
     return create_downstream_mcp_connections(settings, stores.credentials)
 
-def get_downstream_connector_probe(connections: Annotated[DownstreamMcpConnections, Depends(get_downstream_connections)]) -> DownstreamMcpProbe:
-    return connections.connection
+def get_downstream_connector_probe(
+    connections: Annotated[DownstreamMcpConnections, Depends(get_downstream_connections)],
+    discovery: Annotated[FaviconDiscovery, Depends(get_favicon_discovery)],
+) -> DownstreamMcpProbe:
+    return FaviconDiscoveringMcpProbe(connections.connection, discovery)
 
 def get_downstream_connector_preparation(probe: Annotated[DownstreamMcpProbe, Depends(get_downstream_connector_probe)], settings: Annotated[DownstreamMcpInfrastructureSettings, Depends(get_downstream_infrastructure_settings)]) -> DownstreamConnectorPreparation:
     return DownstreamConnectorPreparation(probe)

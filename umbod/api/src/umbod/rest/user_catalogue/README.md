@@ -1,6 +1,6 @@
 # User catalogue REST boundary
 
-`GET /api/me/catalogue` is authenticated independently of administrator membership and personal feature enablement. Responses are no-store and contain only opaque identity, personal support, connector summaries and permitted capability display metadata.
+`GET /api/me/catalogue` is authenticated independently of administrator membership and personal feature enablement. Responses are no-store and contain only opaque identity, personal support, connector summaries and permitted capability display metadata. Tool capabilities additionally require `input_schema` as a JSON object and `output_schema` as either `{status: absent}` or `{status: present, schema: JSON object}`. Non-tool capabilities retain metadata-only shapes. `key` identifies the capability; `name` is its display title.
 
 - `routes.py`: typed read-only endpoint.
 - `caller.py`: required-field typed catalogue capture of caller, strict groups, precomputed identity key and explicit personal identity resolution; raw claim handling stays here.
@@ -8,4 +8,4 @@
 - `identity.py`: stable SHA256 verified identity projection and bounded local development simulation policy.
 - `projection.py`: public-name ambiguity and personal namespace reservation filtering. Gateway and codemode configured-name failures suppress all tools, including otherwise healthy sources; flat mode retains provider-specific filtering. Native gateway claims include unpublished configured names. Empty normalized personal namespaces never advertise tools, while eligible personal entries remain visible.
 
-Personal sources are resolved only when support is enabled and verified claims map to a canonical owner. Failure to map an owner does not deny shared reads. Personal observations are read without refresh, discovery or invocation; OAuth/runtime enablement gates tools independently of personal selection.
+Personal sources are resolved only when support is enabled and verified claims map to a canonical owner. Failure to map an owner does not deny shared reads. Personal approved tool records provide schemas without exposing observation or credential metadata. Personal observations are read without refresh, discovery or invocation; OAuth/runtime enablement gates tools independently of personal selection.

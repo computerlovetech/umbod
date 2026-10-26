@@ -1,6 +1,4 @@
-export type ToolOutputSchemaState =
-  | { status: 'available'; schema: Record<string, unknown> }
-  | { status: 'not-declared' };
+import type { ToolOutputSchemaState } from '$lib/components/shared/tools/presentation';
 
 export function normalizeNullableToolOutputSchema(
   schema: Record<string, unknown> | null

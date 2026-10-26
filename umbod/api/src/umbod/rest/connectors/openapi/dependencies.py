@@ -20,6 +20,8 @@ from umbod.core.connectors.openapi.management import OpenApiBearerConfiguration,
 from umbod.core.connectors.openapi.importing import DefaultOpenApiImportPreparer, InMemoryOpenApiCandidateImporter
 from umbod.core.connectors.openapi.management.setup import OpenApiConnectorSetupService
 from umbod.core.connectors.openapi.management.setup_ports import OpenApiConnectorSetupPort
+from umbod.core.icons import FaviconDiscovery
+from umbod.rest.connectors.icons import get_favicon_discovery
 from umbod.rest.connectors.openapi.schemas import SetupOpenApiConnectorRequest
 from umbod.rest.connectors.openapi.file_import import decode_json_request_object
 from pydantic import ValidationError
@@ -70,8 +72,9 @@ def get_openapi_connector_setup_port(
     management: Annotated[OpenApiConnectorManagementService, Depends(get_openapi_connector_management_service)],
     importer: Annotated[InMemoryOpenApiCandidateImporter, Depends(get_openapi_candidate_importer)],
     configuration: Annotated[OpenApiConfigurationPort, Depends(get_openapi_configuration_port)],
+    discovery: Annotated[FaviconDiscovery, Depends(get_favicon_discovery)],
 ) -> OpenApiConnectorSetupPort:
-    return OpenApiConnectorSetupService(management, importer, DefaultOpenApiImportPreparer(), configuration)
+    return OpenApiConnectorSetupService(management, importer, DefaultOpenApiImportPreparer(), configuration, discovery)
 
 
 async def get_openapi_setup_request(

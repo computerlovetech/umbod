@@ -15,6 +15,7 @@ class CreateOpenApiConnector(Model):
     display_name: str
     tool_name_prefix: str
     capability_description: CapabilityDescription
+    icon_url: str = ""
 
     @model_validator(mode="before")
     @classmethod
@@ -36,6 +37,7 @@ class OpenApiConnector(Model):
     capability_description: CapabilityDescription
     created_at: str
     updated_at: str
+    icon_url: str = ""
 
 class ImportOpenApiCatalog(Model):
     model_config = ConfigDict(extra="forbid", frozen=True)

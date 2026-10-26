@@ -2,7 +2,7 @@
   import { browserSubmit } from '$lib/admin/operations/browser-submit';
   import { untrack } from 'svelte';
   import { downstreamMcpToolActivationBatchResponseSchema, type DownstreamMcpTool } from '$lib/admin/downstream-mcp-connectors';
-  import { mapJsonSchemaToConnectorToolParameters } from '$lib/admin/json-schema-tool-parameters';
+  import { mapJsonSchemaToToolParameters } from '$lib/components/shared/tools/json-schema-tool-parameters';
   import { normalizeNullableToolOutputSchema } from '$lib/admin/tool-output-schema';
   import ToolCard from '$lib/components/admin/connectors/ToolCard.svelte';
   import ToolSaveBar from '$lib/components/admin/connectors/ToolSaveBar.svelte';
@@ -75,7 +75,7 @@
     <CapabilityCatalogGrid>
       {#each catalog.paginatedTools as tool (tool.name)}
         <li>
-          <ToolCard title={tool.title} name={tool.name} description={tool.description} parameters={mapJsonSchemaToConnectorToolParameters(tool.input_schema)} outputSchema={normalizeNullableToolOutputSchema(tool.output_schema)}>
+          <ToolCard title={tool.title} name={tool.name} description={tool.description} parameters={mapJsonSchemaToToolParameters(tool.input_schema)} outputSchema={normalizeNullableToolOutputSchema(tool.output_schema)}>
             {#snippet controls()}<DownstreamMcpToolActivationToggle {tool} disabled={catalog.pending} onActivationChange={catalog.setToolActivation} /><InvocationPolicyControl toolId={tool.name} mode={catalog.policyMode(tool.name)} disabled={catalog.pending || !catalog.policies[tool.name]} conflict={catalog.conflicts[tool.name] ?? false} onchange={catalog.setPolicy} />{/snippet}
           </ToolCard>
         </li>

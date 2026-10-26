@@ -4,6 +4,16 @@
 
 **Read when working with:** Shared UI behavior, visual components, accessibility-visible controls, or reusable interaction patterns.
 
+## Composition boundaries
+
+Shared components own reusable layout, presentation mechanics, and general accessibility behavior. Actor-specific parents own data adaptation, eligibility, actions, wording, and presentation choices. When a section needs to vary between administration and ordinary-user views, make it replaceable through typed Svelte snippets rather than coupling whole actor views or adding role flags.
+
+Actors may deliberately choose the same shared presenter. A later actor-specific requirement should normally be implemented by changing that actor's supplied section, without modifying the shared layout or the other actor's composition. Keep shared presentation types and formatting independent of actor models, controllers, and clients. Use CSS custom properties for supported styling variation rather than reaching into another component's markup.
+
+Do not create extension points for hypothetical differences or wrap every element. Small amounts of actor-owned composition markup are preferable to duplicated rendering, validation, business rules, and keyboard behavior. Changes to genuinely shared mechanics or design tokens may affect all consumers and must be verified for those consumers.
+
+See [ADR-007: Actor-Specific Composition of Shared UI Components](../../../../project/architecture-records/ADR-007-actor-specific-ui-composition.md).
+
 ## Admin visual styling
 
 `../styles/admin.css` defines semantic theme variables adapted from the website and
@@ -25,7 +35,7 @@ existing logo. Shared `WorkspaceShell`, composed by `AdminShell` and the user da
 
 ### `admin/`
 
-**Read when working with:** Administration shell, connectors, permissions, OpenAPI, or downstream MCP interfaces. Mutation forms dispatch typed browser operations through `$lib/admin/operations/browser-submit`; callbacks preserve reconciliation and register pending-state cleanup.
+**Read when working with:** Administration shell, connectors, permissions, OpenAPI, or downstream MCP interfaces. Mutation forms dispatch typed browser operations through `$lib/admin/operations/browser-submit`; callbacks preserve reconciliation and register pending-state cleanup. Administration `connectors/ToolCard.svelte` owns its tool data and control composition over the neutral shared tool card. Dashboard owns a separate `CatalogueToolCard.svelte` composition rather than importing the admin card. Shared `tools/` presenters provide description, parameter and output-schema rendering; actor compositions may select or replace them independently.
 
 ### `admin/personal-mcp-servers/`
 
@@ -53,7 +63,7 @@ existing logo. Shared `WorkspaceShell`, composed by `AdminShell` and the user da
 
 ### `personal-connections/`
 
-`ConnectionCard.svelte` presents explicit personal enablement, owner authorization health, manual status checks and renewal, manual attempt inspection, discovery and confirmed disconnect. Embedded presentation lives inside the dashboard's common connector card. Local health and renewal capability remain separate from tool eligibility; recovery never resumes an earlier operation automatically. Reactive behavior and user API ports live in `$lib/personal-connections/`, not administration state.
+`ConnectionCard.svelte` presents clear local health, one contextual recovery action, optional connection details and confirmed disconnect. `ConnectionStatusBadge.svelte` shares status between details and the connector list; `ConnectionActions.svelte` reuses the connector three-dot menu for secondary owner-scoped actions. Embedded presentation lives inside the dashboard's selected connector detail. Explicit sign-in opens the provider automatically, retaining a manual fallback without restarting the attempt. Local health and renewal capability remain separate from tool eligibility; recovery never resumes an earlier operation automatically. Reactive behavior and user API ports live in `$lib/personal-connections/`, not administration state. See `personal-connections/README.md`.
 
 ### `feedback/`
 
@@ -65,8 +75,8 @@ existing logo. Shared `WorkspaceShell`, composed by `AdminShell` and the user da
 
 ### `dashboard/`
 
-`Dashboard.svelte` composes the single user dashboard with the shared workspace shell, permission-filtered connector catalogue, embedded personal MCP actions and compact client setup. `ConnectorCard.svelte` supplies the common shared/personal summaries and inline read-only capability details. It shows shared administrator navigation only when its independent current-user read resolves allowed administration access; catalogue state remains independent. State and validated clients live in `$lib/dashboard/`.
+`Dashboard.svelte` composes the single user dashboard with the shared workspace shell, permission-filtered connector catalogue, embedded personal MCP actions and compact client setup. `ConnectorWorkspace.svelte` reuses the connector sidebar and split workspace for one combined shared/personal list. `ConnectorDetail.svelte` reuses summary primitives without publication controls and explains administrator-managed definitions; `CatalogueCapabilities.svelte` provides read-only capability groups and search. Administrator navigation appears only when the independent current-user read resolves allowed access; catalogue state remains independent. State and validated clients live in `$lib/dashboard/`.
 
 ### `shared/`
 
-**Read when working with:** Cross-cutting controls and display components reused across features. `workspace/` supplies the neutral navigation/account shell and logout state; `mcp-setup/` supplies the endpoint-driven full and compact client instructions used by administration and the dashboard.
+**Read when working with:** Cross-cutting controls and display components reused across features. `workspace/` supplies the neutral navigation/account shell and logout state; `mcp-setup/` supplies the endpoint-driven full and compact client instructions used by administration and the dashboard. `tools/` supplies the neutral snippet-based tool card, optional presenters and schema display types. See `shared/README.md`.

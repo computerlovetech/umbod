@@ -1,8 +1,10 @@
 import pytest
 
+from umbod.core.capabilities import AbsentCapabilityOutputSchema
+
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
 from umbod.core.connectors.downstream_mcp.user_catalogue import PersonalNamespace
-from umbod.core.user_catalogue import CatalogueCapability, CatalogueConnector, CatalogueSource, UserCatalogueReader, UserCatalogueService
+from umbod.core.user_catalogue import CatalogueCapability, CatalogueConnector, CatalogueSource, CatalogueToolCapability, UserCatalogueReader, UserCatalogueService
 from umbod.core.user_catalogue.in_memory import InMemoryCatalogueSource
 from umbod.rest.user_catalogue.projection import CollisionSafeSource, duplicate_names, gateway_tools_unavailable
 
@@ -17,7 +19,7 @@ async def test_personal_namespace_reservations_hide_shared_tools_even_when_perso
     connector = CatalogueConnector(
         connector_id="shared", kind="native", display_name="Shared",
         capability_description="Shared capabilities", ownership="shared",
-        capabilities=(CatalogueCapability(kind="tool", key="lookup", name="Lookup", description="Lookup"),),
+        capabilities=(CatalogueToolCapability(kind="tool", key="lookup", name="Lookup", description="Lookup", input_schema={}, output_schema=AbsentCapabilityOutputSchema()),),
     )
     names = {("native", "shared", "tool", "lookup"): "reserved_prefix_lookup"}
     source: CatalogueSource = CollisionSafeSource(
@@ -37,7 +39,7 @@ async def test_gateway_global_invalidity_suppresses_every_tool_but_preserves_per
         capability_description="Personal capabilities", endpoint_url="https://private.example/mcp",
         public_path="/mcp/proxies/personal", authorization_mode="personal",
     )
-    tool = CatalogueCapability(kind="tool", key="read", name="Read", description="Read")
+    tool = CatalogueToolCapability(kind="tool", key="read", name="Read", description="Read", input_schema={}, output_schema=AbsentCapabilityOutputSchema())
     connectors = (
         CatalogueConnector(connector_id="healthy", kind="native", display_name="Healthy",
                            capability_description="Healthy capabilities", ownership="shared", capabilities=(tool,)),

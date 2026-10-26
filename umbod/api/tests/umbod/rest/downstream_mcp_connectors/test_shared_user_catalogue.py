@@ -32,6 +32,7 @@ async def test_shared_downstream_catalogue_uses_explicit_grants_and_current_acti
             "display_name": "Alpha", "capability_description": "Manage downstream tools",
             "ownership": "shared", "capabilities": [{
                 "kind": "tool", "key": "echo", "name": "Echo", "description": "Echo",
+                "input_schema": {"type": "object"}, "output_schema": {"status": "absent"},
             }],
         }]
         assert "https://" not in response.text

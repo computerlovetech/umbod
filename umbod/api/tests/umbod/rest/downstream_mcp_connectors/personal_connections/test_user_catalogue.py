@@ -1,7 +1,13 @@
 import asyncio
 
+import pytest
+
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime import InMemoryPersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.models import DiscoveredToolWithoutOutputSchema, ToolIdentity
+from umbod.core.capabilities.domain import CapabilityOutputSchema
+from umbod.core.capabilities import AbsentCapabilityOutputSchema, PresentCapabilityOutputSchema
+from umbod.core.connectors.downstream_mcp.models import (
+    DiscoveredToolWithoutOutputSchema, DiscoveredToolWithOutputSchema, ToolIdentity,
+)
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolInventory
 from umbod.rest.connectors.downstream_mcp.personal_connections.tools import get_personal_tool_transport
 
@@ -51,14 +57,25 @@ def test_catalogue_reflects_permission_withdrawal(personal_api: PersonalApi) -> 
     ).json()["connectors"] == []
 
 
-def test_owner_catalogue_reads_private_observations_without_discovery_or_invocation(discovery_api: PersonalApi) -> None:
+@pytest.mark.parametrize("output_schema", [
+    AbsentCapabilityOutputSchema(),
+    PresentCapabilityOutputSchema(schema={"type": "object", "properties": {"result": {"type": "string"}}}),
+])
+def test_owner_catalogue_reads_private_observations_without_discovery_or_invocation(
+    discovery_api: PersonalApi, output_schema: CapabilityOutputSchema,
+) -> None:
     api = discovery_api
     asyncio.run(stores_with_grants(api))
     transport = InMemoryPersonalMcpTransport()
-    observed = DiscoveredToolWithoutOutputSchema(
-        identity=ToolIdentity(connector_id=api.connector_id, downstream_name="lookup"),
-        title="Alice display title", description="Alice private description",
-        input_schema={"type": "object"},
+    metadata = {
+        "identity": ToolIdentity(connector_id=api.connector_id, downstream_name="lookup"),
+        "title": "Alice display title", "description": "Alice private description",
+        "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+        "annotations": {"readOnlyHint": True}, "meta": {"private_observation": "not-public"},
+    }
+    observed = (
+        DiscoveredToolWithOutputSchema(**metadata, output_schema=output_schema.schema_)
+        if output_schema.status == "present" else DiscoveredToolWithoutOutputSchema(**metadata)
     )
     transport.inventories[query(api, "alice").key] = PersonalToolInventory(tools=(observed,))
 
@@ -73,8 +90,11 @@ def test_owner_catalogue_reads_private_observations_without_discovery_or_invocat
     assert alice["connectors"][0]["capabilities"] == [{
         "kind": "tool", "key": "lookup", "name": "Alice display title",
         "description": "Alice private description",
+        "input_schema": observed.input_schema, "output_schema": output_schema.model_dump(mode="json"),
     }]
     assert bob["connectors"][0]["capabilities"] == []
+    assert "private_observation" not in str(alice)
+    assert "test-user-token" not in str(alice)
     assert len(transport.list_requests) == discovery_count
     assert transport.calls == []
 

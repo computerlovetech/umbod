@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ToolOutputSchemaState } from '$lib/admin/tool-output-schema';
+  import type { ToolOutputSchemaState } from './presentation';
 
   let { outputSchema }: { outputSchema: ToolOutputSchemaState } = $props();
 

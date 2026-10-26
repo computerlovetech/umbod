@@ -6,7 +6,7 @@ export const sharedConnector: CatalogueConnector = {
   display_name: 'Shared calendar',
   capability_description: 'Calendar tools',
   ownership: 'shared',
-  capabilities: [{ kind: 'tool', key: 'events', name: 'Events', description: 'Read calendar events' }]
+  capabilities: [{ kind: 'tool', key: 'events', name: 'Events', description: 'Read calendar events', input_schema: { type: 'object', properties: {}, required: [] }, output_schema: { status: 'absent' } }]
 };
 
 export const personalConnector: CatalogueConnector = {

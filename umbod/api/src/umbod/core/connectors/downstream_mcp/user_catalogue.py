@@ -1,7 +1,10 @@
 from datetime import datetime
 from collections.abc import Callable
 
-from umbod.core.capabilities import CapabilityIdentity, CapabilityNotFoundError, NormalizedCapability
+from umbod.core.capabilities import (
+    AbsentCapabilityOutputSchema, CapabilityIdentity, CapabilityNotFoundError,
+    NormalizedCapability, PresentCapabilityOutputSchema,
+)
 from umbod.core.capabilities.tools.names import mangle_public_tool_name
 from umbod.core.connectors.downstream_mcp.catalog import StoreBackedDownstreamCapabilityCatalog
 from umbod.core.connectors.downstream_mcp.models import ConnectorDefinitionModel, uses_personal_oauth
@@ -11,7 +14,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections import (
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery
 from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolAccessStore
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, CredentialFound, EncryptedCredentialStore
-from umbod.core.user_catalogue import CatalogueCapability, CatalogueConnector
+from umbod.core.user_catalogue import CatalogueConnector, CatalogueToolCapability
 
 
 class SharedDownstreamCatalogue:
@@ -74,9 +77,15 @@ class PersonalCatalogueSource:
                 connector_id=selection.connector_id, kind="downstream_mcp",
                 display_name=selection.display_name,
                 capability_description=selection.capability_description, ownership="personal",
-                capabilities=tuple(CatalogueCapability(
+                capabilities=tuple(CatalogueToolCapability(
                     kind="tool", key=record.tool.identity.downstream_name,
                     name=record.tool.title, description=record.tool.description,
+                    input_schema=record.tool.input_schema,
+                    output_schema=(
+                        PresentCapabilityOutputSchema(schema=record.tool.output_schema)
+                        if record.tool.output_schema_status == "present"
+                        else AbsentCapabilityOutputSchema()
+                    ),
                 ) for record in tools),
             ))
         return tuple(connectors)

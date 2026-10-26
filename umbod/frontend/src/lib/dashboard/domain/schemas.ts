@@ -1,11 +1,26 @@
 import { z } from 'zod';
 
-export const catalogueCapabilitySchema = z.object({
-  kind: z.enum(['tool', 'prompt', 'resource', 'resource_template']),
+const capabilityMetadataSchema = z.object({
   key: z.string(),
   name: z.string(),
   description: z.string()
 }).strict();
+
+const catalogueToolOutputSchema = z.discriminatedUnion('status', [
+  z.object({ status: z.literal('absent') }).strict(),
+  z.object({ status: z.literal('present'), schema: z.record(z.string(), z.unknown()) }).strict()
+]);
+
+export const catalogueCapabilitySchema = z.discriminatedUnion('kind', [
+  capabilityMetadataSchema.extend({
+    kind: z.literal('tool'),
+    input_schema: z.record(z.string(), z.unknown()),
+    output_schema: catalogueToolOutputSchema
+  }),
+  capabilityMetadataSchema.extend({
+    kind: z.enum(['prompt', 'resource', 'resource_template'])
+  })
+]);
 
 export const catalogueConnectorSchema = z.object({
   connector_id: z.string(),

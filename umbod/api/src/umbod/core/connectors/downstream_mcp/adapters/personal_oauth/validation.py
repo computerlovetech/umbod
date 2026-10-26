@@ -5,6 +5,8 @@ from urllib.parse import SplitResult, unquote, urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
+from umbod.core.network import validate_public_address
+
 
 MAX_BODY_BYTES = 1_048_576
 
@@ -34,19 +36,8 @@ def validated_url(value: str) -> SplitResult:
         address = ipaddress.ip_address(parts.hostname)
     except ValueError:
         return parts
-    validated_public_address(str(address))
+    validate_public_address(str(address))
     return parts
-
-
-def validated_public_address(literal: str) -> str:
-    parsed = ipaddress.ip_address(literal)
-    if (
-        not parsed.is_global or parsed.is_reserved or parsed.is_multicast
-        or parsed.is_unspecified or getattr(parsed, "ipv4_mapped", None) is not None
-        or "%" in literal
-    ):
-        raise ValueError("Nonpublic address")
-    return literal
 
 
 def unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:

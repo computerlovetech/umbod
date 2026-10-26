@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'vitest';
-import { mapJsonSchemaToConnectorToolParameters } from './json-schema-tool-parameters';
+import { mapJsonSchemaToToolParameters } from './json-schema-tool-parameters';
 
-describe('mapJsonSchemaToConnectorToolParameters', () => {
+describe('mapJsonSchemaToToolParameters', () => {
   test('maps top-level properties, labels, descriptions, requiredness, and schema types', () => {
-    expect(mapJsonSchemaToConnectorToolParameters({
+    expect(mapJsonSchemaToToolParameters({
       type: 'object',
       required: ['account_id'],
       properties: {
@@ -23,7 +23,7 @@ describe('mapJsonSchemaToConnectorToolParameters', () => {
   });
 
   test('maps fields from a single referenced object parameter', () => {
-    expect(mapJsonSchemaToConnectorToolParameters({
+    expect(mapJsonSchemaToToolParameters({
       type: 'object',
       required: ['draft'],
       properties: {
@@ -49,7 +49,7 @@ describe('mapJsonSchemaToConnectorToolParameters', () => {
   });
 
   test('maps fields from a single inline object parameter', () => {
-    expect(mapJsonSchemaToConnectorToolParameters({
+    expect(mapJsonSchemaToToolParameters({
       type: 'object',
       properties: {
         input: {
@@ -66,7 +66,7 @@ describe('mapJsonSchemaToConnectorToolParameters', () => {
   });
 
   test('returns no parameters for malformed and property-less schemas', () => {
-    expect(mapJsonSchemaToConnectorToolParameters(null)).toEqual([]);
-    expect(mapJsonSchemaToConnectorToolParameters({ type: 'object' })).toEqual([]);
+    expect(mapJsonSchemaToToolParameters(null)).toEqual([]);
+    expect(mapJsonSchemaToToolParameters({ type: 'object' })).toEqual([]);
   });
 });

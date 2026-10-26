@@ -1,5 +1,6 @@
 # Downstream MCP adapters
 
+- `icon_discovery.py`: decorates shared probes with best-effort favicon discovery at the canonical endpoint when MCP metadata has no icons. Existing advertised icon metadata is preserved; failed probes do not trigger website lookups.
 - `settings.py`: application configuration translation into infrastructure settings and narrow personal identity policy.
 - `identity.py`: accepted claim translation into typed personal identity facts, strict shared personal group parsing, raw machine observations and local simulated claim projection. Projection requires personal policy eligibility and authenticated single-test-user composition; it never replaces original machine observations.
 - `personal_oauth/`: resumable personal provider integration, indexed in its README.

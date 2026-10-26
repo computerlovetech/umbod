@@ -21,6 +21,7 @@ function recordingTransport(): { transport: Transport; calls: TransportRequest<u
 function connectorFixture(overrides: Record<string, unknown> = {}) {
   return {
     connector_id: 'billing',
+    icon_url: '',
     display_name: 'Billing API',
     tool_name_prefix: 'Billing_API',
     capability_description: 'Manage billing',
@@ -49,6 +50,45 @@ function apiFrom(body: unknown, status = 200): OpenApiConnectorsApi {
   const fetch = vi.fn(async () => new Response(JSON.stringify(body), { status }));
   return new OpenApiConnectorsApi(browserTransport({ fetch: fetch as unknown as typeof globalThis.fetch, configuration: new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }) }));
 }
+
+describe('OpenApiConnectorsApi connector response contract', () => {
+  const createInput = {
+    display_name: 'Billing API',
+    tool_name_prefix: 'Billing_API',
+    capability_description: 'Manage billing'
+  };
+  const setupInput = {
+    ...createInput,
+    document: { openapi: '3.1.0', paths: {} },
+    approved_hosts: ['api.example.test'],
+    authentication_type: 'none' as const,
+    bearer_token: ''
+  };
+  const operations = [
+    { name: 'setup', run: (api: OpenApiConnectorsApi) => api.connectors.setup(setupInput) },
+    { name: 'get', run: (api: OpenApiConnectorsApi) => api.connectors.get('billing') },
+    { name: 'create', run: (api: OpenApiConnectorsApi) => api.connectors.create(createInput) }
+  ];
+
+  describe.each(operations)('$name', ({ run }) => {
+    test.each(['https://api.example.test/icon.png', ''])('retains the icon URL %j through the transport', async (iconUrl) => {
+      const response = connectorFixture({ icon_url: iconUrl });
+      await expect(run(apiFrom(response))).resolves.toEqual(response);
+    });
+
+    test.each([undefined, null, 42, {}, []])('rejects malformed or missing icon URL %j at the inbound boundary', async (iconUrl) => {
+      await expect(run(apiFrom(connectorFixture({ icon_url: iconUrl })))).rejects.toMatchObject({
+        name: 'SchemaValidationError',
+        direction: 'inbound',
+        issues: expect.arrayContaining([expect.objectContaining({ path: ['icon_url'] })])
+      });
+    });
+
+    test('keeps rejecting unknown response fields', async () => {
+      await expect(run(apiFrom(connectorFixture({ unexpected: true })))).rejects.toBeInstanceOf(SchemaValidationError);
+    });
+  });
+});
 
 describe('OpenApiConnectorsApi connector-list contract', () => {
   test('validates capability description in create payloads', () => {

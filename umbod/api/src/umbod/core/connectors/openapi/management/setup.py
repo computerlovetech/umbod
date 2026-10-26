@@ -9,17 +9,20 @@ from umbod.core.connectors.openapi.management.setup_ports import (
     SetupOpenApiConnector,
 )
 from umbod.core.connectors.openapi.errors import OpenApiCandidateValidationError
+from umbod.core.icons import FaviconDiscovery, FaviconDiscoveryRequest, FaviconFound
 
 
 class OpenApiConnectorSetupService:
     def __init__(
         self, management: OpenApiSetupManagementPort, importer: OpenApiCandidateImporter,
         preparer: OpenApiImportPreparer, configuration: OpenApiConfigurationPort,
+        discovery: FaviconDiscovery,
     ) -> None:
         self._management = management
         self._importer = importer
         self._preparer = preparer
         self._configuration = configuration
+        self._discovery = discovery
 
     async def setup(self, request: SetupOpenApiConnector) -> OpenApiConnector:
         try:
@@ -32,10 +35,14 @@ class OpenApiConnectorSetupService:
                 connector_id="pending-setup", source_document=request.document,
                 candidate=candidate, approved_hosts=request.approved_hosts,
             )
-            self._preparer.prepare(import_request)
+            prepared = self._preparer.prepare(import_request)
+            discovery_result = await self._discovery.discover(FaviconDiscoveryRequest(
+                endpoint_url=prepared.selected_server_url, advertised_icons=(),
+            ))
             connector = await self._management.create_connector(CreateOpenApiConnector(
                 display_name=request.display_name, tool_name_prefix=request.tool_name_prefix,
                 capability_description=request.capability_description,
+                icon_url=discovery_result.icon.url if isinstance(discovery_result, FaviconFound) else "",
             ))
         except (ValueError, OpenApiCandidateValidationError) as error:
             raise OpenApiSetupInvalidRequest("Invalid OpenAPI setup request") from error

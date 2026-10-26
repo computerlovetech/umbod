@@ -47,6 +47,26 @@ def test_personal_disabled_local_catalogue_uses_explicit_current_capability_gran
         "capabilities": [{
             "kind": "tool", "key": "listItems", "name": "Display title",
             "description": "Public description",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "connector_id": {"type": "string", "const": connector_id},
+                    "operation_id": {"type": "string", "const": "listItems"},
+                    **{location: {
+                        "type": "object", "properties": {}, "required": [], "additionalProperties": False,
+                    } for location in ("path", "query", "headers")},
+                    "body": {
+                        "description": "Tagged JSON body. Use state 'missing' or state 'present' with value.",
+                        "oneOf": [
+                            {"type": "object", "properties": {"state": {"const": "missing"}}, "required": ["state"]},
+                            {"type": "object", "properties": {"state": {"const": "present"}, "value": {}},
+                             "required": ["state", "value"]},
+                        ],
+                    },
+                },
+                "required": ["connector_id", "operation_id", "path", "query", "headers", "body"],
+            },
+            "output_schema": {"status": "absent"},
         }],
     }]
     _set_activation(client, connector_id, "listItems", False)

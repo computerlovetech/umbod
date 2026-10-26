@@ -31,7 +31,7 @@ Run the checks applicable to the changed area:
 - Python lint: `cd umbod/api && uv run ruff check .`
 - Frontend tests: `cd umbod/frontend && bun run test`
 - Frontend type and Svelte checks: `cd umbod/frontend && bun run check`
-- Running-service integration tests: `bash umbod/tests/kind-runtime/run.sh` from the repository root. Do not run `uv run pytest live_runtime_tests` against the default Docker Compose stack; its stateless MCP configuration and missing test connector do not satisfy this suite.
+- Running-service integration tests: `bash umbod/tests/kind-runtime/run.sh` from the repository root.
 
 ## UI inspection
 

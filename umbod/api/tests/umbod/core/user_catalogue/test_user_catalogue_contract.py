@@ -2,10 +2,10 @@ import pytest
 
 from umbod.core.capabilities import (
     AbsentCapabilityOutputSchema, CapabilityAvailability, CapabilityIdentity,
-    InMemoryCapabilityCatalog, NormalizedCapability,
+    InMemoryCapabilityCatalog, NormalizedCapability, PresentCapabilityOutputSchema,
 )
 from umbod.core.capabilities.descriptions import SystemConnectorCapabilityDescriptionOverrideStore
-from umbod.core.capabilities.domain import CapabilityKind
+from umbod.core.capabilities.domain import CapabilityKind, CapabilityOutputSchema
 from umbod.core.invocation import ConnectorKind
 from umbod.core.permissions.domain import ConnectorCapabilityRef, GroupPermissionSet, GroupPermissionSummary
 from umbod.core.user_catalogue import CatalogueConnector, CatalogueSource, UserCatalogueReader, UserCatalogueService
@@ -44,6 +44,10 @@ class AvailabilityGates:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("output_schema", [
+    AbsentCapabilityOutputSchema(),
+    PresentCapabilityOutputSchema(schema={"type": "object", "properties": {"result": {"type": "string"}}}),
+])
 @pytest.mark.parametrize("kind", ["native", "openapi", "downstream_mcp"])
 @pytest.mark.parametrize("capability_kind", ["tool", "prompt", "resource", "resource_template"])
 @pytest.mark.parametrize("published,active,ready", [
@@ -51,6 +55,7 @@ class AvailabilityGates:
 ])
 async def test_catalogue_contract_requires_every_current_shared_gate_and_explicit_capability_grants(
     kind: ConnectorKind, capability_kind: CapabilityKind, published: bool, active: bool, ready: bool,
+    output_schema: CapabilityOutputSchema,
 ) -> None:
     identity = CapabilityIdentity(
         connector_kind=kind, connector_id="weather", capability_kind=capability_kind,
@@ -58,7 +63,8 @@ async def test_catalogue_contract_requires_every_current_shared_gate_and_explici
     )
     capability = NormalizedCapability(
         identity=identity, title="Readable title", description="Safe description",
-        input_schema={"secret_administrative_schema": True}, output_schema=AbsentCapabilityOutputSchema(),
+        input_schema={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]},
+        output_schema=output_schema,
         connector_display_name="Weather", connector_capability_description="Weather capabilities",
     )
     grants = CurrentGrants(())
@@ -73,7 +79,14 @@ async def test_catalogue_contract_requires_every_current_shared_gate_and_explici
     connectors = await source.list_connectors()
     if published and active and ready:
         assert connectors[0].capabilities[0].name == "Readable title"
-        assert "secret_administrative_schema" not in connectors[0].model_dump_json()
+        payload = connectors[0].model_dump(mode="json")["capabilities"][0]
+        expected = {
+            "kind": capability_kind, "key": "lookup", "name": "Readable title",
+            "description": "Safe description",
+        }
+        if capability_kind == "tool":
+            expected.update(input_schema=capability.input_schema, output_schema=output_schema.model_dump(mode="json"))
+        assert payload == expected
     else:
         assert connectors == ()
     grants.capabilities = ()

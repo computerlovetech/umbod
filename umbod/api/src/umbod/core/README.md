@@ -48,6 +48,14 @@
 
 **Read when working with:** Encrypted connector configuration, configuration secrets/ciphers, or configuration-changed events.
 
+### `network/`
+
+**Read when working with:** Shared public-address validation, DNS-pinned `httpcore` adapters and pool configuration used by favicon and personal OAuth adapters. `network/adapters.py` owns these low-level primitives; feature-specific URL, authentication, redirect and deadline policies remain in their adapters. Public imports come from `umbod.core.network`.
+
+### `icons/`
+
+**Read when working with:** Shared favicon discovery for MCP and OpenAPI connectors. The [local index](icons/README.md) covers configurable ordered/concurrent strategy batches, explicit outcomes, bounded public HTTP fetching and credential-free website fallbacks.
+
 ### `identity/`
 
 **Read when working with:** Cross-kind connector ID uniqueness checks.

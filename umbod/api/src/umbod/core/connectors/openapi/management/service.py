@@ -48,6 +48,7 @@ class OpenApiConnectorManagementService:
             display_name=display_name,
             tool_name_prefix=tool_name_prefix,
             capability_description=request.capability_description,
+            icon_url=request.icon_url,
             created_at=timestamp,
             updated_at=timestamp,
         )

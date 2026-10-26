@@ -158,6 +158,7 @@ async def _connector_response(
         connector_id=connector.connector_id,
         display_name=connector.display_name,
         tool_name_prefix=connector.tool_name_prefix,
+        icon_url=connector.icon_url,
         created_at=connector.created_at,
         updated_at=connector.updated_at,
         publication_status=status,

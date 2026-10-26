@@ -1,8 +1,4 @@
 import base64
-import socket
-import ssl
-from collections.abc import Iterable
-from typing import Optional
 from urllib.parse import quote_plus
 
 import anyio
@@ -10,45 +6,8 @@ import httpcore
 
 from ...personal_connections.oauth_models import PersonalOAuthProviderFailure
 from .transport import BasicOAuthHttpAuthentication, OAuthDestination, OAuthHttpRequest, OAuthHttpResponse
-from .validation import MAX_BODY_BYTES, validated_public_address, validated_url
-
-
-async def resolve_public_addresses(host: str, port: int) -> list[str]:
-    addresses = await anyio.getaddrinfo(host, port, type=socket.SOCK_STREAM)
-    if not addresses:
-        raise ValueError("No public address")
-    return [validated_public_address(str(address[4][0])) for address in addresses]
-
-
-class PublicAddressNetworkBackend(httpcore.AsyncNetworkBackend):
-    def __init__(self, backend: httpcore.AsyncNetworkBackend) -> None:
-        self._backend = backend
-
-    async def connect_tcp(
-        self,
-        host: str,
-        port: int,
-        timeout: Optional[float],
-        local_address: Optional[str],
-        socket_options: Optional[Iterable[tuple[int, int, object]]],
-    ) -> httpcore.AsyncNetworkStream:
-        with anyio.fail_after(timeout):
-            addresses = await resolve_public_addresses(host=host, port=port)
-            return await self._backend.connect_tcp(
-                host=addresses[0], port=port, timeout=timeout,
-                local_address=local_address, socket_options=socket_options,
-            )
-
-    async def connect_unix_socket(
-        self,
-        path: str,
-        timeout: Optional[float],
-        socket_options: Optional[Iterable[tuple[int, int, object]]],
-    ) -> httpcore.AsyncNetworkStream:
-        raise ValueError("Unix sockets are unsupported")
-
-    async def sleep(self, seconds: float) -> None:
-        await anyio.sleep(seconds)
+from .validation import MAX_BODY_BYTES, validated_url
+from umbod.core.network import resolve_public_addresses
 
 
 class SafeOAuthHttpTransport:
@@ -97,11 +56,3 @@ class SafeOAuthHttpTransport:
                     return OAuthHttpResponse(status=response.status, body=bytes(content))
         except Exception:
             raise PersonalOAuthProviderFailure("Personal OAuth provider request failed") from None
-
-
-def public_connection_pool() -> httpcore.AsyncConnectionPool:
-    return httpcore.AsyncConnectionPool(
-        ssl_context=ssl.create_default_context(), proxy=None,
-        network_backend=PublicAddressNetworkBackend(backend=httpcore.AnyIOBackend()),
-        retries=0, max_connections=10, max_keepalive_connections=0,
-    )

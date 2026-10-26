@@ -11,7 +11,8 @@ from pydantic import SecretStr
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import issuer_callback_uri
-from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import PublicAddressNetworkBackend, SafeOAuthHttpTransport
+from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import SafeOAuthHttpTransport
+from umbod.core.network import PublicAddressNetworkBackend
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.refresh import StoredPersonalOAuthRefreshProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import (
     BasicOAuthHttpAuthentication,

@@ -1,38 +1,30 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { ConnectorToolParameter } from '$lib/admin/connectors';
-  import type { ToolOutputSchemaState } from '$lib/admin/tool-output-schema';
-  import ToolOutputSchemaDetails from './ToolOutputSchemaDetails.svelte';
-  import ToolParameterDetails from './ToolParameterDetails.svelte';
+  import type { ToolParameter, ToolOutputSchemaState } from '$lib/components/shared/tools/presentation';
+  import ToolCardLayout from '$lib/components/shared/tools/ToolCard.svelte';
+  import ToolDescription from '$lib/components/shared/tools/ToolDescription.svelte';
+  import ToolParameterDetails from '$lib/components/shared/tools/ToolParameterDetails.svelte';
+  import ToolOutputSchemaDetails from '$lib/components/shared/tools/ToolOutputSchemaDetails.svelte';
 
-  let { title, name, description, parameters, outputSchema = { status: 'not-declared' }, controls }: {
+  let { title, name, description: descriptionText, parameters: toolParameters, inputSchema, outputSchema: toolOutputSchema = { status: 'not-declared' }, controls }: {
     title: string;
     name: string;
     description: string;
-    parameters: ConnectorToolParameter[];
+    parameters: ToolParameter[];
+    inputSchema?: Record<string, unknown>;
     outputSchema?: ToolOutputSchemaState;
     controls?: Snippet;
   } = $props();
 </script>
 
-<article class="tool-card">
-  <div class="tool-heading">
-    <div class="tool-title">
-      <h4 title={title}>{title}</h4>
-      <code>{name}</code>
-    </div>
-    {#if controls}{@render controls()}{/if}
-  </div>
-  {#if description}<p>{description}</p>{/if}
-  <ToolParameterDetails {parameters} />
-  <ToolOutputSchemaDetails {outputSchema} />
-</article>
-
-<style>
-  .tool-card { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 1rem; }
-  .tool-heading { align-items: flex-start; display: flex; flex-wrap: wrap; gap: 0.75rem; justify-content: space-between; }
-  .tool-title { align-items: flex-start; display: flex; flex: 1 1 20rem; flex-direction: column; gap: 0.5rem; min-width: 0; }
-  h4 { color: var(--admin-ink); display: -webkit-box; font-size: 0.94rem; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; margin: 0; max-width: 100%; overflow: hidden; overflow-wrap: anywhere; }
-  code { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 4px; font-family: var(--admin-mono); color: var(--admin-ink); font-size: 0.75rem; line-height: 1.4; max-width: 100%; overflow-wrap: anywhere; padding: 2px 7px; white-space: normal; word-break: break-word; }
-  p { color: var(--admin-muted); font-size: 0.875rem; line-height: 1.55; margin: 0.7rem 0 0; overflow-wrap: anywhere; }
-</style>
+<ToolCardLayout {title} {name} {controls}>
+  {#snippet description()}
+    <ToolDescription description={descriptionText} />
+  {/snippet}
+  {#snippet parameters()}
+    <ToolParameterDetails parameters={toolParameters} {inputSchema} />
+  {/snippet}
+  {#snippet outputSchema()}
+    <ToolOutputSchemaDetails outputSchema={toolOutputSchema} />
+  {/snippet}
+</ToolCardLayout>

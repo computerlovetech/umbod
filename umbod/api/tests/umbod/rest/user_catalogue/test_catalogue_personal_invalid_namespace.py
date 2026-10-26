@@ -1,6 +1,8 @@
 import pytest
 from fastmcp.exceptions import ToolError
 
+from umbod.core.capabilities import AbsentCapabilityOutputSchema
+
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, runtime_case as runtime_case
 from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import execution_case
 from tests.umbod.mcp.downstream_mcp_connectors.test_personal_execution_pipeline import InvocationLog, provider_for
@@ -8,7 +10,7 @@ from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, SaveConnectorDefinition
 from umbod.core.connectors.downstream_mcp.user_catalogue import PersonalNamespace
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
-from umbod.core.user_catalogue import CatalogueCapability, CatalogueConnector, CatalogueSource
+from umbod.core.user_catalogue import CatalogueConnector, CatalogueSource, CatalogueToolCapability
 from umbod.core.user_catalogue.in_memory import InMemoryCatalogueSource
 from umbod.rest.user_catalogue.projection import CollisionSafeSource, gateway_tools_unavailable
 
@@ -27,7 +29,10 @@ async def test_real_empty_normalized_personal_stem_keeps_selection_but_never_adv
     connector = CatalogueConnector(
         connector_id="personal", kind="downstream_mcp", display_name="Personal",
         capability_description="Personal capabilities", ownership="personal",
-        capabilities=(CatalogueCapability(kind="tool", key="read", name="Read", description="Read"),),
+        capabilities=(CatalogueToolCapability(
+            kind="tool", key="read", name="Read", description="Read",
+            input_schema={}, output_schema=AbsentCapabilityOutputSchema(),
+        ),),
     )
     names = {("downstream_mcp", "personal", "tool", "read"): "read"}
     namespace = PersonalNamespace((definition,))

@@ -1,4 +1,4 @@
-import type { ConnectorToolParameter } from './connectors';
+import type { ToolParameter } from './presentation';
 
 type JsonSchema = Record<string, unknown>;
 
@@ -46,7 +46,7 @@ function parameterObjectSchema(schema: JsonSchema): JsonSchema {
   return isRecord(propertySchema.properties) ? propertySchema : schema;
 }
 
-export function mapJsonSchemaToConnectorToolParameters(schema: unknown): ConnectorToolParameter[] {
+export function mapJsonSchemaToToolParameters(schema: unknown): ToolParameter[] {
   if (!isRecord(schema)) return [];
   const objectSchema = parameterObjectSchema(schema);
   if (!isRecord(objectSchema.properties)) return [];

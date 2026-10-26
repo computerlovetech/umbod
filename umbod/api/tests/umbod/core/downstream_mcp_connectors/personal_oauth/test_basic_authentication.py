@@ -5,7 +5,8 @@ import httpcore
 import pytest
 from pydantic import SecretStr
 
-from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import PublicAddressNetworkBackend, SafeOAuthHttpTransport
+from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import SafeOAuthHttpTransport
+from umbod.core.network import PublicAddressNetworkBackend
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import BasicOAuthHttpAuthentication, OAuthHttpRequest, OAuthHttpTransport
 
 from .test_network import MemoryNetwork, MemoryStream

@@ -42,6 +42,11 @@ def test_native_catalogue_requires_configuration_publication_activation_and_expl
         assert [tool["key"] for tool in connector["capabilities"]] == ["echo"]
         assert "test-key" not in response.text
         assert "api_key" not in response.text
-        assert set(connector["capabilities"][0]) == {"kind", "key", "name", "description"}
+        tool = connector["capabilities"][0]
+        assert set(tool) == {"kind", "key", "name", "description", "input_schema", "output_schema"}
+        assert tool["input_schema"]["properties"]["message"]["type"] == "string"
+        assert tool["input_schema"]["required"] == ["message"]
+        assert "configuration" not in tool["input_schema"]["properties"]
+        assert tool["output_schema"] == {"status": "absent"}
         client.delete("/api/admin/connectors/catalog/test/publication").raise_for_status()
         assert client.get("/api/me/catalogue").json()["connectors"] == []

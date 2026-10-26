@@ -8,7 +8,7 @@ from umbod.core.capabilities.descriptions import (
 from umbod.core.permissions.domain import ConnectorCapabilityRef
 from umbod.core.permissions.ports import GroupPermissionReader
 
-from .models import CatalogueCapability, CatalogueConnector
+from .models import CatalogueCapability, CatalogueConnector, CatalogueToolCapability
 
 
 class ExplicitCapabilityPermissions:
@@ -42,7 +42,11 @@ class SharedCatalogueSource:
             if not await self._availability.is_available(identity):
                 continue
             key = (identity.connector_kind, identity.connector_id)
-            summary = CatalogueCapability(
+            summary = CatalogueToolCapability(
+                kind="tool", key=identity.capability_key,
+                name=capability.title, description=capability.description,
+                input_schema=capability.input_schema, output_schema=capability.output_schema,
+            ) if identity.capability_kind == "tool" else CatalogueCapability(
                 kind=identity.capability_kind, key=identity.capability_key,
                 name=capability.title, description=capability.description,
             )

@@ -1,10 +1,12 @@
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
+import type { AuthorizationBrowser } from '$lib/personal-connections/authorization-browser';
 import { ConnectionState } from '$lib/personal-connections/state/connection-state.svelte';
 import { isUnavailable, requiresSignIn } from '$lib/personal-connections/state/errors';
 import type { DashboardApi } from '../api';
 import type { CatalogueConnector } from '../domain/schemas';
 import type { DashboardController } from './port';
+import { catalogueConnectorId } from '../presentation';
 
 export class DashboardState implements DashboardController {
   phase = $state<'loading' | 'ready' | 'error' | 'sign-in' | 'forbidden'>('loading');
@@ -13,7 +15,8 @@ export class DashboardState implements DashboardController {
   catalogueError = $state('');
   connectors = $state.raw<CatalogueConnector[]>([]);
   personalCards = $state.raw<ConnectionState[]>([]);
-  private identityKey = '';
+  selectedId = $state('');
+  identityKey = $state('');
   private active = true;
   private revision = 0;
   private personalRevision = 0;
@@ -21,8 +24,17 @@ export class DashboardState implements DashboardController {
 
   constructor(
     private readonly api: DashboardApi,
-    private readonly personalApi: PersonalConnectionsApi
+    private readonly personalApi: PersonalConnectionsApi,
+    private readonly authorizationBrowser?: AuthorizationBrowser
   ) {}
+
+  get selectedConnector(): CatalogueConnector | undefined {
+    return this.connectors.find((connector) => catalogueConnectorId(connector) === this.selectedId);
+  }
+
+  selectConnector = (id: string): void => {
+    if (this.connectors.some((connector) => catalogueConnectorId(connector) === id)) this.selectedId = id;
+  };
 
   private clearPersonal = (): void => {
     this.personalRevision++;
@@ -39,6 +51,7 @@ export class DashboardState implements DashboardController {
     this.identityKey = '';
     this.refreshing = false;
     this.catalogueError = '';
+    this.selectedId = '';
     this.phase = 'sign-in';
   };
 
@@ -63,9 +76,13 @@ export class DashboardState implements DashboardController {
     try {
       const result = await this.api.catalogue.list(request.signal);
       if (!this.active || revision !== this.revision) return;
-      if (this.identityKey !== result.identity_key) this.clearPersonal();
+      if (this.identityKey !== result.identity_key) {
+        this.clearPersonal();
+        this.selectedId = '';
+      }
       this.identityKey = result.identity_key;
       this.connectors = result.connectors;
+      if (!this.selectedConnector) this.selectedId = result.connectors.length ? catalogueConnectorId(result.connectors[0]) : '';
       this.phase = 'ready';
       const personalIds = new Set(result.connectors.filter((entry) => entry.ownership === 'personal').map((entry) => entry.connector_id));
       const retained = this.personalCards.filter((card) => personalIds.has(card.selection.connector_id));
@@ -81,12 +98,14 @@ export class DashboardState implements DashboardController {
       if (requiresSignIn(error)) this.authenticationLost();
       else if (error instanceof HttpError && error.status === 403) {
         this.connectors = [];
+        this.selectedId = '';
         this.clearPersonal();
         this.phase = 'forbidden';
       } else if (hadCatalogue) {
         this.catalogueError = "Couldn't refresh connectors";
       } else {
         this.connectors = [];
+        this.selectedId = '';
         this.phase = 'error';
       }
     } finally {
@@ -105,7 +124,7 @@ export class DashboardState implements DashboardController {
       const available = selections.connectors.filter((selection) => eligible.has(selection.connector_id));
       const previous = new Map(this.personalCards.map((card) => [card.selection.connector_id, card]));
       const cards = available.map((selection) =>
-        previous.get(selection.connector_id) ?? new ConnectionState(selection, this.personalApi, this.authenticationLost, this.loadCatalogue)
+        previous.get(selection.connector_id) ?? new ConnectionState(selection, this.personalApi, this.authenticationLost, this.loadCatalogue, this.authorizationBrowser)
       );
       for (const card of this.personalCards) if (!cards.includes(card)) card.dispose();
       this.personalCards = cards;
@@ -127,6 +146,7 @@ export class DashboardState implements DashboardController {
 
   dispose = (): void => {
     this.active = false;
+    this.selectedId = '';
     this.revision++;
     this.request?.abort();
     this.clearPersonal();

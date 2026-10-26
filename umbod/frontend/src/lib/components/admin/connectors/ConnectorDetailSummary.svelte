@@ -7,7 +7,7 @@
     headingId: string;
     title: string;
     iconDataUrl?: string;
-    publicationStatus: string;
+    publicationStatus?: string;
     description?: Snippet;
     summary: Snippet;
     technicalDetails?: Snippet;
@@ -26,7 +26,9 @@
         <h2 id={headingId}>{title}</h2>
       </div>
     </div>
-    <AdminPublicationStatus status={publicationStatus} />
+    {#if publicationStatus !== undefined}
+      <AdminPublicationStatus status={publicationStatus} />
+    {/if}
   </header>
 
   {#if description}

@@ -205,6 +205,7 @@ def test_admin_can_create_list_and_get_connector(tmp_path: Path) -> None:
     assert set(detail.json()) == {
         "connector_id",
         "display_name",
+        "icon_url",
         "tool_name_prefix",
         "capability_description",
         "base_capability_description",

@@ -42,7 +42,7 @@ Administration requests carrying any Cookie header require both an exact trusted
 
 **Read when working with:** Connector administration HTTP surface shared across kinds, plus kind-specific packages under `native/`, `openapi/`, and `downstream_mcp/`.
 
-Shared root modules: kind-agnostic DI, shared schemas, invocation policy helpers, tool activation, publication status, and capability-description response mapping.
+Shared root modules: kind-agnostic DI, shared schemas, invocation policy helpers, tool activation, publication status, and capability-description response mapping. `connectors/icons.py` provides request-scoped website favicon discovery, racing origin `/favicon.ico` and HTML icon links. MCP probes preserve advertised icons before invoking website discovery. Public-only, DNS-pinned lookups never send connector credentials; individual strategies have a one-second timeout and the overall discovery deadline is 1.5 seconds. Shared MCP probes preserve advertised icons and enrich missing icons during configuration and refresh. OpenAPI setup stores and exposes the discovered `icon_url`; legacy connector records use an empty URL. Personal MCP creation remains discovery-free.
 
 Kind packages isolate kind-specific routes, schemas, and dependencies:
 

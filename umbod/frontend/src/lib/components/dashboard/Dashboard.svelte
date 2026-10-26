@@ -10,11 +10,12 @@
   import { browserDashboardApi } from '$lib/dashboard/infrastructure/dashboard-api';
   import { DashboardState } from '$lib/dashboard/state/dashboard-state.svelte';
   import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
+  import type { AuthorizationBrowser } from '$lib/personal-connections/authorization-browser';
+  import { browserAuthorizationBrowser } from '$lib/personal-connections/infrastructure/browser-authorization-browser';
   import { browserPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/personal-connections-api';
   import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
   import McpSetupGuide from '$lib/components/shared/mcp-setup/McpSetupGuide.svelte';
-  import ConnectorCard from './ConnectorCard.svelte';
-  import ConnectionCard from '$lib/components/personal-connections/ConnectionCard.svelte';
+  import ConnectorWorkspace from './ConnectorWorkspace.svelte';
 
   let {
     mcpEndpoint,
@@ -22,6 +23,7 @@
     accountIdentity = { kind: 'hidden' },
     createApi = browserDashboardApi,
     createPersonalApi = browserPersonalConnectionsApi,
+    createAuthorizationBrowser = browserAuthorizationBrowser,
     signIn = navigateToSignIn
   }: {
     mcpEndpoint: string;
@@ -29,11 +31,12 @@
     accountIdentity?: HeaderAccountIdentityState;
     createApi?: () => DashboardApi;
     createPersonalApi?: () => PersonalConnectionsApi;
+    createAuthorizationBrowser?: () => AuthorizationBrowser;
     signIn?: () => void;
   } = $props();
 
   function createState(): DashboardState {
-    return new DashboardState(createApi(), createPersonalApi());
+    return new DashboardState(createApi(), createPersonalApi(), createAuthorizationBrowser());
   }
 
   function createAccessState(): WorkspaceAccessState {
@@ -61,6 +64,7 @@
   {#if state.phase !== 'loading'}
   <div class="dashboard">
     <h1 class="admin-title">Dashboard</h1>
+    <p class="intro">Explore the connectors and capabilities available to your account.</p>
     <section class="catalogue" aria-labelledby="connectors-heading" aria-busy={state.refreshing}>
       <div class="section-heading">
         <h2 id="connectors-heading">Connectors</h2>
@@ -90,21 +94,7 @@
             <button onclick={state.loadPersonal}>Retry personal access</button>
           </div>
         {/if}
-        <ul class="connectors">
-          {#each state.connectors as connector (connector.kind + ':' + connector.connector_id)}
-            <li>
-              {#snippet personalActions()}
-                {@const card = state.personalCard(connector.connector_id)}
-                {#if card}
-                  <ConnectionCard state={card} embedded />
-                {:else}
-                  <p role="status">{state.personalPhase === 'loading' ? 'Loading personal access…' : 'Personal access unavailable'}</p>
-                {/if}
-              {/snippet}
-              <ConnectorCard {connector} children={connector.ownership === 'personal' ? personalActions : undefined} />
-            </li>
-          {/each}
-        </ul>
+        <ConnectorWorkspace {state} canManage={workspaceAccess.adminAccess === 'allowed'} />
       {/if}
     </section>
     <section class="setup" aria-label="MCP client setup">
@@ -115,13 +105,11 @@
 </WorkspaceShell>
 
 <style>
-  .dashboard { max-width: 960px; }
-  .catalogue { margin-top: 2rem; }
+  .dashboard { min-width: 0; }
+  .intro { font-size: 0.9rem; margin: 0.65rem 0 0; }
+  .catalogue { margin-top: 1.75rem; }
   h2 { font-size: 1rem; margin: 0; }
   .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
-  .connectors { list-style: none; padding: 0; margin: 0; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); overflow: hidden; }
-  li { min-width: 0; }
-  li + li { border-top: 1px solid var(--admin-border); }
   .setup { margin-top: 2rem; }
   .feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
   p { color: var(--admin-muted); line-height: 1.6; }

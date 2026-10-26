@@ -1,9 +1,13 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { ConnectionState } from '$lib/personal-connections/state/connection-state.svelte';
+  import type { PersonalConnectionController } from '$lib/personal-connections/state/port';
+  import { PersonalAccessViewState } from '$lib/personal-connections/state/access-view-state.svelte';
+  import ConnectionActions from './ConnectionActions.svelte';
+  import ConnectionStatusBadge from './ConnectionStatusBadge.svelte';
 
-  let { state, embedded = false }: { state: ConnectionState; embedded?: boolean } = $props();
+  let { state, embedded = false }: { state: PersonalConnectionController; embedded?: boolean } = $props();
   const headingId = $props.id();
+  const view = new PersonalAccessViewState(() => state);
 
   async function act(action: () => Promise<void>): Promise<void> {
     await action();
@@ -12,104 +16,99 @@
   }
 </script>
 
-<svelte:element this={embedded ? 'section' : 'article'} class={embedded ? 'personal-access' : 'card'} aria-label={embedded ? 'Personal access' : state.selection.display_name} aria-busy={state.busy}>
-  {#if embedded}
-    <h4 id={headingId} tabindex="-1">Personal access</h4>
-  {:else}
-    <h2 id={headingId} tabindex="-1">{state.selection.display_name}</h2>
-    <p>{state.selection.capability_description}</p>
-  {/if}
-  <dl>
-    <div><dt>Personal access</dt><dd>{state.selection.enabled ? 'Enabled' : 'Disabled'}</dd></div>
-    <div><dt>Authorization</dt><dd>{state.selection.has_authorization ? 'Authorization saved' : 'No authorization saved'}</dd></div>
-    <div><dt>Authorization status</dt><dd aria-live="polite">
-      {#if state.healthPhase === 'loading'}
-        Checking authorization status…
-      {:else if state.healthPhase === 'unavailable'}
-        Authorization status unavailable
-      {:else if state.health?.state === 'not_authorized'}
-        Sign-in needed
-      {:else if state.health?.state === 'authorized'}
-        Authorization valid locally
-      {:else if state.health?.state === 'expired'}
-        Authorization expired
-      {:else if state.health?.state === 'unsupported'}
-        Sign in again to replace unsupported authorization
-      {:else if state.health?.state === 'reconnect_required'}
-        Sign in again required
-      {:else if state.health?.state === 'refreshing'}
-        Renewal in progress. Check status before another action.
+<svelte:element this={embedded ? 'section' : 'article'} class={embedded ? 'personal-access' : 'card'} aria-label={embedded ? 'Personal access' : state.selection.display_name} aria-busy={state.busy || state.checking}>
+  <header>
+    {#if embedded}
+      <h4 id={headingId} tabindex="-1">Personal access</h4>
+    {:else}
+      <h2 id={headingId} tabindex="-1">{state.selection.display_name}</h2>
+    {/if}
+    <div class="header-status" aria-live="polite"><ConnectionStatusBadge status={view.status} /></div>
+    {#if !embedded}<ConnectionActions {state} />{/if}
+  </header>
+  {#if !embedded}<p class="connector-description">{state.selection.capability_description}</p>{/if}
+  <p class="status-description">{view.status.description}</p>
+  {#if !state.confirmingDisconnect && (view.fallbackRequired || view.status.action)}
+    <div class="next-step">
+      {#if view.fallbackRequired}
+        <a class="primary-action" href={state.authorizationUrl} target="_blank" rel="noopener noreferrer">Continue sign-in <span aria-hidden="true">↗</span><span class="sr-only"> (opens a new tab)</span></a>
       {/if}
-    </dd></div>
-    <div><dt>Tools</dt><dd>{state.selection.runtime_available ? 'Tools available' : 'Not available'}</dd></div>
-  </dl>
-  {#if state.healthPhase === 'ready' && state.health}
-    {#if state.health.state === 'authorized' || state.health.state === 'expired'}
-      <p>Expires: <time datetime={state.health.expires_at}>{new Date(state.health.expires_at).toLocaleString()}</time></p>
-      <p class="hint">Last checked: {state.healthCheckedAt}</p>
-    {:else if state.health.state === 'reconnect_required'}
-      <p>{state.health.reason === 'provider_rejected' ? 'The provider rejected this authorization.' : state.health.reason === 'refresh_denied' ? 'Authorization renewal was rejected.' : 'The renewal outcome could not be confirmed.'}</p>
-    {/if}
-  {/if}
-  <div class="actions">
-    <button disabled={state.selection.enabled ? state.cleanupBlocked : state.busy || state.needsRefresh} onclick={state.setEnabled}>{state.selection.enabled ? 'Disable' : 'Enable'}</button>
-    {#if state.selection.enabled}
-      <button disabled={state.busy || state.needsRefresh || state.attempt !== null || state.renewalInProgress} onclick={() => act(state.start)}>{state.selection.has_authorization || (state.healthPhase === 'ready' && state.health && ['unsupported', 'expired', 'reconnect_required'].includes(state.health.state)) ? 'Sign in again' : 'Sign in'}</button>
-    {/if}
-    {#if state.selection.enabled && state.selection.has_authorization}
-      <button disabled={!state.canDiscover} onclick={state.discover}>Discover tools</button>
-    {/if}
-    {#if state.canRenew}
-      <button disabled={!state.canRenew} onclick={state.renew}>Renew authorization</button>
-    {/if}
-    {#if state.selection.has_authorization || state.attempt}
-      <button disabled={state.cleanupBlocked} onclick={state.requestDisconnect}>Disconnect</button>
-    {/if}
-    <button disabled={state.busy} onclick={state.refresh}>Check authorization status</button>
-  </div>
-  {#if state.attempt}
-    <section class="attempt" aria-label="Current sign-in">
-      <h3>Sign-in {state.attempt.status}</h3>
-      <p>Expires: <time datetime={state.attempt.expires_at}>{new Date(state.attempt.expires_at).toLocaleString()}</time></p>
-      {#if state.authorizationUrl}
-        <a href={state.authorizationUrl} target="_blank" rel="noopener noreferrer">Continue sign-in <span class="hint">(opens a new tab)</span></a>
+      {#if view.status.action}
+        <button class={['primary-action', view.fallbackRequired && 'secondary']} type="button" disabled={view.primaryDisabled} onclick={() => act(view.performPrimary)}>{view.primaryLabel}</button>
       {/if}
-      <div class="actions">
-        <button disabled={state.busy || state.checking} onclick={() => act(state.check)}>Check sign-in status</button>
-        <button disabled={state.busy || state.needsRefresh} onclick={() => act(state.cancel)}>Cancel sign-in</button>
-      </div>
-    </section>
+    </div>
   {/if}
+  <details class="connection-details">
+    <summary>Connection details</summary>
+    <dl>
+      <div><dt>Personal access</dt><dd>{state.selection.enabled ? 'Enabled' : 'Disabled'}</dd></div>
+      <div><dt>Authorization</dt><dd>{state.selection.has_authorization ? 'Authorization saved' : 'No authorization saved'}</dd></div>
+      <div><dt>Authorization status</dt><dd>{view.healthLabel}</dd></div>
+      <div><dt>Tools</dt><dd>{state.selection.runtime_available ? 'Tools available' : 'Not available'}</dd></div>
+      {#if state.healthPhase === 'ready' && state.health && (state.health.state === 'authorized' || state.health.state === 'expired')}
+        <div><dt>Expires</dt><dd><time datetime={state.health.expires_at}>{new Date(state.health.expires_at).toLocaleString()}</time></dd></div>
+      {/if}
+      {#if state.healthCheckedAt}<div><dt>Last checked</dt><dd>{state.healthCheckedAt}</dd></div>{/if}
+      {#if state.attempt}
+        <div><dt>Sign-in status</dt><dd>{state.attempt.status}</dd></div>
+        <div><dt>Sign-in expires</dt><dd><time datetime={state.attempt.expires_at}>{new Date(state.attempt.expires_at).toLocaleString()}</time></dd></div>
+      {/if}
+    </dl>
+    <p class="hint">Authorization checks use saved records, not a live provider connection test.</p>
+    {#if state.attempt && state.authorizationOpened && state.authorizationUrl && !state.busy && !state.needsRefresh}
+      <a href={state.authorizationUrl} target="_blank" rel="noopener noreferrer">Open sign-in page again <span aria-hidden="true">↗</span><span class="sr-only"> (opens a new tab)</span></a>
+    {/if}
+  </details>
   {#if state.confirmingDisconnect}
     <section class="confirmation" aria-label="Confirm disconnect">
+      <h5>Disconnect personal access?</h5>
       <p>Remove saved authorization and disable personal access? Any pending sign-in cannot restore it.</p>
-      <div class="actions">
-        <button disabled={state.cleanupBlocked} onclick={() => act(state.disconnect)}>Confirm disconnect</button>
-        <button onclick={state.keepAuthorization}>Keep authorization</button>
+      <div class="confirmation-actions">
+        <button class="danger" type="button" disabled={state.cleanupBlocked} onclick={() => act(state.disconnect)}>Confirm disconnect</button>
+        <button type="button" onclick={state.keepAuthorization}>Keep authorization</button>
       </div>
     </section>
   {/if}
-  <div role="status" aria-live="polite">{state.message}</div>
-  <div role="alert">{state.error}</div>
+  {#if state.message}<p class="feedback" role="status">{state.message}</p>{/if}
+  {#if state.error}<p class="error" role="alert">{state.error}</p>{/if}
 </svelte:element>
 
 <style>
   .card { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: clamp(1rem, 3vw, 1.5rem); min-width: 0; overflow-wrap: anywhere; }
-  h2 { margin: 0; font-size: 1.2rem; }
-  h3, h4 { font-size: 1rem; }
+  .personal-access { min-width: 0; overflow-wrap: anywhere; }
+  header { align-items: center; display: flex; flex-wrap: wrap; gap: 0.65rem; padding-top: 1rem; }
+  .card header { padding-top: 0; }
+  h2, h4 { color: var(--admin-ink); font-size: 0.9rem; margin: 0; }
+  h2 { font-size: 1.1rem; }
+  .header-status { margin-left: auto; }
   p { line-height: 1.6; }
-  dl { display: grid; gap: 0.6rem; }
-  dl div { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; justify-content: space-between; }
-  dt { color: var(--admin-muted); }
-  dd { margin: 0; font-weight: 600; }
-  .hint { color: var(--admin-muted); font-size: 0.9rem; }
-  .actions { display: flex; flex-wrap: wrap; gap: 0.65rem; margin: 1rem 0; }
-  button { background: var(--admin-panel); color: var(--admin-ink); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 0.65rem 0.85rem; font: inherit; cursor: pointer; min-height: 2.75rem; }
-  button:hover:not(:disabled) { border-color: var(--admin-accent); }
+  .status-description, .connector-description { color: var(--admin-muted); font-size: 0.85rem; margin: 0.75rem 0 0; }
+  .next-step { align-items: center; display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; }
+  button, .primary-action { align-items: center; box-sizing: border-box; background: var(--admin-panel); border: 1px solid var(--admin-border-strong); border-radius: 6px; color: var(--admin-ink); cursor: pointer; display: inline-flex; font: inherit; font-size: 0.85rem; font-weight: 600; gap: 0.5rem; justify-content: center; line-height: 1.4; min-height: 2.75rem; padding: 0.6rem 0.9rem; text-decoration: none; }
+  .primary-action { background: var(--admin-action); border-color: var(--admin-action); color: var(--admin-on-action); }
+  .primary-action:hover:not(:disabled) { background: var(--admin-action-hover); border-color: var(--admin-action-hover); }
+  .secondary { background: var(--admin-panel); border-color: var(--admin-border-strong); color: var(--admin-ink); }
+  .secondary:hover:not(:disabled), button:hover:not(:disabled) { background: var(--admin-hover); }
   button:disabled { opacity: 0.55; cursor: not-allowed; }
-  a { color: var(--admin-accent); }
-  a:focus-visible, button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
-  .attempt, .confirmation { border-top: 1px solid var(--admin-border); margin-top: 1rem; padding-top: 0.5rem; }
-  [role='status'], [role='alert'] { line-height: 1.6; }
-  [role='alert'] { color: var(--admin-danger, var(--admin-ink)); }
+  .connection-details { border-top: 1px solid var(--admin-border); font-size: 0.8rem; margin-top: 1rem; padding-top: 0.85rem; }
+  summary { color: var(--admin-muted); cursor: pointer; font-weight: 600; width: fit-content; }
+  summary:hover { color: var(--admin-accent); }
+  dl { display: grid; gap: 0.6rem; margin: 1rem 0 0; }
+  dl div { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; justify-content: space-between; }
+  dt { color: var(--admin-muted); }
+  dd { margin: 0; text-align: right; }
+  .hint { color: var(--admin-muted); font-size: 0.75rem; margin: 0.85rem 0 0; }
+  .connection-details a { display: inline-block; margin-top: 0.75rem; }
+  a { color: var(--admin-accent); text-underline-offset: 3px; }
+  a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
+  .confirmation { background: var(--admin-danger-bg); border: 1px solid var(--admin-danger-border); border-radius: var(--admin-radius); color: var(--admin-danger-text); margin-top: 1rem; padding: 1rem; }
+  h5 { font-size: 0.85rem; margin: 0; }
+  .confirmation p { font-size: 0.8rem; margin: 0.5rem 0 0; }
+  .confirmation-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.85rem; }
+  .danger { background: var(--admin-danger); border-color: var(--admin-danger); color: var(--admin-on-action); }
+  .danger:hover:not(:disabled) { background: var(--admin-danger-hover); }
+  .feedback, .error { font-size: 0.8rem; margin: 0.85rem 0 0; }
+  .feedback { color: var(--admin-muted); }
+  .error { color: var(--admin-danger); }
+  .sr-only { clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 </style>

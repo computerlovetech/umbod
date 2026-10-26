@@ -15,6 +15,11 @@ from umbod.core.connectors.openapi.management.models import CreateOpenApiConnect
 from umbod.core.connectors.openapi.management.setup import OpenApiConnectorSetupService
 from umbod.core.connectors.openapi.management.setup_ports import OpenApiConnectorSetupPort
 from umbod.rest.connectors.openapi.dependencies import get_openapi_configuration_port, get_openapi_connector_management_service, get_openapi_connector_setup_port
+from umbod.core.icons import (
+    Favicon, FaviconDiscovery, FaviconDiscoveryRequest, FaviconDiscoveryResult,
+    FaviconFound, FaviconNotFound, FaviconDiscoveryTimedOut,
+)
+from umbod.rest.connectors.icons import get_favicon_discovery
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
 
@@ -27,8 +32,27 @@ def app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FastAPI:
     return create_app(APISettings(rest={"metrics_enabled": False}, admin_authentication={"mode": "simulation", "simulated_admin": True}), [])
 
 
+class RecordingFaviconDiscovery:
+    def __init__(self, result: FaviconDiscoveryResult) -> None:
+        self.result = result
+        self.requests: list[FaviconDiscoveryRequest] = []
+
+    async def discover(self, request: FaviconDiscoveryRequest) -> FaviconDiscoveryResult:
+        self.requests.append(request)
+        return self.result
+
+
 @pytest.fixture
-def client(app: FastAPI) -> Iterator[TestClient]:
+def discovery() -> RecordingFaviconDiscovery:
+    return RecordingFaviconDiscovery(FaviconNotFound())
+
+
+@pytest.fixture
+def client(app: FastAPI, admin_app: FastAPI, discovery: RecordingFaviconDiscovery) -> Iterator[TestClient]:
+    def discovery_port() -> FaviconDiscovery:
+        return discovery
+
+    admin_app.dependency_overrides[get_favicon_discovery] = discovery_port
     with TestClient(app) as transport:
         yield transport
 
@@ -69,14 +93,36 @@ def test_setup_creates_imports_and_configures_connector(
     {"display_name": " "}, {"tool_name_prefix": "invalid!"}, {"bearer_token": {"secret": "do-not-reflect"}},
 ])
 def test_invalid_setup_leaves_no_connector_and_does_not_reflect_secrets(
-    client: TestClient, payload: dict[str, object], updates: dict[str, object]
+    client: TestClient, payload: dict[str, object], updates: dict[str, object],
+    discovery: RecordingFaviconDiscovery,
 ) -> None:
     payload.update(updates)
     response = client.post("/api/admin/connectors/openapi/setup", json=payload)
     assert response.status_code == 422
+    assert discovery.requests == []
     assert "secret-token-not-for-errors" not in response.text
     assert "do-not-reflect" not in response.text
     assert client.get("/api/admin/connectors/openapi").json() == {"connectors": []}
+
+
+@pytest.mark.parametrize("result, expected_icon_url", [
+    (FaviconFound(icon=Favicon(url="https://api.example.com/icon.svg", mime_type="image/svg+xml"), strategy="test"), "https://api.example.com/icon.svg"),
+    (FaviconNotFound(), ""),
+    (FaviconDiscoveryTimedOut(), ""),
+])
+def test_setup_projects_and_persists_discovered_icon(
+    client: TestClient, payload: dict[str, object], discovery: RecordingFaviconDiscovery,
+    result: FaviconDiscoveryResult, expected_icon_url: str,
+) -> None:
+    discovery.result = result
+    response = client.post("/api/admin/connectors/openapi/setup", json=payload)
+    assert response.status_code == 201
+    assert response.json()["icon_url"] == expected_icon_url
+    connector_id = response.json()["connector_id"]
+    assert client.get(f"/api/admin/connectors/openapi/{connector_id}").json()["icon_url"] == expected_icon_url
+    assert len(discovery.requests) == 1
+    assert str(discovery.requests[0].endpoint_url) == "https://api.example.com/"
+    assert discovery.requests[0].advertised_icons == ()
 
 
 class FailingConfiguration:
@@ -138,12 +184,13 @@ def test_configuration_failure_clears_credentials_and_deletes_connector(
 
 @pytest.mark.parametrize("failure", ["delete", "clear"])
 def test_cleanup_failure_returns_connector_identifier_without_secrets(
-    client: TestClient, admin_app: FastAPI, payload: dict[str, object], failure: str
+    client: TestClient, admin_app: FastAPI, payload: dict[str, object], failure: str,
+    discovery: RecordingFaviconDiscovery,
 ) -> None:
     configuration = FailingConfiguration(failure == "clear")
 
     def setup_port(management: Annotated[OpenApiConnectorManagementService, Depends(get_openapi_connector_management_service)]) -> OpenApiConnectorSetupPort:
-        return OpenApiConnectorSetupService(DeleteFailingManagement(management) if failure == "delete" else management, InMemoryOpenApiCandidateImporter(), DefaultOpenApiImportPreparer(), configuration)
+        return OpenApiConnectorSetupService(DeleteFailingManagement(management) if failure == "delete" else management, InMemoryOpenApiCandidateImporter(), DefaultOpenApiImportPreparer(), configuration, discovery)
 
     admin_app.dependency_overrides[get_openapi_connector_setup_port] = setup_port
     response = client.post("/api/admin/connectors/openapi/setup", json=payload)

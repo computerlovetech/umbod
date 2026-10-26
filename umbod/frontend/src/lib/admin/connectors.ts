@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { normalizeDeclaredToolOutputSchema, type ToolOutputSchemaState } from './tool-output-schema';
+import { normalizeDeclaredToolOutputSchema } from './tool-output-schema';
+import type { ToolOutputSchemaState, ToolParameter } from '$lib/components/shared/tools/presentation';
 import { nullishOptional } from './infrastructure/schema';
-import { mapJsonSchemaToConnectorToolParameters } from './json-schema-tool-parameters';
+import { mapJsonSchemaToToolParameters } from '$lib/components/shared/tools/json-schema-tool-parameters';
 
 export const connectorSourceSchema = z.enum(['built-in', 'user-supplied']);
 export const connectorPublicationStatusSchema = z.enum(['unconfigured', 'draft', 'published', 'unpublished']);
@@ -239,19 +240,11 @@ export type ConnectorConfigurationPageData =
   | ConnectorConfigurationReadyPageData
   | ConnectorConfigurationFailedPageData;
 
-export type ConnectorToolParameter = {
-  name: string;
-  label: string;
-  type: string;
-  description: string;
-  required: boolean;
-};
-
 export type ConnectorTool = {
   operationName: string;
   label: string;
   description: string;
-  parameters: ConnectorToolParameter[];
+  parameters: ToolParameter[];
   outputSchema: ToolOutputSchemaState;
   activationStatus: ConnectorToolActivationStatus;
 };
@@ -328,7 +321,7 @@ export function mapConnectorDetailApiResponse(
       operationName: tool.operation_name,
       label: tool.label,
       description: tool.description,
-      parameters: mapJsonSchemaToConnectorToolParameters(tool.parameters),
+      parameters: mapJsonSchemaToToolParameters(tool.parameters),
       outputSchema: normalizeDeclaredToolOutputSchema(tool),
       activationStatus: activationStatusByOperationName.get(tool.operation_name) ?? 'disabled'
     }))

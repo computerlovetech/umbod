@@ -1,8 +1,8 @@
-from typing import Literal
+from typing import Annotated, Literal, Union
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from umbod.core.capabilities.domain import CapabilityKind
+from umbod.core.capabilities.domain import CapabilityOutputSchema, JsonObject
 from umbod.core.invocation import ConnectorKind
 
 
@@ -11,10 +11,19 @@ class CatalogueModel(BaseModel):
 
 
 class CatalogueCapability(CatalogueModel):
-    kind: CapabilityKind
+    kind: Literal["prompt", "resource", "resource_template"]
     key: str
     name: str
     description: str
+
+
+class CatalogueToolCapability(CatalogueModel):
+    kind: Literal["tool"]
+    key: str
+    name: str
+    description: str
+    input_schema: JsonObject
+    output_schema: CapabilityOutputSchema
 
 
 class CatalogueConnector(CatalogueModel):
@@ -23,7 +32,9 @@ class CatalogueConnector(CatalogueModel):
     display_name: str
     capability_description: str
     ownership: Literal["shared", "personal"]
-    capabilities: tuple[CatalogueCapability, ...]
+    capabilities: tuple[
+        Annotated[Union[CatalogueCapability, CatalogueToolCapability], Field(discriminator="kind")], ...
+    ]
 
 
 class UserCatalogue(CatalogueModel):

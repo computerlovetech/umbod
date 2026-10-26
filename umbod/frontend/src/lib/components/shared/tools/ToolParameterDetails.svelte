@@ -1,7 +1,8 @@
 <script lang="ts">
-  import type { ConnectorToolParameter } from '$lib/admin/connectors';
+  import type { ToolParameter } from './presentation';
 
-  let { parameters }: { parameters: ConnectorToolParameter[] } = $props();
+  let { parameters, inputSchema }: { parameters: ToolParameter[]; inputSchema?: Record<string, unknown> } = $props();
+  const headingId = $props.id();
 
   const requiredParameters = $derived(parameters.filter((parameter) => parameter.required));
   const optionalParameters = $derived(parameters.filter((parameter) => !parameter.required));
@@ -38,8 +39,8 @@
     </div>
 
     {#if requiredParameters.length > 0}
-      <section aria-labelledby="required-parameters-title">
-        <h4 id="required-parameters-title">Required parameters</h4>
+      <section aria-labelledby={headingId + "-required"}>
+        <h4 id={headingId + "-required"}>Required parameters</h4>
         <ul>
           {#each requiredParameters as parameter (parameter.name)}
             <li>
@@ -56,8 +57,8 @@
     {/if}
 
     {#if optionalParameters.length > 0}
-      <section aria-labelledby="optional-parameters-title">
-        <h4 id="optional-parameters-title">Optional parameters</h4>
+      <section aria-labelledby={headingId + "-optional"}>
+        <h4 id={headingId + "-optional"}>Optional parameters</h4>
         <ul>
           {#each optionalParameters as parameter (parameter.name)}
             <li>
@@ -72,6 +73,12 @@
         </ul>
       </section>
     {/if}
+  {/if}
+  {#if inputSchema}
+    <details class="raw-schema">
+      <summary>Full input schema</summary>
+      <textarea readonly aria-label="Full input schema (read-only)" value={JSON.stringify(inputSchema, null, 2)}></textarea>
+    </details>
   {/if}
 </details>
 
@@ -237,4 +244,9 @@
   .empty-state {
     margin-top: 14px;
   }
+
+  .raw-schema { margin-top: 14px; min-width: 0; }
+  .raw-schema > summary { background: transparent; border: 0; border-radius: 0; color: var(--admin-accent); font-size: 0.8rem; padding: 0; text-decoration: underline; text-underline-offset: 3px; }
+  textarea { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 6px; box-sizing: border-box; color: var(--admin-ink); display: block; font-family: var(--admin-mono); font-size: 0.75rem; height: 16rem; line-height: 1.5; margin: 0.6rem 0 0; max-width: 100%; padding: 0.65rem; resize: vertical; width: 100%; }
+  textarea:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
 </style>

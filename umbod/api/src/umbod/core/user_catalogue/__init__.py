@@ -1,8 +1,8 @@
-from .models import CatalogueCapability, CatalogueConnector, UserCatalogue
+from .models import CatalogueCapability, CatalogueConnector, CatalogueToolCapability, UserCatalogue
 from .ports import CatalogueSource, UserCatalogueReader
 from .service import UserCatalogueService
 
 __all__ = [
-    "CatalogueCapability", "CatalogueConnector", "CatalogueSource",
+    "CatalogueCapability", "CatalogueConnector", "CatalogueSource", "CatalogueToolCapability",
     "UserCatalogue", "UserCatalogueReader", "UserCatalogueService",
 ]

@@ -29,7 +29,7 @@ function setupForm(): FormData {
 }
 
 const connector = {
-  connector_id: 'billing', display_name: 'Billing', tool_name_prefix: 'billing', capability_description: 'Manage billing', base_capability_description: 'Manage billing', effective_capability_description: 'Manage billing',
+  connector_id: 'billing', icon_url: '', display_name: 'Billing', tool_name_prefix: 'billing', capability_description: 'Manage billing', base_capability_description: 'Manage billing', effective_capability_description: 'Manage billing',
   capability_description_override: { state: 'system', revision: 0 }, created_at: '2026-01-01', updated_at: '2026-01-01', publication_status: 'draft', available_actions: ['publish']
 };
 

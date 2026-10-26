@@ -4,9 +4,15 @@ import type { ToastApi } from '$lib/components/feedback/toast-state.svelte';
 import type { DashboardApi } from '$lib/dashboard/api';
 import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
 import { catalogue, personalConnector, sharedConnector } from '$lib/dashboard/test-fixtures';
+import type { CatalogueCapability } from '$lib/dashboard/domain/schemas';
+import type { DashboardController } from '$lib/dashboard/state/port';
+import { DashboardState } from '$lib/dashboard/state/dashboard-state.svelte';
+import { authorizationHealth, selection } from '$lib/personal-connections/test-fixtures';
 import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
 import { InMemoryPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/in-memory-api';
-import ConnectorCard from './ConnectorCard.svelte';
+import CatalogueCapabilities from './CatalogueCapabilities.svelte';
+import ConnectorDetail from './ConnectorDetail.svelte';
+import ConnectorWorkspace from './ConnectorWorkspace.svelte';
 import Dashboard from './Dashboard.svelte';
 
 vi.mock('$lib/components/feedback', () => ({
@@ -14,6 +20,15 @@ vi.mock('$lib/components/feedback', () => ({
     success: (): number => 1, warning: (): number => 1, error: (): number => 1, dismiss: (): void => {}
   })
 }));
+
+async function loadedController(): Promise<DashboardController> {
+  const state: DashboardController = new DashboardState(
+    new InMemoryDashboardApi(catalogue),
+    new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth })
+  );
+  await state.loadCatalogue();
+  return state;
+}
 
 describe('dashboard presentation', () => {
   test('hides privileged navigation until the independent current-user read completes', (): void => {
@@ -65,20 +80,81 @@ describe('dashboard presentation', () => {
     { ...sharedConnector, kind: 'openapi' as const, label: 'OpenAPI' },
     { ...sharedConnector, label: 'MCP server' },
     { ...personalConnector, label: 'MCP server' }
-  ])('consistent entries preserve $kind terminology and show read-only capabilities', ({ label, ...connector }): void => {
-    const body = render(ConnectorCard, { props: { connector } }).body;
+  ])('connector detail preserves $kind terminology without administrative controls', ({ label, ...connector }): void => {
+    const body = render(ConnectorDetail, { props: { connector } }).body;
     expect(body).toContain(connector.display_name);
     expect(body).toContain(label);
-    expect(body).toContain('connector-icon medium');
     expect(body).toContain('aria-hidden="true"');
     expect(body).toContain(connector.capability_description);
-    expect(body).toContain(connector.ownership === 'personal' ? 'Personal' : 'Shared');
-    expect(body).toContain(`${connector.capabilities.length} ${connector.capabilities.length === 1 ? 'capability' : 'capabilities'}`);
-    expect(body).toContain('Show details');
-    expect(body).not.toMatch(/<details[^>]*\sopen/);
+    expect(body).toContain(connector.ownership === 'personal' ? 'Personal connection' : 'Shared connection');
+    expect(body).toContain(`${connector.capabilities.length} available`);
+    expect(body).toContain('Managed by your administrator');
     expect(body).not.toContain('Personal access');
-    expect(body).not.toContain('<button');
+    expect(body).not.toMatch(/Publish|Unpublish|Published|Unpublished/);
     expect(body).not.toContain('Configure');
+    expect(body).not.toContain('Edit connector');
+    expect(body).not.toContain('Delete connector');
+    expect(body).not.toContain('href="/admin');
     if (connector.kind !== 'downstream_mcp') expect(body).not.toContain('MCP server');
+  });
+
+  test('detail only offers management navigation when a management URL is supplied', (): void => {
+    const body = render(ConnectorDetail, { props: { connector: sharedConnector, manageHref: '/admin/connectors/downstream_mcp/shared' } }).body;
+    expect(body).toContain('href="/admin/connectors/downstream_mcp/shared"');
+    expect(body).not.toMatch(/Publish|Unpublish|Published|Unpublished/);
+    expect(body).not.toContain('Edit connector');
+  });
+
+  test('workspace lists shared and personal connectors together with only the selected detail', async (): Promise<void> => {
+    const state = await loadedController();
+    const body = render(ConnectorWorkspace, { props: { state } }).body;
+    expect(body).toContain(sharedConnector.display_name);
+    expect(body).toContain(personalConnector.display_name);
+    expect(body).toContain(sharedConnector.capability_description);
+    expect(body).not.toContain(personalConnector.capability_description);
+    expect(body).not.toContain('aria-label="Personal access"');
+    expect(body).not.toContain('href="/admin');
+    expect(body).not.toContain('Shared connectors');
+    expect(body).not.toContain('Personal connectors');
+  });
+
+  test('selected personal connector embeds its existing personal access controls', async (): Promise<void> => {
+    const state = await loadedController();
+    state.selectConnector('downstream_mcp:calendar');
+    await state.personalCard('calendar')!.start();
+    const body = render(ConnectorWorkspace, { props: { state } }).body;
+    expect(body).toContain(personalConnector.capability_description);
+    expect(body).not.toContain(sharedConnector.capability_description);
+    expect(body).toContain('aria-label="Personal access"');
+    expect(body).toContain('Continue sign-in');
+    expect(body).toContain('Personal access actions for Calendar');
+    expect(body).not.toContain('Cancel sign-in');
+    expect(body).not.toContain('href="/admin');
+  });
+
+  test('workspace management permission exposes a link without exposing editing or publication controls', async (): Promise<void> => {
+    const state = await loadedController();
+    const body = render(ConnectorWorkspace, { props: { state, canManage: true } }).body;
+    expect(body).toContain('href="/admin');
+    expect(body).not.toMatch(/Publish|Unpublish|Published|Unpublished/);
+    expect(body).not.toContain('Edit connector');
+    expect(body).not.toContain('Delete connector');
+  });
+
+  test('capability tabs count resource templates with resources and initially show only tool descriptions', (): void => {
+    const capabilities: CatalogueCapability[] = [
+      { kind: 'tool', key: 'events', name: 'Events', description: 'Read calendar events', input_schema: {}, output_schema: { status: 'absent' } },
+      { kind: 'prompt', key: 'agenda', name: 'Agenda', description: 'Prepare an agenda' },
+      { kind: 'resource', key: 'calendar', name: 'Calendar', description: 'Calendar resource description' },
+      { kind: 'resource_template', key: 'event', name: 'Event', description: 'Event template description' }
+    ];
+    const body = render(CatalogueCapabilities, { props: { capabilities } }).body;
+    expect(body).toMatch(/<button[^>]*>[\s\S]*?Tools[\s\S]*?1[\s\S]*?<\/button>/);
+    expect(body).toMatch(/<button[^>]*>[\s\S]*?Prompts[\s\S]*?1[\s\S]*?<\/button>/);
+    expect(body).toMatch(/<button[^>]*>[\s\S]*?Resources[\s\S]*?2[\s\S]*?<\/button>/);
+    expect(body).toContain('Read calendar events');
+    expect(body).not.toContain('Prepare an agenda');
+    expect(body).not.toContain('Calendar resource description');
+    expect(body).not.toContain('Event template description');
   });
 });

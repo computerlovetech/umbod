@@ -73,6 +73,7 @@ class OpenApiConnectorResponse(Model):
     display_name: str
     tool_name_prefix: str
     capability_description: CapabilityDescription
+    icon_url: str
     base_capability_description: CapabilityDescription
     effective_capability_description: CapabilityDescription
     capability_description_override: CapabilityDescriptionOverrideResponse

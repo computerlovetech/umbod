@@ -8,11 +8,8 @@ import httpcore
 import pytest
 from pydantic import SecretStr
 
-from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import (
-    PublicAddressNetworkBackend,
-    SafeOAuthHttpTransport,
-    public_connection_pool,
-)
+from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.network import SafeOAuthHttpTransport
+from umbod.core.network import PublicAddressNetworkBackend, public_http_connection_pool
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import (
     OAuthDestination,
     OAuthHttpRequest,
@@ -167,7 +164,7 @@ async def test_transport_accepts_exact_body_budget(public_dns: list[str]) -> Non
 
 @pytest.mark.asyncio
 async def test_authorization_destination_is_public_dns_validated_without_connecting(public_dns: list[str]) -> None:
-    async with public_connection_pool() as pool:
+    async with public_http_connection_pool(max_connections=10) as pool:
         transport: OAuthHttpTransport = SafeOAuthHttpTransport(pool=pool)
         await transport.validate_destination(OAuthDestination(url="https://issuer.example/authorize"))
     assert public_dns == ["issuer.example"]
@@ -179,7 +176,7 @@ async def test_dns_failure_is_fixed_secret_free_provider_failure(monkeypatch: py
         raise OSError("sensitive-provider-hostname")
 
     monkeypatch.setattr(anyio, "getaddrinfo", resolve)
-    async with public_connection_pool() as pool:
+    async with public_http_connection_pool(max_connections=10) as pool:
         transport: OAuthHttpTransport = SafeOAuthHttpTransport(pool=pool)
         with pytest.raises(PersonalOAuthProviderFailure) as caught:
             await transport.validate_destination(OAuthDestination(url="https://issuer.example/authorize"))
@@ -188,7 +185,7 @@ async def test_dns_failure_is_fixed_secret_free_provider_failure(monkeypatch: py
 
 @pytest.mark.asyncio
 async def test_private_literal_fails_without_dns_or_connection(public_dns: list[str]) -> None:
-    async with public_connection_pool() as pool:
+    async with public_http_connection_pool(max_connections=10) as pool:
         transport: OAuthHttpTransport = SafeOAuthHttpTransport(pool=pool)
         with pytest.raises(PersonalOAuthProviderFailure):
             await transport.request(request("https://127.0.0.1/mcp"))

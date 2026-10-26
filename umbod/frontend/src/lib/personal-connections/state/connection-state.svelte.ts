@@ -1,11 +1,14 @@
 import type { PersonalConnectionsApi } from '../api';
+import type { AuthorizationBrowser, AuthorizationWindow } from '../authorization-browser';
+import type { PersonalConnectionController } from './port';
 import { isTerminalAttempt, type AuthorizationHealth, type Attempt, type Selection, type StartAttempt } from '../domain/schemas';
 import { requiresSignIn, safeActionError, safeRenewalError } from './errors';
 
-export class ConnectionState {
+export class ConnectionState implements PersonalConnectionController {
   selection: Selection;
   attempt: Attempt | null = $state.raw<Attempt | null>(null);
   authorizationUrl = $state('');
+  authorizationOpened = $state(false);
   busy = $state(false);
   checking = $state(false);
   confirmingDisconnect = $state(false);
@@ -19,8 +22,9 @@ export class ConnectionState {
   readingDetails = $state(false);
   private revision = 0;
   private active = true;
+  private authorizationWindow: AuthorizationWindow | null = null;
 
-  constructor(selection: Selection, private readonly api: PersonalConnectionsApi, private readonly authenticationLost: () => void, private readonly onChanged: () => Promise<void> = async (): Promise<void> => {}) {
+  constructor(selection: Selection, private readonly api: PersonalConnectionsApi, private readonly authenticationLost: () => void, private readonly onChanged: () => Promise<void> = async (): Promise<void> => {}, private readonly authorizationBrowser?: AuthorizationBrowser) {
     this.selection = $state.raw(selection);
   }
 
@@ -170,9 +174,36 @@ export class ConnectionState {
     await this.notifyChanged(revision);
   };
 
+  private closeAuthorizationWindow = (): void => {
+    const reserved = this.authorizationWindow;
+    this.authorizationWindow = null;
+    this.authorizationOpened = false;
+    try {
+      reserved?.close();
+    } catch {}
+  };
+
+  private reserveAuthorizationWindow = (): AuthorizationWindow | null => {
+    try {
+      return this.authorizationBrowser?.reserve() ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  private navigateAuthorizationWindow = (reserved: AuthorizationWindow | null, url: string): boolean => {
+    try {
+      return reserved?.navigate(url) ?? false;
+    } catch {
+      return false;
+    }
+  };
+
   private clearAttempt = (): void => {
+    this.closeAuthorizationWindow();
     this.attempt = null;
     this.authorizationUrl = '';
+    this.authorizationOpened = false;
   };
 
   private current = (revision: number): boolean => this.active && revision === this.revision;
@@ -238,8 +269,18 @@ export class ConnectionState {
   start = async (): Promise<void> => {
     if (!this.selection.enabled || this.attempt || this.renewalInProgress) return;
     await this.run(async (revision) => {
-      const started = await this.api.authorization.start(this.selection.connector_id, {});
-      if (this.current(revision)) await this.receiveAttempt(started, revision, started.authorization_url);
+      const reserved = this.reserveAuthorizationWindow();
+      this.authorizationWindow = reserved;
+      try {
+        const started = await this.api.authorization.start(this.selection.connector_id, {});
+        if (!this.current(revision)) return;
+        await this.receiveAttempt(started, revision, started.authorization_url);
+        if (this.current(revision) && this.attempt?.attempt_id === started.attempt_id && !isTerminalAttempt(started) && this.authorizationUrl) {
+          this.authorizationOpened = this.navigateAuthorizationWindow(reserved, this.authorizationUrl);
+        }
+      } finally {
+        if (this.authorizationWindow === reserved && (!this.current(revision) || !this.authorizationOpened)) this.closeAuthorizationWindow();
+      }
     });
   };
 
@@ -263,6 +304,7 @@ export class ConnectionState {
     const attempt = this.attempt;
     if (!attempt) return;
     await this.run(async (revision) => {
+      this.closeAuthorizationWindow();
       const result = await this.api.authorization.cancel(this.selection.connector_id, attempt.attempt_id);
       if (this.current(revision)) await this.receiveAttempt(result, revision);
     });
