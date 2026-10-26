@@ -2,7 +2,7 @@
 
 **Module responsibility:** Shared dashboard and administration navigation and safe administration presentation resolution.
 
-- `navigation.ts` defines Dashboard-first navigation with normal-user Files in both workspaces, administrator links including Filesystem root access, the common home destination and accessible shell/account labels.
+- `navigation.ts` defines Dashboard-first navigation with normal-user Files in both workspaces, administrator links including Group permissions with Connectors and Filesystem subpages, the common home destination and accessible shell/account labels.
 - `admin-access.ts` accepts the validated current-user port already implemented by the admin client. Only a successful read permits administrator navigation and exposes the validated account identity. Authentication, forbidden access and unavailable services/schema validation remain distinct fail-closed outcomes.
 - `workspace-access-state.svelte.ts` owns the independent, initially checking access read started alongside catalogue loading on dashboard mount or URL-selected filesystem loading on Files mount. Disposal discards late responses; no access request delays catalogue mounting or filesystem reads.
 - `workspace-access-state.test.ts` verifies pending access cannot block the catalogue or reveal privileged navigation.

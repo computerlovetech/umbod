@@ -3,7 +3,8 @@ from fastmcp import Client, FastMCP
 
 from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import execution_case
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, runtime_case
-from tests.umbod.mcp.downstream_mcp_connectors.test_personal_execution_pipeline import InvocationLog
+from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
+from umbod.mcp.signals import SignalToolExecutionPipelineFactory
 from umbod.core.capabilities.descriptions import SystemConnectorCapabilityDescriptionOverrideStore
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.mcp.connectors.downstream_mcp import UnrestrictedDownstreamToolPermissionPolicy
@@ -22,8 +23,8 @@ async def test_disabled_personal_profile_keeps_private_namespace_reserved(runtim
     settings = settings.model_copy(update={"personal_connections": settings.personal_connections.model_copy(update={"enabled": selection_enabled, "oauth_enabled": oauth_enabled})})
     public = FastMCP("disabled-personal")
     public.capability_description_overrides = SystemConnectorCapabilityDescriptionOverrideStore()
-    public.connector_tool_invocation_logger = InvocationLog()
-    public.metrics_recorder = InMemoryMcpMetricsRecorder()
+    public.invocation_signals = invocation_signals(InMemoryMcpMetricsRecorder())
+    public.execution_pipelines = SignalToolExecutionPipelineFactory(public.invocation_signals, PermitAllConnectorInvocationPolicy())
     await _register_downstream_mcp_provider(public, settings, UnrestrictedDownstreamToolPermissionPolicy(), runtime_case.database, PermitAllConnectorInvocationPolicy())
     alternate_calls: list[str] = []
 

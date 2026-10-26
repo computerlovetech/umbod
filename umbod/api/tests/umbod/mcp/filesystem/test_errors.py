@@ -14,7 +14,8 @@ from umbod.mcp.filesystem import register_filesystem_tools
 from umbod.mcp.filesystem.errors import filesystem_operation
 from umbod.mcp.filesystem.ports import FilesystemCallerCapture, FilesystemServiceFactory
 from umbod.mcp.tools import McpObservedToolRegistrar
-from umbod.mcp.tools.invocation import McpToolInvocationObserver
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals import McpInvocationPublisher
 from .conftest import FilesystemMcp
 
 
@@ -41,7 +42,7 @@ async def test_expected_domain_failures_do_not_leak_details(
     factory = Mock(spec=FilesystemServiceFactory)
     factory.browsing.return_value = browsing
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpToolInvocationObserver(Mock(), filesystem_mcp.metrics)),
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_mcp.metrics, Mock()))),
         filesystem_mcp.callers, factory,
     )
     async with Client(server) as client:
@@ -88,7 +89,7 @@ async def test_unmasked_tools_sanitize_all_operation_stages(
     if stage == "factory":
         factory_method.side_effect = error
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpToolInvocationObserver(Mock(), filesystem_mcp.metrics)),
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_mcp.metrics, Mock()))),
         callers, factory,
     )
     async with Client(server) as client:

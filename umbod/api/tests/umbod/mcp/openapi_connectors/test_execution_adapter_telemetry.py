@@ -1,3 +1,5 @@
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals import SignalToolExecutionPipelineFactory
 import json
 from types import SimpleNamespace
 from typing import Any
@@ -17,7 +19,6 @@ from umbod.mcp.connectors.native.tools.deployment_modes.codemode import (
 from umbod.mcp.logging import (
     McpAuditEvent,
     McpAuditRecorder,
-    create_default_connector_tool_invocation_logger,
 )
 from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
@@ -126,9 +127,6 @@ async def _execute(
 ) -> tuple[dict[str, Any], InMemoryMcpToolInvocationLogSink, RecordingAuditSink, ExecutionService, InMemoryMcpMetricsRecorder]:
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
-    logger = create_default_connector_tool_invocation_logger(
-        invocation_sink, McpAuditRecorder(audit_sink, "test")
-    )
     server = SimpleNamespace(
         auth=None,
         openapi_connector_store_factory=ResourceFactory(store),
@@ -149,7 +147,8 @@ async def _execute(
         return service
 
     monkeypatch.setattr(OpenApiCodeModeExecutionAdapter, "_execution_service", _execution_service)
-    adapter = OpenApiCodeModeExecutionAdapter(server, logger)
+    signals = create_mcp_signals(invocation_sink, server.metrics_recorder, McpAuditRecorder(audit_sink, "test"))
+    adapter = OpenApiCodeModeExecutionAdapter(server, SignalToolExecutionPipelineFactory(signals, server.connector_invocation_policy))
     response = await adapter.execute(
         OpenApiCodeModeInvocation(
             connector_id="weather-id",

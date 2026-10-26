@@ -20,8 +20,11 @@ from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
 from umbod.logging import configure_logging
 from umbod.mcp.connectors.downstream_mcp.tool_invocation import AuthorizedDownstreamProxyTool
-from umbod.mcp.logging import ConnectorToolInvocationLogger
-from umbod.mcp.logging.invocation.recorder import InvocationLogSinkToolInvocationLogger
+from tests.umbod.mcp.downstream_mcp_connectors.signal_support import DiscardingAuditSink
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.logging import McpAuditRecorder
+from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from umbod.mcp.signals import McpSignals
 from umbod.mcp.logging.invocation.sink import create_default_mcp_tool_invocation_log_sink
 
 __all__ = ["runtime_case"]
@@ -30,14 +33,18 @@ SENSITIVE = "sensitive-sentinel-token-url-arguments-results"
 
 
 @pytest.fixture
-def configured_logger(capsys: pytest.CaptureFixture[str]) -> Iterator[ConnectorToolInvocationLogger]:
+def configured_signals(capsys: pytest.CaptureFixture[str]) -> Iterator[McpSignals]:
     root = logging.getLogger()
     original_handlers, original_level = root.handlers[:], root.level
     names = ("uvicorn", "uvicorn.error", "uvicorn.access", "fastmcp", "mcp")
     states = {name: (logging.getLogger(name).handlers[:], logging.getLogger(name).propagate) for name in names}
     root.handlers = [handler for handler in root.handlers if not getattr(handler, "_umbod_otel_stdout_handler", False)]
     try:
-        yield InvocationLogSinkToolInvocationLogger(create_default_mcp_tool_invocation_log_sink())
+        yield create_mcp_signals(
+            create_default_mcp_tool_invocation_log_sink(),
+            InMemoryMcpMetricsRecorder(),
+            McpAuditRecorder(DiscardingAuditSink(), "test"),
+        )
     finally:
         root.handlers = original_handlers
         root.setLevel(original_level)
@@ -79,9 +86,9 @@ def assert_failure(record: dict[str, Any], connector_id: str, name: str, tool: s
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["exception", "internal", "result"])
-async def test_shared_failures_enrich_normal_stdout_completion(configured_logger: ConnectorToolInvocationLogger, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, failure: str) -> None:
+async def test_shared_failures_enrich_normal_stdout_completion(configured_signals: McpSignals, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, failure: str) -> None:
     configure_logging("failure-test", "INFO")
-    provider, *_ = await _provider({"weather": _downstream()}, ProviderOptions({"weather": "Weather"}, configured_logger))
+    provider, *_ = await _provider({"weather": _downstream()}, ProviderOptions({"weather": "Weather"}, configured_signals))
     held = await provider.get_tool("Weather_forecast")
     assert isinstance(held, AuthorizedDownstreamProxyTool)
 
@@ -115,10 +122,10 @@ async def test_shared_failures_enrich_normal_stdout_completion(configured_logger
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("reason,stage", [("context_unavailable", "context"), ("admission_denied", "admission"), ("invalid_arguments", "arguments"), ("invalid_output", "output"), ("authorization_rejected", "authorization"), ("authorization_health_unavailable", "authorization"), ("transport_failure", "transport"), ("runtime_failure", "runtime"), ("contract_mismatch", "transport"), ("target_expired", "transport"), ("timeout", "transport"), ("downstream_tool_error", "downstream")])
-async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: RuntimeCase, configured_logger: ConnectorToolInvocationLogger, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, reason: str, stage: str) -> None:
+async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: RuntimeCase, configured_signals: McpSignals, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, reason: str, stage: str) -> None:
     configure_logging("failure-test", "INFO")
     execution = await execution_case(runtime_case)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), configured_logger)
+    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), configured_signals.invocation_completed.send)
     held = await provider.get_tool("Personal_read")
     arguments: dict[str, Any] = {"value": SENSITIVE}
     if reason == "context_unavailable":
@@ -163,10 +170,10 @@ async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: R
 
 
 @pytest.mark.asyncio
-async def test_concurrent_failures_do_not_contaminate_success_or_later_invocations(runtime_case: RuntimeCase, configured_logger: ConnectorToolInvocationLogger, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_concurrent_failures_do_not_contaminate_success_or_later_invocations(runtime_case: RuntimeCase, configured_signals: McpSignals, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch) -> None:
     configure_logging("failure-test", "INFO")
     execution = await execution_case(runtime_case)
-    held = await provider_for(execution, PermitAllConnectorInvocationPolicy(), configured_logger).get_tool("Personal_read")
+    held = await provider_for(execution, PermitAllConnectorInvocationPolicy(), configured_signals.invocation_completed.send).get_tool("Personal_read")
     failed = asyncio.Event()
     success = PersonalToolResult(result={"content": [], "structuredContent": {"owner": "unchanged"}})
 

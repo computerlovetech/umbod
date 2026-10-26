@@ -10,8 +10,8 @@ from umbod.mcp.logging import (
     McpAuditIdentity,
     McpAuditOutcome,
     McpAuditRecorder,
-    McpToolIdentity,
 )
+from umbod.mcp.signals import McpToolIdentity
 from umbod.mcp.logging.audit import McpAuditFailure
 from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter
 

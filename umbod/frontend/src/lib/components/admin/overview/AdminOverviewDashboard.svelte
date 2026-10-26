@@ -29,7 +29,7 @@
   <h1 class="admin-title">Overview</h1>
   <p class="admin-lede">Connector configuration, tool activation and publication at a glance.</p>
 
-  <p><a href="/admin/filesystem">Configure filesystem root access</a></p>
+  <p><a href="/admin/group-permissions/filesystem">Configure filesystem root access</a></p>
 
   <dl class="stats">
     <AdminStatCard label="Configured connectors">
@@ -46,7 +46,7 @@
     </AdminStatCard>
     <AdminStatCard label="Registered permission groups">
       <strong>{countText(overview.permissionGroups)}</strong>
-      <p><a href="/admin/group-permissions">Manage group permissions</a></p>
+      <p><a href="/admin/group-permissions/connectors">Manage group permissions</a></p>
     </AdminStatCard>
   </dl>
 

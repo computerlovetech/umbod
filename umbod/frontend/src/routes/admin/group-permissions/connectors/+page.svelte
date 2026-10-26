@@ -17,7 +17,7 @@
 </script>
 
 <svelte:head>
-  <title>Group permissions</title>
+  <title>Connectors · Group permissions</title>
 </svelte:head>
 
 <AdminShell activeItem="groupPermissions" accountIdentity={data.accountIdentity ?? fallbackAccountIdentity} contentWidth="wide">

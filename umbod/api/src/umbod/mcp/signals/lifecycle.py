@@ -1,7 +1,8 @@
 import time
 import uuid
 
-from umbod.mcp.logging import (
+from umbod.mcp.signals.context import current_mcp_invocation_context
+from umbod.mcp.signals.events import (
     McpInteractionType,
     McpInvocationActor,
     McpInvocationCorrelation,
@@ -10,7 +11,6 @@ from umbod.mcp.logging import (
     McpToolInvocationFailureCategory,
     McpToolInvocationStarted,
     McpToolInvocationSucceeded,
-    current_mcp_invocation_context,
 )
 
 

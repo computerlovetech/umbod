@@ -8,7 +8,7 @@ from umbod.logging import (
     emit_structured_record,
     format_structured_record,
 )
-from umbod.mcp.logging.invocation.event import McpToolInvocationLogEvent
+from umbod.mcp.signals.events import McpToolInvocationEvent
 from umbod.mcp.logging.invocation.formatting import (
     McpToolInvocationLogFormatter,
     McpToolInvocationLogRecord,
@@ -22,7 +22,7 @@ class McpToolInvocationLogReader(Protocol):
 
 
 class McpToolInvocationLogSink(Protocol):
-    def record_invocation_completed(self, event: McpToolInvocationLogEvent) -> None: ...
+    def record_invocation_completed(self, event: McpToolInvocationEvent) -> None: ...
 
 
 class StdoutMcpToolInvocationLogSink:
@@ -31,7 +31,7 @@ class StdoutMcpToolInvocationLogSink:
         self._stream = _resolve_stdout_stream(stream)
         self._uses_shared_logging = len(stream) == 0
 
-    def record_invocation_completed(self, event: McpToolInvocationLogEvent) -> None:
+    def record_invocation_completed(self, event: McpToolInvocationEvent) -> None:
         record = self._formatter.format_invocation_completed(event)
         structured_record = OpenTelemetryStructuredLogRecord(
             body=record.body,
@@ -54,7 +54,7 @@ class InMemoryMcpToolInvocationLogSink:
         self._formatter = formatter
         self._records: list[StructuredLogRecord] = []
 
-    def record_invocation_completed(self, event: McpToolInvocationLogEvent) -> None:
+    def record_invocation_completed(self, event: McpToolInvocationEvent) -> None:
         record = self._formatter.format_invocation_completed(event)
         self._records.append(record)
 

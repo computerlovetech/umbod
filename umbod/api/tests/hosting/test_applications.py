@@ -14,7 +14,7 @@ from umbod.hosting import (
     InMemoryGroupConnectorToolPermissions,
     JwtClaims,
     JwtVerificationError,
-    McpToolInvocationLogEvent,
+    McpToolInvocationEvent,
     create_mcp_app,
     create_rest_app,
 )
@@ -33,7 +33,7 @@ class OwnerVerifier:
 
 
 class UsageSink:
-    def record_invocation_completed(self, event: McpToolInvocationLogEvent) -> None:
+    def record_invocation_completed(self, event: McpToolInvocationEvent) -> None:
         pass
 
 

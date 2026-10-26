@@ -15,7 +15,7 @@ def test_public_exports_and_explicit_keyword_only_signatures() -> None:
     expected_exports = {
         "AccessToken", "AppConfig", "ConnectorRegistration",
         "InMemoryGroupConnectorToolPermissions", "JwtClaims", "JwtVerificationError",
-        "JwtVerifier", "MCPAuthProvider", "McpToolInvocationLogEvent",
+        "JwtVerifier", "MCPAuthProvider", "McpToolInvocationEvent",
         "McpToolInvocationLogSink", "OAuthService", "TokenVerifier",
         "create_mcp_app", "create_rest_app",
     }
@@ -49,7 +49,7 @@ CORE = {
 HOSTING = {
     "AccessToken", "AppConfig", "ConnectorRegistration",
     "InMemoryGroupConnectorToolPermissions", "JwtClaims", "JwtVerificationError",
-    "JwtVerifier", "MCPAuthProvider", "McpToolInvocationLogEvent",
+    "JwtVerifier", "MCPAuthProvider", "McpToolInvocationEvent",
     "McpToolInvocationLogSink", "OAuthService", "TokenVerifier",
     "create_mcp_app", "create_rest_app",
 }

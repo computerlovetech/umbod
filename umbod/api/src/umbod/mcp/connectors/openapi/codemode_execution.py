@@ -5,7 +5,7 @@ from fastmcp import FastMCP
 from pydantic import JsonValue, TypeAdapter
 
 from umbod.core.capabilities import AvailabilityAwareCapabilityAuthorizer
-from umbod.core.invocation.tools.execution import ToolExecutionPipeline, create_tool_execution_pipeline
+from umbod.core.invocation.tools.execution import ToolExecutionPipeline
 from umbod.core.connectors.openapi.execution import (
     AggregateOpenApiOperationResolver,
     AsyncStreamingHttpClient,
@@ -24,12 +24,11 @@ from umbod.core.connectors.openapi.execution import (
 )
 from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
 from umbod.core.permissions.ports import GroupPermissionReader
-from umbod.mcp.connectors.native.tools import ConnectorTelemetryInterceptor
+from umbod.mcp.signals import McpToolExecutionPipelineFactory
 from umbod.mcp.connectors.native.tools.deployment_modes.codemode import (
     OpenApiCodeModeExecutor,
     OpenApiCodeModeInvocation,
 )
-from umbod.mcp.logging import ConnectorToolInvocationLogger
 from umbod.mcp.connectors.openapi.availability import openapi_availability_reader
 from umbod.mcp.connectors.openapi.configuration import openapi_configuration_adapter
 from umbod.mcp.connectors.openapi.deps import capture_openapi_groups
@@ -37,7 +36,7 @@ from umbod.mcp.connectors.openapi.deps import capture_openapi_groups
 logger = logging.getLogger(__name__)
 
 
-def _openapi_result_is_error(result: object) -> bool:
+def openapi_response_is_error(result: object) -> bool:
     return isinstance(result, OpenApiExecutionResponse) and result.status >= 400
 
 
@@ -53,9 +52,9 @@ async def _close_resource(resource: object) -> None:
 
 
 class OpenApiCodeModeExecutionAdapter:
-    def __init__(self, server: FastMCP, tool_invocation_logger: ConnectorToolInvocationLogger) -> None:
+    def __init__(self, server: FastMCP, execution_pipelines: McpToolExecutionPipelineFactory) -> None:
         self._server = server
-        self._tool_invocation_logger = tool_invocation_logger
+        self._execution_pipelines = execution_pipelines
 
     async def execute(self, invocation: OpenApiCodeModeInvocation) -> JsonValue:
         groups = capture_openapi_groups(self._server)
@@ -64,17 +63,7 @@ class OpenApiCodeModeExecutionAdapter:
         client = self._server.openapi_outbound_http_client_factory.create()
         try:
             connector_name = await self._connector_display_name(store, invocation)
-            execution_pipeline = create_tool_execution_pipeline(
-                self._server.connector_invocation_policy,
-                (
-                    ConnectorTelemetryInterceptor(
-                        connector_name=connector_name,
-                        tool_invocation_logger=self._tool_invocation_logger,
-                        metrics_recorder=self._server.metrics_recorder,
-                        result_is_error=_openapi_result_is_error,
-                    ),
-                ),
-            )
+            execution_pipeline = self._execution_pipelines.create(connector_name, openapi_response_is_error)
             service = await self._execution_service(store, permission_reader, client, execution_pipeline)
             operation_input = self._operation_input(invocation)
             result = await service.execute(operation_input, groups.group_ids)
@@ -139,12 +128,12 @@ class OpenApiCodeModeExecutionAdapter:
 
 
 class OpenApiCodeModeExecutionAdapterFactory:
-    def create(self, server: FastMCP, tool_invocation_logger: ConnectorToolInvocationLogger) -> OpenApiCodeModeExecutor:
-        return OpenApiCodeModeExecutionAdapter(server, tool_invocation_logger).execute
+    def create(self, server: FastMCP, execution_pipelines: McpToolExecutionPipelineFactory) -> OpenApiCodeModeExecutor:
+        return OpenApiCodeModeExecutionAdapter(server, execution_pipelines).execute
 
 
 def build_openapi_codemode_executor(
     server: FastMCP,
-    tool_invocation_logger: ConnectorToolInvocationLogger,
+    execution_pipelines: McpToolExecutionPipelineFactory,
 ) -> OpenApiCodeModeExecutor:
-    return OpenApiCodeModeExecutionAdapterFactory().create(server, tool_invocation_logger)
+    return OpenApiCodeModeExecutionAdapterFactory().create(server, execution_pipelines)

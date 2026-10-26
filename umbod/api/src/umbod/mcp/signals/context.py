@@ -3,7 +3,7 @@ from __future__ import annotations
 from contextvars import ContextVar
 from dataclasses import dataclass
 
-from umbod.mcp.logging.invocation.event import McpInvocationActor, McpInvocationCorrelation
+from umbod.mcp.signals.events import McpInvocationActor, McpInvocationCorrelation
 
 
 @dataclass(frozen=True)

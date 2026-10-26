@@ -1,6 +1,11 @@
 from dataclasses import replace
 from typing import cast
 
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
+from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
+from umbod.mcp.logging import create_default_mcp_audit_recorder
+
 from fastmcp import FastMCP
 from pydantic import SecretStr
 
@@ -47,6 +52,16 @@ async def metadata_server(case: RuntimeCase, exposure: str) -> FastMCP:
     if exposure == "flat":
         public.add_provider(provider)
         return public
-    await register_connector_tools(public, invocation_policy=PermitAllConnectorInvocationPolicy(), connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=case.bundle.publishing, connector_tool_mappings=[], connector_tool_exposure_mode=exposure, tool_invocation_log_sink=create_default_mcp_tool_invocation_log_sink())
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test"))
+    await register_connector_tools(
+        public,
+        signals=signals,
+        execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()),
+        connector_registrations=[],
+        connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(),
+        connector_publishing_store=case.bundle.publishing,
+        connector_tool_mappings=[],
+        connector_tool_exposure_mode=exposure,
+    )
     cast(RuntimeConnectorToolRegistry, public.connector_tool_registry).add_gateway_provider(provider)
     return public

@@ -5,7 +5,7 @@
   let { data }: { data: PageData } = $props();
 </script>
 
-<svelte:head><title>Filesystem access</title></svelte:head>
-<AdminShell activeItem="filesystem" accountIdentity={data.accountIdentity ?? { kind: 'hidden' }}>
+<svelte:head><title>Filesystem · Group permissions</title></svelte:head>
+<AdminShell activeItem="groupPermissions" accountIdentity={data.accountIdentity ?? { kind: 'hidden' }} contentWidth="wide">
   <FilesystemAccessPage />
 </AdminShell>

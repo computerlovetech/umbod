@@ -4,6 +4,7 @@ import { AdminApi } from '../infrastructure/admin-api';
 import { AuthenticationRequiredError, HttpError } from '../infrastructure/transport';
 import { createBrowserSubmit, type BrowserSubmitDependencies, type BrowserSubmitFunction } from './browser-submit';
 import { operationFailure, operationRedirect, type BrowserOperation } from './contracts';
+import { OperationState } from './operation-state.svelte';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn(), invalidateAll: vi.fn() }));
 
@@ -116,6 +117,58 @@ describe('browser submissions', () => {
     expect(after).not.toHaveBeenCalled();
     expect(setup.dependencies.replaceFeedback).not.toHaveBeenCalled();
     expect(setup.dependencies.invalidate).not.toHaveBeenCalled();
+  });
+  test.each([
+    ['registerPermissionGroup', 'registered'],
+    ['deletePermissionGroup', 'deleted'],
+    ['saveGroupPermissions', 'saved']
+  ])('dispatches %s from nested connector permissions with route-owned feedback', async (name, status): Promise<void> => {
+    const setup = fixture();
+    const operation = vi.fn<BrowserOperation>().mockResolvedValue({ status, groupId: 'team' });
+    setup.dependencies.operations['group-permissions'] = { [name]: operation };
+    setup.dependencies.pathname = () => '/admin/group-permissions/connectors';
+    setup.form.dataset.operation = name;
+    const input = setup.form.elements.namedItem('connectorId') as HTMLInputElement;
+    input.name = 'groupId'; input.value = 'team';
+    setup.submit();
+    await vi.waitFor(() => expect(setup.dependencies.invalidate).toHaveBeenCalledOnce());
+    expect(operation).toHaveBeenCalledOnce();
+    expect(operation.mock.calls[0][1].get('groupId')).toBe('team');
+    expect(setup.operation).not.toHaveBeenCalled();
+    expect(setup.dependencies.replaceFeedback).toHaveBeenCalledWith({ status, groupId: 'team' }, { route: '/admin/group-permissions/connectors', connectorId: undefined });
+    expect(setup.dependencies.navigate).not.toHaveBeenCalled();
+  });
+  test('suppresses pending connector permissions feedback after switching to filesystem', async (): Promise<void> => {
+    const cleanup = vi.fn(); const after = vi.fn();
+    const setup = fixture(({ onComplete }) => { onComplete(cleanup); return after; });
+    let pathname = '/admin/group-permissions/connectors';
+    setup.dependencies.pathname = () => pathname;
+    setup.dependencies.operations['group-permissions'] = { save: setup.operation };
+    let complete!: (value: unknown) => void;
+    setup.operation.mockImplementation(() => new Promise((resolve) => { complete = resolve; }));
+    setup.submit();
+    await vi.waitFor(() => expect(setup.operation).toHaveBeenCalledOnce());
+    pathname = '/admin/group-permissions/filesystem';
+    complete({ status: 'saved', groupId: 'team' });
+    await vi.waitFor(() => expect(cleanup).toHaveBeenCalledOnce());
+    expect(after).not.toHaveBeenCalled();
+    expect(setup.dependencies.replaceFeedback).not.toHaveBeenCalled();
+    expect(setup.dependencies.invalidate).not.toHaveBeenCalled();
+    expect(setup.dependencies.navigate).not.toHaveBeenCalled();
+  });
+  test('does not expose completed connector permissions feedback to the filesystem route', async (): Promise<void> => {
+    const setup = fixture();
+    const feedback = new OperationState();
+    const owner = { route: '/admin/group-permissions/connectors', connectorId: 'billing' };
+    setup.dependencies.pathname = () => owner.route;
+    setup.dependencies.operations['group-permissions'] = { save: setup.operation };
+    setup.dependencies.replaceFeedback = feedback.replace;
+    setup.submit();
+    await vi.waitFor(() => expect(setup.dependencies.invalidate).toHaveBeenCalledOnce());
+    expect(feedback.forOwner(owner)).toEqual({ status: 'saved' });
+    expect(feedback.forOwner({ ...owner, route: '/admin/group-permissions/filesystem' })).toBeNull();
+    feedback.resetForPath('/admin/group-permissions/filesystem');
+    expect(feedback.forOwner(owner)).toBeNull();
   });
   test('keeps authoritative failure reconciliation and suppresses invalidation', async () => {
     const setup = fixture(() => async ({ result, update }) => {

@@ -13,7 +13,9 @@
 - `admin/+page.ts` composes the administration overview through browser API adapters.
 - `admin/downstream-mcp-connectors/+page.ts` loads one Shared/Personal inventory and selection. Personal details branch before shared catalogue and activation reads; component-scoped OAuth forms remain outside cached detail bundles.
 - `admin/personal-mcp-servers/+page.ts` redirects with 307 to the unified MCP workspace, preserving valid selection and query parameters. No separate personal page or navigation remains.
-- `admin/filesystem/+page.svelte` composes the filesystem access editor; component mount owns validated loading, explicit saves and authoritative reloads.
+- `admin/group-permissions/connectors/+page.ts` loads connector group permissions and validates connector/operation deep links; its page composes the wide Connectors permissions workspace.
+- `admin/group-permissions/filesystem/+page.svelte` composes the wide Filesystem group overview and modal editor under Group permissions; component mount owns validated loading, explicit saves and authoritative reloads.
+- `admin/group-permissions/+page.ts` and `admin/filesystem/+page.ts` redirect legacy URLs to the Connectors and Filesystem permissions subpages respectively, preserving query parameters and fragments.
 - Administration `+page.ts` modules load lists, selected details, permissions, instance settings, and MCP setup data.
 - Connector detail routes redirect to the corresponding workspace selection.
 

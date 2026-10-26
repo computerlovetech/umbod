@@ -2,7 +2,7 @@ from dataclasses import dataclass, replace
 
 import pytest
 
-from umbod.mcp.logging.invocation.event import (
+from umbod.mcp.signals.events import (
     McpInteractionType,
     McpInvocationActor,
     McpToolIdentity,

@@ -25,7 +25,6 @@ from umbod.core.capabilities import (
     ConnectorStoreCapabilityActivation,
     ConnectorStoreCapabilityPublication,
 )
-from umbod.core.invocation import ConnectorInvocationPolicy
 from umbod.core.publishing import ConnectorPublishingStore
 from umbod.core.capabilities.descriptions import ConnectorCapabilityDescriptionKey, ConnectorCapabilityDescriptionOverrideStore, OverriddenCapabilityDescription
 from umbod.core.capabilities.tools.names import PublicToolIdentity, PublicToolNameConflictError, mangle_public_tool_name, validate_unique_public_tool_names
@@ -37,16 +36,17 @@ from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.core.connectors.downstream_mcp.runtime import DownstreamRuntimeResolver, DownstreamRuntimeUnavailable, SharedDownstreamRuntimeResolver
 from umbod.mcp.connectors.downstream_mcp.permissions import DownstreamToolPermissionPolicy, DownstreamToolPermissionPolicySource
 from umbod.mcp.connectors.native.tools import (
-    ConnectorTelemetryInterceptor,
-    ConnectorToolInvocationIdentity,
     ConnectorToolSearchCandidate,
 )
 from umbod.mcp.connectors.downstream_mcp.tool_invocation import AuthorizedDownstreamProxyTool, AuthorizedPersonalTool
 from umbod.mcp.connectors.downstream_mcp.tool_projection import tool_descriptor_options
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolRuntime, PersonalToolRecord
-from umbod.mcp.logging import ConnectorToolInvocationLogger
-from umbod.mcp.metrics import InvocationScope, McpMetricsRecorder, ToolInvocationMetricIdentity
-from umbod.mcp.tools.invocation.telemetry import initialize_invocation_metrics
+from umbod.mcp.signals import McpSignals, McpToolExecutionPipelineFactory, McpToolIdentity, ToolInventoryObserved
+from umbod.mcp.connectors.downstream_mcp.inventory import read_shared_tool_inventory
+def downstream_result_is_error(result: object) -> bool:
+    return isinstance(result, ToolResult) and result.is_error
+
+
 logger = logging.getLogger(__name__)
 
 def _log_collisions(capability_kind: str, owners: Mapping[str, list[str]]) -> None:
@@ -210,32 +210,17 @@ async def _effective_descriptions(store: ConnectorCapabilityDescriptionOverrideS
 
 class DownstreamMcpToolRuntimeProvider(Provider):
 
-    def __init__(self, *, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, publishing: ConnectorPublishingStore, activations: ActivationStore, client_factory: DownstreamClientFactory, permission_policy: DownstreamToolPermissionPolicySource, connector_scope: str, capability_description_overrides: ConnectorCapabilityDescriptionOverrideStore, tool_invocation_logger: ConnectorToolInvocationLogger, metrics_recorder: McpMetricsRecorder, invocation_policy: ConnectorInvocationPolicy, personal_runtime: PersonalToolRuntime) -> None:
+    def __init__(self, *, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, publishing: ConnectorPublishingStore, activations: ActivationStore, client_factory: DownstreamClientFactory, permission_policy: DownstreamToolPermissionPolicySource, connector_scope: str, capability_description_overrides: ConnectorCapabilityDescriptionOverrideStore, signals: McpSignals, execution_pipelines: McpToolExecutionPipelineFactory, personal_runtime: PersonalToolRuntime) -> None:
         self._stores = ConnectorStoreService(definitions, credentials, catalogs, publishing, activations)
         self._capabilities = StoreBackedDownstreamCapabilityCatalog(definitions, catalogs)
         self._permission_policy = permission_policy
         self._downstream_client_factory = client_factory
         self._connector_scope = connector_scope
         self._capability_description_overrides = capability_description_overrides
-        self._tool_invocation_logger = tool_invocation_logger
-        self._metrics_recorder = metrics_recorder
-        self._invocation_policy = invocation_policy
+        self._signals = signals
+        self._execution_pipelines = execution_pipelines
         self._personal_runtime = personal_runtime
         super().__init__()
-
-    async def initialize_metrics(self) -> None:
-        for record in await self._capabilities.list_records():
-            if uses_personal_oauth(record.definition) or record.capability.identity.capability_kind != "tool" or record.source_tool is None:
-                continue
-            connector_id = record.definition.connector_id
-            backend_name = record.source_tool.identity.downstream_name
-            self._initialize_tool_metrics(connector_id, mangle_public_tool_name(record.definition.tool_name_prefix, backend_name))
-            self._initialize_tool_metrics(connector_id, backend_name)
-
-    def _initialize_tool_metrics(self, connector_id: str, public_name: str) -> None:
-        initialize_invocation_metrics(self._metrics_recorder, ToolInvocationMetricIdentity(
-            scope=InvocationScope.CONNECTOR, connector_name=connector_id, tool_name=public_name,
-        ))
 
     def _operation_availability(self) -> CapabilityAvailability:
         policy = self._permission_policy.capture()
@@ -272,22 +257,19 @@ class DownstreamMcpToolRuntimeProvider(Provider):
         client_factory = partial(self._create_capability_client, identity)
         backend_tool = ProxyTool(client_factory=client_factory, name=catalog_tool.identity.downstream_name, **tool_descriptor_options(catalog_tool))
         public_name = self._public_tool_name(connector_id, tool_name_prefix, backend_tool.name)
-        self._initialize_tool_metrics(connector_id, public_name)
-        return AuthorizedDownstreamProxyTool(identity=self._invocation_identity(connector_id, connector_name, catalog_tool, public_name), backend_tool=backend_tool, client_factory=client_factory, public_name=public_name, invocation_policy=self._invocation_policy, telemetry_interceptor=self._telemetry_interceptor(connector_name))
+        self._signals.tool_inventory_observed.send(ToolInventoryObserved((self._invocation_identity(connector_id, connector_name, catalog_tool, public_name),)))
+        return AuthorizedDownstreamProxyTool(identity=self._invocation_identity(connector_id, connector_name, catalog_tool, public_name), backend_tool=backend_tool, client_factory=client_factory, public_name=public_name, execution_pipeline=self._execution_pipelines.create(connector_name, downstream_result_is_error))
 
     def _materialize_personal_tool(self, record: PersonalToolRecord) -> AuthorizedPersonalTool:
         definition = record.definition
         catalog = record.tool
         public_name = self._public_tool_name(definition.connector_id, definition.tool_name_prefix, catalog.identity.downstream_name)
         options = tool_descriptor_options(catalog)
-        return AuthorizedPersonalTool(identity=self._invocation_identity(definition.connector_id, definition.display_name, catalog, public_name), record=record, runtime=self._personal_runtime, public_name=public_name, invocation_policy=self._invocation_policy, telemetry_interceptor=self._telemetry_interceptor(definition.display_name), options=options)
+        return AuthorizedPersonalTool(identity=self._invocation_identity(definition.connector_id, definition.display_name, catalog, public_name), record=record, runtime=self._personal_runtime, public_name=public_name, execution_pipeline=self._execution_pipelines.create(definition.display_name, downstream_result_is_error), options=options)
 
     @staticmethod
-    def _invocation_identity(connector_id: str, connector_name: str, catalog_tool: DiscoveredTool, public_name: str) -> ConnectorToolInvocationIdentity:
-        return ConnectorToolInvocationIdentity(tool_name=public_name, connector_id=connector_id, connector_name=connector_name, operation_name=catalog_tool.identity.downstream_name)
-
-    def _telemetry_interceptor(self, connector_name: str) -> ConnectorTelemetryInterceptor:
-        return ConnectorTelemetryInterceptor(connector_name=connector_name, tool_invocation_logger=self._tool_invocation_logger, metrics_recorder=self._metrics_recorder, result_is_error=lambda result: isinstance(result, ToolResult) and result.is_error)
+    def _invocation_identity(connector_id: str, connector_name: str, catalog_tool: DiscoveredTool, public_name: str) -> McpToolIdentity:
+        return McpToolIdentity(tool_name=public_name, connector_id=connector_id, connector_name=connector_name, operation_name=catalog_tool.identity.downstream_name)
 
     def _public_tool_name(self, connector_id: str, tool_name_prefix: str, backend_name: str) -> str:
         if self._active_scope() == connector_id:
@@ -526,7 +508,7 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
         return await availability.is_available(identity)
 
     async def native_capability_projection(self) -> tuple[tuple[object, ...], tuple[object, ...]]:
-        await self.initialize_metrics()
+        self._signals.tool_inventory_observed.send(await read_shared_tool_inventory(self._stores.definitions, self._stores.catalogs))
         catalogs = await self._eligible_catalogs()
         return DownstreamCapabilityIndex(catalogs).native_projection()
 

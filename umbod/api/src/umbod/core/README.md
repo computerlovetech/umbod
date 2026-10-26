@@ -24,6 +24,10 @@
 
 **Read when working with:** Group access, tool permissions, authorization state, or permission notifications. `stores/service.py` exposes session-bound permission reads and updates for atomic configuration writes. `runtime.py` evaluates typed `GroupMembership` through `RuntimeGroupPermissions`, without parsing claims. Legacy constructor claim selectors remain adapter metadata for hosting compatibility. FastMCP callbacks and policy-specific claim capture live in `umbod.mcp.authorization` and `umbod.mcp.auth.groups`.
 
+### `signals/`
+
+**Read when working with:** Typed, application-scoped synchronous signals, explicit receiver registration, isolated ordinary receiver failures, or in-memory failure capture. Signals have no logging, metrics, transport, or global registration dependency. See [the local index](signals/README.md).
+
 ### `invocation/`
 
 **Read when working with:** Cross-kind invocation policy, approval nonces, gated tool execution, or invocation-policy events. `failure_evidence.py` captures bounded exception types and traceback frames without messages, source lines or locals, with explicit internal, connector, downstream OpenAPI and downstream MCP origins. `tools/execution.py` scopes this evidence to each pipeline execution, restoring enclosing context on completion or cancellation.

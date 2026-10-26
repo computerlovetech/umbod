@@ -19,7 +19,7 @@ vi.mock('$app/state', () => ({ navigating: { to: null, from: null } }));
 describe('personal server administration presentation', () => {
   test('renders a standalone selected policy panel with whole-server guidance and no second inventory', () => {
     const body = render(PersonalServerPolicyPanel, { props: { connectorId: 'personal', api: new InMemoryPersonalServers(), configuration: { get: async () => configurationFixture() } } }).body;
-    expect(body).toContain('href="/admin/group-permissions"');
+    expect(body).toContain('href="/admin/group-permissions/connectors"');
     expect(body).toContain('including future tools after explicit rediscovery');
     expect(body).toContain('No per-tool approval, activation or tool grants are required');
     expect(body).toContain('Server details and endpoint are read-only');

@@ -15,7 +15,7 @@ from umbod.core.invocation.failure_evidence import (
     InvocationFailureOrigin,
     InvocationReturnedFailure,
 )
-from umbod.mcp.logging import (
+from umbod.mcp.signals import (
     McpInvocationActor,
     McpInvocationContext,
     McpInvocationCorrelation,
@@ -26,14 +26,17 @@ from umbod.mcp.logging import (
 )
 from umbod.mcp.metrics import CompletedToolInvocation, InvocationOutcome, InvocationScope
 from umbod.mcp.tools import McpObservedToolRegistrar
-from umbod.mcp.tools.invocation import McpToolInvocationObserver
+from umbod.core.signals import InMemorySignalFailureHandler
+from umbod.mcp.listeners.invocation_metrics import InvocationMetricsReceiver
+from umbod.mcp.metrics import McpMetricsRecorder, ToolInvocationMetricIdentity
+from umbod.mcp.signals import McpInvocationPublisher, McpSignals
 
 
 class RecordingLogger:
     def __init__(self) -> None:
         self.events: list[McpToolInvocationCompleted] = []
 
-    def record_tool_invocation_completed(self, event: McpToolInvocationCompleted) -> None:
+    def __call__(self, event: McpToolInvocationCompleted) -> None:
         self.events.append(event)
 
 
@@ -41,23 +44,40 @@ class RecordingMetrics:
     def __init__(self) -> None:
         self.invocations: list[CompletedToolInvocation] = []
 
+    def initialize_invocation(self, identity: ToolInvocationMetricIdentity) -> None:
+        return None
+
     def record_completed_invocation(self, invocation: CompletedToolInvocation) -> None:
         self.invocations.append(invocation)
 
 
 class FailingLogger:
-    def record_tool_invocation_completed(self, event: McpToolInvocationCompleted) -> None:
+    def __call__(self, event: McpToolInvocationCompleted) -> None:
         raise RuntimeError("failed")
 
 
 class FailingMetrics:
+    def initialize_invocation(self, identity: ToolInvocationMetricIdentity) -> None:
+        return None
+
     def record_completed_invocation(self, invocation: CompletedToolInvocation) -> None:
         raise RuntimeError("failed")
 
 
-class RaisingObserver(McpToolInvocationObserver):
+def _test_signals(logger: Callable[[McpToolInvocationCompleted], None], metrics: McpMetricsRecorder) -> McpSignals:
+    signals = McpSignals(InMemorySignalFailureHandler())
+    signals.invocation_completed.connect("test.logger", logger)
+    signals.invocation_completed.connect("test.metrics", InvocationMetricsReceiver(metrics))
+    return signals
+
+
+def _publisher(logger: Callable[[McpToolInvocationCompleted], None], metrics: McpMetricsRecorder) -> McpInvocationPublisher:
+    return McpInvocationPublisher(_test_signals(logger, metrics))
+
+
+class RaisingObserver(McpInvocationPublisher):
     def __init__(self, failing_method: str) -> None:
-        super().__init__(RecordingLogger(), RecordingMetrics())
+        super().__init__(_test_signals(RecordingLogger(), RecordingMetrics()))
         self._failing_method = failing_method
 
     def start(self, identity: Any) -> Any:
@@ -78,7 +98,7 @@ class RaisingObserver(McpToolInvocationObserver):
 
 def _registered_tool(
     fn: Callable[..., Any],
-    observer: McpToolInvocationObserver,
+    observer: McpInvocationPublisher,
     auth: Callable[[Any], bool] | None = None,
 ) -> Any:
     registrar = McpObservedToolRegistrar(FastMCP("test"), observer)
@@ -113,14 +133,14 @@ async def test_success_records_internal_identity_context_duration_and_metric_onc
     metrics = RecordingMetrics()
     _set_invocation_context()
     monkeypatch.setattr(
-        "umbod.mcp.tools.invocation.lifecycle.McpToolInvocationLifecycle._duration_ms",
+        "umbod.mcp.signals.lifecycle.McpToolInvocationLifecycle._duration_ms",
         lambda self: 125.0,
     )
 
     async def invoke(value: int) -> dict[str, int]:
         return {"value": value}
 
-    result = await _registered_tool(invoke, McpToolInvocationObserver(logger, metrics)).run({"value": 4})
+    result = await _registered_tool(invoke, _publisher(logger, metrics)).run({"value": 4})
 
     assert result.structured_content == {"value": 4}
     assert len(logger.events) == 1
@@ -149,7 +169,7 @@ def test_registration_preserves_callable_schemas_description_and_auth() -> None:
         description="Internal tool.",
         auth=authorization,
     )
-    actual = _registered_tool(invoke, McpToolInvocationObserver(RecordingLogger(), RecordingMetrics()), authorization)
+    actual = _registered_tool(invoke, _publisher(RecordingLogger(), RecordingMetrics()), authorization)
 
     assert actual.name == expected.name
     assert actual.description == expected.description
@@ -169,7 +189,7 @@ async def test_invalid_arguments_record_validation_without_entering_callable() -
         return value
 
     with pytest.raises(ValidationError):
-        await _registered_tool(invoke, McpToolInvocationObserver(logger, RecordingMetrics())).run({"value": "invalid"})
+        await _registered_tool(invoke, _publisher(logger, RecordingMetrics())).run({"value": "invalid"})
 
     assert entered is False
     assert len(logger.events) == 1
@@ -185,7 +205,7 @@ async def test_returned_error_is_returned_unchanged_and_recorded_as_failure() ->
     async def invoke() -> ToolResult:
         return returned
 
-    result = await _registered_tool(invoke, McpToolInvocationObserver(logger, RecordingMetrics())).run({})
+    result = await _registered_tool(invoke, _publisher(logger, RecordingMetrics())).run({})
 
     assert result is returned
     assert len(logger.events) == 1
@@ -203,7 +223,7 @@ async def test_original_exception_identity_is_preserved() -> None:
         raise failure
 
     with pytest.raises(RuntimeError) as raised:
-        await _registered_tool(invoke, McpToolInvocationObserver(logger, RecordingMetrics())).run({})
+        await _registered_tool(invoke, _publisher(logger, RecordingMetrics())).run({})
 
     assert raised.value is failure
     assert len(logger.events) == 1
@@ -225,7 +245,7 @@ async def test_cancellation_emits_no_completion() -> None:
         raise asyncio.CancelledError
 
     with pytest.raises(asyncio.CancelledError):
-        await _registered_tool(invoke, McpToolInvocationObserver(logger, RecordingMetrics())).run({})
+        await _registered_tool(invoke, _publisher(logger, RecordingMetrics())).run({})
 
     assert logger.events == []
 
@@ -261,7 +281,7 @@ async def test_logger_failure_still_records_metric_and_preserves_result() -> Non
     async def invoke() -> str:
         return "ok"
 
-    result = await _registered_tool(invoke, McpToolInvocationObserver(FailingLogger(), metrics)).run({})
+    result = await _registered_tool(invoke, _publisher(FailingLogger(), metrics)).run({})
 
     assert result.structured_content == {"result": "ok"}
     assert len(metrics.invocations) == 1
@@ -274,7 +294,7 @@ async def test_metrics_failure_preserves_result_and_log() -> None:
     async def invoke() -> str:
         return "ok"
 
-    result = await _registered_tool(invoke, McpToolInvocationObserver(logger, FailingMetrics())).run({})
+    result = await _registered_tool(invoke, _publisher(logger, FailingMetrics())).run({})
 
     assert result.structured_content == {"result": "ok"}
     assert len(logger.events) == 1

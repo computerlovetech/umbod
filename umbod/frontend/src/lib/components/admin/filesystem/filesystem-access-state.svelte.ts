@@ -46,6 +46,14 @@ export class FilesystemAccessState {
     this.rows = [...this.rows, { id: this.nextId++, issuer: this.saved?.suggested_issuer || '', group_id: '', permissions: [] }];
     this.success = '';
   };
+  applyGroup = (id: number | null, group: ObservedGroupPolicy): number | null => {
+    if (!this.editable) return null;
+    const rowId = id ?? this.nextId++;
+    const row = { ...group, permissions: [...group.permissions], id: rowId };
+    this.rows = id === null ? [...this.rows, row] : this.rows.map((current) => current.id === id ? row : current);
+    this.success = '';
+    return rowId;
+  };
   edit = (id: number, field: 'issuer' | 'group_id', value: string): void => {
     if (!this.editable) return;
     this.rows = this.rows.map((row) => row.id === id ? { ...row, [field]: value } : row);

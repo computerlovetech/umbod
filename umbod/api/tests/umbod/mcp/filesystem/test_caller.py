@@ -17,7 +17,8 @@ from umbod.mcp.filesystem import (
 )
 from umbod.mcp.filesystem.ports import FilesystemCallerCapture
 from umbod.mcp.tools import McpObservedToolRegistrar
-from umbod.mcp.tools.invocation import McpToolInvocationObserver
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals import McpInvocationPublisher
 from .conftest import FilesystemMcp
 
 
@@ -118,7 +119,7 @@ async def test_each_tool_invocation_captures_exactly_one_current_token(
     monkeypatch.setattr("umbod.mcp.filesystem.caller.get_access_token", source)
     server = FastMCP(auth=upstream_provider)
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpToolInvocationObserver(Mock(), filesystem_mcp.metrics)),
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_mcp.metrics, Mock()))),
         CurrentFilesystemCallerCapture(server, StaticFilesystemGroupClaimFields("active")),
         filesystem_mcp.services,
     )

@@ -28,9 +28,8 @@ from umbod.mcp.connectors.native.tools.invocation.errors import (
     ConnectorToolFailureResult,
 )
 from umbod.mcp.connectors.native.tools.invocation.runner import ConnectorToolInvocationRunner
-from umbod.mcp.connectors.native.tools.invocation.telemetry import (
-    ConnectorTelemetryInterceptor,
-)
+from umbod.mcp.signals.execution import ConnectorInvocationSignalInterceptor
+from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.metrics import (
     CompletedToolInvocation,
     InvocationOutcome,
@@ -41,9 +40,10 @@ from umbod.mcp.logging import (
     McpAuditEvent,
     McpAuditOutcome,
     McpAuditRecorder,
+)
+from umbod.mcp.signals import (
     McpToolInvocationFailureCategory,
     McpToolInvocationOutcome,
-    create_default_connector_tool_invocation_logger,
 )
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
@@ -118,13 +118,13 @@ def _runner(
     options: RunnerOptions = RunnerOptions(None, "Slack"),
     invocation_policy: ConnectorInvocationPolicy = PermitAllConnectorInvocationPolicy(),
 ) -> ConnectorToolInvocationRunner:
-    telemetry = ConnectorTelemetryInterceptor(
+    telemetry = ConnectorInvocationSignalInterceptor(
         connector_name=options.connector_name,
-        tool_invocation_logger=create_default_connector_tool_invocation_logger(
+        signals=create_mcp_signals(
             invocation_log_sink,
+            options.metrics_recorder or RecordingMetricsRecorder(),
             McpAuditRecorder(audit_sink, "test"),
         ),
-        metrics_recorder=options.metrics_recorder or RecordingMetricsRecorder(),
         result_is_error=lambda result: False,
     )
     return ConnectorToolInvocationRunner(
@@ -298,7 +298,7 @@ async def test_success_records_metrics_with_external_identity_and_duration(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
-        "umbod.mcp.connectors.native.tools.invocation.lifecycle.ConnectorInvocationLifecycle._duration_ms",
+        "umbod.mcp.signals.lifecycle.McpToolInvocationLifecycle._duration_ms",
         lambda self: 250.0,
     )
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
@@ -374,13 +374,11 @@ async def test_result_predicate_failure_preserves_result_and_records_failure() -
     def failing_predicate(_result: object) -> bool:
         raise RuntimeError("predicate failed")
 
-    telemetry = ConnectorTelemetryInterceptor(
+    telemetry = ConnectorInvocationSignalInterceptor(
         connector_name="Slack",
-        tool_invocation_logger=create_default_connector_tool_invocation_logger(
-            invocation_sink,
-            McpAuditRecorder(RecordingAuditSink(), "test"),
+        signals=create_mcp_signals(
+            invocation_sink, metrics, McpAuditRecorder(RecordingAuditSink(), "test")
         ),
-        metrics_recorder=metrics,
         result_is_error=failing_predicate,
     )
     invoker = ConnectorToolInvocationRunner(
@@ -438,12 +436,11 @@ async def test_native_operation_exception_preserves_identity_and_safe_connector_
     async def async_operation() -> dict[str, Any]:
         return operation()
 
-    telemetry = ConnectorTelemetryInterceptor(
+    telemetry = ConnectorInvocationSignalInterceptor(
         connector_name="Slack",
-        tool_invocation_logger=create_default_connector_tool_invocation_logger(
-            invocation_sink, McpAuditRecorder(RecordingAuditSink(), "test")
+        signals=create_mcp_signals(
+            invocation_sink, metrics, McpAuditRecorder(RecordingAuditSink(), "test")
         ),
-        metrics_recorder=metrics,
         result_is_error=lambda result: False,
     )
     invoker = ConnectorToolInvocationRunner(
@@ -505,12 +502,11 @@ async def test_returned_failure_evidence_has_only_supported_origin(
 ) -> None:
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     metrics = RecordingMetricsRecorder()
-    telemetry = ConnectorTelemetryInterceptor(
+    telemetry = ConnectorInvocationSignalInterceptor(
         connector_name="Service",
-        tool_invocation_logger=create_default_connector_tool_invocation_logger(
-            invocation_sink, McpAuditRecorder(RecordingAuditSink(), "test")
+        signals=create_mcp_signals(
+            invocation_sink, metrics, McpAuditRecorder(RecordingAuditSink(), "test")
         ),
-        metrics_recorder=metrics,
         result_is_error=lambda result: True,
     )
     returned = ToolResult(content=[], is_error=True)

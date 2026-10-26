@@ -107,7 +107,7 @@
   <div class="backdrop" role="presentation"><div class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"><h2 id="confirm-title">Delete connector?</h2><p>This permanently removes the connector and its discovered catalog.</p><form method="POST" data-operation={state.modal} use:browserSubmit={mutationSubmit('delete', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id} /><footer><Button variant="secondary" onclick={state.close}>Cancel</Button><Button type="submit" variant="danger" disabled={state.submitting}>{state.submitting ? 'Working…' : 'Confirm'}</Button></footer></form></div></div>
 {/if}
 {#if form?.message && (form.status === 'stale' || form.status === 'conflict' || form.status === 'authentication' || form.status === 'invalid')}<p class="feedback" role="alert">{form.message}</p>{/if}
-{#if state.operations.message}<p role="alert" class="feedback">{state.operations.message} <a href="/admin/group-permissions">Group permissions</a></p>{/if}
+{#if state.operations.message}<p role="alert" class="feedback">{state.operations.message} <a href="/admin/group-permissions/connectors">Group permissions</a></p>{/if}
 {#if state.operations.blocked}<Button onclick={state.operations.reload}>Reload servers</Button>{/if}
 {#if connectors.length && selected && !state.operations.blocked}
 <AdminSplitWorkspace ariaLabel="MCP connectors workspace" sidebarLabel="MCP connectors" sidebarHeading="Connectors" count={connectors.length} detailLabel="Selected MCP connector detail">

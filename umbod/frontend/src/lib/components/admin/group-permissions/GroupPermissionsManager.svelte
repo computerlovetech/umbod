@@ -2,6 +2,7 @@
   import { browserSubmit } from '$lib/admin/operations/browser-submit';
   import { untrack } from 'svelte';
   import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
+  import GroupPermissionsTabs from './GroupPermissionsTabs.svelte';
   import AdminSidebarActionMenu from '$lib/components/admin/shared/AdminSidebarActionMenu.svelte';
   import AdminToggle from '$lib/components/admin/shared/AdminToggle.svelte';
   import AdminSaveAction from '$lib/components/admin/shared/AdminSaveAction.svelte';
@@ -111,6 +112,7 @@
     <p class="admin-lede">Add groups and see what each group's agents can do — which connectors they can access and the operations allowed for each.</p>
   </div>
 
+  <GroupPermissionsTabs activeTab="connectors" />
 
   {#if state.initialTarget !== null}
     {#if state.deepLinkedTargetAvailable}

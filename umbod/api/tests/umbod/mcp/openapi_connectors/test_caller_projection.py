@@ -1,13 +1,14 @@
 import asyncio
 from contextvars import ContextVar
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, create_autospec
 
 import pytest
 from fastmcp.server.auth import AccessToken
 
 from umbod.mcp.connectors.openapi import OpenApiCodeModeExecutionAdapter
 from umbod.mcp.connectors.openapi import deps
+from umbod.mcp.signals import McpToolExecutionPipelineFactory
 from umbod.mcp.connectors.native.tools.deployment_modes.codemode import OpenApiCodeModeInvocation
 
 
@@ -62,7 +63,7 @@ async def test_retained_executor_captures_groups_before_awaits_and_isolates_over
         connector_invocation_policy=object(),
         metrics_recorder=object(),
     )
-    adapter = OpenApiCodeModeExecutionAdapter(server, object())
+    adapter = OpenApiCodeModeExecutionAdapter(server, create_autospec(McpToolExecutionPipelineFactory, instance=True))
 
     async def invoke(caller: str) -> None:
         current.set(AccessToken(token=caller, client_id="client", scopes=[], claims={"groups": [caller]}))

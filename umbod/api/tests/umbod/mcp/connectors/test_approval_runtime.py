@@ -27,7 +27,7 @@ from umbod.mcp.connectors.native import (
     McpConnectorInvocationApprovalPolicy,
     ModernConnectorApprovalRequired,
 )
-from umbod.mcp.logging import (
+from umbod.mcp.signals import (
     McpInvocationActor,
     McpInvocationContext,
     McpInvocationCorrelation,

@@ -14,7 +14,7 @@ from umbod.mcp.logging.audit.event import (
     McpAuditClientMetadata,
     McpAuthenticatedAuditActor,
 )
-from umbod.mcp.logging.invocation.event import McpInvocationActor
+from umbod.mcp.signals.events import McpInvocationActor
 
 _USER_ID_FALLBACK_FIELDS = ("email", "preferred_username")
 

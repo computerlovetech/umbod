@@ -19,7 +19,7 @@ from umbod.mcp.logging.audit.event import (
 )
 from umbod.mcp.logging.audit.identity import McpAuditIdentity
 from umbod.mcp.logging.audit.sink import create_default_mcp_audit_event_sink
-from umbod.mcp.logging.invocation.event import McpToolIdentity
+from umbod.mcp.signals.events import McpToolIdentity
 
 logger = logging.getLogger(__name__)
 

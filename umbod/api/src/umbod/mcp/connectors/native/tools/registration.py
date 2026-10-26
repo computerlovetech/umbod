@@ -7,7 +7,6 @@ from umbod.mcp.proxies import Model
 from umbod.proxies import Model as ConnectorConfigurationModel
 
 from umbod.core.configuration import ConnectorCurrentConfigurationStore
-from umbod.core.invocation import ConnectorInvocationPolicy
 from umbod.core.capabilities.descriptions import (
     ConnectorCapabilityDescriptionOverrideStore,
     SystemConnectorCapabilityDescriptionOverrideStore,
@@ -35,24 +34,12 @@ from umbod.mcp.connectors.native.tools.invocation.errors import ConnectorToolErr
 from umbod.mcp.connectors.native.tools.runtime.registry import (
     ConnectorToolInvokerDependencies,
     RuntimeConnectorToolRegistry,
-    _server_name,
     create_connector_tool_invoker_factory,
 )
 from umbod.mcp.connectors.native.tools.definition.naming import _tool_name
 from umbod.mcp.tools.registration import McpObservedToolRegistrar
-from umbod.mcp.tools.invocation.telemetry import McpToolInvocationObserver, initialize_invocation_metrics
-from umbod.mcp.metrics import (
-    InvocationScope,
-    McpMetricsRecorder,
-    PrometheusMcpMetricsRecorder,
-    ToolInvocationMetricIdentity,
-)
-from umbod.mcp.logging import (
-    InvocationLogSinkToolInvocationLogger,
-    McpAuditRecorder,
-    McpToolInvocationLogSink,
-    create_default_mcp_audit_recorder,
-)
+from umbod.mcp.signals import McpInvocationPublisher, McpSignals, McpToolIdentity, ToolInventoryObserved
+from umbod.mcp.signals.execution import McpToolExecutionPipelineFactory
 
 
 class ConnectorToolRegistrationOptions(Model):
@@ -71,18 +58,14 @@ class ConnectorToolRegistrationOptions(Model):
     )
     error_formatter: ConnectorToolErrorFormatter | None
     connector_tool_runtime_state_store: SkipValidation[ConnectorToolRuntimeStateReader | None]
-    tool_invocation_log_sink: SkipValidation[McpToolInvocationLogSink]
-    audit_recorder: SkipValidation[McpAuditRecorder | None] = None
-    metrics_recorder: SkipValidation[McpMetricsRecorder] = Field(
-        default_factory=PrometheusMcpMetricsRecorder
-    )
+    signals: SkipValidation[McpSignals]
+    execution_pipelines: SkipValidation[McpToolExecutionPipelineFactory]
     connector_tool_exposure_mode: ConnectorToolExposureMode = "flat"
     connector_code_execution_timeout_seconds: float = 30.0
     maximum_uploaded_file_bytes: int = Field(
         default=DEFAULT_MAXIMUM_UPLOADED_FILE_BYTES,
         gt=0,
     )
-    invocation_policy: SkipValidation[ConnectorInvocationPolicy]
 
 
 async def register_connector_tools(
@@ -93,10 +76,6 @@ async def register_connector_tools(
     resolved_options = _resolve_registration_options(option_arguments, registration_options)
     if not _has_required_registration_options(resolved_options):
         return
-    if resolved_options.tool_invocation_log_sink is None:
-        raise TypeError(
-            "register_connector_tools() missing required argument: 'tool_invocation_log_sink'"
-        )
     connector_tool_mappings = cast(
         Sequence[ConnectorToolMapping], resolved_options.connector_tool_mappings
     )
@@ -106,9 +85,6 @@ async def register_connector_tools(
     ):
         raise ValueError("UploadedFile connector tools are supported only in flat exposure mode")
     error_formatter = resolved_options.error_formatter or ConnectorToolErrorFormatter()
-    audit_recorder = resolved_options.audit_recorder or create_default_mcp_audit_recorder(
-        _server_name(mcp)
-    )
     client_notifier = install_tool_list_changed_notifier(mcp)
     deployment_factory = connector_tool_deployment_factory(
         resolved_options.connector_tool_exposure_mode,
@@ -120,13 +96,10 @@ async def register_connector_tools(
         create_connector_tool_invoker_factory(
             ConnectorToolInvokerDependencies(
                 error_formatter=error_formatter,
-                tool_invocation_log_sink=resolved_options.tool_invocation_log_sink,
-                audit_recorder=audit_recorder,
-                metrics_recorder=resolved_options.metrics_recorder,
+                execution_pipelines=resolved_options.execution_pipelines,
                 connector_display_names=_connector_display_names(
                     cast(Sequence[Mapping[str, object]], resolved_options.connector_registrations)
                 ),
-                invocation_policy=resolved_options.invocation_policy,
             )
         ),
         client_notifier,
@@ -142,15 +115,19 @@ async def register_connector_tools(
             for mapping in connector_tool_mappings
         )
     )
-    for mapping in connector_tool_mappings:
-        initialize_invocation_metrics(
-            resolved_options.metrics_recorder,
-            ToolInvocationMetricIdentity(
-                scope=InvocationScope.CONNECTOR,
-                connector_name=mapping.connector_id,
-                tool_name=_tool_name(mapping),
+    resolved_options.signals.tool_inventory_observed.send(
+        ToolInventoryObserved(
+            tuple(
+                McpToolIdentity(
+                    tool_name=_tool_name(mapping),
+                    connector_id=mapping.connector_id,
+                    operation_name=mapping.operation_name,
+                    connector_name=mapping.connector_id,
+                )
+                for mapping in connector_tool_mappings
             )
         )
+    )
     registry = RuntimeConnectorToolRegistry(
         mcp,
         schemas=_valid_configuration_schemas(
@@ -174,12 +151,9 @@ async def register_connector_tools(
         ),
         error_formatter=error_formatter,
         connector_tool_runtime_state_store=resolved_options.connector_tool_runtime_state_store,
-        tool_invocation_log_sink=resolved_options.tool_invocation_log_sink,
-        audit_recorder=audit_recorder,
+        execution_pipelines=resolved_options.execution_pipelines,
         client_notifier=client_notifier,
         exposure_strategy=exposure_strategy,
-        metrics_recorder=resolved_options.metrics_recorder,
-        invocation_policy=resolved_options.invocation_policy,
     )
     setattr(mcp, "connector_tool_registry", registry)
     deployment_factory.register_fixed_tools(
@@ -187,10 +161,7 @@ async def register_connector_tools(
         registry,
         McpObservedToolRegistrar(
             mcp,
-            McpToolInvocationObserver(
-                InvocationLogSinkToolInvocationLogger(resolved_options.tool_invocation_log_sink),
-                resolved_options.metrics_recorder,
-            ),
+            McpInvocationPublisher(resolved_options.signals),
         ),
     )
     await registry.reconcile_all()
@@ -246,7 +217,6 @@ def _registration_option_data(legacy_options: Mapping[str, object]) -> dict[str,
         "connector_tool_mappings": None,
         "error_formatter": None,
         "connector_tool_runtime_state_store": None,
-        "audit_recorder": None,
         "connector_tool_exposure_mode": "flat",
         "connector_code_execution_timeout_seconds": 30.0,
         "maximum_uploaded_file_bytes": DEFAULT_MAXIMUM_UPLOADED_FILE_BYTES,

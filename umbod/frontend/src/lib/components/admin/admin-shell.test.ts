@@ -31,6 +31,10 @@ describe('admin shell logout', () => {
     expect(shell.body).toContain('href="/dashboard"');
     expect(shell.body).toContain('Administration</a>');
     expect(shell.body).toContain('href="/admin/connectors"');
+    expect(shell.body).toContain('href="/admin/group-permissions/connectors"');
+    expect(shell.body).not.toContain('href="/admin/group-permissions"');
+    expect(shell.body).not.toContain('href="/admin/filesystem"');
+    expect(shell.body).not.toContain('Filesystem</a>');
     expect(shell.body.indexOf('Dashboard</a>')).toBeLessThan(shell.body.indexOf('Administration</a>'));
     expect(logout).not.toHaveBeenCalled();
   });

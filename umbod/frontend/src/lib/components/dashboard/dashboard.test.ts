@@ -45,7 +45,7 @@ describe('dashboard presentation', () => {
     expect(currentUser).not.toHaveBeenCalled();
     expect(body).toContain('href="/dashboard"');
     expect(body).toContain('aria-busy="true"');
-    for (const path of ['/admin', '/admin/connectors', '/admin/group-permissions', '/admin/mcp-setup', '/admin/instance-configuration']) {
+    for (const path of ['/admin', '/admin/connectors', '/admin/group-permissions/connectors', '/admin/group-permissions/filesystem', '/admin/filesystem', '/admin/mcp-setup', '/admin/instance-configuration']) {
       expect(body.includes(`href="${path}"`)).toBe(false);
     }
   });

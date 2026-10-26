@@ -16,6 +16,8 @@ from fastmcp.tools.base import Tool, ToolResult
 from umbod.mcp.logging import (
     McpAuditCorrelation,
     McpAuditIdentitySource,
+)
+from umbod.mcp.signals import (
     McpInvocationContext,
     McpInvocationCorrelation,
     McpToolIdentity,

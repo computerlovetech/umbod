@@ -15,7 +15,7 @@ from umbod.core.invocation.failure_evidence import (
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
 from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable
-from umbod.mcp.tools.invocation.diagnostics import invocation_failure
+from umbod.mcp.signals.diagnostics import invocation_failure
 from typing import Any
 
 from fastmcp.server.dependencies import get_context
@@ -34,14 +34,10 @@ from umbod.core.connectors.downstream_mcp.personal_tools import validate_contrac
 from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.invocation import (
     ConnectorInvocationDenied,
-    ConnectorInvocationPolicy,
 )
-from umbod.core.invocation.tools.execution import PreparedToolExecution, ToolExecutionRequest, create_tool_execution_pipeline, prepare_tool_execution
+from umbod.core.invocation.tools.execution import PreparedToolExecution, ToolExecutionRequest, ToolExecutionPipeline, prepare_tool_execution
 from umbod.mcp.connectors.native import ModernConnectorApprovalRequired
-from umbod.mcp.connectors.native.tools import (
-    ConnectorTelemetryInterceptor,
-    ConnectorToolInvocationIdentity,
-)
+from umbod.mcp.signals import McpToolIdentity
 
 
 class _InitialDownstreamContext:
@@ -64,17 +60,14 @@ class AuthorizedDownstreamTool(Tool):
     def __init__(
         self,
         *,
-        identity: ConnectorToolInvocationIdentity,
+        identity: McpToolIdentity,
         options: dict[str, Any],
         public_name: str,
-        invocation_policy: ConnectorInvocationPolicy,
-        telemetry_interceptor: ConnectorTelemetryInterceptor,
+        execution_pipeline: ToolExecutionPipeline[ToolResult],
     ) -> None:
         super().__init__(name=public_name, **options)
         self._identity = identity
-        self._execution_pipeline = create_tool_execution_pipeline(
-            invocation_policy, (telemetry_interceptor,)
-        )
+        self._execution_pipeline = execution_pipeline
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
         try:
@@ -130,9 +123,9 @@ class AuthorizedDownstreamTool(Tool):
 
 
 class AuthorizedDownstreamProxyTool(AuthorizedDownstreamTool):
-    def __init__(self, *, identity: ConnectorToolInvocationIdentity, backend_tool: ProxyTool, client_factory: object, public_name: str, invocation_policy: ConnectorInvocationPolicy, telemetry_interceptor: ConnectorTelemetryInterceptor) -> None:
+    def __init__(self, *, identity: McpToolIdentity, backend_tool: ProxyTool, client_factory: object, public_name: str, execution_pipeline: ToolExecutionPipeline[ToolResult]) -> None:
         options = _proxy_tool_options(backend_tool)
-        super().__init__(identity=identity, options=options, public_name=public_name, invocation_policy=invocation_policy, telemetry_interceptor=telemetry_interceptor)
+        super().__init__(identity=identity, options=options, public_name=public_name, execution_pipeline=execution_pipeline)
         self._backend_tool = backend_tool
 
     async def _invoke_downstream(self, arguments: dict[str, Any]) -> ToolResult:
@@ -167,8 +160,8 @@ def _safe_downstream_failure() -> ToolResult:
 
 
 class AuthorizedPersonalTool(AuthorizedDownstreamTool):
-    def __init__(self, *, identity: ConnectorToolInvocationIdentity, record: PersonalToolRecord, runtime: PersonalToolRuntime, public_name: str, invocation_policy: ConnectorInvocationPolicy, telemetry_interceptor: ConnectorTelemetryInterceptor, options: dict[str, Any]) -> None:
-        super().__init__(identity=identity, options=options, public_name=public_name, invocation_policy=invocation_policy, telemetry_interceptor=telemetry_interceptor)
+    def __init__(self, *, identity: McpToolIdentity, record: PersonalToolRecord, runtime: PersonalToolRuntime, public_name: str, execution_pipeline: ToolExecutionPipeline[ToolResult], options: dict[str, Any]) -> None:
+        super().__init__(identity=identity, options=options, public_name=public_name, execution_pipeline=execution_pipeline)
         self._runtime = runtime
         self._command = InvokePersonalTool(identity=CapabilityIdentity(connector_kind="downstream_mcp", connector_id=record.definition.connector_id, capability_kind="tool", capability_key=record.tool.identity.downstream_name), inventory_revision=record.inventory_revision, fingerprint=record.fingerprint, arguments={})
 

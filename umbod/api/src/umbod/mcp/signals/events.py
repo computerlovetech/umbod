@@ -54,7 +54,7 @@ class McpToolInvocationStarted:
     correlation: McpInvocationCorrelation | None = None
 
 
-class McpToolInvocationLogEvent(Protocol):
+class McpToolInvocationEvent(Protocol):
     started: McpToolInvocationStarted
     duration_ms: float
 
@@ -86,3 +86,8 @@ class McpToolInvocationFailed:
 
 
 McpToolInvocationCompleted = McpToolInvocationSucceeded | McpToolInvocationFailed
+
+
+@dataclass(frozen=True)
+class ToolInventoryObserved:
+    identities: tuple[McpToolIdentity, ...]

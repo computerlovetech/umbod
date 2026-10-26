@@ -9,6 +9,13 @@ import re
 import asyncio
 from typing import Any, cast
 import mcp.types
+from umbod.core.signals import InMemorySignalFailureHandler
+from umbod.mcp.signals import McpSignals, McpToolIdentity, ToolInventoryObserved
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
+from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
+from umbod.mcp.logging import create_default_mcp_audit_recorder
+
 import pytest
 from fastmcp import Client, FastMCP
 from fastmcp.client.messages import MessageHandler
@@ -47,7 +54,16 @@ async def test_connector_tool_invocation_emits_invocation_and_audit_logs() -> No
     await _save_valid_slack_configuration(configuration_store)
     await publishing_store.publish_connector('slack')
     mcp = FastMCP(name='test')
-    await register_connector_tools(mcp, invocation_policy=PermitAllConnectorInvocationPolicy(), connector_registrations=[SLACK_REGISTRATION], connector_configuration_store=configuration_store, connector_publishing_store=publishing_store, connector_tool_mappings=[_tool_mapping('slack', 'search_messages')], tool_invocation_log_sink=StdoutMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter(), invocation_stream), audit_recorder=McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), audit_stream), 'test'))
+    signals = create_mcp_signals(StdoutMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter(), invocation_stream), PrometheusMcpMetricsRecorder(), McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), audit_stream), 'test'))
+    await register_connector_tools(
+        mcp,
+        signals=signals,
+        execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()),
+        connector_registrations=[SLACK_REGISTRATION],
+        connector_configuration_store=configuration_store,
+        connector_publishing_store=publishing_store,
+        connector_tool_mappings=[_tool_mapping('slack', 'search_messages')],
+    )
     async with Client(mcp) as client:
         await client.call_tool('slack_search_messages', {})
     records = [_single_json_record(stream.getvalue()) for stream in (invocation_stream, audit_stream)]
@@ -58,6 +74,38 @@ async def test_connector_tool_invocation_emits_invocation_and_audit_logs() -> No
     assert audit_record['attributes']['mcp.audit.outcome'] == 'success'
     assert audit_record['attributes']['mcp.tool.name'] == 'slack_search_messages'
     assert audit_record['trace_id'] == invocation_record['trace_id']
+
+@pytest.mark.asyncio
+async def test_registration_observes_all_configured_tools_before_publication() -> None:
+    signals = McpSignals(InMemorySignalFailureHandler())
+    inventories: list[ToolInventoryObserved] = []
+    signals.tool_inventory_observed.connect("test.inventory", inventories.append)
+    await register_connector_tools(
+        FastMCP("inventory-test"),
+        signals=signals,
+        execution_pipelines=SignalToolExecutionPipelineFactory(
+            signals, PermitAllConnectorInvocationPolicy()
+        ),
+        connector_registrations=[SLACK_REGISTRATION, GITHUB_REGISTRATION],
+        connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(),
+        connector_publishing_store=ConnectorPublishingStoreService(
+            create_inmemory_runtime().database, PUBLICATION_STATE_TABLE
+        ),
+        connector_tool_mappings=[
+            _tool_mapping("slack", "search_messages"),
+            _tool_mapping("github", "list_repositories"),
+        ],
+    )
+
+    assert inventories == [
+        ToolInventoryObserved(
+            (
+                McpToolIdentity("slack_search_messages", "slack", "search_messages", "slack"),
+                McpToolIdentity("github_list_repositories", "github", "list_repositories", "github"),
+            )
+        )
+    ]
+
 
 @pytest.mark.asyncio
 async def test_admin_publish_makes_connector_tools_available_without_restarting_mcp_server() -> None:
@@ -276,7 +324,17 @@ async def _save_valid_slack_configuration(configuration_store: InMemoryConnector
 
 async def _build_mcp_with_runtime_state(configuration_store: InMemoryConnectorCurrentConfigurationStore, publishing_store: ConnectorPublishingStoreService, runtime_state_store: InMemoryConnectorToolRuntimeStateStore) -> FastMCP:
     mcp = FastMCP(name='test')
-    await register_connector_tools(mcp, invocation_policy=PermitAllConnectorInvocationPolicy(), connector_registrations=[SLACK_REGISTRATION], connector_configuration_store=configuration_store, connector_publishing_store=publishing_store, connector_tool_mappings=[_tool_mapping('slack', 'search_messages')], connector_tool_runtime_state_store=runtime_state_store, tool_invocation_log_sink=create_default_mcp_tool_invocation_log_sink())
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test"))
+    await register_connector_tools(
+        mcp,
+        signals=signals,
+        execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()),
+        connector_registrations=[SLACK_REGISTRATION],
+        connector_configuration_store=configuration_store,
+        connector_publishing_store=publishing_store,
+        connector_tool_mappings=[_tool_mapping('slack', 'search_messages')],
+        connector_tool_runtime_state_store=runtime_state_store,
+    )
     return mcp
 
 def _slack_search_messages_ref() -> ConnectorToolRef:

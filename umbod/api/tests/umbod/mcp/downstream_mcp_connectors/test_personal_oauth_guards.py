@@ -1,3 +1,5 @@
+from umbod.mcp.signals import SignalToolExecutionPipelineFactory
+from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -41,13 +43,7 @@ from umbod.mcp.connectors.downstream_mcp.discovery_execution import (
     ConnectorDiscoveryExecutionDependencies,
     ConnectorDiscoveryExecutor,
 )
-from umbod.mcp.logging import McpToolInvocationCompleted
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
-
-
-class NullInvocationLogger:
-    def record_tool_invocation_completed(self, event: McpToolInvocationCompleted) -> None:
-        return None
 
 
 class RejectingDownstreamFactory:
@@ -134,13 +130,14 @@ async def ownership() -> OwnershipFixture:
         ), ActivationStatus.ENABLED)
     factory = RejectingDownstreamFactory()
     permissions = MutablePermissionPolicy()
+    signals = invocation_signals(InMemoryMcpMetricsRecorder())
     provider = ConnectorAwareDownstreamMcpToolProvider(personal_runtime=DisabledPersonalToolRuntime(),
         definitions=stores.definitions, credentials=stores.credentials,
         catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations,
         client_factory=factory, permission_policy=permissions,
         connector_scope="", capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(),
-        tool_invocation_logger=NullInvocationLogger(),
-        metrics_recorder=InMemoryMcpMetricsRecorder(), invocation_policy=PermitAllConnectorInvocationPolicy(),
+        signals=signals,
+        execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()),
     )
     return OwnershipFixture(stores, provider, factory, permissions)
 

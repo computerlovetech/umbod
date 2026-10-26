@@ -5,7 +5,8 @@ import pytest
 
 from umbod.core.connectors.openapi.management.models import OpenApiConnector
 from umbod.core.connectors.openapi.stores import OpenApiConnectorReader
-from umbod.mcp.connectors.openapi.metrics import initialize_openapi_metrics
+from umbod.mcp.connectors.openapi.inventory import read_openapi_tool_inventory
+from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder, McpMetricsRecorder
 
 
@@ -27,8 +28,11 @@ async def test_known_openapi_inventory_initializes_both_outcomes_without_complet
     recorder = InMemoryMcpMetricsRecorder()
     port: McpMetricsRecorder = recorder
 
-    await initialize_openapi_metrics(connector_reader, port)
-    await initialize_openapi_metrics(connector_reader, port)
+    signals = invocation_signals(port)
+    event = await read_openapi_tool_inventory(connector_reader)
+    assert [(identity.tool_name, identity.connector_id, identity.connector_name, identity.operation_name) for identity in event.identities] == [("execute_openapi", "weather", "Weather", None)]
+    signals.tool_inventory_observed.send(event)
+    signals.tool_inventory_observed.send(event)
 
     samples = recorder.metric_samples()
     assert len(samples) == 4
@@ -45,9 +49,10 @@ async def test_metrics_initialization_failure_does_not_abort_openapi_inventory_s
     recorder = create_autospec(McpMetricsRecorder, instance=True)
     recorder.initialize_invocation.side_effect = RuntimeError("private-initialization-detail")
 
-    await initialize_openapi_metrics(connector_reader, cast(McpMetricsRecorder, recorder))
+    signals = invocation_signals(cast(McpMetricsRecorder, recorder))
+    signals.tool_inventory_observed.send(await read_openapi_tool_inventory(connector_reader))
 
     recorder.initialize_invocation.assert_called_once()
     recorder.record_completed_invocation.assert_not_called()
-    assert "MCP tool metrics initialization failed" in caplog.text
+    assert "mcp.inventory.metrics" in caplog.text
     assert "private-initialization-detail" not in caplog.text

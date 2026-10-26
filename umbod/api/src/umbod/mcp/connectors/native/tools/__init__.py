@@ -2,7 +2,6 @@ from importlib import import_module
 from typing import Any
 
 __all__ = [
-    "ConnectorTelemetryInterceptor",
     "ConnectorToolChangePollingSynchronizer",
     "ConnectorToolChangeStreamReader",
     "ConnectorToolErrorFormatter",
@@ -20,11 +19,10 @@ __all__ = [
 ]
 
 _EXPORTS: dict[str, str] = {
-    "ConnectorTelemetryInterceptor": ".invocation.telemetry",
     "ConnectorToolChangePollingSynchronizer": ".runtime.synchronization",
     "ConnectorToolChangeStreamReader": ".runtime.synchronization",
     "ConnectorToolErrorFormatter": ".invocation.errors",
-    "ConnectorToolInvocationIdentity": ".invocation.lifecycle",
+    "ConnectorToolInvocationIdentity": ".invocation.identity",
     "ConnectorToolMapping": "umbod.core.connectors.native.runtime.tools",
     "ConnectorToolRuntimeStateSynchronizer": ".runtime.synchronization",
     "ConnectorToolSearchCandidate": ".discovery.search",

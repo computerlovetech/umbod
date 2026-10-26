@@ -4,6 +4,11 @@ from hashlib import sha256
 from inspect import signature
 from typing import Annotated, Optional
 
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
+from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
+from umbod.mcp.logging import create_default_mcp_audit_recorder
+
 import pytest
 from fastmcp import FastMCP
 from fastmcp.tools import ToolResult
@@ -123,9 +128,11 @@ async def test_safe_arguments_distinguish_files_with_identical_metadata() -> Non
     recording_policy = RecordingInvocationPolicy()
     policy: ConnectorInvocationPolicy = recording_policy
     mcp = FastMCP("file-policy-test")
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test"))
     await register_connector_tools(
         mcp,
-        invocation_policy=policy,
+        signals=signals,
+        execution_pipelines=SignalToolExecutionPipelineFactory(signals, policy),
         connector_registrations=[connector.registration()],
         connector_configuration_store=configuration_store,
         connector_publishing_store=publishing_store,
@@ -136,7 +143,6 @@ async def test_safe_arguments_distinguish_files_with_identical_metadata() -> Non
             operation=upload,
             parameters={},
         )],
-        tool_invocation_log_sink=create_default_mcp_tool_invocation_log_sink(),
     )
     backend_name = next(
         tool.name for tool in await mcp.list_tools() if tool.name.startswith("submit_")

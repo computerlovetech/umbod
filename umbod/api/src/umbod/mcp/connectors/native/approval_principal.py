@@ -3,7 +3,7 @@ from typing import Protocol, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from umbod.core.invocation import ConnectorInvocationDenied
-from umbod.mcp.logging import current_mcp_invocation_context
+from umbod.mcp.signals import current_mcp_invocation_context
 
 
 class ApprovalActorIdentity(BaseModel):

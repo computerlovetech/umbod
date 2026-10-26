@@ -3,6 +3,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
+from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
+from umbod.mcp.logging import create_default_mcp_audit_recorder
+
 import pytest
 from fastapi.testclient import TestClient
 from fastmcp import Client, FastMCP
@@ -132,11 +137,16 @@ async def test_actual_runtime_rejects_gateway_collisions_without_disabling_unrel
             parameters={}, tool_name_prefix=prefix,
         ))
     public = FastMCP("catalogue-collision-parity")
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test"))
     await register_connector_tools(
-        public, invocation_policy=PermitAllConnectorInvocationPolicy(), connector_registrations=_registrations(),
-        connector_configuration_store=configurations, connector_publishing_store=publishing,
-        connector_tool_mappings=mappings, connector_tool_exposure_mode=mode,
-        tool_invocation_log_sink=create_default_mcp_tool_invocation_log_sink(),
+        public,
+        signals=signals,
+        execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()),
+        connector_registrations=_registrations(),
+        connector_configuration_store=configurations,
+        connector_publishing_store=publishing,
+        connector_tool_mappings=mappings,
+        connector_tool_exposure_mode=mode,
     )
     if mode == "flat":
         public.add_provider(provider)

@@ -1,5 +1,10 @@
 from typing import Any
 
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
+from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
+from umbod.mcp.logging import create_default_mcp_audit_recorder
+
 import pytest
 from fastmcp import FastMCP
 
@@ -43,15 +48,16 @@ async def test_codemode_registration_does_not_mutate_unrelated_tools() -> None:
     def unrelated_tool() -> dict[str, str]:
         return {"status": "still callable"}
 
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test"))
     await register_connector_tools(
         mcp,
-        invocation_policy=PermitAllConnectorInvocationPolicy(),
+        signals=signals,
+        execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()),
         connector_registrations=[],
         connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(),
         connector_publishing_store=InMemoryConnectorPublishingStore(),
         connector_tool_mappings=[],
         connector_tool_exposure_mode="codemode",
-        tool_invocation_log_sink=create_default_mcp_tool_invocation_log_sink(),
     )
 
     tool_names = {tool.name for tool in await mcp.list_tools()}

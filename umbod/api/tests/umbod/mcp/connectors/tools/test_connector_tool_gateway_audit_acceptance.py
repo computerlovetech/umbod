@@ -6,6 +6,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from io import StringIO
 from typing import Any
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
+from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
+
 import pytest
 from fastmcp import Client, FastMCP
 from pydantic import SecretStr
@@ -54,7 +58,17 @@ async def _audited_gateway() -> tuple[FastMCP, StringIO]:
     stream = StringIO()
     audit_recorder = McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), stream), 'test')
     mcp = FastMCP(name='test', middleware=[McpAuditMiddleware(audit_recorder, McpAuditIdentityAdapter(), exposure_mode='gateway')])
-    await register_connector_tools(mcp, invocation_policy=PermitAllConnectorInvocationPolicy(), connector_registrations=[{'id': 'slack', 'display_name': 'Slack', 'capability_description': 'Access connector capabilities.', 'description': 'Slack', 'configuration_schema': SlackAdminConfiguration}], connector_configuration_store=configurations, connector_publishing_store=publications, connector_tool_mappings=[ConnectorToolMapping('slack', 'list_readable_channels', 'List Slack channels.', lambda limit: {'channels': []})], connector_tool_exposure_mode='gateway', tool_invocation_log_sink=create_default_mcp_tool_invocation_log_sink(), audit_recorder=audit_recorder)
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), audit_recorder)
+    await register_connector_tools(
+        mcp,
+        signals=signals,
+        execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()),
+        connector_registrations=[{'id': 'slack', 'display_name': 'Slack', 'capability_description': 'Access connector capabilities.', 'description': 'Slack', 'configuration_schema': SlackAdminConfiguration}],
+        connector_configuration_store=configurations,
+        connector_publishing_store=publications,
+        connector_tool_mappings=[ConnectorToolMapping('slack', 'list_readable_channels', 'List Slack channels.', lambda limit: {'channels': []})],
+        connector_tool_exposure_mode='gateway',
+    )
     return (mcp, stream)
 
 def _records(stream: StringIO) -> list[dict[str, Any]]:

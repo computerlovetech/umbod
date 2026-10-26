@@ -20,6 +20,8 @@ from umbod.mcp.logging import (
     McpAuditIdentity,
     McpAuditOutcome,
     McpAuditRecorder,
+)
+from umbod.mcp.signals import (
     McpInvocationActor,
     current_mcp_invocation_context,
 )

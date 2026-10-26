@@ -21,8 +21,7 @@ const administratorNavigation: readonly WorkspaceNavigationItem[] = [
   ...dashboardNavigation,
   { id: 'overview', label: 'Administration', href: '/admin' },
   { id: 'connectors', label: 'Connectors', href: '/admin/connectors' },
-  { id: 'groupPermissions', label: 'Group permissions', href: '/admin/group-permissions' },
-  { id: 'filesystem', label: 'Filesystem', href: '/admin/filesystem' },
+  { id: 'groupPermissions', label: 'Group permissions', href: '/admin/group-permissions/connectors' },
   { id: 'mcpSetup', label: 'MCP setup guide', href: '/admin/mcp-setup' },
   { id: 'instanceConfiguration', label: 'Instance settings', href: '/admin/instance-configuration' }
 ];

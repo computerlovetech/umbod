@@ -11,7 +11,7 @@ from umbod.core.invocation.failure_evidence import (
     InvocationReturnedFailure,
     exception_evidence,
 )
-from umbod.mcp.logging.invocation.event import (
+from umbod.mcp.signals.events import (
     McpInteractionType,
     McpInvocationActor,
     McpInvocationCorrelation,

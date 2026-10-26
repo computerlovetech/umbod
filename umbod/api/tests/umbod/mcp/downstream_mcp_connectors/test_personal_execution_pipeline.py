@@ -1,3 +1,5 @@
+from umbod.mcp.signals import SignalToolExecutionPipelineFactory
+from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
 from tests.umbod.core.downstream_mcp_connectors.personal_caller_support import captured_personal_caller
 from collections.abc import Awaitable, Callable, Mapping
 from typing import Any, Optional
@@ -24,7 +26,7 @@ from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolP
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import personal_tool_permission_check
 from umbod.mcp.connectors.downstream_mcp.provider import reset_request_connector_scope, set_request_connector_scope
 from umbod.mcp.connectors.downstream_mcp.tool_invocation import AuthorizedPersonalTool
-from umbod.mcp.logging import McpToolInvocationCompleted
+from umbod.mcp.signals import McpToolInvocationCompleted
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
 
 from tests.umbod.mcp.downstream_mcp_connectors.test_personal_oauth_guards import RejectingDownstreamFactory
@@ -36,7 +38,7 @@ class InvocationLog:
     def __init__(self) -> None:
         self.events: list[McpToolInvocationCompleted] = []
 
-    def record_tool_invocation_completed(self, event: McpToolInvocationCompleted) -> None:
+    def __call__(self, event: McpToolInvocationCompleted) -> None:
         self.events.append(event)
 
 
@@ -50,9 +52,10 @@ class ApprovalMutation:
         await self._mutation()
 
 
-def provider_for(execution: ExecutionCase, policy: ConnectorInvocationPolicy, log: InvocationLog, metrics_recorder: Optional[InMemoryMcpMetricsRecorder]=None) -> ConnectorAwareDownstreamMcpToolProvider:
+def provider_for(execution: ExecutionCase, policy: ConnectorInvocationPolicy, log: Callable[[McpToolInvocationCompleted], None], metrics_recorder: Optional[InMemoryMcpMetricsRecorder]=None) -> ConnectorAwareDownstreamMcpToolProvider:
     stores = execution.case.bundle
-    return ConnectorAwareDownstreamMcpToolProvider(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=RejectingDownstreamFactory(), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope="", capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), tool_invocation_logger=log, metrics_recorder=metrics_recorder or InMemoryMcpMetricsRecorder(), invocation_policy=policy, personal_runtime=execution.runtime)
+    signals = invocation_signals(metrics_recorder or InMemoryMcpMetricsRecorder(), log)
+    return ConnectorAwareDownstreamMcpToolProvider(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=RejectingDownstreamFactory(), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope="", capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, policy), personal_runtime=execution.runtime)
 
 
 @pytest.mark.asyncio
@@ -62,7 +65,7 @@ async def test_listing_personal_tools_does_not_expose_metric_identities(runtime_
     metrics = InMemoryMcpMetricsRecorder()
     log = InvocationLog()
     provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), log, metrics)
-    await provider.initialize_metrics()
+    await provider.native_capability_projection()
     assert metrics.metric_samples() == ()
     token = set_request_connector_scope(connector_scope)
     try:

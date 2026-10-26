@@ -28,8 +28,9 @@ from umbod.core.invocation.tools.execution import (
     ToolExecutionRequest,
     ToolExecutionFailed,
 )
-from umbod.mcp.connectors.native.tools.invocation.telemetry import ConnectorTelemetryInterceptor
-from umbod.mcp.logging import McpAuditRecorder, create_default_connector_tool_invocation_logger
+from umbod.mcp.signals import ConnectorInvocationSignalInterceptor
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.logging import McpAuditRecorder
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
@@ -451,13 +452,9 @@ async def test_openapi_failure_evidence_preserves_origin_and_one_safe_completion
     await _save(store, _records())
     sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
-    logger = create_default_connector_tool_invocation_logger(
-        sink, McpAuditRecorder(audit_sink, "test")
-    )
+    signals = create_mcp_signals(sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, "test"))
     recorder = FailureEvidenceRecorder()
-    telemetry = ConnectorTelemetryInterceptor(
-        "Inventory", logger, InMemoryMcpMetricsRecorder(), lambda result: False
-    )
+    observer = ConnectorInvocationSignalInterceptor("Inventory", signals, lambda result: False)
     transport: OutboundOperationTransport = RecordingTransport(events)
     authenticator: OpenApiRequestAuthenticator = CanaryAuthenticator("private-bearer-canary")
     normalizer: OpenApiResponseNormalizer = RecordingNormalizer(events)
@@ -473,7 +470,7 @@ async def test_openapi_failure_evidence_preserves_origin_and_one_safe_completion
         store, RecordingAuthorizer(events, True), AggregateOpenApiOperationResolver(),
         RecordingCompiler(events), transport, normalizer,
         OpenApiExecutionLimits(timeout_seconds=1, maximum_response_bytes=5), authenticator,
-        create_tool_execution_pipeline(PermitAllConnectorInvocationPolicy(), (telemetry, recorder)),
+        create_tool_execution_pipeline(PermitAllConnectorInvocationPolicy(), (observer, recorder)),
     )
 
     result = await service.execute(
@@ -543,13 +540,9 @@ async def test_openapi_http_error_status_is_a_successful_completion_without_fail
     await _save(store, _records())
     sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
-    logger = create_default_connector_tool_invocation_logger(
-        sink, McpAuditRecorder(audit_sink, "test")
-    )
+    signals = create_mcp_signals(sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, "test"))
     recorder = FailureEvidenceRecorder()
-    telemetry = ConnectorTelemetryInterceptor(
-        "Inventory", logger, InMemoryMcpMetricsRecorder(), lambda result: False
-    )
+    observer = ConnectorInvocationSignalInterceptor("Inventory", signals, lambda result: False)
     service = OpenApiCapabilityExecutionService(
         store, RecordingAuthorizer(events, True), AggregateOpenApiOperationResolver(),
         RecordingCompiler(events),
@@ -559,7 +552,7 @@ async def test_openapi_http_error_status_is_a_successful_completion_without_fail
         IdentityOpenApiResponseNormalizer(),
         OpenApiExecutionLimits(timeout_seconds=1, maximum_response_bytes=5),
         CanaryAuthenticator("private-bearer-canary"),
-        create_tool_execution_pipeline(PermitAllConnectorInvocationPolicy(), (telemetry, recorder)),
+        create_tool_execution_pipeline(PermitAllConnectorInvocationPolicy(), (observer, recorder)),
     )
 
     result = await service.execute(_input(), ("engineering",))

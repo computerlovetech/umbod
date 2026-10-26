@@ -5,9 +5,9 @@ from enum import StrEnum
 from typing import Mapping, Protocol, Self
 
 from umbod.core.invocation.failure_evidence import InvocationExceptionEvidence
-from umbod.mcp.logging.invocation.event import (
+from umbod.mcp.signals.events import (
     McpToolInvocationFailed,
-    McpToolInvocationLogEvent,
+    McpToolInvocationEvent,
     McpToolInvocationOutcome,
 )
 
@@ -53,17 +53,17 @@ class StructuredLogRecord:
 
 class McpToolInvocationLogFormatter(Protocol):
     def format_invocation_completed(
-        self, event: McpToolInvocationLogEvent
+        self, event: McpToolInvocationEvent
     ) -> McpToolInvocationLogRecord: ...
 
 
 class StructuredMcpToolInvocationLogFormatter:
-    def format_invocation_completed(self, event: McpToolInvocationLogEvent) -> StructuredLogRecord:
+    def format_invocation_completed(self, event: McpToolInvocationEvent) -> StructuredLogRecord:
         return assemble_invocation_log_record(event, map_invocation_attributes(event))
 
 
 def map_invocation_attributes(
-    event: McpToolInvocationLogEvent,
+    event: McpToolInvocationEvent,
 ) -> dict[str, StructuredAttributeValue]:
     builder = _InvocationLogAttributesBuilder(event)
     optional_attributes = (
@@ -84,7 +84,7 @@ def map_invocation_attributes(
 
 
 def assemble_invocation_log_record(
-    event: McpToolInvocationLogEvent,
+    event: McpToolInvocationEvent,
     attributes: Mapping[str, StructuredAttributeValue],
 ) -> StructuredLogRecord:
     correlation = getattr(event.started, "correlation", None)
@@ -98,7 +98,7 @@ def assemble_invocation_log_record(
 
 
 class _InvocationLogAttributesBuilder:
-    def __init__(self, event: McpToolInvocationLogEvent) -> None:
+    def __init__(self, event: McpToolInvocationEvent) -> None:
         self._attributes: dict[str, StructuredAttributeValue] = {
             McpToolInvocationLogAttribute.INTERACTION_TYPE: _enum_value(
                 event.started.interaction_type
@@ -115,7 +115,7 @@ class _InvocationLogAttributesBuilder:
         self._attributes[key] = value
         return self
 
-    def with_failure(self, event: McpToolInvocationLogEvent) -> Self:
+    def with_failure(self, event: McpToolInvocationEvent) -> Self:
         if isinstance(event, McpToolInvocationFailed):
             self._attributes[McpToolInvocationLogAttribute.FAILURE_CATEGORY] = _enum_value(
                 event.failure_category

@@ -84,13 +84,15 @@ from umbod.mcp.connectors.native.tools import (
     install_tool_list_changed_notifier,
     register_connector_tools,
 )
-from umbod.mcp.metrics import McpMetricsRecorder, PrometheusMcpMetricsRecorder
+from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
 from umbod.mcp.metrics.http_server import McpMetricsHttpServer
-from umbod.mcp.logging import ConnectorToolInvocationLogger, McpAuditIdentityAdapter, McpToolInvocationLogSink, create_default_connector_tool_invocation_logger, create_default_mcp_audit_recorder, create_default_mcp_tool_invocation_log_sink
+from umbod.mcp.logging import McpAuditIdentityAdapter, McpToolInvocationLogSink, create_default_mcp_audit_recorder, create_default_mcp_tool_invocation_log_sink
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals import McpInvocationPublisher, McpSignals, McpToolExecutionPipelineFactory, SignalToolExecutionPipelineFactory
+from umbod.mcp.connectors.downstream_mcp.inventory import read_shared_tool_inventory
 from umbod.mcp.middleware import McpAuditMiddleware
 from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesystemServiceFactory, RuntimeFilesystemGroupClaimFields, StaticFilesystemGroupClaimFields, register_filesystem_tools
 from umbod.mcp.tools import McpObservedToolRegistrar
-from umbod.mcp.tools.invocation import McpToolInvocationObserver
 from umbod.core.persistence import Database, PersistenceRuntime
 from umbod.core.connectors.downstream_mcp.adapters.settings import (
     downstream_mcp_infrastructure_settings_from_app_config,
@@ -102,7 +104,7 @@ from umbod.core.connectors.openapi.execution import OutboundHttpClientFactory
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.authorization import connector_tool_permission_check
 from umbod.mcp.connectors.openapi import DatabaseGroupPermissionReaderFactory, OutboundHttpClientFactoryPort, build_openapi_codemode_executor
-from umbod.mcp.connectors.openapi.metrics import initialize_openapi_metrics
+from umbod.mcp.connectors.openapi.inventory import read_openapi_tool_inventory
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, ConnectorStorePair, HttpConnectorRuntimeStateSourceStrategy, LocalConnectorRuntimeStateSourceStrategy, StoreBackedConnectorRuntimeStateSourceStrategy, resolve_connector_runtime_state_source_strategy
 from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
 from umbod.config import AppConfig, InMemoryConnectorStoreConfig, SQLiteConnectorStoreConfig, load_server_app_config
@@ -138,7 +140,8 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     if len(invocation_log_sinks) > 1:
         raise TypeError("At most one invocation log sink may be supplied")
     invocation_log_sink = invocation_log_sinks[0] if invocation_log_sinks else create_default_mcp_tool_invocation_log_sink()
-    tool_invocation_logger = create_default_connector_tool_invocation_logger(invocation_log_sink, audit_recorder)
+    signals = create_mcp_signals(invocation_log_sink, metrics_recorder, audit_recorder)
+    publisher = McpInvocationPublisher(signals)
     middleware: list[Middleware] = [McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
     if group_permission_runtime_state is not None:
         auth_check = personal_tool_permission_check(connector_tool_permission_check(group_permission_runtime_state))
@@ -155,6 +158,9 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     invocation_policy_store = DatabaseConnectorInvocationPolicyStore(persistence_runtime.database)
     invocation_policy = McpConnectorInvocationApprovalPolicy(StoredConnectorInvocationPolicy(invocation_policy_store), nonce_store=DatabaseApprovalNonceStore(persistence_runtime.database), state_codec=ApprovalStateCodec(clock=time.time, random_token=random_approval_token, ttl_seconds=APPROVAL_TTL_SECONDS), caller_capture=CurrentInvocationApprovalCallerCapture())
     mcp.connector_invocation_policy = invocation_policy
+    mcp.invocation_signals = signals
+    mcp.execution_pipelines = SignalToolExecutionPipelineFactory(signals, invocation_policy)
+    mcp.metrics_recorder = metrics_recorder
     await persistence_runtime.readiness.ensure_ready()
     mcp.persistence_runtime = persistence_runtime
     mcp.group_connector_tool_permissions = group_permission_runtime_state
@@ -204,13 +210,13 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
             openapi_administrator_mutation,
         )
         register_administrator_connector_configuration_tools(
-            McpObservedToolRegistrar(mcp, McpToolInvocationObserver(tool_invocation_logger, metrics_recorder)),
+            McpObservedToolRegistrar(mcp, publisher),
             administrator_connector_configuration,
             settings.admin_authentication.membership_claim,
             settings.admin_authentication.required_membership,
         )
     register_filesystem_tools(
-        McpObservedToolRegistrar(mcp, McpToolInvocationObserver(tool_invocation_logger, metrics_recorder)),
+        McpObservedToolRegistrar(mcp, publisher),
         CurrentFilesystemCallerCapture(
             mcp,
             RuntimeFilesystemGroupClaimFields(group_permission_runtime_state)
@@ -219,9 +225,9 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
         ),
         DatabaseFilesystemServiceFactory(persistence_runtime.database),
     )
-    await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, audit_recorder, invocation_log_sink, tool_invocation_logger, metrics_recorder, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes, invocation_policy)
-    mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.connector_tool_invocation_logger)
-    await initialize_openapi_metrics(await mcp.openapi_connector_store_factory.create(), metrics_recorder)
+    await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, signals, mcp.execution_pipelines, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes)
+    mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.execution_pipelines)
+    signals.tool_inventory_observed.send(await read_openapi_tool_inventory(await mcp.openapi_connector_store_factory.create()))
     downstream_permission_policy = UnrestrictedDownstreamToolPermissionPolicy() if group_permission_runtime_state is None else GroupDownstreamToolPermissionPolicy(group_permission_runtime_state)
     await _register_downstream_mcp_provider(mcp, settings, downstream_permission_policy, persistence_runtime.database, invocation_policy)
     register_agent_instructions(mcp)
@@ -236,8 +242,8 @@ async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettin
     personal_runtime: PersonalToolRuntime = DisabledPersonalToolRuntime()
     if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled:
         personal_runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), stores.definitions, stores.personal_tool_access, create_personal_mcp_transport(), utc_clock)
-    provider = ConnectorAwareDownstreamMcpToolProvider(personal_runtime=personal_runtime, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=connections.client_factory, permission_policy=permission_policy, connector_scope='', capability_description_overrides=mcp.capability_description_overrides, tool_invocation_logger=mcp.connector_tool_invocation_logger, metrics_recorder=mcp.metrics_recorder, invocation_policy=invocation_policy)
-    await provider.initialize_metrics()
+    provider = ConnectorAwareDownstreamMcpToolProvider(personal_runtime=personal_runtime, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=connections.client_factory, permission_policy=permission_policy, connector_scope='', capability_description_overrides=mcp.capability_description_overrides, signals=mcp.invocation_signals, execution_pipelines=mcp.execution_pipelines)
+    mcp.invocation_signals.tool_inventory_observed.send(await read_shared_tool_inventory(stores.definitions, stores.catalogs))
     mcp.downstream_mcp_tool_provider = provider
     mcp.add_middleware(PersonalToolReservationMiddleware(provider))
     if settings.mcp.connector_tool_exposure_mode == 'flat':
@@ -263,10 +269,8 @@ def _default_connector_tool_runtime_state_store(runtime: ConnectorRuntime) -> In
         store.save_runtime_state(ConnectorToolRuntimeState(key=ConnectorToolRef(mapping.connector_id, mapping.operation_name), status='enabled'))
     return store
 
-async def _register_connector_capabilities(mcp: FastMCP, runtime: ConnectorRuntime, connector_tool_runtime_state_store: InMemoryConnectorToolRuntimeStateStore, audit_recorder: object, invocation_log_sink: McpToolInvocationLogSink, tool_invocation_logger: ConnectorToolInvocationLogger, metrics_recorder: McpMetricsRecorder, connector_tool_exposure_mode: Literal['flat', 'gateway', 'codemode'], connector_code_execution_timeout_seconds: float, maximum_uploaded_file_bytes: int, invocation_policy: ConnectorInvocationPolicy) -> None:
-    mcp.metrics_recorder = metrics_recorder
-    mcp.connector_tool_invocation_logger = tool_invocation_logger
-    await register_connector_tools(mcp, connector_registrations=runtime.connector_registrations, connector_configuration_store=runtime.connector_configuration_store, connector_publishing_store=runtime.connector_publishing_store, connector_tool_mappings=runtime.connector_tool_mappings, capability_description_overrides=mcp.capability_description_overrides, connector_tool_runtime_state_store=connector_tool_runtime_state_store, tool_invocation_log_sink=invocation_log_sink, audit_recorder=audit_recorder, metrics_recorder=metrics_recorder, connector_tool_exposure_mode=connector_tool_exposure_mode, connector_code_execution_timeout_seconds=connector_code_execution_timeout_seconds, maximum_uploaded_file_bytes=maximum_uploaded_file_bytes, invocation_policy=invocation_policy)
+async def _register_connector_capabilities(mcp: FastMCP, runtime: ConnectorRuntime, connector_tool_runtime_state_store: InMemoryConnectorToolRuntimeStateStore, signals: McpSignals, execution_pipelines: McpToolExecutionPipelineFactory, connector_tool_exposure_mode: Literal['flat', 'gateway', 'codemode'], connector_code_execution_timeout_seconds: float, maximum_uploaded_file_bytes: int) -> None:
+    await register_connector_tools(mcp, connector_registrations=runtime.connector_registrations, connector_configuration_store=runtime.connector_configuration_store, connector_publishing_store=runtime.connector_publishing_store, connector_tool_mappings=runtime.connector_tool_mappings, capability_description_overrides=mcp.capability_description_overrides, connector_tool_runtime_state_store=connector_tool_runtime_state_store, signals=signals, execution_pipelines=execution_pipelines, connector_tool_exposure_mode=connector_tool_exposure_mode, connector_code_execution_timeout_seconds=connector_code_execution_timeout_seconds, maximum_uploaded_file_bytes=maximum_uploaded_file_bytes)
     connector_options = {'connector_registrations': runtime.connector_registrations, 'connector_configuration_store': runtime.connector_configuration_store, 'connector_publishing_store': runtime.connector_publishing_store, 'activation_store': mcp.capability_activation_store}
     await register_connector_prompts(mcp, ConnectorPromptRegistrationOptions(**connector_options, connector_prompt_mappings=runtime.connector_prompt_mappings))
     await register_connector_resources(mcp, ConnectorResourceRegistrationOptions(**connector_options, connector_resource_mappings=runtime.connector_resource_mappings))

@@ -11,7 +11,7 @@
   const settings = new InstanceSettingsState(() => state);
   const sections = [
     { id: 'addresses', label: 'Addresses and browser access', description: 'Find the public addresses and allowed browser origins for this instance.', href: '/admin/mcp-setup', link: 'MCP setup guide' },
-    { id: 'access', label: 'Access and sign-in', description: 'Review who can sign in and use administration. Group permissions control tool access, not membership of the administrator group.', href: '/admin/group-permissions', link: 'Manage group permissions' },
+    { id: 'access', label: 'Access and sign-in', description: 'Review who can sign in and use administration. Group permissions control connector and filesystem access, not membership of the administrator group.', href: '/admin/group-permissions/connectors', link: 'Manage group permissions' },
     { id: 'tools', label: 'Tool behavior and limits', description: 'Review how tools are offered and the limits applied to their use.', href: '/admin/connectors', link: 'Manage connectors' }
   ] as const;
 </script>

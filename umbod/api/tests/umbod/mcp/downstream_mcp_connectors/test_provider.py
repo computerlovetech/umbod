@@ -1,3 +1,6 @@
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals import McpSignals, SignalToolExecutionPipelineFactory
+from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
@@ -21,7 +24,7 @@ from umbod.core.permissions import ConnectorCapabilityPermission, ConnectorToolP
 from umbod.mcp.connectors.native import ModernConnectorApprovalRequired
 from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalToolRuntime
 from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolProvider, GroupDownstreamToolPermissionPolicy, NativeCapabilityProviderView, UnrestrictedDownstreamToolPermissionPolicy
-from umbod.mcp.logging import ConnectorToolInvocationLogger, McpAuditEvent, McpAuditRecorder, McpToolInvocationCompleted, create_default_connector_tool_invocation_logger
+from umbod.mcp.logging import McpAuditEvent, McpAuditRecorder
 from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
@@ -44,15 +47,10 @@ class RecordingInvocationPolicy:
         if self.failure is not None:
             raise self.failure
 
-class NullToolInvocationLogger:
-
-    def record_tool_invocation_completed(self, event: McpToolInvocationCompleted) -> None:
-        return None
-
 @dataclass(frozen=True)
 class ProviderOptions:
     display_names: dict[str, str] | None
-    tool_invocation_logger: ConnectorToolInvocationLogger | None
+    signals: McpSignals | None
 
 class RecordingAuditSink:
 
@@ -90,7 +88,8 @@ async def _provider(servers: dict[str, FastMCP], options: ProviderOptions=Provid
         await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="prompt", capability_key='weather_prompt'), ActivationStatus.ENABLED)
         await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="resource", capability_key=f'data://{connector_id}/weather'), ActivationStatus.ENABLED)
         await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="resource_template", capability_key=f'data://{connector_id}/{{city}}'), ActivationStatus.ENABLED)
-    return (ConnectorAwareDownstreamMcpToolProvider(personal_runtime=personal_runtime or DisabledPersonalToolRuntime(), definitions=definitions, credentials=credentials, catalogs=catalogs, publishing=publishing, activations=activations, client_factory=factory, permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), tool_invocation_logger=options.tool_invocation_logger or NullToolInvocationLogger(), metrics_recorder=metrics_recorder or InMemoryMcpMetricsRecorder(), invocation_policy=invocation_policy), factory, publishing, activations, catalogs)
+    signals = options.signals or invocation_signals(metrics_recorder or InMemoryMcpMetricsRecorder())
+    return (ConnectorAwareDownstreamMcpToolProvider(personal_runtime=personal_runtime or DisabledPersonalToolRuntime(), definitions=definitions, credentials=credentials, catalogs=catalogs, publishing=publishing, activations=activations, client_factory=factory, permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, invocation_policy)), factory, publishing, activations, catalogs)
 
 def _downstream(calls: list[str] | None=None, *, is_error: bool=False) -> FastMCP:
     server = FastMCP('downstream')
@@ -427,8 +426,8 @@ async def test_group_permission_filters_listing_and_denies_direct_lookup_and_sta
 async def test_proxy_records_display_name_failure_without_secret_attributes() -> None:
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
-    logger = create_default_connector_tool_invocation_logger(invocation_sink, McpAuditRecorder(audit_sink, 'test'))
-    (provider, _, _, _, _) = await _provider({'weather': _downstream(is_error=True)}, ProviderOptions({'weather': 'Weather Service'}, logger))
+    signals = create_mcp_signals(invocation_sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, 'test'))
+    (provider, _, _, _, _) = await _provider({'weather': _downstream(is_error=True)}, ProviderOptions({'weather': 'Weather Service'}, signals))
     secret = 'downstream-secret-marker'
     tool_name = (await provider.list_tools())[0].name
     public = FastMCP('public')
@@ -450,8 +449,8 @@ async def test_proxy_records_display_name_failure_without_secret_attributes() ->
 async def test_proxy_uses_connector_id_when_display_name_is_empty() -> None:
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
-    logger = create_default_connector_tool_invocation_logger(invocation_sink, McpAuditRecorder(audit_sink, 'test'))
-    (provider, _, _, _, _) = await _provider({'weather': _downstream()}, ProviderOptions({'weather': '   '}, logger))
+    signals = create_mcp_signals(invocation_sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, 'test'))
+    (provider, _, _, _, _) = await _provider({'weather': _downstream()}, ProviderOptions({'weather': '   '}, signals))
     tool_name = (await provider.list_tools())[0].name
     public = FastMCP('public')
 
@@ -470,7 +469,7 @@ async def test_metrics_initialization_failure_preserves_listing_and_dispatch(dis
     recorder.initialize_invocation.side_effect = RuntimeError('Recorder unavailable')
     calls: list[str] = []
     provider, _, _, _, _ = await _provider({'weather': _downstream(calls)}, metrics_recorder=recorder)
-    await provider.initialize_metrics()
+    await provider.native_capability_projection()
     await provider.native_capability_projection()
     assert [tool.name for tool in await provider.list_tools()] == ['weather_forecast']
     public = FastMCP('public', providers=[provider])
@@ -490,14 +489,14 @@ async def test_metrics_initialization_failure_preserves_listing_and_dispatch(dis
     recorder.record_completed_invocation.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_initialize_metrics_seeds_shared_routes_without_traffic_or_private_listing() -> None:
+async def test_shared_inventory_seeds_shared_routes_without_traffic_or_private_listing() -> None:
     metrics = InMemoryMcpMetricsRecorder()
     recorder = Mock(spec=McpMetricsRecorder, wraps=metrics)
     personal = Mock(spec=PersonalToolRuntime)
     personal.list_tools.side_effect = AssertionError('Private inventory must not be enumerated')
     provider, factory, _, _, _ = await _provider({'weather': _downstream()}, metrics_recorder=recorder, personal_runtime=personal)
-    await provider.initialize_metrics()
-    await provider.initialize_metrics()
+    await provider.native_capability_projection()
+    await provider.native_capability_projection()
     samples = metrics.metric_samples()
     assert {sample.labels['tool_name'] for sample in samples} == {'weather_forecast', 'forecast'}
     assert {sample.labels['connector_name'] for sample in samples} == {'weather'}
@@ -510,7 +509,7 @@ async def test_initialize_metrics_seeds_shared_routes_without_traffic_or_private
 async def test_native_projection_initializes_new_shared_tools_without_resetting_counts() -> None:
     metrics = InMemoryMcpMetricsRecorder()
     provider, factory, _, _, catalogs = await _provider({'weather': _downstream()}, metrics_recorder=metrics)
-    await provider.initialize_metrics()
+    await provider.native_capability_projection()
     async with Client(FastMCP('public', providers=[provider])) as client:
         await client.call_tool_mcp('weather_forecast', {'city': 'Copenhagen'})
     result = await catalogs.get(ConnectorIdQuery(connector_id='weather'))
@@ -541,7 +540,7 @@ async def test_materialized_shared_tool_initializes_current_public_identity(conn
     assert factory.created == []
 
 @pytest.mark.asyncio
-async def test_initialize_metrics_skips_persisted_personal_oauth_catalog() -> None:
+async def test_shared_inventory_skips_persisted_personal_oauth_catalog() -> None:
     metrics = InMemoryMcpMetricsRecorder()
     personal = Mock(spec=PersonalToolRuntime)
     personal.list_tools.side_effect = AssertionError('Private inventory must not be enumerated')
@@ -549,7 +548,7 @@ async def test_initialize_metrics_skips_persisted_personal_oauth_catalog() -> No
     await provider._stores.definitions.save(SaveConnectorDefinition(definition=OAuthConnectorDefinition(
         connector_id='weather', display_name='Weather', tool_name_prefix='Private', endpoint_url='https://weather.example/mcp', authorization_mode='personal',
     )))
-    await provider.initialize_metrics()
+    await provider.native_capability_projection()
     await provider.native_capability_projection()
     assert metrics.metric_samples() == ()
     assert factory.created == []

@@ -23,6 +23,8 @@ from umbod.mcp.logging import (
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals import McpToolInvocationCompleted, SignalToolExecutionPipelineFactory
 from umbod.mcp.middleware import McpAuditMiddleware
 from pydantic import SecretStr
 
@@ -40,6 +42,8 @@ async def _observed_server(mode: str) -> tuple[FastMCP, InMemoryMcpMetricsRecord
     stream = StringIO()
     audit = McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), stream), "test")
     server = FastMCP("test", middleware=[McpAuditMiddleware(audit, McpAuditIdentityAdapter(), mode)])
+    signals = create_mcp_signals(logs, metrics, audit)
+    server.invocation_signals = signals
 
     def operation(limit: int) -> dict[str, int]:
         if limit < 0:
@@ -48,7 +52,8 @@ async def _observed_server(mode: str) -> tuple[FastMCP, InMemoryMcpMetricsRecord
 
     await register_connector_tools(
         server,
-        invocation_policy=PermitAllConnectorInvocationPolicy(),
+        signals=signals,
+        execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()),
         connector_registrations=[{"id": "slack", "display_name": "Slack", "capability_description": "Slack operations", "configuration_schema": SlackAdminConfiguration}],
         connector_configuration_store=configurations,
         connector_publishing_store=publications,
@@ -58,9 +63,6 @@ async def _observed_server(mode: str) -> tuple[FastMCP, InMemoryMcpMetricsRecord
         ],
         connector_tool_exposure_mode=mode,
         connector_code_execution_timeout_seconds=0.01,
-        tool_invocation_log_sink=logs,
-        audit_recorder=audit,
-        metrics_recorder=metrics,
     )
     return server, metrics, logs, stream
 
@@ -79,6 +81,36 @@ def _counts(metrics: InMemoryMcpMetricsRecorder, metric_name: str) -> dict[tuple
         for sample in metrics.metric_samples()
         if sample.name == metric_name and sample.value
     }
+
+
+@pytest.mark.asyncio
+async def test_custom_receivers_are_isolated_and_extend_real_tool_execution(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    server, metrics, logs, stream = await _observed_server("gateway")
+    other_server, _, _, _ = await _observed_server("gateway")
+    received: list[McpToolInvocationCompleted] = []
+    other_received: list[McpToolInvocationCompleted] = []
+
+    def failing_action(event: McpToolInvocationCompleted) -> None:
+        raise RuntimeError("private-receiver-detail")
+
+    server.invocation_signals.invocation_completed.connect("test.failing_action", failing_action)
+    server.invocation_signals.invocation_completed.connect("test.notification", received.append)
+    other_server.invocation_signals.invocation_completed.connect("test.notification", other_received.append)
+    async with Client(server) as client:
+        result = await client.call_tool("execute_tool", {"tool_name": "slack_first", "arguments": {"limit": 1}})
+
+    assert result.is_error is False
+    assert {event.started.tool.tool_name for event in received} == {"execute_tool", "slack_first"}
+    assert len(received) == 2
+    assert other_received == []
+    assert _counts(metrics, "umbod_mcp_tool_requests_total") == {("execute_tool", "success"): 1}
+    assert _counts(metrics, "umbod_mcp_tool_invocations_total") == {("slack_first", "success"): 1}
+    assert len(logs.invocation_records()) == 2
+    assert len(_audit_records(stream)) == 2
+    assert "test.failing_action" in caplog.text
+    assert "private-receiver-detail" not in caplog.text
 
 
 @pytest.mark.asyncio

@@ -5,7 +5,7 @@ from umbod.core.connectors.native.registry import ConnectorRegistration
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.auth.factory import MCPAuthProvider
 from umbod.mcp.logging import McpToolInvocationLogSink
-from umbod.mcp.logging.invocation.event import McpToolInvocationLogEvent
+from umbod.mcp.signals.events import McpToolInvocationEvent
 from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationError, JwtVerifier
 
 __all__ = [
@@ -17,7 +17,7 @@ __all__ = [
     "JwtVerificationError",
     "JwtVerifier",
     "MCPAuthProvider",
-    "McpToolInvocationLogEvent",
+    "McpToolInvocationEvent",
     "McpToolInvocationLogSink",
     "OAuthService",
     "TokenVerifier"

@@ -9,7 +9,7 @@ from umbod.mcp.connectors.native.approval_principal import (
     ApprovalActorIdentity,
     CurrentInvocationApprovalCallerCapture,
 )
-from umbod.mcp.logging import (
+from umbod.mcp.signals import (
     McpInvocationActor,
     McpInvocationContext,
     McpInvocationCorrelation,

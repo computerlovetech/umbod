@@ -21,7 +21,8 @@ from umbod.infrastructure import create_root_provisioning
 from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory, register_filesystem_tools
 from umbod.mcp.metrics.in_memory import InMemoryMcpMetricsRecorder
 from umbod.mcp.tools import McpObservedToolRegistrar
-from umbod.mcp.tools.invocation import McpToolInvocationObserver
+from umbod.mcp.listeners import create_mcp_signals
+from umbod.mcp.signals import McpInvocationPublisher
 
 
 def caller_snapshot(
@@ -71,7 +72,7 @@ async def filesystem_mcp() -> AsyncIterator[FilesystemMcp]:
     metrics = InMemoryMcpMetricsRecorder()
     services = DatabaseFilesystemServiceFactory(runtime.database)
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpToolInvocationObserver(Mock(), metrics)),
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), metrics, Mock()))),
         callers,
         services,
     )

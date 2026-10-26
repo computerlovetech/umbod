@@ -8,7 +8,6 @@ from fastmcp.tools import ToolResult
 from umbod.proxies import Model
 
 from umbod.core.configuration import ConnectorCurrentConfigurationStore
-from umbod.core.invocation import ConnectorInvocationPolicy
 from umbod.core.capabilities.descriptions import (
     ConnectorCapabilityDescriptionOverrideStore,
 )
@@ -29,7 +28,6 @@ from umbod.core.connectors.native.capabilities import (
     NativeCapabilityReadiness,
 )
 from umbod.core.connectors.native.runtime.tools import ConnectorToolMapping
-from umbod.core.invocation.tools.execution import create_tool_execution_pipeline
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.mcp.connectors.native.tools.infrastructure.authorization import (
     ConnectorToolAuthorizationScope,
@@ -40,9 +38,6 @@ from umbod.mcp.connectors.native.tools.infrastructure.client_notifications impor
 )
 from umbod.mcp.connectors.native.tools.runtime.ports import ConnectorToolExposureStrategy
 from umbod.mcp.connectors.native.tools.invocation.runner import ConnectorToolInvocationRunner
-from umbod.mcp.connectors.native.tools.invocation.telemetry import (
-    ConnectorTelemetryInterceptor,
-)
 from umbod.mcp.connectors.native.tools.invocation.errors import ConnectorToolErrorFormatter
 from umbod.mcp.connectors.native.tools.definition.naming import _mangle_tool_name
 from umbod.mcp.connectors.native.tools.runtime.ports import RuntimeReconciliationResult
@@ -52,12 +47,7 @@ from umbod.mcp.connectors.native.tools.runtime.native_capabilities import (
     NativeCapabilitySearch,
     ensure_unique_candidates,
 )
-from umbod.mcp.metrics import McpMetricsRecorder
-from umbod.mcp.logging import (
-    McpAuditRecorder,
-    McpToolInvocationLogSink,
-    create_default_connector_tool_invocation_logger,
-)
+from umbod.mcp.signals.execution import McpToolExecutionPipelineFactory
 
 
 @runtime_checkable
@@ -77,12 +67,9 @@ class ConnectorToolGatewayProvider(Protocol):
 
 def _raise_for_unknown_optional_dependencies(optional_dependencies: Mapping[str, object]) -> None:
     unknown_dependency_names = set(optional_dependencies) - {
-        "audit_recorder",
         "client_notifier",
         "connector_tool_runtime_state_store",
         "exposure_strategy",
-        "metrics_recorder",
-        "invocation_policy",
     }
     if unknown_dependency_names:
         unknown_dependency_name = next(iter(unknown_dependency_names))
@@ -106,17 +93,6 @@ def _runtime_state_store_from_optional_dependencies(
     )
 
 
-def _audit_recorder_from_optional_dependencies(
-    optional_dependencies: Mapping[str, object],
-) -> McpAuditRecorder:
-    audit_recorder = optional_dependencies.get("audit_recorder")
-    if audit_recorder is None:
-        raise TypeError(
-            "RuntimeConnectorToolRegistry() missing required keyword-only argument: 'audit_recorder'"
-        )
-    return cast(McpAuditRecorder, audit_recorder)
-
-
 def _exposure_strategy_from_optional_dependencies(
     optional_dependencies: Mapping[str, object],
 ) -> ConnectorToolExposureStrategy:
@@ -131,45 +107,24 @@ def _exposure_strategy_from_optional_dependencies(
 @dataclass(frozen=True)
 class ConnectorToolInvokerDependencies:
     error_formatter: ConnectorToolErrorFormatter
-    tool_invocation_log_sink: McpToolInvocationLogSink
-    audit_recorder: McpAuditRecorder
-    metrics_recorder: McpMetricsRecorder
+    execution_pipelines: McpToolExecutionPipelineFactory
     connector_display_names: Mapping[str, str]
-    invocation_policy: ConnectorInvocationPolicy
 
 
 def create_connector_tool_invoker_factory(
     dependencies: ConnectorToolInvokerDependencies,
 ) -> Callable[[ConnectorToolMapping], ConnectorToolInvocationRunner]:
     def invoker_for_mapping(mapping: ConnectorToolMapping) -> ConnectorToolInvocationRunner:
-        telemetry_interceptor = ConnectorTelemetryInterceptor(
-            connector_name=dependencies.connector_display_names.get(
-                mapping.connector_id, mapping.connector_id
-            ),
-            tool_invocation_logger=create_default_connector_tool_invocation_logger(
-                dependencies.tool_invocation_log_sink,
-                dependencies.audit_recorder,
-            ),
-            metrics_recorder=dependencies.metrics_recorder,
-            result_is_error=lambda result: False,
-        )
         return ConnectorToolInvocationRunner(
             mapping=mapping,
             error_formatter=dependencies.error_formatter,
-            execution_pipeline=create_tool_execution_pipeline(
-                dependencies.invocation_policy,
-                (telemetry_interceptor,),
+            execution_pipeline=dependencies.execution_pipelines.create(
+                dependencies.connector_display_names.get(mapping.connector_id, mapping.connector_id),
+                result_is_error=lambda result: False,
             ),
         )
 
     return invoker_for_mapping
-
-
-def _server_name(mcp: FastMCP) -> str:
-    name = getattr(mcp, "name", None)
-    if isinstance(name, str):
-        return name
-    return "umbod"
 
 
 @dataclass(frozen=True)
@@ -180,7 +135,7 @@ class _NativeRuntimeConfiguration:
     mappings: Sequence[ConnectorToolMapping]
     display_names: Mapping[str, str]
     error_formatter: ConnectorToolErrorFormatter
-    log_sink: McpToolInvocationLogSink
+    execution_pipelines: McpToolExecutionPipelineFactory
     optional_dependencies: Mapping[str, object]
     capability_descriptions: Mapping[str, str]
     description_overrides: ConnectorCapabilityDescriptionOverrideStore
@@ -209,11 +164,8 @@ def _create_native_runtime(
     invoker_factory = create_connector_tool_invoker_factory(
         ConnectorToolInvokerDependencies(
             error_formatter=configuration.error_formatter,
-            tool_invocation_log_sink=configuration.log_sink,
-            audit_recorder=_audit_recorder_from_optional_dependencies(dependencies),
-            metrics_recorder=cast(McpMetricsRecorder, dependencies["metrics_recorder"]),
+            execution_pipelines=configuration.execution_pipelines,
             connector_display_names=configuration.display_names,
-            invocation_policy=cast(ConnectorInvocationPolicy, dependencies["invocation_policy"]),
         )
     )
     return NativeCapabilityRuntime(
@@ -350,14 +302,14 @@ class RuntimeConnectorToolRegistry(
         connector_tool_mappings: Sequence[ConnectorToolMapping],
         capability_description_overrides: ConnectorCapabilityDescriptionOverrideStore,
         error_formatter: ConnectorToolErrorFormatter,
-        tool_invocation_log_sink: McpToolInvocationLogSink,
+        execution_pipelines: McpToolExecutionPipelineFactory,
         **optional_dependencies: object,
     ) -> None:
         _raise_for_unknown_optional_dependencies(optional_dependencies)
         configuration = _NativeRuntimeConfiguration(
             schemas, connector_configuration_store, connector_publishing_store,
             connector_tool_mappings, connector_display_names, error_formatter,
-            tool_invocation_log_sink, optional_dependencies,
+            execution_pipelines, optional_dependencies,
             connector_capability_descriptions, capability_description_overrides,
         )
         self._state = _create_registry_state(configuration)
