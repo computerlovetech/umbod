@@ -40,7 +40,7 @@ def metrics_clients(request: pytest.FixtureRequest) -> Iterator[tuple[TestClient
 
     admin_app = SubApiAppFactory(title="metrics-acceptance", router=router).create()
     admin_app.add_middleware(
-        AdminRestMetricsMiddleware, recorder=recorder, routes=tuple(router.routes)
+        AdminRestMetricsMiddleware, recorder=recorder, routes=tuple(router.routes), mount_path=""
     )
     app = FastAPI()
     app.mount("/api/admin", admin_app)

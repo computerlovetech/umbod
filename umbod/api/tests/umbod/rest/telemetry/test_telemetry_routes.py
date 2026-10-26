@@ -281,7 +281,8 @@ def test_direct_production_config_cannot_enable_unauthenticated_ingestion(
     sink: RecordingSink,
 ) -> None:
     config = AppConfig(
-        runtime=RuntimeConfig(profile="production"),
+        runtime=RuntimeConfig(profile="production", auth="auth0"),
+        admin_authentication={"mode": "jwt", "environment": "production"},
         otlp_receiver=OtlpReceiverConfig(enabled=True, allow_unauthenticated=True),
     )
     with pytest.raises(ValueError, match="only allowed locally"):

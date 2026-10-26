@@ -66,7 +66,7 @@ def test_local_personal_api_uses_configured_identity_only(local_client: TestClie
     assert response.status_code == 200
     assert response.json() == {
         "owner": "configured-stable-owner", "namespace": "test:configured",
-        "claims": {"sub": "configured-stable-owner", "email": "test@example.org", "name": "Configured Test User", "custom-groups": ["configured-administrators"]},
+        "claims": {"iss": "urn:umbod:local", "sub": "configured-stable-owner", "email": "test@example.org", "name": "Configured Test User", "custom-groups": ["configured-administrators"]},
     }
     admin = local_client.get("/api/admin/users")
     assert admin.status_code == 200
@@ -87,12 +87,10 @@ def test_supplied_admin_verifier_does_not_control_local_personal_identity(local_
 
 
 @pytest.mark.parametrize("section,updates", [
-    ("runtime", {"profile": "production"}),
     ("runtime", {"auth": "google"}),
     ("runtime", {"auth": "none"}),
     ("admin_authentication", {"mode": "jwt"}),
     ("admin_authentication", {"mode": "disabled"}),
-    ("admin_authentication", {"environment": "production"}),
     ("admin_authentication", {"simulated_user_id": " "}),
     ("personal_connections", {"enabled": False}),
     ("personal_connections", {"identity_namespace": "test:"}),
@@ -105,7 +103,10 @@ def test_local_identity_policy_fails_closed(local_settings: AppConfig, section: 
     assert not local_personal_identity_enabled(personal_identity_policy_from_app_config(settings))
     app = create_rest_app(settings, connector_registrations=[], admin_verifier=None, oauth_service=None)
     with TestClient(app) as client:
-        expected_status = 401 if settings.personal_connections.enabled else 404
+        expected_status = (
+            403 if section == "personal_connections" and settings.personal_connections.enabled
+            else 401 if settings.personal_connections.enabled else 404
+        )
         assert client.get("/api/me/connectors/mcp").status_code == expected_status
 
 

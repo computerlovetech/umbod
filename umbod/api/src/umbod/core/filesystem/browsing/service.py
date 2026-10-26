@@ -1,6 +1,6 @@
 from collections.abc import Sequence
 
-from umbod.core.callers import CallerContext
+from umbod.core.callers import CallerSnapshot
 
 from ..authorization import FilesystemAuthorization, PermissionDenied
 from ..errors import MissingNode
@@ -34,13 +34,13 @@ class BrowsingService:
         self._namespace = namespace
         self._authorization = authorization
 
-    async def _require_discover(self, caller: CallerContext, node_id: NodeId) -> None:
+    async def _require_discover(self, caller: CallerSnapshot, node_id: NodeId) -> None:
         try:
             await self._authorization.require(caller, node_id, Permission.DISCOVER)
         except PermissionDenied:
             raise discover_denied(node_id) from None
 
-    async def get_root(self, caller: CallerContext) -> NodeSummary:
+    async def get_root(self, caller: CallerSnapshot) -> NodeSummary:
         try:
             root = await self._namespace.get_root()
         except MissingNode:
@@ -48,7 +48,7 @@ class BrowsingService:
         await self._require_discover(caller, root.id)
         return summary(root)
 
-    async def get_node(self, caller: CallerContext, node_id: NodeId) -> NodeSummary:
+    async def get_node(self, caller: CallerSnapshot, node_id: NodeId) -> NodeSummary:
         await self._require_discover(caller, node_id)
         try:
             node = await self._namespace.get_node(node_id)
@@ -57,7 +57,7 @@ class BrowsingService:
         return summary(node)
 
     async def list_children(
-        self, caller: CallerContext, parent_id: NodeId
+        self, caller: CallerSnapshot, parent_id: NodeId
     ) -> Sequence[NodeSummary]:
         await self._require_discover(caller, parent_id)
         try:

@@ -6,6 +6,13 @@ from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models im
 
 from .runtime_support import execution_case, runtime_for_caller
 from umbod.core.connectors.downstream_mcp.personal_connections import UnavailablePersonalCaller
+from umbod.core.invocation.failure_evidence import (
+    InvocationExceptionEvidence,
+    InvocationFailureOrigin,
+    capture_invocation_exception,
+    current_invocation_failure,
+    invocation_failure_scope,
+)
 
 __all__ = ["runtime_case"]
 
@@ -39,12 +46,56 @@ async def test_rejection_health_persistence_failure_keeps_its_distinct_exception
     execution = await execution_case(runtime_case)
 
     async def rejected(command: PersonalToolCall) -> PersonalToolResult:
-        raise PersonalAuthorizationRejected("Personal MCP unavailable")
+        try:
+            raise PersonalAuthorizationRejected("sensitive-rejected-token")
+        except PersonalAuthorizationRejected as error:
+            capture_invocation_exception(error, InvocationFailureOrigin.MCP)
+            raise
 
     async def unavailable(command: RejectPersonalAuthorization) -> None:
-        raise PersonalAuthorizationHealthUnavailable("Personal authorization health unavailable")
+        evidence = current_invocation_failure()
+        assert isinstance(evidence, InvocationExceptionEvidence)
+        assert evidence.origin == InvocationFailureOrigin.MCP
+        assert evidence.exception_type == "PersonalAuthorizationRejected"
+        raise PersonalAuthorizationHealthUnavailable("sensitive-persistence-token")
 
     monkeypatch.setattr(execution.transport, "call_tool", rejected)
     monkeypatch.setattr(runtime_case.bundle.personal_tool_access, "reject_authorization", unavailable)
-    with pytest.raises(PersonalAuthorizationHealthUnavailable):
-        await execution.runtime.execute(execution.command)
+    with invocation_failure_scope():
+        with pytest.raises(PersonalAuthorizationHealthUnavailable, match="sensitive-persistence-token"):
+            await execution.runtime.execute(execution.command)
+        evidence = current_invocation_failure()
+        assert isinstance(evidence, InvocationExceptionEvidence)
+        assert evidence.origin == InvocationFailureOrigin.INTERNAL
+        assert evidence.exception_type == "PersonalAuthorizationHealthUnavailable"
+        assert "in unavailable" in evidence.stacktrace
+        assert "sensitive-rejected-token" not in evidence.stacktrace
+        assert "sensitive-persistence-token" not in evidence.stacktrace
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("lower_boundary", [False, True])
+async def test_runtime_preserves_original_safe_exception_evidence(runtime_case: RuntimeCase, monkeypatch: pytest.MonkeyPatch, lower_boundary: bool) -> None:
+    execution = await execution_case(runtime_case)
+
+    async def fail(command: PersonalToolCall) -> PersonalToolResult:
+        try:
+            raise ValueError("sensitive-original-token")
+        except ValueError as error:
+            if lower_boundary:
+                capture_invocation_exception(error, InvocationFailureOrigin.MCP)
+                raise PersonalRuntimeUnavailable("Personal MCP unavailable") from None
+            raise RuntimeError("sensitive-wrapper-token") from error
+
+    monkeypatch.setattr(execution.transport, "call_tool", fail)
+    with invocation_failure_scope():
+        with pytest.raises(PersonalRuntimeUnavailable):
+            await execution.runtime.execute(execution.command)
+        evidence = current_invocation_failure()
+        assert isinstance(evidence, InvocationExceptionEvidence)
+        assert evidence.origin == (InvocationFailureOrigin.MCP if lower_boundary else InvocationFailureOrigin.INTERNAL)
+        assert evidence.exception_type == ("ValueError" if lower_boundary else "RuntimeError")
+        assert "in fail" in evidence.stacktrace
+        assert "ValueError" in evidence.stacktrace
+        assert "sensitive-original-token" not in evidence.stacktrace
+        assert "sensitive-wrapper-token" not in evidence.stacktrace

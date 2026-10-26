@@ -7,6 +7,13 @@ import httpcore2
 import httpx2
 
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+from umbod.core.invocation.failure_evidence import (
+    InvocationFailureOrigin,
+    capture_invocation_exception,
+    current_invocation_failure,
+)
+
+from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
 
 from .operation import OperationState
 from .wire_parsing import ProtocolInputValidator, ValidatedProtocolStream
@@ -46,8 +53,16 @@ def safe_core_errors() -> Iterator[None]:
     except Exception as error:
         for core_error, http_error in _CORE_ERRORS:
             if isinstance(error, core_error):
+                if current_invocation_failure() is None:
+                    capture_invocation_exception(error, InvocationFailureOrigin.MCP)
                 raise http_error("Personal MCP unavailable") from None
         raise
+
+
+def _capture_http_failure(error: Exception) -> None:
+    if current_invocation_failure() is None:
+        origin = InvocationFailureOrigin.MCP if isinstance(error, (TimeoutError, httpx2.HTTPError, PersonalRuntimeUnavailable)) else InvocationFailureOrigin.INTERNAL
+        capture_invocation_exception(error, origin)
 
 
 class BoundedResponseStream(httpx2.AsyncByteStream):
@@ -64,9 +79,11 @@ class BoundedResponseStream(httpx2.AsyncByteStream):
                     chunk = await anext(iterator)
             except StopAsyncIteration:
                 return
-            except (TimeoutError, httpx2.TimeoutException):
+            except (TimeoutError, httpx2.TimeoutException) as error:
+                _capture_http_failure(error)
                 self._state.fail(_TIMEOUT)
-            except Exception:
+            except Exception as error:
+                _capture_http_failure(error)
                 self._state.fail()
             self._size += len(chunk)
             self._state.account(len(chunk), self._size)
@@ -88,7 +105,8 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
         response = await self._send(self._outgoing(request, body))
         try:
             return self._response(request, response)
-        except Exception:
+        except Exception as error:
+            _capture_http_failure(error)
             with anyio.move_on_after(0.25, shield=True):
                 await response.aclose()
         self._state.fail()
@@ -119,10 +137,11 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
         try:
             with anyio.fail_after(max(0, self._state.deadline - anyio.current_time())), safe_core_errors():
                 return await self._connections.handle_async_request(outgoing)
-        except (TimeoutError, httpx2.TimeoutException):
+        except (TimeoutError, httpx2.TimeoutException) as error:
+            _capture_http_failure(error)
             self._state.fail(_TIMEOUT)
-        except Exception:
-            pass
+        except Exception as error:
+            _capture_http_failure(error)
         self._state.fail()
 
     def _response(self, request: httpx2.Request, response: httpcore2.Response) -> httpx2.Response:

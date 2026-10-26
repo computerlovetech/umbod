@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
-from umbod.core.callers import AuthenticationProvenance
+from umbod.core.callers import AuthenticationProvenance, CallerContext
 from umbod.rest.authentication.authorization import (
     AdminAuthorizationPolicy,
     AdminAuthorizationService,
@@ -131,6 +131,15 @@ class JwtAdminAuthenticationStrategy:
         self.authorization_service = authorization_service
 
     async def authenticate(self, request: Request) -> Response | None:
+        accepted_claims = getattr(request.state, VERIFIED_ACCESS_CLAIMS_STATE_KEY, None)
+        accepted_context = getattr(request.state, CALLER_CONTEXT_STATE_KEY, None)
+        if isinstance(accepted_claims, JwtClaims) and isinstance(accepted_context, CallerContext):
+            if not self.authorization_service.is_authorized(accepted_claims):
+                return JSONResponse(
+                    status_code=403, content={"detail": "Forbidden"},
+                    headers={"Cache-Control": "no-store"},
+                )
+            return None
         token = extract_request_jwt_token(request.headers, self.jwt_header_name)
         try:
             claims = self.authorization_service.verify_claims(token)

@@ -1,19 +1,12 @@
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 
-from umbod.core.callers import GroupMembership
+from umbod.core.callers import GroupMembership, group_membership_from_values
 
 
 def capture_runtime_permission_groups(
     claims: Mapping[str, object], claim_fields: Sequence[str]
 ) -> GroupMembership:
-    groups: dict[str, None] = {}
-    for field in claim_fields:
-        value = claims.get(field)
-        if isinstance(value, str):
-            groups[value] = None
-        elif isinstance(value, Iterable):
-            groups.update((group, None) for group in value if isinstance(group, str))
-    return GroupMembership(group_ids=tuple(groups))
+    return group_membership_from_values(claims.get(field) for field in claim_fields)
 
 
 def capture_openapi_principal_groups(

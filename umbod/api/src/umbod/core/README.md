@@ -26,7 +26,7 @@
 
 ### `invocation/`
 
-**Read when working with:** Cross-kind invocation policy, approval nonces, gated tool execution, or invocation-policy events.
+**Read when working with:** Cross-kind invocation policy, approval nonces, gated tool execution, or invocation-policy events. `failure_evidence.py` captures bounded exception types and traceback frames without messages, source lines or locals, with explicit internal, connector, downstream OpenAPI and downstream MCP origins. `tools/execution.py` scopes this evidence to each pipeline execution, restoring enclosing context on completion or cancellation.
 
 ### `publishing/`
 

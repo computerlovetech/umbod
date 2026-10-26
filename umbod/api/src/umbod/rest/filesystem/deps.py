@@ -1,0 +1,65 @@
+from typing import Annotated
+
+from fastapi import Depends
+
+from umbod.core.callers import CallerContext, CallerSnapshot, group_membership_from_values
+from umbod.core.filesystem import FilesystemCreation, Principal, PrincipalType
+from umbod.core.filesystem.authorization import (
+    FilesystemIdentityResolver, LocalDevelopmentIdentityResolver, VerifiedIdentityResolver,
+)
+from umbod.core.filesystem.browsing import FilesystemBrowsing
+from umbod.core.persistence import Database
+from umbod.infrastructure import create_filesystem_browsing, create_filesystem_creation
+from umbod.rest.authentication.local import LOCAL_DEVELOPMENT_ISSUER, local_rest_identity_enabled
+from umbod.rest.authentication.authorization import JwtClaims
+from umbod.rest.authentication.deps import get_caller_context, get_verified_access_claims
+from umbod.rest.dependencies import get_connector_api_dependency_factories
+from umbod.rest.factories import ConnectorApiDependencyFactories
+
+from .errors import filesystem_errors
+
+
+def get_filesystem_caller(
+    caller: Annotated[CallerContext, Depends(get_caller_context)],
+    claims: Annotated[JwtClaims, Depends(get_verified_access_claims)],
+    factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
+) -> CallerSnapshot:
+    return CallerSnapshot(
+        caller=caller,
+        groups=group_membership_from_values((
+            claims.claims.get(factories.settings.mcp.permission_group_claim),
+        )),
+    )
+
+
+async def get_filesystem_database(
+    factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
+) -> Database:
+    with filesystem_errors():
+        await factories.persistence_runtime.readiness.ensure_ready()
+        return factories.persistence_runtime.database
+
+
+def get_filesystem_identity_resolver(
+    factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
+) -> FilesystemIdentityResolver:
+    if local_rest_identity_enabled(factories.settings):
+        return LocalDevelopmentIdentityResolver(Principal(
+            type=PrincipalType.USER, issuer=LOCAL_DEVELOPMENT_ISSUER,
+            id=factories.settings.admin_authentication.simulated_user_id,
+        ))
+    return VerifiedIdentityResolver()
+
+
+def get_filesystem_browsing(
+    database: Annotated[Database, Depends(get_filesystem_database)],
+    resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
+) -> FilesystemBrowsing:
+    return create_filesystem_browsing(database=database, resolver=resolver)
+
+
+def get_filesystem_creation(
+    database: Annotated[Database, Depends(get_filesystem_database)],
+    resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
+) -> FilesystemCreation:
+    return create_filesystem_creation(database=database, resolver=resolver)

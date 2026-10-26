@@ -5,6 +5,11 @@ from .config import (
     FilesystemConfig,
 )
 from .factory import (
+    create_filesystem_browsing,
+    create_filesystem_transactions,
+    create_filesystem_creation,
+    create_root_provisioning,
+    create_root_group_policy_management,
     create_access_control_driver,
     create_content_driver,
     create_namespace_driver,
@@ -12,6 +17,11 @@ from .factory import (
 )
 
 __all__ = [
+    "create_filesystem_browsing",
+    "create_filesystem_transactions",
+    "create_filesystem_creation",
+    "create_root_provisioning",
+    "create_root_group_policy_management",
     "ContentConfig",
     "InMemoryContentConfig",
     "LocalContentConfig",

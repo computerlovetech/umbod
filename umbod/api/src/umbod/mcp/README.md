@@ -34,6 +34,8 @@ Connector kinds are grouped under `native/`, `openapi/`, and `downstream_mcp/`, 
 
 `approval_principal.py` exposes a fresh approval caller capture boundary over invocation actor identity. `approval.py` captures its immutable binding once per Ask evaluation, including continuations; `approval_state.py` preserves the existing client/user or session-only wire binding without substituting canonical ownership or authentication observations.
 
+`tools/invocation/runner.py` captures connector failure evidence only around the actual native operation call and await; result adaptation failures remain internal. `tools/invocation/telemetry.py` enriches the existing completion with invocation-scoped safe exception evidence, or origin-only returned-failure evidence, without changing categories, metrics, or audit outcomes.
+
 File-input connector tools keep uploaded bytes only for the current app-backend invocation. Policy and approval receive only filename, media type, size, and SHA-256 metadata. Approval-required invocations cannot be resumed because no upload storage exists; callers must submit the file again after approval. File-input connector tools currently support only flat exposure; gateway and codemode registration reject them.
 
 ### `connectors/downstream_mcp/`
@@ -64,13 +66,21 @@ Personal OAuth definitions remain unavailable to shared runtime execution and ba
 
 **Read when working with:** FastMCP component identity adaptation and group-grant permission callbacks. The bridge owns tool/prompt/resource/template metadata and SDK authentication-context handling; `core/permissions` retains neutral grant decisions over typed `GroupMembership`, without importing FastMCP or parsing claims. Native, downstream and global permission consumers capture memberships before invoking core. Checker imports now use `umbod.mcp.authorization`, not core permission exports.
 
+### `filesystem/`
+
+**Read when working with:** Filesystem browsing and empty node creation over MCP. See [the local module index](filesystem/README.md) for tool, error, snapshot, lifetime, and bootstrap contracts. `registration.py` publishes exactly `get_filesystem_root`, `get_filesystem_node`, `list_filesystem_children`, `create_filesystem_file`, and `create_filesystem_directory` through the observed registrar. Node IDs and parent IDs are UUIDs. Creation requires `parent_id`, `name`, and `metadata: NodeMetadata`; caller identity, ownership, grants, and content are not accepted inputs. Root, node, and creation results are safe `NodeSummary` objects; children return the named `{nodes: [NodeSummary, ...]}` envelope. Summaries never expose content storage keys, owners, or grants.
+
+`caller.py` captures one current token per invocation and derives provenance from the actual server authentication provider. Membership uses active runtime permission claim fields, falling back to the configured MCP group claim only when no permission runtime state exists. Core's verified identity resolver alone decides authority; local test, unavailable, and deployment-only observations cannot authorize filesystem access. No caller, session, or application service is retained across invocations. `factory.py` constructs operation-local core browsing and creation services over the prepared application database, without a content driver.
+
+Authorization, list filtering, name validation, ownership, and persistence remain core responsibilities. Missing and denied nodes share `filesystem_permission_denied`; other expected failures use fixed `filesystem_invalid_name`, `filesystem_name_collision`, `filesystem_wrong_node_kind`, and `filesystem_storage_failure` messages without raw exception details. Unexpected failures produce the fixed `filesystem_operation_failed: Filesystem operation failed` error. Read tools are read-only and idempotent; creation is non-idempotent and creates empty private nodes. The tools do not provision a root or grant access: an operator must bootstrap the system-owned root and initial discover/write grants through the separate provisioning boundary before clients can use them.
+
 ### `messaging/`
 
 **Read when working with:** Event transport and state synchronization used by the MCP process.
 
 ### `logging/`, `metrics/`, `middleware/`, and `tools/`
 
-**Read when working with:** Audit behavior, instrumentation, protocol request handling, or observed registration of internal FastMCP tools. Audit/invocation actor projection consumes the shared captured subject while retaining the separate email/preferred-username fallback and client/session metadata rules. `tools/registration.py` preserves callable-derived FastMCP metadata while observing the complete `FunctionTool.run` lifecycle; `tools/invocation/` contains shared invocation lifecycle and telemetry behavior.
+**Read when working with:** Audit behavior, instrumentation, protocol request handling, or observed registration of internal FastMCP tools. Failed completion logs carry `mcp.failure.origin` independently of audit categories and metric labels; exception failures include safe `exception.type` and `exception.stacktrace` snapshots, while returned failures have no invented traceback. Raw exception messages, source lines, locals and credential values are excluded. Audit/invocation actor projection consumes the shared captured subject while retaining the separate email/preferred-username fallback and client/session metadata rules. `tools/registration.py` preserves callable-derived FastMCP metadata while observing the complete `FunctionTool.run` lifecycle and attaching internal failure evidence without exception messages, source text, or locals; `tools/invocation/` contains shared invocation lifecycle and telemetry behavior.
 
 ## Embedded host composition
 

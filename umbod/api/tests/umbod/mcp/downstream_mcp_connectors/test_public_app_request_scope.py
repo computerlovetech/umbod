@@ -13,6 +13,11 @@ from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, AsyncIterator
+from unittest.mock import AsyncMock, Mock
+
+from umbod.core.filesystem.browsing import FilesystemBrowsing, NodeSummary
+from umbod.core.filesystem.models import NodeKind, NodeMetadata, RootParent
+from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory
 import httpx
 import pytest
 import pytest_asyncio
@@ -78,7 +83,7 @@ async def _post(client: httpx.AsyncClient, path: str, payload: dict[str, Any]) -
     return parsed
 
 @pytest.mark.asyncio
-async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_path: Path) -> None:
+async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     database_path = str(tmp_path / 'request-scope.sqlite3')
     await _persist_catalog(database_path)
     settings = MCPAppSettings(mcp=MCPSettings(metrics_enabled=False, connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, stateless_http=True, _env_file=None), connector_store=ConnectorStoreConfig(type='sqlite', sqlite_path=database_path), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
@@ -86,6 +91,16 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_p
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
     await persistence_runtime.readiness.ensure_ready()
     context = await create_runtime_context(PublicAppConfig(settings=settings, connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=True, api_base_url=None, persistence_runtime=persistence_runtime))
+    browsing = Mock(spec=FilesystemBrowsing)
+    browsing.get_root = AsyncMock(return_value=NodeSummary(
+        id='00000000-0000-0000-0000-000000000001', parent_id=RootParent(),
+        name='/', kind=NodeKind.DIRECTORY,
+        metadata=NodeMetadata(content_type='application/octet-stream', attributes={}),
+        created_at=datetime(2026, 1, 1, tzinfo=UTC),
+        updated_at=datetime(2026, 1, 1, tzinfo=UTC), revision=1,
+    ))
+    service_factory = Mock(return_value=browsing)
+    monkeypatch.setattr(DatabaseFilesystemServiceFactory, 'browsing', service_factory)
     app = await build_starlette_app(context)
     transport = httpx.ASGITransport(app=app)
     async with app.router.lifespan_context(app):
@@ -98,16 +113,22 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_p
             proxy_response = await _post(client, PUBLIC_PATH, _request(2, 'tools/list', {}))
             (root_response, concurrent_proxy_response) = await asyncio.gather(_post(client, '/mcp', _request(3, 'tools/list', {})), _post(client, PUBLIC_PATH, _request(4, 'tools/list', {})))
             refreshed_root_response = await _post(client, '/mcp', _request(5, 'tools/list', {}))
+            allowed_response = await _post(client, '/mcp', _request(6, 'tools/call', {'name': 'get_filesystem_root', 'arguments': {}}))
+            assert allowed_response['result']['structuredContent']['id'] == '00000000-0000-0000-0000-000000000001'
+            service_factory.assert_called_once_with()
+            forbidden_response = await _post(client, PUBLIC_PATH, _request(7, 'tools/call', {'name': 'get_filesystem_root', 'arguments': {}}))
+    service_factory.assert_called_once_with()
+    assert 'error' in forbidden_response or forbidden_response['result'].get('isError') is True
     proxy_names = {tool['name'] for tool in proxy_response['result']['tools']}
     concurrent_proxy_names = {tool['name'] for tool in concurrent_proxy_response['result']['tools']}
-    expected_root_names = {f'scope_test_{name}' for name in DOWNSTREAM_TOOL_NAMES}
+    expected_root_names = {f'scope_test_{name}' for name in DOWNSTREAM_TOOL_NAMES} | {"get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory"}
     root_names = {tool['name'] for tool in root_response['result']['tools']}
     refreshed_root_names = {tool['name'] for tool in refreshed_root_response['result']['tools']}
     assert proxy_names == set(DOWNSTREAM_TOOL_NAMES)
     assert concurrent_proxy_names == set(DOWNSTREAM_TOOL_NAMES)
-    assert expected_root_names <= root_names
+    assert expected_root_names == root_names
     assert not set(DOWNSTREAM_TOOL_NAMES) & root_names
-    assert expected_root_names <= refreshed_root_names
+    assert expected_root_names == refreshed_root_names
     assert not set(DOWNSTREAM_TOOL_NAMES) & refreshed_root_names
 
 class RecordingClientSession:

@@ -2,7 +2,10 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from umbod.core.persistence import Database, DatabaseSession, TransactionMode
+from ..authorization.errors import PermissionDenied
+from ..administration.errors import PolicyConflict, PolicyRevisionConflict
 from ..errors import (
+    ProvisioningConflict,
     InvalidName,
     MissingNode,
     NameCollision,
@@ -21,6 +24,10 @@ async def storage_session(
         async with database.session(mode=mode) as session:
             yield session
     except (
+        PermissionDenied,
+        PolicyConflict,
+        PolicyRevisionConflict,
+        ProvisioningConflict,
         InvalidName,
         MissingNode,
         NameCollision,

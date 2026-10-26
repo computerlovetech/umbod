@@ -6,9 +6,11 @@ from time import time
 import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
+from fastapi import Request
 from fastapi.testclient import TestClient
 from jwt import PyJWK, PyJWKClient
 
+from umbod.rest.authentication.deps import get_caller_context
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
 
@@ -30,11 +32,18 @@ def client(signing_key: rsa.RSAPrivateKey, tmp_path: Path, monkeypatch: pytest.M
 
     monkeypatch.setattr(PyJWKClient, "get_signing_key_from_jwt", trusted_key)
     settings = APISettings(
+        runtime={"profile": "production", "auth": "auth0"},
         rest={"metrics_enabled": False},
         admin_authentication={"mode": "jwt", "environment": "production", "jwt_header_name": "X-Auth-Request-Access-Token", "jwks_url": "https://identity.example.com/jwks"},
         oidc={"issuer_url": "https://identity.example.com/", "audience": "umbod-api"},
     )
-    with TestClient(create_app(settings, [])) as transport:
+    app = create_app(settings, [])
+
+    @app.get("/api/probe")
+    def probe(request: Request) -> dict[str, object]:
+        return get_caller_context(request).model_dump(mode="json")
+
+    with TestClient(app) as transport:
         yield transport
 
 
@@ -149,3 +158,42 @@ def test_production_admin_configuration_requires_issuer_and_audience(
     settings = APISettings(admin_authentication={"mode": "jwt", "environment": "production"}, oidc={"issuer_url": issuer, "audience": audience})
     with pytest.raises(ValueError, match="issuer and audience"):
         create_app(settings, [])
+
+
+@pytest.mark.parametrize("path", ["/api/probe", "/api/me/docs", "/api/me/filesystem/root"])
+def test_production_shared_boundary_rejects_missing_credentials_and_forged_local_identity(
+    client: TestClient, path: str,
+) -> None:
+    forged = json.dumps({"signature": "trusted", "claims": {
+        "iss": "urn:umbod:local", "sub": "test-user", "groups": ["umbod-admins"],
+        "authentication": "upstream_verified",
+    }})
+    for headers in ({}, {"Authorization": "Bearer " + forged, "X-Umbod-Issuer": "urn:umbod:local"}):
+        response = client.get(path, headers=headers)
+        assert response.status_code == 401
+        assert response.headers["cache-control"] == "no-store"
+
+
+def test_production_root_caller_retains_real_issuer_and_provenance(
+    client: TestClient, signing_key: rsa.RSAPrivateKey,
+) -> None:
+    token = _token(signing_key, "https://identity.example.com/", "umbod-api")
+    response = client.get("/api/probe", headers={"Authorization": "Bearer " + token})
+    assert response.status_code == 200
+    assert response.json() == {
+        "authentication": "upstream_verified",
+        "subject": {"issuer": {"value": "https://identity.example.com/"}, "subject": "admin-123"},
+    }
+    assert client.get("/api/me/docs", headers={"Authorization": "Bearer " + token}).status_code == 200
+
+
+@pytest.mark.parametrize("path", ["/api/probe", "/api/me/docs"])
+@pytest.mark.parametrize("selected", ["", "invalid"])
+def test_shared_production_header_precedence_never_retries_valid_bearer(
+    client: TestClient, signing_key: rsa.RSAPrivateKey, path: str, selected: str,
+) -> None:
+    response = client.get(path, headers={
+        "X-Auth-Request-Access-Token": selected,
+        "Authorization": "Bearer " + _token(signing_key, "https://identity.example.com/", "umbod-api"),
+    })
+    assert response.status_code == 401

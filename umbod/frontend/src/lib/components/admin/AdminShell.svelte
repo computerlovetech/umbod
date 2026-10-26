@@ -9,6 +9,7 @@
     | 'overview'
     | 'connectors'
     | 'groupPermissions'
+    | 'filesystem'
     | 'mcpSetup'
     | 'instanceConfiguration';
 

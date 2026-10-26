@@ -5,7 +5,40 @@ from umbod.core.permissions.stores.service import GroupPermissionStoreService
 from umbod.core.persistence import Database
 from tests.persistence_runtime import create_inmemory_runtime
 import asyncio
+import json
 from typing import Optional
+
+import httpx
+
+from umbod.core.connectors.openapi.execution import (
+    HttpxOutboundOperationAdapter,
+    IdentityOpenApiResponseNormalizer,
+    OpenApiRequestAuthenticator,
+    OpenApiResponseNormalizer,
+    OutboundOperationTransport,
+)
+from umbod.core.invocation.failure_evidence import (
+    InvocationExceptionEvidence,
+    InvocationFailureEvidence,
+    current_invocation_failure,
+)
+from umbod.core.invocation.tools.execution import (
+    ToolExecutionContext,
+    ToolExecutionOutcome,
+    ToolExecutionRequest,
+    ToolExecutionFailed,
+)
+from umbod.mcp.connectors.native.tools.invocation.telemetry import ConnectorTelemetryInterceptor
+from umbod.mcp.logging import McpAuditRecorder, create_default_connector_tool_invocation_logger
+from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
+from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
+from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
+from tests.umbod.core.openapi_connectors.test_openapi_http_adapters import (
+    FakeStreamResponse,
+    RaisingAsyncHttpClient,
+    RecordingAsyncHttpClient,
+)
+from tests.umbod.mcp.openapi_connectors.test_execution_adapter_telemetry import RecordingAuditSink
 from pydantic import SecretStr
 import pytest
 from umbod.core.invocation.tools.execution import create_tool_execution_pipeline
@@ -357,3 +390,188 @@ async def test_cancellation_propagates_without_outbound_normalize() -> None:
     with pytest.raises(asyncio.CancelledError):
         await service.execute(_input(body=PresentJsonBody(value={'secret': 'canary'})), ('engineering',))
     assert 'normalize' not in events
+
+
+class FailingAuthenticator:
+    def __init__(self, error: BaseException) -> None:
+        self.error = error
+
+    async def authenticate(
+        self, connector_id: str, request: OutboundRequest
+    ) -> AuthenticatedOutboundRequest:
+        raise self.error
+
+
+class FailingNormalizer:
+    def __init__(self, error: BaseException) -> None:
+        self.error = error
+
+    def normalize(self, response: OpenApiExecutionResponse) -> OpenApiExecutionResponse:
+        raise self.error
+
+
+class FailureEvidenceRecorder:
+    def __init__(self) -> None:
+        self.completions: list[tuple[ToolExecutionOutcome, Optional[InvocationFailureEvidence]]] = []
+
+    async def before_tool_preparation(self, request: ToolExecutionRequest) -> object:
+        return None
+
+    async def before_tool_execution(self, context: ToolExecutionContext, state: object) -> None:
+        return None
+
+    async def after_tool_execution(
+        self, request: ToolExecutionRequest, outcome: ToolExecutionOutcome, state: object
+    ) -> None:
+        self.completions.append((outcome, current_invocation_failure()))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "stage,error,expected_origin,expected_type,expected_code",
+    [
+        ("transport", OutboundTimeoutError(), "downstream_openapi", "OutboundTimeoutError", "outbound_timeout"),
+        ("http", httpx.ReadTimeout("private-exception-canary"), "downstream_openapi", "ReadTimeout", "outbound_timeout"),
+        ("transport", RuntimeError("private-exception-canary"), "internal", "RuntimeError", "outbound_failed"),
+        ("authenticator", RuntimeError("private-exception-canary"), "internal", "RuntimeError", "outbound_failed"),
+        ("normalizer", RuntimeError("private-exception-canary"), "internal", "RuntimeError", "outbound_failed"),
+        ("authenticator", OutboundTimeoutError(), "internal", "OutboundTimeoutError", "outbound_timeout"),
+        ("normalizer", OutboundTimeoutError(), "internal", "OutboundTimeoutError", "outbound_timeout"),
+    ],
+)
+async def test_openapi_failure_evidence_preserves_origin_and_one_safe_completion(
+    stage: str,
+    error: Exception,
+    expected_origin: str,
+    expected_type: str,
+    expected_code: str,
+) -> None:
+    events: list[str] = []
+    store = await RecordingStore.create(events)
+    await _save(store, _records())
+    sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
+    audit_sink = RecordingAuditSink()
+    logger = create_default_connector_tool_invocation_logger(
+        sink, McpAuditRecorder(audit_sink, "test")
+    )
+    recorder = FailureEvidenceRecorder()
+    telemetry = ConnectorTelemetryInterceptor(
+        "Inventory", logger, InMemoryMcpMetricsRecorder(), lambda result: False
+    )
+    transport: OutboundOperationTransport = RecordingTransport(events)
+    authenticator: OpenApiRequestAuthenticator = CanaryAuthenticator("private-bearer-canary")
+    normalizer: OpenApiResponseNormalizer = RecordingNormalizer(events)
+    if stage == "transport":
+        transport = RecordingTransport(events, error)
+    elif stage == "http":
+        transport = HttpxOutboundOperationAdapter(RaisingAsyncHttpClient(error))
+    elif stage == "authenticator":
+        authenticator = FailingAuthenticator(error)
+    else:
+        normalizer = FailingNormalizer(error)
+    service = OpenApiCapabilityExecutionService(
+        store, RecordingAuthorizer(events, True), AggregateOpenApiOperationResolver(),
+        RecordingCompiler(events), transport, normalizer,
+        OpenApiExecutionLimits(timeout_seconds=1, maximum_response_bytes=5), authenticator,
+        create_tool_execution_pipeline(PermitAllConnectorInvocationPolicy(), (telemetry, recorder)),
+    )
+
+    result = await service.execute(
+        _input(body=PresentJsonBody(value={"password": "private-body-canary"})), ("engineering",)
+    )
+
+    assert result.code == expected_code
+    assert len(recorder.completions) == 1
+    outcome, evidence = recorder.completions[0]
+    assert isinstance(outcome, ToolExecutionFailed)
+    if stage != "http":
+        assert outcome.error is error
+    assert isinstance(evidence, InvocationExceptionEvidence)
+    assert evidence.origin.value == expected_origin
+    assert evidence.exception_type == expected_type
+    records = sink.invocation_records()
+    assert len(records) == 1
+    assert len(audit_sink.events) == 1
+    attributes = records[0].attributes
+    assert attributes["mcp.invocation.outcome"] == "failure"
+    assert attributes["mcp.failure.origin"] == expected_origin
+    assert attributes["exception.type"] == expected_type
+    assert attributes["exception.stacktrace"] == evidence.stacktrace
+    assert "_invoke_transport" in evidence.stacktrace or stage == "http"
+    if stage == "http":
+        assert "raising_context" in evidence.stacktrace
+    payload = json.dumps(dict(attributes)) + repr(audit_sink.events) + result.model_dump_json()
+    for canary in ("private-exception-canary", "private-bearer-canary", "private-body-canary"):
+        assert canary not in payload
+    assert current_invocation_failure() is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ["authenticator", "transport", "normalizer"])
+async def test_openapi_cancellation_preserves_identity_without_failure_evidence(stage: str) -> None:
+    events: list[str] = []
+    store = await RecordingStore.create(events)
+    await _save(store, _records())
+    cancellation = asyncio.CancelledError()
+    recorder = FailureEvidenceRecorder()
+    service = OpenApiCapabilityExecutionService(
+        store, RecordingAuthorizer(events, True), AggregateOpenApiOperationResolver(),
+        RecordingCompiler(events),
+        RecordingTransport(events, cancellation if stage == "transport" else None),
+        FailingNormalizer(cancellation) if stage == "normalizer" else RecordingNormalizer(events),
+        OpenApiExecutionLimits(timeout_seconds=1, maximum_response_bytes=5),
+        FailingAuthenticator(cancellation) if stage == "authenticator" else CanaryAuthenticator("secret"),
+        create_tool_execution_pipeline(PermitAllConnectorInvocationPolicy(), (recorder,)),
+    )
+
+    with pytest.raises(asyncio.CancelledError) as caught:
+        await service.execute(_input(), ("engineering",))
+
+    assert caught.value is cancellation
+    assert len(recorder.completions) == 1
+    assert recorder.completions[0][1] is None
+    assert current_invocation_failure() is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("status", [400, 401, 404, 500, 503])
+async def test_openapi_http_error_status_is_a_successful_completion_without_failure_evidence(
+    status: int,
+) -> None:
+    events: list[str] = []
+    store = await RecordingStore.create(events)
+    await _save(store, _records())
+    sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
+    audit_sink = RecordingAuditSink()
+    logger = create_default_connector_tool_invocation_logger(
+        sink, McpAuditRecorder(audit_sink, "test")
+    )
+    recorder = FailureEvidenceRecorder()
+    telemetry = ConnectorTelemetryInterceptor(
+        "Inventory", logger, InMemoryMcpMetricsRecorder(), lambda result: False
+    )
+    service = OpenApiCapabilityExecutionService(
+        store, RecordingAuthorizer(events, True), AggregateOpenApiOperationResolver(),
+        RecordingCompiler(events),
+        HttpxOutboundOperationAdapter(
+            RecordingAsyncHttpClient(FakeStreamResponse(status, {}, (b"private-response-canary",)))
+        ),
+        IdentityOpenApiResponseNormalizer(),
+        OpenApiExecutionLimits(timeout_seconds=1, maximum_response_bytes=5),
+        CanaryAuthenticator("private-bearer-canary"),
+        create_tool_execution_pipeline(PermitAllConnectorInvocationPolicy(), (telemetry, recorder)),
+    )
+
+    result = await service.execute(_input(), ("engineering",))
+
+    assert result.status == "success"
+    assert result.http_status == status
+    assert len(recorder.completions) == 1
+    assert recorder.completions[0][1] is None
+    records = sink.invocation_records()
+    assert len(records) == 1
+    assert len(audit_sink.events) == 1
+    assert records[0].attributes["mcp.invocation.outcome"] == "success"
+    assert "mcp.failure.origin" not in records[0].attributes
+    assert "exception.stacktrace" not in records[0].attributes
+    assert "private-response-canary" not in json.dumps(dict(records[0].attributes))

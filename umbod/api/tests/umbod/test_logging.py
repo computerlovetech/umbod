@@ -8,7 +8,7 @@ from typing import Any
 
 import pytest
 
-from umbod.logging import OpenTelemetryJsonFormatter, configure_logging
+from umbod.logging import OpenTelemetryJsonFormatter, configure_logging, log_safe_exception
 
 
 def _payload(record: logging.LogRecord, service_name: str) -> dict[str, Any]:
@@ -58,6 +58,23 @@ def test_formatter_maps_exception_attributes() -> None:
     assert attributes["exception.type"] == "ValueError"
     assert attributes["exception.message"] == "invalid"
     assert "ValueError: invalid" in attributes["exception.stacktrace"]
+
+
+def test_safe_exception_log_exports_frames_without_sensitive_message(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    try:
+        raise RuntimeError("raw-token-sentinel")
+    except RuntimeError as error:
+        log_safe_exception(logging.getLogger("test.safe"), "Instrumentation failed", error)
+
+    attributes = _payload(caplog.records[-1], "test-service")["attributes"]
+
+    assert attributes["exception.type"] == "RuntimeError"
+    assert "test_safe_exception_log_exports_frames" in attributes["exception.stacktrace"]
+    assert "raw-token-sentinel" not in json.dumps(attributes)
+    assert "exception.message" not in attributes
+    assert attributes["mcp.failure.origin"] == "internal"
 
 
 def test_configure_logging_is_idempotent_and_routes_framework_loggers() -> None:

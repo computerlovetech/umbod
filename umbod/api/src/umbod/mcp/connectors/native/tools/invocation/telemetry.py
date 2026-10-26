@@ -1,16 +1,19 @@
 import asyncio
-import logging
 from collections.abc import Callable
 
+from umbod.core.invocation.failure_evidence import (
+    InvocationFailureOrigin,
+    InvocationReturnedFailure,
+    current_invocation_failure,
+    exception_evidence,
+)
 from umbod.core.invocation.tools.execution import ToolExecutionContext, ToolExecutionFailed, ToolExecutionOutcome, ToolExecutionRequest, ToolExecutionSucceeded
 from umbod.mcp.connectors.native.approval import ModernConnectorApprovalRequired
 from umbod.mcp.connectors.native.tools.invocation.lifecycle import ConnectorInvocationLifecycle, ConnectorToolInvocationIdentity
 from umbod.mcp.logging import ConnectorToolInvocationLogger, McpToolInvocationFailureCategory
 from umbod.mcp.metrics import McpMetricsRecorder
 from umbod.mcp.tools.invocation.diagnostics import invocation_failure
-from umbod.mcp.tools.invocation.telemetry import McpToolInvocationObserver
-
-logger = logging.getLogger(__name__)
+from umbod.mcp.tools.invocation.telemetry import McpToolInvocationObserver, log_observation_failure
 
 
 class ConnectorTelemetryInterceptor:
@@ -44,14 +47,23 @@ class ConnectorTelemetryInterceptor:
         if state is not None and not isinstance(state, ConnectorInvocationLifecycle):
             raise TypeError("Invalid connector invocation lifecycle state")
         if isinstance(outcome, ToolExecutionFailed):
-            self._observer.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, invocation_failure.get())
+            evidence = current_invocation_failure() or exception_evidence(outcome.error, InvocationFailureOrigin.INTERNAL)
+            self._observer.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, invocation_failure.get(), evidence)
             return
         try:
             returned_error = isinstance(outcome, ToolExecutionSucceeded) and self._result_is_error(outcome.result)
-        except Exception:
-            logger.error("Connector tool result classification failed")
-            returned_error = True
+        except Exception as error:
+            log_observation_failure("Connector tool result classification failed", error)
+            self._observer.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, invocation_failure.get(), exception_evidence(error, InvocationFailureOrigin.INTERNAL))
+            return
         if returned_error:
-            self._observer.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, invocation_failure.get())
+            evidence = current_invocation_failure()
+            if evidence is None:
+                returned_origin = {
+                    "native": InvocationFailureOrigin.CONNECTOR,
+                    "downstream_mcp": InvocationFailureOrigin.MCP,
+                }.get(request.identity.connector_kind, InvocationFailureOrigin.INTERNAL)
+                evidence = InvocationReturnedFailure(returned_origin)
+            self._observer.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, invocation_failure.get(), evidence)
         else:
             self._observer.succeeded(state)

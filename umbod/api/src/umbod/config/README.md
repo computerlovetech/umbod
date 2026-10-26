@@ -30,7 +30,7 @@ OIDC issuer derivation preserves an explicit `UMBOD_OIDC_ISSUER_URL`. Otherwise 
 
 ### `app.py`
 
-**Read when working with:** Internal application configuration consumed at runtime, including `user_profile` mapping and token-role validation, and the independently enabled OTLP receiver and its request limit. Operator OTLP bearer credentials are excluded from configuration inspection and redacted display.
+**Read when working with:** Internal application configuration consumed at runtime, including `user_profile` mapping and token-role validation, and the independently enabled OTLP receiver and its request limit. Operator OTLP bearer credentials are excluded from configuration inspection and redacted display. Direct AppConfig construction rejects production REST simulation, disabled mode, development verification and dev/none authentication independently of personal connections. REST startup rechecks this invariant for explicitly copied configuration; local disabled administration remains supported.
 
 ### `validate.py`
 

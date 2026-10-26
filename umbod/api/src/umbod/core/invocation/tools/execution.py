@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Generic, Protocol, TypeAlias, TypeVar
 
 from umbod.core.capabilities import CapabilityIdentity
+from umbod.core.invocation.failure_evidence import invocation_failure_scope
 from umbod.core.invocation.policy import (
     ConnectorInvocation,
     ConnectorInvocationDenied,
@@ -91,6 +92,14 @@ class OrderedToolExecutionPipeline(Generic[ExecutionResult]):
         self._interceptors = tuple(interceptors)
 
     async def execute(
+        self,
+        request: ToolExecutionRequest,
+        prepare: Callable[[], Awaitable[PreparedToolExecution[ExecutionResult]]],
+    ) -> ExecutionResult:
+        with invocation_failure_scope():
+            return await self._execute(request, prepare)
+
+    async def _execute(
         self,
         request: ToolExecutionRequest,
         prepare: Callable[[], Awaitable[PreparedToolExecution[ExecutionResult]]],

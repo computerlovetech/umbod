@@ -108,6 +108,11 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
         'create_content_driver',
         'create_namespace_driver',
         'create_filesystem',
+        'create_filesystem_browsing',
+        'create_filesystem_transactions',
+        'create_filesystem_creation',
+        'create_root_provisioning',
+        'create_root_group_policy_management',
     }
     forbidden = {
         'InMemoryDatabase',

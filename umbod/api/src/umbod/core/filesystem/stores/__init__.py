@@ -1,4 +1,6 @@
 from .access_control import DatabaseAccessControl
 from .namespace import DatabaseNamespace
 
-__all__ = ["DatabaseAccessControl", "DatabaseNamespace"]
+from .transactions import DatabaseFilesystemTransactions
+
+__all__ = ["DatabaseAccessControl", "DatabaseNamespace", "DatabaseFilesystemTransactions"]

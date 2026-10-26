@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+from umbod.core.invocation.failure_evidence import InvocationFailureEvidence
 from enum import StrEnum
 from typing import Literal, Protocol
 
@@ -77,6 +78,7 @@ class McpToolInvocationFailed:
     duration_ms: float
     failure_category: McpToolInvocationFailureCategory
     diagnostic: InvocationFailureDiagnostic | None = None
+    evidence: InvocationFailureEvidence | None = None
 
     @property
     def outcome(self) -> Literal[McpToolInvocationOutcome.FAILURE]:

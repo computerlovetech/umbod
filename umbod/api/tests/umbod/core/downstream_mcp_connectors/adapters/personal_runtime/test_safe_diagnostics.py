@@ -1,12 +1,21 @@
 from .contracts import LOOKUP_FINGERPRINT
+import asyncio
 import json
 import logging
+
+import httpcore2
 
 import pytest
 
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeLimits, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall
 
 from .conftest import ScriptedNetwork, ScriptedResolver, make_transport
+from umbod.core.invocation.failure_evidence import (
+    InvocationExceptionEvidence,
+    InvocationFailureOrigin,
+    current_invocation_failure,
+    invocation_failure_scope,
+)
 
 
 @pytest.mark.asyncio
@@ -64,3 +73,69 @@ async def test_valid_fragmented_sse_is_preserved(target: PersonalRuntimeTarget, 
     transport = make_transport(limits, network, ScriptedResolver())
     result = await transport.call_tool(PersonalToolCall(target=target, tool_name="lookup", expected_fingerprint=LOOKUP_FINGERPRINT, arguments={}))
     assert result.result["content"] == [{"type": "text", "text": "safe"}]
+
+
+@pytest.mark.asyncio
+async def test_background_http_failure_preserves_original_internal_evidence_in_parent(target: PersonalRuntimeTarget, limits: PersonalRuntimeLimits, network: ScriptedNetwork, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture) -> None:
+    operation_task = asyncio.current_task()
+    background_failures: list[bool] = []
+
+    async def fail_http_connect(*arguments: object, **options: object) -> httpcore2.AsyncNetworkStream:
+        background_failures.append(asyncio.current_task() is not operation_task)
+        raise RuntimeError("sensitive-http-original-token")
+
+    monkeypatch.setattr(network, "connect_tcp", fail_http_connect)
+    transport = make_transport(limits, network, ScriptedResolver())
+    previous = current_invocation_failure()
+    with invocation_failure_scope():
+        with pytest.raises(PersonalRuntimeUnavailable) as failure:
+            await transport.call_tool(PersonalToolCall(target=target, tool_name="lookup", expected_fingerprint=LOOKUP_FINGERPRINT, arguments={}))
+        evidence = current_invocation_failure()
+        assert background_failures == [True]
+        assert type(failure.value) is PersonalRuntimeUnavailable
+        assert str(failure.value) == "Personal MCP unavailable"
+        assert isinstance(evidence, InvocationExceptionEvidence)
+        assert evidence.exception_type == "RuntimeError"
+        assert evidence.origin == InvocationFailureOrigin.INTERNAL
+        assert "in fail_http_connect" in evidence.stacktrace
+        assert "sensitive-http-original-token" not in evidence.stacktrace
+        assert "sensitive-http-original-token" not in caplog.text
+    assert current_invocation_failure() is previous
+
+
+@pytest.mark.asyncio
+async def test_concurrent_background_http_failures_keep_invocation_scopes_isolated(target: PersonalRuntimeTarget, limits: PersonalRuntimeLimits, monkeypatch: pytest.MonkeyPatch) -> None:
+    first_ready = asyncio.Event()
+    second_ready = asyncio.Event()
+
+    async def invoke(error: Exception, ready: asyncio.Event, other_ready: asyncio.Event) -> InvocationExceptionEvidence:
+        network = ScriptedNetwork()
+
+        async def fail_concurrent_http_connect(*arguments: object, **options: object) -> httpcore2.AsyncNetworkStream:
+            ready.set()
+            await other_ready.wait()
+            raise error
+
+        monkeypatch.setattr(network, "connect_tcp", fail_concurrent_http_connect)
+        transport = make_transport(limits, network, ScriptedResolver())
+        with invocation_failure_scope():
+            assert current_invocation_failure() is None
+            with pytest.raises(PersonalRuntimeUnavailable):
+                await transport.call_tool(PersonalToolCall(target=target, tool_name="lookup", expected_fingerprint=LOOKUP_FINGERPRINT, arguments={}))
+            evidence = current_invocation_failure()
+            assert isinstance(evidence, InvocationExceptionEvidence)
+            return evidence
+
+    with invocation_failure_scope():
+        first, second = await asyncio.gather(
+            invoke(RuntimeError("first-sensitive-token"), first_ready, second_ready),
+            invoke(LookupError("second-sensitive-token"), second_ready, first_ready),
+        )
+        assert current_invocation_failure() is None
+    assert first.exception_type == "RuntimeError"
+    assert second.exception_type == "LookupError"
+    for evidence in (first, second):
+        assert evidence.origin == InvocationFailureOrigin.INTERNAL
+        assert "in fail_concurrent_http_connect" in evidence.stacktrace
+        assert "first-sensitive-token" not in evidence.stacktrace
+        assert "second-sensitive-token" not in evidence.stacktrace

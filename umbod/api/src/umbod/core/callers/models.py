@@ -55,3 +55,10 @@ class CallerContext(BaseModel):
         if self.authentication == AuthenticationProvenance.UNAVAILABLE and isinstance(self.subject, SubjectIdentity):
             raise ValueError("Unavailable authentication cannot establish a subject")
         return self
+
+
+class CallerSnapshot(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    caller: CallerContext
+    groups: GroupMembership

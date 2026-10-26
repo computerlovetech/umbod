@@ -6,6 +6,8 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp
 
+from umbod.rest.authentication.rest_paths import protected_rest_request
+
 
 class AdminCookieCsrfMiddleware(BaseHTTPMiddleware):
     def __init__(
@@ -27,3 +29,13 @@ class AdminCookieCsrfMiddleware(BaseHTTPMiddleware):
             ):
                 return JSONResponse(status_code=403, content={"detail": "Forbidden"})
         return await call_next(request)
+
+
+class RestCookieCsrfMiddleware(AdminCookieCsrfMiddleware):
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        if not protected_rest_request(request.scope):
+            return await call_next(request)
+        response = await super().dispatch(request, call_next)
+        if response.status_code == 403:
+            response.headers["Cache-Control"] = "no-store"
+        return response

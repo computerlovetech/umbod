@@ -1,0 +1,106 @@
+import hashlib
+import json
+
+from ..models import (
+    SYSTEM_ROOT_OWNER, AccessGrant, EmptyContent, NodeKind, Principal,
+    PrincipalType, RootParent,
+)
+from ..namespace import ROOT_ID
+from .errors import PolicyConflict, PolicyRevisionConflict
+from .models import (
+    ObservedGroupPolicy, RootGroupPolicyView, RootPolicyState,
+    RootPolicyStatus, SaveRootGroupPolicy,
+)
+from .ports import RootPolicyTransactions
+
+
+def policy_status(state: RootPolicyState) -> RootPolicyStatus:
+    if state.malformed_root:
+        return RootPolicyStatus.CONFLICT
+    if state.roots:
+        root = state.roots[0]
+        if (
+            root.id != ROOT_ID or root.name != ""
+            or root.kind != NodeKind.DIRECTORY
+            or not isinstance(root.parent_id, RootParent)
+            or not isinstance(root.content, EmptyContent)
+        ):
+            return RootPolicyStatus.CONFLICT
+    if state.owners:
+        if not state.roots or state.owners[0].owner != SYSTEM_ROOT_OWNER:
+            return RootPolicyStatus.CONFLICT
+        return RootPolicyStatus.READY
+    if state.grants or state.has_children:
+        return RootPolicyStatus.CONFLICT
+    return RootPolicyStatus.UNINITIALIZED
+
+
+def revision(state: RootPolicyState) -> str:
+    payload = state.model_dump(mode="json", exclude={"grants", "has_children"})
+    if policy_status(state) != RootPolicyStatus.READY:
+        payload["has_children"] = state.has_children
+    payload["grants"] = sorted(
+        [
+            {
+                **grant.model_dump(mode="json", exclude={"permissions"}),
+                "permissions": sorted(grant.permissions),
+            }
+            for grant in state.grants
+        ],
+        key=lambda grant: (
+            grant["principal"]["type"], grant["principal"]["issuer"],
+            grant["principal"]["id"],
+        ),
+    )
+    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def policy_view(state: RootPolicyState) -> RootGroupPolicyView:
+    groups: list[ObservedGroupPolicy] = []
+    unmanaged: list[ObservedGroupPolicy] = []
+    for grant in state.grants:
+        if grant.principal.type == PrincipalType.GROUP:
+            target = unmanaged if grant.recursive else groups
+            target.append(ObservedGroupPolicy(
+                issuer=grant.principal.issuer, group_id=grant.principal.id,
+                permissions=frozenset(grant.permissions),
+            ))
+    return RootGroupPolicyView(
+        root_id=ROOT_ID, status=policy_status(state), revision=revision(state),
+        groups=tuple(sorted(groups, key=lambda group: (group.issuer, group.group_id))),
+        unmanaged_groups=tuple(sorted(unmanaged, key=lambda group: (group.issuer, group.group_id))),
+    )
+
+
+class RootGroupPolicyService:
+    def __init__(self, transactions: RootPolicyTransactions) -> None:
+        self._transactions = transactions
+
+    async def inspect(self) -> RootGroupPolicyView:
+        async with self._transactions.read() as session:
+            return policy_view(await session.observe())
+
+    async def save(self, command: SaveRootGroupPolicy) -> RootGroupPolicyView:
+        async with self._transactions.write() as session:
+            state = await session.observe()
+            view = policy_view(state)
+            if command.expected_revision != view.revision:
+                raise PolicyRevisionConflict()
+            if view.status == RootPolicyStatus.CONFLICT:
+                raise PolicyConflict()
+            recursive_keys = {(group.issuer, group.group_id) for group in view.unmanaged_groups}
+            if recursive_keys.intersection((group.issuer, group.group_id) for group in command.groups):
+                raise PolicyConflict()
+            if view.status == RootPolicyStatus.UNINITIALIZED:
+                await session.ensure_root()
+            for grant in state.grants:
+                if grant.principal.type == PrincipalType.GROUP and not grant.recursive:
+                    await session.remove_group(grant.principal)
+            for group in command.groups:
+                await session.add_group(AccessGrant(
+                    node_id=ROOT_ID,
+                    principal=Principal(type=PrincipalType.GROUP, issuer=group.issuer, id=group.group_id),
+                    permissions=set(group.permissions), recursive=False,
+                ))
+            result = policy_view(await session.observe())
+        return result

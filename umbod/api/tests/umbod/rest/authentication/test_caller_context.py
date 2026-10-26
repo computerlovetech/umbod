@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 import pytest
 from pydantic import ValidationError
 
+from umbod.config import AppConfig
 from umbod.core.callers import (
     AuthenticationProvenance,
     CallerContext,
@@ -22,8 +23,8 @@ from umbod.rest.authentication.authorization import (
 )
 from umbod.rest.authentication.caller import caller_context_from_claims
 from umbod.rest.authentication.deps import CALLER_CONTEXT_STATE_KEY, get_caller_context
-from umbod.rest.authentication.middleware import JwtAdminAuthenticationStrategy
-from umbod.rest.authentication.user_middleware import UserAuthenticationMiddleware
+from umbod.rest.authentication.middleware import JwtAdminAuthenticationStrategy, SuppliedJwtVerifierFactory
+from umbod.rest.authentication.rest_middleware import RestAuthenticationMiddleware
 from umbod.rest.authentication.verifiers import (
     ProductionJwksJwtVerifier,
     SemanticJwtVerifier,
@@ -91,13 +92,13 @@ def test_missing_request_context_is_unauthorized() -> None:
 def _user_client(verifier: JwtVerifier) -> TestClient:
     app = FastAPI()
     app.add_middleware(
-        UserAuthenticationMiddleware,
-        verifier=verifier,
-        jwt_header_name="Authorization",
-        allow_missing_simulated_token=False,
+        RestAuthenticationMiddleware,
+        settings=AppConfig(),
+        admin_verifier_factory=SuppliedJwtVerifierFactory(verifier),
+        user_verifier_factory=SuppliedJwtVerifierFactory(verifier),
     )
 
-    @app.get("/")
+    @app.get("/api/me/probe")
     def caller(request: Request) -> CallerContext:
         return get_caller_context(request)
 
@@ -121,7 +122,7 @@ def test_user_http_context_provenance_uses_actual_verifier(
     })))
 
     with _user_client(verifier) as client:
-        response = client.get("/", headers={"Authorization": "Bearer token"})
+        response = client.get("/api/me/probe", headers={"Authorization": "Bearer token"})
 
     assert response.status_code == 200
     assert response.json()["authentication"] == expected.value
@@ -152,11 +153,12 @@ async def test_failed_admin_authentication_does_not_store_context(
 async def test_failed_user_authentication_does_not_store_context(missing_token: bool) -> None:
     verifier = Mock(spec=JwtVerifier)
     verifier.verify.side_effect = JwtVerificationError()
-    middleware = UserAuthenticationMiddleware(
-        FastAPI(), verifier, "Authorization", False
+    middleware = RestAuthenticationMiddleware(
+        FastAPI(), AppConfig(), SuppliedJwtVerifierFactory(verifier), SuppliedJwtVerifierFactory(verifier),
     )
     request = Request({
         "type": "http",
+        "path": "/api/me/probe", "method": "GET",
         "headers": [] if missing_token else [(b"authorization", b"Bearer token")],
     })
     call_next = AsyncMock()
@@ -215,17 +217,18 @@ def test_current_user_reuses_context_subject_without_reverification(subject: str
     )
     app = FastAPI()
     app.add_middleware(
-        UserAuthenticationMiddleware, verifier=verifier, jwt_header_name="Authorization",
-        allow_missing_simulated_token=False,
+        RestAuthenticationMiddleware, settings=AppConfig(),
+        admin_verifier_factory=SuppliedJwtVerifierFactory(verifier),
+        user_verifier_factory=SuppliedJwtVerifierFactory(verifier),
     )
 
-    @app.get("/")
+    @app.get("/api/me/probe")
     def user(request: Request) -> dict[str, object]:
         claims.claims["sub"] = "mutated"
         return provider.get_current_user(request).model_dump()
 
     with TestClient(app) as client:
-        response = client.get("/", headers={"Authorization": "Bearer token"})
+        response = client.get("/api/me/probe", headers={"Authorization": "Bearer token"})
 
     assert response.status_code == 200
     assert response.json()["id"] == subject

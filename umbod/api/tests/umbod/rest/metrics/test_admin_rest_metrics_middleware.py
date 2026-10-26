@@ -51,7 +51,7 @@ def create_test_app(
             AdminAuthenticationMiddleware,
             strategy=RejectingAuthenticationStrategy(authentication_status),
         )
-    app.add_middleware(AdminRestMetricsMiddleware, recorder=recorder, routes=router.routes)
+    app.add_middleware(AdminRestMetricsMiddleware, recorder=recorder, routes=router.routes, mount_path="")
     return app
 
 

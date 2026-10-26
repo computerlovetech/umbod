@@ -9,6 +9,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
+from umbod.core.invocation.failure_evidence import InvocationFailureOrigin, exception_evidence
+
 _SEVERITY_NUMBERS: Mapping[str, int] = {
     "DEBUG": 5,
     "INFO": 9,
@@ -118,6 +120,18 @@ def configure_logging(service_name: str, level: str) -> None:
         framework_logger = logging.getLogger(logger_name)
         framework_logger.handlers.clear()
         framework_logger.propagate = True
+
+
+def log_safe_exception(target: logging.Logger, message: str, error: BaseException) -> None:
+    evidence = exception_evidence(error, InvocationFailureOrigin.INTERNAL)
+    target.error(
+        message,
+        extra={"structured_attributes": {
+            "mcp.failure.origin": evidence.origin.value,
+            "exception.type": evidence.exception_type,
+            "exception.stacktrace": evidence.stacktrace,
+        }},
+    )
 
 
 def flush_logging() -> None:

@@ -6,6 +6,9 @@ from typing import Any
 
 import pytest
 from fastmcp.tools import ToolResult
+from fastmcp.exceptions import ToolError
+
+from umbod.core.invocation.failure_evidence import current_invocation_failure
 
 from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import execution_case
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, runtime_case
@@ -64,11 +67,18 @@ def assert_failure(record: dict[str, Any], connector_id: str, name: str, tool: s
     assert attributes["mcp.failure.stage"] == stage
     assert attributes["mcp.failure.reason"] == reason
     assert attributes["mcp.execution_mode"] == mode
-    assert not any(key.startswith("exception.") for key in attributes)
+    if reason == "downstream_tool_error":
+        assert attributes["mcp.failure.origin"] == "downstream_mcp"
+        assert not any(key.startswith("exception.") for key in attributes)
+    else:
+        assert attributes["exception.type"]
+        assert 'File "' in attributes["exception.stacktrace"]
+        assert "[message omitted]" in attributes["exception.stacktrace"]
+        assert "exception.message" not in attributes
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failure", ["exception", "result"])
+@pytest.mark.parametrize("failure", ["exception", "internal", "result"])
 async def test_shared_failures_enrich_normal_stdout_completion(configured_logger: ConnectorToolInvocationLogger, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, failure: str) -> None:
     configure_logging("failure-test", "INFO")
     provider, *_ = await _provider({"weather": _downstream()}, ProviderOptions({"weather": "Weather"}, configured_logger))
@@ -76,8 +86,13 @@ async def test_shared_failures_enrich_normal_stdout_completion(configured_logger
     assert isinstance(held, AuthorizedDownstreamProxyTool)
 
     async def invoke(self: object, arguments: dict[str, Any], **options: Any) -> ToolResult:
-        if failure == "exception":
-            raise RuntimeError(SENSITIVE)
+        if failure in {"exception", "internal"}:
+            try:
+                raise ValueError(SENSITIVE)
+            except ValueError as error:
+                if failure == "exception":
+                    raise ToolError(SENSITIVE) from error
+                raise RuntimeError(SENSITIVE) from error
         return ToolResult(content=SENSITIVE, structured_content={"secret": SENSITIVE}, meta={"secret": SENSITIVE}, is_error=True)
 
     monkeypatch.setattr(type(held._backend_tool), "run", invoke)
@@ -88,7 +103,14 @@ async def test_shared_failures_enrich_normal_stdout_completion(configured_logger
     assert result.meta is None
     records = completion_records(capsys, caplog)
     assert len(records) == 1
-    assert_failure(records[0], "weather", "Weather", "Weather_forecast", "forecast", "shared", "downstream", "downstream_exception" if failure == "exception" else "downstream_tool_error")
+    assert_failure(records[0], "weather", "Weather", "Weather_forecast", "forecast", "shared", "downstream", "downstream_tool_error" if failure == "result" else "downstream_exception")
+    attributes = records[0]["attributes"]
+    assert attributes["mcp.failure.origin"] == ("internal" if failure == "internal" else "downstream_mcp")
+    if failure != "result":
+        assert attributes["exception.type"] == ("RuntimeError" if failure == "internal" else "ToolError")
+        assert "ValueError" in attributes["exception.stacktrace"]
+        assert "in invoke" in attributes["exception.stacktrace"]
+    assert current_invocation_failure() is None
 
 
 @pytest.mark.asyncio
@@ -131,6 +153,13 @@ async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: R
     records = completion_records(capsys, caplog)
     assert len(records) == 1
     assert_failure(records[0], "personal", "Personal", "Personal_read", "read", "personal", stage, reason)
+    attributes = records[0]["attributes"]
+    downstream = {"authorization_rejected", "transport_failure", "contract_mismatch", "target_expired", "timeout", "downstream_tool_error"}
+    assert attributes["mcp.failure.origin"] == ("downstream_mcp" if reason in downstream else "internal")
+    if reason == "runtime_failure":
+        assert attributes["exception.type"] == "RuntimeError"
+        assert "in fail" in attributes["exception.stacktrace"]
+    assert current_invocation_failure() is None
 
 
 @pytest.mark.asyncio
@@ -162,3 +191,6 @@ async def test_concurrent_failures_do_not_contaminate_success_or_later_invocatio
             assert "mcp.failure.reason" not in record["attributes"]
             assert "mcp.failure.stage" not in record["attributes"]
             assert "mcp.execution_mode" not in record["attributes"]
+            assert "mcp.failure.origin" not in record["attributes"]
+            assert "exception.stacktrace" not in record["attributes"]
+    assert current_invocation_failure() is None

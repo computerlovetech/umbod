@@ -3,6 +3,13 @@ from datetime import datetime
 
 from jsonschema.exceptions import ValidationError
 
+from umbod.core.invocation.failure_evidence import (
+    InvocationFailureOrigin,
+    capture_invocation_exception,
+    capture_returned_failure,
+    current_invocation_failure,
+)
+
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, PERSONAL_RUNTIME_FAILURE
 
 from ..models import DiscoveredTool, uses_personal_oauth
@@ -25,6 +32,7 @@ _INVALID_OUTPUT = InvocationFailureDiagnostic(execution_mode="personal", stage="
 
 def _validate_result(tool: DiscoveredTool, result: PersonalToolResult) -> None:
     if result.result.get("isError", False) is True:
+        capture_returned_failure(InvocationFailureOrigin.MCP)
         raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=InvocationFailureDiagnostic(execution_mode="personal", stage="downstream", reason="downstream_tool_error"))
     if not isinstance(result.result.get("content"), list) or result.result.get("isError", False) is not False:
         raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=_INVALID_OUTPUT)
@@ -63,7 +71,9 @@ class PersonalToolRuntimeService:
     def _capture(self) -> PersonalCaller:
         try:
             return require_personal_caller(self._caller)
-        except MissingCanonicalPrincipal:
+        except MissingCanonicalPrincipal as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
             raise PersonalRuntimeUnavailable("Personal identity unavailable") from None
 
     async def list_tools(self) -> tuple[PersonalToolRecord, ...]:
@@ -107,7 +117,9 @@ class PersonalToolRuntimeService:
                     expected_fingerprint=command.fingerprint,
                     arguments=command.arguments,
                 ))
-            except PersonalAuthorizationRejected:
+            except PersonalAuthorizationRejected as error:
+                if current_invocation_failure() is None:
+                    capture_invocation_exception(error, InvocationFailureOrigin.MCP)
                 await self._access.reject_authorization(RejectPersonalAuthorization(
                     key=admission.target.key,
                     expected_connection_revision=admission.target.authorization_revision,
@@ -116,9 +128,12 @@ class PersonalToolRuntimeService:
             stage = "output"
             _validate_result(admission.tool, result)
             return result
-        except PersonalAuthorizationHealthUnavailable:
+        except PersonalAuthorizationHealthUnavailable as error:
+            capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
             raise
         except PersonalRuntimeUnavailable as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, InvocationFailureOrigin.MCP if stage == "transport" else InvocationFailureOrigin.INTERNAL)
             diagnostic = error.diagnostic
             if diagnostic == PERSONAL_RUNTIME_FAILURE:
                 diagnostic = {
@@ -126,11 +141,15 @@ class PersonalToolRuntimeService:
                     "admission": InvocationFailureDiagnostic(execution_mode="personal", stage="admission", reason="admission_denied"),
                     "transport": InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="transport_failure"),
                 }.get(stage, PERSONAL_RUNTIME_FAILURE)
-        except (ValidationError, PersonalToolPolicyInvalid):
+        except (ValidationError, PersonalToolPolicyInvalid) as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
             diagnostic = {
                 "arguments": InvocationFailureDiagnostic(execution_mode="personal", stage="arguments", reason="invalid_arguments"),
                 "output": _INVALID_OUTPUT,
             }.get(stage, PERSONAL_RUNTIME_FAILURE)
-        except Exception:
+        except Exception as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
             diagnostic = PERSONAL_RUNTIME_FAILURE
         raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=diagnostic)

@@ -8,6 +8,7 @@ from fastmcp.tools import ToolResult
 
 from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.invocation import ConnectorInvocationDenied
+from umbod.core.invocation.failure_evidence import InvocationFailureOrigin, capture_invocation_exception
 from umbod.core.connectors.native.runtime.tools import ConnectorToolMapping
 from umbod.core.invocation.tools.execution import PreparedToolExecution, ToolExecutionPipeline, ToolExecutionRequest, prepare_tool_execution
 
@@ -105,9 +106,13 @@ class ConnectorToolInvocationRunner:
         )
 
     async def _invoke_operation(self, arguments: Mapping[str, Any]) -> ToolResult:
-        operation_result = self._mapping.operation(**arguments)
-        if isawaitable(operation_result):
-            operation_result = await operation_result
+        try:
+            operation_result = self._mapping.operation(**arguments)
+            if isawaitable(operation_result):
+                operation_result = await operation_result
+        except Exception as error:
+            capture_invocation_exception(error, InvocationFailureOrigin.CONNECTOR)
+            raise
         structured_content = dict(cast(Mapping[str, Any], operation_result))
         return ToolResult(
             structured_content=structured_content,

@@ -5,6 +5,8 @@ import uuid
 
 from typing import Protocol
 
+from umbod.logging import log_safe_exception
+
 from umbod.mcp.logging.audit.event import (
     McpAuditCorrelation,
     McpAuditFailure,
@@ -35,8 +37,8 @@ class InvocationLogSinkToolInvocationLogger:
     def record_tool_invocation_completed(self, event: McpToolInvocationCompleted) -> None:
         try:
             self._sink.record_invocation_completed(event)
-        except Exception:
-            logger.error("MCP tool invocation logging failed")
+        except Exception as error:
+            log_safe_exception(logger, "MCP tool invocation logging failed", error)
 
 
 class AuditToolInvocationLogger:
@@ -65,8 +67,8 @@ class CompositeConnectorToolInvocationLogger:
         for child in self._loggers:
             try:
                 child.record_tool_invocation_completed(event)
-            except Exception:
-                logger.error("MCP tool invocation logger failed")
+            except Exception as error:
+                log_safe_exception(logger, "MCP tool invocation logger failed", error)
 
 
 def create_default_connector_tool_invocation_logger(

@@ -1,5 +1,4 @@
 import asyncio
-import logging
 
 from collections.abc import Callable
 from typing import Any
@@ -10,10 +9,14 @@ from fastmcp.tools import FunctionTool, ToolResult
 from fastmcp.tools.base import Tool
 from pydantic import PrivateAttr
 
+from umbod.core.invocation.failure_evidence import (
+    InvocationFailureEvidence,
+    InvocationFailureOrigin,
+    InvocationReturnedFailure,
+    exception_evidence,
+)
 from umbod.mcp.logging import McpToolIdentity, McpToolInvocationFailureCategory
-from umbod.mcp.tools.invocation.telemetry import McpToolInvocationObserver
-
-logger = logging.getLogger(__name__)
+from umbod.mcp.tools.invocation.telemetry import McpToolInvocationObserver, log_observation_failure
 
 
 class ObservedFunctionTool(Tool):
@@ -28,27 +31,27 @@ class ObservedFunctionTool(Tool):
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
         try:
             lifecycle = self._observer.start(McpToolIdentity(tool_name=self.name, connector_id=None, operation_name=None))
-        except Exception:
-            logger.error("MCP tool invocation observation start failed")
+        except Exception as error:
+            log_observation_failure("MCP tool invocation observation start failed", error)
             lifecycle = None
         try:
             result = await self._delegate.run(arguments)
         except (asyncio.CancelledError, AuthorizationError):
             raise
-        except ValidationError:
-            self._safely_fail(lifecycle, McpToolInvocationFailureCategory.VALIDATION)
+        except ValidationError as error:
+            self._safely_fail(lifecycle, McpToolInvocationFailureCategory.VALIDATION, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
             raise
-        except Exception:
-            self._safely_fail(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR)
+        except Exception as error:
+            self._safely_fail(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
             raise
         try:
             is_error = result.is_error
-        except Exception:
-            logger.error("MCP tool result classification failed")
-            self._safely_fail(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR)
+        except Exception as error:
+            log_observation_failure("MCP tool result classification failed", error)
+            self._safely_fail(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
             return result
         if is_error:
-            self._safely_fail(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR)
+            self._safely_fail(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, InvocationReturnedFailure(InvocationFailureOrigin.INTERNAL))
         else:
             self._safely_succeed(lifecycle)
         return result
@@ -56,14 +59,14 @@ class ObservedFunctionTool(Tool):
     def _safely_succeed(self, lifecycle: Any) -> None:
         try:
             self._observer.succeeded(lifecycle)
-        except Exception:
-            logger.error("MCP tool invocation success observation failed")
+        except Exception as error:
+            log_observation_failure("MCP tool invocation success observation failed", error)
 
-    def _safely_fail(self, lifecycle: Any, category: McpToolInvocationFailureCategory) -> None:
+    def _safely_fail(self, lifecycle: Any, category: McpToolInvocationFailureCategory, evidence: InvocationFailureEvidence) -> None:
         try:
-            self._observer.failed(lifecycle, category)
-        except Exception:
-            logger.error("MCP tool invocation failure observation failed")
+            self._observer.failed(lifecycle, category, None, evidence)
+        except Exception as error:
+            log_observation_failure("MCP tool invocation failure observation failed", error)
 
 
 class McpObservedToolRegistrar:

@@ -15,7 +15,14 @@ from umbod.core.invocation import (
     ConnectorInvocationPolicy,
     PermitAllConnectorInvocationPolicy,
 )
-from umbod.core.invocation.tools.execution import create_tool_execution_pipeline
+from umbod.core.capabilities import CapabilityIdentity
+from umbod.core.invocation.tools.execution import (
+    PreparedToolExecution,
+    ToolExecutionRequest,
+    create_tool_execution_pipeline,
+    prepare_tool_execution,
+)
+from umbod.core.invocation.failure_evidence import InvocationFailureOrigin
 from umbod.mcp.connectors.native.tools.invocation.errors import (
     ConnectorToolErrorFormatter,
     ConnectorToolFailureResult,
@@ -390,6 +397,12 @@ async def test_result_predicate_failure_preserves_result_and_records_failure() -
     assert result.structured_content == {"ok": True}
     assert invocation_sink.invocation_records()[0].attributes["mcp.failure.category"] == McpToolInvocationFailureCategory.CONNECTOR_ERROR
     assert metrics.invocations[0].outcome == InvocationOutcome.FAILURE
+    attributes = invocation_sink.invocation_records()[0].attributes
+    assert attributes["mcp.failure.origin"] == InvocationFailureOrigin.INTERNAL
+    assert attributes["exception.type"] == "RuntimeError"
+    assert "in failing_predicate" in attributes["exception.stacktrace"]
+    assert "predicate failed" not in attributes["exception.stacktrace"]
+    assert len(invocation_sink.invocation_records()) == 1
 
 
 @pytest.mark.asyncio
@@ -401,3 +414,128 @@ async def test_invoke_swallows_invocation_logging_failures() -> None:
 
     assert result.structured_content == {"ok": True}
     assert len(audit_sink.events) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("asynchronous", [False, True])
+async def test_native_operation_exception_preserves_identity_and_safe_connector_evidence(
+    asynchronous: bool,
+) -> None:
+    failure = RuntimeError("secret-native-message")
+    observed_errors: list[Exception] = []
+    invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
+    metrics = RecordingMetricsRecorder()
+
+    class RecordingFormatter(ConnectorToolErrorFormatter):
+        def format_error(self, connector_id: str, operation_name: str, error: Exception) -> str:
+            observed_errors.append(error)
+            return "failed"
+
+    def operation() -> dict[str, Any]:
+        _secret_local = "secret-native-local"
+        raise failure
+
+    async def async_operation() -> dict[str, Any]:
+        return operation()
+
+    telemetry = ConnectorTelemetryInterceptor(
+        connector_name="Slack",
+        tool_invocation_logger=create_default_connector_tool_invocation_logger(
+            invocation_sink, McpAuditRecorder(RecordingAuditSink(), "test")
+        ),
+        metrics_recorder=metrics,
+        result_is_error=lambda result: False,
+    )
+    invoker = ConnectorToolInvocationRunner(
+        mapping=_mapping(async_operation if asynchronous else operation),
+        error_formatter=RecordingFormatter(),
+        execution_pipeline=create_tool_execution_pipeline(
+            PermitAllConnectorInvocationPolicy(), (telemetry,)
+        ),
+    )
+
+    result = await invoker.invoke({})
+
+    assert isinstance(result, ConnectorToolFailureResult)
+    assert observed_errors == [failure]
+    assert observed_errors[0] is failure
+    assert len(invocation_sink.invocation_records()) == 1
+    assert len(metrics.invocations) == 1
+    attributes = invocation_sink.invocation_records()[0].attributes
+    assert attributes["mcp.failure.origin"] == InvocationFailureOrigin.CONNECTOR
+    assert attributes["exception.type"] == "RuntimeError"
+    stacktrace = attributes["exception.stacktrace"]
+    assert "in operation" in stacktrace
+    assert "secret-native-message" not in stacktrace
+    assert "secret-native-local" not in stacktrace
+    assert "raise failure" not in stacktrace
+
+
+@pytest.mark.asyncio
+async def test_native_result_adaptation_failure_is_internal() -> None:
+    invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
+
+    def operation() -> Any:
+        return 42
+
+    invoker = _runner(_mapping(operation), invocation_sink, RecordingAuditSink())
+
+    result = await invoker.invoke({})
+
+    assert isinstance(result, ConnectorToolFailureResult)
+    assert len(invocation_sink.invocation_records()) == 1
+    attributes = invocation_sink.invocation_records()[0].attributes
+    assert attributes["mcp.failure.origin"] == InvocationFailureOrigin.INTERNAL
+    assert attributes["exception.type"] == "TypeError"
+    assert "in _invoke_operation" in attributes["exception.stacktrace"]
+    assert "dict(cast" not in attributes["exception.stacktrace"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "connector_kind,expected_origin",
+    [
+        ("native", InvocationFailureOrigin.CONNECTOR),
+        ("downstream_mcp", InvocationFailureOrigin.MCP),
+        ("openapi", InvocationFailureOrigin.INTERNAL),
+    ],
+)
+async def test_returned_failure_evidence_has_only_supported_origin(
+    connector_kind: str, expected_origin: InvocationFailureOrigin,
+) -> None:
+    invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
+    metrics = RecordingMetricsRecorder()
+    telemetry = ConnectorTelemetryInterceptor(
+        connector_name="Service",
+        tool_invocation_logger=create_default_connector_tool_invocation_logger(
+            invocation_sink, McpAuditRecorder(RecordingAuditSink(), "test")
+        ),
+        metrics_recorder=metrics,
+        result_is_error=lambda result: True,
+    )
+    returned = ToolResult(content=[], is_error=True)
+
+    async def operation() -> ToolResult:
+        return returned
+
+    async def prepare() -> PreparedToolExecution[ToolResult]:
+        return prepare_tool_execution({}, operation, invocation_arguments={})
+
+    pipeline = create_tool_execution_pipeline(PermitAllConnectorInvocationPolicy(), (telemetry,))
+    request = ToolExecutionRequest(
+        identity=CapabilityIdentity(
+            connector_kind=connector_kind, connector_id="service",
+            capability_kind="tool", capability_key="operation",
+        ),
+        public_tool_name="service_operation", arguments={},
+    )
+
+    result = await pipeline.execute(request, prepare)
+
+    assert result is returned
+    assert len(invocation_sink.invocation_records()) == 1
+    assert len(metrics.invocations) == 1
+    attributes = invocation_sink.invocation_records()[0].attributes
+    assert attributes.get("mcp.failure.origin") == expected_origin
+    assert "exception.type" not in attributes
+    assert "exception.stacktrace" not in attributes

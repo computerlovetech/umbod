@@ -16,6 +16,10 @@
 
 ## Submodules
 
+### `filesystem/`
+
+Root group access administration port, exact-identity Zod contracts, in-memory and HTTP adapters, and safe policy failure presentation. See `filesystem/README.md`.
+
 ### `personal-mcp-servers/`
 
 **Read when working with:** The personal server allowlist administration port, strict request and nonsecret OAuth policy schemas in `domain/`, in-memory behavior, and the guarded HTTP route adapter. The pure `domain/availability.ts` projection reads resolved typed instance settings and fails closed for missing, duplicate or mistyped availability entries. The unified MCP workspace reuses this boundary for registration and revision-checked OAuth policy replacement without introducing a second inventory. Those operations remain separate from common publication/deletion, owner authorization and private discovery.

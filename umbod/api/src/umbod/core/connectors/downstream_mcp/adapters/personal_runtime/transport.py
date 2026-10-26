@@ -8,6 +8,14 @@ import httpx2
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 from mcp import types
+from mcp.shared.exceptions import MCPError
+from fastmcp.exceptions import ClientError, ToolError
+
+from umbod.core.invocation.failure_evidence import (
+    InvocationFailureOrigin,
+    capture_invocation_exception,
+    current_invocation_failure,
+)
 
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
 
@@ -30,6 +38,14 @@ from .network import PinnedPublicNetworkBackend, PublicAddressResolver
 from .redaction import contains_secret
 from .operation import OperationState
 from .wire_models import StrictCallToolResult
+
+
+def _transport_failure_origin(error: BaseException) -> InvocationFailureOrigin:
+    if isinstance(error, BaseExceptionGroup):
+        return InvocationFailureOrigin.MCP if all(_transport_failure_origin(nested) == InvocationFailureOrigin.MCP for nested in error.exceptions) else InvocationFailureOrigin.INTERNAL
+    if isinstance(error, (MCPError, ClientError, ToolError, httpx2.HTTPError, TimeoutError, PersonalRuntimeUnavailable, anyio.EndOfStream, anyio.BrokenResourceError, anyio.ClosedResourceError)):
+        return InvocationFailureOrigin.MCP
+    return InvocationFailureOrigin.INTERNAL
 
 
 class FastMCPPersonalMcpTransport:
@@ -75,11 +91,17 @@ class FastMCPPersonalMcpTransport:
                 wire.check()
                 raise PersonalRuntimeUnavailable("Personal MCP unavailable", diagnostic=wire.diagnostic)
             return result
-        except (TimeoutError, httpx2.TimeoutException):
+        except (TimeoutError, httpx2.TimeoutException) as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, InvocationFailureOrigin.MCP)
             diagnostic = InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="timeout")
         except PersonalRuntimeUnavailable as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, InvocationFailureOrigin.MCP)
             diagnostic = error.diagnostic
-        except Exception:
+        except Exception as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, _transport_failure_origin(error))
             diagnostic = wire.diagnostic
         if wire.authorization_rejected:
             raise PersonalAuthorizationRejected("Personal MCP unavailable", diagnostic=InvocationFailureDiagnostic(execution_mode="personal", stage="authorization", reason="authorization_rejected")) from None

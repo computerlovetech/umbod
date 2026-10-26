@@ -1,13 +1,20 @@
 import asyncio
 
 from collections.abc import Callable
-from typing import Any
+from typing import Any, Optional
 
 import pytest
 from fastmcp import FastMCP
 from fastmcp.exceptions import ValidationError
 from fastmcp.tools import FunctionTool, ToolResult
 
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+from umbod.core.invocation.failure_evidence import (
+    InvocationExceptionEvidence,
+    InvocationFailureEvidence,
+    InvocationFailureOrigin,
+    InvocationReturnedFailure,
+)
 from umbod.mcp.logging import (
     McpInvocationActor,
     McpInvocationContext,
@@ -63,10 +70,10 @@ class RaisingObserver(McpToolInvocationObserver):
             raise RuntimeError("failed")
         super().succeeded(lifecycle)
 
-    def failed(self, lifecycle: Any, category: McpToolInvocationFailureCategory) -> None:
+    def failed(self, lifecycle: Any, category: McpToolInvocationFailureCategory, diagnostic: Optional[InvocationFailureDiagnostic] = None, evidence: Optional[InvocationFailureEvidence] = None) -> None:
         if self._failing_method == "failed":
             raise RuntimeError("failed")
-        super().failed(lifecycle, category)
+        super().failed(lifecycle, category, diagnostic, evidence)
 
 
 def _registered_tool(
@@ -180,13 +187,15 @@ async def test_returned_error_is_returned_unchanged_and_recorded_as_failure() ->
     result = await _registered_tool(invoke, McpToolInvocationObserver(logger, RecordingMetrics())).run({})
 
     assert result is returned
+    assert len(logger.events) == 1
     assert isinstance(logger.events[0], McpToolInvocationFailed)
+    assert logger.events[0].evidence == InvocationReturnedFailure(InvocationFailureOrigin.INTERNAL)
     assert logger.events[0].failure_category == McpToolInvocationFailureCategory.UNEXPECTED_ERROR
 
 
 @pytest.mark.asyncio
 async def test_original_exception_identity_is_preserved() -> None:
-    failure = RuntimeError("domain failure")
+    failure = RuntimeError("secret-domain-failure")
     logger = RecordingLogger()
 
     async def invoke() -> None:
@@ -196,7 +205,15 @@ async def test_original_exception_identity_is_preserved() -> None:
         await _registered_tool(invoke, McpToolInvocationObserver(logger, RecordingMetrics())).run({})
 
     assert raised.value is failure
+    assert len(logger.events) == 1
     assert isinstance(logger.events[0], McpToolInvocationFailed)
+    evidence = logger.events[0].evidence
+    assert isinstance(evidence, InvocationExceptionEvidence)
+    assert evidence.origin == InvocationFailureOrigin.INTERNAL
+    assert evidence.exception_type == "RuntimeError"
+    assert "in invoke" in evidence.stacktrace
+    assert "secret-domain-failure" not in evidence.stacktrace
+    assert "raise failure" not in evidence.stacktrace
 
 
 @pytest.mark.asyncio

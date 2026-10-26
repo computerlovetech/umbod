@@ -1,3 +1,4 @@
+import { FilesystemRoute } from '../filesystem/http-route';
 import { PersonalServersRoute } from '../personal-mcp-servers/http-route';
 import { CapabilityDescriptionsRoute } from '../capability-descriptions-api';
 import { ConnectorsApi } from '../connectors-api';
@@ -10,6 +11,7 @@ import { currentUserIdentitySchema, type CurrentUserIdentity } from '$lib/header
 
 
 export class AdminApi {
+  readonly filesystem: FilesystemRoute;
   readonly personalServers: PersonalServersRoute;
   readonly capabilityDescriptions: CapabilityDescriptionsRoute;
   readonly connectors: ConnectorsApi;
@@ -19,6 +21,7 @@ export class AdminApi {
   readonly openApiConnectors: OpenApiConnectorsApi;
 
   constructor(private readonly transport: Transport) {
+    this.filesystem = new FilesystemRoute(transport);
     this.personalServers = new PersonalServersRoute(transport);
     this.capabilityDescriptions = new CapabilityDescriptionsRoute(transport);
     this.connectors = new ConnectorsApi(transport);

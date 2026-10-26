@@ -22,5 +22,9 @@ class RevisionConflict(Exception):
     pass
 
 
+class ProvisioningConflict(Exception):
+    pass
+
+
 class StorageFailure(Exception):
     pass

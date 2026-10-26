@@ -4,6 +4,8 @@ from typing import Union
 from umbod.core.callers import (
     AuthenticationProvenance,
     CallerContext,
+    CallerSnapshot,
+    GroupMembership,
     DeclaredIssuer,
     SubjectIdentity,
 )
@@ -18,10 +20,10 @@ from umbod.core.filesystem.authorization import (
 
 class SuppliedIdentityResolver:
     def __init__(self) -> None:
-        self.identities: dict[CallerContext, Union[ResolvedIdentity, UnresolvedIdentity]] = {}
+        self.identities: dict[CallerSnapshot, Union[ResolvedIdentity, UnresolvedIdentity]] = {}
 
     async def resolve(
-        self, caller: CallerContext
+        self, caller: CallerSnapshot
     ) -> Union[ResolvedIdentity, UnresolvedIdentity]:
         return self.identities.get(caller, UnresolvedIdentity())
 
@@ -33,13 +35,13 @@ def principal(
     return Principal(type=principal_type, issuer=issuer, id=identifier)
 
 
-def caller(identifier: str) -> CallerContext:
-    return CallerContext(
+def caller(identifier: str) -> CallerSnapshot:
+    return CallerSnapshot(groups=GroupMembership(group_ids=()), caller=CallerContext(
         authentication=AuthenticationProvenance.LOCAL_TEST,
         subject=SubjectIdentity(
             issuer=DeclaredIssuer(value="test-observations"), subject=identifier
         ),
-    )
+    ))
 
 
 @dataclass(frozen=True)

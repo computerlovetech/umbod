@@ -55,8 +55,7 @@ class DatabaseNamespace:
         return root is not None
 
     async def _initialize_root(self, session: DatabaseSession) -> None:
-        if not await self._root_exists(session):
-            await session.insert(NODE_TABLE, InsertCommand(row=node_record(initial_root())))
+        await SessionNamespace(session).initialize_root()
 
     @asynccontextmanager
     async def _read_session(self) -> AsyncIterator[DatabaseSession]:
@@ -68,8 +67,48 @@ class DatabaseNamespace:
             await self._initialize_root(session)
             yield session
 
-    async def _get_node(self, session: DatabaseSession, node_id: NodeId) -> Node:
-        record = await session.find_one(
+    async def get_root(self) -> Node:
+        return await self.get_node(ROOT_ID)
+
+    async def get_node(self, node_id: NodeId) -> Node:
+        async with self._read_session() as session:
+            return await SessionNamespace(session).get_node(node_id)
+
+    async def list_children(self, parent_id: NodeId) -> list[Node]:
+        async with self._read_session() as session:
+            return await SessionNamespace(session).list_children(parent_id)
+
+    async def create_node(
+        self, parent_id: NodeId, name: str, kind: NodeKind, metadata: NodeMetadata
+    ) -> Node:
+        async with storage_session(self._database, TransactionMode.SERIALIZED_WRITE) as session:
+            await self._initialize_root(session)
+            return await SessionNamespace(session).create_node(parent_id, name, kind, metadata)
+
+    async def update_node(
+        self, node_id: NodeId, *, content: ContentRef, expected_revision: int
+    ) -> Node:
+        async with storage_session(self._database, TransactionMode.SERIALIZED_WRITE) as session:
+            await self._initialize_root(session)
+            return await SessionNamespace(session).update_node(
+                node_id, content=content, expected_revision=expected_revision
+            )
+
+
+class SessionNamespace:
+    def __init__(self, session: DatabaseSession) -> None:
+        self._session = session
+
+    async def initialize_root(self) -> None:
+        record = await self._session.find_one(
+            NODE_TABLE,
+            Query(filter=Equals(NODE_ID, str(ROOT_ID)), projection=NODE_KEY_PROJECTION, ordering=Unordered()),
+        )
+        if record is None:
+            await self._session.insert(NODE_TABLE, InsertCommand(row=node_record(initial_root())))
+
+    async def get_node(self, node_id: NodeId) -> Node:
+        record = await self._session.find_one(
             NODE_TABLE,
             Query(
                 filter=Equals(NODE_ID, str(node_id)),
@@ -84,25 +123,20 @@ class DatabaseNamespace:
     async def get_root(self) -> Node:
         return await self.get_node(ROOT_ID)
 
-    async def get_node(self, node_id: NodeId) -> Node:
-        async with self._read_session() as session:
-            return await self._get_node(session, node_id)
-
     async def list_children(self, parent_id: NodeId) -> list[Node]:
-        async with self._read_session() as session:
-            require_directory(await self._get_node(session, parent_id))
-            records = await session.find_many(
-                NODE_TABLE,
-                Query(
-                    filter=Equals(NODE_PARENT, str(parent_id)),
-                    projection=AllFields(),
-                    ordering=Unordered(),
-                ),
-            )
-            return sorted(
-                (record.payload.model_copy(deep=True) for record in records),
-                key=lambda node: node.name,
-            )
+        require_directory(await self.get_node(parent_id))
+        records = await self._session.find_many(
+            NODE_TABLE,
+            Query(
+                filter=Equals(NODE_PARENT, str(parent_id)),
+                projection=AllFields(),
+                ordering=Unordered(),
+            ),
+        )
+        return sorted(
+            (record.payload.model_copy(deep=True) for record in records),
+            key=lambda node: node.name,
+        )
 
     async def create_node(
         self,
@@ -111,30 +145,26 @@ class DatabaseNamespace:
         kind: NodeKind,
         metadata: NodeMetadata,
     ) -> Node:
-        async with storage_session(
-            self._database, TransactionMode.SERIALIZED_WRITE
-        ) as session:
-            await self._initialize_root(session)
-            require_directory(await self._get_node(session, parent_id))
-            validate_name(name)
-            existing = await session.find_one(
-                NODE_TABLE,
-                Query(
-                    filter=AllOf(
-                        (Equals(NODE_PARENT, str(parent_id)), Equals(NODE_NAME, name))
-                    ),
-                    projection=AllFields(),
-                    ordering=Unordered(),
+        require_directory(await self.get_node(parent_id))
+        validate_name(name)
+        existing = await self._session.find_one(
+            NODE_TABLE,
+            Query(
+                filter=AllOf(
+                    (Equals(NODE_PARENT, str(parent_id)), Equals(NODE_NAME, name))
                 ),
-            )
-            if existing is not None:
-                raise NameCollision(name)
-            node = new_node(parent_id, name, kind, metadata)
-            if not await session.insert(
-                NODE_TABLE, InsertCommand(row=node_record(node))
-            ):
-                raise NameCollision(name)
-            return node.model_copy(deep=True)
+                projection=AllFields(),
+                ordering=Unordered(),
+            ),
+        )
+        if existing is not None:
+            raise NameCollision(name)
+        node = new_node(parent_id, name, kind, metadata)
+        if not await self._session.insert(
+            NODE_TABLE, InsertCommand(row=node_record(node))
+        ):
+            raise NameCollision(name)
+        return node.model_copy(deep=True)
 
     async def update_node(
         self,
@@ -143,15 +173,11 @@ class DatabaseNamespace:
         content: ContentRef,
         expected_revision: int,
     ) -> Node:
-        async with storage_session(
-            self._database, TransactionMode.SERIALIZED_WRITE
-        ) as session:
-            await self._initialize_root(session)
-            node = updated_node(
-                await self._get_node(session, node_id), content, expected_revision
-            )
-            await session.upsert(
-                NODE_TABLE,
-                UpsertCommand(key=NodeKey(node_id=str(node_id)), row=node_record(node)),
-            )
-            return node.model_copy(deep=True)
+        node = updated_node(
+            await self.get_node(node_id), content, expected_revision
+        )
+        await self._session.upsert(
+            NODE_TABLE,
+            UpsertCommand(key=NodeKey(node_id=str(node_id)), row=node_record(node)),
+        )
+        return node.model_copy(deep=True)

@@ -6,12 +6,17 @@ import httpx
 from pydantic import ConfigDict, PositiveFloat, PositiveInt
 
 from umbod.proxies import Model
+from umbod.core.invocation.failure_evidence import (
+    InvocationFailureOrigin,
+    capture_invocation_exception,
+)
 
 from umbod.core.connectors.openapi.execution.service import (
     AuthenticatedOutboundRequest,
     ExactHttpsDestinationPolicy,
     OpenApiExecutionResponse,
     OutboundRequest,
+    OutboundTransportError,
     TrustedBearerAuthorization,
 )
 
@@ -27,13 +32,6 @@ class AsyncStreamingHttpClient(Protocol):
     def stream(
         self, method: str, url: str, **kwargs: object
     ) -> AbstractAsyncContextManager[AsyncHttpStreamResponse]: ...
-
-
-class OutboundTransportError(Exception):
-    code: str = "outbound_failed"
-
-    def __init__(self) -> None:
-        super().__init__(self.code)
 
 
 class OutboundPolicyError(OutboundTransportError):
@@ -140,13 +138,16 @@ class HttpxOutboundOperationAdapter:
                 )
         except OutboundTransportError:
             raise
-        except httpx.TimeoutException:
+        except httpx.TimeoutException as error:
+            capture_invocation_exception(error, InvocationFailureOrigin.OPENAPI)
             raise OutboundTimeoutError() from None
         except httpx.ConnectError as error:
+            capture_invocation_exception(error, InvocationFailureOrigin.OPENAPI)
             if self._has_tls_cause(error):
                 raise OutboundTlsError() from None
             raise OutboundNetworkError() from None
-        except httpx.HTTPError:
+        except httpx.HTTPError as error:
+            capture_invocation_exception(error, InvocationFailureOrigin.OPENAPI)
             raise OutboundNetworkError() from None
 
     def _has_tls_cause(self, error: BaseException) -> bool:

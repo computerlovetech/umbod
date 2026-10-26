@@ -12,6 +12,7 @@ StorageKey = str
 class PrincipalType(StrEnum):
     USER = "user"
     GROUP = "group"
+    SYSTEM = "system"
 
 
 class Permission(StrEnum):
@@ -28,6 +29,11 @@ class Principal(BaseModel):
     type: PrincipalType
     issuer: str
     id: str
+
+
+SYSTEM_ROOT_OWNER = Principal(
+    type=PrincipalType.SYSTEM, issuer="umbod:system", id="filesystem-root"
+)
 
 
 class Ownership(BaseModel):

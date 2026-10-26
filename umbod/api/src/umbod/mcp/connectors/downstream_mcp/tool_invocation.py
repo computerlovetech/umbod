@@ -1,5 +1,17 @@
 from functools import partial
 
+import anyio
+import httpx2
+from fastmcp.exceptions import ClientError, ToolError
+from mcp.shared.exceptions import MCPError
+
+from umbod.core.invocation.failure_evidence import (
+    InvocationFailureOrigin,
+    capture_invocation_exception,
+    capture_returned_failure,
+    current_invocation_failure,
+)
+
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeUnavailable
 from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable
@@ -130,13 +142,24 @@ class AuthorizedDownstreamProxyTool(AuthorizedDownstreamTool):
                 arguments,
                 context=_InitialDownstreamContext(context),
             )
-        except Exception:
+        except Exception as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, _shared_failure_origin(error))
             invocation_failure.set(InvocationFailureDiagnostic(execution_mode="shared", stage="downstream", reason="downstream_exception"))
             return _safe_downstream_failure()
         if result.is_error:
+            capture_returned_failure(InvocationFailureOrigin.MCP)
             invocation_failure.set(InvocationFailureDiagnostic(execution_mode="shared", stage="downstream", reason="downstream_tool_error"))
             return _safe_downstream_failure()
         return result
+
+
+def _shared_failure_origin(error: BaseException) -> InvocationFailureOrigin:
+    if isinstance(error, BaseExceptionGroup):
+        return InvocationFailureOrigin.MCP if all(_shared_failure_origin(nested) == InvocationFailureOrigin.MCP for nested in error.exceptions) else InvocationFailureOrigin.INTERNAL
+    if isinstance(error, (MCPError, ClientError, ToolError, httpx2.HTTPError, TimeoutError, anyio.EndOfStream, anyio.BrokenResourceError, anyio.ClosedResourceError)):
+        return InvocationFailureOrigin.MCP
+    return InvocationFailureOrigin.INTERNAL
 
 
 def _safe_downstream_failure() -> ToolResult:
@@ -154,9 +177,11 @@ class AuthorizedPersonalTool(AuthorizedDownstreamTool):
             validate_contract_schema(self.parameters)
             Draft202012Validator(self.parameters, registry=Registry()).validate(arguments)
             return
-        except (ValidationError, PersonalToolPolicyInvalid):
+        except (ValidationError, PersonalToolPolicyInvalid) as error:
+            capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
             invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="arguments", reason="invalid_arguments"))
-        except Exception:
+        except Exception as error:
+            capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
             invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="runtime", reason="runtime_failure"))
         raise RuntimeError("Personal tool unavailable")
 
@@ -176,11 +201,17 @@ class AuthorizedPersonalTool(AuthorizedDownstreamTool):
                 structured_content=downstream.structured_content,
                 meta=downstream.meta,
             )
-        except PersonalAuthorizationHealthUnavailable:
+        except PersonalAuthorizationHealthUnavailable as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
             invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="authorization", reason="authorization_health_unavailable"))
         except PersonalRuntimeUnavailable as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
             invocation_failure.set(error.diagnostic)
-        except Exception:
+        except Exception as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
             invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="runtime", reason="runtime_failure"))
         return _safe_downstream_failure()
 

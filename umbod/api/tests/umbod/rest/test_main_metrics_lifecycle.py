@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from umbod.rest.authentication import AdminAuthenticationMiddleware
+from umbod.rest.authentication.rest_middleware import RestAuthenticationMiddleware
 from umbod.rest.main import _create_lifespan, create_app
 from umbod.rest.metrics import AdminRestMetricsMiddleware
 from umbod.rest.settings import APISettings
@@ -66,11 +66,10 @@ def test_rest_app_composes_one_shared_metrics_recorder_and_server(
     monkeypatch.setattr("umbod.rest.main.RestMetricsHttpServer", create_server)
     settings = APISettings(admin_authentication={"mode": "simulation"})
     app = create_app(settings=settings, connector_registrations=[])
-    admin_app = _admin_app(app)
     metrics_middleware = next(
         (
             middleware
-            for middleware in admin_app.user_middleware
+            for middleware in app.user_middleware
             if middleware.cls is AdminRestMetricsMiddleware
         )
     )
@@ -136,7 +135,7 @@ def test_admin_metrics_middleware_wraps_authentication(
         settings=APISettings(admin_authentication={"mode": "simulation"}),
         connector_registrations=[],
     )
-    middleware = _admin_app(app).user_middleware
+    middleware = app.user_middleware
     metrics_index = next(
         (
             index
@@ -148,7 +147,7 @@ def test_admin_metrics_middleware_wraps_authentication(
         (
             index
             for (index, entry) in enumerate(middleware)
-            if entry.cls is AdminAuthenticationMiddleware
+            if entry.cls is RestAuthenticationMiddleware
         )
     )
     assert metrics_index < authentication_index

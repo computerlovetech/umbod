@@ -88,6 +88,7 @@ from umbod.mcp.metrics import McpMetricsRecorder, PrometheusMcpMetricsRecorder
 from umbod.mcp.metrics.http_server import McpMetricsHttpServer
 from umbod.mcp.logging import ConnectorToolInvocationLogger, McpAuditIdentityAdapter, McpToolInvocationLogSink, create_default_connector_tool_invocation_logger, create_default_mcp_audit_recorder, create_default_mcp_tool_invocation_log_sink
 from umbod.mcp.middleware import McpAuditMiddleware
+from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesystemServiceFactory, RuntimeFilesystemGroupClaimFields, StaticFilesystemGroupClaimFields, register_filesystem_tools
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.tools.invocation import McpToolInvocationObserver
 from umbod.core.persistence import Database, PersistenceRuntime
@@ -207,6 +208,16 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
             settings.admin_authentication.membership_claim,
             settings.admin_authentication.required_membership,
         )
+    register_filesystem_tools(
+        McpObservedToolRegistrar(mcp, McpToolInvocationObserver(tool_invocation_logger, metrics_recorder)),
+        CurrentFilesystemCallerCapture(
+            mcp,
+            RuntimeFilesystemGroupClaimFields(group_permission_runtime_state)
+            if group_permission_runtime_state is not None
+            else StaticFilesystemGroupClaimFields(settings.mcp.permission_group_claim),
+        ),
+        DatabaseFilesystemServiceFactory(persistence_runtime.database),
+    )
     await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, audit_recorder, invocation_log_sink, tool_invocation_logger, metrics_recorder, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes, invocation_policy)
     mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.connector_tool_invocation_logger)
     downstream_permission_policy = UnrestrictedDownstreamToolPermissionPolicy() if group_permission_runtime_state is None else GroupDownstreamToolPermissionPolicy(group_permission_runtime_state)

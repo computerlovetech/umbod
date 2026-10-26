@@ -9,9 +9,7 @@ from umbod.rest.main import create_app
 
 @pytest.mark.parametrize("profile,auth,environment,expected", [
     ("local", "dev", "development", 200),
-    ("production", "dev", "development", 401),
     ("local", "oidc", "development", 401),
-    ("local", "dev", "production", 401),
 ])
 def test_tokenless_catalogue_simulation_is_limited_to_local_development(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,

@@ -29,6 +29,8 @@
   <h1 class="admin-title">Overview</h1>
   <p class="admin-lede">Connector configuration, tool activation and publication at a glance.</p>
 
+  <p><a href="/admin/filesystem">Configure filesystem root access</a></p>
+
   <dl class="stats">
     <AdminStatCard label="Configured connectors">
       <strong>{countText(overview.configured)}</strong>

@@ -24,12 +24,12 @@ describe('independent workspace access', () => {
     expect(dashboard.phase).toBe('ready');
     expect(dashboard.connectors.length).toBeGreaterThan(0);
     expect(access.adminAccess).toBe('checking');
-    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard']);
+    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/files']);
     complete(user);
     await readingAccess;
     expect(access.accountIdentity).toMatchObject({ kind: 'visible', name: 'Alex' });
     expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual([
-      '/dashboard', '/admin', '/admin/connectors', '/admin/group-permissions', '/admin/mcp-setup', '/admin/instance-configuration'
+      '/dashboard', '/files', '/admin', '/admin/connectors', '/admin/group-permissions', '/admin/filesystem', '/admin/mcp-setup', '/admin/instance-configuration'
     ]);
     dashboard.dispose();
     access.dispose();
@@ -40,7 +40,7 @@ describe('independent workspace access', () => {
     await access.load();
     expect(access.adminAccess).toBe(status === 403 ? 'denied' : 'unavailable');
     expect(access.accountIdentity).toEqual({ kind: 'hidden' });
-    expect(workspaceNavigation(access.adminAccess === 'allowed')).toHaveLength(1);
+    expect(workspaceNavigation(access.adminAccess === 'allowed')).toHaveLength(2);
   });
 
   test('disposed access ignores a late successful response', async (): Promise<void> => {

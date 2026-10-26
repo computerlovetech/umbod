@@ -115,8 +115,11 @@ def test_system_alias_is_equivalent_and_public(client: TestClient) -> None:
 
 
 @pytest.mark.parametrize("route", ["/events", "/connectors/runtime-state", "/mcp-permissions/groups", "/docs", "/openapi.json"])
-def test_system_alias_does_not_expose_internal_routes(client: TestClient, route: str) -> None:
-    assert client.get(f"/api/system{route}").status_code == 404
+def test_system_alias_does_not_expose_internal_routes(
+    client: TestClient, bearer_headers: dict[str, str], route: str,
+) -> None:
+    assert client.get(f"/api/system{route}").status_code == 401
+    assert client.get(f"/api/system{route}", headers=bearer_headers).status_code == 404
 
 
 def test_openapi_respects_upstream_asgi_root_prefix(client: TestClient, bearer_headers: dict[str, str]) -> None:

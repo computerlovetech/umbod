@@ -1,12 +1,12 @@
 # Authorized filesystem browsing
 
-**Responsibility:** Caller-aware, read-only root discovery, direct lookup, and child listing. Import FilesystemBrowsing, NodeSummary, and BrowsingService from `umbod.core.filesystem.browsing`. This opt-in service does not change the trusted raw Filesystem API or add transport wiring.
+**Responsibility:** Caller-aware, read-only root discovery, direct lookup, and child listing. Import FilesystemBrowsing, NodeSummary, and BrowsingService from `umbod.core.filesystem.browsing`. REST and MCP delegate browsing to this service without changing the trusted raw Filesystem API.
 
 ## Files
 
 - `models.py` defines frozen NodeSummary with required explicit fields and forbidden extra fields.
 - `ports.py` defines FilesystemBrowsing.get_root(caller), get_node(caller, node_id), and list_children(caller, parent_id).
-- `service.py` implements the port with injected NamespaceDriver and FilesystemAuthorization only.
+- `service.py` implements the port with injected NamespaceDriver and FilesystemAuthorization only. The exported explicit `summary` projection is shared with creation and provisioning.
 - `__init__.py` exposes the public API.
 
 ## Visibility policy
@@ -17,7 +17,7 @@ Root discovery requires DISCOVER on the root returned by the namespace. Direct l
 
 Missing and inaccessible targets raise PermissionDenied with the normal evaluator's identical `discover denied for node {node_id}` text. Namespace MissingNode after successful authorization, including a vanished listing parent, becomes the same denial; root namespace absence uses the existing root ID. Target authorization denials from injected implementations are normalized to this same message with suppressed exception context; their internal denial details are not exposed. Timing side-channel equivalence is not promised. Only child PermissionDenied is omitted. Resolver, authorization, and other namespace/storage failures propagate and abort the whole operation. Results are fully materialized before return; no partial sequence is exposed on failure.
 
-Every operation re-evaluates authorization; there is no cache. Authorization and namespace reads are separate observations: no atomic check/use, consistent snapshot, or mid-operation revocation guarantee is provided. The existing namespace's lazy root initialization remains accepted. Browsing adds no writes, content dependency, identity mapping, inheritance, configuration, schema, or REST/MCP surface.
+Every operation accepts a CallerSnapshot captured from one authenticated operation and re-evaluates authorization; there is no cache. Authorization and namespace reads are separate observations: no atomic check/use, consistent snapshot, or mid-operation revocation guarantee is provided. The existing namespace's lazy root initialization remains accepted. Browsing adds no writes, content dependency, identity mapping, inheritance, configuration or schema. REST and MCP expose this port through their filesystem delivery modules.
 
 ## Verification
 

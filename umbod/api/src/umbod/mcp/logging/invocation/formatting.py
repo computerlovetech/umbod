@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Mapping, Protocol, Self
 
+from umbod.core.invocation.failure_evidence import InvocationExceptionEvidence
 from umbod.mcp.logging.invocation.event import (
     McpToolInvocationFailed,
     McpToolInvocationLogEvent,
@@ -23,6 +24,7 @@ class McpToolInvocationLogAttribute(StrEnum):
     INVOCATION_OUTCOME = "mcp.invocation.outcome"
     INVOCATION_DURATION_MS = "mcp.invocation.duration_ms"
     FAILURE_CATEGORY = "mcp.failure.category"
+    FAILURE_ORIGIN = "mcp.failure.origin"
     FAILURE_STAGE = "mcp.failure.stage"
     FAILURE_REASON = "mcp.failure.reason"
     EXECUTION_MODE = "mcp.execution_mode"
@@ -116,6 +118,11 @@ class _InvocationLogAttributesBuilder:
             self._attributes[McpToolInvocationLogAttribute.FAILURE_CATEGORY] = _enum_value(
                 event.failure_category
             )
+            if event.evidence is not None:
+                self._attributes[McpToolInvocationLogAttribute.FAILURE_ORIGIN] = event.evidence.origin.value
+                if isinstance(event.evidence, InvocationExceptionEvidence):
+                    self._attributes["exception.type"] = event.evidence.exception_type
+                    self._attributes["exception.stacktrace"] = event.evidence.stacktrace
             if event.diagnostic is not None:
                 self._attributes[McpToolInvocationLogAttribute.FAILURE_STAGE] = event.diagnostic.stage
                 self._attributes[McpToolInvocationLogAttribute.FAILURE_REASON] = event.diagnostic.reason

@@ -2,8 +2,12 @@
 
 **Module responsibility:** Immutable, transport-neutral caller observations captured at operation boundaries.
 
+- `constants.py`: backend-owned `LOCAL_DEVELOPMENT_ISSUER` (`urn:umbod:local`) shared by explicitly local identity policies; it never promotes authentication provenance.
 - `models.py`: authentication provenance, subject and declared-issuer observations, explicit unavailable states, required-field caller context and separate required-field `GroupMembership` observations.
-- `__init__.py`: public contracts.
+- `groups.py`: pure `group_membership_from_values` projection shared by runtime MCP permission capture and filesystem delivery adapters. Strings and iterable string members are retained exactly, including empty strings, with stable deduplication; no claim names or token formats enter core.
+- `__init__.py`: public contracts, including required-field immutable `CallerSnapshot(caller, groups)`.
+
+`CallerSnapshot` bundles observations only. Delivery adapters capture both fields from the same authenticated operation; it contains no claims or framework objects. Filesystem resolver, authorization, browsing and creation ports consume this snapshot. REST uses its middleware-accepted caller and claims with the configured MCP permission claim; MCP captures its current SDK token once with active runtime permission claim fields or the configured fallback. Both use the runtime group projection rather than personal or administrator parsing policies. Empty group observations remain visible to the filesystem resolver, which rejects malformed snapshots.
 
 REST and MCP adapters supply provenance from their actual authentication composition, never user-submitted claims. Known built-in upstream verifiers, local simulation, semantic development verification and local test providers remain distinguishable. Arbitrary host-supplied authentication is deployment-established rather than automatically upstream-verified. These values describe the accepted authentication boundary; they neither verify tokens nor prove a human identity or authorization.
 

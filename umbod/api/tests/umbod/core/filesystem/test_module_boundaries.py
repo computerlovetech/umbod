@@ -15,7 +15,11 @@ def test_filesystem_core_contains_no_backend_configuration_or_adapter_package() 
 
 def test_filesystem_core_does_not_import_host_filesystem_or_infrastructure() -> None:
     root = Path(__file__).parents[4] / "src" / "umbod" / "core" / "filesystem"
-    forbidden = ("os", "fcntl", "tempfile", "pathlib", "sqlite3", "umbod.infrastructure", "umbod.rest", "umbod.mcp")
+    forbidden = (
+        "os", "fcntl", "tempfile", "pathlib", "sqlite3", "aiosqlite", "sqlalchemy",
+        "fastapi", "starlette", "mcp", "jwt", "umbod.infrastructure", "umbod.config",
+        "umbod.rest", "umbod.mcp",
+    )
     violations: list[str] = []
     for path in root.rglob("*.py"):
         for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
@@ -52,6 +56,16 @@ def test_filesystem_core_does_not_import_host_filesystem_or_infrastructure() -> 
     "umbod.core.filesystem.stores.namespace",
     "umbod.core.filesystem.stores.access_control",
     "umbod.core.filesystem.stores.session",
+    "umbod.core.filesystem.stores.transactions",
+    "umbod.core.filesystem.transactions",
+    "umbod.core.filesystem.creation",
+    "umbod.core.filesystem.creation.ports",
+    "umbod.core.filesystem.creation.service",
+    "umbod.core.filesystem.provisioning",
+    "umbod.core.filesystem.provisioning.models",
+    "umbod.core.filesystem.provisioning.ports",
+    "umbod.core.filesystem.provisioning.service",
+    "umbod.core.filesystem.authorization.resolver",
 ])
 def test_importing_filesystem_core_does_not_load_infrastructure(module: str) -> None:
     program = (

@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from pydantic import ValidationError
 
-from umbod.core.callers import CallerContext
+from umbod.core.callers import CallerSnapshot
 from umbod.core.filesystem import MissingNode, NamespaceDriver, Node, Permission, StorageFailure
 from umbod.core.filesystem.authorization import FilesystemAuthorization, PermissionDenied
 from umbod.core.filesystem.browsing import BrowsingService, FilesystemBrowsing, NodeSummary
@@ -175,7 +175,7 @@ async def test_kind_check_happens_after_authorization(
 ) -> None:
     context = browsing_mocks
 
-    async def require(observation: CallerContext, node_id: object, permission: Permission) -> None:
+    async def require(observation: CallerSnapshot, node_id: object, permission: Permission) -> None:
         context.namespace.get_node.assert_not_awaited()
         assert observation == caller("alice")
         assert node_id == context.root.id

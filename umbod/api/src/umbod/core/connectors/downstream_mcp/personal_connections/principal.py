@@ -1,3 +1,5 @@
+from umbod.core.callers import LOCAL_DEVELOPMENT_ISSUER
+
 from .development_identity import local_personal_identity_enabled
 from .identity_models import (
     AbsentIssuer, DeclaredIssuer, ObservedIdentityString,
@@ -19,7 +21,10 @@ def canonical_principal(
     if policy.authentication_mode == "simulation":
         if (
             not local_personal_identity_enabled(policy)
-            or not isinstance(facts.issuer, AbsentIssuer)
+            or not (
+                isinstance(facts.issuer, AbsentIssuer)
+                or (isinstance(facts.issuer, DeclaredIssuer) and facts.issuer.value == LOCAL_DEVELOPMENT_ISSUER)
+            )
             or not isinstance(facts.subject, ObservedIdentityString)
             or facts.subject.value != policy.simulated_subject
         ):

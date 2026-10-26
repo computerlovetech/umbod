@@ -7,6 +7,12 @@ import httpx
 import pytest
 from pydantic import SecretStr, ValidationError
 
+from umbod.core.invocation.failure_evidence import (
+    InvocationExceptionEvidence,
+    InvocationFailureOrigin,
+    current_invocation_failure,
+    invocation_failure_scope,
+)
 from umbod.core.connectors.openapi.execution import (
     AuthenticatedOutboundRequest,
     ExactHttpsDestinationPolicy,
@@ -234,11 +240,19 @@ async def test_outbound_transport_denies_every_redirect_before_consuming_body(st
 async def test_outbound_transport_maps_httpx_errors_to_stable_codes(
     source_error: httpx.HTTPError, expected_error: type[OutboundTransportError]
 ) -> None:
-    with pytest.raises(expected_error) as caught:
-        await HttpxOutboundOperationAdapter(RaisingAsyncHttpClient(source_error)).send(
-            _outbound_request(False)
-        )
+    with invocation_failure_scope():
+        with pytest.raises(expected_error) as caught:
+            transport: OutboundOperationTransport = HttpxOutboundOperationAdapter(
+                RaisingAsyncHttpClient(source_error)
+            )
+            await transport.send(_outbound_request(False))
+        evidence = current_invocation_failure()
 
+    assert isinstance(evidence, InvocationExceptionEvidence)
+    assert evidence.origin == InvocationFailureOrigin.OPENAPI
+    assert evidence.exception_type == type(source_error).__qualname__
+    assert "raising_context" in evidence.stacktrace
+    assert "canary" not in evidence.stacktrace
     assert str(caught.value) == expected_error.code
     assert caught.value.__cause__ is None
     for canary in (

@@ -9,6 +9,11 @@ from pydantic import ConfigDict, JsonValue, PositiveFloat, PositiveInt
 
 from umbod.proxies import Model
 from umbod.core.capabilities import CapabilityIdentity
+from umbod.core.invocation.failure_evidence import (
+    InvocationFailureOrigin,
+    capture_invocation_exception,
+    current_invocation_failure,
+)
 from umbod.core.invocation.tools.execution import PreparedToolExecution, ToolExecutionPipeline, ToolExecutionRequest, prepare_tool_execution
 from umbod.core.connectors.openapi.execution.authentication import (
     AuthenticatedOutboundRequest,
@@ -122,6 +127,13 @@ class OpenApiRequestCompiler(Protocol):
         arguments: OpenApiOperationArguments,
         limits: OpenApiExecutionLimits,
     ) -> OutboundRequest: ...
+
+
+class OutboundTransportError(Exception):
+    code: str = "outbound_failed"
+
+    def __init__(self) -> None:
+        super().__init__(self.code)
 
 
 class OutboundOperationTransport(Protocol):
@@ -554,10 +566,28 @@ class OpenApiCapabilityExecutionService:
         connector_id: str,
         outbound_request: OutboundRequest,
     ) -> OpenApiExecutionResponse:
-        authenticated_request = await self._authenticator.authenticate(
-            connector_id, outbound_request
-        )
-        return self._normalizer.normalize(await self._transport.send(authenticated_request))
+        try:
+            authenticated_request = await self._authenticator.authenticate(
+                connector_id, outbound_request
+            )
+        except Exception as error:
+            capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
+            raise
+        try:
+            response = await self._transport.send(authenticated_request)
+        except OutboundTransportError as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, InvocationFailureOrigin.OPENAPI)
+            raise
+        except Exception as error:
+            if current_invocation_failure() is None:
+                capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
+            raise
+        try:
+            return self._normalizer.normalize(response)
+        except Exception as error:
+            capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
+            raise
 
     def _safe_error_code(self, error: Exception) -> OpenApiExecutionErrorCode:
         safe_codes: set[OpenApiExecutionErrorCode] = {

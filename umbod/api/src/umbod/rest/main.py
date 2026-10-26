@@ -7,6 +7,9 @@ from dataclasses import dataclass
 from typing import Any, cast
 from time import monotonic
 from fastapi import APIRouter, FastAPI, Request, Response
+from fastapi.responses import JSONResponse
+from starlette.middleware import Middleware
+from starlette.routing import BaseRoute
 from umbod.core.connectors.native.registry import ConnectorRegistration
 from umbod.core.persistence import PersistenceRuntime
 from umbod.rest.authentication import (
@@ -18,11 +21,10 @@ from umbod.rest.authentication import (
 )
 from umbod.rest.authentication.authorization import JwtVerifier
 from umbod.rest.authentication.middleware import SuppliedJwtVerifierFactory
-from umbod.rest.authentication.user_middleware import UserAuthenticationMiddleware
-from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
-from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import local_personal_identity_enabled
+from umbod.rest.authentication.rest_middleware import RestAuthenticationMiddleware
 from umbod.rest.user_catalogue import router as user_catalogue_router
-from umbod.rest.user_catalogue.identity import local_catalogue_identity_enabled
+from umbod.rest.filesystem import router as filesystem_router
+from umbod.rest.filesystem_administration import router as filesystem_administration_router
 from umbod.rest.connectors.downstream_mcp.personal_connections import router as personal_connections_router
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback import (
     PersonalOAuthQueryRedactionMiddleware,
@@ -30,7 +32,7 @@ from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback im
     router as personal_oauth_callback_router,
 )
 from umbod.rest.users.deps import get_access_token_verifier
-from umbod.rest.authentication.csrf_middleware import AdminCookieCsrfMiddleware
+from umbod.rest.authentication.csrf_middleware import RestCookieCsrfMiddleware
 from umbod.rest.capability_descriptions import router as capability_description_router
 from umbod.rest.connectors import (
     downstream_mcp_router as downstream_mcp_connector_router,
@@ -50,7 +52,6 @@ from umbod.rest.metrics import (
     AdminRestMetricsMiddleware,
     PrometheusRestMetricsRecorder,
     RestMetricsHttpServer,
-    RestMetricsRecorder,
 )
 from umbod.config import AppConfig, load_server_app_config
 from umbod.logging import flush_logging
@@ -141,11 +142,10 @@ def _mount_admin_app(
     app: FastAPI,
     settings: APISettings,
     dependency_factories: ConnectorApiDependencyFactories,
-    metrics_recorder: RestMetricsRecorder,
     app_config: AppConfig,
     verifier_factory: JwtVerifierFactory,
     oauth_service: OAuthService | None,
-) -> None:
+) -> tuple[BaseRoute, ...]:
     admin_router = APIRouter()
     admin_router.include_router(create_current_user_router())
     admin_router.include_router(connector_router)
@@ -155,6 +155,7 @@ def _mount_admin_app(
     admin_router.include_router(oauth_router)
     admin_router.include_router(downstream_mcp_connector_router)
     admin_router.include_router(instance_configuration_router)
+    admin_router.include_router(filesystem_administration_router)
     admin_app = SubApiAppFactory(title="umbod-admin-api", router=admin_router).create()
     if oauth_service is not None:
         def provide_oauth_service() -> OAuthService:
@@ -173,49 +174,41 @@ def _mount_admin_app(
 
     admin_app.dependency_overrides[get_access_token_verifier] = provide_access_token_verifier
     _attach_admin_authorization(admin_app, settings, verifier_factory)
-    admin_app.add_middleware(
-        AdminCookieCsrfMiddleware,
-        site_base_url=settings.endpoints.site_base_url,
-        allowed_origins=settings.cors.origins,
-    )
-    admin_app.add_middleware(
-        AdminRestMetricsMiddleware, recorder=metrics_recorder, routes=admin_routes
-    )
+    @admin_app.middleware("http")
+    async def prevent_policy_response_caching(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        if request.url.path.rstrip("/").endswith("/filesystem/root-access"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
+
     app.mount("/api/admin", admin_app)
+    return admin_routes
 
 
 def _mount_personal_connections_app(
     app: FastAPI,
     settings: APISettings,
     dependency_factories: ConnectorApiDependencyFactories,
-    verifier_factory: JwtVerifierFactory,
 ) -> None:
     user_router = APIRouter()
     user_router.include_router(user_catalogue_router)
+    user_router.include_router(filesystem_router)
     if settings.personal_connections.enabled:
         user_router.include_router(personal_connections_router)
     personal_app = SubApiAppFactory(
         title="umbod-personal-api", router=user_router
     ).create()
+    @personal_app.exception_handler(Exception)
+    async def user_internal_error(request: Request, exception: Exception) -> JSONResponse:
+        return JSONResponse(
+            status_code=500,
+            content={"detail": {"code": "internal_server_error", "message": "Request failed."}},
+            headers={"Cache-Control": "no-store"},
+        )
+
     _attach_dependency_factories(personal_app, dependency_factories)
-    personal_app.add_middleware(
-        UserAuthenticationMiddleware,
-        verifier=verifier_factory.create(settings),
-        jwt_header_name=settings.admin_authentication.jwt_header_name,
-        allow_missing_simulated_token=(
-            type(verifier_factory) is JwtVerifierFactory
-            and (
-                local_personal_identity_enabled(personal_identity_policy_from_app_config(settings))
-                if settings.personal_connections.enabled
-                else local_catalogue_identity_enabled(settings)
-            )
-        ),
-    )
-    personal_app.add_middleware(
-        AdminCookieCsrfMiddleware,
-        site_base_url=settings.endpoints.site_base_url,
-        allowed_origins=settings.cors.origins,
-    )
     @personal_app.middleware("http")
     async def prevent_user_response_caching(
         request: Request, call_next: Callable[[Request], Awaitable[Response]],
@@ -324,6 +317,7 @@ def _create_configured_lifespan(
 def create_app(*args: Any, **kwargs: Any) -> FastAPI:
     create_app_arguments = _resolve_create_app_arguments(*args, **kwargs)
     app_settings = create_app_arguments.settings or load_server_app_config(".env")
+    app_settings.validate_rest_authentication()
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(
         app_settings.connector_store
     ).create()
@@ -343,15 +337,32 @@ def create_app(*args: Any, **kwargs: Any) -> FastAPI:
         SuppliedJwtVerifierFactory(create_app_arguments.admin_verifier)
         if create_app_arguments.admin_verifier is not None else JwtVerifierFactory()
     )
-    _mount_admin_app(
-        app, app_settings, dependency_factories, metrics_recorder, app_settings, verifier_factory,
+    admin_routes = _mount_admin_app(
+        app, app_settings, dependency_factories, app_settings, verifier_factory,
         create_app_arguments.oauth_service,
     )
     _mount_personal_connections_app(
-        app, app_settings, dependency_factories, create_app_arguments.user_verifier_factory
+        app, app_settings, dependency_factories
     )
     _mount_personal_oauth_callback_app(app, app_settings, dependency_factories)
     _mount_system_app(app, dependency_factories)
     install_telemetry_receiver(app, app_settings)
+    app.user_middleware.extend([
+        Middleware(
+            AdminRestMetricsMiddleware, recorder=metrics_recorder, routes=admin_routes,
+            mount_path="/api/admin",
+        ),
+        Middleware(
+            RestCookieCsrfMiddleware,
+            site_base_url=app_settings.endpoints.site_base_url,
+            allowed_origins=app_settings.cors.origins,
+        ),
+        Middleware(
+            RestAuthenticationMiddleware,
+            settings=app_settings,
+            admin_verifier_factory=verifier_factory,
+            user_verifier_factory=create_app_arguments.user_verifier_factory,
+        ),
+    ])
     app.add_middleware(PersonalOAuthQueryRedactionMiddleware)
     return app

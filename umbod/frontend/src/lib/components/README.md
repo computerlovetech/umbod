@@ -53,6 +53,10 @@ existing logo. Shared `WorkspaceShell`, composed by `AdminShell` and the user da
 
 `McpSetupGuide.svelte` provides connection instructions and a copyable prompt referring to the shared `umbod://setup/agent-instructions` MCP resource for user-scoped agent discovery setup.
 
+### `admin/filesystem/`
+
+Root-only group access editor with explicit saves, staged revocation, empty-policy confirmation and stale-draft preservation. See `admin/filesystem/README.md`.
+
 ### `admin/overview/`
 
 **Read when working with:** Overview cards, connector breakdown, partial-data warnings or connector attention presentation. See `admin/overview/README.md`.
@@ -64,6 +68,10 @@ existing logo. Shared `WorkspaceShell`, composed by `AdminShell` and the user da
 ### `personal-connections/`
 
 `ConnectionCard.svelte` presents clear local health, one contextual recovery action, optional connection details and confirmed disconnect. `ConnectionStatusBadge.svelte` shares status between details and the connector list; `ConnectionActions.svelte` reuses the connector three-dot menu for secondary owner-scoped actions. Embedded presentation lives inside the dashboard's selected connector detail. Explicit sign-in opens the provider automatically, retaining a manual fallback without restarting the attempt. Local health and renewal capability remain separate from tool eligibility; recovery never resumes an earlier operation automatically. Reactive behavior and user API ports live in `$lib/personal-connections/`, not administration state. See `personal-connections/README.md`.
+
+### `files/`
+
+Normal-user Files workspace, visited-folder navigation, item lists, file metadata and inline folder creation. Uses independent administration navigation lookup, never administration-dependent filesystem access. See `files/README.md`.
 
 ### `feedback/`
 

@@ -3,6 +3,7 @@ from time import perf_counter
 from typing import Optional, Sequence, cast
 
 from fastapi.routing import iter_route_contexts
+from starlette._utils import get_route_path
 from starlette.routing import BaseRoute, Match
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -20,10 +21,12 @@ class AdminRestMetricsMiddleware:
         app: ASGIApp,
         recorder: RestMetricsRecorder,
         routes: Sequence[BaseRoute],
+        mount_path: str,
     ) -> None:
         self.app = app
         self.recorder = recorder
         self.routes = tuple(iter_route_contexts(routes))
+        self.mount_path = mount_path
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
@@ -76,6 +79,11 @@ class AdminRestMetricsMiddleware:
             )
 
     def _matched_route(self, scope: Scope) -> Optional[str]:
+        if self.mount_path:
+            path = get_route_path(scope)
+            if not path.startswith(self.mount_path + "/"):
+                return None
+            scope = {**scope, "path": path[len(self.mount_path):], "root_path": ""}
         for route in self.routes:
             match, _ = route.matches(scope)
             if match in (Match.FULL, Match.PARTIAL):

@@ -13,7 +13,8 @@ export const workspacePresentation = {
 };
 
 const dashboardNavigation: readonly WorkspaceNavigationItem[] = [
-  { id: 'dashboard', label: 'Dashboard', href: '/dashboard' }
+  { id: 'dashboard', label: 'Dashboard', href: '/dashboard' },
+  { id: 'files', label: 'Files', href: '/files' }
 ];
 
 const administratorNavigation: readonly WorkspaceNavigationItem[] = [
@@ -21,6 +22,7 @@ const administratorNavigation: readonly WorkspaceNavigationItem[] = [
   { id: 'overview', label: 'Administration', href: '/admin' },
   { id: 'connectors', label: 'Connectors', href: '/admin/connectors' },
   { id: 'groupPermissions', label: 'Group permissions', href: '/admin/group-permissions' },
+  { id: 'filesystem', label: 'Filesystem', href: '/admin/filesystem' },
   { id: 'mcpSetup', label: 'MCP setup guide', href: '/admin/mcp-setup' },
   { id: 'instanceConfiguration', label: 'Instance settings', href: '/admin/instance-configuration' }
 ];

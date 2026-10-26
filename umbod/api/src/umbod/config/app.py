@@ -336,6 +336,19 @@ class AppConfig(ConfigModel):
                 )
         return self
 
+    @model_validator(mode="after")
+    def validate_rest_authentication(self) -> "AppConfig":
+        authentication = self.admin_authentication
+        if self.runtime.profile == "production" and (
+            self.runtime.auth in ("dev", "none")
+            or authentication.mode != "jwt"
+            or authentication.environment != "production"
+        ):
+            raise ValueError("Production REST requires real sign-in and production JWT authentication")
+        if authentication.environment == "production" and authentication.mode != "jwt":
+            raise ValueError("Production REST requires production JWT authentication")
+        return self
+
     @field_validator("connector_store", mode="before")
     @classmethod
     def normalize_connector_store_config(cls, value: object) -> object:

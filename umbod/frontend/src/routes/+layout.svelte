@@ -9,7 +9,7 @@
 
   let { children, data } = $props();
 
-  const hasWorkspaceShell = $derived(page.url.pathname.startsWith('/admin') || page.url.pathname === '/dashboard');
+  const hasWorkspaceShell = $derived(page.url.pathname.startsWith('/admin') || page.url.pathname === '/dashboard' || page.url.pathname === '/files');
   afterNavigate(() => operationState.resetForPath(`${page.url.pathname}${page.url.search}`));
 </script>
 
