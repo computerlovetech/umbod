@@ -6,6 +6,9 @@
 
 <h1 align="center">Umbod</h1>
 
+[![umbod CI](https://github.com/computerlovetech/umbod/actions/workflows/umbod-ci.yml/badge.svg?branch=main)](https://github.com/computerlovetech/umbod/actions/workflows/umbod-ci.yml)
+[![codecov](https://codecov.io/gh/computerlovetech/umbod/branch/main/graph/badge.svg)](https://codecov.io/gh/computerlovetech/umbod)
+
 <p align="center"><strong>Manage agent access. On your own infrastructure.</strong></p>
 
 <p align="center">

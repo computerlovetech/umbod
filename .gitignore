@@ -3,4 +3,8 @@
 .claude/skills/
 .github/skills/
 __pycache__/
+.coverage
+.coverage.*
+coverage.xml
+coverage/
 .env

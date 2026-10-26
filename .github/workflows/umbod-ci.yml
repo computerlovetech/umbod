@@ -8,6 +8,7 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - 'codecov.yml'
       - 'umbod/**'
       - 'packages/umbod-sdk/**'
       - '.github/workflows/umbod-ci.yml'
@@ -80,7 +81,22 @@ jobs:
       - uses: actions/checkout@v6
       - uses: astral-sh/setup-uv@v7
       - name: Test SDK
-        run: uv run --locked pytest tests -q
+        run: uv run --locked pytest tests -q --cov --cov-report=xml:coverage.xml
+      - name: Save SDK coverage report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sdk-coverage
+          path: packages/umbod-sdk/coverage.xml
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload SDK coverage
+        uses: codecov/codecov-action@4481f553995cc5011b158ce191746ac1a1d0f815
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: packages/umbod-sdk/coverage.xml
+          flags: sdk
+          disable_search: true
+          fail_ci_if_error: false
       - name: Verify installed SDK wheel
         shell: bash
         run: |
@@ -108,7 +124,24 @@ jobs:
         run: uv sync --locked
 
       - name: Run complete backend test suite
-        run: uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal
+        run: uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal --cov --cov-report=xml:coverage.xml
+
+      - name: Save backend coverage report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: backend-coverage
+          path: umbod/api/coverage.xml
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload backend coverage
+        uses: codecov/codecov-action@4481f553995cc5011b158ce191746ac1a1d0f815
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: umbod/api/coverage.xml
+          flags: backend
+          disable_search: true
+          fail_ci_if_error: false
 
       - name: Test release version resolution
         env:
@@ -171,7 +204,24 @@ jobs:
 
       - name: Run complete frontend test suite
         working-directory: umbod/frontend
-        run: bun run test
+        run: bun run test --coverage
+
+      - name: Save frontend coverage report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: frontend-coverage
+          path: umbod/frontend/coverage/lcov.info
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload frontend coverage
+        uses: codecov/codecov-action@4481f553995cc5011b158ce191746ac1a1d0f815
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: umbod/frontend/coverage/lcov.info
+          flags: frontend
+          disable_search: true
+          fail_ci_if_error: false
 
       - name: Check frontend
         working-directory: umbod/frontend
@@ -274,7 +324,7 @@ jobs:
 
   ci-complete:
     name: umbod CI
-    needs: [changes, docs, backend-tests, core, connector-builder, frontend, helm, helm-kubernetes-schema, helm-kind-install]
+    needs: [changes, docs, sdk-tests, backend-tests, core, connector-builder, frontend, helm, helm-kubernetes-schema, helm-kind-install]
     if: always()
     runs-on: ubuntu-latest
     environment: umbod-ci
@@ -283,6 +333,7 @@ jobs:
         run: |
           if [ "${{ needs.changes.result }}" != "success" ] || \
              [ "${{ needs.docs.result }}" != "success" ] || \
+             [ "${{ needs.sdk-tests.result }}" != "success" ] || \
              [ "${{ needs.backend-tests.result }}" != "success" ] || \
              [ "${{ needs.core.result }}" != "success" ] || \
              [ "${{ needs.connector-builder.result }}" != "success" ] || \

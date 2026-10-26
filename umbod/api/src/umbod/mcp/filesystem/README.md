@@ -33,4 +33,4 @@ Registration retains only infrastructure, factories, and capture adapters. Appli
 
 ## Bootstrap limitation
 
-These tools neither provision a root nor grant access. An operator must bootstrap the system-owned root and initial discover/write grants through the separate provisioning boundary before clients can use the tools. There is no public MCP bootstrap tool.
+These tools neither provision a root nor grant access. An administrator must initialize the system-owned root and configure discover/write grants through the authenticated admin root-access editor before clients can use the tools. There is no public MCP bootstrap tool.
