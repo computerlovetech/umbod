@@ -4,7 +4,7 @@
     "agent-browser-ui-check": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "b07a58493e2c324126dc25930868453d7a0a3e94e4a8093eeac647228c10c967"
+      "computedHash": "5c5d8656dfdc8c593510f5cad7c8230b1148ff51e74c87611caaef13b791c19e"
     },
     "api-client-architecture": {
       "source": "./skills",

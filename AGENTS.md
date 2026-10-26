@@ -2,50 +2,49 @@
 
 Paths and commands below are relative to the repository root unless a working directory is specified.
 
+## Agent Skills
+
+Use Vercel's [skills.sh](https://skills.sh/) to install agent skills. Repository skill sources live in `skills/`; edit those, not installed copies in `.agents/skills/`.
+
 ## Where to start by task
 
-Start at the boundary exposing the behavior, use that module's `README.md` as its local index, follow calls into `umbod/api/src/umbod/core/`, and inspect `infrastructure/` or other adapters only for external I/O. Update affected module `README.md` indexes when responsibilities, entrypoints, or submodule structures change.
+Start at the public boundary or failing test, then trace inward; do not choose files by name alone. Use the boundary module's `README.md` as its local index, follow backend calls into `umbod/api/src/umbod/core/`, and inspect `infrastructure/` or other adapters only for external I/O. Update affected module `README.md` indexes when responsibilities, entrypoints, or submodule structures change.
 
 - REST/API behavior → `umbod/api/src/umbod/rest/`; MCP behavior → `umbod/api/src/umbod/mcp/`; CLI behavior → `umbod/api/src/umbod/cli/`.
-- Connector authoring API → `packages/umbod-sdk/src/umbod_sdk/connectors/` is the public API for users building connectors to deploy in Umbod; read `packages/umbod-sdk/src/umbod_sdk/connectors/README.md` and `packages/umbod-sdk/src/umbod_sdk/skills/draft-agent-connector/SKILL.md` before changing it or creating a connector.
+- Connector authoring → `packages/umbod-sdk/src/umbod_sdk/connectors/`; read `packages/umbod-sdk/src/umbod_sdk/connectors/README.md` and `packages/umbod-sdk/src/umbod_sdk/skills/draft-agent-connector/SKILL.md` before changing it or creating a connector.
 - Messaging/events → `umbod/api/src/messaging/`.
 - Pages/navigation → `umbod/frontend/src/routes/`; reusable UI → `umbod/frontend/src/lib/components/`; frontend administration APIs and state → `umbod/frontend/src/lib/admin/`.
-- Configuration → `umbod/api/src/umbod/config/`, then `umbod/docker-compose.yml` or Helm when deployment wiring is involved.
+- Configuration → `umbod/api/src/umbod/config/`.
 - Local service wiring → `umbod/docker-compose.yml`; Kubernetes deployment → `umbod/deploy/helm/umbod/`.
-- Defects → begin at the failing public behavior or test, find its nearest boundary, then trace inward; do not choose files by name alone.
 
-## Runtime verification
+## Verification
 
-- For API or MCP application changes, verify the running services in a disposable Kind cluster with `bash umbod/tests/kind-runtime/run.sh` from the repository root. This builds and loads local images, installs the Helm chart, runs its in-cluster tests, and runs `umbod/api/live_runtime_tests` through Kubernetes Service port-forwards. Docker Compose is not a substitute for these service integration tests.
+Run the checks applicable to the changed area.
+
+### API/MCP runtime
+
+- For API or MCP application changes, run `bash umbod/tests/kind-runtime/run.sh` to verify running services in a disposable Kind cluster. Docker Compose is not a substitute.
 - If Kind service integration tests fail, inspect the runner's pod diagnostics, report the failing assertions, and do not describe the integration suite as passing. The connector fixture and test-only values under `umbod/tests/kind-runtime/` must not enter the published chart or application images.
-- For frontend UI changes, follow the separate Docker Compose and browser verification instructions below.
 
-## Tests and static checks
+### Tests and static checks
 
-Run the checks applicable to the changed area:
-
-- Complete backend suite: `cd umbod/api && uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal`
-- MCP: `cd umbod/api && uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal -k mcp`
-- API: `cd umbod/api && uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal -k "not mcp"`
+- Backend suite: `cd umbod/api && uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal`. To select MCP tests, append `-k mcp`; for API tests, append `-k "not mcp"`.
 - Serial execution/debugging: `cd umbod/api && uv run --locked pytest tests -q -n 0`. Use serial execution for small focused selections to avoid worker startup overhead. Parallel execution is explicit, not a global pytest default; keep Kind/live-runtime tests serial. Do not use uncapped `-n auto` or launch several full-suite runs concurrently.
 - Python lint: `cd umbod/api && uv run ruff check .`
-- Frontend tests: `cd umbod/frontend && bun run test`
-- Frontend type and Svelte checks: `cd umbod/frontend && bun run check`
-- Running-service integration tests: `bash umbod/tests/kind-runtime/run.sh` from the repository root.
+- Frontend tests, types, and Svelte checks: `cd umbod/frontend && bun run test && bun run check`
 
-## UI inspection
+### Frontend UI
 
 - From `umbod/`, run `docker compose build` and `docker compose up -d`, then verify UI changes with `agent_browser` at `http://localhost:3010` (not `file://`).
 - After a rebuild, prefer separate `open`, `snapshot`, and `screenshot` calls over the `qa` preset.
 
-## Helm chart verification
+### Helm chart
 
-- Whenever changing the Helm chart, run `umbod/deploy/helm/umbod/scripts/validate.sh` before reporting the work as done.
-- Whenever changing the Helm chart, run `bash umbod/deploy/helm/umbod/scripts/kind-install-test.sh` from the repository root before reporting the work as done.
+- For Helm chart changes, run both `umbod/deploy/helm/umbod/scripts/validate.sh` and `bash umbod/deploy/helm/umbod/scripts/kind-install-test.sh` before reporting the work as done.
 - Run applicable negative schema checks when changing `values.yaml`, `values.schema.json`, or chart invariants.
 
-## Semgrep
+### Semgrep
 
 - Run the shared app Semgrep rules with `cd umbod && uv run semgrep scan --config ../.semgrep.yml .`.
 - After each Semgrep run, resolve the reported issues, including pre-existing findings, and rerun the scan to verify the fixes.
-- The shared Semgrep config lives at `.semgrep.yml`; do not add app-local `.semgrep.yml` files unless the app needs an explicitly documented exception.
+- Do not add app-local Semgrep configs without an explicitly documented exception to the shared root `.semgrep.yml`.
