@@ -1,15 +1,17 @@
-# Workspace
+---
+type: Software Module
+title: "Workspace"
+description: "Shared workspace navigation and fail-closed administration presentation resolution."
+---
 
-**Module responsibility:** Shared dashboard and administration navigation and safe administration presentation resolution.
+# Files
 
-- `navigation.ts` defines Dashboard-first navigation with normal-user Files in both workspaces, administrator links including Group permissions with Connectors and Filesystem subpages, the common home destination and accessible shell/account labels.
-- `admin-access.ts` accepts the validated current-user port already implemented by the admin client. Only a successful read permits administrator navigation and exposes the validated account identity. Authentication, forbidden access and unavailable services/schema validation remain distinct fail-closed outcomes.
-- `workspace-access-state.svelte.ts` owns the independent, initially checking access read started alongside catalogue loading on dashboard mount or URL-selected filesystem loading on Files mount. Disposal discards late responses; no access request delays catalogue mounting or filesystem reads.
-- `workspace-access-state.test.ts` verifies pending access cannot block the catalogue or reveal privileged navigation.
-- `admin-access.test.ts` tests presentation resolution through an injected in-memory current-user port.
+- [admin-access.ts](./admin-access.ts) — Administration navigation eligibility.
+- [admin-access.test.ts](./admin-access.test.ts) — Access presentation tests.
+- [navigation.ts](./navigation.ts) — Workspace destinations and labels.
+- [workspace-access-state.svelte.ts](./workspace-access-state.svelte.ts) — Independent access lookup lifetime.
+- [workspace-access-state.test.ts](./workspace-access-state.test.ts) — Access lookup isolation tests.
 
-Dashboard lookup failures or stalled requests do not block catalogue rendering. Confirmed identity replaces the existing account identity fallback.
+# Context not available from the code
 
-See [ADR-005: One Workspace and Only Usable Controls](../../../../project/architecture-records/ADR-005-unified-workspace-and-usable-controls.md).
-
-These presentation decisions do not grant authority: the existing admin layout and backend remain responsible for direct administration access.
+- [ADR-005: One Workspace and Only Usable Controls](../../../../project/architecture-records/ADR-005-unified-workspace-and-usable-controls.md) — Navigation eligibility is not backend authorization.

@@ -1,51 +1,23 @@
-# Configuration
+---
+type: Software Module
+title: "Configuration"
+description: "Operator settings, validation and conversion into runtime application configuration."
+---
 
-**Module responsibility:** Typed operator settings, defaults, validation, derivation, and conversion into application configuration.
+# Files
 
-**Read when working with:** Environment variables, configuration profiles, defaults, secrets, validation rules, or runtime settings consumed by services.
+- [__init__.py](./__init__.py) — Package exports.
+- [app.py](./app.py) — Runtime configuration models.
+- [build.py](./build.py) — Operator-to-runtime assembly.
+- [defaults.py](./defaults.py) — Configuration defaults.
+- [derive.py](./derive.py) — Configuration loading.
+- [inspection.py](./inspection.py) — Redacted inspection.
+- [operator.py](./operator.py) — Operator-facing settings.
+- [personal_connection_policy.py](./personal_connection_policy.py) — Personal identity and OAuth policy resolution.
+- [secret_derivation.py](./secret_derivation.py) — Secret derivation.
+- [server_settings.py](./server_settings.py) — Server root-secret preflight.
+- [validate.py](./validate.py) — Cross-field validation.
 
-## Modules
+# Context not available from the code
 
-### `operator.py`
-
-**Read when working with:** Operator-facing settings and environment-backed configuration.
-
-### `derive.py`
-
-**Read when working with:** Loading operator settings, validation orchestration, or redacted configuration results. `load_server_app_config` requires a nonblank `UMBOD_ROOT_SECRET` before derivation for API/MCP startup. Generic loaders retain inspection and structural validation semantics.
-
-### `server_settings.py`
-
-**Read when working with:** Root-secret-only server preflight. `ServerRootSettings` shares operator environment/dotenv source precedence and requires the secret before unrelated operator fields are parsed. Projection errors become a fixed secret-free startup error; the full operator load then rechecks the root before derivation.
-
-### `build.py`
-
-**Read when working with:** Building internal application configuration from operator settings.
-
-OIDC issuer derivation preserves an explicit `UMBOD_OIDC_ISSUER_URL`. Otherwise Auth0 derives `https://{UMBOD_OIDC_DOMAIN}/`, with the trailing slash matching its discovery issuer. A custom discovery URL without an Auth0 domain requires an explicit issuer in production. Entra and Google require an explicit production issuer: tenant/token-version and issuer spelling must match the JWT exactly, rather than being guessed from the provider recipe. All production OIDC recipes require `UMBOD_OIDC_AUDIENCE`; missing audience or an issuer that cannot be derived is rejected during operator configuration validation. Local authentication modes are unchanged.
-
-### `secret_derivation.py`
-
-**Read when working with:** Secret generation and resolution.
-
-### `app.py`
-
-**Read when working with:** Internal application configuration consumed at runtime, including `user_profile` mapping and token-role validation, and the independently enabled OTLP receiver and its request limit. Operator OTLP bearer credentials are excluded from configuration inspection and redacted display. Direct AppConfig construction rejects production REST simulation, disabled mode, development verification and dev/none authentication independently of personal connections. REST startup rechecks this invariant for explicitly copied configuration; local disabled administration remains supported.
-
-### `validate.py`
-
-**Read when working with:** Cross-field configuration constraints and startup validation. Optional profile mode, header and mapping settings are assembled explicitly in `build.py`, validated by `validate.py` and `app.py`, and exposed through the non-secret inspection catalog. The [environment reference](../../../../docs/operations/configuration.md#optional-user-profile-enrichment) defines the profile contract.
-
-### `personal_connection_policy.py`
-
-**Read when working with:** Immutable local/dev identity namespace normalization and resolving automatic personal selection and OAuth modes into runtime booleans.
-
-### Personal connections identity policy
-
-Operator settings `UMBOD_PERSONAL_CONNECTIONS_ENABLED` and `UMBOD_PERSONAL_CONNECTIONS_OAUTH_ENABLED` default to `auto` and also accept explicit `true` or `false`. Automatic selection activates when `UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE` is supplied. For the `local` profile with resolved `dev` authentication only, automatic selection with an exactly empty namespace derives the stable `test:umbod-local` authority, enabling personal MCP server registration by default. Normalization copies operator settings without mutating the caller. Explicit modes and supplied namespaces are preserved; whitespace or malformed namespaces are validated, not silently replaced. `UMBOD_PERSONAL_CONNECTIONS_ENABLED=false` opts out. Real providers and production require an explicit namespace to enable registration and never receive this fallback. API and MCP share derivation and must retain the same stable authority across restarts; changing it changes ownership. No root secret is generated and development authentication does not provide real-account sign-in. Direct embedded `AppConfig.personal_connections` construction retains conservative disabled boolean defaults; operator assembly always resolves modes to booleans before runtime or inspection. Both operator assembly and direct `AppConfig` construction reject unsafe identity configurations. Production requires REST JWT verification with issuer, audience and JWKS, MCP OIDC and a supported provider. Development or simulation requires a `test:` namespace, derived only for the local/dev automatic case above. A development REST authentication environment uses semantic JWT verification even with mode `jwt` and an OIDC recipe; it is rejected in production and requires test isolation locally. Identity settings are registered in non-secret inspection. Automatic OAuth authorization requires effective selection, durable SQLite storage and a nonblank connector configuration encryption secret derived from `UMBOD_ROOT_SECRET`. Explicit OAuth `true` still requires all prerequisites and fails validation otherwise, including when selection is explicitly disabled. Storage durability uses the same predicate during policy resolution and runtime validation: blank paths, `:memory:` paths and paths containing `mode=memory` are not durable. In-memory and SQLite memory paths are rejected for exposed authorization. Registration alone does not enable execution; runtime access still requires current owner authorization, approved contracts, activation and explicit permissions. See the [environment reference](../../../../docs/operations/configuration.md#personal-connections-identity-policy).
-
-### `inspection.py`
-
-**Read when working with:** Configuration inspection and display behavior.
-
-`RestConfig.metrics_enabled` and `McpConfig.metrics_enabled` default to true. Embedded hosts may disable the dedicated metrics listeners while retaining application instrumentation; normal service configurations remain enabled.
+- [Operator configuration](../../../../docs/operations/configuration.md) — Deployment settings, provider issuer/audience requirements and personal identity policy; preserve the identity namespace across restarts to retain ownership.

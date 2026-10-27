@@ -1,13 +1,16 @@
-# User catalogue
+---
+type: Software Module
+title: "User catalogue"
+description: "Safe connector and capability projections for authenticated users."
+---
 
-Read-only, safe connector and capability projections for authenticated users, independent of connector-kind implementations.
+# Files
 
-- `models.py`: strict response models, including opaque session identity. `CatalogueToolCapability` requires the permitted tool's `input_schema` JSON object and explicit `output_schema` absent/present state; `CatalogueCapability` covers prompts, resources and resource templates without schema fields. Connector capabilities use a kind-discriminated union. `key` remains the identifier and `name` the display title.
-- `ports.py`: catalogue source and reader contracts.
-- `read_state.py`: request-local publication, activation and caller-group permission snapshots registered with a caller-owned read plan; resolution performs no I/O. Each context deduplicates IDs and uses batches of at most 200 IDs, with no reads for empty inputs.
-- `in_memory.py`: in-memory source implementing the same contract.
-- `service.py`: request-scoped composition and deterministic connector ordering.
-- `readiness.py`: request-local reuse of connector-invariant native configuration readiness; capability-dependent readiness must not use this adapter.
-- `shared.py`: publication, activation, readiness and explicit capability-grant filtering with effective descriptions and normalized tool schema projection after availability checks. Dashboard composition captures `IndexedCapabilityPermissions` once from the caller's planned group snapshots; its immutable grant union provides set membership without further group lookups. `ExplicitCapabilityPermissions` retains live lookup behavior for consumers requiring fresh checks.
-
-Kind adapters and REST dependency providers compose these contracts. Shared entries require an available capability; eligible personal entries may have no tools.
+- [__init__.py](./__init__.py) — Public module exports.
+- [in_memory.py](./in_memory.py) — In-memory catalogue source.
+- [models.py](./models.py) — User-facing catalogue data.
+- [ports.py](./ports.py) — Source and reader contracts.
+- [read_state.py](./read_state.py) — Planned request-local policy snapshots.
+- [readiness.py](./readiness.py) — Native configuration readiness reuse.
+- [service.py](./service.py) — Catalogue composition.
+- [shared.py](./shared.py) — Shared capability eligibility projection.

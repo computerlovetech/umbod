@@ -1,10 +1,10 @@
-# Admin Overview Components
+---
+type: Software Module
+title: "Administration overview components"
+description: "Presentation for administration overview counts and availability warnings."
+---
 
-**Module responsibility:** Server-loaded administration dashboard presentation without local state or network access.
+# Files
 
-## Modules
-
-- `AdminOverviewDashboard.svelte`: Four overview cards, linked connector-family breakdown, explicit unavailable warnings and conditional connector attention counts.
-- `admin-overview-dashboard.test.ts`: SSR coverage for cards, zero counts, attention and partial availability.
-
-The dashboard consumes `$lib/admin/overview/models.ts` contracts and existing admin theme tokens. The route retains `AdminShell` navigation. The breakdown has semantic headers and a labelled keyboard-focusable horizontal scroll region.
+- [AdminOverviewDashboard.svelte](./AdminOverviewDashboard.svelte) — Overview cards and connector breakdown.
+- [admin-overview-dashboard.test.ts](./admin-overview-dashboard.test.ts) — Overview rendering tests.

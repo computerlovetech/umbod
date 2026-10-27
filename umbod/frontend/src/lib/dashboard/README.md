@@ -1,11 +1,18 @@
-# Dashboard
+---
+type: Software Module
+title: "Dashboard"
+description: "User catalogue contracts and dashboard lifetime independent of administration."
+---
 
-**Module responsibility:** Authenticated user catalogue reads and dashboard lifetime, independently of administration and personal MCP feature availability.
+# Files
 
-- `api.ts` defines the catalogue port; `domain/schemas.ts` validates the user-only connector and capability projection, personal feature availability and opaque identity key. Tool entries require complete input schemas and explicit present/absent output schemas; other capability kinds retain display metadata only. Backend and frontend schema changes require coordinated deployment because older strict clients reject the additional tool fields.
-- `infrastructure/in-memory-api.ts` supplies the validated in-memory adapter. `catalogue-route.ts` uses the generic transport and `/me/catalogue`; `dashboard-api.ts` supplies browser composition without administrator inventory reads.
-- `state/port.ts` defines the dashboard controller interface. `dashboard-state.svelte.ts` owns cancellable catalogue reads, kind-qualified selection, independent personal-action loading, identity/authentication clearing, revoked-entry disposal and retained personal state during catalogue refresh. Selection retains the latest matching entry across refreshes, falls back when revoked and resets with identity changes.
-- `presentation.ts` supplies connector labels and composite sidebar identities. `state/capabilities-state.svelte.ts` owns read-only capability grouping and search without URL synchronization or side effects.
-- `$lib/components/dashboard/Dashboard.svelte` supplies the page presentation. Shared connector list/detail primitives and personal controls compose without changing owner-scoped operation permissions. `$lib/workspace/` supplies shared navigation and independent, fail-closed admin presentation started alongside catalogue loading on dashboard mount, never awaited by the page loader.
+- [api.ts](./api.ts) — User catalogue port.
+- [domain/](./domain/) — Catalogue validation contracts.
+- [infrastructure/](./infrastructure/) — Catalogue HTTP and in-memory adapters.
+- [presentation.ts](./presentation.ts) — Connector labels and sidebar identities.
+- [state/](./state/) — Catalogue lifetime and capability search.
+- [test-fixtures.ts](./test-fixtures.ts) — Catalogue test fixtures.
 
-Catalogue refresh never authorizes, discovers, renews or invokes tools. Returning focus or visibility to a loaded dashboard revalidates its catalogue and identity, then checks explicit in-memory personal sign-in attempts without overlapping status reads or replaying initiation. Personal controllers own bounded sequential attempt monitoring, stop on owner replacement or removal, and load tools only after confirmed completion. Catalogue reads synchronously fence automatic completion behind identity validation; completion waits for the latest validation before reading owner details and again before discovery. Failed identity validation preserves attempts but prevents automatic continuation until identity is safely revalidated. Successful personal operations trigger a read-only background refresh; transient refresh failures retain valid entries and operation outcomes. Personal feature disablement skips all personal API reads. Authentication loss clears the complete user projection; stale responses cannot restore it.
+# Context not available from the code
+
+- Catalogue tool schema changes require coordinated backend/frontend deployment because older strict clients reject additional tool fields.

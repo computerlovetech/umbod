@@ -1,109 +1,36 @@
-# Core
+---
+type: Software Module
+title: Core
+description: Shared application workflows, domain contracts and feature-local adapters behind REST and MCP.
+---
 
-**Module responsibility:** Application behavior, domain models, ports, and feature-local adapters shared by delivery boundaries.
+# Files
 
-**Read when working with:** Business rules, application workflows, domain models, ports, or feature-specific integration behavior used by REST and MCP.
+- [__init__.py](./__init__.py)
+- [activation](./activation/README.md) — Capability enablement.
+- [administrator](./administrator/) — Shared administrator configuration.
+- [caching](./caching/README.md) — Request-local result reuse.
+- [callers](./callers/README.md) — Transport-neutral caller facts.
+- [capabilities](./capabilities/README.md) — Capability identity and catalogues.
+- [configuration](./configuration/) — Encrypted connector configuration.
+- [connectors](./connectors/) — Native, OpenAPI and downstream MCP connectors.
+- [filesystem](./filesystem/README.md) — Namespaces, content and access policy.
+- [groups](./groups/README.md) — Group catalogue.
+- [icons](./icons/README.md) — Favicon discovery.
+- [identity](./identity/) — Connector identity.
+- [invocation](./invocation/) — Invocation policy and approval.
+- [key_value](./key_value/README.md) — Key-value storage contracts.
+- [messaging](./messaging/) — Events and stream contracts.
+- [network](./network/) — Shared network validation.
+- [permissions](./permissions/README.md) — Group grants and runtime access.
+- [persistence](./persistence/README.md) — Database ports and read plans.
+- [publishing](./publishing/README.md) — Connector publication.
+- [signals](./signals/README.md) — Application-local signals.
+- [telemetry](./telemetry/README.md) — Telemetry models and sink ports.
+- [user_catalogue](./user_catalogue/README.md) — Caller-visible connector catalogue.
 
-## Submodules
+# Context not available from the code
 
-### Shared concepts
-
-### `callers/`
-
-**Read when working with:** Transport-neutral caller observations, explicit authentication provenance, subject/issuer availability, separate unqualified `GroupMembership` observations and captured caller values shared by REST and MCP. Generic caller-provider wrappers are removed; feature-specific deferred capture remains at delivery boundaries only where operation freshness requires it. The [local index](callers/README.md) distinguishes caller facts from canonical ownership, group projections and authorization policy.
-
-### `administrator/connector_configuration/`
-
-**Read when working with:** Shared administrator connector configuration models, explicit discriminated mutation operations, requests, results, reader and atomic mutation ports, or application service behavior. Import its public API only from `umbod.core.administrator.connector_configuration`. `reader.py` reads complete cross-kind configurable state. `mutation.py` validates and atomically persists mixed activation, invocation policy, description override, and permission operations with their durable events. `catalog.py` defines the connector inventory port.
-
-### `activation/`
-
-**Read when working with:** Capability activation state (tools, prompts, resources), enable/disable workflows, or activation persistence shared by connector kinds. Public database-store mutations append events transactionally; session-level helpers leave event ownership to the enclosing aggregate. `events.py` constructs generic capability-activation events; obsolete tool-only aliases and typed stream wrappers are removed.
-
-### `groups/`
-
-**Read when working with:** The shared exact-ID group catalogue, registration, transactional usage-checked deletion and session-bound registration helpers. The [local index](groups/README.md) separates catalogue membership from connector and issuer-qualified filesystem authorization.
-
-### `permissions/`
-
-**Read when working with:** Group access, tool permissions, authorization state, or permission notifications. `stores/service.py` exposes session-bound permission reads and updates for atomic configuration writes. Public update/save operations append grant/revoke events in their serialized transaction, while enclosing administrator aggregates own events for session-bound updates. `runtime.py` evaluates typed `GroupMembership` through `RuntimeGroupPermissions`, without parsing claims. Legacy constructor claim selectors remain adapter metadata for hosting compatibility. FastMCP callbacks and policy-specific claim capture live in `umbod.mcp.authorization` and `umbod.mcp.auth.groups`.
-
-### `signals/`
-
-**Read when working with:** Typed, application-scoped synchronous signals, explicit receiver registration, isolated ordinary receiver failures, or in-memory failure capture. Signals have no logging, metrics, transport, or global registration dependency. See [the local index](signals/README.md).
-
-### `invocation/`
-
-**Read when working with:** Cross-kind invocation policy, approval nonces, gated tool execution, or invocation-policy events. `tools/database_configuration_mutation.py` atomically persists tool activation/policy changes and their events; its result identifies persisted event ownership so boundary orchestration does not append duplicates. `failure_evidence.py` captures bounded exception types and traceback frames without messages, source lines or locals, with explicit internal, connector, downstream OpenAPI and downstream MCP origins. `tools/execution.py` scopes this evidence to each pipeline execution, restoring enclosing context on completion or cancellation.
-
-### `publishing/`
-
-**Read when working with:** Connector publish/unpublish state, publication persistence, or publication events.
-
-### `filesystem/`
-
-**Read when working with:** Filesystem models, namespace/content/access-control ports, shared namespace rules, root discovery, nested creation, streamed content publication, and persisted ownership/sharing. `stores/` owns typed table declarations and database-neutral namespace/policy stores over the shared Database port, following ADR-001. Concrete persistence drivers, byte-storage adapters, configuration, and factories remain infrastructure responsibilities under ADR-006; callers compose through the public `umbod.infrastructure` API. The [local index](filesystem/README.md) describes contracts and deferred behavior. `authorization/` supplies shared direct-node decisions through injected identity, namespace, and policy ports; `browsing/` supplies opt-in caller-aware DISCOVER summaries and parent-authorized, independently filtered child listing without content dependencies. All summary metadata attributes are DISCOVER-visible; observations are not atomic check/use. Production identity mapping, content/mutation enforcement, and delivery wiring remain deferred. No filesystem REST/MCP or authorization wiring is included.
-
-### `user_catalogue/`
-
-**Read when working with:** Safe authenticated-user catalogue models, source/reader ports, in-memory acceptance and explicit shared capability-grant filtering. The [local index](user_catalogue/README.md) describes request-scoped projection responsibilities.
-
-### `capabilities/`
-
-**Read when working with:** Shared capability vocabulary (identity, catalog, availability), request-cached catalogue wrappers, capability description overrides, or public tool naming/schemas. The [local index](capabilities/README.md) describes complete-identity snapshot reuse and schema-copy isolation. Public description-store mutations persist their events atomically; administrator aggregate mutations own events when using session-level compare-and-swap.
-
-### `configuration/`
-
-**Read when working with:** Encrypted connector configuration, configuration secrets/ciphers, or configuration-changed events. `events.py` constructs generic change events for transactional writers; delivery uses the shared messaging ports rather than connector-specific stream wrappers.
-
-### `network/`
-
-**Read when working with:** Shared public-address validation, DNS-pinned `httpcore` adapters and pool configuration used by favicon and personal OAuth adapters. `network/adapters.py` owns these low-level primitives; feature-specific URL, authentication, redirect and deadline policies remain in their adapters. Public imports come from `umbod.core.network`.
-
-### `icons/`
-
-**Read when working with:** Shared favicon discovery for MCP and OpenAPI connectors. The [local index](icons/README.md) covers configurable ordered/concurrent strategy batches, explicit outcomes, bounded public HTTP fetching and credential-free website fallbacks.
-
-### `identity/`
-
-**Read when working with:** Cross-kind connector ID uniqueness checks.
-
-### Connector kinds
-
-### `connectors/native/`
-
-**Read when working with:** Native/built-in connector lifecycle, plugin registry, runtime assembly, or deployment availability.
-
-### `connectors/openapi/`
-
-**Read when working with:** OpenAPI imports, generated connector models, operation execution, or administrator-configurable OpenAPI inventory. `administrator_catalog.py` adapts persisted operation summaries to the shared configuration catalog port. `management/setup_ports.py` defines the client-independent setup contract and explicit failure states; `management/setup.py` validates, creates, imports, and configures a connector, compensating configuration and connector persistence on failure. Setup is a backend operation, not a browser workflow or a guaranteed database transaction.
-
-### `connectors/downstream_mcp/`
-
-**Read when working with:** Registration, discovery, security, or invocation of downstream MCP servers. `oauth/` owns shared sign-in orchestration, metadata discovery, registration decisions, scope summaries, diagnostics, safe failures, and authorization/discovery status. `oauth/ports.py` defines deployment storage and callback ports; `oauth/provider.py` applies public-client policy for both interactive and runtime use. `adapters/fastmcp/oauth_client.py` contains the SDK session transport. Shared OAuth policy remains independent of deployment-specific hosts.
-
-`personal_connections/` owns canonical principal keys, personal enablement, opaque authorization states, revision-checked writes, captured `PersonalCaller` values and the pure typed identity resolver in `principal.py`. Connection, OAuth, refresh and tool runtime services receive immutable operation inputs, not caller lookup callbacks. The feature-specific deferred caller port is consumed by the MCP runtime adapter, which constructs a core service per operation. `identity_models.py` and `identity_ports.py` distinguish observed facts from resolved canonical identity; `adapters/settings.py` and `adapters/identity.py` translate deployment configuration and accepted claims outside the policy. Its [index](connectors/downstream_mcp/personal_connections/README.md) describes the public contracts. `stores/personal_connections.py` persists encrypted principal-bound records in an additive table; connector aggregate deletion removes them transactionally. OAuth definitions without `authorization_mode` remain shared. The [downstream index](connectors/downstream_mcp/README.md) describes discovery-free personal creation, publication and connector-grant assignment. `personal_connections/inventory.py` coordinates eligible personal selection and cleanup; production storage binds mutations to an existing personal definition transactionally. Shared discovery/OAuth/execution paths still reject personal mode. Durable personal sign-in uses independently resolved attempt/provider policy, defaulting available when secure prerequisites are configured, encrypted attempt storage and worker-independent callbacks; authorization never enables execution. See the [foundation specification](../../../../docs/operations/personal-downstream-mcp-oauth-specification.md), [catalogue iteration](../../../../docs/operations/personal-downstream-mcp-catalogue-specification.md) and [authorization iteration](../../../../docs/operations/personal-downstream-mcp-authorization-specification.md).
-
-### Other
-
-### `messaging/`
-
-**Read when working with:** Core messaging contracts shared with transport implementations. `stores/event_stream.py` provides durable stream storage and `append_event_in_session` for atomic state-and-event writes. `discovery_events.py` defines connector-kind/identity change events for definition and catalog reconciliation.
-
-### `telemetry/`
-
-**Read when working with:** Validated telemetry exports, sink ports, in-memory acceptance, or existing stdout logger integration.
-
-### `key_value/`
-
-**Read when working with:** Generic asynchronous key-value storage contracts and explicit hit/miss results. The [local index](key_value/README.md) separates neutral ports from concrete infrastructure drivers; it contains no caching policy or backend selection.
-
-### `caching/`
-
-**Read when working with:** Explicit request-local asynchronous result reuse. The [local index](caching/README.md) defines the injectable generic cache protocol, key-value driver dependency, concurrent-load sharing, cancellation, generation-based invalidation and caller-owned key/lifetime boundaries. The assignable-targets GET boundary opts in through reader wrappers; persistence execution and authoritative mutation/invocation reads remain unchanged.
-
-### `persistence/`
-
-**Read when working with:** Persistence ports, queries, deferred read plans, or database readiness behavior. The [local index](persistence/README.md) describes explicit registration, exact-read optimization and session-bound execution; [ADR-009](../../../../project/architecture-records/ADR-009-deferred-read-planning.md) records the planning and authority boundaries.
-
-**Dependency rule:** Shared root packages never import `umbod_sdk.connectors.native`, `umbod_sdk.connectors.openapi`, or `umbod_sdk.connectors.downstream_mcp`. Kind packages and delivery boundaries may import shared roots. Kind-stitching composition belongs in delivery wiring (for example REST).
+- Shared root packages must not import connector-kind packages. Cross-kind composition belongs in delivery wiring.
+- [ADR-001](../../../../project/architecture-records/ADR-001-backend-neutral-persistence.md) — Persistence boundary decisions.
+- [ADR-009](../../../../project/architecture-records/ADR-009-deferred-read-planning.md) — Read planning and authority boundaries.

@@ -1,47 +1,68 @@
 ---
 name: write-module-readme
-description: Use when creating, editing, or reviewing module-level README.md files, or updating module indexes after files are added, renamed, moved, or removed. Enforces title frontmatter and a file table of contents only, with no prose duplicating the code.
+description: Use when creating, editing, or reviewing module README.md files or related knowledge Markdown. Applies Open Knowledge Format (OKF) v0.2 with Markdown templates, progressive-disclosure links, and concise context that does not duplicate the code.
 ---
 
-# Write module README indexes
+# Write module knowledge in Open Knowledge Format
 
-## Hard rule
+## Sources and version
 
-A module-level `README.md` is only a navigation index, not documentation about the module. It contains YAML frontmatter with a single `title` field, followed by a Markdown bullet list of relative links to module files. Nothing else.
+- [Google Cloud introduction to OKF](https://cloud.google.com/blog/products/data-analytics/how-the-open-knowledge-format-can-improve-data-sharing) describes v0.1.
+- [Canonical OKF specification](https://github.com/GoogleCloudPlatform/open-knowledge-format/blob/main/SPEC.md) specifies v0.2, used by this skill. The article's original repository now points here.
 
-Agents consult this index when unsure whether a file is relevant to their search, before deciding to read it. The code is the source of information about behavior and implementation.
+OKF is a portable directory of UTF-8 Markdown files with YAML frontmatter and ordinary Markdown links. Humans and agents can produce and consume the same files without a service, SDK, or prescribed runtime. Frontmatter makes metadata searchable; the body holds curated knowledge; links form a graph beyond the directory hierarchy.
 
-## Procedure
+## OKF rules
 
-1. Inspect the module's actual files and any existing index. Read code only as needed to identify accurate link labels.
-2. Set `title` to the module name.
-3. List the module's direct files, excluding `README.md` itself, generated files, caches, and build artifacts. Link to each child module's `README.md` rather than flattening its files into the parent index. Do not invent links to missing indexes.
-4. Use the filename as the link label. Only when the filename is ambiguous, append a few identifying words within the label to help an agent select the file. Do not add descriptions after links.
-5. Remove all other content, including module overviews, architecture explanations, behavior summaries, API or symbol inventories, dependencies, workflows, setup commands, examples, and testing instructions. Do not replace it with shorter explanatory prose.
-6. Verify that every relative link resolves and that added, renamed, moved, or removed files are reflected in the index.
+### Concepts
 
-## Required format
+- Represent one concept per Markdown file. Its identity is its path within the chosen bundle, without `.md`; moving it changes that identity.
+- Begin every concept with YAML frontmatter delimited by `---`. A non-empty string `type` is the only always-required field. Types are producer-defined, not a fixed taxonomy.
+- `title`, one-sentence `description`, canonical asset URI `resource`, and a list of `tags` are recommended, not mandatory. Omit fields that have no useful value; never invent metadata to fill a template.
+- Use structured Markdown for the body. OKF requires no particular body sections. Use `# Schema`, `# Examples`, or `# Computation` only when applicable, not as boilerplate.
+- Link concepts using ordinary Markdown links. Relative links are supported; `/path.md` means bundle-root-relative in OKF, not filesystem-root-relative. Choose a bundle root explicitly before using that form.
+- Preserve unfamiliar frontmatter fields when editing. Unknown types and missing optional fields do not invalidate a concept.
 
-```markdown
----
-title: Permissions
----
+### Navigation and history
 
-- [__init__.py](./__init__.py)
-- [models.py](./models.py)
-- [service.py](./service.py)
-- [adapters](./adapters/README.md)
-```
+- `index.md` and `log.md` are reserved filenames, not concepts.
+- `index.md` lists linked entries under headings, with short descriptions to support progressive disclosure. It has no frontmatter except that a bundle-root index may declare `okf_version: "0.2"`.
+- `log.md` is optional history, newest first, under ISO `YYYY-MM-DD` date headings. Do not add one just to repeat Git history.
+- `README.md` is not a reserved OKF filename. A README written as an OKF document is a concept and therefore needs `type`; do not mistake a title-only README for a conformant concept or call it the standard's `index.md`.
 
-The paths above illustrate the format; use only paths that exist in the target module.
+### Provenance, trust, and freshness
+
+Use these optional v0.2 fields only when useful and supported by evidence:
+
+- `sources`: materials the concept derives from. Each entry requires `resource`; give it a stable `id` when citing a claim with a matching Markdown footnote. Source `author`, `usage_count`, and `last_modified` are optional objective signals, not credibility scores.
+- `generated`: records production with `by` and, when known, `at`. Use `<producer>/<version>` for agents, `human:<id>` for people, or `process:<id>` for automation. v0.2 uses `generated.at` instead of v0.1's `timestamp`.
+- `verified`: actual confirmation events, each with `by` and `at`; a single mapping is also permitted. Authorship is not verification. Never claim human review that did not happen.
+- No `verified` means unverified; non-human verifiers mean machine-confirmed; a `human:` verifier means human-reviewed. These are advisory signals, not access controls.
+- `status`: `draft`, `stable`, or `deprecated`; absent means `stable`. `stale_after` optionally records the absolute instant at which content becomes stale.
+- Use ISO 8601 datetimes with explicit UTC offsets for timestamp-valued fields. Do not invent dates or refresh them on unrelated edits.
+
+OKF also supports `type: Attested Computation`, with required `runtime` and a sanctioned computation linked or embedded under `# Computation`. Do not introduce this type for ordinary module documentation; consult specification §10 when that contract is actually needed.
+
+## Repository policy: useful context, not duplicated code
+
+The following restrictions are repository policy, not requirements imposed by OKF:
+
+- A module README primarily helps an agent decide which files to read. Use `type: Software Module`, a concise title and description, and a linked file table of contents.
+- Keep descriptions to short relevance cues. Do not reproduce implementation walkthroughs, function or class inventories, signatures, schemas, branching logic, dependency lists, or examples that merely restate the source or tests.
+- Include extra knowledge only when it cannot be learned from the code: for example, an externally imposed constraint or a decision's rationale. Prefer a link to the authoritative ADR, specification, or runbook over copying its content. Omit the context section when there is nothing to add.
+- Link to child module READMEs rather than flattening their file lists. Exclude caches and generated build artifacts. Never invent links or create a companion knowledge document per source file merely to satisfy OKF.
+- Keep the existing `README.md` entrypoint. Do not rename files or add parallel `index.md` files unless explicitly creating an OKF bundle.
+- Applying these conventions to selected READMEs does not make the entire repository an OKF bundle. Full bundle conformance requires every non-reserved Markdown file within the declared bundle boundary to have parseable frontmatter and a non-empty `type`.
+
+## Templates and workflow
+
+1. Inspect the target module's files and existing README. Read source as needed to establish accurate relevance cues; do not document inferred behavior as curated knowledge.
+2. Start from [the module README template](templates/module-readme.md). Replace every placeholder, include only links that resolve, and remove the optional context section if unnecessary. Adjust file entries to the real module.
+3. When explicitly authoring a bundle navigation file, use [the index template](templates/index.md) instead. It is not a README/concept template. Only a bundle-root index may add version frontmatter.
+4. Add optional metadata only when grounded in known facts. Preserve legitimate existing metadata and links; update stale content rather than blindly replacing it with the template.
+5. Check YAML validity, `type`, link targets, and concise descriptions. Remove unfilled placeholders, empty headings, and anything the reader can simply find in the code.
+6. Update affected links when files move or disappear. OKF consumers tolerate broken links, but repository-authored indexes should not knowingly introduce them.
 
 ## Scope
 
-Apply this rule to module-level indexes, not repository landing pages, product documentation, architecture decision records, or `SKILL.md` instructions. Do not move redundant code explanations into another document merely to preserve them.
-
-## Completion check
-
-- Frontmatter contains only `title`.
-- The body contains only linked table-of-contents entries.
-- Links resolve, labels are concise, and the index matches the module files.
-- No prose explains information that can be found by reading the code.
+Use this skill for module READMEs and explicitly requested related knowledge documents. Do not bulk-convert repository landing pages, ADRs, product documentation, or `SKILL.md` files. The templates define this repository's minimal authoring profile, not additional universal OKF requirements.

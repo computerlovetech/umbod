@@ -1,11 +1,16 @@
-# Instance settings
+---
+type: Software Module
+title: "Instance settings components"
+description: "Read-only instance settings presentation and clipboard feedback."
+---
 
-Read-only administration presentation at `/admin/instance-configuration`.
+# Files
 
-- `InstanceConfigurationView.svelte` composes essentials, task sections and collapsed deployment details.
-- `SettingRow.svelte` presents readable values and technical disclosures with raw-value copying.
-- `presentation.ts` classifies entries by variable, formats display values and preserves original group context for advanced settings.
-- `instance-settings-state.svelte.ts` derives presentation from current page data.
-- `instance-configuration-copy-state.svelte.ts` owns clipboard feedback and the unchanged raw-value formatter.
-
-Wire schemas and page-state contracts remain in `$lib/admin/instance-configuration.ts`. The route server loader owns authorization and failure handling.
+- [instance-configuration-copy-state.svelte.ts](./instance-configuration-copy-state.svelte.ts) — Raw-value clipboard feedback.
+- [instance-configuration-copy-state.test.ts](./instance-configuration-copy-state.test.ts) — Clipboard state tests.
+- [instance-settings-state.svelte.ts](./instance-settings-state.svelte.ts) — Settings presentation state.
+- [InstanceConfigurationView.svelte](./InstanceConfigurationView.svelte) — Settings page composition.
+- [InstanceConfigurationView.test.ts](./InstanceConfigurationView.test.ts) — Settings view tests.
+- [presentation.ts](./presentation.ts) — Setting labels and value formatting.
+- [presentation.test.ts](./presentation.test.ts) — Setting presentation tests.
+- [SettingRow.svelte](./SettingRow.svelte) — Setting value and technical disclosure.

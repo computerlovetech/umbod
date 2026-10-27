@@ -1,5 +1,17 @@
-# Connector discovery
+---
+type: Software Module
+title: "Native tool discovery"
+description: "Search and manifest adapters for native and OpenAPI capability discovery."
+---
 
-`tools.py` registers gateway/code-mode search and the capability manifest transform. It captures caller authorization before asynchronous work. OpenAPI search consumes the explicitly initialized application projection in `connectors/openapi/discovery_runtime.py`, while native search consumes registry-maintained candidate snapshots.
+# Files
 
-`openapi.py` adapts normalized capabilities to candidates and deterministic lexical search. `search.py` defines the candidate/search contracts and in-memory fuzzy ranking. `manifest.py` groups accessible candidates into bounded connector-domain descriptions.
+- [__init__.py](./__init__.py) — Package exports.
+- [manifest.py](./manifest.py) — Connector-domain manifests.
+- [openapi.py](./openapi.py) — OpenAPI search adaptation.
+- [search.py](./search.py) — Candidate ranking contracts.
+- [tools.py](./tools.py) — Search and manifest registration.
+
+# Context not available from the code
+
+- [ADR-008](../../../../../../../../project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Required event-synchronized discovery architecture; projections are not invocation authority and cross-worker updates are not instantaneous.

@@ -1,10 +1,16 @@
-# MCP metrics
+---
+type: Software Module
+title: "MCP metrics"
+description: "Invocation and protocol observation contracts with application-owned metric adapters."
+---
 
-- `models.py` and `recorder.py`: neutral invocation identity/completion models and the invocation metrics port.
-- `in_memory.py`: invocation recorder for interface-level tests.
-- `protocol_models.py` and `protocol_recorder.py`: validated protocol request/list-size observations and recorder port, separate from tool invocation completion.
-- `prometheus.py`: application-owned Prometheus registry implementing invocation and protocol recording. Protocol timing labels are bounded method/outcome values; list sizes have no identity labels.
-- `http_server.py`: metrics endpoint lifecycle.
-- `__init__.py`: public recorder and observation exports.
+# Files
 
-Protocol middleware times initialize and tools/list without recording credentials, private descriptors or owner identities. Runtime rebuild and synchronization failures are logged at their application-owned reconciliation boundary. Inventory initialization and invocation metric ownership remain in the neutral signal listeners.
+- [__init__.py](./__init__.py) — Package exports.
+- [http_server.py](./http_server.py) — Metrics listener lifecycle.
+- [in_memory.py](./in_memory.py) — In-memory recorder.
+- [models.py](./models.py) — Invocation observation models.
+- [prometheus.py](./prometheus.py) — Prometheus adapter.
+- [protocol_models.py](./protocol_models.py) — Protocol observation models.
+- [protocol_recorder.py](./protocol_recorder.py) — Protocol recording contract.
+- [recorder.py](./recorder.py) — Invocation recording contract.

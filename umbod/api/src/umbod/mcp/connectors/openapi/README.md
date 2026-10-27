@@ -1,9 +1,21 @@
-# OpenAPI MCP boundary
+---
+type: Software Module
+title: "OpenAPI MCP boundary"
+description: "MCP discovery and execution adapters for OpenAPI-generated capabilities."
+---
 
-`discovery_runtime.py` owns the application-scoped structural discovery projection. Startup calls `initialize_openapi_discovery(server)` before discovery is ready. Discovery-affecting event handlers call `reconcile_openapi_discovery(server)` after durable changes. Loading normalizes operation schemas, availability and effective connector descriptions before atomically publishing a replacement tuple. Reconciliation uses an asynchronous lock across loading and publication to prevent older overlapping loads from overwriting newer snapshots; readers remain lock-free. Cancellation preserves the previous complete snapshot and releases the lock. Failed refresh clears discovery availability and propagates the error for lifecycle retry; it never writes authoritative stores.
+# Files
 
-`AuthorizedOpenApiDiscoveryCatalog` filters a captured structural snapshot using captured caller memberships and current group grants on every list/search. It never caches final authorization. Snapshot reads, authorized-catalog construction and catalog responses deep-copy normalized capabilities, including nested input/output schemas, to prevent request-local mutations from changing later discovery. `native/tools/discovery/tools.py` captures caller membership and the structural snapshot before asynchronous dependency resolution; `native/tools/discovery/openapi.py` supplies lexical search and discovery candidates. No request-time structural initialization is provided.
+- [__init__.py](./__init__.py) — Package exports.
+- [availability.py](./availability.py) — Execution availability.
+- [codemode_execution.py](./codemode_execution.py) — Code-mode execution.
+- [configuration.py](./configuration.py) — Adapter configuration.
+- [deps.py](./deps.py) — Caller and persistence dependencies.
+- [discovery_runtime.py](./discovery_runtime.py) — Application discovery projection.
+- [factories.py](./factories.py) — Adapter composition.
+- [inventory.py](./inventory.py) — Inventory observations.
+- [ports.py](./ports.py) — Composition contracts.
 
-The consistency window is the lifecycle event-delivery and reconciliation delay. Each application owns its projection; the lifecycle owns bootstrap ordering, event replay, retries and shutdown.
+# Context not available from the code
 
-`deps.py` captures caller groups and obtains persistence ports. `availability.py` supplies authoritative execution availability. `codemode_execution.py` retains fresh execution admission and operation-scoped outbound calls independently of discovery snapshots. `configuration.py`, `factories.py` and `ports.py` compose external adapters. `inventory.py` publishes startup inventory observations.
+- [ADR-008](../../../../../../project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Required event-synchronized discovery architecture; projections are not invocation authority and cross-worker updates are not instantaneous.

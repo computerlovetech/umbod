@@ -1,28 +1,26 @@
-# Personal connections REST
+---
+type: Software Module
+title: "Personal connections REST"
+description: "Owner-scoped downstream MCP selection, authorization and discovery delivery."
+---
 
-Downstream MCP-owned delivery for authenticated user selection under `/api/me`, separate from administrator authorization. The public OAuth callback remains independently state-bound. Package nesting does not change URLs, middleware or mounts.
+# Files
 
-- `routes.py`: eligible catalogue, personal state, strict enablement and disconnect endpoints.
-- `authorization.py`: request-scoped no-store `GET /connectors/mcp/{id}/authorization`, using the same non-enumerating inventory eligibility as detail and the verified owner. It reports local authorization facts without provider, discovery or runtime calls, preserves selection DTOs and sanitizes operational failures as 503. Authorized/expired variants require `expires_at` and `refresh_supported`; refreshing exposes `deadline` only; reconnect-required reasons are `provider_rejected`, `refresh_denied` or `refresh_uncertain`. Other variants remain not-authorized and unsupported. Refresh capability is independent of current enablement and live provider acceptance.
-- `schemas.py`: secret-free user projections with truthful current-owner runtime status.
-- `runtime.py`: request-scoped captured-caller/runtime composition without deferred authentication access. Selection responses check the current eligible owner-private inventory in storage without discovery or network calls; disabled profiles remain unavailable.
-- `dependencies.py`: request-scoped `PersonalCaller` capture from accepted caller context, identity facts and strict group membership, with one canonical resolution and inventory composition through core ports and shared persistence infrastructure.
-- `oauth_routes.py` and `oauth_schemas.py`: bounded strict initiation bodies, safe attempt projections and owner-scoped status/cancellation.
-- `oauth_dependencies.py`: request-scoped provider resources and authorization/callback service composition. Derives an immutable callback policy only from trusted settings using the pure local personal identity gate, shared with refresh composition; caller headers and callback URI contents never grant local eligibility.
-- `refresh_routes.py`: authenticated strict-empty, bounded `POST /connectors/mcp/{id}/authorization/refresh`; success returns only `status=refreshed` and `discovery_required=true`, with no-store responses and fixed 409/422/503 errors.
-- `refresh_dependencies.py`: request-scoped refresh provider and core orchestration composition through ports. Refresh never performs discovery or resumes tools.
-- `oauth_callback.py`: strict public generic and `/callback/issuer/{issuer_key}` routing, canonical raw-path and bounded query validation, namespace query redaction and fixed secret-free Umbod HTML completion pages. The matched route identity reaches the claim and provider independently; generic callbacks require a response issuer before claiming. Success explains that tools will be loaded in the dashboard, detaches the opener and attempts automatic close where permitted. Both pages retain a fixed `/dashboard` return link resolved from trusted `endpoints.site_base_url`, never callback origin, Host/forwarded headers or query parameters, and no-store/no-referrer headers with hash-restricted scripts and styles. Failure stays open and directs users to the dashboard to inspect the existing sign-in attempt in Connections and cancel or wait for expiry before retrying.
-- `tools.py`: authenticated strict-empty `POST /connectors/mcp/{id}/tools/discovery`, request-scoped transport/service composition and fixed secret-free failures. Discovery uses only the verified owner's authorization and compare-and-swaps complete validated encrypted private inventories without administrator per-tool policy, activation or tool grants; it never approves servers, updates global user-derived metadata or executes them.
-- `__init__.py`: router export.
+- [__init__.py](./__init__.py) — Package exports.
+- [authorization.py](./authorization.py) — Authorization status projection.
+- [dependencies.py](./dependencies.py) — Verified owner and inventory dependencies.
+- [oauth_callback.py](./oauth_callback.py) — State-bound public callback.
+- [oauth_dependencies.py](./oauth_dependencies.py) — Authorization and callback composition.
+- [oauth_routes.py](./oauth_routes.py) — Authorization attempt routes.
+- [oauth_schemas.py](./oauth_schemas.py) — Authorization transport models.
+- [refresh_dependencies.py](./refresh_dependencies.py) — Refresh service composition.
+- [refresh_routes.py](./refresh_routes.py) — Owner authorization refresh.
+- [routes.py](./routes.py) — Catalogue, enablement and disconnect.
+- [runtime.py](./runtime.py) — Owner-private runtime composition.
+- [schemas.py](./schemas.py) — Secret-free user projections.
+- [tools.py](./tools.py) — Owner-private tool discovery.
 
-`rest/main.py` mounts this application when the resolved personal identity policy is enabled. Operator configuration enables it automatically once a namespace and safe authentication are supplied; explicit `false` opts out. Authentication-only middleware verifies credentials once and retains claims on request state; identity mapping rejects unmappable claims before personal storage access. Cookie safeguards are identical to administration, but administrator membership is not required or sufficient for catalogue eligibility.
+# Context not available from the code
 
-Only the `local`/`dev` runtime with development admin simulation, enabled personal connections and an exact nonempty `test:` namespace automatically uses the configured Admin Test User for personal identity. Default REST composition accepts tokenless `/api/me` requests by invoking the configured simulated verifier; caller tokens and forwarded identity headers cannot select another owner. Explicit user-verifier hooks remain token-required and never inherit the admin verifier. Personal MCP adapters require a current authenticated `single_test_user` context before projecting that same configured subject, profile and admin membership claim. Original machine claims are rejected; global MCP/shared/native claims and permissions are unchanged. A different MCP group claim receives no invented membership, and `simulated_admin=false` grants no simulated administrator membership. Production, real-provider, JWT and unauthenticated modes never receive this fallback.
-
-Preserve both `UMBOD_ADMIN_SIMULATED_USER_ID` and `UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE` across restarts to retain ownership; display names and email addresses are not ownership keys. An empty eligible catalogue is legitimate. Publication, current verified connector-group grants, owner enablement, valid owner OAuth and explicit discovery remain mandatory; no shared credentials or root-secret generation are introduced.
-
-Published personal definitions require connector-level grants through the configured MCP permission group claim. Unpublished, ungranted and shared definitions are hidden. Existing owners can disable or disconnect retained connections after approval withdrawal; cleanup never exposes an ineligible definition to users without an existing record.
-
-Personal authorization routes and callback dependencies live alongside the selection routes and use `core/connectors/downstream_mcp/personal_connections/oauth_service.py`. Their resolved `oauth_enabled` policy defaults on when selection, persistent SQLite and encryption are configured, unless explicitly opted out. User enablement and downstream consent remain explicit. POST starts a durable attempt with a strict empty body; owner-scoped GET and DELETE read/cancel it. A separately mounted public callback uses persisted one-time state, PKCE and issuer binding, not authenticated browser identity or a worker-local Future. Fixed no-store responses do not reflect provider parameters, and callback query secrets are redacted before access logging.
-
-There is no user-supplied owner, credential upload, scope/client override, or return URL. Personal OAuth remains unavailable to shared runtime and discovery paths, even after successful authorization.
+- [Personal authorization specification](../../../../../../../docs/operations/personal-downstream-mcp-authorization-specification.md) — Owner-bound authorization and callback security.
+- [Identity configuration](../../../../../../../docs/operations/configuration.md#personal-connections-identity-policy) — Stable namespace and simulated-user identity are ownership inputs, not display attributes.

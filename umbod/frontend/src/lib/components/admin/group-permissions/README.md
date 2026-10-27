@@ -1,13 +1,16 @@
-# Group permissions
+---
+type: Software Module
+title: "Group permissions components"
+description: "Connector group grant presentation and shared registration controls."
+---
 
-Administration permissions are organized into Connectors and Filesystem subpages under one workspace navigation entry.
+# Files
 
-- `GroupPermissionsTabs.svelte`: Accessible resource navigation shared by both permission subpages; the active route determines the current link.
-- `GroupPermissionsManager.svelte`: Connectors permissions page, shared catalogue registration/deletion, selected group overview, capability grants and explicit saves. Deletion is blocked by connector, capability or filesystem references; registration grants no access and creates no IdP membership.
-- `group-permissions-state.svelte.ts`: Connector grant drafts, group selection, capability expansion, unavailable saved grant cleanup and save feedback.
-- `group-permissions-loader.ts`: Selected group permission reads and loading state boundaries.
-- `group-permissions-components.test.ts`: Accessible connector permission presentation and resource navigation.
-- `group-permissions-state.test.ts` and `group-permissions-state.spec.ts`: Group selection, capability grant behavior and draft lifecycle.
-- `shared/GroupRegistrationDialog.svelte` and `shared/group-registration-state.svelte.ts`: Exact group-claim registration modal with independent immediate persistence, no issuer or permissions, and cancellable pre-submit state. Used by the filesystem workspace.
-- `shared/native-dialog.ts`: Native modal attachment with focus handling, cleanup and optional pending-operation cancellation guard; filesystem dialogs retain a compatibility export.
-- `../filesystem/README.md`: Filesystem permission overview, isolated modal drafts and revision-checked policy saves.
+- [group-permissions-components.test.ts](./group-permissions-components.test.ts) — Permission workspace presentation tests.
+- [group-permissions-loader.ts](./group-permissions-loader.ts) — Selected group reads.
+- [group-permissions-state.spec.ts](./group-permissions-state.spec.ts) — Capability grant state tests.
+- [group-permissions-state.svelte.ts](./group-permissions-state.svelte.ts) — Connector grant draft state.
+- [group-permissions-state.test.ts](./group-permissions-state.test.ts) — Group selection and draft tests.
+- [GroupPermissionsManager.svelte](./GroupPermissionsManager.svelte) — Connector permissions workspace.
+- [GroupPermissionsTabs.svelte](./GroupPermissionsTabs.svelte) — Connector and filesystem navigation.
+- [shared/](./shared/) — Group registration and native dialog mechanics.

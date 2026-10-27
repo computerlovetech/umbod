@@ -1,29 +1,24 @@
-# Personal MCP transport adapters
+---
+type: Software Module
+title: "Personal MCP transport"
+description: "Owner-bound MCP transport with bounded protocol and network integration."
+---
 
-`../tool_mapping.py` is the pure typed SDK-tool mapper and connector binder shared with shared discovery. It preserves annotations, icons, metadata, execution and absent versus present-empty output schemas without sharing credentials, sessions or orchestration.
+# Files
 
-`inmemory.py` supplies the first, explicitly scripted `PersonalMcpTransport`, keyed by canonical personal connection keys and recording typed requests. `transport.py` supplies the independent FastMCP adapter; nothing here enables runtime admission or shares connector factories, credentials, clients, sessions, or pools.
+- [__init__.py](./__init__.py) — Public module exports.
+- [factory.py](./factory.py) — Production transport composition.
+- [http.py](./http.py) — HTTP client and pool bridge.
+- [inmemory.py](./inmemory.py) — Scripted transport adapter.
+- [network.py](./network.py) — Public-address and TLS enforcement.
+- [operation.py](./operation.py) — Operation protocol guard.
+- [redaction.py](./redaction.py) — Token-reflection rejection.
+- [transport.py](./transport.py) — FastMCP integration.
+- [wire_models.py](./wire_models.py) — Strict protocol results.
+- [wire_parsing.py](./wire_parsing.py) — Bounded JSON and SSE parsing.
 
-`factory.py` composes production bounds, clock, system DNS and verified trust roots without test switches. `network.py` rejects literal token echoes per stream before HTTP-core diagnostics, and resolves every new TCP connection, rejects the complete answer set if any address is nonpublic, mapped, reserved, multicast, or scoped, then connects to one validated literal. The httpcore2 pool retains the original hostname for Host and verified TLS/SNI. Resolver, network-backend and verified `ssl.SSLContext` dependencies are mandatory injections; production composition must use `SystemAddressResolver`, the httpcore2 native backend and an operator-trusted context such as `ssl.create_default_context()`. The constructor and network stream require hostname verification and `CERT_REQUIRED`; the adapter preserves the supplied trust roots. HTTP `trust_env=False` still excludes environment proxies. Tests own their explicitly substituted local network seam. There is no application test switch.
+# Context
 
-`http.py` bridges the public httpx2 `AsyncBaseTransport` interface to the public httpcore2 pool. It maps native exception families without their messages and bounds streamed response bytes before SDK parsing, without collecting SSE streams. Environment proxies, cookie forwarding, compression, redirects and retries are disabled. Only protocol headers and the target's bearer token cross this boundary.
+The SDK's higher-level tool-call helper is deliberately avoided because it performs implicit tool lookups and may retrieve remote schema references. The SDK has no public SSE reconnection-disable switch, so protocol enforcement remains at the wire boundary.
 
-A non-cleanup bound-resource 401 latches a typed authorization rejection before response-header validation or body parsing. The latch survives SDK exception/cancellation wrapping, while real caller cancellation still propagates. DELETE/teardown failures, 403 and other transport/protocol failures do not establish rejection. The earlier raw-stream token-reflection guard remains fail-closed before HTTP parsing; reflected credentials never reach SDK diagnostics. No rejection triggers refresh or replay.
-
-`operation.py` gates requests before network access: exact bound HTTPS resource, one initialize, one initialized notification, one initial background GET, bounded unique-cursor tool listing, one intended tool call, and one termination DELETE. Reconnection, Last-Event-ID, replay even with another request ID, batching, tasks, nonempty metadata, interactive replies and unrelated methods latch failure and cancel the operation. `redaction.py` rejects literal token echoes in decoded inventory/results, including JSON-escaped strings and keys.
-
-`wire_parsing.py` validates complete bounded JSON envelopes and individual bounded SSE events before the SDK sees them. It rejects duplicate keys, invalid constants, malformed protocol envelopes and decoded token echoes, including escaped values. SSE remains incremental across LF, CR and CRLF framing, with UTF-8 BOM handling. Permitted response headers are checked before forwarding. This prevents SDK parsing-error diagnostics from reflecting credentials; it does not install global logging filters.
-
-## Reviewed SDK boundary
-
-Reviewed against FastMCP 4.0.10, MCP 2.0.0, httpx2 2.10.0 and httpcore2 2.10.0. httpcore 1.x types and private pool replacement are not used.
-
-The nullable timeout, local-address, socket-options and TLS server-hostname annotations mirror the native networking interface only. The HTTP client factory accepts SDK keyword arguments at its boundary and deliberately ignores them, including `follow_redirects=True`, in favor of operation-local fixed policy. SDK pagination and tool output-schema absence are translated immediately at the adapter boundary. No type/lint suppressions are used.
-
-The SDK adds empty request `_meta` objects itself; these are permitted but nonempty request metadata is rejected. Successful result `_meta` objects are preserved after token-reflection and result validation; absent and empty result metadata remain valid. These result fields neither authorize invocation nor relax request metadata restrictions. Tool calls use public `client.session.send_request` with `CallToolRequest` and the adapter's `wire_models.StrictCallToolResult`: content is required, only the complete result type is accepted and extra fields are forbidden. Input-required, claimed, task and malformed result shapes fail without replay. The SDK's higher-level `call_tool` is deliberately bypassed because it implicitly lists tools and validates attacker-controlled output schemas with potentially remote reference retrieval. Every call deliberately performs a fresh bounded, unique-cursor `tools/list` preflight in the same session and operation deadline before exactly one `tools/call`. The requested name and exact discovered private contract fingerprint must match; missing, changed, duplicate or invalid contracts prevent the call. Listing after preflight or execution is forbidden, so there is no implicit post-call SDK lookup. The live fingerprint is a session safety binding, not administrator approval. Live schemas are checked offline; discovered argument and structured-output validation belongs to `personal_tools/runtime.py`.
-
-The SDK has no public SSE reconnection-disable switch. The wire guard therefore rejects reconnections before network access and retains a failure latch even when SDK stream code catches exceptions. Initial GET and DELETE remain supported. Non-2xx responses, including an optional GET rejected by a server, fail closed; resumable SSE, subscriptions, tasks, sampling, roots, elicitation and additional interactive rounds are unsupported.
-
-Transport failures carry bounded immutable diagnostics through `PersonalRuntimeUnavailable`. Transport and HTTP catches preserve original safe exception types and frames before sanitization, without messages, locals or source text. Known protocol/HTTP errors carry MCP origin; unexpected local bugs carry internal origin. Existing lower-boundary evidence is not overwritten. Only the exact live name/fingerprint comparison establishes `contract_mismatch`; malformed inventories remain transport failures. Typed timeouts or observed deadlines establish `timeout`, never cancellation alone. Policy failure diagnostics latch before cleanup, and a bound-resource authorization rejection retains precedence. Caller cancellation still propagates.
-
-One conservative expiration/operation deadline covers DNS, connection, initialization, listing, execution, streaming and normal teardown. Independent per-network-await deadline scopes also constrain the SDK's background session task. Cleanup is shielded in bounded 250ms stages for client, response and pool closure; an expired target cannot issue a termination request. Failures return only `Personal MCP unavailable` without retaining underlying exception context.
+The reviewed dependency boundary is FastMCP 4.0.10, MCP 2.0.0, httpx2 2.10.0 and httpcore2 2.10.0.

@@ -1,7 +1,7 @@
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
 from umbod.core.connectors.downstream_mcp.stores.ports import (
     ConnectorDefinitionFound,
-    ConnectorDefinitionStore,
+    ConnectorDefinitionReader,
     ConnectorIdQuery,
 )
 from umbod.core.permissions import AssignablePermissionCatalog
@@ -18,7 +18,7 @@ class PersonalDownstreamPermissionCatalog:
     def __init__(
         self,
         catalog: AssignablePermissionCatalog,
-        definitions: ConnectorDefinitionStore,
+        definitions: ConnectorDefinitionReader,
         publishing: ConnectorPublicationReader,
     ) -> None:
         self._catalog = catalog

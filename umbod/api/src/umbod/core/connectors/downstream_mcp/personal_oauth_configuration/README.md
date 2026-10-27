@@ -1,7 +1,15 @@
-# Personal OAuth configuration
+---
+type: Software Module
+title: "Personal OAuth configuration"
+description: "Administrator-owned client and scope policy for personal downstream MCP authorization."
+---
 
-`models.py` defines explicit dynamic-public, preconfigured-public and preconfigured-confidential client policies, bounded canonical requested scopes and revision-bound configuration commands. `ports.py` exposes configuration lookup, optimistic replacement and aggregate cleanup. The package index exports these contracts without provider or database dependencies.
+# Files
 
-Missing configuration resolves to the legacy empty-scope dynamic-public policy. Configuration is encrypted separately from connector definition JSON. Preconfigured clients pin an administrator-selected issuer; confidential client secrets remain write-only at the REST boundary. Every effective policy change invalidates personal authorizations and attempts atomically, preserving user enablement. Confidential replacement always represents rotation; complete replacement requires a fresh secret, never a masked placeholder or implicit retention.
+- [__init__.py](./__init__.py) — Public module exports.
+- [models.py](./models.py) — Client policies and revision commands.
+- [ports.py](./ports.py) — Configuration storage contracts.
 
-`stores/personal_oauth_configurations.py` implements the port over in-memory or SQLite database adapters. The schema is additive; identity and revision are checked inside the encrypted record. Attempt transitions compare the captured policy with the current policy inside their serialized eligibility transaction. Administrator and provider contracts are specified in the [provider-policy iteration](../../../../../../../docs/operations/personal-downstream-mcp-provider-policy-specification.md).
+# Context
+
+See the [provider-policy specification](../../../../../../../docs/operations/personal-downstream-mcp-provider-policy-specification.md) for administrator and provider contracts.

@@ -1,6 +1,22 @@
-# Permissions
+---
+type: Software Module
+title: Permissions
+description: Group permission contracts, assignable target policies and persisted grants.
+---
 
-- `ports.py`: domain contracts including narrow snapshot read ports.
-- `stores/schema.py`: backend-neutral typed storage schema.
-- `stores/service.py`: persistent store operations.
-- `stores/reads.py`: pure planned bulk reads and execution-local explicit connector and capability grants readers. IDs are deduplicated and sorted; each query selects at most 200 caller group IDs to stay conservatively below portable parameter limits. Empty inputs register no queries. Snapshot readers never fall back to persistence.
+# Files
+
+- [__init__.py](./__init__.py)
+- [catalog.py](./catalog.py) — Assignable target composition.
+- [domain.py](./domain.py)
+- [factories.py](./factories.py)
+- [management.py](./management.py)
+- [notifier.py](./notifier.py)
+- [ports.py](./ports.py)
+- [read_state.py](./read_state.py) — Deferred assignable publication and activation reads.
+- [runtime.py](./runtime.py)
+- [stores](./stores/) — Grant persistence and scoped query builders.
+
+# Context not available from the code
+
+- [ADR-009](../../../../../project/architecture-records/ADR-009-deferred-read-planning.md) — Planned projections are not mutation or invocation authority.

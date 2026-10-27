@@ -1,19 +1,16 @@
-# Personal connections
+---
+type: Software Module
+title: "Personal connections"
+description: "Owner-scoped personal MCP authorization, local health and discovery state."
+---
 
-**Module responsibility:** Owner-scoped personal MCP selection, local authorization health, explicit renewal, authorization attempts and tool discovery, independent of administration state.
+# Files
 
-- `domain/schemas.ts` validates exact selection, request and OAuth wire contracts, including the six-state local authorization health union, strict renewal bodies and discovery-required renewal results, and HTTPS authorization links.
-- `api.ts` defines selection and authorization ports with no caller-supplied owner identity.
-- `attempt-scheduler.ts` defines the injected clock/scheduling port; `infrastructure/in-memory-attempt-scheduler.ts` and `infrastructure/browser-attempt-scheduler.ts` implement deterministic testing and lazy browser timeout scheduling.
-- `authorization-browser.ts` defines injectable browser reservation and window navigation/cleanup interfaces; `state/port.ts` exposes the personal connection controller contract.
-- `infrastructure/in-memory-authorization-browser.ts` provides an observable in-memory browser adapter; `browser-authorization-browser.ts` lazily reserves an opener-detached blank window and validates HTTPS, credential-free URLs before navigation.
-- `infrastructure/in-memory-api.ts` provides a validated in-memory port adapter with explicitly seeded health facts, never inferred from selection authorization presence.
-- `infrastructure/*-route.ts` implements resource routes over the shared generic Transport; `personal-connections-api.ts` composes them with browser transport and public configuration only.
-- `presentation.ts` derives text, semantic status and one contextual next step without treating saved authorization as live connectivity. `state/access-view-state.svelte.ts` exposes guarded personal menu actions and component-scoped menu visibility through a presentation interface.
-- `state/` contains owner-lifetime reactive state, safe error presentation, explicit actions and stale-result guards. `ConnectionState` notifies an optional read-only catalogue refresh hook after successful changes without replacing pending sign-in state; `$lib/dashboard/state/` owns dashboard composition.
-
-Generic reads never enable, authorize or discover. The primary Connect command reserves a window synchronously before enabling or reading owner facts. Usable saved authorization is reused without consent; missing tools are loaded once. The separate menu enablement command remains independent. Explicit menu sign-in replaces authorization only when requested. Duplicate commands are guarded while initiation or completion is in progress. Known attempt identifiers and authorization URLs stay in page memory and are cleared on terminal outcomes or disposal; reload does not resume attempts.
-
-Accepted sign-in navigates the reserved window automatically. Blocked, closed or failed windows preserve the manual authorization link without replaying initiation. The browser adapter remains lazy and opener-detached. Connection state owns its window across detail switches and closes it on cancellation, disablement, disconnection, terminal outcomes or disposal. Browser failures do not invalidate accepted authorization or make its outcome uncertain.
-
-Explicit in-memory attempts are checked sequentially every two seconds, with transient read failures backing off to at most ten seconds. Monitoring pauses after ten minutes or 300 checks with visible manual status recovery; this never declares a server attempt expired or unlocks mutations. Focus revalidates dashboard identity before checking retained attempts and coalesces overlapping status reads. Cancellation, disablement, disconnection, removal, logout and disposal stop monitoring. Waiting does not hold the mutation busy lock. Manual refresh is guarded during status checks and tool loading, while cleanup actions remain available. Safe operation completion reschedules retained monitoring, including superseded checks. Dashboard-injected identity validation fences completed-attempt handling before owner detail reads and again before automatic discovery; unknown or replaced identities cannot continue the old automatic chain. Only server completion triggers owner selection and health reads, then one discovery when authorization is confirmed usable, followed by catalogue refresh. Rendering and generic refresh never discover. Successful renewal remains independent of discovery. Discovery failures retain credentials and offer one Retry loading tools action, which safely revalidates selection and health before explicit discovery. Completion-read failures retain tool-loading intent even if prior inventory was available. Other uncertain mutations still require separate read-only status recovery. Uncertain mutations and catalogue refresh failures are never replayed automatically. Saved authorization, local authorization health, enablement and runtime eligibility are separate facts. Health is a database-only read, not a live provider probe. Unavailable or uncertain status blocks renewal and discovery until a manual status check succeeds; refreshing status never authorizes client-clock-based retries. Generation guards reject late health, renewal, selection and attempt results after superseding actions or disposal.
+- [api.ts](./api.ts) — Selection and authorization ports.
+- [attempt-scheduler.ts](./attempt-scheduler.ts) — Attempt monitoring clock port.
+- [authorization-browser.ts](./authorization-browser.ts) — Authorization window port.
+- [domain/](./domain/) — Owner API validation contracts.
+- [infrastructure/](./infrastructure/) — HTTP, browser and in-memory adapters.
+- [presentation.ts](./presentation.ts) — Status labels and contextual recovery.
+- [state/](./state/) — Owner-lifetime connection controller.
+- [test-fixtures.ts](./test-fixtures.ts) — Personal connection test fixtures.

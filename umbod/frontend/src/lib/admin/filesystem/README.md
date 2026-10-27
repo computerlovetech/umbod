@@ -1,10 +1,15 @@
-# Filesystem administration
+---
+type: Software Module
+title: "Filesystem administration"
+description: "Ports and adapters for root filesystem group access policy."
+---
 
-Root-only direct group access configuration through the `FilesystemAdministration` port. Grants use an explicit issuer plus exact group claim value. The independent shared catalogue lives in `../groups/`; registering a catalogue value does not create a filesystem grant.
+# Files
 
-- `port.ts`: Read and revision-checked replacement operations.
-- `domain/schemas.ts`: Separate observed legacy response and strict submission Zod contracts, exact submitted identities, permissions and canonical policy comparison.
-- `in-memory.ts`: Validated in-memory adapter with initialization, replacement and conflict handling.
-- `http-route.ts`: Validated GET and PUT adapter for `/admin/filesystem/root-access`.
-- `errors.ts`: Safe presentation of typed transport failures without exposing response bodies.
-- `administration.test.ts`: Port and HTTP boundary checks.
+- [administration.test.ts](./administration.test.ts) — Policy port and HTTP tests.
+- [domain/](./domain/) — Policy validation contracts.
+- [errors.ts](./errors.ts) — Safe policy failure presentation.
+- [fixtures.test-support.ts](./fixtures.test-support.ts) — Policy test fixtures.
+- [http-route.ts](./http-route.ts) — Root access HTTP adapter.
+- [in-memory.ts](./in-memory.ts) — In-memory policy adapter.
+- [port.ts](./port.ts) — Policy administration port.

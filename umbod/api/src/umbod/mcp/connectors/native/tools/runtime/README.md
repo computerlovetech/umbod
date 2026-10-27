@@ -1,9 +1,18 @@
-# Native tool runtime
+---
+type: Software Module
+title: "Native tool runtime"
+description: "Native exposure, discovery projections and lifecycle-owned reconciliation."
+---
 
-`registry.py` owns native tool exposure, gateway dispatch and reconciliation. Its constructor accepts explicit source-store, state-reader, exposure and caller-scope dependencies; it has no FastMCP parameter, untyped optional-dependency bag or permissive execution-admission default. `registration.py` validates the supported keyword registration boundary without the unused positional/options-object compatibility path. Admission checks the stores/readers injected at registration rather than independently selecting database or HTTP configuration. The notifier and activation reader are mandatory, non-null dependencies. Registration rejects absent activation readers; missing individual activation states remain disabled. Standalone tests explicitly seed enabled states instead of relying on implicit unrestricted activation. `reconcile_all`, `reconcile_connector` and `reconcile_runtime_state` explicitly refresh discovery. `refresh_discovery` refreshes description and availability projections without changing persisted configuration or publication.
+# Files
 
-`native_capabilities.py` separates execution from discovery. `NativeCapabilitySearch.refresh` builds available normalized candidates and effective connector descriptions before replacing its snapshot. Search filters that snapshot with the request's captured authorization scope without configuration, publication or description reads. `NativeCapabilityRuntime.execute` retains authoritative availability checks and the existing invocation pipeline. The [invocation boundary](../invocation/README.md) also runs injected fresh admission after approval immediately before connector I/O, including flat and retained tools. It captures current caller membership and grants again and checks current publication, configuration and activation. Returned discovery candidates deep-copy schemas so request-local mutations cannot alter shared snapshots.
+- [__init__.py](./__init__.py) — Package exports.
+- [native_capabilities.py](./native_capabilities.py) — Discovery and execution adapters.
+- [ports.py](./ports.py) — Exposure and runtime-state contracts.
+- [registry.py](./registry.py) — Tool exposure and reconciliation.
+- [state.py](./state.py) — Runtime state.
+- [synchronization.py](./synchronization.py) — Lifecycle change application.
 
-Reconciliation commands share an asynchronous lock across loading and publication; discovery readers never acquire it. Search refresh also serializes independently. Cancellation preserves the previous complete projection. Read/reconciliation failures clear search candidates and all native exposure registrations because description/availability refresh spans the native inventory. The next successful reconciliation rebuilds all invalidated exposures before applying a scoped update. Failures propagate for lifecycle retry. `refresh_discovery` performs full reconciliation so it can also recover removed exposures.
+# Context not available from the code
 
-`ports.py` defines exposure and runtime-state contracts. `state.py` owns runtime state. `synchronization.py` applies lifecycle-owned changes through registry reconciliation.
+- [ADR-008](../../../../../../../../project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Required event-synchronized discovery architecture; projections are not invocation authority and cross-worker updates are not instantaneous.

@@ -1,18 +1,15 @@
-# In-memory key-value infrastructure
+---
+type: Software Module
+title: "Key-value infrastructure"
+description: "In-memory key-value storage and request-cache composition."
+---
 
-- `inmemory.py` implements the core key-value port using one dictionary per driver.
-- `factory.py` composes fresh drivers and request caches.
-- `__init__.py` exports only `create_inmemory_key_value_driver` and `create_request_cache`.
+# Files
 
-The driver factory lazily imports the concrete implementation and returns the core
-`KeyValueDriver` protocol. Every call creates independent storage.
-The request-cache factory injects a fresh driver into the core `RequestCache`.
+- [__init__.py](./__init__.py) — Package exports.
+- [factory.py](./factory.py) — Driver and cache composition.
+- [inmemory.py](./inmemory.py) — In-memory storage adapter.
 
-Hashable keys, including compound keys, retain normal Python dictionary equality
-semantics. Values are held by reference without copying or serialization.
-Missing keys return `KeyValueMiss`; stored values, including `None` and falsy
-values, return `KeyValueHit`. Set overwrites, delete tolerates missing keys,
-and clear is repeatable and scoped to one driver instance.
+# Context not available from the code
 
-Operations are intended for a single event loop. No thread safety, cross-process
-storage, or distributed guarantees are provided. No Redis driver is implemented.
+- [ADR-010](../../../../../project/architecture-records/ADR-010-key-value-storage-drivers.md) — Storage semantics and request-cache lifetime boundary; distributed storage is not implemented.

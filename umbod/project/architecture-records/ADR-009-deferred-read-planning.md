@@ -1,7 +1,7 @@
 # ADR-009: Explicit Deferred Read Planning
 
 - **Status:** Accepted
-- **Scope:** Backend-neutral persistence reads and Dashboard catalogue assembly
+- **Scope:** Backend-neutral persistence reads, Dashboard catalogue assembly and assignable group-permission targets
 
 ## Decision
 
@@ -16,6 +16,16 @@ Handles preserve result types and belong to one plan. Results belong to one exec
 Dashboard catalogue assembly plans publication, activation and captured caller-group grants together, using bounded ID batches. Empty inputs generate no reads. Activation predicates include connector kinds to use the existing compound primary key; lookup results retain complete kind-qualified capability identities.
 
 The request reuses loaded downstream definitions, normalized catalogues and connector-invariant readiness results. OpenAPI current-operation reads use successive header and operation plans in one session, restricting operations to the selected connector and exact current catalogue ID.
+
+## Group-permission target reads
+
+The group-permissions page fetches group details and assignable targets separately. Group details already use two scoped grant reads in one session and remain unchanged. Only GET `/api/admin/mcp-permissions/assignable-targets` opts into planned availability state; permission mutations and invocation retain their existing authoritative dependencies.
+
+The GET prepares native, OpenAPI and downstream catalogues before registering state reads. The same request-owned catalogue wrappers serve subsequent enumeration and resolution. A single downstream definition listing is shared with catalogue loading and personal connector decoration. Publication requirements include eligible personal connector definitions even when they have no canonical capabilities; activation requirements include only connector IDs represented by enumerated capabilities. The existing bounded query builders deduplicate and sort each scope independently, reading at most 200 connector IDs per batch. Empty requirements open no state session.
+
+After preparation, publication and activation reads execute together through one supplied session. Resolved readers perform no further database I/O and fail closed for absent facts. Activation lookups retain complete connector-kind, connector-ID, capability-kind and key identities. The bulk query selects all capability statuses and connector kinds for the scoped IDs, not exact individual capability keys. Catalogue preparation and native configuration readiness remain outside the planned-state transaction; this is not a fully atomic endpoint snapshot.
+
+For the existing single-shared-downstream fixture, one, forty and one hundred enabled tools now require five reads and four sessions on both backends, rather than the cached path's N+5 reads and sessions. The five reads are connector inventory, downstream definitions, one downstream catalogue, publication and activation. Catalogue reads still grow with connector count, and native configuration readiness is unchanged. No universal endpoint budget or production latency guarantee is implied.
 
 ## Consistency and authority
 

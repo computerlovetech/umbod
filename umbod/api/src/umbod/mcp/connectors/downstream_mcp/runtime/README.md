@@ -1,12 +1,18 @@
-# Downstream discovery runtime
+---
+type: Software Module
+title: "Downstream MCP discovery runtime"
+description: "Application-owned downstream discovery snapshots and explicit reconciliation contracts."
+---
 
-Implements the shared downstream read model required by [ADR-008](../../../../../../../project/architecture-records/ADR-008-event-synchronized-tool-runtime.md).
+# Files
 
-- `ports.py`: explicit snapshot-loader and runtime contracts.
-- `models.py`: stable discovery snapshots and unavailable-runtime errors. Snapshots contain structural shared metadata, publication/activation/readiness projections, descriptions and namespace indexes, never decrypted credentials or caller authorization decisions.
-- `loader.py`: background persistence loading and normalization; reads each shared catalog once per rebuild and retains only credential availability facts. Personal definitions contribute namespace reservations, not private inventories.
-- `catalog.py`: application-owned in-memory adapter. Rebuilds are serialized independently of readers and publish by one snapshot replacement. Failed rebuilding closes discovery until a successful retry; cancellation preserves the previous complete snapshot.
-- `definitions.py`: list-only definition projection for personal connector enumeration without a shared-definition database scan. Owner availability and execution admission remain authoritative and operation-scoped.
-- `__init__.py`: explicit factory and public contracts. Construction does not perform I/O; the application must reconcile before discovery readiness.
+- [__init__.py](./__init__.py) — Package exports.
+- [catalog.py](./catalog.py) — In-memory discovery projection.
+- [definitions.py](./definitions.py) — Personal namespace definition projection.
+- [loader.py](./loader.py) — Background snapshot loading.
+- [models.py](./models.py) — Discovery snapshots and errors.
+- [ports.py](./ports.py) — Loader and runtime contracts.
 
-`provider.py` captures the runtime snapshot and caller membership before asynchronous listing, then evaluates current grants against that captured caller. Retained shared tools and personal execution continue to check current authority. The background-only `native_capability_projection` entrypoint reconciles before publishing inventory and comparing prompt/resource projections. Durable messaging and startup replay are composed by the MCP application; ordinary discovery never loads missing state on demand.
+# Context not available from the code
+
+- [ADR-008](../../../../../../../project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Required event-synchronized discovery architecture; projections are not invocation authority and cross-worker updates are not instantaneous.

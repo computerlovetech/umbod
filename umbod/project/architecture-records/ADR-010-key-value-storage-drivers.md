@@ -31,15 +31,15 @@ TTL, Redis configuration, Redis clients, distributed single-flight, cross-reques
 
 ## First reader integration
 
-GET `/api/admin/mcp-permissions/assignable-targets` creates request-owned publication and capability-catalogue wrappers through its own dependency chain. Publication results are shared by operation and connector ID, including false values. OpenAPI and downstream catalogues are listed once, copied and indexed by complete capability identity, then reused for readiness resolution. Returned nested schemas cannot mutate the retained snapshot. Native catalogues retain their existing in-memory indexes; activation and native configuration readiness are unchanged.
+The initial GET `/api/admin/mcp-permissions/assignable-targets` integration created request-owned publication and capability-catalogue wrappers through its own dependency chain. Publication results were shared by operation and connector ID, including false values. OpenAPI and downstream catalogues are listed once, copied and indexed by complete capability identity, then reused for readiness resolution. Returned nested schemas cannot mutate the retained snapshot. Native catalogues retain their existing in-memory indexes.
 
 This intentionally captures read-model facts for the current request without claiming an atomic database snapshot. No cross-request values, credentials or grants are retained. Permission mutations, other group reads and invocation continue through their existing uncached dependencies. Subsequent requests observe committed state changes. A per-identity memoizer alone was rejected because list-to-resolve catalogue duplication was the measured bottleneck.
 
-The single-shared-connector query-budget fixture falls from 4N+4 reads/sessions to N+5 for N enabled tools on both persistence backends. Unique activation reads remain linear and batching is deferred. This is a scoped regression, not a universal budget or production latency guarantee.
+That first integration reduced the single-shared-connector fixture from 4N+4 reads/sessions to N+5 for N enabled tools. The subsequent [ADR-009 assignable-target extension](ADR-009-deferred-read-planning.md#group-permission-target-reads) replaces publication-store memoization with planned publication and activation snapshots, while retaining request-owned capability-catalogue wrappers. It also shares the downstream definition listing, reducing the same fixture to five reads and four sessions. The reusable publication-cache adapter remains available but is no longer wired into this GET. Native configuration readiness and catalogue-per-connector reads remain unchanged. These are scoped regressions, not universal budgets or production latency guarantees.
 
 ## Relationship to accepted decisions
 
-This extends the infrastructure placement boundary in [ADR-001](ADR-001-backend-neutral-persistence.md) for a separate generic storage concern without changing database ownership, schemas or migrations. [ADR-009](ADR-009-deferred-read-planning.md) is unchanged: repeated read-plan executions perform fresh reads. Request-local reuse must not become authoritative authorization or shared credential storage.
+This extends the infrastructure placement boundary in [ADR-001](ADR-001-backend-neutral-persistence.md) for a separate generic storage concern without changing database ownership, schemas or migrations. The execution semantics in [ADR-009](ADR-009-deferred-read-planning.md) are unchanged: repeated read-plan executions perform fresh reads. Request-local reuse must not become authoritative authorization or shared credential storage.
 
 ## Verification
 

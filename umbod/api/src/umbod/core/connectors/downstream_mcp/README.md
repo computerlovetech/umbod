@@ -1,27 +1,35 @@
-# Downstream MCP connectors
+---
+type: Software Module
+title: "Downstream MCP connectors"
+description: "Shared and personal downstream MCP connector coordination."
+---
 
-The package facade and `personal_connections/` expose their established public names lazily. Importing the typed personal identity resolver does not initialize deployment configuration, REST/MCP frameworks or persistence drivers. Concrete services are imported only when their public exports are requested.
+# Files
 
-Personal identity policy consumes validated facts and a narrow policy through `personal_connections/identity_ports.py`. Accepted-claim capture and AppConfig translation live in `adapters/identity.py` and `adapters/settings.py`; the [personal index](personal_connections/README.md) describes resolved/rejected results and stable ownership keys.
+- [__init__.py](./__init__.py) — Public module exports.
+- [activation/](./activation/) — Connector activation.
+- [adapters/](./adapters/README.md) — Protocol and configuration integration.
+- [catalog/](./catalog/) — Shared capability projections.
+- [connection.py](./connection.py) — Shared connection integration.
+- [errors.py](./errors.py) — Connector failures.
+- [management/](./management/) — Aggregate lifecycle and discovery.
+- [models.py](./models.py) — Definitions and creation commands.
+- [oauth/](./oauth/) — Shared authorization.
+- [permissions.py](./permissions.py) — Personal connector permission targets.
+- [personal_connections/](./personal_connections/README.md) — Owner-bound connection lifecycle.
+- [personal_oauth_configuration/](./personal_oauth_configuration/README.md) — Administrator OAuth policy.
+- [personal_tools/](./personal_tools/README.md) — Private inventories and execution.
+- [probe/](./probe/) — Shared discovery.
+- [publishing/](./publishing/) — Namespace publication.
+- [runtime/](./runtime/) — Shared runtime resolution.
+- [security.py](./security.py) — Connector security policy.
+- [stores/](./stores/) — Connector persistence.
+- [user_catalogue.py](./user_catalogue.py) — User-facing catalogue projections.
 
-`models.py` defines connector definitions, discovery data and creation commands. Shared creation retains its discriminated `CreateConnectorDefinition` union. `CreatePersonalOAuthConnectorDefinition` is a separate personal creation operation with optional administrator-owned OAuth configuration.
+# Context
 
-`management/` coordinates creation, updates, deletion and queries through the aggregate unit-of-work port. Aggregate mutations append durable discovery events in their serialized transaction, including unpublished personal namespace creation and deletion. `admit_discovery()` captures definition, operation-scoped credentials, explicit missing/present catalog revision and aggregate generation before probing. Catalog success and failure compare that observation transactionally before changing catalogs or health. Background and administrator refresh share this compare-and-swap path, including capability activation reconciliation. `stores/discovery_generation.py` keeps monotonic generations, including tombstones after deletion; aggregate, standalone definition, credential and catalog writes advance them. Credentials are excluded from serialized admission/results and never enter runtime snapshots or events. A stale background result is ignored; stale administrator rediscovery reports a conflict. `DownstreamConnectorCreator.create_personal_oauth()` checks identity and public-path uniqueness, then atomically creates the definition while clearing shared credentials, catalogue, health and publication and reconciling an empty activation set. It does not invoke preparation or probing. Generic personal edits remain rejected; dedicated revision-checked OAuth policy replacement invalidates personal authorizations and attempts without changing publication or grants.
+See [personal OAuth policy](./personal_oauth_configuration/README.md) and [personal execution](./personal_tools/README.md) for the separate personal path; shared credentials are not personal authority.
 
-`stores/definitions.py`, `stores/credentials.py` and `stores/catalogs.py` are raw persistence adapters. Discovery-affecting production creation, configuration/credential-readiness edits, deletion and shared refresh enter the aggregate unit of work; raw adapters advance discovery generations but intentionally do not append independent duplicate discovery events. The enclosing aggregate owns state-and-event atomicity. Legacy personal-policy projection is a separate serialized mutation: `stores/personal_tool_policies.py` atomically appends configuration, changed-tool activation and returned revoked-grant events, while preserving the metadata API and private runtime authority. Intact no-op policies emit no events; repairing their catalog projection emits configuration invalidation.
-
-`publishing/` delegates publication to `PublishDownstreamConnectorAggregate` in `management/unit_of_work.py`: a serialized transaction validates current published SQL catalogues and supplied non-downstream identities before claiming the namespace. Personal approval permits catalogue-free publication; shared publication requires a nonempty capability catalogue. Published-prefix changes, catalogue replacement and discovery validate the resulting namespace within the same aggregate transaction. `permissions.py` decorates an existing assignable permission catalogue with published personal connector targets only; it does not synthesize tools or change runtime readiness.
-
-`catalog/`, `probe/`, `connection.py` and `adapters/` implement shared discovery and connection integration. `oauth/` implements shared authorization orchestration. `stores/` supplies persistence adapters, including `EncryptedPersonalRuntimeAuthorizationStore` for internal owner-bound admission with current policy, connector grants, publication and absolute token expiry; the factory exposes it as `personal_runtime_authorizations`. It never reads shared credentials or exposes resolved secrets through public selection. Its production factory uses `DefinitionBoundPersonalConnectionStore`, which validates personal connector existence inside the same serialized transaction as every personal mutation. Aggregate deletion therefore cannot be followed by orphaned enablement or stale authorization writes. The detached `EncryptedPersonalConnectionStore` retains its standalone lifecycle contract. `personal_connections/` owns principal-scoped connection lifecycle, selection and durable personal authorization. `personal_oauth_configuration/` defines administrator-approved scopes, explicit dynamic/preconfigured client variants and the encrypted configuration-store port. Its [index](personal_oauth_configuration/README.md) describes policy lifecycle. `adapters/personal_oauth/` supplies resumable public/confidential-client OAuth independently of shared orchestration. Attempt storage and aggregate deletion share transactional boundaries; personal authorization alone does not grant runtime access.
-
-`personal_tools/` defines complete validated owner-private inventories, offline schema validation, current-owner context and tools-only runtime admission/execution; its [index](personal_tools/README.md) describes the entrypoints. `stores/personal_tool_policies.py` retains compatible administrator metadata independently of access authority. `stores/personal_tool_access.py` encrypts version-2 inventories and uses captured missing/present inventory revisions for serialized compare-and-swap. Discovery never projects private descriptors into the global catalogue. Legacy match-only observations require explicit rediscovery. The factory exposes `personal_tool_policies` and `personal_tool_access`. `stores/queries.py` supplies their shared typed query construction. Availability checks current publication, connector grants, owner enablement and valid owner OAuth within the same authoritative transaction, without per-tool policy, activation or tool grants. The MCP boundary composes the active runtime only when resolved selection and OAuth policies are both enabled; otherwise the explicit disabled runtime lists nothing and denies invocation.
-
-`runtime/` defines the capability-identity runtime resolver port, validated frozen shared connection model, explicit unavailable error, and explicit-map in-memory adapter. Its shared resolver checks current capability availability and rereads definitions and credentials, rejecting missing and personal definitions even when shared credentials exist. It has no protocol or infrastructure dependencies; boundaries compose readiness and permissions.
-
-`stores/personal_authorization_health.py` exposes owner-scoped local authorization facts independently of enablement and tool eligibility. `personal_authorization_rejections.py` persists encrypted owner-bound full-authorization fingerprints using captured-revision serialized writes. The factory exposes `personal_authorization_health`; the adapters use the same database port for in-memory and durable SQLite execution. Matching rejection blocks resolution, observations, availability and retained admissions without rotating credentials or revisions. Disconnect and aggregate deletion clean markers transactionally.
-
-`stores/personal_refresh.py` implements the owner-scoped refresh-store port using encrypted claims from `personal_refresh_records.py` and `personal_refresh_schema.py`. The factory exposes `personal_refresh`. Active refresh excludes OAuth initiation and new runtime admission; expired exchanging work stays uncertain without retry. Successful refresh forces a fresh connection revision, invalidating observations without automatic discovery. OAuth completion, disconnect and aggregate deletion clear refresh records transactionally; late workers cannot change replacement authorization.
-
-`user_catalogue.py` adapts request-materialized shared capabilities and principal-scoped personal inventories into safe user catalogue sources, validates shared credential readiness once per connector without external calls and supplies personal namespace reservation predicates. `catalog/definitions.py` supplies a read-only in-memory definition reader so namespace, catalogue and personal-selection assembly reuse one definition listing. These projections and readiness facts are request-local and do not replace authoritative execution checks. REST composes publication, activation, explicit shared grants and collision guards independently of personal selection.
-
-The administration boundary is indexed in `rest/connectors/downstream_mcp/README.md`.
+- [Foundation specification](../../../../../../docs/operations/personal-downstream-mcp-oauth-specification.md) — Personal ownership and authorization boundaries.
+- [Catalogue specification](../../../../../../docs/operations/personal-downstream-mcp-catalogue-specification.md) — Personal selection and catalogue scope.
+- [Authorization specification](../../../../../../docs/operations/personal-downstream-mcp-authorization-specification.md) — Durable personal sign-in scope.

@@ -1,22 +1,21 @@
-# Resumable personal OAuth provider
+---
+type: Software Module
+title: "Personal OAuth provider"
+description: "Resumable authorization and refresh integration for personal downstream MCP connections."
+---
 
-- `factory.py`: request-scoped authorization and refresh provider lifetimes over the production transport.
-- `provider.py`: protected-resource and issuer discovery, public registration or pinned preconfigured-client selection, scoped S256 authorization preparation, and bound one-shot token exchange.
-- `refresh.py`: one-shot exchange of a stored refresh token for preconfigured clients, bound to the existing issuer, resource, client and approved configuration. Returned scopes may only narrow the previous granted set; omitted scope and refresh-token fields preserve their previous values only after definite success. New access-token expiry is required. Fixed denied/uncertain outcomes reveal no provider payloads.
-- `refresh_logging.py`: context-local suppression of HTTP networking diagnostics during refresh, including unsafe reflected headers. The filter leaves unrelated request contexts unchanged.
-- `callback.py`: immutable trusted callback policy and callback-only validation, separately injected into authorization and refresh factories. Only the narrowly gated local development identity recipe permits literal loopback HTTP callbacks; outbound URL validation is never relaxed.
-- `validation.py`: strict supported wire models, durable provider context, OAuth URL validation, and bounded duplicate-safe JSON parsing. Public-address validation is shared through `umbod.core.network`.
-- `transport.py`: validated HTTP port bundles and the in-memory adapter.
-- `network.py`: TLS-verified, redirect-free bounded HTTP over the shared public-address backend and pool from `umbod.core.network`. OAuth authentication, request limits and deadlines remain feature-local.
+# Files
 
-Supported clients are dynamic public registration, preconfigured public clients and preconfigured confidential clients using explicit `client_secret_basic` or `client_secret_post`. Configured clients pin the administrator-selected issuer and never register or fall back. Missing server authentication-method metadata defaults to Basic. S256 remains required. Explicit true `authorization_response_iss_parameter_supported` selects the generic callback with mandatory exact response issuer. Omission or false selects the trusted callback base plus `/issuer/` and the lowercase SHA-256 of the exact discovered issuer UTF-8 bytes, finalized before registration. Null and mistyped flags reject initiation. Missing response issuer is accepted only on the matching persisted issuer-bound route; any supplied issuer must match exactly. Legacy prepared records remain strict generic callbacks and are never promoted. Preconfigured clients must externally register the derived URI when issuer support is omitted or false; no provider client or administrator policy is rewritten. State, PKCE, resource, client, redirect and policy bindings remain mandatory.
+- [__init__.py](./__init__.py) — Public module exports.
+- [callback.py](./callback.py) — Trusted callback policy.
+- [factory.py](./factory.py) — Provider composition.
+- [network.py](./network.py) — Bounded public HTTP transport.
+- [provider.py](./provider.py) — Discovery and authorization exchange.
+- [refresh_logging.py](./refresh_logging.py) — Refresh diagnostic redaction.
+- [refresh.py](./refresh.py) — Refresh exchange.
+- [transport.py](./transport.py) — HTTP contracts and in-memory adapter.
+- [validation.py](./validation.py) — Wire and provider-context validation.
 
-Requested scopes come only from administrator policy; optional or incomplete metadata advertisements do not expand or veto them. Registration scope responses, when supplied, must match the request. Token grants may narrow but never expand requested scopes; omitted token scope means the requested set. Empty policy still cannot guarantee zero implicit provider privileges. Effective scope sets and configuration revision accompany persisted authorization. Basic credentials are separately UTF-8 form-encoded before Base64 and sent only through the typed secret header; POST credentials stay in the form body.
+# Context
 
-Dynamic registration sends the stable display name `Umbod` and declares `application_type=native` only for an already validated local HTTP callback; HTTPS callbacks declare `application_type=web`. An echoed application type must exactly match the request; omission remains compatible with older providers. The client-name echo is not a security binding. Redirect, authentication method, grant, response and scope bindings remain unchanged.
-
-Provider context is opaque secret JSON. The personal OAuth attempt store encrypts that context and the preparation before persistence. A recreated provider exchanges using only the claimed attempt, without discovery or registration replay.
-
-Authorization endpoint DNS is validated before returning a browser URL. Server connections resolve and validate again at connection time; browser navigation is outside server connection pinning.
-
-The shared network adapter implements httpcore's nullable boundary arguments. Production OAuth requests supply explicit bounded timeouts, and whole-operation deadlines also cover preparation and exchange.
+Preconfigured provider clients must externally register issuer-bound callback URIs when issuer response support is absent; administrator policy is not rewritten during authorization.

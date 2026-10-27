@@ -1,5 +1,13 @@
-# Installed SDK verification
+---
+type: Software Module
+title: Installed SDK verification
+description: Smoke checks against a built and installed SDK wheel rather than the source checkout.
+---
 
-`installed_wheel.py` runs under an isolated environment containing a built SDK wheel. It verifies that imports come from the installed distribution, previews and applies connector initialization in a temporary project, checks compatible and incompatible SDK declarations, and invokes the generated connector's public contract. It leaves dependency resolution and image builds outside the CLI.
+# Files
 
-The SDK CI job builds and installs the wheel before executing this check. Unit and adapter tests under `tests/` cover registry metadata without requiring a published synchronized release.
+- [installed_wheel.py](./installed_wheel.py) — Installed distribution and generated connector checks.
+
+# Related guidance
+
+- [SDK package](../README.md) — Packaging and connector integration.

@@ -1,19 +1,21 @@
-# Downstream MCP REST
+---
+type: Software Module
+title: "Downstream MCP REST"
+description: "Downstream MCP administration with separately mounted personal-user and callback delivery."
+---
 
-This module owns downstream MCP REST delivery. Administrator routes, authenticated personal-user routes and the public state-bound callback remain independently mounted with their existing URLs and authentication policies. Folder ownership does not merge access boundaries.
+# Files
 
-`personal_connections/` owns personal catalogue, enablement, disconnect and durable OAuth routes. Its [index](personal_connections/README.md) describes request-scoped composition and callback protections. `rest/main.py` mounts these separately from administration; they are not included in the administrator router exported by this package.
+- [__init__.py](./__init__.py) — Package exports.
+- [dependencies.py](./dependencies.py) — Request-scoped administration composition.
+- [errors.py](./errors.py) — Public error adaptation.
+- [oauth.py](./oauth.py) — Shared OAuth administration.
+- [personal_connections/](./personal_connections/README.md) — Personal selection and durable OAuth.
+- [personal_tools.py](./personal_tools.py) — Administrator tool-contract approval.
+- [personal_validation.py](./personal_validation.py) — Secret-safe write validation.
+- [routes.py](./routes.py) — Connector administration routes.
+- [schemas.py](./schemas.py) — Administration transport models.
 
-`personal_tools.py` exposes revision-checked administrator tool-contract approval. `GET`/`PUT /{connector_id}/personal-tools` read or replace complete approved tool definitions, using their connector-bound identities and explicit output-schema states. Only administrator-supplied metadata enters the global catalogue projection. Changed or removed contracts reset activation and capability grants, retaining connector grants and enablement. Existing activation and permission APIs apply; approval alone never enables execution. The configuration route wrapper sanitizes validation failures for both OAuth and tool policy writes.
+# Context not available from the code
 
-## Administration
-
-`routes.py` exposes connector creation, projections, publication, deletion and capability administration under `/api/admin/connectors/mcp`. `schemas.py` defines strict request and response contracts; `dependencies.py` creates request-scoped application services.
-
-`POST /personal-oauth` accepts the existing `metadata` object and a `configuration` object containing `endpoint_url` and optional `oauth_configuration`. Endpoint-only requests preserve empty-scope dynamic public registration. OAuth settings contain administrator-approved `requested_scopes` and an explicit `client` variant: `dynamic_public`, `preconfigured_public` or `preconfigured_confidential`. Static clients require exact `issuer_url` and `client_id`; confidential clients additionally require a nonblank `client_secret` and explicit Basic/POST token authentication. Downstream user credentials, owner identifiers and ownership overrides are rejected. Creation requires `personal_connections.enabled`; disabled deployments return 404 with `personal_connections_unavailable` before writes. It returns 201 with personal ownership, unpublished status, unknown health and no shared credentials, without probing the endpoint.
-
-Detail, summary and configuration responses include `authorization_mode` (`shared` or `personal`). Personal definitions always report `credential_configured=false`. Generic metadata/configuration edits and ownership conversion remain unsupported; publication and deletion remain available. Publication does not discover capabilities or enable execution.
-
-`GET` and `PUT /{connector_id}/personal-oauth` read and replace the separate OAuth configuration. GET exposes a revision, requested scopes and nonsecret client fields; confidential responses expose only `client_secret_configured`. PUT requires `expected_revision` and complete `settings`, including a fresh secret for confidential configurations. Effective changes or explicit confidential rotation atomically erase personal authorizations and attempts while preserving user enablement, publication and grants. Stale writes return 409. Confidential writes require a configured encryption secret. `personal_validation.py` sanitizes validation errors on personal administrator writes without altering shared-route errors; no submitted secret or Pydantic input document is reflected.
-
-Group permission composition in `rest/mcp_permissions/dependencies.py` decorates the downstream permission catalogue with published personal connector targets, without adding capability targets.
+- [Personal authorization specification](../../../../../../docs/operations/personal-downstream-mcp-authorization-specification.md) — Personal credential ownership remains separate from shared administrator OAuth; package nesting does not merge authentication boundaries.

@@ -1,9 +1,17 @@
-# Downstream MCP adapters
+---
+type: Software Module
+title: "Downstream MCP adapters"
+description: "Integration adapters for downstream MCP discovery, identity and personal providers."
+---
 
-- `icon_discovery.py`: decorates shared probes with best-effort favicon discovery at the canonical endpoint when MCP metadata has no icons. Existing advertised icon metadata is preserved; failed probes do not trigger website lookups.
-- `settings.py`: application configuration translation into infrastructure settings and narrow personal identity policy.
-- `identity.py`: accepted claim translation into typed personal identity facts, strict shared personal group parsing, raw machine observations and local simulated claim projection. Projection requires personal policy eligibility and authenticated single-test-user composition; it never replaces original machine observations.
-- `personal_oauth/`: resumable personal provider integration, indexed in its README.
-- `personal_runtime/`: owner-bound personal runtime integration, indexed in its README.
+# Files
 
-Personal ownership decisions belong to `../personal_connections/principal.py`; these adapters do not verify tokens or infer authority from caller observations.
+- [__init__.py](./__init__.py) — Public module exports.
+- [composition.py](./composition.py) — Adapter composition.
+- [fastmcp/](./fastmcp/) — Shared FastMCP integration.
+- [icon_discovery.py](./icon_discovery.py) — Probe favicon enrichment.
+- [identity.py](./identity.py) — Accepted claim translation.
+- [personal_oauth/](./personal_oauth/README.md) — Personal OAuth provider.
+- [personal_runtime/](./personal_runtime/README.md) — Personal MCP transport.
+- [settings.py](./settings.py) — Configuration translation.
+- [tool_mapping.py](./tool_mapping.py) — SDK tool projection.

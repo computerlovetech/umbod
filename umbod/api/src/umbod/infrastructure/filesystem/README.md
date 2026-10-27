@@ -1,35 +1,21 @@
-# Filesystem composition and content adapters
+---
+type: Software Module
+title: "Filesystem infrastructure"
+description: "Filesystem composition and concrete content storage over the application's shared database."
+---
 
-**Module responsibility:** Compose database-neutral filesystem stores with independently selected concrete content storage, as defined by ADR-006. Import configuration and factory functions from `umbod.infrastructure`; concrete content classes remain internal. Core never imports infrastructure.
+# Files
 
-## Configured composition
+- [__init__.py](./__init__.py) — Package exports.
+- [config.py](./config.py) — Content storage configuration.
+- [factory.py](./factory.py) — Filesystem service and store composition.
+- [inmemory.py](./inmemory.py) — In-memory content storage.
+- [io.py](./io.py) — Cancellation-safe host I/O.
+- [local_content.py](./local_content.py) — Local content storage.
+- [objects.py](./objects.py) — Trusted content directory operations.
 
-A caller supplies FilesystemConfig and an explicit Database to create_filesystem. Configuration selects content storage only: inmemory or local, with a required directory for local bytes. Namespace and ownership/grant persistence use the existing application's database driver; no filesystem-specific database backend selection or private runtime is created.
+# Context not available from the code
 
-create_namespace_driver and create_access_control_driver construct neutral stores over the supplied Database. create_content_driver constructs the selected content adapter separately. Ownership remains an independent operation; constructing or using Filesystem does not assign an owner or enforce permissions.
-
-The persistence runtime owns database readiness and shutdown. Filesystem tables participate in the existing application schema registry. Factories and constructors do not prepare schemas. Inject the same prepared runtime.database into stores that must share state. Fresh store objects over that database see the same nodes and policies.
-
-Each content factory invocation creates a new adapter. Retain in-memory content for its intended storage lifetime; fresh instances do not retain previous bytes. Matching local content directories reopen stored objects. Persistent namespace with ephemeral content cannot preserve readable bytes across process restarts.
-
-Future request-scoped hosts should inject shared infrastructure dependencies into operation services, not create private database runtimes or fresh in-memory content per request. Do not put application services on app.state.
-
-## Files
-
-- `config.py` defines validated content backend declarations and FilesystemConfig, with no content default. Retired namespace selectors are rejected.
-- `factory.py` composes the raw service and namespace/access-control stores from an injected Database and selects content storage. Concrete content drivers are loaded lazily. Opt-in exports at the public `umbod.infrastructure` boundary (also available under `umbod.infrastructure.filesystem`) include create_filesystem_browsing and create_filesystem_creation (explicit resolver), create_filesystem_transactions, create_root_provisioning, and create_root_group_policy_management. All require an explicitly supplied prepared Database; none prepares schema or invokes bootstrap.
-- `inmemory.py` provides InMemoryContent. Objects become visible only after their streams complete.
-- `local_content.py` provides LocalContent. It writes bounded stream chunks to temporary files and publishes immutable objects under opaque UUID keys with non-overwriting links after completion and fsync. Logical node names never become host paths.
-- `objects.py` centralizes trusted-directory preparation, content-key validation, regular-file checks, and directory synchronization.
-- `io.py` offloads host file operations and drains in-flight work before returning cancellation to prevent descriptor-close races.
-- The [core stores index](../../core/filesystem/stores/README.md) describes namespace/policy schema and database-neutral behavior.
-
-## Guarantees and limits
-
-Local byte storage requires POSIX filesystem support for hard links, file descriptors, and fsync. Use dedicated trusted directories; hostile concurrent modification of directory ancestors is not contained. Existing directory/object symlinks are rejected. Network filesystem semantics are not established.
-
-Interrupted streams and cancellation clean incomplete content temporaries. Process crashes may leave private temporaries. Old and completed unpublished objects remain available for future concurrency-safe cleanup. Database transactions do not encompass byte publication: store bytes first, then publish their namespace reference with the expected revision. Re-read state before retrying operations whose commit outcome is uncertain.
-
-The JSON namespace adapter and its directory/lock/snapshot configuration are removed. Existing JSON files are not read, migrated, or deleted. This is a deliberate configuration change; callers must provide a prepared Database.
-
-REST and MCP filesystem boundaries use these factories for per-operation authorized browsing and empty creation over shared persistence, without content adapters. Core owns verified identity mapping, authorization and creation policy. Application startup and ordinary requests never invoke root provisioning. Canonical system root ownership is the reserved bootstrap completion signal: retries skip all grant reconciliation, including newly supplied grants. Changed bootstrap input does not update access. The admin panel instead uses create_root_group_policy_management for strictly read-only inspection and revision-checked direct root GROUP reconciliation; explicit admin saves initialize clean roots. Administrator configuration does not grant implicit ordinary filesystem access. Dirty or differently owned legacy roots are never adopted automatically. Inherited-permission evaluation and garbage collection remain deferred.
+- [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Shared-database namespace and policy storage, independently selected content storage.
+- [Filesystem boundary detail](../../../../../project/architecture-records/supporting/filesystem-boundaries.md) — Local content requires trusted POSIX directories; database transactions do not include byte publication. Retired JSON namespaces have no implicit migration.
+- [REST filesystem](../../rest/filesystem/README.md) — Implemented browsing and empty creation are separate from planned content operations.

@@ -1,5 +1,11 @@
-# Groups administration
+---
+type: Software Module
+title: "Group administration"
+description: "REST delivery for shared group catalogue registration and usage-checked deletion."
+---
 
-`routes.py` exposes authenticated administration GET `/api/admin/groups`, POST `/api/admin/groups`, DELETE `/api/admin/groups` with a JSON `group_id`, and the compatible DELETE `/api/admin/groups/{group_id:path}`. GET returns group-ID projections; POST accepts an exact nonblank `group_id` and returns 204; DELETE returns 204 or 409 when any connector permission, filesystem GROUP grant or GROUP ownership still uses the ID.
+# Files
 
-`deps.py` creates request-scoped management and catalogue adapters over the existing prepared Database. Existing administrator authentication and cookie mutation safeguards apply. Pure registration grants no access and publishes no permission events. Legacy MCP-permission group endpoints use the same catalogue and deletion guard while retaining their response contracts. GET and PUT `/api/admin/mcp-permissions/group-permissions?group_id=...` provide exact-ID permission detail and updates without path normalization, including dot-segment IDs. Their response and update-body contracts match the existing path aliases. Use body deletion and query permission routes for arbitrary exact IDs.
+- [__init__.py](./__init__.py) — Package exports.
+- [deps.py](./deps.py) — Request-local catalogue composition.
+- [routes.py](./routes.py) — Exact-ID group administration.

@@ -1,14 +1,14 @@
-# Admin Overview
+---
+type: Software Module
+title: "Administration overview"
+description: "Read-only overview aggregation with explicit source availability."
+---
 
-**Module responsibility:** Read-only administration counts with explicit availability per connector family and tool subtotal.
+# Files
 
-## Modules
-
-- `models.ts`: Validated source records and overview count contracts.
-- `port.ts`: Source interface for connector lists, tool activations and registered permission groups.
-- `in-memory-source.ts`: Validated in-memory source for interface-level tests.
-- `api-source.ts`: Existing validated administration API adapter; operational failures become unavailable data, authorization and validation failures propagate.
-- `aggregate.ts`: Independent source aggregation and globally bounded tool requests across all connector families.
-- `aggregate.test.ts`: Public source-port aggregation coverage.
-
-Successful empty lists yield zero. A failed connector list invalidates totals requiring that list. A failed tool request invalidates its family tool subtotal and the combined tool total, not connector counts. MCP configured counts mean saved Shared proxies; the adapter filters Personal definitions before counting or requesting global tool activations. Unknown discovery is not unhealthy.
+- [aggregate.ts](./aggregate.ts) — Overview count aggregation.
+- [aggregate.test.ts](./aggregate.test.ts) — Source aggregation tests.
+- [api-source.ts](./api-source.ts) — Administration API source adapter.
+- [in-memory-source.ts](./in-memory-source.ts) — In-memory overview source.
+- [models.ts](./models.ts) — Count and availability contracts.
+- [port.ts](./port.ts) — Overview source port.

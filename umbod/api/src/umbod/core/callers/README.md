@@ -1,20 +1,16 @@
-# Callers
+---
+type: Software Module
+title: "Caller observations"
+description: "Transport-neutral caller and group observations captured at operation boundaries."
+---
 
-**Module responsibility:** Immutable, transport-neutral caller observations captured at operation boundaries.
+# Files
 
-- `constants.py`: backend-owned `LOCAL_DEVELOPMENT_ISSUER` (`urn:umbod:local`) shared by explicitly local identity policies; it never promotes authentication provenance.
-- `models.py`: authentication provenance, subject and declared-issuer observations, explicit unavailable states, required-field caller context and separate required-field `GroupMembership` observations.
-- `groups.py`: pure `group_membership_from_values` projection shared by runtime MCP permission capture and filesystem delivery adapters. Strings and iterable string members are retained exactly, including empty strings, with stable deduplication; no claim names or token formats enter core.
-- `__init__.py`: public contracts, including required-field immutable `CallerSnapshot(caller, groups)`.
+- [__init__.py](./__init__.py) — Public module exports.
+- [constants.py](./constants.py) — Local identity issuer.
+- [groups.py](./groups.py) — Group observation projection.
+- [models.py](./models.py) — Caller provenance and snapshots.
 
-`CallerSnapshot` bundles observations only. Delivery adapters capture both fields from the same authenticated operation; it contains no claims or framework objects. Filesystem resolver, authorization, browsing and creation ports consume this snapshot. REST uses its middleware-accepted caller and claims with the configured MCP permission claim; MCP captures its current SDK token once with active runtime permission claim fields or the configured fallback. Both use the runtime group projection rather than personal or administrator parsing policies. Empty group observations remain visible to the filesystem resolver, which rejects malformed snapshots.
+# Context
 
-REST and MCP adapters supply provenance from their actual authentication composition, never user-submitted claims. Known built-in upstream verifiers, local simulation, semantic development verification and local test providers remain distinguishable. Arbitrary host-supplied authentication is deployment-established rather than automatically upstream-verified. These values describe the accepted authentication boundary; they neither verify tokens nor prove a human identity or authorization.
-
-Subject and declared issuer strings are retained exactly, including legacy empty subject strings. Missing or non-string claims are unavailable observations, not new authentication rejection rules. Unavailable issuer does not distinguish an absent claim from a malformed claim; feature identity policies that require that distinction must retain their existing boundary validation. These observations must not replace canonical-owner mapping or its issuer-presence checks.
-
-`GroupMembership.group_ids` is a required tuple of observed group IDs in a frozen model, separate from `CallerContext`. It neither qualifies those IDs nor proves membership authority; delivery-specific legacy capture policies retain their own filtering, coercion and ordering semantics. No caller context or membership is cached across MCP requests.
-
-Tokens, arbitrary claims, profiles, framework objects, session IDs and group assertions are excluded from `CallerContext`. Identity/group authority mapping remains explicit feature policy. In particular, downstream personal `CanonicalPrincipal.namespace` is not necessarily a token issuer, Entra canonical subjects can differ from `sub`, and current group projections have deliberately different parsing rules. No filesystem principal can be inferred from this context without its own accepted mapping contract.
-
-REST retains immutable observations on request state after successful authentication and administrator membership checks where applicable. MCP operation dependencies capture the current SDK token once per operation and never cache callers across requests. An SDK token inherited or supplied by a host without a known built-in provider is classified as deployment-established; absent SDK authentication produces an unavailable caller. These contracts import no transport, infrastructure, configuration or connector-kind modules.
+Caller observations are not proof of identity or authorization; canonical ownership mapping remains feature-specific.

@@ -1,11 +1,14 @@
-# MCP listeners
+---
+type: Software Module
+title: "MCP listeners"
+description: "Application-scoped adapters from neutral MCP signals to logging, metrics and audit."
+---
 
-App composition calls `create_mcp_signals` once, or constructs channels and calls `register_mcp_listeners` exactly once. Receiver names are checked before any subscription is added, so conflicting or repeated registration is rejected without installing partial effects. Register during application composition before traffic; there are no global subscriptions.
+# Files
 
-- `registration.py`: single explicit registration point and app-scoped factory.
-- `invocation_logging.py`: completion sink receiver.
-- `invocation_metrics.py`: request/connector metric conversion and independently guarded inventory initialization.
-- `invocation_audit.py`: completion audit receiver; protocol middleware retains ownership of request-scoped search_tools, execute_tool and execute_code.
-- `failure.py`: safe signal failure reporting.
-
-No receivers are registered at import time.
+- [__init__.py](./__init__.py) — Package exports.
+- [failure.py](./failure.py) — Safe receiver failure reporting.
+- [invocation_audit.py](./invocation_audit.py) — Completion audit adapter.
+- [invocation_logging.py](./invocation_logging.py) — Completion logging adapter.
+- [invocation_metrics.py](./invocation_metrics.py) — Completion and inventory metrics.
+- [registration.py](./registration.py) — Central listener composition.

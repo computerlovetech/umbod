@@ -1,11 +1,14 @@
-# User catalogue REST boundary
+---
+type: Software Module
+title: "User catalogue REST"
+description: "Authenticated read-only projections of shared and eligible personal capabilities."
+---
 
-`GET /api/me/catalogue` is authenticated independently of administrator membership and personal feature enablement. Responses are no-store and contain only opaque identity, personal support, connector summaries and permitted capability display metadata. Tool capabilities additionally require `input_schema` as a JSON object and `output_schema` as either `{status: absent}` or `{status: present, schema: JSON object}`. Non-tool capabilities retain metadata-only shapes. `key` identifies the capability; `name` is its display title.
+# Files
 
-- `routes.py`: typed read-only endpoint.
-- `caller.py`: required-field typed catalogue capture of caller, strict groups, precomputed identity key and explicit personal identity resolution; raw claim handling stays here.
-- `dependencies.py`: request-scoped cross-kind assembly from typed captured inputs. It registers bounded publication, activation and caller-grant reads before executing one state plan, then reuses loaded downstream definitions and normalized catalogues for naming, projection and structural readiness. Planned state shares one session. Explicit capability grants are indexed once per request as an immutable set; per-capability checks perform no further group lookups. Descriptions, configuration and owner-specific admission retain their existing separate read boundaries. No request results become invocation authority or survive into another request.
-- `identity.py`: stable SHA256 verified identity projection and bounded local development simulation policy.
-- `projection.py`: public-name ambiguity and personal namespace reservation filtering. Gateway and codemode configured-name failures suppress all tools, including otherwise healthy sources; flat mode retains provider-specific filtering. Native gateway claims include unpublished configured names. Empty normalized personal namespaces never advertise tools, while eligible personal entries remain visible.
-
-Personal sources are resolved only when support is enabled and verified claims map to a canonical owner. Failure to map an owner does not deny shared reads. Personal approved tool records provide schemas without exposing observation or credential metadata. Personal observations are read without refresh, discovery or invocation; OAuth/runtime enablement gates tools independently of personal selection.
+- [__init__.py](./__init__.py) — Package exports.
+- [caller.py](./caller.py) — Typed caller and membership capture.
+- [dependencies.py](./dependencies.py) — Request-scoped catalogue assembly.
+- [identity.py](./identity.py) — Opaque identity projection.
+- [projection.py](./projection.py) — Public naming and collision filtering.
+- [routes.py](./routes.py) — Catalogue endpoint.

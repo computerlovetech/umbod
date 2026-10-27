@@ -1,8 +1,17 @@
-# OpenAPI connectors
+---
+type: Software Module
+title: "OpenAPI connectors"
+description: "OpenAPI connector configuration, import, catalogue and execution coordination."
+---
 
-- `management/` owns connector configuration and current catalogue replacement.
-- `importing/` validates source documents and builds endpoint capabilities.
-- `stores/ports.py` defines connector and catalogue persistence contracts.
-- `stores/service.py` implements backend-neutral persistence. `list_operations(connector_id)` reads the current header and its complete operation records in one session without loading source documents.
-- `catalog/capability_catalog.py` normalizes persisted capabilities. `StoreBackedOpenApiCapabilityCatalog.list_connector_capabilities(connector)` reuses an already-loaded connector for administration catalogue reads. Authorized catalogue resolution retains its separate permission and availability checks.
-- `execution/README.md` indexes authoritative operation execution.
+# Files
+
+- [__init__.py](./__init__.py) — Public module exports.
+- [administrator_catalog.py](./administrator_catalog.py) — Administrator catalogue projection.
+- [catalog/](./catalog/) — Normalized capability catalogue.
+- [errors.py](./errors.py) — Connector failures.
+- [execution/](./execution/README.md) — Authoritative operation execution.
+- [importing/](./importing/) — Source document validation.
+- [management/](./management/) — Configuration and catalogue replacement.
+- [models.py](./models.py) — Connector data contracts.
+- [stores/](./stores/) — Connector persistence.

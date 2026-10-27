@@ -1,10 +1,19 @@
-# Connector initialization
+---
+type: Software Module
+title: Connector initialization
+description: Planning and applying connector scaffolding within an existing Hatch src-package project.
+---
 
-Creates a Hello World connector module and adds its entry point to an existing explicit Hatch src-package project. Preview is read-only; apply rechecks the project before writing. Apply is not atomic across both files; on failure, inspect the reported paths rather than relying on automatic cleanup.
+# Files
 
-- `models.py` defines the request, snapshot, and complete plan.
-- `port.py` defines project file operations and refusal errors.
-- `adapters.py` provides in-memory and filesystem project file operations.
-- `service.py` validates metadata and builds and applies the plan.
-- `cli.py` exposes the init command, registered under the connectors group by the SDK CLI.
-- `__init__.py` exposes the public planning interface and filesystem factory.
+- [__init__.py](./__init__.py) — Public planning interface.
+- [adapters.py](./adapters.py) — Project file operations.
+- [cli.py](./cli.py) — Connector init command.
+- [models.py](./models.py) — Requests and plans.
+- [port.py](./port.py) — Project file contract.
+- [service.py](./service.py) — Initialization planning and application.
+
+# Context not available from the code
+
+- [ADR-003](../../../../../umbod/project/architecture-records/ADR-003-umbod-specific-connector-cli.md) — SDK connector CLI scope.
+- After an apply failure, inspect the reported paths rather than assuming automatic cleanup; writes across project files are not atomic.

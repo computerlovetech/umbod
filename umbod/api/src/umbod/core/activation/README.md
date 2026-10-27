@@ -1,6 +1,15 @@
-# Activation
+---
+type: Software Module
+title: "Activation"
+description: "Capability activation contracts and persistent state."
+---
 
-- `domain.py`: domain contracts including narrow snapshot read ports.
-- `stores/schema.py`: backend-neutral typed storage schema.
-- `stores/service.py`: persistent store operations.
-- `stores/reads.py`: pure planned bulk reads and execution-local activation status readers. IDs are deduplicated and sorted; each query selects at most 200 connector IDs to stay conservatively below portable parameter limits. Empty inputs register no queries. Kind predicates use the existing compound primary key instead of scanning the activation table. Snapshot readers preserve complete kind-qualified identities and never fall back to persistence.
+# Files
+
+- [__init__.py](./__init__.py) — Public module exports.
+- [catalog.py](./catalog.py) — Activation catalogue.
+- [domain.py](./domain.py) — Activation identities and read ports.
+- [events.py](./events.py) — Activation change events.
+- [factories.py](./factories.py) — Store composition.
+- [service.py](./service.py) — Activation operations.
+- [stores/](./stores/) — Activation persistence and planned reads.

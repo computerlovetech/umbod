@@ -1,14 +1,19 @@
-# Telemetry receiver
+---
+type: Software Module
+title: "Telemetry receiver"
+description: "OTLP HTTP JSON ingestion for logs, metrics and traces."
+---
 
-**Module responsibility:** OTLP/HTTP JSON ingestion for logs, metrics, and traces.
+# Files
 
-## Modules
+- [__init__.py](./__init__.py) — Package exports.
+- [body.py](./body.py) — Bounded gzip and uncompressed reads.
+- [composition.py](./composition.py) — Receiver route composition.
+- [dependencies.py](./dependencies.py) — Bearer authentication and sinks.
+- [errors.py](./errors.py) — Safe receiver failures.
+- [routes.py](./routes.py) — Ingestion coordination.
+- [validation.py](./validation.py) — OTLP JSON validation.
 
-- `composition.py` installs root signal routes, configuration dependency overrides, and OTLP error responses.
-- `dependencies.py` authenticates dedicated bearer credentials and supplies request-scoped sinks using acknowledged writes through the existing stdout logger.
-- `routes.py` coordinates media-type checks, bounded reads, schema validation, and sink invocation.
-- `body.py` streams bounded uncompressed and gzip bodies.
-- `validation.py` validates canonical OTLP requests with JSON-specific identifiers and enums.
-- `errors.py` defines safe HTTP failures.
+# Context not available from the code
 
-Core contracts and sink adapters live in `umbod.core.telemetry`. Operator behavior and deployment paths are described in `umbod/docs/reference/telemetry-ingestion.md`.
+- [Telemetry ingestion](../../../../../docs/reference/telemetry-ingestion.md) — Operator and deployment contract.

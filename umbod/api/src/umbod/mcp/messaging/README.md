@@ -1,13 +1,15 @@
-# MCP messaging
+---
+type: Software Module
+title: "MCP messaging"
+description: "Durable event delivery and lifecycle synchronization of MCP runtime projections."
+---
 
-`transport.py` adapts durable database or HTTP event streams to MCP consumers. Each live application uses independent in-memory delivery checkpoints and unique consumer identities rather than sharing another worker's cursor.
+# Files
 
-`projection.py` owns runtime bootstrap, event replay, retry and synchronization health. Bootstrap scans historical event pages to establish a pre-load fence, hydrates current authoritative state once, and checkpoints that fence only after hydration succeeds. It then drains changes committed during loading before marking discovery ready. Historical pages do not each rebuild the catalog. One orchestrator lock serializes bootstrap and polling through projection publication and checkpoint advancement. A batch reconciles current authoritative state before advancing its checkpoint. Duplicate and obsolete events therefore rebuild current state rather than installing older event payloads.
+- [__init__.py](./__init__.py) — Package exports.
+- [projection.py](./projection.py) — Bootstrap, replay and synchronization health.
+- [transport.py](./transport.py) — Database and HTTP event adapters.
 
-`public_app.py` composes downstream, OpenAPI, native capability and permission reconciliation. Event delivery is selected only by `messaging_transport`; data-reader selection uses the existing runtime `source_strategy` independently. An HTTP source with an API URL loads native state, activation and grants through HTTP readers, regardless of whether events arrive through HTTP or SQL. Store-backed and explicit host-local sources read activation and grants from the authoritative application database. Store-backed reconciliation never copies configuration or publication state back into persistence. Explicit host-owned native source stores initialize native configuration before bootstrap; read-back projection never recopies those sources for each replayed event.
+# Context not available from the code
 
-The existing missing-API fallback applies only to HTTP event delivery: it uses SQL events instead. It does not override another adapter's transport selection. Data readers independently fall back to database reads when no HTTP data endpoint is available. Adding a messaging adapter must not change domain readers, projection reconciliation or execution authorization.
-
-The consistency window is the one-second projection polling interval plus event backlog and reconciliation duration, not instantaneous cross-worker revocation. Failures retain the previous checkpoint, log bounded error types and close public MCP traffic with HTTP 503 until reconciliation succeeds. `/system/health` preserves its healthy response and exposes failure state and the last applied sequence while unavailable.
-
-The application lifespan owns consumer cancellation and persistence shutdown. Request-time scoped routing captures downstream runtime definitions and publication state without store reads.
+- [ADR-008](../../../../../project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Required event-synchronized discovery architecture; projections are not invocation authority and cross-worker updates are not instantaneous.

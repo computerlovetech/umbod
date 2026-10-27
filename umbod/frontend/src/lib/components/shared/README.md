@@ -1,9 +1,16 @@
-# Shared components
+---
+type: Software Module
+title: "Shared components"
+description: "Actor-independent presentation and interaction mechanics."
+---
 
-**Module responsibility:** Neutral presentation and interaction mechanisms reused across actors and features.
+# Files
 
-- `workspace/` provides workspace structure, navigation, account presentation and explicit logout interaction.
-- `mcp-setup/` provides endpoint-driven client setup instructions shared by administration and Dashboard.
-- `tools/` provides a snippet-based tool card, optional description/schema presenters, neutral display types and schema formatting. See `tools/README.md`.
+- [DateTimeView.svelte](./DateTimeView.svelte) — Date and time display.
+- [mcp-setup/](./mcp-setup/) — Endpoint-driven client setup instructions.
+- [tools](./tools/README.md) — Neutral tool cards and schema presenters.
+- [workspace/](./workspace/) — Navigation, account and logout shell.
 
-Follow the composition boundaries in `../README.md`: parents choose actor-specific content, actions and presentation, while shared components own reusable mechanics. Shared styling changes are deliberate cross-consumer changes, not actor-local customization.
+# Context not available from the code
+
+- [ADR-007: Actor-Specific Composition](../../../../../project/architecture-records/ADR-007-actor-specific-ui-composition.md) — Shared changes deliberately affect multiple consumers.

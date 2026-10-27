@@ -1,39 +1,27 @@
-# Filesystem
+---
+type: Software Module
+title: "Filesystem"
+description: "Storage-independent filesystem operations with separate authorization and persistence modules."
+---
 
-**Module responsibility:** Storage-independent filesystem coordination plus database-neutral namespace and ownership/sharing persistence. Public filesystem operations support root discovery, directory/file creation, node retrieval, child listing, and streamed content reads/writes. Policy storage is independent of these operations.
+# Files
 
-**Public entrypoint:** Import models, NamespaceDriver, ContentDriver, AccessControlDriver, errors, and Filesystem from `umbod.core.filesystem`. Import FilesystemConfig and composition factories from `umbod.infrastructure`, supplying the existing prepared runtime.database. Core has no infrastructure dependency.
+- [__init__.py](./__init__.py) — Public module exports.
+- [administration/](./administration/README.md) — Trusted root group policy editing.
+- [authorization/](./authorization/README.md) — Identity resolution and permission decisions.
+- [browsing/](./browsing/README.md) — Caller-aware summaries and child listing.
+- [creation/](./creation/README.md) — Authorized node creation.
+- [errors.py](./errors.py) — Namespace and storage failures.
+- [models.py](./models.py) — Nodes, metadata and access policy.
+- [namespace.py](./namespace.py) — Pure namespace rules.
+- [ports.py](./ports.py) — Namespace, content and policy contracts.
+- [provisioning/](./provisioning/README.md) — Trusted one-time root bootstrap.
+- [service.py](./service.py) — Raw filesystem coordination.
+- [stores/](./stores/README.md) — Database-neutral namespace and policy stores.
+- [transactions.py](./transactions.py) — Combined namespace and policy transactions.
 
-## Files and submodules
+# Context
 
-- `models.py` defines nodes, metadata, immutable-content references, explicit absence states, principals, ownership, permissions, and access grants. Principal identity includes type, issuer, and provider ID. RootParent, EmptyContent, and UnspecifiedContentType name meaningful absent states without nullable model fields.
-- `ports.py` defines namespace, byte-content, and ownership/grant persistence protocols. AccessControlDriver stores policies; it does not resolve identities or evaluate authorization.
-- `errors.py` distinguishes namespace failures, OwnershipNotFound, and StorageFailure.
-- `authorization/` provides a shared resolved-identity policy evaluator, immutable identity contracts, VerifiedIdentityResolver and explicit opt-in LocalDevelopmentIdentityResolver over CallerSnapshot, decision/require ports and PermissionDenied. The [authorization index](authorization/README.md) describes exact verified issuer/group mapping and default-deny rules.
-- `browsing/` provides caller-aware DISCOVER-only root/node summaries and independently filtered child listing through injected namespace and authorization ports. The [browsing index](browsing/README.md) records the complete metadata visibility policy, safe projections, race/failure behavior, and non-atomic observation limits.
-- `transactions.py` defines the session-bound namespace/policy capability and transaction port without database-driver imports.
-- `creation/` provides snapshot-aware atomic node creation and USER ownership after parent DISCOVER/WRITE checks. See the [creation index](creation/README.md).
-- `administration/` provides read-only inspection and revision-checked, atomic full direct root GROUP reconciliation through domain transaction ports. See the [administration index](administration/README.md).
-- `provisioning/` provides explicit trusted atomic root bootstrap with reserved SYSTEM_ROOT_OWNER and immutable initial direct-grant specs. See the [provisioning index](provisioning/README.md).
-- `namespace.py` supplies shared pure name validation, root/node construction, directory checks, and optimistic content-update rules.
-- `stores/` supplies typed per-node/policy tables and database-neutral stores over core.persistence.Database. The [stores index](stores/README.md) describes transactions and identity semantics. Concrete database drivers remain in infrastructure under ADR-001.
-- `service.py` coordinates public filesystem operations through injected namespace/content ports. Content storage must complete before revision-checked reference publication. Old or completed unpublished content is not eagerly deleted.
-- [Filesystem infrastructure](../../infrastructure/filesystem/README.md) owns configured composition and concrete content adapters under amended ADR-006. Namespace and policy stores share an explicitly supplied Database; content remains independently configurable.
+See [filesystem infrastructure](../../infrastructure/filesystem/README.md) for configured composition and concrete content adapters under ADR-006.
 
-## Ownership and sharing
-
-GROUP grant and ownership writes register their exact IDs in the shared group catalogue in the same serialized transaction; USER and SYSTEM principals do not. Issuer-qualified policy identity remains unchanged. Removing a grant keeps its catalogue registration.
-
-Raw ownership assignment is separate, including for the root. Raw node creation does not assign an owner. Opt-in CreationService instead authorizes and atomically assigns the resolved USER owner. Explicit trusted RootProvisioningService bootstraps a clean root with SYSTEM_ROOT_OWNER and supplied direct grants. Canonical SYSTEM ownership is the completion signal: retries skip all grant reconciliation, even newly supplied grants, and never adopt differently owned or dirty legacy roots. Bootstrap configuration changes do not update access. Missing ownership raises OwnershipNotFound; assignment replaces the complete owner without revision checks. Grants are keyed by node UUID and exact principal identity. Re-adding a grant replaces its entire permission set and recursive flag, including empty permission sets. Listing absent grants returns empty; removing an absent grant succeeds.
-
-Policies accept logical UUIDs independently of namespace existence, names, or byte keys. Returned observations are detached from persisted state. This persistence layer neither authenticates callers nor enforces authorization. The separate authorization evaluator provides default-deny direct-node decisions through an injected identity resolver. Caller-aware authorized browsing is available separately through `umbod.core.filesystem.browsing`; DISCOVER exposes the entire summary including all custom metadata attributes. Verified snapshot identity/group mapping and authorized creation are opt-in core support. REST/MCP adapters capture caller and groups from the same authenticated operation using MCP runtime group-claim extraction/configuration. They delegate safe browsing and empty creation to these core ports; they never invoke raw Filesystem or provision root ownership from ordinary requests. The admin panel explicitly initializes and repeatedly updates direct root GROUP policy. This configuration does not supply ordinary filesystem authority. REST alone opts into the exact backend-configured local simulation principal under the strict local/dev policy; it still needs explicit issuer-qualified grants. Production and MCP remain upstream-verified. Inherited permissions, authorized content access, other policy mutation and other mutation enforcement remain future integration responsibilities.
-
-## Current boundary
-
-Namespace and policy behavior use the same neutral stores against the existing in-memory and SQLite drivers. Content has independent in-memory/local adapters. Test support translates domain language and records public operations; it does not implement a parallel filesystem.
-
-Namespace checks retain exact case-sensitive Unicode-scalar names, sibling collisions, directory-only parents, sorted children, detached metadata, missing-node behavior, and optimistic revisions. Database tests cover reopening, concurrency, transaction failure, schema readiness, and shared application persistence. Local-content tests retain byte publication, symlink, and interrupted-stream/cancellation checks.
-
-The JSON namespace and standalone in-memory namespace are retired. No existing JSON data is read, migrated, or deleted. Metadata replacement, moves, deletion, content and other mutation authorization enforcement, checksums, policy cleanup, and byte garbage collection remain unimplemented. The move-dependent portion of P08 remains deferred. Raw namespace and ownership/grants APIs stay independent; opt-in creation and provisioning share one serialized database transaction.
-
-The latest local feature record is `.atdd/features/filesystem/13-owned-creation-and-root-bootstrap.md` at the repository root; these tracked README indexes are authoritative. Earlier feature artifacts preserve implementation history; these tests do not establish all original scenarios or future backend conformance.
+Legacy JSON namespace data is not read, migrated or deleted. Byte garbage collection and the move-dependent portion of [P08 in the acceptance plan](../../../../../../.atdd/features/filesystem/04-acceptance-test-plan.md) remain deferred.

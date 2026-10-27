@@ -1,7 +1,19 @@
-# Publishing
+---
+type: Software Module
+title: Publishing
+description: Publication reader and writer contracts, events and persisted state.
+---
 
-- `store.py`: domain contracts including narrow snapshot read ports.
-- `cached.py`: `CachedConnectorPublicationReader`, a read-only wrapper with an injected request cache. Per-wrapper namespace, operation and connector ID distinguish current-publication and historical-publication reads, including false results. The wrapper exposes no mutation operations. REST shares one instance across connector kinds during assignable-target listing only; writes and invocation retain fresh readers.
-- `stores/schema.py`: backend-neutral typed storage schema.
-- `stores/service.py`: persistent store operations.
-- `stores/reads.py`: pure planned bulk reads and execution-local publication state readers. IDs are deduplicated and sorted; each query selects at most 200 connector IDs to stay conservatively below portable parameter limits. Empty inputs register no queries. Snapshot readers never fall back to persistence.
+# Files
+
+- [__init__.py](./__init__.py)
+- [cached.py](./cached.py) — Request-cache publication wrapper.
+- [events.py](./events.py)
+- [factories.py](./factories.py)
+- [store.py](./store.py)
+- [stores](./stores/) — Publication persistence and scoped query builders.
+
+# Context not available from the code
+
+- [ADR-009](../../../../../project/architecture-records/ADR-009-deferred-read-planning.md) — Scoped bulk publication reads for read models.
+- [ADR-010](../../../../../project/architecture-records/ADR-010-key-value-storage-drivers.md) — Request-cache policy and interchangeable storage drivers.

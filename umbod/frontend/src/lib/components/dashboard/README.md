@@ -1,12 +1,15 @@
-# User dashboard components
+---
+type: Software Module
+title: "Dashboard components"
+description: "User catalogue workspace presentation outside administration."
+---
 
-**Module responsibility:** Single-page user dashboard presentation outside administration.
+# Files
 
-- `Dashboard.svelte` composes the shared workspace shell using `$lib/workspace/` navigation and independently resolved administration access (hidden while checking), user-scoped catalogue, personal controls and compact MCP client setup. Initial catalogue loading uses the shared shell's whole-main-view spinner, withholding both connectors and MCP setup until loading completes. Background refreshes retain the visible content. Mounting and disposal belong to the dashboard controller; focus and visibility events revalidate reads only.
-- `ConnectorWorkspace.svelte` composes the existing connector sidebar and responsive split workspace into one combined user-scoped list. Selection is controller-owned; identity-keyed details reset local presentation without recreating personal connection state. Administrator navigation appears only after independently confirmed access. Personal rows show a compact status badge and the shared three-dot action menu; menu actions select their connector so progress and disconnect confirmation remain visible.
-- `ConnectorDetail.svelte` reuses connector summary and metadata components without publication or configuration controls. It distinguishes administrator-managed definitions from owner-managed personal authorization and embeds the contextual Personal access panel without duplicating secondary actions.
-- `CatalogueCapabilities.svelte` presents read-only Tools, Prompts and Resources navigation, counts and name/description search over the user projection. Tools use the Dashboard-owned `CatalogueToolCard.svelte` composition over the neutral snippet-based card, with parameter summaries, full input schemas and declared output schemas. Shared `ToolDescription` previews bound long descriptions until explicitly expanded. Resource templates appear with resources; no administration catalogue is fetched.
-- `CatalogueToolCard.svelte` adapts the user catalogue and supplies description, parameter and output-schema snippets to `shared/tools/ToolCard.svelte`, with no administration controls or administration view-model dependency. Its presenter choices can diverge from the administration card without modifying the shared layout.
-- `dashboard.test.ts` verifies initial loading, combined selection, administrator-managed read-only details, capability counts and retained personal controls.
-
-Data validation and lifetime behavior live in `$lib/dashboard/`. Owner authorization and mutation guards remain in `$lib/personal-connections/`.
+- [CatalogueCapabilities.svelte](./CatalogueCapabilities.svelte) — Read-only capability browsing.
+- [CatalogueToolCard.svelte](./CatalogueToolCard.svelte) — Dashboard-owned tool card composition.
+- [ConnectorDetail.svelte](./ConnectorDetail.svelte) — User connector detail presentation.
+- [ConnectorWorkspace.svelte](./ConnectorWorkspace.svelte) — Combined connector list and selection.
+- [Dashboard.svelte](./Dashboard.svelte) — Dashboard page composition.
+- [dashboard.test.ts](./dashboard.test.ts) — Workspace presentation tests.
+- [tool-catalogue.test.ts](./tool-catalogue.test.ts) — Tool catalogue presentation tests.

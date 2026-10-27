@@ -1,30 +1,37 @@
-# Personal connections
+---
+type: Software Module
+title: "Personal connections"
+description: "Owner-scoped connection lifecycle, identity, authorization and refresh contracts."
+---
 
-Principal-scoped enablement and opaque authorization state, independent of shared credentials and runtime execution.
+# Files
 
-- `models.py`: canonical ownership keys, explicit authorization states, lifecycle transitions and revision conflicts.
-- `authorization_models.py`: versioned owner-bound OAuth grants, explicit expiry and refresh-token states, and secret-safe serialization into opaque encrypted authorization.
-- `runtime_models.py` and `runtime_ports.py`: internal admission target, typed provider rejection and transport contracts; these do not enable public execution.
-- `health_models.py` and `health_ports.py`: immutable owner-keyed authorization-health queries, secret-free discriminated facts and captured-revision rejection commands. Authorized means locally bound and known unexpired, not live provider health or tool readiness.
-- `grant_binding.py`: pure saved-grant, owner, resource and current-policy validation shared by health and runtime; it does not require enablement or tools.
-- `caller.py`: immutable captured personal callers, explicit unavailable capture, authentication guard and deferred current-operation caller port for MCP freshness.
-- `ports.py`: personal connection storage contracts.
-- `development_identity_models.py`: immutable required-field simulated Test User identity DTO for claims projection.
-- `development_identity.py`: pure narrowly gated local Test User eligibility from typed personal policy; no configuration, claims or token dependencies.
-- `identity_models.py` and `identity_ports.py`: frozen required-field identity policy, explicit observed/unavailable claim facts, issuer states and resolved/rejected results, with a pure resolver contract.
-- `principal.py`: pure typed `canonical_principal(policy, facts)` resolver with explicit resolution results. Identity policy maps Google/Auth0 subjects and tenant-scoped Entra object IDs under the configured namespace, rejecting mismatched and machine identities. Narrow local simulation additionally accepts the backend-owned `urn:umbod:local` issuer emitted by shared REST authentication, or the existing issuer-absent MCP observation, while preserving canonical namespace/subject ownership. Configuration translation, raw claim observations, membership parsing and local MCP projection live in `../adapters/settings.py` and `../adapters/identity.py`; token verification stays in REST/MCP.
-- `service.py`: owner-bound operations; missing validated identity is rejected before storage access.
-- `inmemory.py`: serialized in-memory storage adapter.
-- `inventory_models.py` and `inventory_ports.py`: validated catalogue queries, enablement commands, secret-free projections and public selection port.
-- `inventory.py`: published personal-definition and connector-grant eligibility, effective descriptions, explicit opt-in and owner cleanup after withdrawal.
-- `oauth_callback_models.py`: immutable generic/issuer route identities, persisted legacy/generic/issuer bindings, exact issuer SHA-256 route derivation and pure callback-binding validation; callback URI syntax includes literal loopback HTTP. Request-scoped provider policy separately requires trusted local development eligibility before preparing, exchanging or refreshing an HTTP callback.
-- `oauth_models.py` and `oauth_ports.py`: validated durable attempt, callback-claim and resumable provider contracts.
-- `oauth_service.py`: request-scoped initiation, owner-bound status/cancellation and worker-independent callback completion.
-- `refresh_models.py` and `refresh_ports.py`: immutable owner-scoped refresh reservation, fenced exchange/completion and terminal recovery contracts.
-- `refresh_provider_models.py` and `refresh_provider_ports.py`: bounded preconfigured-client provider operation and explicit denied/uncertain outcomes.
-- `refresh_service.py`: explicit request-only refresh orchestration with one provider operation, durable cancellation uncertainty and no discovery or tool replay.
-- `__init__.py`: lazy public lifecycle, inventory and typed identity API. Importing identity contracts does not initialize deployment configuration, frameworks or persistence services.
-
-Missing records are disabled and unauthorized. Enabling creates an unauthorized record; disabling retains authorization; disconnect disables and clears it. Meaningful changes generate opaque revisions. Disconnect always invalidates an existing revision, including when already disabled and unauthorized, to reject pending authorization writes; repeated requests preserve disabled/unauthorized state. Conditional authorization replacement cannot create records or overwrite stale revisions. Generic identical replacement preserves its revision. Successful interactive completion alone always creates a fresh revision and clears rejection in the completion transaction, including when authorization bytes are unchanged. Authorized and expired health variants include required `refresh_supported`, a DB-only protocol-capability fact independent of enablement or live provider acceptance. Active refresh health exposes only its deadline; terminal denial/uncertainty requires reconnect. Refresh claims are encrypted and owner validated in `../stores/personal_refresh.py`, `personal_refresh_records.py` and `personal_refresh_schema.py`. Serialized reservation and exchange commits fence workers before provider contact; exchanging claims are never reclaimed. Successful completion forces a new authorization revision even for identical bytes, requiring fresh explicit discovery. Interactive OAuth and refresh exclude active work, and successful interactive completion clears refresh recovery atomically. Disablement preserves uncertainty, while disconnect and deletion clear it. Persistent storage is implemented by `../stores/personal_connections.py`, whose `load_personal_connection` helper retains encrypted ownership validation within caller transactions. `../stores/personal_runtime_authorizations.py` resolves internal admission targets from one serialized snapshot of current configuration, publication, connector grants and owner authorization. Its `load_personal_runtime_target` helper supports composing that same transaction. Expiry is absolute from the callback claim time; legacy, unknown-lifetime, expired and future-issued grants are denied without migration. The production factory uses its definition-bound adapter, checking target existence and personal ownership inside each serialized mutation transaction so concurrent deletion cannot leave orphaned state. The detached adapter remains available for standalone lifecycle contracts.
-
-Personal authorization availability defaults on when the deployment identity policy, persistent SQLite and encryption are configured; explicit opt-out remains available. This does not automatically enable any user's connector or grant downstream consent. Reserve preparation before outbound registration and publish only after encrypted provider context is durable. Callback claims and token installation are serialized; completion checks the current connection revision, definition, publication and connector grants. Terminal attempts erase sensitive preparation context. Failure/cancellation preserves existing authorization; runtime execution remains disabled. Persistence lives under `../stores/personal_oauth_attempts.py`, with transactional deletion cleanup. Provider I/O lives under `../adapters/personal_oauth/`, independently of the shared SDK coroutine workflow.
+- [__init__.py](./__init__.py) — Public module exports.
+- [authorization_models.py](./authorization_models.py) — Saved OAuth grants.
+- [caller.py](./caller.py) — Current-operation personal callers.
+- [development_identity_models.py](./development_identity_models.py) — Simulated identity data.
+- [development_identity.py](./development_identity.py) — Local identity eligibility.
+- [grant_binding.py](./grant_binding.py) — Saved-grant policy validation.
+- [health_models.py](./health_models.py) — Authorization health observations.
+- [health_ports.py](./health_ports.py) — Health read contracts.
+- [identity_models.py](./identity_models.py) — Personal identity facts and policy.
+- [identity_ports.py](./identity_ports.py) — Identity resolver contract.
+- [inmemory.py](./inmemory.py) — In-memory lifecycle store.
+- [inventory_models.py](./inventory_models.py) — Selection queries and projections.
+- [inventory_ports.py](./inventory_ports.py) — Selection contracts.
+- [inventory.py](./inventory.py) — User selection operations.
+- [models.py](./models.py) — Ownership keys and lifecycle state.
+- [oauth_callback_models.py](./oauth_callback_models.py) — Callback route bindings.
+- [oauth_models.py](./oauth_models.py) — Durable authorization attempts.
+- [oauth_ports.py](./oauth_ports.py) — Attempt and provider contracts.
+- [oauth_service.py](./oauth_service.py) — Authorization orchestration.
+- [ports.py](./ports.py) — Connection storage contracts.
+- [principal.py](./principal.py) — Canonical identity resolution.
+- [refresh_models.py](./refresh_models.py) — Refresh reservation state.
+- [refresh_ports.py](./refresh_ports.py) — Refresh storage contracts.
+- [refresh_provider_models.py](./refresh_provider_models.py) — Refresh provider outcomes.
+- [refresh_provider_ports.py](./refresh_provider_ports.py) — Refresh provider contract.
+- [refresh_service.py](./refresh_service.py) — Refresh orchestration.
+- [runtime_models.py](./runtime_models.py) — Internal admission targets.
+- [runtime_ports.py](./runtime_ports.py) — Personal runtime transport contracts.
+- [service.py](./service.py) — Connection lifecycle operations.

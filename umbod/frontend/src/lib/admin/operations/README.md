@@ -1,10 +1,18 @@
-# Browser Administration Operations
+---
+type: Software Module
+title: "Browser administration operations"
+description: "Typed browser mutation dispatch for administration forms."
+---
 
-**Module responsibility:** Typed administration mutation handlers receiving an injected `AdminApi` and prepared form data, without server events or form-action network requests.
+# Files
 
-- `contracts.ts` defines operation handlers, failures, and navigation results.
-- `connectors.ts`, `downstream-mcp-connectors.ts`, `openapi-connectors.ts`, and `group-permissions.ts` preserve bounded-context validation, safe failure values, publication, and authoritative reconciliation.
-- `browser-submit.ts` dispatches explicit operation names, respects form cancellation and submitter overrides, invokes result/update callbacks, and always runs registered completion cleanup. Its dependencies are injectable for behavioral tests.
-- `operation-state.svelte.ts` holds SPA submission feedback owned by route and connector, cleared when the navigation location changes. Disposed forms and obsolete selections cannot publish completion feedback or reconciliation.
-
-OpenAPI setup parses and validates JSON files before one `POST /admin/connectors/openapi/setup` request. The response uses `openApiConnectorSchema`. Cleanup failures expose the connector identity and block retry in the setup modal. Configuration retains its metadata/authentication/import sequencing and partial-failure messaging.
+- [browser-submit.ts](./browser-submit.ts) — Form operation dispatcher.
+- [browser-submit.test.ts](./browser-submit.test.ts) — Submit lifecycle tests.
+- [connectors.ts](./connectors.ts) — Native connector mutations.
+- [contracts.ts](./contracts.ts) — Operation results and failures.
+- [downstream-mcp-connectors.ts](./downstream-mcp-connectors.ts) — MCP connector mutations.
+- [group-permissions.ts](./group-permissions.ts) — Connector grant mutations.
+- [openapi-connectors.ts](./openapi-connectors.ts) — OpenAPI connector mutations.
+- [operation-state.svelte.ts](./operation-state.svelte.ts) — Submission feedback state.
+- [operation-state.test.ts](./operation-state.test.ts) — Feedback lifetime tests.
+- [operations.test.ts](./operations.test.ts) — Mutation handler tests.

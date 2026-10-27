@@ -1,12 +1,19 @@
-# Filesystem access editor
+---
+type: Software Module
+title: "Filesystem access editor"
+description: "Administration presentation and draft state for root filesystem group permissions."
+---
 
-- `FilesystemAccessPage.svelte`: Browser composition injecting both filesystem administration and shared group catalogue ports, mount loading and disposal, and the administration shell with its page-loading overlay.
-- `FilesystemAccessEditor.svelte`: Shared group catalogue sidebar including zero-access identities and inspectable legacy grants. Selected group detail lists independent issuer-qualified grants or explicit no-access status. Registration uses the shared registration modal; assignment/editing and removal only stage filesystem policy changes until Save policy. Recursive grants remain read-only.
-- `FilesystemGroupDialog.svelte` and `filesystem-group-editor-state.svelte.ts`: Isolated assignment/edit drafts with immutable selected group identity, explicit editable issuer, multiple issuer grants, strict permission/duplicate validation and blank legacy identity repair. Cancel leaves the policy draft unchanged.
-- `../group-permissions/shared/GroupRegistrationDialog.svelte` and `group-registration-state.svelte.ts`: Shared exact group-claim registration, persisted independently without granting access or creating IdP membership.
-- `FilesystemConfirmationDialog.svelte` and `confirmation-dialog.ts`: Empty-policy/discard confirmations and compatibility export of the shared native dialog attachment.
-- `filesystem-access-state.svelte.ts`: Loads the shared catalogue and root policy, owns grant drafts, derives combined group entries, independently registers catalogue values, compares canonical dirty state and performs revision-checked policy saves. Failed writes preserve drafts and block further saves until reload. Registration does not alter existing unsaved grants.
-- `filesystem-access-state.test.ts`: Revision, validation, confirmation, legacy repair and safe failure behavior through the administration port.
-- `filesystem-group-editor-state.test.ts`: Cross-resource group reuse, zero access, registration independent of unsaved drafts, multiple issuers, staged assignment/removal and legacy behavior.
-- `filesystem-components.test.ts`: Accessible registration/assignment separation, immutable identities, no-access detail, scoped removal and navigation.
-- `confirmation-dialog.test.ts`: Native lifecycle, pending-registration cancellation guard and draft-preserving Escape behavior. Browser-native focus behavior remains a browser verification responsibility.
+# Files
+
+- [confirmation-dialog.test.ts](./confirmation-dialog.test.ts) — Native dialog lifecycle tests.
+- [confirmation-dialog.ts](./confirmation-dialog.ts) — Shared native dialog compatibility export.
+- [filesystem-access-state.svelte.ts](./filesystem-access-state.svelte.ts) — Root policy drafts and saves.
+- [filesystem-access-state.test.ts](./filesystem-access-state.test.ts) — Policy draft tests.
+- [filesystem-components.test.ts](./filesystem-components.test.ts) — Accessible editor tests.
+- [filesystem-group-editor-state.svelte.ts](./filesystem-group-editor-state.svelte.ts) — Isolated issuer-qualified grant drafts.
+- [filesystem-group-editor-state.test.ts](./filesystem-group-editor-state.test.ts) — Group and grant draft tests.
+- [FilesystemAccessEditor.svelte](./FilesystemAccessEditor.svelte) — Policy workspace presentation.
+- [FilesystemAccessPage.svelte](./FilesystemAccessPage.svelte) — Page composition and loading.
+- [FilesystemConfirmationDialog.svelte](./FilesystemConfirmationDialog.svelte) — Policy confirmation presentation.
+- [FilesystemGroupDialog.svelte](./FilesystemGroupDialog.svelte) — Group grant editor.

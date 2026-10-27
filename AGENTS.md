@@ -21,16 +21,10 @@ Architecture decision records live in [`umbod/project/architecture-records/`](um
 
 ## Where to start by task
 
-Start at the public boundary or failing test, then trace inward; do not choose files by name alone. Follow backend calls into `umbod/api/src/umbod/core/`, and inspect `infrastructure/` or other adapters only for external I/O.
-
-Module-level `README.md` files contain only YAML frontmatter with a `title` and a table of contents linking to module files. Consult this index before opening a file when unsure whether it is relevant to your search. Do not include module explanations or information available from reading the code. Use the `write-module-readme` skill when creating or updating these indexes; keep links current when files are added, renamed, moved, or removed.
-
-- REST/API behavior → `umbod/api/src/umbod/rest/`; MCP behavior → `umbod/api/src/umbod/mcp/`; CLI behavior → `umbod/api/src/umbod/cli/`.
-- Connector authoring → `packages/umbod-sdk/src/umbod_sdk/connectors/`; read `packages/umbod-sdk/src/umbod_sdk/connectors/README.md` and `packages/umbod-sdk/src/umbod_sdk/skills/draft-agent-connector/SKILL.md` before changing it or creating a connector.
-- Messaging/events → `umbod/api/src/messaging/`.
-- Pages/navigation → `umbod/frontend/src/routes/`; reusable UI → `umbod/frontend/src/lib/components/`; frontend administration APIs and state → `umbod/frontend/src/lib/admin/`.
-- Configuration → `umbod/api/src/umbod/config/`.
-- Local service wiring → `umbod/docker-compose.yml`; Kubernetes deployment → `umbod/deploy/helm/umbod/`.
+- [Backend — API, MCP, and CLI](umbod/api/src/README.md)
+- [Frontend — workspace UI](umbod/frontend/src/README.md)
+- [SDK — connector development](packages/umbod-sdk/src/README.md)
+- [Website — public site](website/src/README.md)
 
 ## Verification
 
