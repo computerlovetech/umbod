@@ -1,3 +1,4 @@
+from umbod.infrastructure.key_value import create_inmemory_key_value_driver, create_request_cache
 from umbod.infrastructure.persistence.runtime import (
     AppPersistenceRuntime,
     ConfiguredPersistenceRuntimeProvider,
@@ -19,6 +20,8 @@ from umbod.infrastructure.filesystem import (
 )
 
 __all__ = [
+    "create_inmemory_key_value_driver",
+    "create_request_cache",
     "AppPersistenceRuntime",
     "ConfiguredPersistenceRuntimeProvider",
     "ContentConfig",

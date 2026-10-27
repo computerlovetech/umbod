@@ -94,6 +94,14 @@
 
 **Read when working with:** Validated telemetry exports, sink ports, in-memory acceptance, or existing stdout logger integration.
 
+### `key_value/`
+
+**Read when working with:** Generic asynchronous key-value storage contracts and explicit hit/miss results. The [local index](key_value/README.md) separates neutral ports from concrete infrastructure drivers; it contains no caching policy or backend selection.
+
+### `caching/`
+
+**Read when working with:** Explicit request-local asynchronous result reuse. The [local index](caching/README.md) defines the injectable generic cache protocol, key-value driver dependency, concurrent-load sharing, cancellation, generation-based invalidation and caller-owned key/lifetime boundaries. This standalone module is not integrated with persistence or catalogue reads.
+
 ### `persistence/`
 
 **Read when working with:** Persistence ports, queries, deferred read plans, or database readiness behavior. The [local index](persistence/README.md) describes explicit registration, exact-read optimization and session-bound execution; [ADR-009](../../../../project/architecture-records/ADR-009-deferred-read-planning.md) records the planning and authority boundaries.

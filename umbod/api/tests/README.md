@@ -14,6 +14,10 @@ Parallelism is enabled explicitly by the backend command and CI, not global pyte
 
 `umbod/core/persistence/test_read_plan.py` checks deferred registration, exact-read deduplication, result ownership, lifecycle and fresh execution against both database ports. `umbod/core/user_catalogue/test_read_state.py` checks bounded state batches, complete activation identities, missing facts and revocation. `umbod/rest/user_catalogue/test_catalogue_query_budget.py` checks constant reads and sessions for one versus forty shared tools and next-request grant revocation. Its counting adapters observe neutral persistence calls, not SQL text. `umbod/infrastructure/persistence/test_planned_activation_reads.py` separately verifies SQLite uses the existing compound index. `umbod/core/openapi_connectors/test_bulk_operation_reads.py` checks current-catalogue operation isolation and constant operation-read budgets.
 
+## Request-local caching
+
+`umbod/core/caching/` tests the public `AsyncRequestCache` protocol for successful and empty-result reuse, separate keys and instances, concurrent load sharing, failure retry, same-task recursion, cancellation, and invalidation while older loads are still running. Event-controlled loaders and drivers coordinate concurrency without fixed sleeps. `test_cache_driver.py` covers injected storage, shared-driver namespace isolation, suspended driver lookups/writes, failures, cancellation and generation-safe invalidation. `umbod/infrastructure/key_value/` verifies the in-memory driver through `KeyValueDriver`, including explicit misses, false values, compound keys, overwrites, deletion, scoped clearing and fresh composition. These contracts do not integrate the cache with database sessions, HTTP requests, or read plans.
+
 ## Shared persistence fixtures
 
 `conftest.py` installs test connector plugins and isolates the default connector-store path for each test. Isolation changes configuration only; it does not create a SQLite database or prepare the application schema.

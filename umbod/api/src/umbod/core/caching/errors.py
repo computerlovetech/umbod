@@ -1,0 +1,2 @@
+class RecursiveCacheLoadError(RuntimeError):
+    pass

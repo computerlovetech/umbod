@@ -1,10 +1,16 @@
 # Infrastructure
 
-**Module responsibility:** Low-level persistence and filesystem storage drivers with their configured composition boundaries, as defined by ADR-001 and its scoped ADR-006 extension. Domain-specific models, ports, rules, and services belong in core.
+**Module responsibility:** Low-level persistence, filesystem and key-value storage drivers with their composition boundaries, as defined by ADR-001 and its scoped ADR-006 and ADR-010 extensions. Domain-specific models, ports, rules, and services belong in core.
 
 **Read when working with:** Backend selection, database or filesystem storage drivers, connection handling, schema preparation, or configured storage/service composition.
 
 ## Submodules
+
+### `key_value/`
+
+**Public entry:** Import `create_inmemory_key_value_driver` or `create_request_cache` from `umbod.infrastructure`. Both create fresh operation-owned objects. Custom cache composition injects a core `KeyValueDriver` into `RequestCache`; connections to any future remote backend must not extend the cache's request lifetime.
+
+**Internal:** The concrete in-memory driver stores successful key-value data, not asyncio futures or caching policy. The [local index](key_value/README.md) describes the generic storage operations. Redis, serialization, expiry and distributed coordination are not implemented. Cache logical invalidation does not physically delete backend entries; external-driver retention must be explicitly designed before integration. [ADR-010](../../../../project/architecture-records/ADR-010-key-value-storage-drivers.md) records this boundary.
 
 ### `persistence/`
 
