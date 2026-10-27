@@ -1,3 +1,10 @@
+from umbod.core.persistence.plan import (
+    ManyRead,
+    OneRead,
+    ReadPlan,
+    ReadPlanOperations,
+    ReadResults,
+)
 from umbod.core.persistence.ports import (
     Database,
     DatabaseSchema,
@@ -66,9 +73,11 @@ __all__ = [
     "JsonTupleCodec",
     "JsonValueCodec",
     "KeyCodec",
+    "ManyRead",
     "NoFilter",
     "Not",
     "OneOf",
+    "OneRead",
     "OrderBy",
     "Ordering",
     "PersistenceDecodingError",
@@ -79,6 +88,9 @@ __all__ = [
     "Projection",
     "PydanticJsonCodec",
     "Query",
+    "ReadPlan",
+    "ReadPlanOperations",
+    "ReadResults",
     "RowCodec",
     "Table",
     "TableIdentity",

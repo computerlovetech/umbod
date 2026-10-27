@@ -19,7 +19,7 @@ from umbod.core.connectors.downstream_mcp.models import (
 )
 from umbod.core.connectors.downstream_mcp.stores.ports import (
     ConnectorDefinitionFound,
-    ConnectorDefinitionStore,
+    ConnectorDefinitionReader,
     ConnectorIdQuery,
     ToolCatalogFound,
     ToolCatalogStore,
@@ -35,7 +35,7 @@ class DownstreamCapabilityRecord:
 
 class StoreBackedDownstreamCapabilityCatalog:
     def __init__(
-        self, definitions: ConnectorDefinitionStore, catalogs: ToolCatalogStore
+        self, definitions: ConnectorDefinitionReader, catalogs: ToolCatalogStore
     ) -> None:
         self._definitions = definitions
         self._catalogs = catalogs

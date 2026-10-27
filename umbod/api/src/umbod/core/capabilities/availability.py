@@ -1,13 +1,13 @@
 from typing import Protocol
 
-from umbod.core.activation.domain import ActivationStatus, ActivationStore, CapabilityRef
+from umbod.core.activation.domain import ActivationStatus, CapabilityActivationReader, CapabilityRef
 from umbod.core.capabilities.catalog import (
     CapabilityCatalog,
     CapabilityNotFoundError,
 )
 from umbod.core.capabilities.domain import CapabilityIdentity
 from umbod.core.invocation import ConnectorKind
-from umbod.core.publishing.store import ConnectorPublishingStore
+from umbod.core.publishing.store import ConnectorPublicationReader
 
 
 class CapabilityPublication(Protocol):
@@ -53,7 +53,7 @@ class ConnectorStoreCapabilityPublication:
     def __init__(
         self,
         connector_kind: ConnectorKind,
-        store: ConnectorPublishingStore,
+        store: ConnectorPublicationReader,
     ) -> None:
         self._connector_kind = connector_kind
         self._store = store
@@ -68,7 +68,7 @@ class ConnectorStoreCapabilityActivation:
     def __init__(
         self,
         connector_kind: ConnectorKind,
-        store: ActivationStore,
+        store: CapabilityActivationReader,
     ) -> None:
         self._connector_kind = connector_kind
         self._store = store

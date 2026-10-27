@@ -1,0 +1,36 @@
+# ADR-009: Explicit Deferred Read Planning
+
+- **Status:** Accepted
+- **Scope:** Backend-neutral persistence reads and Dashboard catalogue assembly
+
+## Decision
+
+Bounded-context stores may compose validated, typed reads into an explicit request-scoped `ReadPlan`. Registration performs no I/O. Execution freezes registration, applies a separate pure optimization pass, and runs the resulting reads through a supplied `DatabaseSession`.
+
+The first optimization eliminates structurally identical reads, including table/schema descriptors, cardinality, predicates, projection, ordering and limit. Context-owned builders express bulk reads explicitly. Immediate database operations remain available and unchanged.
+
+Handles preserve result types and belong to one plan. Results belong to one execution. Reexecuting a frozen plan performs fresh reads; neither results nor authorization decisions are cached between requests. Failed or cancelled execution returns no partial result object.
+
+## Initial use
+
+Dashboard catalogue assembly plans publication, activation and captured caller-group grants together, using bounded ID batches. Empty inputs generate no reads. Activation predicates include connector kinds to use the existing compound primary key; lookup results retain complete kind-qualified capability identities.
+
+The request reuses loaded downstream definitions, normalized catalogues and connector-invariant readiness results. OpenAPI current-operation reads use successive header and operation plans in one session, restricting operations to the selected connector and exact current catalogue ID.
+
+## Consistency and authority
+
+The caller and membership are captured before asynchronous catalogue loading. Planned state reads share one transaction. This is not a claim that all Dashboard data, configuration, descriptions and personal authorization reads share one atomic snapshot. SQLite and in-memory session guarantees remain defined by their existing adapters.
+
+No ordinary session-opening store is invoked inside plan execution. Transactions do not include network discovery, OAuth operations or response rendering. Existing personal admission and mutation transactions remain fresh and authoritative. Request-local readiness reuse never becomes invocation authority or shared credential storage.
+
+This extends [ADR-001](ADR-001-backend-neutral-persistence.md) without changing runtime ownership. It does not replace the event-synchronized MCP discovery boundary in [ADR-008](ADR-008-event-synchronized-tool-runtime.md).
+
+## Alternatives and limits
+
+Implicit query interception and global caches were rejected because they hide execution and authorization lifetimes. Full-table snapshots were rejected in favor of scoped bulk requirements. A general cost-based optimizer, arbitrary query merging, joins, write planning and cross-HTTP-request composition are deferred.
+
+The separate planning/optimization/execution stages leave room for safe rewrite rules, narrower projections and backend-specific execution strategies. Future rules must preserve ordering, limits, cardinality, decoding errors and owner isolation, with behavioral and query-budget regressions.
+
+## Consequences
+
+The current shared-downstream catalogue regression performs the same nine database reads and six sessions for one and forty tools, on both in-memory and SQLite backends, without writes. This is a bounded fixture result, not a universal latency or query-count guarantee. Broader batching across connectors remains future work.

@@ -54,6 +54,7 @@ from umbod.core.connectors.openapi.stores.schema import (
     CurrentCatalogHeaderKey,
     CurrentCatalogHeaderRecord,
 )
+from umbod.core.persistence.plan import ReadPlan
 from umbod.core.persistence.ports import (
     Database,
     DatabaseSession,
@@ -144,6 +145,41 @@ class OpenApiConnectorStoreService:
                 ),
             )
         return tuple(self._summary(row) for row in rows)
+
+    async def list_operations(
+        self, connector_id: str
+    ) -> tuple[PersistedOpenApiOperation, ...]:
+        header_plan = ReadPlan()
+        header_handle = header_plan.find_one(
+            self._headers,
+            Query(
+                filter=Equals(CURRENT_CATALOG_HEADER_CONNECTOR_ID, connector_id),
+                projection=AllFields(),
+                ordering=Unordered(),
+            ),
+        )
+        async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
+            header_results = await header_plan.execute(session)
+            header = header_results.get(header_handle)
+            if header is None:
+                return ()
+            operations_plan = ReadPlan()
+            operations_handle = operations_plan.find_many(
+                self._operations,
+                Query(
+                    filter=AllOf(
+                        (
+                            Equals(CATALOG_OPERATION_CONNECTOR_ID, connector_id),
+                            Equals(CATALOG_OPERATION_CATALOG_ID, header.catalog_id),
+                        )
+                    ),
+                    projection=AllFields(),
+                    ordering=OrderBy((CATALOG_OPERATION_OPERATION_ID,)),
+                ),
+            )
+            operation_results = await operations_plan.execute(session)
+            rows = operation_results.get(operations_handle)
+        return tuple(self._operation(row) for row in rows)
 
     async def read_operation(
         self, connector_id: str, operation_id: str

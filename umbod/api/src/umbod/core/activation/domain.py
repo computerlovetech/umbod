@@ -61,9 +61,10 @@ class ActivationBatchResult:
     failure: ActivationFailure | None
 
 
-class ActivationStore(Protocol):
+class CapabilityActivationReader(Protocol):
     async def get_status(self, ref: CapabilityRef) -> ActivationStatus: ...
 
+class ActivationStore(CapabilityActivationReader, Protocol):
     async def set_status(self, ref: CapabilityRef, status: ActivationStatus) -> None: ...
 
     async def set_statuses(self, states: tuple[CapabilityActivationState, ...]) -> None: ...

@@ -7,11 +7,11 @@ from umbod.core.capabilities.descriptions import (
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
 from umbod.core.connectors.downstream_mcp.stores.ports import (
     ConnectorDefinitionFound,
-    ConnectorDefinitionStore,
+    ConnectorDefinitionReader,
     ConnectorIdQuery,
 )
-from umbod.core.permissions.ports import GroupPermissionReader
-from umbod.core.publishing import ConnectorPublishingStore
+from umbod.core.permissions.ports import GroupPermissionLookup
+from umbod.core.publishing.store import ConnectorPublicationReader
 
 from .inventory_models import (
     PersonalConnectorQuery,
@@ -27,9 +27,9 @@ from .service import PersonalConnectionService
 class PersonalConnectorInventoryService:
     def __init__(
         self,
-        definitions: ConnectorDefinitionStore,
-        publishing: ConnectorPublishingStore,
-        permissions: GroupPermissionReader,
+        definitions: ConnectorDefinitionReader,
+        publishing: ConnectorPublicationReader,
+        permissions: GroupPermissionLookup,
         groups: GroupMembership,
         connections: PersonalConnectionService,
         descriptions: ConnectorCapabilityDescriptionOverrideStore,

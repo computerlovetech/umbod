@@ -63,6 +63,10 @@ class OpenApiConnectorStore(
     OpenApiOperationReader,
     Protocol,
 ):
+    async def list_operations(
+        self, connector_id: str
+    ) -> tuple[PersistedOpenApiOperation, ...]: ...
+
     async def save_catalog(self, catalog: OpenApiConnectorCatalog) -> None: ...
 
 

@@ -11,10 +11,12 @@ from umbod.core.permissions.domain import (
 )
 
 
-class GroupPermissionReader(Protocol):
-    async def list_group_identifiers(self) -> tuple[GroupPermissionSummary, ...]: ...
-
+class GroupPermissionLookup(Protocol):
     async def list_group_permissions(self, group_id: str) -> GroupPermissionSet: ...
+
+
+class GroupPermissionReader(GroupPermissionLookup, Protocol):
+    async def list_group_identifiers(self) -> tuple[GroupPermissionSummary, ...]: ...
 
     async def list_all_group_permissions(self) -> tuple[GroupPermissionSet, ...]: ...
 

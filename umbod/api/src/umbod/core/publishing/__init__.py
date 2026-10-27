@@ -1,4 +1,5 @@
 from umbod.core.publishing.store import (
+    ConnectorPublicationReader,
     ConnectorPublishingStore,
     ConnectorPublishStateChanged,
     ConnectorPublishStateChangeSource,
@@ -7,6 +8,7 @@ from umbod.core.publishing.store import (
 )
 
 __all__ = [
+    "ConnectorPublicationReader",
     "ConnectorPublishingStore",
     "ConnectorPublishStateChanged",
     "ConnectorPublishStateChangeSource",

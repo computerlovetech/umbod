@@ -96,6 +96,6 @@
 
 ### `persistence/`
 
-**Read when working with:** Persistence ports, queries, or database readiness behavior.
+**Read when working with:** Persistence ports, queries, deferred read plans, or database readiness behavior. The [local index](persistence/README.md) describes explicit registration, exact-read optimization and session-bound execution; [ADR-009](../../../../project/architecture-records/ADR-009-deferred-read-planning.md) records the planning and authority boundaries.
 
 **Dependency rule:** Shared root packages never import `umbod_sdk.connectors.native`, `umbod_sdk.connectors.openapi`, or `umbod_sdk.connectors.downstream_mcp`. Kind packages and delivery boundaries may import shared roots. Kind-stitching composition belongs in delivery wiring (for example REST).

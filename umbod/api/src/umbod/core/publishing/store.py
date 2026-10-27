@@ -7,11 +7,12 @@ from umbod.core.publishing.stores.events import (
 )
 
 
-class ConnectorPublishingStore(Protocol):
+class ConnectorPublicationReader(Protocol):
     async def is_published(self, connector_id: str) -> bool: ...
 
     async def was_previously_published(self, connector_id: str) -> bool: ...
 
+class ConnectorPublishingStore(ConnectorPublicationReader, Protocol):
     async def publish_connector(self, connector_id: str) -> None: ...
 
     async def unpublish_connector(self, connector_id: str) -> None: ...
@@ -25,6 +26,7 @@ class ConnectorPublishStateChangeSource(Protocol):
 
 
 __all__ = [
+    "ConnectorPublicationReader",
     "ConnectorPublishingStore",
     "ConnectorPublishStateChanged",
     "ConnectorPublishStateChangeSource",

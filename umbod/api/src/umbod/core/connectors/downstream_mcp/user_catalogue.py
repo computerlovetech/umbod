@@ -6,7 +6,8 @@ from umbod.core.capabilities import (
     NormalizedCapability, PresentCapabilityOutputSchema,
 )
 from umbod.core.capabilities.tools.names import mangle_public_tool_name
-from umbod.core.connectors.downstream_mcp.catalog import StoreBackedDownstreamCapabilityCatalog
+from umbod.core.capabilities.catalog import CapabilityCatalog, InMemoryCapabilityCatalog
+from umbod.core.connectors.downstream_mcp.catalog.capability_catalog import DownstreamCapabilityRecord
 from umbod.core.connectors.downstream_mcp.models import ConnectorDefinitionModel, uses_personal_oauth
 from umbod.core.connectors.downstream_mcp.personal_connections import (
     CanonicalPrincipal, PersonalConnectionKey, PersonalConnectorInventory,
@@ -18,39 +19,39 @@ from umbod.core.user_catalogue import CatalogueConnector, CatalogueToolCapabilit
 
 
 class SharedDownstreamCatalogue:
-    def __init__(self, catalog: StoreBackedDownstreamCapabilityCatalog) -> None:
-        self._catalog = catalog
-
-    async def list_capabilities(self) -> tuple[NormalizedCapability, ...]:
-        return tuple(
+    def __init__(self, records: tuple[DownstreamCapabilityRecord, ...]) -> None:
+        self._catalog = InMemoryCapabilityCatalog(tuple(
             record.capability.model_copy(update={
                 "connector_capability_description": record.definition.capability_description,
             })
-            for record in await self._catalog.list_records()
+            for record in records
             if not uses_personal_oauth(record.definition)
-        )
+        ))
+
+    async def list_capabilities(self) -> tuple[NormalizedCapability, ...]:
+        return await self._catalog.list_capabilities()
 
     async def resolve(self, identity: CapabilityIdentity) -> NormalizedCapability:
-        record = await self._catalog.resolve_record(identity)
-        if uses_personal_oauth(record.definition):
-            raise CapabilityNotFoundError(identity)
-        return record.capability
+        return await self._catalog.resolve(identity)
 
 
 class SharedDownstreamReadiness:
-    def __init__(self, catalog: SharedDownstreamCatalogue, credentials: EncryptedCredentialStore) -> None:
+    def __init__(self, catalog: CapabilityCatalog, credentials: EncryptedCredentialStore) -> None:
         self._catalog = catalog
         self._credentials = credentials
+        self._credential_readiness: dict[str, bool] = {}
 
     async def is_ready(self, identity: CapabilityIdentity) -> bool:
         try:
             await self._catalog.resolve(identity)
         except CapabilityNotFoundError:
             return False
-        return isinstance(
-            await self._credentials.get(ConnectorIdQuery(connector_id=identity.connector_id)),
-            CredentialFound,
-        )
+        if identity.connector_id not in self._credential_readiness:
+            self._credential_readiness[identity.connector_id] = isinstance(
+                await self._credentials.get(ConnectorIdQuery(connector_id=identity.connector_id)),
+                CredentialFound,
+            )
+        return self._credential_readiness[identity.connector_id]
 
 
 class PersonalCatalogueSource:

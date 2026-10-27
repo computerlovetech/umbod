@@ -6,13 +6,13 @@ from umbod.core.capabilities.descriptions import (
     OverriddenCapabilityDescription,
 )
 from umbod.core.permissions.domain import ConnectorCapabilityRef
-from umbod.core.permissions.ports import GroupPermissionReader
+from umbod.core.permissions.ports import GroupPermissionLookup
 
 from .models import CatalogueCapability, CatalogueConnector, CatalogueToolCapability
 
 
 class ExplicitCapabilityPermissions:
-    def __init__(self, permissions: GroupPermissionReader, groups: tuple[str, ...]) -> None:
+    def __init__(self, permissions: GroupPermissionLookup, groups: tuple[str, ...]) -> None:
         self._permissions = permissions
         self._groups = groups
 

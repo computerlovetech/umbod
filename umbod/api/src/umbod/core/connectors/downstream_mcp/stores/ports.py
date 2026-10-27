@@ -85,9 +85,7 @@ class ConnectorHealthMissing(DomainModel):
     connector_id: NonEmptyString
 
 
-class ConnectorDefinitionStore(Protocol):
-    async def save(self, command: SaveConnectorDefinition) -> ConnectorDefinitionFound: ...
-
+class ConnectorDefinitionReader(Protocol):
     async def get(
         self, query: ConnectorIdQuery
     ) -> ConnectorDefinitionFound | ConnectorDefinitionMissing: ...
@@ -97,6 +95,11 @@ class ConnectorDefinitionStore(Protocol):
     async def get_by_public_path(
         self, query: PublicPathQuery
     ) -> ConnectorDefinitionFound | ConnectorDefinitionMissing: ...
+
+
+
+class ConnectorDefinitionStore(ConnectorDefinitionReader, Protocol):
+    async def save(self, command: SaveConnectorDefinition) -> ConnectorDefinitionFound: ...
 
     async def delete(
         self, command: ConnectorIdQuery

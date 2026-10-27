@@ -10,6 +10,10 @@ Use `-n 0` instead of the parallel options for serial execution, debugger sessio
 
 Parallelism is enabled explicitly by the backend command and CI, not global pytest configuration. Kind/live-runtime integration tests remain serial. New tests must collect deterministically and isolate writable files, databases, and network listeners across processes.
 
+## Deferred read planning
+
+`umbod/core/persistence/test_read_plan.py` checks deferred registration, exact-read deduplication, result ownership, lifecycle and fresh execution against both database ports. `umbod/core/user_catalogue/test_read_state.py` checks bounded state batches, complete activation identities, missing facts and revocation. `umbod/rest/user_catalogue/test_catalogue_query_budget.py` checks constant reads and sessions for one versus forty shared tools and next-request grant revocation. Its counting adapters observe neutral persistence calls, not SQL text. `umbod/infrastructure/persistence/test_planned_activation_reads.py` separately verifies SQLite uses the existing compound index. `umbod/core/openapi_connectors/test_bulk_operation_reads.py` checks current-catalogue operation isolation and constant operation-read budgets.
+
 ## Shared persistence fixtures
 
 `conftest.py` installs test connector plugins and isolates the default connector-store path for each test. Isolation changes configuration only; it does not create a SQLite database or prepare the application schema.

@@ -33,15 +33,19 @@ class StoreBackedOpenApiCapabilityCatalog:
     async def list_capabilities(self) -> tuple[NormalizedCapability, ...]:
         capabilities: list[NormalizedCapability] = []
         for connector in await self._store.list_connectors():
-            for summary in await self._store.list_operation_summaries(connector.connector_id):
-                operation = await self._store.read_operation(connector.connector_id, summary.operation_id)
-                if operation is not None:
-                    capabilities.append(
-                        _normalize_authorized_operation(
-                            operation, connector, connector.capability_description
-                        )
-                    )
+            capabilities.extend(await self.list_connector_capabilities(connector))
         return tuple(capabilities)
+
+    async def list_connector_capabilities(
+        self, connector: OpenApiConnector
+    ) -> tuple[NormalizedCapability, ...]:
+        operations = await self._store.list_operations(connector.connector_id)
+        return tuple(
+            _normalize_authorized_operation(
+                operation, connector, connector.capability_description
+            )
+            for operation in operations
+        )
 
     async def resolve(self, identity: CapabilityIdentity) -> NormalizedCapability:
         if identity.connector_kind != "openapi":
