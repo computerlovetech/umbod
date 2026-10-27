@@ -147,7 +147,7 @@ class FastMCPPersonalMcpTransport:
                 result = inventory
             wire.check()
             if contains_secret(result, wire.target.access_token.get_secret_value()):
-                wire.fail()
+                wire.fail(None)
             return result
         finally:
             wire.cleaning_up = True
@@ -172,12 +172,12 @@ class FastMCPPersonalMcpTransport:
             response = await client.session.list_tools(params=params)
             for tool in response.tools:
                 if len(tools) >= 256 or tool.name in names or len(tool.name) > 128:
-                    state.fail()
+                    state.fail(None)
                 names.add(tool.name)
                 tools.append(bind_tool(state.target.key.connector_id, map_sdk_tool(tool)))
             if response.next_cursor is None:
                 return PersonalToolInventory(tools=tuple(tools)).model_dump(mode="json")
             if not response.next_cursor or response.next_cursor in state.cursors:
-                state.fail()
+                state.fail(None)
             state.expected_cursor = response.next_cursor
-        state.fail()
+        state.fail(None)

@@ -66,7 +66,7 @@ def store_at(path):
 
 
 async def seed(store, connector_id="one", expired=False):
-    value = ConnectorOAuthStorage(document(expired=expired)).export()
+    value = ConnectorOAuthStorage(document(expired=expired), "", None).export()
     await store.save(
         SaveCredential(
             credential=OAuthCredentialState(connector_id=connector_id, authorization=value)
@@ -154,7 +154,7 @@ async def test_authorization_is_scoped_to_connector_and_endpoint(tmp_path):
 
 @pytest.mark.asyncio
 async def test_runtime_never_starts_browser_authorization():
-    oauth = ConnectorOAuth(ConnectorOAuthStorage(document()))
+    oauth = ConnectorOAuth(ConnectorOAuthStorage(document(), "", None))
     with pytest.raises(SignInRequired):
         await oauth._perform_authorization()
 
@@ -163,7 +163,7 @@ def test_nested_unauthorized_response_is_not_reported_as_invalid_mcp():
     response = httpx2.Response(401, request=httpx2.Request("POST", "https://tools.example/mcp"))
     error = httpx2.HTTPStatusError("unauthorized", request=response.request, response=response)
     failure = FastMCPDownstreamConnection(
-        True, 10, FastMCPDownstreamConnectionFactory(True)
+        True, 10, FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False)
     )._classify_exception(
         ExceptionGroup("transport", [error])
     )

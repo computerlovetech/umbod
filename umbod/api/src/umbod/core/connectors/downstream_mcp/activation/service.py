@@ -30,7 +30,7 @@ class DownstreamConnectorActivation:
         capability_key: str,
         enabled: bool,
         *,
-        capability_kind: str = "tool",
+        capability_kind: str,
     ) -> ActivationResult:
         await self._queries.get(connector_id)
         ref = CapabilityRef(

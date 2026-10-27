@@ -28,7 +28,7 @@ class MemoryHost:
         self.authorized = False
         self.reconnections = 0
         self.saved = ConnectorOAuthStorage(
-            AuthorizationDocument(endpoint_url="https://tools.example/mcp")
+            AuthorizationDocument(endpoint_url="https://tools.example/mcp"), "", None
         )
 
     def resolve(self, connector_id):

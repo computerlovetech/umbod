@@ -52,7 +52,7 @@ def test_canonical_api_returns_authenticated_identity(
     assert response.json()["email"] == "admin@example.com"
 
 
-@pytest.mark.parametrize("route", ["/users", "/docs", "/openapi.json"])
+@pytest.mark.parametrize("route", ["/users", "/overview", "/docs", "/openapi.json"])
 @pytest.mark.parametrize("membership,status", [(None, 401), ("umbod-users", 403)])
 def test_canonical_api_requires_admin_authentication(
     client: TestClient, route: str, membership: str | None, status: int
@@ -82,6 +82,7 @@ def test_openapi_and_docs_use_canonical_mount_prefix(
     assert response.status_code == 200
     assert response.json()["servers"] == [{"url": "/api/admin"}]
     assert "/users" in response.json()["paths"]
+    assert "/overview" in response.json()["paths"]
     docs = client.get("/api/admin/docs", headers=bearer_headers)
     assert docs.status_code == 200
     assert "/api/admin/openapi.json" in docs.text

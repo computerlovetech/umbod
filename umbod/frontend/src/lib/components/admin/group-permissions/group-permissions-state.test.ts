@@ -70,6 +70,31 @@ const unavailableGrantData = (): GroupPermissionsInitialData => ({
   assignableTargets: targets('available')
 });
 
+describe('registered groups', () => {
+  test('selects a registered group without granting permissions or duplicating it', async (): Promise<void> => {
+    const state = new GroupPermissionsState(unavailableGrantData(), null, null, new ControllableLoader());
+    state.acceptRegisteredGroup('new-team');
+    await ready(state);
+    expect(state.selectedGroupId).toBe('new-team');
+    expect(state.selectedPermissionSet).toEqual(detail('new-team'));
+    expect(state.hasUnsavedChanges).toBe(false);
+    state.acceptRegisteredGroup('new-team');
+    expect(state.groups.filter((group) => group.groupId === 'new-team')).toHaveLength(1);
+  });
+
+  test('preserves unsaved permissions and asks before switching to a registered group', (): void => {
+    const state = new GroupPermissionsState(unavailableGrantData(), null, null, new ControllableLoader());
+    state.removeUnavailableConnectorGrants('z-unavailable');
+    const draft = state.selectedPermissionSet;
+    state.acceptRegisteredGroup('new-team');
+    expect(state.groups.some((group) => group.groupId === 'new-team')).toBe(true);
+    expect(state.selectedGroupId).toBe('a');
+    expect(state.selectedPermissionSet).toEqual(draft);
+    expect(state.hasUnsavedChanges).toBe(true);
+    expect(state.unsavedChangesWarning).not.toBeNull();
+  });
+});
+
 describe('unavailable saved connector grants', () => {
   test('derives sorted unique IDs including capability-only grants without synthesizing permissions', () => {
     const initial = unavailableGrantData();

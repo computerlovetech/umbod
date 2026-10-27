@@ -52,7 +52,7 @@ def connection_configuration_from_persisted_models(
     definition: ConnectorDefinition,
     credential: CredentialState,
     *,
-    persist_refresh: bool = True,
+    persist_refresh: bool,
 ) -> DownstreamMcpConnectionConfiguration:
     if uses_personal_oauth(definition):
         raise ValueError("Personal OAuth cannot use shared connector credentials")

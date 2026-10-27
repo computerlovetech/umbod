@@ -32,9 +32,9 @@ class PinnedPublicNetworkBackend(httpcore2.AsyncNetworkBackend):
         self,
         host: str,
         port: int,
-        timeout: float | None = None,
-        local_address: str | None = None,
-        socket_options: Iterable[httpcore2.SOCKET_OPTION] | None = None,
+        timeout: float | None,
+        local_address: str | None,
+        socket_options: Iterable[httpcore2.SOCKET_OPTION] | None,
     ) -> httpcore2.AsyncNetworkStream:
         self._check()
         addresses = await self._resolver.resolve(host, port)
@@ -56,8 +56,8 @@ class PinnedPublicNetworkBackend(httpcore2.AsyncNetworkBackend):
     async def connect_unix_socket(
         self,
         path: str,
-        timeout: float | None = None,
-        socket_options: Iterable[httpcore2.SOCKET_OPTION] | None = None,
+        timeout: float | None,
+        socket_options: Iterable[httpcore2.SOCKET_OPTION] | None,
     ) -> httpcore2.AsyncNetworkStream:
         raise PersonalRuntimeUnavailable("Personal MCP unavailable")
 
@@ -73,7 +73,7 @@ class CheckedNetworkStream(httpcore2.AsyncNetworkStream):
         self._secret_bytes = token.get_secret_value().encode("ascii")
         self._trailer = b""
 
-    async def read(self, max_bytes: int, timeout: float | None = None) -> bytes:
+    async def read(self, max_bytes: int, timeout: float | None) -> bytes:
         self._check()
         result = await self._stream.read(max_bytes, timeout)
         self._check()
@@ -83,7 +83,7 @@ class CheckedNetworkStream(httpcore2.AsyncNetworkStream):
         self._trailer = combined[-max(0, len(self._secret_bytes) - 1):] if len(self._secret_bytes) > 1 else b""
         return result
 
-    async def write(self, buffer: bytes, timeout: float | None = None) -> None:
+    async def write(self, buffer: bytes, timeout: float | None) -> None:
         self._check()
         await self._stream.write(buffer, timeout)
         self._check()
@@ -92,8 +92,8 @@ class CheckedNetworkStream(httpcore2.AsyncNetworkStream):
         await self._stream.aclose()
 
     async def start_tls(
-        self, ssl_context: ssl.SSLContext, server_hostname: str | None = None,
-        timeout: float | None = None,
+        self, ssl_context: ssl.SSLContext, server_hostname: str | None,
+        timeout: float | None,
     ) -> httpcore2.AsyncNetworkStream:
         self._check()
         if not ssl_context.check_hostname or ssl_context.verify_mode != ssl.CERT_REQUIRED:

@@ -151,7 +151,7 @@ def test_exception_classification_terminates_for_cyclic_exception_chain() -> Non
     connection = FastMCPDownstreamConnection(
         tls_verification=True,
         timeout_seconds=1,
-        connection_factory=FastMCPDownstreamConnectionFactory(True),
+        connection_factory=FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False),
     )
     outer_error = RuntimeError("outer")
     transport_error = httpx2.ConnectError("connection failed")
@@ -196,7 +196,7 @@ async def test_slow_catalog_respects_probe_deadline_not_httpx_default(deadline, 
                     if task.done():
                         await task
                     await asyncio.sleep(0.01)
-            probe = FastMCPDownstreamConnection(True, deadline, FastMCPDownstreamConnectionFactory(True))
+            probe = FastMCPDownstreamConnection(True, deadline, FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False))
             result = await probe.probe(NoAuthConnectionConfiguration(endpoint_url=endpoint))
             if succeeds:
                 assert isinstance(result, ProbeCapabilities)

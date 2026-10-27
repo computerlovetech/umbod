@@ -36,8 +36,8 @@ async def list_tool_activations(
     connector_id: str,
     activation_port: ActivationPort,
     policy_store: ConnectorInvocationPolicyStore,
-    operation_names: Sequence[str] | None = None,
-    activation_filter: ActivationListFilter | None = None,
+    operation_names: Sequence[str] | None,
+    activation_filter: ActivationListFilter | None,
 ) -> ToolActivationBatchResponse:
     tools = await activation_port.list_activations(
         connector_id,
@@ -74,7 +74,7 @@ async def put_tool_activations(
     mutation_port: ConnectorToolConfigurationMutationPort,
     event_stream: EventStream | None,
     activation_event_policy: ActivationEventPublicationPolicy,
-    unknown_tool_error: HTTPException | None = None,
+    unknown_tool_error: HTTPException | None,
 ) -> ToolActivationBatchResponse | JSONResponse:
     if any(item.tool_id not in known_operation_names for item in items):
         if unknown_tool_error is not None:

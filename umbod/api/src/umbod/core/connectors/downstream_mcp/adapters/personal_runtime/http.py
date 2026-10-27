@@ -84,7 +84,7 @@ class BoundedResponseStream(httpx2.AsyncByteStream):
                 self._state.fail(_TIMEOUT)
             except Exception as error:
                 _capture_http_failure(error)
-                self._state.fail()
+                self._state.fail(None)
             self._size += len(chunk)
             self._state.account(len(chunk), self._size)
             yield chunk
@@ -109,13 +109,13 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
             _capture_http_failure(error)
             with anyio.move_on_after(0.25, shield=True):
                 await response.aclose()
-        self._state.fail()
+        self._state.fail(None)
 
     async def _request_body(self, request: httpx2.Request) -> bytes:
         body = bytearray()
         async for chunk in request.stream:
             if len(body) + len(chunk) > self._state.limits.maximum_request_bytes:
-                self._state.fail()
+                self._state.fail(None)
             body.extend(chunk)
         return bytes(body)
 
@@ -142,12 +142,12 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
             self._state.fail(_TIMEOUT)
         except Exception as error:
             _capture_http_failure(error)
-        self._state.fail()
+        self._state.fail(None)
 
     def _response(self, request: httpx2.Request, response: httpcore2.Response) -> httpx2.Response:
         if response.status == 401 and request.method != "DELETE" and not self._state.cleaning_up:
             self._state.authorization_rejected = True
-            self._state.fail()
+            self._state.fail(None)
         incoming = self._response_headers(response)
         raw = BoundedResponseStream(response, self._state)
         media_type = incoming.get("content-type", "").partition(";")[0].strip().lower()
@@ -173,7 +173,7 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
             or length + self._state.total_bytes > self._state.limits.maximum_total_bytes
             or response.status < 200 or response.status >= 300
         ):
-            self._state.fail()
+            self._state.fail(None)
         return permitted
 
     def _validate_encoding(self, headers: httpx2.Headers) -> None:
@@ -182,7 +182,7 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
         for parameter in parts[1:]:
             name, _, value = parameter.partition("=")
             if name.strip().lower().startswith("charset") and value.strip().strip('"').lower() not in {"utf-8", "utf8"}:
-                self._state.fail()
+                self._state.fail(None)
         if parts[0].strip().lower() in {"application/json", "text/event-stream"}:
             headers["content-type"] = parts[0].strip().lower() + "; charset=utf-8"
 

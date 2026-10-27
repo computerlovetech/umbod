@@ -1,12 +1,12 @@
 import { render } from 'svelte/server';
 import { describe, expect, test } from 'vitest';
-import { loadAdminOverview } from '$lib/admin/overview/aggregate';
 import { InMemoryOverviewSource } from '$lib/admin/overview/in-memory-source';
+import { overviewFixture } from '$lib/admin/overview/fixtures.test-support';
 import { available, type AdminOverview } from '$lib/admin/overview/models';
 import AdminOverviewDashboard from './AdminOverviewDashboard.svelte';
 
 async function emptyOverview(): Promise<AdminOverview> {
-  return loadAdminOverview(new InMemoryOverviewSource({ connectors: { catalog: available([]), openapi: available([]), mcp: available([]) }, tools: { catalog: {}, openapi: {}, mcp: {} }, permissionGroups: available(0) }));
+  return new InMemoryOverviewSource(overviewFixture()).load();
 }
 
 describe('admin overview dashboard SSR', () => {

@@ -34,7 +34,7 @@ def test_personal_oauth_definition_cannot_use_shared_credentials() -> None:
     )
     credential = OAuthCredentialState(connector_id="alpha", authorization=SecretStr("admin-canary"))
     with pytest.raises(ValueError, match="Personal OAuth"):
-        connection_configuration_from_persisted_models(definition, credential)
+        connection_configuration_from_persisted_models(definition, credential, persist_refresh=True)
 
 
 def test_shared_creation_contract_rejects_personal_ownership() -> None:

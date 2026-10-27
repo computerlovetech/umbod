@@ -17,5 +17,6 @@ class FastMCPDownstreamClientFactory:
         configuration = connection_configuration_from_persisted_models(
             command.definition,
             command.credential,
+            persist_refresh=True,
         )
         return self.connection_factory.create(configuration).create_client()

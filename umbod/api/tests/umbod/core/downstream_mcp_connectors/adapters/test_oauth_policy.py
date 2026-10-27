@@ -33,7 +33,7 @@ def connections(enabled: bool = False):
         OperatorSettings(_env_file=None, mcp_downstream_oauth_enabled=enabled)
     )
     return create_downstream_mcp_connections(
-        downstream_mcp_infrastructure_settings_from_app_config(config)
+        downstream_mcp_infrastructure_settings_from_app_config(config), None
     )
 
 
@@ -85,7 +85,7 @@ async def test_disabled_blocks_probe_runtime_and_background_discovery() -> None:
     ],
 )
 def test_disabled_still_constructs_non_oauth_clients(configuration) -> None:
-    strategy = FastMCPDownstreamConnectionFactory(True).create(configuration)
+    strategy = FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False).create(configuration)
     client = strategy.create_client()
     assert client.transport.auth is None
     if configuration.connection_type == "static_bearer":

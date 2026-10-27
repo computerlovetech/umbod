@@ -1,7 +1,7 @@
 # ADR-009: Explicit Deferred Read Planning
 
 - **Status:** Accepted
-- **Scope:** Backend-neutral persistence reads, Dashboard catalogue assembly and assignable group-permission targets
+- **Scope:** Backend-neutral persistence reads, Dashboard catalogue assembly, administration overview and assignable group-permission targets
 
 ## Decision
 
@@ -26,6 +26,14 @@ The GET prepares native, OpenAPI and downstream catalogues before registering st
 After preparation, publication and activation reads execute together through one supplied session. Resolved readers perform no further database I/O and fail closed for absent facts. Activation lookups retain complete connector-kind, connector-ID, capability-kind and key identities. The bulk query selects all capability statuses and connector kinds for the scoped IDs, not exact individual capability keys. Catalogue preparation and native configuration readiness remain outside the planned-state transaction; this is not a fully atomic endpoint snapshot.
 
 For the existing single-shared-downstream fixture, one, forty and one hundred enabled tools now require five reads and four sessions on both backends, rather than the cached path's N+5 reads and sessions. The five reads are connector inventory, downstream definitions, one downstream catalogue, publication and activation. Catalogue reads still grow with connector count, and native configuration readiness is unchanged. No universal endpoint budget or production latency guarantee is implied.
+
+## Administration overview
+
+GET `/api/admin/overview` uses request-scoped read planning for a metadata summary, rather than invoking connector-management endpoints. Inventory and scoped dependent reads share a supplied session. Counts use registered native tools, current OpenAPI operation identities and shared downstream snapshots; stale activations and personal inventories do not contribute.
+
+Configuration counts mean persisted current-configuration presence, not successful credential decryption or live service readiness. The overview must not load secrets or invocation policies, perform network discovery, or normalize complete capability schemas merely to count them. Narrow context-owned projections and bounded ID batches avoid per-tool reads. Downstream snapshots currently embed tool metadata, so reading those snapshots remains necessary; this is not a claim of database-side aggregate counts or constant work for arbitrary connector inventories.
+
+A failed database read aborts the summary snapshot; the frontend reports unavailable counts rather than zeros. This intentionally replaces independent HTTP-source failure isolation with one coherent read. Results are not cached across requests or used as execution authority.
 
 ## Consistency and authority
 

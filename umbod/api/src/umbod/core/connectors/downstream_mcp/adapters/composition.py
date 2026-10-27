@@ -19,7 +19,7 @@ class DownstreamMcpConnections:
 
 def create_downstream_mcp_connections(
     settings: DownstreamMcpInfrastructureSettings,
-    credentials: EncryptedCredentialStore | None = None,
+    credentials: EncryptedCredentialStore | None,
 ) -> DownstreamMcpConnections:
     connection_factory = FastMCPDownstreamConnectionFactory(
         settings.tls_verification,

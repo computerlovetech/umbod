@@ -31,7 +31,7 @@ class FastMCPDownstreamDiscovery:
     async def discover(self, command: DiscoverDownstreamTools) -> DiscoveryResult:
         attempted_at = self._clock()
         configuration = connection_configuration_from_persisted_models(
-            command.definition, command.credential
+            command.definition, command.credential, persist_refresh=True
         )
         result = await self._probe.probe(configuration)
         if isinstance(result, ProbeFailed):

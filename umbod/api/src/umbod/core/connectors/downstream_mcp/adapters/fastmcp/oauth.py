@@ -6,6 +6,7 @@ SDK-specific token and issuer metadata stay out of the connector domain model.
 
 import asyncio
 import time
+from typing import TypedDict, Unpack
 from weakref import WeakValueDictionary
 from collections.abc import Awaitable, Callable
 
@@ -50,8 +51,8 @@ class ConnectorOAuthStorage:
     def __init__(
         self,
         document: AuthorizationDocument,
-        connector_id: str = "",
-        credentials: EncryptedCredentialStore | None = None,
+        connector_id: str,
+        credentials: EncryptedCredentialStore | None,
     ) -> None:
         self.document = document
         self.connector_id = connector_id
@@ -109,15 +110,25 @@ async def require_sign_in(_url: str) -> None:
     raise SignInRequired()
 
 
+class ConnectorOAuthOptions(TypedDict, total=False):
+    redirect_uri: str
+    redirect_handler: Callable[[str], Awaitable[None]]
+    callback_handler: Callable[[], Awaitable[AuthorizationCodeResult]] | None
+
+
 class ConnectorOAuth(OAuthClientProvider):
     def __init__(
         self,
         storage: ConnectorOAuthStorage,
-        redirect_uri: str = "http://127.0.0.1/oauth/callback",
-        redirect_handler: Callable[[str], Awaitable[None]] = require_sign_in,
-        callback_handler: Callable[[], Awaitable[AuthorizationCodeResult]] | None = None,
+        **options: Unpack[ConnectorOAuthOptions],
     ) -> None:
+        unknown_options = options.keys() - ConnectorOAuthOptions.__annotations__.keys()
+        if unknown_options:
+            raise TypeError(f"Unexpected OAuth options: {sorted(unknown_options)}")
         self.storage = storage
+        redirect_uri = options.get("redirect_uri", "http://127.0.0.1/oauth/callback")
+        redirect_handler = options.get("redirect_handler", require_sign_in)
+        callback_handler = options.get("callback_handler")
         super().__init__(
             server_url=storage.document.endpoint_url,
             client_metadata=OAuthClientMetadata(

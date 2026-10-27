@@ -401,6 +401,15 @@ export class GroupPermissionsState {
     }
   };
 
+  acceptRegisteredGroup = (groupId: string): void => {
+    if (!this.groups.some((group) => group.groupId === groupId)) {
+      const group = emptyPermissionSet(groupId);
+      this.groupCache.set(groupId, group);
+      this.pageData = { ...this.pageData, groups: [...this.groups, group] };
+    }
+    this.selectGroup(groupId);
+  };
+
   selectGroup = (groupId: string): void => {
     if (this.selectedGroupId !== null && this.selectedGroupId !== groupId && this.hasUnsavedChanges) {
       this.pageData = stageGroupSelectionWithUnsavedChanges(this.pageData, groupId);

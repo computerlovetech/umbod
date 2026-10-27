@@ -1,14 +1,16 @@
 ---
 type: Software Module
 title: "Administration overview"
-description: "Read-only overview aggregation with explicit source availability."
+description: "Validated administration summaries with explicit source availability."
 ---
 
 # Files
 
-- [aggregate.ts](./aggregate.ts) — Overview count aggregation.
-- [aggregate.test.ts](./aggregate.test.ts) — Source aggregation tests.
-- [api-source.ts](./api-source.ts) — Administration API source adapter.
-- [in-memory-source.ts](./in-memory-source.ts) — In-memory overview source.
-- [models.ts](./models.ts) — Count and availability contracts.
-- [port.ts](./port.ts) — Overview source port.
+- [models.ts](./models.ts) — Wire and presentation summary contracts.
+- [models.test.ts](./models.test.ts) — Summary validation tests.
+- [port.ts](./port.ts) — Summary loading boundary.
+- [in-memory-source.ts](./in-memory-source.ts) — In-memory summary adapter.
+- [source.test.ts](./source.test.ts) — Summary port contract tests.
+- [http-route.ts](./http-route.ts) — Focused summary HTTP adapter.
+- [http-route.test.ts](./http-route.test.ts) — Route and transport failure tests.
+- [fixtures.test-support.ts](./fixtures.test-support.ts) — Summary test fixtures.

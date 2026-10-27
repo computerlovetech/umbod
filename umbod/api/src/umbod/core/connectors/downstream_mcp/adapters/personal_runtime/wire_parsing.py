@@ -31,18 +31,18 @@ class ProtocolInputValidator:
 
     def text(self, value: str) -> None:
         if contains_secret(value, self._token):
-            self._state.fail()
+            self._state.fail(None)
 
     def envelope(self, data: str) -> None:
         try:
             value = json.loads(data, object_pairs_hook=unique_json_object, parse_constant=reject_json_constant)
             if contains_secret(value, self._token):
-                self._state.fail()
+                self._state.fail(None)
             JSON_RPC_MESSAGE.validate_python(value, strict=True, extra="forbid", by_alias=True, by_name=False)
             return
         except Exception:
             pass
-        self._state.fail()
+        self._state.fail(None)
 
     def frame(self, lines: list[str]) -> bytes:
         data: list[str] = []
@@ -93,14 +93,14 @@ class EventFrameBuffer:
                 self._lines = []
                 yield frame
         if complete and (self._pending or self._lines):
-            self._state.fail()
+            self._state.fail(None)
 
     def _decode(self, value: bytes) -> str:
         try:
             return value.decode("utf-8", errors="strict")
         except UnicodeError:
             pass
-        self._state.fail()
+        self._state.fail(None)
 
 
 class ValidatedProtocolStream(httpx2.AsyncByteStream):
@@ -122,7 +122,7 @@ class ValidatedProtocolStream(httpx2.AsyncByteStream):
             if not body and self._allow_empty:
                 return
             if self._media_type != "application/json":
-                self._state.fail()
+                self._state.fail(None)
             self._validate_json(bytes(body))
             yield bytes(body)
 
@@ -139,7 +139,7 @@ class ValidatedProtocolStream(httpx2.AsyncByteStream):
         try:
             text = body.decode("utf-8", errors="strict")
         except UnicodeError:
-            self._state.fail()
+            self._state.fail(None)
         self._validator.envelope(text)
 
     async def aclose(self) -> None:

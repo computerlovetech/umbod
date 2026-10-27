@@ -1,4 +1,7 @@
 <script lang="ts">
+  import { adminApi } from '$lib/admin/infrastructure/admin-api';
+  import GroupRegistrationDialog from './shared/GroupRegistrationDialog.svelte';
+  import { GroupRegistrationState } from './shared/group-registration-state.svelte';
   import { browserSubmit } from '$lib/admin/operations/browser-submit';
   import { untrack } from 'svelte';
   import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
@@ -28,6 +31,13 @@
   );
   const pendingState = new FormPendingState();
   const toast = useToast();
+  const registration = new GroupRegistrationState(
+    (groupId) => adminApi().groups.register(groupId),
+    (groupId) => {
+      state.acceptRegisteredGroup(groupId);
+      toast.success(`Registered group ${groupId}`);
+    }
+  );
 
   $effect(() => {
     const nextData = data;
@@ -35,10 +45,6 @@
 
     untrack(() => state.synchronizeServerData(nextData, null, nextSelectedGroupId));
   });
-
-  const inputValue = (event: Event): string => {
-    return event.currentTarget instanceof HTMLInputElement ? event.currentTarget.value : '';
-  };
 
   const inputChecked = (event: Event): boolean => {
     return event.currentTarget instanceof HTMLInputElement ? event.currentTarget.checked : false;
@@ -107,9 +113,14 @@
     {#if state.originHref !== null}
       <a class="group-permissions__back" href={state.originHref}>← Back to OpenAPI connector</a>
     {/if}
-    <p class="admin-eyebrow">Umbod</p>
-    <h1 id="group-permissions-title" class="admin-title">Group permissions</h1>
-    <p class="admin-lede">Add groups and see what each group's agents can do — which connectors they can access and the operations allowed for each.</p>
+    <div class="group-permissions__heading">
+      <div>
+        <p class="admin-eyebrow">Umbod</p>
+        <h1 id="group-permissions-title" class="admin-title">Group permissions</h1>
+        <p class="admin-lede">Add groups and see what each group's agents can do — which connectors they can access and the operations allowed for each.</p>
+      </div>
+      <Button disabled={registration.pending} onclick={registration.show}><span class="group-permissions__plus" aria-hidden="true">+</span> Add Group</Button>
+    </div>
   </div>
 
   <GroupPermissionsTabs activeTab="connectors" />
@@ -169,40 +180,6 @@
         {/each}
       </ul>
 
-      <form
-        method="POST"
-        data-operation="registerPermissionGroup"
-        class="group-permissions__add"
-        use:browserSubmit={({ onComplete }) => {
-          const pendingKey = 'register-group';
-          onComplete(() => pendingState.stop(pendingKey));
-      pendingState.start(pendingKey);
-
-          return async ({ update, result }) => {
-            const actionForm = formFromActionResult(result);
-            if (!actionForm) throw new Error('Invalid register permission group result');
-            if (actionForm.status === 'registered') toast.success(`Registered group ${actionForm.groupId ?? ''}`);
-            else toast.error(actionForm.message ?? 'Could not register group');
-            await update();
-            pendingState.stop(pendingKey);
-          };
-        }}
-      >
-        <label for="group-permissions-new-group">Add group value</label>
-        <div class="group-permissions__add-row">
-          <input id="group-permissions-new-group" name="groupId" value={state.groupInput} oninput={(event) => state.updateGroupInput(inputValue(event))} />
-          <LoadingButton
-            type="submit"
-            label="Add"
-            loadingLabel="Adding..."
-            loading={pendingState.isPending('register-group')}
-            variant="secondary"
-          />
-        </div>
-        {#if state.validationMessage !== null}
-          <p class="group-permissions__error">{state.validationMessage}</p>
-        {/if}
-      </form>
     {/snippet}
 
     {#snippet detail()}
@@ -352,9 +329,34 @@
   </AdminSplitWorkspace>
 </section>
 
+{#if registration.open}<GroupRegistrationDialog {registration} />{/if}
+
 <style>
   .group-permissions__header {
     margin-bottom: 32px;
+  }
+
+  .group-permissions__heading {
+    align-items: flex-start;
+    display: flex;
+    gap: 24px;
+    justify-content: space-between;
+  }
+
+  .group-permissions__heading :global(.admin-shared-button) {
+    flex-shrink: 0;
+    margin-top: 26px;
+  }
+
+  .group-permissions__plus {
+    font-size: 18px;
+    font-weight: 400;
+    margin-right: 8px;
+  }
+
+  @media (max-width: 1000px) {
+    .group-permissions__heading { flex-wrap: wrap; gap: 16px; }
+    .group-permissions__heading :global(.admin-shared-button) { margin-top: 0; }
   }
 
   .group-permissions__back {
@@ -438,37 +440,6 @@
     font-size: 13px;
     font-weight: 600;
     min-width: 0;
-  }
-
-  .group-permissions__add {
-    border-top: 1px solid var(--admin-border);
-    margin-top: auto;
-    padding: 13px 15px;
-  }
-
-  .group-permissions__add label {
-    color: var(--admin-muted);
-    display: block;
-    font-size: 12px;
-    font-weight: 600;
-    margin-bottom: 8px;
-  }
-
-  .group-permissions__add-row {
-    display: flex;
-    gap: 8px;
-  }
-
-  .group-permissions__add-row input {
-    background: var(--admin-panel);
-    border: 1px solid var(--admin-border-strong);
-    border-radius: 7px;
-    color: var(--admin-ink);
-    flex: 1;
-    font: inherit;
-    font-size: 14px;
-    min-width: 0;
-    padding: 8px 9px;
   }
 
   .group-permissions__edit-button {

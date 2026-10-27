@@ -18,7 +18,7 @@ from umbod.core.connectors.downstream_mcp.adapters.fastmcp.connection import (
 
 def test_factory_creates_no_auth_streamable_http_client_with_tls_verification() -> None:
     factory = FastMCPDownstreamClientFactory(
-        FastMCPDownstreamConnectionFactory("/tmp/test-ca.pem")
+        FastMCPDownstreamConnectionFactory("/tmp/test-ca.pem", None, oauth_enabled=False)
     )
     command = DiscoverDownstreamTools(
         definition=NoAuthConnectorDefinition(
@@ -38,7 +38,7 @@ def test_factory_creates_no_auth_streamable_http_client_with_tls_verification() 
 
 
 def test_factory_uses_only_connector_owned_static_bearer_token() -> None:
-    factory = FastMCPDownstreamClientFactory(FastMCPDownstreamConnectionFactory(True))
+    factory = FastMCPDownstreamClientFactory(FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False))
     command = DiscoverDownstreamTools(
         definition=StaticBearerConnectorDefinition(
             connector_id="weather",
@@ -59,7 +59,7 @@ def test_factory_uses_only_connector_owned_static_bearer_token() -> None:
 
 
 def test_factory_sends_basic_token_without_transformation() -> None:
-    factory = FastMCPDownstreamClientFactory(FastMCPDownstreamConnectionFactory(True))
+    factory = FastMCPDownstreamClientFactory(FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False))
     command = DiscoverDownstreamTools(
         definition=StaticBearerConnectorDefinition(
             connector_id="weather",
@@ -79,7 +79,7 @@ def test_factory_sends_basic_token_without_transformation() -> None:
 
 
 def test_factory_rejects_definition_credential_authentication_mismatch() -> None:
-    factory = FastMCPDownstreamClientFactory(FastMCPDownstreamConnectionFactory(True))
+    factory = FastMCPDownstreamClientFactory(FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False))
     command = DiscoverDownstreamTools(
         definition=NoAuthConnectorDefinition(
             connector_id="weather",
@@ -100,7 +100,7 @@ def test_factory_rejects_definition_credential_authentication_mismatch() -> None
 
 
 def test_factory_sends_custom_token_unchanged() -> None:
-    factory = FastMCPDownstreamClientFactory(FastMCPDownstreamConnectionFactory(True))
+    factory = FastMCPDownstreamClientFactory(FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False))
     command = DiscoverDownstreamTools(
         definition=StaticBearerConnectorDefinition(
             connector_id="weather",

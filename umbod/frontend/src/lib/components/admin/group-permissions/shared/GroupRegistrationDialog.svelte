@@ -7,7 +7,7 @@
 
 <dialog aria-labelledby="group-registration-title" aria-describedby="group-registration-description" {@attach nativeDialog(registration.cancel, () => !registration.pending)}>
   <h2 id="group-registration-title">Add group</h2>
-  <p id="group-registration-description">Register a shared group claim value for connectors and filesystem access. This does not create IdP membership. Registration is saved immediately and independently of Save policy. It grants no access.</p>
+  <p id="group-registration-description">Register a shared group claim value for connectors and filesystem access. This does not create IdP membership. Registration is saved immediately and independently of permission changes. It grants no access.</p>
   <form onsubmit={(event) => { event.preventDefault(); void registration.submit(); }}>
     <label for="catalogue-group-id">Group ID</label>
     <input id="catalogue-group-id" value={registration.groupId} oninput={(event) => registration.edit(event.currentTarget.value)} disabled={registration.pending} autocomplete="off" spellcheck="false" placeholder="Exact group ID" />

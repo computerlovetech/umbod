@@ -869,6 +869,7 @@ async def get_tool_activations(
         activation_port=activation,
         policy_store=policy_store,
         operation_names=operation_names,
+        activation_filter=None,
     )
 
 

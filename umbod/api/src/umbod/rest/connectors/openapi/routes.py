@@ -472,6 +472,8 @@ async def get_tool_activations(
         connector_id=connector_id,
         activation_port=activation,
         policy_store=policy_store,
+        operation_names=None,
+        activation_filter=None,
     )
 
 
@@ -497,6 +499,7 @@ async def set_tool_activations(
         mutation_port=mutation_port,
         event_stream=event_stream,
         activation_event_policy=AlwaysPublishActivationEvents(),
+        unknown_tool_error=None,
     )
 
 

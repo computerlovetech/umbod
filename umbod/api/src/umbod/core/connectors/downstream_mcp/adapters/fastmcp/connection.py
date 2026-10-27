@@ -67,8 +67,8 @@ class _FastMCPConnection:
     def _create_transport(
         self,
         *,
-        headers: dict[str, str] | None = None,
-        auth: ConnectorOAuth | None = None,
+        headers: dict[str, str] | None,
+        auth: ConnectorOAuth | None,
     ) -> StreamableHttpTransport:
         transport = StreamableHttpTransport(
             url=self._configuration.endpoint_url,
@@ -85,7 +85,7 @@ class _FastMCPConnection:
 
 class FastMCPUnauthenticatedConnection(_FastMCPConnection):
     def create_client(self) -> Client:
-        return Client(self._create_transport(headers={}))
+        return Client(self._create_transport(headers={}, auth=None))
 
 
 class FastMCPStaticBearerConnection(_FastMCPConnection):
@@ -108,7 +108,7 @@ class FastMCPStaticBearerConnection(_FastMCPConnection):
             if configuration.custom_header_name is None:
                 raise ValueError("custom header name is required")
             headers = {configuration.custom_header_name: token}
-        return Client(self._create_transport(headers=headers))
+        return Client(self._create_transport(headers=headers, auth=None))
 
 
 class FastMCPOAuthConnection(_FastMCPConnection):
@@ -133,7 +133,7 @@ class FastMCPOAuthConnection(_FastMCPConnection):
         )
 
     def create_client(self) -> Client:
-        return Client(self._create_transport(auth=self._oauth))
+        return Client(self._create_transport(headers=None, auth=self._oauth))
 
     def export_authorization(self, client: Client) -> SecretStr | None:
         return self._oauth.storage.export()
@@ -143,9 +143,9 @@ class FastMCPDownstreamConnectionFactory:
     def __init__(
         self,
         tls_verification: TlsVerification,
-        credentials: EncryptedCredentialStore | None = None,
+        credentials: EncryptedCredentialStore | None,
         *,
-        oauth_enabled: bool = False,
+        oauth_enabled: bool,
     ) -> None:
         self._tls_verification = tls_verification
         self._credentials = credentials

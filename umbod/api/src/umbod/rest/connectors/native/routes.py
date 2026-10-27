@@ -392,6 +392,7 @@ async def list_connector_tools(
         connector_id=connector_id,
         activation_port=activation_port,
         policy_store=policy_store,
+        operation_names=None,
         activation_filter=ActivationListFilter(activation_status=activation_status),
     )
 
@@ -425,6 +426,7 @@ async def put_connector_tool_activations(
         mutation_port=mutation_port,
         event_stream=event_stream,
         activation_event_policy=AlwaysPublishActivationEvents(),
+        unknown_tool_error=None,
     )
 
 

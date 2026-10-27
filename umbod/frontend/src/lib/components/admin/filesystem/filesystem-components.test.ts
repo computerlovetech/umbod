@@ -51,7 +51,7 @@ describe('filesystem accessible presentation', () => {
     const registration = new GroupRegistrationState(state.registerGroup, (): void => {});
     registration.show();
     const { body } = render(GroupRegistrationDialog, { props: { registration } });
-    for (const label of ['Add group', 'Group ID', 'Exact group ID', 'Register group', 'Cancel', 'saved immediately and independently of Save policy', 'grants no access', 'group claim value', 'does not create IdP membership']) expect(body).toContain(label);
+    for (const label of ['Add group', 'Group ID', 'Exact group ID', 'Register group', 'Cancel', 'saved immediately and independently of permission changes', 'grants no access', 'group claim value', 'does not create IdP membership']) expect(body).toContain(label);
     expect(body).not.toContain('Identity issuer');
     expect(body).not.toContain('type="checkbox"');
     expect(body).toContain('data-dialog-cancel');

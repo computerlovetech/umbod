@@ -1,3 +1,5 @@
+from typing import TypedDict, Unpack
+
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, PERSONAL_RUNTIME_FAILURE
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr, field_validator
@@ -56,10 +58,17 @@ class PersonalToolResult(PersonalRuntimeModel):
         return result
 
 
+class PersonalRuntimeFailureOptions(TypedDict, total=False):
+    diagnostic: InvocationFailureDiagnostic
+
+
 class PersonalRuntimeUnavailable(ValueError):
-    def __init__(self, message: str, *, diagnostic: InvocationFailureDiagnostic = PERSONAL_RUNTIME_FAILURE) -> None:
+    def __init__(self, message: str, **options: Unpack[PersonalRuntimeFailureOptions]) -> None:
+        unknown_options = options.keys() - PersonalRuntimeFailureOptions.__annotations__.keys()
+        if unknown_options:
+            raise TypeError(f"Unexpected failure options: {sorted(unknown_options)}")
         super().__init__(message)
-        self.diagnostic = diagnostic
+        self.diagnostic = options.get("diagnostic", PERSONAL_RUNTIME_FAILURE)
 
 
 class PersonalAuthorizationRejected(PersonalRuntimeUnavailable):

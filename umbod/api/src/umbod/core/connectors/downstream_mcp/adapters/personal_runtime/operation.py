@@ -35,9 +35,9 @@ class OperationState:
         self.preflight_complete = False
         self.url = httpx2.URL(target.endpoint_url)
         if self.url.scheme != "https" or not self.url.host or self.url.userinfo or self.url.fragment or "#" in target.endpoint_url:
-            self.fail()
+            self.fail(None)
 
-    def fail(self, diagnostic: InvocationFailureDiagnostic | None = None) -> NoReturn:
+    def fail(self, diagnostic: InvocationFailureDiagnostic | None) -> NoReturn:
         if not self.cleaning_up:
             if not self.failed and diagnostic is not None:
                 self.diagnostic = diagnostic
@@ -47,7 +47,7 @@ class OperationState:
 
     def check(self) -> None:
         if self.failed:
-            self.fail()
+            self.fail(None)
         if self.clock() >= self.target.expires_at:
             self.fail(InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="target_expired"))
         if anyio.current_time() >= self.deadline:
@@ -57,7 +57,7 @@ class OperationState:
         self.check()
         self.total_bytes += size
         if response_bytes > self.limits.maximum_response_bytes or self.total_bytes > self.limits.maximum_total_bytes:
-            self.fail()
+            self.fail(None)
 
     def authorize(self, request: httpx2.Request, body: bytes) -> None:
         self.check()
@@ -68,65 +68,65 @@ class OperationState:
             or request.headers.get("host") != self.url.netloc.decode("ascii")
             or len(body) > self.limits.maximum_request_bytes
         ):
-            self.fail()
+            self.fail(None)
         if request.method in {"GET", "DELETE"}:
             self._authorize_stream_control(request.method, body)
         elif request.method == "POST":
             self._authorize_message(body)
         else:
-            self.fail()
+            self.fail(None)
 
     def _authorize_stream_control(self, method: str, body: bytes) -> None:
         if not self.initialized or body:
-            self.fail()
+            self.fail(None)
         if method == "GET":
             self.gets += 1
             if self.gets > 1:
-                self.fail()
+                self.fail(None)
         else:
             self.deletes += 1
             if self.deletes > 1:
-                self.fail()
+                self.fail(None)
 
     def _authorize_message(self, body: bytes) -> None:
         try:
             message = json.loads(body)
         except (ValueError, UnicodeError):
-            self.fail()
+            self.fail(None)
         if not isinstance(message, dict) or message.get("jsonrpc") != "2.0" or set(message) - {"jsonrpc", "id", "method", "params"}:
-            self.fail()
+            self.fail(None)
         params = message.get("params", {})
         if not isinstance(params, dict) or ("_meta" in params and params["_meta"] != {}):
-            self.fail()
+            self.fail(None)
         params = {key: value for key, value in params.items() if key != "_meta"}
         handlers = {"initialize": self._initialize, "notifications/initialized": self._notification, "tools/list": self._list, "tools/call": self._call}
         handler = handlers.get(message.get("method"))
         if handler is None:
-            self.fail()
+            self.fail(None)
         handler(message, params)
 
     def _initialize(self, message: dict[str, object], params: dict[str, object]) -> None:
         if self.initialized or "id" not in message or set(params) - {"protocolVersion", "capabilities", "clientInfo"}:
-            self.fail()
+            self.fail(None)
         self.initialized = True
 
     def _notification(self, message: dict[str, object], params: dict[str, object]) -> None:
         self.notifications += 1
         if not self.initialized or self.notifications > 1 or params or "id" in message:
-            self.fail()
+            self.fail(None)
 
     def _list(self, message: dict[str, object], params: dict[str, object]) -> None:
         if not self.initialized or "id" not in message or self.notifications != 1 or self.calls or self.preflight_complete:
-            self.fail()
+            self.fail(None)
         self.pages += 1
         cursor = params.get("cursor", "")
         if set(params) - {"cursor"} or not isinstance(cursor, str) or cursor != self.expected_cursor or cursor in self.cursors or self.pages > self.limits.maximum_tool_pages:
-            self.fail()
+            self.fail(None)
         self.cursors.add(cursor)
 
     def _call(self, message: dict[str, object], params: dict[str, object]) -> None:
         if not self.initialized or not isinstance(self.operation, PersonalToolCall) or not self.preflight_complete or self.notifications != 1 or "id" not in message:
-            self.fail()
+            self.fail(None)
         self.calls += 1
         if self.calls > 1 or params != {"name": self.operation.tool_name, "arguments": self.operation.arguments}:
-            self.fail()
+            self.fail(None)

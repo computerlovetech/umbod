@@ -19,6 +19,14 @@ const initialData = (): GroupPermissionsInitialData => ({
 });
 
 describe('unavailable saved grant presentation', () => {
+  test('offers group registration from the primary header action instead of the sidebar form', (): void => {
+    const body = render(GroupPermissionsManager, { props: { data: initialData() } }).body;
+    expect(body).toContain('Add Group');
+    expect(body).toContain('admin-shared-button--primary');
+    expect(body).not.toContain('Add group value');
+    expect(body).not.toContain('data-operation="registerPermissionGroup"');
+  });
+
   test('explains shared catalogue deletion and zero-access registration separately from grants', (): void => {
     const data = initialData();
     data.preloadedGroup = { groupId: 'team', connectorIds: [], capabilities: [] };

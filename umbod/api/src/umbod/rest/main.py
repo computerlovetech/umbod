@@ -22,6 +22,7 @@ from umbod.rest.authentication import (
 from umbod.rest.authentication.authorization import JwtVerifier
 from umbod.rest.authentication.middleware import SuppliedJwtVerifierFactory
 from umbod.rest.authentication.rest_middleware import RestAuthenticationMiddleware
+from umbod.rest.admin_overview import router as admin_overview_router
 from umbod.rest.user_catalogue import router as user_catalogue_router
 from umbod.rest.filesystem import router as filesystem_router
 from umbod.rest.filesystem_administration import router as filesystem_administration_router
@@ -153,6 +154,7 @@ def _mount_admin_app(
     admin_router.include_router(capability_description_router)
     admin_router.include_router(mcp_permission_router)
     admin_router.include_router(groups_router)
+    admin_router.include_router(admin_overview_router)
     admin_router.include_router(openapi_connector_router)
     admin_router.include_router(oauth_router)
     admin_router.include_router(downstream_mcp_connector_router)

@@ -8,6 +8,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 
 - [__init__.py](./__init__.py)
 - [activation](./activation/README.md) — Capability enablement.
+- [admin_overview](./admin_overview/README.md) — Administration summary contracts.
 - [administrator](./administrator/) — Shared administrator configuration.
 - [caching](./caching/README.md) — Request-local result reuse.
 - [callers](./callers/README.md) — Transport-neutral caller facts.

@@ -1,5 +1,4 @@
 import { describe, expect, test, vi } from 'vitest';
-import { ApiOverviewSource } from '../overview/api-source';
 import { AdminApi } from '../infrastructure/admin-api';
 import { browserTransport, SchemaValidationError } from '../infrastructure/transport';
 import { InMemoryPublicConfigurationProvider } from '../infrastructure/public-configuration';
@@ -16,19 +15,6 @@ function harness(response: (path: string, init: RequestInit) => unknown): { api:
 }
 
 describe('personal server HTTP port contract', () => {
-  test('overview keeps shared-only counts and filters personal definitions before activation reads', async () => {
-    const { api, request } = harness((path) => {
-      if (path.endsWith('/mcp')) return { connectors: [summaryFixture(), { ...summaryFixture('shared'), authorization_mode: 'shared', auth_mode: 'none' }] };
-      if (path.endsWith('/tools/activation')) return { connector_id: 'shared', tools: [] };
-      return { ...serverFixture('shared'), authorization_mode: 'shared', auth_mode: 'none' };
-    });
-    const source = new ApiOverviewSource(api);
-    const result = await source.listConnectors('mcp');
-    expect(result).toMatchObject({ status: 'available', value: [{ id: 'shared' }] });
-    if (result.status === 'available') for (const connector of result.value) await source.listTools('mcp', connector.id);
-    expect(request.mock.calls.some(([path]) => String(path).includes('/personal/'))).toBe(false);
-    expect(request.mock.calls.filter(([path]) => String(path).endsWith('/tools/activation'))).toHaveLength(1);
-  });
   test('composes selected personal definition and policy with API base once', async () => {
     const { api, request } = harness((path) => path.endsWith('/personal-oauth') ? policyFixture() : path.endsWith('/mcp') ? { connectors: [summaryFixture(), { ...summaryFixture('shared'), authorization_mode: 'shared', auth_mode: 'none' }] } : serverFixture());
     const port: PersonalServerAdministration = api.personalServers;
