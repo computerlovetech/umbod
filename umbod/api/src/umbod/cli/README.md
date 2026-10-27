@@ -10,7 +10,6 @@ description: "Service startup, configuration inspection and connector validation
 - [api.py](./api.py) — REST service commands.
 - [config.py](./config.py) — Configuration inspection commands.
 - [connectors.py](./connectors.py) — Connector validation commands.
-- [filesystem/](./filesystem/) — Filesystem administration commands.
 - [main.py](./main.py) — Command registration.
 - [mcp.py](./mcp.py) — MCP service commands.
 

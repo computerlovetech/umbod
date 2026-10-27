@@ -23,4 +23,4 @@ description: "Storage-independent filesystem operations with separate authorizat
 # Related links
 
 - [Filesystem infrastructure](../../infrastructure/filesystem/README.md) — Configured composition and concrete content adapters under ADR-006.
-- [Acceptance plan](../../../../../../.atdd/features/filesystem/04-acceptance-test-plan.md) — Deferred byte garbage collection and move-dependent acceptance coverage.
+- [Filesystem acceptance tests](../../../../tests/umbod/core/filesystem/) — Namespace, authorization and persistence acceptance coverage.

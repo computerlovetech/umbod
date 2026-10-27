@@ -11,7 +11,6 @@ description: "Reusable and actor-owned Svelte presentation and interaction modul
 - [feedback/](./feedback/) — Toast presentation and state.
 - [files](./files/README.md) — User filesystem workspace.
 - [header/](./header/) — Header and account presentation.
-- [home/](./home/) — Home page presentation.
 - [personal-connections](./personal-connections/README.md) — Owner-scoped connection controls.
 - [shared](./shared/README.md) — Actor-independent presentation.
 

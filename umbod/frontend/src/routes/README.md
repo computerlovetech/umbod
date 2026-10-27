@@ -15,7 +15,6 @@ description: "Static SvelteKit SPA layouts, browser loaders and page composition
 - [error.test.ts](./error.test.ts) — Route error presentation tests.
 - [files/](./files/) — User filesystem page.
 - [navigation.test.ts](./navigation.test.ts) — Route navigation tests.
-- [system/](./system/) — Service health routes.
 
 # Context not available from the code
 
