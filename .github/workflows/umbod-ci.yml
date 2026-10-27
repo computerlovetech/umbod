@@ -11,7 +11,9 @@ on:
       - 'codecov.yml'
       - 'umbod/**'
       - 'packages/umbod-sdk/**'
+      - '**/src/**/README.md'
       - '.github/workflows/umbod-ci.yml'
+      - '.github/workflows/harness-linting.yml'
       - '.github/workflows/umbod-release.yml'
       - '.github/workflows/umbod-image-retention.yml'
       - '.github/actions/docker-build/action.yml'
@@ -21,7 +23,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  harness-linting:
+    uses: ./.github/workflows/harness-linting.yml
+
   changes:
+    needs: harness-linting
     name: Detect Kind-relevant changes
     runs-on: ubuntu-latest
     permissions:
@@ -52,6 +58,7 @@ jobs:
               - 'packages/umbod-sdk/**'
         
   docs:
+    needs: harness-linting
     name: umbod Documentation Build
     runs-on: ubuntu-latest
     defaults:
@@ -72,6 +79,7 @@ jobs:
         run: uv run mkdocs build --strict
 
   sdk-tests:
+    needs: harness-linting
     name: Umbod SDK Tests and Installed Wheel
     runs-on: ubuntu-latest
     defaults:
@@ -107,6 +115,7 @@ jobs:
           env -u PYTHONPATH "${RUNNER_TEMP}/sdk-smoke/bin/python" smoke_tests/installed_wheel.py
 
   backend-tests:
+    needs: harness-linting
     name: umbod Backend Tests
     runs-on: ubuntu-latest
     defaults:
@@ -170,6 +179,7 @@ jobs:
           tags: ghcr.io/computerlovetech/umbod:ci
 
   connector-builder:
+    needs: harness-linting
     name: umbod Connector Builder Image
     runs-on: ubuntu-latest
     steps:
@@ -235,6 +245,7 @@ jobs:
           tags: ghcr.io/computerlovetech/umbod-frontend:ci
 
   helm:
+    needs: harness-linting
     name: umbod Helm Chart
     runs-on: ubuntu-latest
     defaults:
@@ -268,6 +279,7 @@ jobs:
         run: helm package deploy/helm/umbod --destination chart-package
 
   helm-kubernetes-schema:
+    needs: harness-linting
     name: umbod Helm Chart (Kubernetes ${{ matrix.kubernetes-version }})
     runs-on: ubuntu-latest
     strategy:
@@ -324,14 +336,15 @@ jobs:
 
   ci-complete:
     name: umbod CI
-    needs: [changes, docs, sdk-tests, backend-tests, core, connector-builder, frontend, helm, helm-kubernetes-schema, helm-kind-install]
+    needs: [harness-linting, changes, docs, sdk-tests, backend-tests, core, connector-builder, frontend, helm, helm-kubernetes-schema, helm-kind-install]
     if: always()
     runs-on: ubuntu-latest
     environment: umbod-ci
     steps:
       - name: Fail if any required job failed
         run: |
-          if [ "${{ needs.changes.result }}" != "success" ] || \
+          if [ "${{ needs.harness-linting.result }}" != "success" ] || \
+             [ "${{ needs.changes.result }}" != "success" ] || \
              [ "${{ needs.docs.result }}" != "success" ] || \
              [ "${{ needs.sdk-tests.result }}" != "success" ] || \
              [ "${{ needs.backend-tests.result }}" != "success" ] || \

@@ -13,6 +13,8 @@ on:
       - 'umbod/scripts/tests/test_release_workflow.py'
       - '.github/workflows/umbod-release.yml'
       - '.github/workflows/website-ci.yml'
+      - '.github/workflows/harness-linting.yml'
+      - 'umbod/scripts/check_module_readmes.py'
   push:
     branches: [main]
     paths:
@@ -27,11 +29,17 @@ on:
       - 'umbod/scripts/tests/test_release_workflow.py'
       - '.github/workflows/umbod-release.yml'
       - '.github/workflows/website-ci.yml'
+      - '.github/workflows/harness-linting.yml'
+      - 'umbod/scripts/check_module_readmes.py'
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
+  harness-linting:
+    uses: ./.github/workflows/harness-linting.yml
+
   website:
+    needs: harness-linting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

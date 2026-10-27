@@ -1,0 +1,25 @@
+name: harness-linting
+
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  harness-linting:
+    name: harness-linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install lint dependencies
+        run: python -m pip install 'PyYAML>=6.0.3,<7'
+
+      - name: Check module README OKF
+        run: python umbod/scripts/check_module_readmes.py

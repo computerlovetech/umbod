@@ -1,14 +1,15 @@
 ---
 type: Software Module
-title: Release scripts
-description: Release-tag version conversion and SDK version stamping with workflow contract tests.
+title: Repository scripts
+description: Source README validation, release version conversion and SDK version stamping.
 ---
 
 # Files
 
+- [check_module_readmes.py](./check_module_readmes.py) — OKF frontmatter validation beneath source trees.
 - [release_versions.py](./release_versions.py) — Release version conversion.
 - [stamp_sdk_version.py](./stamp_sdk_version.py) — SDK build-workspace stamping.
-- [tests](./tests/) — Version and release workflow contracts.
+- [tests](./tests/) — README checks, version and release workflow contracts.
 
 # Context not available from the code
 
