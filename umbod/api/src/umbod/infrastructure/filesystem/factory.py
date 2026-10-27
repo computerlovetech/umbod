@@ -51,8 +51,8 @@ def create_filesystem_creation(
     return CreationService(resolver, create_filesystem_transactions(database=database))
 
 
-def create_root_group_policy_management(*, database: Database) -> RootGroupPolicyManagement:
-    return RootGroupPolicyService(DatabaseRootPolicyTransactions(database))
+def create_root_group_policy_management(*, database: Database, issuer: str) -> RootGroupPolicyManagement:
+    return RootGroupPolicyService(DatabaseRootPolicyTransactions(database), issuer)
 
 
 def create_root_provisioning(*, database: Database) -> RootProvisioning:

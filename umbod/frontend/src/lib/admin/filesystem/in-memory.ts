@@ -10,7 +10,7 @@ export class InMemoryFilesystemAdministration implements FilesystemAdministratio
     const parsed = replaceRootAccessSchema.parse(input);
     if (this.policy.status === 'conflict') throw new HttpError(409, '', { detail: { code: 'filesystem_policy_conflict' } });
     if (parsed.expected_revision !== this.policy.revision) throw new HttpError(409, '', { detail: { code: 'filesystem_policy_stale' } });
-    if (parsed.groups.some((group) => this.policy.unmanaged_groups.some((unmanaged) => group.issuer === unmanaged.issuer && group.group_id === unmanaged.group_id))) throw new HttpError(409, '', { detail: { code: 'filesystem_policy_conflict' } });
+    if (parsed.groups.some((group) => this.policy.blocked_group_ids.includes(group.group_id))) throw new HttpError(409, '', { detail: { code: 'filesystem_policy_conflict' } });
     this.policy = rootAccessSchema.parse({ ...this.policy, status: 'ready', revision: crypto.randomUUID(), groups: parsed.groups });
     return this.getRootAccess();
   }

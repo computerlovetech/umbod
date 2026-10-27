@@ -12,6 +12,12 @@ Namespace nodes, ownership, and grants share the application's neutral persisten
 
 File bytes remain behind ContentDriver. Database transactions do not include local/object-store publication; content must be stored before its reference is published, and unreferenced bytes are not eagerly deleted.
 
+## Root group policy administration contract
+
+The root-access management API accepts only expected_revision and groups; each group contains an exact group_id and nonempty permissions. Responses contain only status, revision, groups, and blocked_group_ids. The request-scoped backend selects the local development issuer only when local authentication is enabled, otherwise the exact configured OIDC issuer. Missing or blank issuer configuration fails closed with filesystem_policy_unavailable; issuer and claim configuration are not client policy fields.
+
+Inspection projects valid nonrecursive groups for that issuer only. Saves replace only that editable scope, including when groups is empty. Foreign-issuer, user/system, recursive, and malformed grants remain unchanged. Nonblank current-issuer group IDs with preserved recursive or malformed grants are blocked from assignment and excluded from editable projection. Revisions cover the original root policy state and all grants plus the exact managed issuer, so authority changes invalidate stale saves. Existing serialized transaction ports provide atomic conflict checks and reconciliation without a persistence migration. This scoped contract does not assert a new architecture decision.
+
 ## Enforcement
 
 - Keep the exact infrastructure source-package allowlist: persistence and filesystem, plus the root package.

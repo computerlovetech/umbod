@@ -3,8 +3,8 @@
   import FilesystemConfirmationDialog from './FilesystemConfirmationDialog.svelte';
   import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
   import Button from '$lib/components/admin/shared/Button.svelte';
+  import AdminSaveAction from '$lib/components/admin/shared/AdminSaveAction.svelte';
   import GroupPermissionsTabs from '$lib/components/admin/group-permissions/GroupPermissionsTabs.svelte';
-  import FilesystemGroupDialog from './FilesystemGroupDialog.svelte';
   import GroupRegistrationDialog from '../group-permissions/shared/GroupRegistrationDialog.svelte';
   import { GroupRegistrationState } from '../group-permissions/shared/group-registration-state.svelte';
   import { FilesystemGroupEditorState } from './filesystem-group-editor-state.svelte';
@@ -43,7 +43,7 @@
             <li>
               <button class={['group-button', { selected: editor.selected?.id === row.id }]} type="button" aria-current={editor.selected?.id === row.id ? 'true' : undefined} onclick={() => editor.select(row.id)}>
                 <span class="avatar">{(row.group_id.trim() || '?').slice(0, 1).toUpperCase()}</span>
-                <span>{row.group_id.trim() ? row.group_id : 'Blank group ID (legacy)'}</span>
+                <span>{row.group_id}</span>
               </button>
             </li>
           {/each}
@@ -55,44 +55,34 @@
           <header class="detail-heading">
             <span class="avatar large">{(row.group_id.trim() || '?').slice(0, 1).toUpperCase()}</span>
             <div>
-              <h2>{row.group_id.trim() ? row.group_id : 'Blank group ID (legacy)'}</h2>
+              <h2>{row.group_id}</h2>
               <p>Filesystem permission set</p>
             </div>
             <span class="scope-badge">Root only</span>
           </header>
-          <p class="description">Direct root access is qualified by an exact identity issuer. Registration alone grants no access.</p>
-          {#if !row.registered}<p class="field-hint">Legacy filesystem grant: not in the shared group catalogue.</p>{/if}
-          <section class="overview-block" aria-labelledby="identity-title">
-            <h3 id="identity-title">Group identity</h3>
-            <dl><div><dt>Group ID</dt><dd>{row.group_id.trim() ? row.group_id : 'Blank group ID (legacy)'}</dd></div></dl>
-          </section>
-          {#if row.grants.length === 0}
+          {#if editor.assignmentMessage}
+            <p class="description" role="status">{editor.assignmentMessage}</p>
+          {:else}
+          <p class="description">Choose this group’s root permissions. Registration alone grants no access.</p>
+          {#if !row.registered}<p class="field-hint">This group is not in the shared group catalogue.</p>{/if}
+          {#if row.permissions.length === 0}
             <p class="description">No direct root access. This group has no direct root permissions.</p>
           {/if}
-          {#if state.saved?.unmanaged_groups.some((grant) => grant.group_id === row.group_id)}
-            <p class="description">This group has recursive grants. Review the read-only recursive grants below.</p>
+          <section class="overview-block" aria-labelledby="permissions-title">
+            <h3 id="permissions-title">Filesystem &amp; permissions</h3>
+            <p class="field-hint">Changes are staged across groups until you save permissions.</p>
+            {#each permissions as permission (permission)}
+              <label class="permission-row">
+                <span>{permissionLabels[permission]}</span>
+                <input type="checkbox" checked={editor.permissions.includes(permission)} disabled={!editor.editable} onchange={(event) => editor.toggle(permission, event.currentTarget.checked)} />
+              </label>
+            {/each}
+            {#if editor.permissions.includes('write') && !editor.permissions.includes('discover')}<p class="field-hint">Also select Browse root to allow creation.</p>{/if}
+            <form class="detail-actions" onsubmit={(event) => { event.preventDefault(); void state.save(); }}>
+              <AdminSaveAction label="Save permissions" loadingLabel="Saving…" loading={state.saving} disabled={!state.canSave} message={state.error || (state.dirty ? 'Unsaved changes' : 'Permissions up to date')} tone={state.error ? 'error' : state.saving ? 'saving' : state.dirty ? 'warning' : 'success'} icon={state.error ? '!' : state.dirty ? '•' : '✓'} />
+            </form>
+          </section>
           {/if}
-          {#each row.grants as grant (grant.id)}
-            <section class="overview-block" aria-label="Filesystem permission grant">
-              <h3>Filesystem &amp; permissions</h3>
-              <dl><div><dt>Identity issuer</dt><dd>{grant.issuer.trim() ? grant.issuer : 'Blank issuer (legacy)'}</dd></div></dl>
-              {#if grant.permissions.length === 0}<p class="description">No permissions</p>{/if}
-              {#each permissions as permission (permission)}
-                <div class="permission-row">
-                  <span>{permissionLabels[permission]}</span>
-                  <span class={['permission-status', { granted: grant.permissions.includes(permission) }]}>{grant.permissions.includes(permission) ? 'Allowed' : 'No access'}</span>
-                </div>
-              {/each}
-              {#if grant.permissions.includes('write') && !grant.permissions.includes('discover')}<p class="field-hint">Also select Browse root to allow creation.</p>{/if}
-              <div class="detail-actions">
-                <Button variant="secondary" disabled={!state.editable} onclick={() => state.remove(grant.id)}>Remove filesystem access</Button>
-                <Button variant="secondary" disabled={!state.editable} onclick={() => editor.openEdit(grant.id)}>Edit filesystem permissions</Button>
-              </div>
-            </section>
-          {/each}
-          <div class="detail-actions">
-            <Button variant="secondary" disabled={!state.editable || !row.group_id.trim()} onclick={editor.openAdd}>Assign filesystem permissions</Button>
-          </div>
         {:else}
           <div class="empty-state">
             <h2>No groups selected</h2>
@@ -107,23 +97,7 @@
       <p role="status" class="field-hint validation">{state.validationMessage}</p>
     {/if}
 
-    {#if state.saved.unmanaged_groups.length > 0}
-      <details class="access-details recursive-grants">
-        <summary>Recursive grants <span class="count">{state.saved.unmanaged_groups.length}</span><span class="read-only">Read-only</span></summary>
-        <ul>{#each state.saved.unmanaged_groups as group (JSON.stringify([group.issuer, group.group_id]))}<li><strong>{group.group_id.trim() ? group.group_id : 'Blank group ID (legacy)'}</strong><span>{group.issuer.trim() ? group.issuer : 'Blank issuer (legacy)'}</span><span>{group.permissions.length ? group.permissions.map((permission) => permissionLabels[permission]).join(', ') : 'No permissions'}</span></li>{/each}</ul>
-      </details>
-    {/if}
-
-    <details class="access-details">
-      <summary>Access details</summary>
-      <dl>
-        <div><dt>Group claim</dt><dd><code>{state.saved.group_claim || 'Not configured'}</code></dd></div>
-        {#if state.saved.suggested_issuer}<div><dt>Configured issuer</dt><dd><code>{state.saved.suggested_issuer}</code></dd></div>{/if}
-      </dl>
-      <p>Root access only, with no inheritance. New items are private to their creator.</p>
-      <p>Requires verified authentication and exact issuer/group IDs. Local or simulated users cannot access the filesystem.</p>
-      <p>User grants, recursive grants and child policies are unchanged.</p>
-    </details>
+    <p class="field-hint">Root permissions apply here only. New items are private to their creator. Other access rules remain unchanged.</p>
   {/if}
 
   <footer class="action-bar">
@@ -134,19 +108,18 @@
     </p>
     <div class="actions">
       <button class="secondary" type="button" disabled={state.busy} onclick={state.requestReload}>{state.dirty ? 'Discard changes' : 'Reload'}</button>
-      {#if state.saved}<button class="primary" type="button" disabled={!state.canSave} onclick={state.save}>{state.saving ? 'Saving…' : 'Save policy'}</button>{/if}
+      {#if state.saved && (!editor.selected || (editor.assignmentMessage && state.canSave))}<button class="primary" type="button" disabled={!state.canSave} onclick={state.save}>{state.saving ? 'Saving…' : 'Save permissions'}</button>{/if}
     </div>
   </footer>
 </div>
 
 {#if registration.open}<GroupRegistrationDialog {registration} />{/if}
-{#if editor.draft}<FilesystemGroupDialog {editor} />{/if}
 
 {#if state.confirmation}
   <FilesystemConfirmationDialog
-    title={state.confirmation === 'empty' ? 'Save with no group access?' : 'Discard unsaved changes?'}
-    description={state.confirmation === 'empty' ? 'All direct root group grants will be removed. User grants and recursive grants stay unchanged.' : 'Your unsaved changes will be lost.'}
-    confirmLabel={state.confirmation === 'empty' ? 'Save empty policy' : 'Discard and reload'}
+    title={state.confirmation === 'empty' ? 'Clear configurable group permissions?' : 'Discard unsaved changes?'}
+    description={state.confirmation === 'empty' ? 'Configurable group permissions will be cleared. Other access rules remain unchanged.' : 'Your unsaved changes will be lost.'}
+    confirmLabel={state.confirmation === 'empty' ? 'Clear group permissions' : 'Discard and reload'}
     oncancel={state.cancelConfirmation}
     onconfirm={state.confirm}
   />
@@ -158,8 +131,8 @@
   .page-heading :global(.admin-shared-button) { flex-shrink: 0; margin-top: 26px; }
   .plus { font-size: 18px; font-weight: 400; margin-right: 8px; }
   .admin-title { margin-bottom: 0; }
-  .scope-badge, .count, .read-only { font-size: 11px; font-weight: 500; white-space: nowrap; }
-  .scope-badge, .count { background: var(--admin-soft); border: 1px solid var(--admin-border); color: var(--admin-muted); border-radius: 999px; padding: 4px 9px; }
+  .scope-badge { font-size: 11px; font-weight: 500; white-space: nowrap; }
+  .scope-badge { background: var(--admin-soft); border: 1px solid var(--admin-border); color: var(--admin-muted); border-radius: 999px; padding: 4px 9px; }
   .groups { list-style: none; margin: 0; padding: 0; }
   .group-button { align-items: center; background: transparent; border: 0; border-top: 1px solid var(--admin-border); border-radius: 0; color: var(--admin-ink); display: flex; font-size: 13px; font-weight: 600; gap: 11px; padding: 11px 15px; text-align: left; width: 100%; }
   .group-button > span:last-child { min-width: 0; overflow-wrap: anywhere; }
@@ -175,8 +148,8 @@
   .overview-block { margin-bottom: 24px; }
   h3 { color: var(--admin-muted); font-family: var(--admin-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.5px; margin: 0 0 8px; text-transform: uppercase; }
   .permission-row { align-items: center; border-bottom: 1px solid var(--admin-soft); display: flex; font-size: 13px; gap: 12px; justify-content: space-between; padding: 11px 0; }
-  .permission-status { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 4px; color: var(--admin-muted); font-size: 11px; font-weight: 600; padding: 2px 7px; }
-  .permission-status.granted { background: var(--admin-success-bg); border-color: var(--admin-success-border); color: var(--admin-success-text); }
+  input[type="checkbox"] { accent-color: var(--admin-accent); height: 16px; width: 16px; }
+  input:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
   .detail-actions, .actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
   .empty-state { align-items: center; display: flex; flex-direction: column; gap: 12px; padding: 60px 0; text-align: center; }
   .empty-state p { color: var(--admin-muted); font-size: 13px; margin: 0; }
@@ -185,18 +158,9 @@
   .secondary:hover:not(:disabled) { background: var(--admin-soft); }
   .primary { background: var(--admin-action); color: var(--admin-on-action); border-color: var(--admin-action); min-width: 5rem; }
   button:disabled { cursor: not-allowed; opacity: 0.55; }
-  button:focus-visible, summary:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
+  button:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
   .field-hint { color: var(--admin-muted); font-size: 13px; line-height: 1.5; margin-top: 12px; }
   .validation { margin-top: -8px; }
-  .access-details { font-size: 13px; color: var(--admin-muted); }
-  summary { cursor: pointer; width: fit-content; padding: 4px 0; color: var(--admin-ink); }
-  summary .count, summary .read-only { margin-left: 8px; }
-  .access-details p { line-height: 1.6; margin-top: 8px; }
-  dl { font-size: 13px; margin: 12px 0; }
-  dl > div { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 8px 0; }
-  dt { color: var(--admin-muted); min-width: 7rem; }
-  dd { margin: 0; overflow-wrap: anywhere; min-width: 0; }
-  .recursive-grants li { display: flex; flex-direction: column; gap: 5px; overflow-wrap: anywhere; margin-top: 16px; }
   .notice { padding: 12px 16px; background: var(--admin-soft); border-radius: var(--admin-radius); font-size: 13px; line-height: 1.5; margin: 0; }
   .error { color: var(--admin-danger-text); }
   .success { color: var(--admin-accent); }

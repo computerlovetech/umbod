@@ -4,3 +4,7 @@ class PolicyRevisionConflict(Exception):
 
 class PolicyConflict(Exception):
     pass
+
+
+class PolicyUnavailable(Exception):
+    pass

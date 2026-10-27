@@ -25,16 +25,17 @@ async def test_local_rest_test_user_respects_policy_while_mcp_requires_verified_
         inspected = rest.get(policy_path)
         assert inspected.status_code == 200
         policy = inspected.json()
-        assert policy["suggested_issuer"] == "urn:umbod:local"
+        assert set(policy) == {"status", "revision", "groups", "blocked_group_ids"}
         assert policy["groups"] == []
         configured = rest.put(policy_path, json={
             "expected_revision": policy["revision"],
             "groups": [{
-                "issuer": policy["suggested_issuer"], "group_id": "admin",
+                "group_id": "admin",
                 "permissions": ["discover", "write"],
             }],
         })
         assert configured.status_code == 200, configured.text
+        assert set(configured.json()) == {"status", "revision", "groups", "blocked_group_ids"}
         try:
             root = rest.get(base + "/root")
             assert root.status_code == 200, root.text

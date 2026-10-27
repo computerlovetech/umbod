@@ -133,10 +133,7 @@ def test_shared_group_registration_and_independent_filesystem_usage(
             assigned = client.put(policy_path, json={
                 "expected_revision": policy.json()["revision"],
                 "groups": [*original_groups, {
-                    "issuer": "urn:umbod:shared-group-runtime", "group_id": group_id,
-                    "permissions": ["read"],
-                }, {
-                    "issuer": "urn:umbod:another-runtime-issuer", "group_id": group_id,
+                    "group_id": group_id,
                     "permissions": ["read"],
                 }],
             })
@@ -148,8 +145,8 @@ def test_shared_group_registration_and_independent_filesystem_usage(
             reduced = client.put(policy_path, json={
                 "expected_revision": assigned.json()["revision"],
                 "groups": [*original_groups, {
-                    "issuer": "urn:umbod:another-runtime-issuer", "group_id": group_id,
-                    "permissions": ["read"],
+                    "group_id": group_id,
+                    "permissions": ["discover"],
                 }],
             })
             assert reduced.status_code == 200, reduced.text

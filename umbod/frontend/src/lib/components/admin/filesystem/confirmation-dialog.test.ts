@@ -46,11 +46,11 @@ describe('filesystem native confirmation lifecycle', () => {
     expect(dialog.open).toBe(false);
   });
   it('Escape closes the native dialog, cancels confirmation and preserves the draft without submitting', async () => {
-    const api = new InMemoryFilesystemAdministration(rootPolicy({ status: 'ready', groups: [{ issuer: 'issuer', group_id: 'existing', permissions: ['read'] }] }));
+    const api = new InMemoryFilesystemAdministration(rootPolicy({ status: 'ready', groups: [{ group_id: 'existing', permissions: ['read'] }] }));
     const replace = vi.spyOn(api, 'replaceRootAccess');
     const state = new FilesystemAccessState(api, new InMemoryGroupCatalogue());
     await state.load();
-    state.remove(state.rows[0].id);
+    state.setGroupPermissions('existing', []);
     await state.save();
     expect(state.confirmation).toBe('empty');
     const { dialog, window } = dialogFixture();
@@ -69,8 +69,7 @@ describe('filesystem native confirmation lifecycle', () => {
   it('Escape during discard confirmation leaves edited values unchanged and removes listeners on teardown', async () => {
     const state = new FilesystemAccessState(new InMemoryFilesystemAdministration(rootPolicy()), new InMemoryGroupCatalogue());
     await state.load();
-    state.add();
-    state.edit(state.rows[0].id, 'group_id', 'keep-draft');
+    state.setGroupPermissions('keep-draft', ['read']);
     state.requestReload();
     const { dialog, window } = dialogFixture();
     const cancel = vi.fn(state.cancelConfirmation);

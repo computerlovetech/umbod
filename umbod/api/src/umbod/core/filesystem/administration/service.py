@@ -6,9 +6,9 @@ from ..models import (
     PrincipalType, RootParent,
 )
 from ..namespace import ROOT_ID
-from .errors import PolicyConflict, PolicyRevisionConflict
+from .errors import PolicyConflict, PolicyRevisionConflict, PolicyUnavailable
 from .models import (
-    ObservedGroupPolicy, RootGroupPolicyView, RootPolicyState,
+    GroupPolicy, RootGroupPolicyView, RootPolicyState,
     RootPolicyStatus, SaveRootGroupPolicy,
 )
 from .ports import RootPolicyTransactions
@@ -35,8 +35,9 @@ def policy_status(state: RootPolicyState) -> RootPolicyStatus:
     return RootPolicyStatus.UNINITIALIZED
 
 
-def revision(state: RootPolicyState) -> str:
+def revision(state: RootPolicyState, issuer: str) -> str:
     payload = state.model_dump(mode="json", exclude={"grants", "has_children"})
+    payload["managed_issuer"] = issuer
     if policy_status(state) != RootPolicyStatus.READY:
         payload["has_children"] = state.has_children
     payload["grants"] = sorted(
@@ -55,52 +56,67 @@ def revision(state: RootPolicyState) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def policy_view(state: RootPolicyState) -> RootGroupPolicyView:
-    groups: list[ObservedGroupPolicy] = []
-    unmanaged: list[ObservedGroupPolicy] = []
-    for grant in state.grants:
-        if grant.principal.type == PrincipalType.GROUP:
-            target = unmanaged if grant.recursive else groups
-            target.append(ObservedGroupPolicy(
-                issuer=grant.principal.issuer, group_id=grant.principal.id,
-                permissions=frozenset(grant.permissions),
-            ))
+def editable_grant(grant: AccessGrant, issuer: str) -> bool:
+    return (
+        grant.principal.type == PrincipalType.GROUP
+        and grant.principal.issuer == issuer
+        and bool(grant.principal.id.strip())
+        and bool(grant.permissions)
+        and not grant.recursive
+    )
+
+
+def policy_view(state: RootPolicyState, issuer: str) -> RootGroupPolicyView:
+    blocked = {
+        grant.principal.id for grant in state.grants
+        if grant.principal.type == PrincipalType.GROUP
+        and grant.principal.issuer == issuer
+        and grant.principal.id.strip()
+        and not editable_grant(grant, issuer)
+    }
+    groups = tuple(
+        GroupPolicy(group_id=grant.principal.id, permissions=frozenset(grant.permissions))
+        for grant in state.grants
+        if editable_grant(grant, issuer) and grant.principal.id not in blocked
+    )
     return RootGroupPolicyView(
-        root_id=ROOT_ID, status=policy_status(state), revision=revision(state),
-        groups=tuple(sorted(groups, key=lambda group: (group.issuer, group.group_id))),
-        unmanaged_groups=tuple(sorted(unmanaged, key=lambda group: (group.issuer, group.group_id))),
+        status=policy_status(state), revision=revision(state, issuer),
+        groups=tuple(sorted(groups, key=lambda group: group.group_id)),
+        blocked_group_ids=tuple(sorted(blocked)),
     )
 
 
 class RootGroupPolicyService:
-    def __init__(self, transactions: RootPolicyTransactions) -> None:
+    def __init__(self, transactions: RootPolicyTransactions, issuer: str) -> None:
+        if not isinstance(issuer, str) or not issuer.strip():
+            raise PolicyUnavailable()
         self._transactions = transactions
+        self._issuer = issuer
 
     async def inspect(self) -> RootGroupPolicyView:
         async with self._transactions.read() as session:
-            return policy_view(await session.observe())
+            return policy_view(await session.observe(), self._issuer)
 
     async def save(self, command: SaveRootGroupPolicy) -> RootGroupPolicyView:
         async with self._transactions.write() as session:
             state = await session.observe()
-            view = policy_view(state)
+            view = policy_view(state, self._issuer)
             if command.expected_revision != view.revision:
                 raise PolicyRevisionConflict()
             if view.status == RootPolicyStatus.CONFLICT:
                 raise PolicyConflict()
-            recursive_keys = {(group.issuer, group.group_id) for group in view.unmanaged_groups}
-            if recursive_keys.intersection((group.issuer, group.group_id) for group in command.groups):
+            if set(view.blocked_group_ids).intersection(group.group_id for group in command.groups):
                 raise PolicyConflict()
             if view.status == RootPolicyStatus.UNINITIALIZED:
                 await session.ensure_root()
             for grant in state.grants:
-                if grant.principal.type == PrincipalType.GROUP and not grant.recursive:
+                if editable_grant(grant, self._issuer) and grant.principal.id not in view.blocked_group_ids:
                     await session.remove_group(grant.principal)
             for group in command.groups:
                 await session.add_group(AccessGrant(
                     node_id=ROOT_ID,
-                    principal=Principal(type=PrincipalType.GROUP, issuer=group.issuer, id=group.group_id),
+                    principal=Principal(type=PrincipalType.GROUP, issuer=self._issuer, id=group.group_id),
                     permissions=set(group.permissions), recursive=False,
                 ))
-            result = policy_view(await session.observe())
+            result = policy_view(await session.observe(), self._issuer)
         return result

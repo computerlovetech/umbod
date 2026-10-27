@@ -7,7 +7,7 @@ description: "Trusted inspection and revision-checked reconciliation of direct r
 # Files
 
 - [__init__.py](./__init__.py) — Public module exports.
-- [errors.py](./errors.py) — Revision and policy-scope conflicts.
-- [models.py](./models.py) — Root policy commands and observations.
+- [errors.py](./errors.py) — Revision, policy-scope, and unavailable-configuration failures.
+- [models.py](./models.py) — Issuer-free commands, editable groups, and blocked group IDs.
 - [ports.py](./ports.py) — Administration transaction contracts.
-- [service.py](./service.py) — Root policy reconciliation.
+- [service.py](./service.py) — Configured-issuer projection and transactional reconciliation.

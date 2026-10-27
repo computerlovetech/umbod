@@ -3,17 +3,16 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from ..models import AccessGrant, Node, NodeId, Ownership, Permission
+from ..models import AccessGrant, Node, Ownership, Permission
 
 
 class GroupPolicy(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    issuer: str
     group_id: str
     permissions: frozenset[Permission] = Field(min_length=1)
 
-    @field_validator("issuer", "group_id")
+    @field_validator("group_id")
     @classmethod
     def nonblank(cls, value: str) -> str:
         if not value.strip():
@@ -29,7 +28,7 @@ class SaveRootGroupPolicy(BaseModel):
 
     @model_validator(mode="after")
     def unique_groups(self) -> Self:
-        keys = {(group.issuer, group.group_id) for group in self.groups}
+        keys = {group.group_id for group in self.groups}
         if len(keys) != len(self.groups):
             raise ValueError("Policy keys must be unique")
         return self
@@ -41,22 +40,13 @@ class RootPolicyStatus(StrEnum):
     CONFLICT = "conflict"
 
 
-class ObservedGroupPolicy(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    issuer: str
-    group_id: str
-    permissions: frozenset[Permission]
-
-
 class RootGroupPolicyView(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    root_id: NodeId
     status: RootPolicyStatus
     revision: str
-    groups: tuple[ObservedGroupPolicy, ...]
-    unmanaged_groups: tuple[ObservedGroupPolicy, ...]
+    groups: tuple[GroupPolicy, ...]
+    blocked_group_ids: tuple[str, ...]
 
 
 class RootPolicyState(BaseModel):

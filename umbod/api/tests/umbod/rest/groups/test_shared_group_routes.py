@@ -193,7 +193,6 @@ def test_filesystem_reference_blocks_both_delete_routes(client: TestClient) -> N
             "expected_revision": state["revision"],
             "groups": [
                 {
-                    "issuer": "issuer",
                     "group_id": "filesystem-only",
                     "permissions": ["discover"],
                 }
@@ -232,7 +231,6 @@ def test_stale_root_save_does_not_register_rejected_group(client: TestClient) ->
             "expected_revision": state["revision"],
             "groups": [
                 {
-                    "issuer": "issuer",
                     "group_id": "stale-only",
                     "permissions": ["discover"],
                 }

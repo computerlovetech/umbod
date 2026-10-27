@@ -33,13 +33,13 @@ def test_local_filesystem_requires_explicit_root_grant_and_retains_private_owner
     with TestClient(create_app(local_filesystem_settings, [])) as client:
         initial = client.get(POLICY).json()
         assert initial["status"] == "uninitialized"
-        assert initial["suggested_issuer"] == "urn:umbod:local"
+        assert set(initial) == {"status", "revision", "groups", "blocked_group_ids"}
         assert client.get(BASE + "/root").status_code == 403
         assert client.get(BASE + "/nodes?scope=owned").status_code == 501
         initial = client.get(POLICY).json()
         saved = client.put(POLICY, json={
             "expected_revision": initial["revision"], "groups": [{
-                "issuer": "urn:umbod:local", "group_id": "admin", "permissions": ["discover", "write"],
+                "group_id": "admin", "permissions": ["discover", "write"],
             }],
         })
         assert saved.status_code == 200
@@ -61,7 +61,7 @@ def test_local_filesystem_requires_explicit_root_grant_and_retains_private_owner
         assert other.get(BASE + f"/nodes/{child['id']}").status_code == 403
 
 
-def test_local_filesystem_does_not_treat_wrong_issuer_grants_as_local_grants(
+def test_local_filesystem_rejects_client_selected_issuer(
     local_filesystem_settings: AppConfig,
 ) -> None:
     with TestClient(create_app(local_filesystem_settings, [])) as client:
@@ -71,7 +71,7 @@ def test_local_filesystem_does_not_treat_wrong_issuer_grants_as_local_grants(
                 "issuer": "attacker", "group_id": "admin", "permissions": ["discover", "write"],
             }],
         })
-        assert saved.status_code == 200
+        assert saved.status_code == 422
         assert client.get(BASE + "/root", headers={
             "Authorization": 'Bearer {"iss":"attacker","sub":"test-user","groups":["admin"]}',
             "X-Umbod-Issuer": "attacker",

@@ -47,11 +47,11 @@ def test_authenticated_admin_can_initialize_edit_revoke_and_detect_stale(admin_c
     assert initial.status_code == 200
     assert initial.headers["cache-control"] == "no-store"
     assert initial.json()["status"] == "uninitialized"
-    assert initial.json()["suggested_issuer"] == "urn:umbod:local"
-    assert initial.json()["group_claim"] == "filesystem_groups"
-    groups = [{"issuer": " Future Issuer ", "group_id": " Team ", "permissions": ["write"]}]
+    assert set(initial.json()) == {"status", "revision", "groups", "blocked_group_ids"}
+    groups = [{"group_id": " Team ", "permissions": ["write"]}]
     saved = admin_client.put(PATH, json={"expected_revision": initial.json()["revision"], "groups": groups})
     assert saved.status_code == 200
+    assert set(saved.json()) == {"status", "revision", "groups", "blocked_group_ids"}
     assert saved.json()["groups"] == groups
     assert saved.json()["status"] == "ready"
     assert saved.headers["cache-control"] == "no-store"
@@ -68,7 +68,12 @@ def test_authenticated_admin_can_initialize_edit_revoke_and_detect_stale(admin_c
     {"groups": []}, {"expected_revision": "r"},
     {"expected_revision": "r", "groups": [], "caller": "admin"},
     {"expected_revision": "r", "groups": [{"issuer": " ", "group_id": "g", "permissions": ["read"]}]},
-    {"expected_revision": "r", "groups": [{"issuer": "i", "group_id": "g", "permissions": []}]},
+    {"expected_revision": "r", "groups": [{"group_id": "g", "permissions": []}]},
+    {"expected_revision": "r", "groups": [{"issuer": "i", "group_id": "g", "permissions": ["read"]}]},
+    *({"expected_revision": "r", "groups": [], field: "legacy"} for field in (
+        "issuer", "suggested_issuer", "unmanaged_groups", "unmanaged", "root_id", "group_claim",
+    )),
+    {"expected_revision": "r", "groups": [{"group_id": "g", "permissions": ["read"]}] * 2},
 ])
 def test_invalid_admin_policy_is_sanitized_and_no_store(admin_client: TestClient, payload: dict[str, object]) -> None:
     response = admin_client.put(PATH, json=payload)
@@ -141,8 +146,9 @@ def test_management_is_created_per_request_from_same_prepared_database(admin_cli
     services: list[RootGroupPolicyManagement] = []
     databases: list[Database] = []
 
-    def track(*, database: Database) -> RootGroupPolicyManagement:
-        service = factory(database=database)
+    def track(*, database: Database, issuer: str) -> RootGroupPolicyManagement:
+        assert issuer == "urn:umbod:local"
+        service = factory(database=database, issuer=issuer)
         services.append(service)
         databases.append(database)
         return service
@@ -183,7 +189,7 @@ def test_known_conflict_errors_are_safe_and_no_store(admin_client: TestClient) -
     assert "private" not in response.text
 
 
-def test_production_authority_hint_preserves_configured_oidc_issuer(admin_settings: AppConfig) -> None:
+def test_production_policy_hides_configured_oidc_issuer(admin_settings: AppConfig) -> None:
     settings = admin_settings.model_copy(update={
         "runtime": admin_settings.runtime.model_copy(update={"profile": "production", "auth": "auth0"}),
         "admin_authentication": AdminAuthConfig(
@@ -195,14 +201,44 @@ def test_production_authority_hint_preserves_configured_oidc_issuer(admin_settin
     with TestClient(create_app(settings, [], admin_verifier=FalseRoleVerifier())) as client:
         response = client.get(PATH, headers={"Authorization": "Bearer accepted"})
         assert response.status_code == 200
-        assert response.json()["suggested_issuer"] == " Exact Issuer "
+        assert set(response.json()) == {"status", "revision", "groups", "blocked_group_ids"}
 
 
-def test_local_authority_hint_does_not_depend_on_oidc_configuration(admin_settings: AppConfig) -> None:
+def test_local_policy_does_not_depend_on_oidc_configuration(admin_settings: AppConfig) -> None:
     settings = admin_settings.model_copy(update={"oidc": admin_settings.oidc.model_copy(update={"issuer_url": ""})})
     with TestClient(create_app(settings, [])) as client:
         initial = client.get(PATH).json()
-        assert initial["suggested_issuer"] == "urn:umbod:local"
-        response = client.put(PATH, json={"expected_revision": initial["revision"], "groups": [{"issuer": "future", "group_id": "team", "permissions": ["discover"]}]})
+        assert set(initial) == {"status", "revision", "groups", "blocked_group_ids"}
+        response = client.put(PATH, json={"expected_revision": initial["revision"], "groups": [{"group_id": "team", "permissions": ["discover"]}]})
         assert response.status_code == 200
         assert client.get("/api/me/filesystem/root").status_code in (401, 403)
+
+
+
+def test_openapi_root_policy_definitions_are_minimal(admin_client: TestClient) -> None:
+    schema = admin_client.get("/api/admin/openapi.json").json()
+    definitions = schema["components"]["schemas"]
+    assert set(definitions["GroupPolicy"]["properties"]) == {"group_id", "permissions"}
+    assert set(definitions["SaveRootGroupPolicy"]["properties"]) == {"expected_revision", "groups"}
+    assert set(definitions["RootGroupPolicyView"]["properties"]) == {"status", "revision", "groups", "blocked_group_ids"}
+    for name in ("GroupPolicy", "SaveRootGroupPolicy", "RootGroupPolicyView"):
+        assert definitions[name]["additionalProperties"] is False
+        assert "issuer" not in str(definitions[name])
+
+
+@pytest.mark.parametrize("issuer", ["", "   "])
+@pytest.mark.parametrize("method", ["GET", "PUT"])
+def test_oidc_policy_missing_issuer_fails_closed(
+    admin_settings: AppConfig, issuer: str, method: str, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(deps, "local_rest_identity_enabled", lambda config: False)
+    settings = admin_settings.model_copy(update={
+        "oidc": admin_settings.oidc.model_copy(update={"issuer_url": issuer}),
+    })
+    with TestClient(create_app(settings, []), raise_server_exceptions=False) as client:
+        response = client.request(method, PATH, json={"expected_revision": "r", "groups": []})
+    assert response.status_code == 503
+    assert response.json() == {"detail": {
+        "code": "filesystem_policy_unavailable", "message": "Filesystem policy configuration unavailable.",
+    }}
+    assert response.headers["cache-control"] == "no-store"

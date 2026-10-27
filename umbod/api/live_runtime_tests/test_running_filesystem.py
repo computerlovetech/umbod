@@ -53,12 +53,13 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
         policy = inspected.json()
         assert policy["status"] in ("uninitialized", "ready")
         assert policy["groups"] == []
-        assert policy["suggested_issuer"] == "https://identity.personal-runtime.kind.invalid/"
-        assert policy["group_claim"] == "groups"
-        group = {"issuer": policy["suggested_issuer"], "group_id": "admin", "permissions": ["discover", "write"]}
+        assert set(policy) == {"status", "revision", "groups", "blocked_group_ids"}
+        assert policy["blocked_group_ids"] == []
+        group = {"group_id": "admin", "permissions": ["discover", "write"]}
         configured = alice.put(policy_url, json={"expected_revision": policy["revision"], "groups": [group]})
         assert configured.status_code == 200, configured.text
         assert configured.headers["cache-control"] == "no-store"
+        assert set(configured.json()) == {"status", "revision", "groups", "blocked_group_ids"}
         assert configured.json()["status"] == "ready"
         root = checked_summary(alice.get(FILESYSTEM + "/root"), 200)
         assert checked_summary(bob.get(FILESYSTEM + "/root"), 200) == root

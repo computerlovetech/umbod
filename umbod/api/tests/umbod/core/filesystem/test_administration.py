@@ -14,7 +14,7 @@ from umbod.core.filesystem import (
 )
 from umbod.core.filesystem.administration import (
     GroupPolicy, PolicyConflict, PolicyRevisionConflict, RootGroupPolicyManagement,
-    RootGroupPolicyService, RootPolicySession, RootPolicyTransactions,
+    RootGroupPolicyService, RootPolicySession, RootPolicyState, RootPolicyTransactions,
     SaveRootGroupPolicy,
 )
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
@@ -32,11 +32,11 @@ from tests.umbod.core.filesystem.test_verified_identity import snapshot
 
 
 def group(identifier: str) -> GroupPolicy:
-    return GroupPolicy(issuer="issuer", group_id=identifier, permissions=frozenset({Permission.DISCOVER, Permission.WRITE}))
+    return GroupPolicy(group_id=identifier, permissions=frozenset({Permission.DISCOVER, Permission.WRITE}))
 
 
 def management(runtime: PersistenceRuntime) -> RootGroupPolicyManagement:
-    return create_root_group_policy_management(database=runtime.database)
+    return create_root_group_policy_management(database=runtime.database, issuer="issuer")
 
 
 @pytest.mark.asyncio
@@ -44,7 +44,7 @@ async def test_inspect_absent_root_is_strictly_readonly(filesystem_runtime: Pers
     service = management(filesystem_runtime)
     first = await service.inspect()
     assert first.status == "uninitialized"
-    assert first.root_id == ROOT_ID
+    assert first.blocked_group_ids == ()
     assert await service.inspect() == first
     async with filesystem_runtime.database.session(mode=TransactionMode.READ_WRITE) as session:
         for table in (NODE_TABLE, OWNER_TABLE, GRANT_TABLE):
@@ -144,10 +144,11 @@ async def test_reconcile_direct_groups_including_raw_grants_preserves_users_and_
     ]
     for grant in preserved:
         await policies.add_grant(grant)
-    await policies.add_grant(AccessGrant(node_id=ROOT_ID, principal=Principal(type=PrincipalType.GROUP, issuer="issuer", id="raw"), permissions=set(), recursive=False))
+    preserved.append(AccessGrant(node_id=ROOT_ID, principal=Principal(type=PrincipalType.GROUP, issuer="issuer", id="raw"), permissions=set(), recursive=False))
+    await policies.add_grant(preserved[-1])
     view = await service.inspect()
-    assert {item.group_id for item in view.groups} == {"old", "raw"}
-    assert [item.group_id for item in view.unmanaged_groups] == ["recursive"]
+    assert {item.group_id for item in view.groups} == {"old"}
+    assert view.blocked_group_ids == ("raw", "recursive")
     with pytest.raises(PolicyConflict):
         await service.save(SaveRootGroupPolicy(expected_revision=view.revision, groups=(group("recursive"),)))
     assert await service.inspect() == view
@@ -232,7 +233,7 @@ async def test_mid_grant_failure_rolls_back_root_and_all_policies(filesystem_run
     service: RootGroupPolicyManagement = RootGroupPolicyService(FailingGrantTransactions(
         DatabaseRootPolicyTransactions(filesystem_runtime.database),
         asyncio.CancelledError() if cancelled else RuntimeError("private failure"),
-    ))
+    ), issuer="issuer")
     view = await service.inspect()
     with pytest.raises(asyncio.CancelledError if cancelled else StorageFailure):
         await service.save(SaveRootGroupPolicy(expected_revision=view.revision, groups=(group("first"), group("second"))))
@@ -259,7 +260,7 @@ async def test_replacement_failure_restores_exact_existing_policy_and_revision(f
     failing: RootGroupPolicyManagement = RootGroupPolicyService(FailingGrantTransactions(
         DatabaseRootPolicyTransactions(filesystem_runtime.database),
         asyncio.CancelledError() if cancelled else RuntimeError("replacement failed"),
-    ))
+    ), issuer="issuer")
     with pytest.raises(asyncio.CancelledError if cancelled else StorageFailure):
         await failing.save(SaveRootGroupPolicy(expected_revision=before.revision, groups=(group("new-first"), group("new-second"))))
     assert await normal.inspect() == before
@@ -284,11 +285,11 @@ async def test_sqlite_reopen_preserves_policy_and_revision(tmp_path: Path) -> No
 
 
 @pytest.mark.parametrize("payload", [
-    {}, {"issuer": "", "group_id": "team", "permissions": ["read"]},
-    {"issuer": "issuer", "group_id": " \t", "permissions": ["read"]},
-    {"issuer": "issuer", "group_id": "team", "permissions": []},
-    {"issuer": "issuer", "group_id": "team", "permissions": ["owner"]},
-    {"issuer": "issuer", "group_id": "team", "permissions": ["read"], "recursive": False},
+    {}, {"issuer": "issuer", "group_id": "team", "permissions": ["read"]},
+    {"group_id": " \t", "permissions": ["read"]},
+    {"group_id": "team", "permissions": []},
+    {"group_id": "team", "permissions": ["owner"]},
+    {"group_id": "team", "permissions": ["read"], "recursive": False},
 ])
 def test_invalid_group_policy_is_rejected(payload: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
@@ -297,16 +298,124 @@ def test_invalid_group_policy_is_rejected(payload: dict[str, object]) -> None:
 
 def test_policy_models_are_exact_immutable_explicit_and_unique() -> None:
     permissions = {Permission.READ}
-    policy = GroupPolicy(issuer=" Issuer ", group_id=" Team ", permissions=permissions)
+    policy = GroupPolicy(group_id=" Team ", permissions=permissions)
     permissions.clear()
-    assert policy.issuer == " Issuer "
     assert policy.group_id == " Team "
     assert policy.permissions == frozenset({Permission.READ})
+    distinct = policy.model_copy(update={"group_id": "Team"})
+    assert SaveRootGroupPolicy(expected_revision="r", groups=(policy, distinct)).groups == (policy, distinct)
     with pytest.raises(ValidationError):
-        policy.issuer = "changed"
+        policy.group_id = "changed"
     with pytest.raises(ValidationError):
         SaveRootGroupPolicy(expected_revision="revision", groups=(policy, policy))
     with pytest.raises(ValidationError):
         SaveRootGroupPolicy.model_validate({"groups": []})
     with pytest.raises(ValidationError):
         SaveRootGroupPolicy.model_validate({"expected_revision": "r", "groups": [], "owner": "admin"})
+
+
+
+@pytest.mark.asyncio
+async def test_managed_scope_preserves_legacy_foreign_and_nongroup_grants(filesystem_runtime: PersistenceRuntime) -> None:
+    service = management(filesystem_runtime)
+    await service.save(SaveRootGroupPolicy(expected_revision=(await service.inspect()).revision, groups=(group("old"),)))
+    policies = create_access_control_driver(database=filesystem_runtime.database)
+    preserved = [
+        AccessGrant(node_id=ROOT_ID, principal=principal, permissions=permissions, recursive=recursive)
+        for principal, permissions, recursive in (
+            (user("alice"), {Permission.READ}, False),
+            (SYSTEM_ROOT_OWNER, {Permission.SHARE}, False),
+            (Principal(type=PrincipalType.GROUP, issuer="foreign", id="team"), {Permission.READ}, True),
+            (Principal(type=PrincipalType.GROUP, issuer="foreign", id="direct"), {Permission.READ}, False),
+            (Principal(type=PrincipalType.GROUP, issuer="issuer", id="empty"), set(), False),
+            (Principal(type=PrincipalType.GROUP, issuer="issuer", id="recursive"), {Permission.READ}, True),
+            (Principal(type=PrincipalType.GROUP, issuer="issuer", id="  "), set(), False),
+        )
+    ]
+    for grant in preserved:
+        await policies.add_grant(grant)
+    before = await service.inspect()
+    assert before.groups == (group("old"),)
+    assert before.blocked_group_ids == ("empty", "recursive")
+    for identifier in before.blocked_group_ids:
+        with pytest.raises(PolicyConflict):
+            await service.save(SaveRootGroupPolicy(expected_revision=before.revision, groups=(group(identifier),)))
+        assert await service.inspect() == before
+    saved = await service.save(SaveRootGroupPolicy(expected_revision=before.revision, groups=(group("team"),)))
+    assert saved.groups == (group("team"),)
+    await service.save(SaveRootGroupPolicy(expected_revision=saved.revision, groups=()))
+    assert {grant.principal: grant for grant in await policies.list_grants(ROOT_ID)} == {
+        grant.principal: grant for grant in preserved
+    }
+
+
+@pytest.mark.asyncio
+async def test_exact_configured_issuer_scopes_projection_and_revision(filesystem_runtime: PersistenceRuntime) -> None:
+    first = create_root_group_policy_management(database=filesystem_runtime.database, issuer=" Exact Issuer ")
+    saved = await first.save(SaveRootGroupPolicy(expected_revision=(await first.inspect()).revision, groups=(group("team"),)))
+    policies = create_access_control_driver(database=filesystem_runtime.database)
+    grants = await policies.list_grants(ROOT_ID)
+    assert grants[0].principal.issuer == " Exact Issuer "
+    second = create_root_group_policy_management(database=filesystem_runtime.database, issuer="Exact Issuer")
+    view = await second.inspect()
+    assert view.groups == ()
+    assert view.revision != saved.revision
+    with pytest.raises(PolicyRevisionConflict):
+        await second.save(SaveRootGroupPolicy(expected_revision=saved.revision, groups=()))
+    await second.save(SaveRootGroupPolicy(expected_revision=view.revision, groups=()))
+    assert await policies.list_grants(ROOT_ID) == grants
+
+
+@pytest.mark.asyncio
+async def test_preserved_foreign_grants_participate_in_revision(filesystem_runtime: PersistenceRuntime) -> None:
+    service = management(filesystem_runtime)
+    saved = await service.save(SaveRootGroupPolicy(expected_revision=(await service.inspect()).revision, groups=()))
+    policies = create_access_control_driver(database=filesystem_runtime.database)
+    await policies.add_grant(AccessGrant(
+        node_id=ROOT_ID, principal=Principal(type=PrincipalType.GROUP, issuer="foreign", id="hidden"),
+        permissions=set(), recursive=False,
+    ))
+    view = await service.inspect()
+    assert view.groups == saved.groups
+    assert view.blocked_group_ids == ()
+    assert view.revision != saved.revision
+    with pytest.raises(PolicyRevisionConflict):
+        await service.save(SaveRootGroupPolicy(expected_revision=saved.revision, groups=()))
+
+
+
+@pytest.mark.asyncio
+async def test_blocked_principal_with_direct_duplicate_is_not_editable(filesystem_runtime: PersistenceRuntime) -> None:
+    normal = management(filesystem_runtime)
+    await normal.save(SaveRootGroupPolicy(
+        expected_revision=(await normal.inspect()).revision, groups=(group("blocked"), group("editable")),
+    ))
+    async with DatabaseRootPolicyTransactions(filesystem_runtime.database).read() as stored:
+        original = await stored.observe()
+    duplicate = AccessGrant(
+        node_id=ROOT_ID, principal=Principal(type=PrincipalType.GROUP, issuer="issuer", id="blocked"),
+        permissions={Permission.READ}, recursive=True,
+    )
+    state = RootPolicyState(
+        **original.model_dump(exclude={"grants"}), grants=(*original.grants, duplicate),
+    )
+    session = create_autospec(RootPolicySession, instance=True)
+    session.observe.return_value = state
+
+    @asynccontextmanager
+    async def open_session() -> AsyncIterator[RootPolicySession]:
+        yield session
+
+    transactions = create_autospec(RootPolicyTransactions, instance=True)
+    transactions.read.side_effect = open_session
+    transactions.write.side_effect = open_session
+    service = RootGroupPolicyService(transactions, issuer="issuer")
+    view = await service.inspect()
+    assert view.groups == (group("editable"),)
+    assert view.blocked_group_ids == ("blocked",)
+    result = await service.save(SaveRootGroupPolicy(expected_revision=view.revision, groups=view.groups))
+    assert result == view
+    session.remove_group.assert_awaited_once_with(
+        Principal(type=PrincipalType.GROUP, issuer="issuer", id="editable"),
+    )
+    session.add_group.assert_awaited_once()
