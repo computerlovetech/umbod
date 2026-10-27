@@ -361,7 +361,14 @@ jobs:
   publish-main-images:
     name: Publish ${{ matrix.name }} main image
     needs: ci-complete
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'computerlovetech/umbod'
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.ci-complete.result == 'success' &&
+        github.event_name == 'push' &&
+        github.ref == 'refs/heads/main' &&
+        github.repository == 'computerlovetech/umbod'
+      }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -399,7 +406,14 @@ jobs:
   promote-nightly-images:
     name: Promote main images to nightly
     needs: publish-main-images
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'computerlovetech/umbod'
+    if: >-
+      ${{
+        !cancelled() &&
+        needs.publish-main-images.result == 'success' &&
+        github.event_name == 'push' &&
+        github.ref == 'refs/heads/main' &&
+        github.repository == 'computerlovetech/umbod'
+      }}
     runs-on: ubuntu-latest
     permissions:
       packages: write
