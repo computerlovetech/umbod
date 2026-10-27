@@ -1,7 +1,6 @@
 import asyncio
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Any
 
 import pytest
 import pytest_asyncio
@@ -9,6 +8,7 @@ import pytest_asyncio
 from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
 from tests.umbod.core.downstream_mcp_connectors.test_unit_of_work_contract import (
     AggregateHarness,
+    Harness,
     _inmemory,
     _published_prefix_command,
     _sqlite,
@@ -36,7 +36,10 @@ from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, SaveCo
 
 async def _database_inmemory(path: Path, fault: Callable[[str], None]) -> AggregateHarness:
     runtime = await prepared_inmemory_runtime()
-    return await create_downstream_mcp_stores("namespace-secret", runtime.database)
+    from umbod.core.messaging.stores.event_stream import DatabaseEventStream
+
+    stores = await create_downstream_mcp_stores("namespace-secret", runtime.database)
+    return Harness(stores.unit_of_work, stores.definitions, stores.credentials, stores.catalogs, stores.health, stores.publishing, stores.activations, stores.personal_connections, DatabaseEventStream(runtime.database))
 
 
 @pytest_asyncio.fixture(params=(_inmemory, _database_inmemory, _sqlite), ids=("detached", "inmemory", "sqlite"))
@@ -116,6 +119,7 @@ async def test_published_catalogue_collision_rolls_back_catalogue_activation_and
     with pytest.raises(PublicToolNameConflictError):
         if mutation == "discovery":
             await aggregate.unit_of_work.apply_discovery(ApplyDiscoveredCatalog(
+                admission=await aggregate.unit_of_work.admit_discovery("alpha"),
                 connector_id="alpha", native_identities=native, catalog=snapshot,
                 health=ConnectorHealthy(connector_id="alpha", checked_at=snapshot.discovered_at),
                 operation_names=("search",),
@@ -160,23 +164,15 @@ class NativeIdentities:
         return ()
 
 
-class Events:
-    def __init__(self) -> None:
-        self.events: list[Any] = []
-
-    async def append(self, event: Any) -> None:
-        self.events.append(event)
-
-
 @pytest.mark.asyncio
 async def test_repeated_and_concurrent_publication_emits_only_one_event(aggregate: AggregateHarness) -> None:
     await aggregate.unit_of_work.create(_published_prefix_command("alpha", "Alpha"))
     queries = DownstreamConnectorQueries(aggregate.definitions, aggregate.credentials, aggregate.catalogs, aggregate.health, aggregate.publishing)
-    events = Events()
-    publisher = DownstreamConnectorPublisher(aggregate.publishing, events, queries, aggregate.unit_of_work, NativeIdentities())
+    publisher = DownstreamConnectorPublisher(aggregate.publishing, queries, aggregate.unit_of_work, NativeIdentities())
     await asyncio.gather(publisher.publish("alpha"), publisher.publish("alpha"))
     await publisher.publish("alpha")
-    assert len(events.events) == 1
+    persisted = await aggregate.events.list_after(0, 100)
+    assert len([entry for entry in persisted if entry.event.event_type == "connector.publication.changed"]) == 1
 
 
 @pytest.mark.parametrize("adapter", ("inmemory", "sqlite"))

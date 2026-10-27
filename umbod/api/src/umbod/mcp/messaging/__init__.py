@@ -1,9 +1,10 @@
+from umbod.mcp.messaging.projection import RuntimeProjectionHealth, RuntimeProjectionSynchronizer
 from umbod.mcp.messaging.transport import (
-    DatabaseDomainEventReader,
     McpMessagingAdapterFactory,
 )
 
 __all__ = (
-    "DatabaseDomainEventReader",
+    "RuntimeProjectionHealth",
+    "RuntimeProjectionSynchronizer",
     "McpMessagingAdapterFactory",
 )

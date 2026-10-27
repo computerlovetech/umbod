@@ -1,3 +1,5 @@
+from umbod.core.capabilities.descriptions.events import connector_capability_description_override_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
 from pydantic import BaseModel, ConfigDict
 
 from umbod.core.capabilities.descriptions.overrides import (
@@ -137,6 +139,10 @@ class ConnectorCapabilityDescriptionOverrideStoreService:
                     ),
                 )
 
+                await append_event_in_session(session, connector_capability_description_override_changed_event(
+                    key.kind, key.connector_id, "clear", row.revision + 1,
+                ))
+
     async def _compare_and_swap(
         self,
         key: ConnectorCapabilityDescriptionKey,
@@ -145,9 +151,13 @@ class ConnectorCapabilityDescriptionOverrideStoreService:
         expected_revision: int,
     ) -> int:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
-            return await self.compare_and_swap_in_session(
+            revision = await self.compare_and_swap_in_session(
                 session, key, state, description, expected_revision
             )
+            await append_event_in_session(session, connector_capability_description_override_changed_event(
+                key.kind, key.connector_id, "set" if state == "overridden" else "clear", revision,
+            ))
+            return revision
 
     async def get_in_session(
         self,

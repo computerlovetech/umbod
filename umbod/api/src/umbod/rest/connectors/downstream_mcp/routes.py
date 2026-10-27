@@ -17,7 +17,6 @@ from umbod.core.capabilities.tools.names import PublicToolNameConflictError
 from umbod.core.invocation import (
     ConnectorInvocationPolicyStore,
 )
-from umbod.core.activation.events import connector_capability_activation_changed_event
 from umbod.core.invocation.tools.configuration_mutation import ConnectorToolConfigurationMutationPort
 from umbod.core.activation import (
     ActivationListFilter,
@@ -531,7 +530,6 @@ async def set_prompt_activations(
     request: PromptActivationBatchRequest,
     queries: Queries,
     activations: CapabilityActivations,
-    event_stream: ConnectorEventStream,
 ) -> PromptActivationBatchResponse:
     try:
         result = await queries.catalog(connector_id)
@@ -559,16 +557,6 @@ async def set_prompt_activations(
     batch = await port.set_statuses(states)
     if batch.failure is not None:
         raise HTTPException(status_code=404, detail=batch.failure.message)
-    if event_stream is not None:
-        for state in batch.changed_states:
-            await event_stream.append(
-                connector_capability_activation_changed_event(
-                    state.ref.connector_kind,
-                    state.ref.connector_id,
-                    state.ref.capability_kind,
-                    state.ref.capability_key,
-                )
-            )
     return PromptActivationBatchResponse(
         connector_id=connector_id,
         prompts=tuple(
@@ -640,7 +628,6 @@ async def set_resource_activations(
     request: ResourceActivationBatchRequest,
     queries: Queries,
     activations: CapabilityActivations,
-    event_stream: ConnectorEventStream,
 ) -> ResourceActivationBatchResponse:
     try:
         result = await queries.catalog(connector_id)
@@ -671,16 +658,6 @@ async def set_resource_activations(
     batch = await port.set_statuses(states)
     if batch.failure is not None:
         raise HTTPException(status_code=404, detail=batch.failure.message)
-    if event_stream is not None:
-        for state in batch.changed_states:
-            await event_stream.append(
-                connector_capability_activation_changed_event(
-                    state.ref.connector_kind,
-                    state.ref.connector_id,
-                    state.ref.capability_kind,
-                    state.ref.capability_key,
-                )
-            )
     return ResourceActivationBatchResponse(
         connector_id=connector_id,
         resources=tuple(

@@ -1,5 +1,7 @@
 from collections.abc import Sequence
 
+from umbod.core.connectors.downstream_mcp.stores.discovery_generation import DISCOVERY_GENERATION_TABLE
+
 from umbod.core.connectors.downstream_mcp.stores.personal_refresh_schema import PERSONAL_REFRESH_TABLE
 
 from umbod.core.connectors.downstream_mcp.stores.personal_authorization_health_schema import PERSONAL_AUTHORIZATION_REJECTION_TABLE
@@ -73,6 +75,7 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
     PERSONAL_TOOL_OBSERVATION_TABLE,
     TOOL_CATALOG_TABLE,
     CONNECTOR_HEALTH_TABLE,
+    DISCOVERY_GENERATION_TABLE,
     EVENT_TABLE,
     CHECKPOINT_TABLE,
 )

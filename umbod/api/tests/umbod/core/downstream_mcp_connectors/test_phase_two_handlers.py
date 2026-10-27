@@ -123,15 +123,15 @@ class FailOnceProxy:
 
 class DownstreamConnectorFixture:
 
-    def __init__(self, definitions: Any, credentials: Any, catalogs: Any, health: Any, discovery: Any, activation_store: Any, publishing: Any, activation: Any, permissions: Any, events: Any, ids: Any, identities: Any, probe: Any, unit_of_work: Any, native_identities: tuple[Any, ...]=()) -> None:
+    def __init__(self, definitions: Any, credentials: Any, catalogs: Any, health: Any, discovery: Any, activation_store: Any, publishing: Any, activation: Any, permissions: Any, ids: Any, identities: Any, probe: Any, unit_of_work: Any, native_identities: tuple[Any, ...]=()) -> None:
         self.queries = DownstreamConnectorQueries(definitions, credentials, catalogs, health, publishing)
         preparation = DownstreamConnectorPreparation(probe)
         self.creator = DownstreamConnectorCreator(definitions, ids, identities, preparation, unit_of_work)
         validator = PublicToolNameValidator()
         identity_source = PublicToolIdentitySourceFake(native_identities)
-        self.updater = DownstreamConnectorUpdater(credentials, catalogs, publishing, events, unit_of_work, preparation, self.queries, validator, identity_source)
-        self.publisher = DownstreamConnectorPublisher(publishing, events, self.queries, unit_of_work, identity_source)
-        self.deleter = DownstreamConnectorDeleter(permissions, publishing, events, unit_of_work, self.queries)
+        self.updater = DownstreamConnectorUpdater(credentials, publishing, unit_of_work, preparation, self.queries, validator, identity_source)
+        self.publisher = DownstreamConnectorPublisher(publishing, self.queries, unit_of_work, identity_source)
+        self.deleter = DownstreamConnectorDeleter(permissions, unit_of_work, self.queries)
 
     async def create(self, request: Any) -> Any:
         return await self.creator.create(request)
@@ -172,7 +172,7 @@ def service(definitions: Any, credentials: Any, catalogs: Any, health: Any, nati
     publishing = ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE)
     events = EventStreamFake()
     activation = ActivationFake()
-    return (DownstreamConnectorFixture(definitions, credentials, catalogs, health, UnusedDiscovery(), activation, publishing, activation, PermissionsFake(), events, FixedIdGenerator(), AvailableIdentities(), SuccessfulDownstreamMcpProbe(), InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activation, publishing, lambda phase: None, InMemoryPersonalConnectionStore(), configurations, personal_policies, personal_access), native_identities), definitions, credentials, catalogs, health, publishing, events)
+    return (DownstreamConnectorFixture(definitions, credentials, catalogs, health, UnusedDiscovery(), activation, publishing, activation, PermissionsFake(), FixedIdGenerator(), AvailableIdentities(), SuccessfulDownstreamMcpProbe(), InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activation, publishing, lambda phase: None, InMemoryPersonalConnectionStore(), configurations, personal_policies, personal_access, events), native_identities), definitions, credentials, catalogs, health, publishing, events)
 
 def standard_service() -> tuple[DownstreamConnectorFixture, Any, Any, Any, Any, ConnectorPublishingStoreService, EventStreamFake]:
     return service(ConnectorDefinitionStoreService(create_inmemory_runtime().database, CONNECTOR_DEFINITION_TABLE), EncryptedCredentialStoreService(create_inmemory_runtime().database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('phase-two-secret')), ToolCatalogStoreService(create_inmemory_runtime().database, TOOL_CATALOG_TABLE), ConnectorHealthStoreService(create_inmemory_runtime().database, CONNECTOR_HEALTH_TABLE))
@@ -236,7 +236,7 @@ async def test_same_configuration_update_preserves_valid_state_and_token() -> No
     assert isinstance(stored, CredentialFound)
     assert isinstance(stored.credential, StaticBearerCredentialState)
     assert stored.credential.bearer_token.get_secret_value() == 'old-token'
-    assert events.events == []
+    assert [event.event_type for event in events.events] == ['connector.discovery.changed'] * 2
 
 @pytest.mark.asyncio
 async def test_published_prefix_only_update_preserves_connector_state() -> None:
@@ -255,7 +255,7 @@ async def test_published_prefix_only_update_preserves_connector_state() -> None:
     assert await connector_service.catalog('alpha') == current_catalog
     assert await connector_service.health('alpha') == current_health
     assert await credentials.get(ConnectorIdQuery(connector_id='alpha')) == current_credential
-    assert events.events == []
+    assert [event.event_type for event in events.events] == ['connector.discovery.changed']
 
 @pytest.mark.asyncio
 async def test_published_prefix_collision_rejects_update_without_persisting() -> None:
@@ -289,7 +289,7 @@ async def test_configuration_changes_emit_structured_invalidation_event(change: 
         updated = definition('https://example.test/mcp')
         token = 'new-token'
     await connector_service.update(updated, token)
-    assert events.events[-1].event_type == 'connector.configuration.changed'
+    assert events.events[-1].event_type == 'connector.discovery.changed'
     stored = await credentials.get(ConnectorIdQuery(connector_id='alpha'))
     assert isinstance(stored, CredentialFound)
     if change == 'auth':
@@ -299,7 +299,7 @@ async def test_configuration_changes_emit_structured_invalidation_event(change: 
         assert stored.credential.bearer_token.get_secret_value() == 'new-token'
 
 @pytest.mark.asyncio
-async def test_event_failure_after_update_does_not_restore_committed_state() -> None:
+async def test_event_failure_during_update_restores_definition_and_credential() -> None:
     (connector_service, definitions, credentials, _, _, _, events) = standard_service()
     await create_configured(connector_service)
     events.failure = RuntimeError('event append failed')
@@ -307,9 +307,9 @@ async def test_event_failure_after_update_does_not_restore_committed_state() -> 
         await connector_service.update(definition('https://changed.test/mcp'), 'new-token')
     persisted = await definitions.get(ConnectorIdQuery(connector_id='alpha'))
     credential = await credentials.get(ConnectorIdQuery(connector_id='alpha'))
-    assert persisted.definition.endpoint_url == 'https://changed.test/mcp'
+    assert persisted.definition.endpoint_url == 'https://example.test/mcp'
     assert isinstance(credential, CredentialFound)
-    assert credential.credential.bearer_token.get_secret_value() == 'new-token'
+    assert credential.credential.bearer_token.get_secret_value() == 'old-token'
 
 @pytest.mark.asyncio
 async def test_update_partial_failure_restores_definition_and_credential() -> None:
@@ -325,7 +325,7 @@ async def test_update_partial_failure_restores_definition_and_credential() -> No
     assert isinstance(stored, CredentialFound)
     assert isinstance(stored.credential, StaticBearerCredentialState)
     assert stored.credential.bearer_token.get_secret_value() == 'old-token'
-    assert events.events == []
+    assert [event.event_type for event in events.events] == ['connector.discovery.changed']
 
 @pytest.mark.asyncio
 async def test_delete_partial_failure_restores_all_already_mutated_state() -> None:
@@ -339,7 +339,7 @@ async def test_delete_partial_failure_restores_all_already_mutated_state() -> No
     assert await connector_service.get('alpha') == definition('https://example.test/mcp')
     assert isinstance(await credentials.get(ConnectorIdQuery(connector_id='alpha')), CredentialFound)
     assert await publishing.is_published('alpha') is True
-    assert events.events == []
+    assert [event.event_type for event in events.events] == ['connector.discovery.changed']
 
 @pytest.mark.asyncio
 async def test_complete_delete_allows_clean_recreation() -> None:
@@ -352,4 +352,4 @@ async def test_complete_delete_allows_clean_recreation() -> None:
     assert await publishing.was_previously_published('alpha') is False
     assert (await connector_service.catalog('alpha')).found is True
     assert (await connector_service.health('alpha')).found is True
-    assert events.events[-1].metadata['state'] == 'unpublished'
+    assert [event.event_type for event in events.events] == ['connector.discovery.changed'] * 3

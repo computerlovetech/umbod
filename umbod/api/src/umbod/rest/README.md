@@ -8,7 +8,7 @@
 
 ### `main.py`, `factories.py`, and `dependencies.py`
 
-**Read when working with:** Application startup, REST composition, dependency lifetimes, or adapter wiring.
+**Read when working with:** Application startup, REST composition, dependency lifetimes, or adapter wiring. `ConfiguredEventStreamFactory` always exposes the runtime database event stream, including in-memory persistence, so transactional producers and `/system/events` observe the same records independently of messaging transport selection.
 
 ## Submodules
 

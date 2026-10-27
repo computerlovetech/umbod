@@ -14,7 +14,6 @@ from umbod.core.connectors.native.capabilities import (
 from umbod.core.connectors.openapi.catalog import StoreBackedOpenApiCapabilityCatalog
 from umbod.rest.connectors.dependencies import (
     get_capability_activation_store,
-    get_connector_event_stream,
     get_connector_publishing_store,
 )
 from umbod.rest.connectors.native.dependencies import (
@@ -23,7 +22,6 @@ from umbod.rest.connectors.native.dependencies import (
 )
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
-from umbod.rest.mcp_permissions.events import McpPermissionEventPublisher
 from umbod.core.connectors.downstream_mcp.permissions import PersonalDownstreamPermissionCatalog
 from umbod.core.connectors.downstream_mcp.catalog import (
     StoreBackedDownstreamCapabilityCatalog,
@@ -44,8 +42,6 @@ from umbod.core.connectors.native.registry import (
     ConnectorRegistry,
 )
 from umbod.core.activation import ActivationStore
-from messaging.no_op import NoOpEventStream
-from messaging.ports import EventStream
 
 
 async def get_group_permission_store(
@@ -164,9 +160,3 @@ def get_admin_group_permission_management(
         catalog=catalog,
         notifier=NoopPermissionChangeNotifier(),
     )
-
-
-def get_mcp_permission_event_publisher(
-    event_stream: Annotated[EventStream | None, Depends(get_connector_event_stream)],
-) -> McpPermissionEventPublisher:
-    return McpPermissionEventPublisher(event_stream or NoOpEventStream())

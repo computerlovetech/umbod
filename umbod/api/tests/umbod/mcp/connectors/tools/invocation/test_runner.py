@@ -8,6 +8,9 @@ from typing import Any
 
 import pytest
 from fastmcp.tools import ToolResult
+from fastmcp.exceptions import ValidationError
+
+from umbod.mcp.connectors.native.tools.definition.registrar import build_connector_tool_definition
 
 from umbod.core.invocation import (
     ConnectorInvocation,
@@ -28,6 +31,7 @@ from umbod.mcp.connectors.native.tools.invocation.errors import (
     ConnectorToolFailureResult,
 )
 from umbod.mcp.connectors.native.tools.invocation.runner import ConnectorToolInvocationRunner
+from umbod.mcp.connectors.native.tools.invocation.ports import NativeToolExecutionAdmission
 from umbod.mcp.signals.execution import ConnectorInvocationSignalInterceptor
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.metrics import (
@@ -111,12 +115,17 @@ def _mapping(operation: Callable[..., dict[str, Any]]) -> ConnectorToolMapping:
     )
 
 
+async def _permit_execution(identity: CapabilityIdentity) -> None:
+    return None
+
+
 def _runner(
     mapping: ConnectorToolMapping,
     invocation_log_sink: InMemoryMcpToolInvocationLogSink | FailingInvocationLogSink,
     audit_sink: RecordingAuditSink,
     options: RunnerOptions = RunnerOptions(None, "Slack"),
     invocation_policy: ConnectorInvocationPolicy = PermitAllConnectorInvocationPolicy(),
+    execution_admission: NativeToolExecutionAdmission = _permit_execution,
 ) -> ConnectorToolInvocationRunner:
     telemetry = ConnectorInvocationSignalInterceptor(
         connector_name=options.connector_name,
@@ -130,6 +139,7 @@ def _runner(
     return ConnectorToolInvocationRunner(
         mapping=mapping,
         error_formatter=ConnectorToolErrorFormatter(),
+        execution_admission=execution_admission,
         execution_pipeline=create_tool_execution_pipeline(
             invocation_policy,
             (telemetry,),
@@ -384,6 +394,7 @@ async def test_result_predicate_failure_preserves_result_and_records_failure() -
     invoker = ConnectorToolInvocationRunner(
         mapping=_mapping(lambda: {"ok": True}),
         error_formatter=ConnectorToolErrorFormatter(),
+        execution_admission=_permit_execution,
         execution_pipeline=create_tool_execution_pipeline(
             PermitAllConnectorInvocationPolicy(),
             (telemetry,),
@@ -446,6 +457,7 @@ async def test_native_operation_exception_preserves_identity_and_safe_connector_
     invoker = ConnectorToolInvocationRunner(
         mapping=_mapping(async_operation if asynchronous else operation),
         error_formatter=RecordingFormatter(),
+        execution_admission=_permit_execution,
         execution_pipeline=create_tool_execution_pipeline(
             PermitAllConnectorInvocationPolicy(), (telemetry,)
         ),
@@ -535,3 +547,34 @@ async def test_returned_failure_evidence_has_only_supported_origin(
     assert attributes.get("mcp.failure.origin") == expected_origin
     assert "exception.type" not in attributes
     assert "exception.stacktrace" not in attributes
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("valid", [False, True])
+async def test_fresh_admission_runs_only_after_validation_and_approval(valid: bool) -> None:
+    events: list[str] = []
+
+    def operation(limit: int) -> dict[str, int]:
+        events.append("operation")
+        return {"limit": limit}
+
+    async def admission(identity: CapabilityIdentity) -> None:
+        events.append("admission")
+        raise ConnectorInvocationDenied("private admission rationale")
+
+    runner = _runner(
+        _mapping(operation),
+        InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter()),
+        RecordingAuditSink(),
+        invocation_policy=RecordingInvocationPolicy(events),
+        execution_admission=admission,
+    )
+    tool = build_connector_tool_definition(_mapping(operation), runner)
+    if valid:
+        result = await tool.run({"limit": 5})
+        assert isinstance(result, ConnectorToolFailureResult)
+        assert "private admission rationale" not in result.content[0].text
+    else:
+        with pytest.raises(ValidationError):
+            await tool.run({"limit": "not-an-integer"})
+    assert events == (["policy", "admission"] if valid else [])

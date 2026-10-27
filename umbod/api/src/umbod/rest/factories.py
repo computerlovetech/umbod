@@ -23,7 +23,6 @@ from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from umbod.core.messaging import DatabaseEventStream
-from messaging.in_memory import InMemoryEventStreamFactory
 from messaging.ports import EventStream
 from umbod.core.capabilities.descriptions import (
     ConnectorCapabilityDescriptionOverrideStore,
@@ -416,7 +415,6 @@ class ConfiguredCapabilityActivationStoreFactory:
 
 class ConfiguredEventStreamFactory:
     def __init__(self, settings: APISettings, database: Database) -> None:
-        self._settings = settings
         self._database = database
 
     def create(self) -> EventStream:
@@ -424,9 +422,7 @@ class ConfiguredEventStreamFactory:
 
     @cached_property
     def _event_stream(self) -> EventStream:
-        if self._settings.mcp.messaging_transport == "sql":
-            return DatabaseEventStream(self._database)
-        return InMemoryEventStreamFactory("Event stream is closed").create()
+        return DatabaseEventStream(self._database)
 
 
 class ConfiguredOpenApiConnectorStoreFactory:

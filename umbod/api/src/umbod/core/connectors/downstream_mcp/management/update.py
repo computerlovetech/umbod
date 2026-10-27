@@ -1,7 +1,4 @@
-
-from umbod.core.configuration.events import connector_configuration_changed_event
 from pydantic import SecretStr
-from umbod.core.publishing.events import connector_publication_changed_event
 from umbod.core.publishing import ConnectorPublishingStore
 from umbod.core.capabilities.tools.names import PublicToolIdentity, PublicToolIdentitySource, PublicToolNameValidator
 from umbod.core.connectors.downstream_mcp.models import (
@@ -35,18 +32,14 @@ from umbod.core.connectors.downstream_mcp.stores.ports import (
     CredentialFound,
     EncryptedCredentialStore,
     ToolCatalogFound,
-    ToolCatalogStore,
 )
-from messaging.ports import EventStream
 
 
 class DownstreamConnectorUpdater:
     def __init__(
         self,
         credentials: EncryptedCredentialStore,
-        catalogs: ToolCatalogStore,
         publishing: ConnectorPublishingStore,
-        events: EventStream,
         unit_of_work: DownstreamConnectorUnitOfWork,
         preparation: DownstreamConnectorPreparation,
         queries: DownstreamConnectorQueries,
@@ -54,9 +47,7 @@ class DownstreamConnectorUpdater:
         identity_source: PublicToolIdentitySource,
     ) -> None:
         self._credentials = credentials
-        self._catalogs = catalogs
         self._publishing = publishing
-        self._events = events
         self._unit_of_work = unit_of_work
         self._preparation = preparation
         self._queries = queries
@@ -79,8 +70,6 @@ class DownstreamConnectorUpdater:
             return definition
         query = ConnectorIdQuery(connector_id=definition.connector_id)
         existing = await self._credentials.get(query)
-        catalog = await self._catalogs.get(query)
-        was_published = await self._publishing.is_published(definition.connector_id)
         prepared, credential_mutation = await self._prepare_configuration(
             current,
             definition,
@@ -95,9 +84,6 @@ class DownstreamConnectorUpdater:
             or bool(replacement_token)
         )
         await self._replace(prepared, credential_mutation, configuration_changed)
-        await self._emit_events(
-            definition.connector_id, configuration_changed, was_published, catalog
-        )
         return definition
 
     @staticmethod
@@ -175,7 +161,6 @@ class DownstreamConnectorUpdater:
             connector_id=connector_id, authorization=authorization
         ))
         await self._replace(prepared, ReplaceCredential(credential=prepared.credential), False)
-        await self._events.append(connector_configuration_changed_event(connector_id))
         return prepared.definition
 
     async def _replace(
@@ -201,21 +186,6 @@ class DownstreamConnectorUpdater:
             publication=UnpublishConnector() if configuration_changed else PreservePublication(),
         )
         await self._unit_of_work.replace(aggregate)
-
-    async def _emit_events(
-        self,
-        connector_id: str,
-        configuration_changed: bool,
-        was_published: bool,
-        catalog: object,
-    ) -> None:
-        if not configuration_changed:
-            return
-        if was_published and isinstance(catalog, ToolCatalogFound):
-            await self._events.append(
-                connector_publication_changed_event(connector_id, "unpublished")
-            )
-        await self._events.append(connector_configuration_changed_event(connector_id))
 
     def _resolve_credential(
         self,

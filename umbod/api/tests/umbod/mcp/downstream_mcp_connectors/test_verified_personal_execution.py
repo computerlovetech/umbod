@@ -37,7 +37,7 @@ async def test_retained_tool_cannot_cross_owner_inventory_and_fresh_tool_uses_ow
     settings = _settings(namespace="trusted")
     settings = settings.model_copy(update={"mcp": settings.mcp.model_copy(update={"permission_group_claim": "groups"})})
     runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), runtime_case.bundle.definitions, runtime_case.bundle.personal_tool_access, execution.transport, lambda: runtime_case.query.now)
-    provider = provider_for(replace(execution, runtime=runtime), PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(replace(execution, runtime=runtime), PermitAllConnectorInvocationPolicy(), InvocationLog())
     alice_token = AccessToken(token="alice-upstream", client_id="alice-client", scopes=[], claims={"sub": "owner", "groups": ["team"]})
     marker = auth_context_var.set(AuthenticatedUser(alice_token))
     try:

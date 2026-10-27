@@ -1,0 +1,11 @@
+# MCP messaging
+
+`transport.py` adapts durable database or HTTP event streams to MCP consumers. Each live application uses independent in-memory delivery checkpoints and unique consumer identities rather than sharing another worker's cursor.
+
+`projection.py` owns runtime bootstrap, event replay, retry and synchronization health. Bootstrap scans historical event pages to establish a pre-load fence, hydrates current authoritative state once, and checkpoints that fence only after hydration succeeds. It then drains changes committed during loading before marking discovery ready. Historical pages do not each rebuild the catalog. One orchestrator lock serializes bootstrap and polling through projection publication and checkpoint advancement. A batch reconciles current authoritative state before advancing its checkpoint. Duplicate and obsolete events therefore rebuild current state rather than installing older event payloads.
+
+`public_app.py` composes downstream, OpenAPI, native capability and permission reconciliation. SQL synchronization reads authoritative stores without copying configuration or publication state back into persistence and does not require an API URL. HTTP delivery with an API URL applies existing native source-state synchronization through the same fail-closed projection consumer before notifying clients. Without an API URL, delivery and permission reconciliation use the authoritative application database. Explicit host-owned native source stores initialize native configuration before bootstrap; read-back projection never recopies those sources for each replayed event.
+
+The consistency window is the one-second projection polling interval plus event backlog and reconciliation duration, not instantaneous cross-worker revocation. Failures retain the previous checkpoint, log bounded error types and close public MCP traffic with HTTP 503 until reconciliation succeeds. `/system/health` preserves its healthy response and exposes failure state and the last applied sequence while unavailable.
+
+The application lifespan owns consumer cancellation and persistence shutdown. Request-time scoped routing captures downstream runtime definitions and publication state without store reads.

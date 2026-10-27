@@ -59,6 +59,7 @@ def test_prompt_activation_put_emits_capability_activation_changed_event(client:
         "connector_id": "test",
         "prompts": [{"prompt_id": "summarize", "activation_status": "enabled"}],
     }
+    assert len(events) == 1
     assert events[-1]["event"]["metadata"] == {
         "connector_kind": "native",
         "connector_id": "test",
@@ -92,6 +93,7 @@ def test_resource_activation_put_emits_capability_activation_changed_events(
     ).json()
 
     assert response.status_code == 200
+    assert len(events) == 2
     assert {event["event"]["metadata"]["capability_kind"] for event in events[-2:]} == {
         "resource",
         "resource_template",

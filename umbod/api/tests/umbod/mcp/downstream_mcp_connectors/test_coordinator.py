@@ -1,3 +1,6 @@
+from umbod.core.messaging.stores.event_stream import DatabaseEventStream
+from umbod.core.capabilities.tools.names import PublicToolIdentity
+from umbod.core.connectors.downstream_mcp.management import DownstreamConnectorUnitOfWorkService, no_downstream_connector_mutation_fault, utc_clock
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
 from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
@@ -103,22 +106,27 @@ class InMemoryClientFactory:
 class CoordinatorFixture:
 
     def __init__(self, database: Database, activations: ActivationStore, maximum_concurrency: int=2, refresh_interval_seconds: float=10) -> None:
-        self.definitions = ConnectorDefinitionStoreService(create_inmemory_runtime().database, CONNECTOR_DEFINITION_TABLE)
-        self.credentials = EncryptedCredentialStoreService(create_inmemory_runtime().database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('test-key'))
-        self.catalogs = ToolCatalogStoreService(create_inmemory_runtime().database, TOOL_CATALOG_TABLE)
-        self.health = ConnectorHealthStoreService(create_inmemory_runtime().database, CONNECTOR_HEALTH_TABLE)
+        self.definitions = ConnectorDefinitionStoreService(database, CONNECTOR_DEFINITION_TABLE)
+        self.credentials = EncryptedCredentialStoreService(database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('test-key'))
+        self.catalogs = ToolCatalogStoreService(database, TOOL_CATALOG_TABLE)
+        self.health = ConnectorHealthStoreService(database, CONNECTOR_HEALTH_TABLE)
         self.activations = activations
         self.publishing = ConnectorPublishingStoreService(database, PUBLICATION_STATE_TABLE)
+        self.events = DatabaseEventStream(database)
         self.discovery = FakeDiscovery()
         self.notifier = RecordingNotifier()
         self.clock = FakeClock()
-        self.coordinator = create_downstream_discovery_coordinator(DownstreamDiscoveryStores(definitions=self.definitions, credentials=self.credentials, catalogs=self.catalogs, health=self.health, activations=self.activations, publishing=self.publishing), DownstreamDiscoveryAdapters(discovery=self.discovery, notifier=self.notifier, native_capabilities=self, monotonic_clock=self.clock, random_source=lambda : 1.0), DownstreamDiscoveryCoordinatorOptions(refresh_interval_seconds=refresh_interval_seconds, maximum_concurrency=maximum_concurrency, jitter_ratio=0.25, maximum_backoff_seconds=max(40, refresh_interval_seconds)))
+        self.unit_of_work = DownstreamConnectorUnitOfWorkService(database, AuthenticatedTextCipher("test-key"), no_downstream_connector_mutation_fault, utc_clock)
+        self.coordinator = create_downstream_discovery_coordinator(DownstreamDiscoveryStores(definitions=self.definitions, credentials=self.credentials, catalogs=self.catalogs, health=self.health, activations=self.activations, publishing=self.publishing, unit_of_work=self.unit_of_work), DownstreamDiscoveryAdapters(discovery=self.discovery, notifier=self.notifier, native_capabilities=self, monotonic_clock=self.clock, random_source=lambda : 1.0, identity_source=self), DownstreamDiscoveryCoordinatorOptions(refresh_interval_seconds=refresh_interval_seconds, maximum_concurrency=maximum_concurrency, jitter_ratio=0.25, maximum_backoff_seconds=max(40, refresh_interval_seconds)))
 
     @classmethod
     async def create(cls, maximum_concurrency: int=2, refresh_interval_seconds: float=10) -> 'CoordinatorFixture':
         database = create_inmemory_runtime().database
         activations = await create_capability_activation_store(database)
         return cls(database, activations, maximum_concurrency, refresh_interval_seconds)
+
+    async def identities(self) -> tuple[PublicToolIdentity, ...]:
+        return ()
 
     async def native_capability_projection(self) -> tuple[tuple[object, ...], tuple[object, ...]]:
         prompts: list[object] = []
@@ -312,7 +320,13 @@ async def test_catalog_reconciliation_notifies_connected_session_and_updates_exp
     public = FastMCP('public')
     notifier = install_tool_list_changed_notifier(public)
     signals = invocation_signals(InMemoryMcpMetricsRecorder())
-    public.add_provider(ConnectorAwareDownstreamMcpToolProvider(personal_runtime=DisabledPersonalToolRuntime(), definitions=fixture.definitions, credentials=fixture.credentials, catalogs=fixture.catalogs, publishing=fixture.publishing, activations=fixture.activations, client_factory=InMemoryClientFactory(downstream), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy())))
+    from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryStores as RuntimeDiscoveryStores, create_downstream_discovery_runtime
+
+    discovery_runtime = create_downstream_discovery_runtime(RuntimeDiscoveryStores(definitions=fixture.definitions, credentials=fixture.credentials, catalogs=fixture.catalogs, publishing=fixture.publishing, activations=fixture.activations, descriptions=SystemConnectorCapabilityDescriptionOverrideStore()))
+    await discovery_runtime.reconcile()
+    provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_runtime=DisabledPersonalToolRuntime(), definitions=fixture.definitions, credentials=fixture.credentials, catalogs=fixture.catalogs, publishing=fixture.publishing, activations=fixture.activations, client_factory=InMemoryClientFactory(downstream), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()))
+    public.add_provider(provider)
+    fixture.coordinator._components.native_monitor._projection = provider
     fixture.coordinator._components.native_monitor._notifier = notifier
     fixture.discovery.results['weather'].append(_success('weather', 'alerts'))
     handler = RecordingToolListChangedHandler()
@@ -325,3 +339,120 @@ async def test_catalog_reconciliation_notifies_connected_session_and_updates_exp
         await fixture.coordinator.refresh_connector('weather')
         await asyncio.wait_for(handler.changed.wait(), timeout=1)
         assert [tool.name for tool in await client.list_tools()] == ['weather_alerts']
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mutation", ("edit", "delete"))
+async def test_late_success_does_not_overwrite_changed_or_deleted_definition(mutation: str) -> None:
+    fixture = await CoordinatorFixture.create()
+    await fixture.add("weather")
+    fixture.discovery.block = True
+    task = asyncio.create_task(fixture.coordinator.refresh_connector("weather"))
+    await fixture.discovery.started.wait()
+    if mutation == "delete":
+        await fixture.definitions.delete(ConnectorIdQuery(connector_id="weather"))
+    else:
+        await fixture.definitions.save(SaveConnectorDefinition(definition=NoAuthConnectorDefinition(
+            connector_id="weather", display_name="Weather", endpoint_url="https://changed.example/mcp",
+        )))
+    fixture.discovery.release.set()
+    await task
+    assert not (await fixture.catalogs.get(ConnectorIdQuery(connector_id="weather"))).found
+    assert await fixture.events.list_after(0, 100) == []
+
+
+@pytest.mark.asyncio
+async def test_successful_background_discovery_publishes_durable_change_event() -> None:
+    fixture = await CoordinatorFixture.create()
+    await fixture.add("weather")
+    await fixture.coordinator.refresh_connector("weather")
+    events = await fixture.events.list_after(0, 100)
+    assert len(events) == 1
+    assert events[0].event.event_type == "connector.discovery.changed"
+    assert events[0].event.metadata == {"connector_kind": "downstream_mcp", "connector_id": "weather"}
+    assert (await fixture.health.get(ConnectorIdQuery(connector_id="weather"))).found
+
+
+@pytest.mark.asyncio
+async def test_two_workers_ignore_late_success_from_an_older_probe() -> None:
+    from datetime import timedelta
+
+    database = create_inmemory_runtime().database
+    activations = await create_capability_activation_store(database)
+    older = CoordinatorFixture(database, activations)
+    newer = CoordinatorFixture(database, activations)
+    await older.add("weather")
+    older.discovery.block = True
+    older.discovery.results["weather"].append(_success("weather", "old"))
+    newer_result = _success("weather", "new").model_copy(update={
+        "snapshot": _success("weather", "new").snapshot.model_copy(update={"discovered_at": NOW + timedelta(seconds=1)}),
+    })
+    newer.discovery.results["weather"].append(newer_result)
+    old_task = asyncio.create_task(older.coordinator.refresh_connector("weather"))
+    await older.discovery.started.wait()
+    await newer.coordinator.refresh_connector("weather")
+    older.discovery.release.set()
+    await old_task
+    persisted = await older.catalogs.get(ConnectorIdQuery(connector_id="weather"))
+    assert isinstance(persisted, ToolCatalogFound)
+    assert persisted.snapshot == newer_result.snapshot
+    assert len(await older.events.list_after(0, 100)) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("entrypoint", ("manual", "background"))
+@pytest.mark.parametrize("result_kind", ("success", "failure"))
+@pytest.mark.parametrize("concurrent_change", ("reauthorization", "newer_success"))
+async def test_probe_admission_rejects_obsolete_credentials_catalog_and_failure(
+    entrypoint: str, result_kind: str, concurrent_change: str,
+) -> None:
+    from umbod.core.connectors.downstream_mcp.catalog.lifecycle import DownstreamConnectorCatalogLifecycle
+    from umbod.core.connectors.downstream_mcp.errors import ObsoleteDownstreamCatalogError
+    from umbod.core.connectors.downstream_mcp.management import ApplyDiscoveredCatalog, DownstreamConnectorQueries, PreserveActivation, PreservePublication, ReplaceCatalog, ReplaceCredential, ReplaceDownstreamConnectorAggregate, ReplaceHealth
+    from umbod.core.connectors.downstream_mcp.models import StaticBearerConnectorDefinition, StaticBearerCredentialState
+
+    fixture = await CoordinatorFixture.create()
+    definition = StaticBearerConnectorDefinition(
+        connector_id="weather", display_name="Weather", endpoint_url="https://weather.example/mcp",
+    )
+    await fixture.definitions.save(SaveConnectorDefinition(definition=definition))
+    await fixture.credentials.save(SaveCredential(credential=StaticBearerCredentialState(
+        connector_id="weather", bearer_token="old-secret",
+    )))
+    fixture.discovery.block = True
+    fixture.discovery.results["weather"].append(_success("weather", "stale") if result_kind == "success" else _failure("weather"))
+    queries = DownstreamConnectorQueries(fixture.definitions, fixture.credentials, fixture.catalogs, fixture.health, fixture.publishing)
+    lifecycle = DownstreamConnectorCatalogLifecycle(
+        fixture.discovery, fixture.unit_of_work, queries, fixture,
+    )
+    task = asyncio.create_task(lifecycle.refresh("weather") if entrypoint == "manual" else fixture.coordinator.refresh_connector("weather"))
+    await fixture.discovery.started.wait()
+    current = _success("weather", "current").snapshot
+    health = ConnectorHealthy(connector_id="weather", checked_at=NOW)
+    if concurrent_change == "reauthorization":
+        await fixture.unit_of_work.replace(ReplaceDownstreamConnectorAggregate(
+            native_identities=(), definition=definition,
+            credential=ReplaceCredential(credential=StaticBearerCredentialState(connector_id="weather", bearer_token="new-secret")),
+            catalog=ReplaceCatalog(snapshot=current), health=ReplaceHealth(health=health),
+            activation=PreserveActivation(), publication=PreservePublication(),
+        ))
+    else:
+        await fixture.unit_of_work.apply_discovery(ApplyDiscoveredCatalog(
+            admission=await fixture.unit_of_work.admit_discovery("weather"),
+            native_identities=(), connector_id="weather", catalog=current,
+            health=health, operation_names=("current",),
+        ))
+    events_before = await fixture.events.list_after(0, 100)
+    fixture.discovery.release.set()
+    if entrypoint == "manual":
+        with pytest.raises(ObsoleteDownstreamCatalogError):
+            await task
+    else:
+        await task
+    catalog = await fixture.catalogs.get(ConnectorIdQuery(connector_id="weather"))
+    assert isinstance(catalog, ToolCatalogFound)
+    assert catalog.snapshot == current
+    assert (await fixture.health.get(ConnectorIdQuery(connector_id="weather"))).health == health
+    assert await fixture.events.list_after(0, 100) == events_before
+    assert "old-secret" not in str(events_before)
+    assert "new-secret" not in str(events_before)

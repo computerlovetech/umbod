@@ -392,11 +392,38 @@ class DiscoverySucceeded(DomainModel):
     snapshot: ToolCatalogSnapshot
 
 
+class MissingCatalogRevision(DomainModel):
+    state: Literal["missing"]
+
+
+class PresentCatalogRevision(DomainModel):
+    state: Literal["present"]
+    fingerprint: str
+
+
+CatalogRevision = Annotated[Union[MissingCatalogRevision, PresentCatalogRevision], Field(discriminator="state")]
+
+
+class DiscoveryAdmission(DomainModel):
+    definition: ConnectorDefinition
+    credential: CredentialState = Field(repr=False, exclude=True)
+    catalog_revision: CatalogRevision
+    aggregate_revision: int
+
+
+class DefinitionDiscoverySucceeded(DiscoverySucceeded):
+    admission: DiscoveryAdmission = Field(repr=False, exclude=True)
+
+
 class DiscoveryFailed(DomainModel):
     status: Literal["failed"] = "failed"
     connector_id: NonEmptyString
     attempted_at: datetime
     reason: NonEmptyString
+
+
+class DefinitionDiscoveryFailed(DiscoveryFailed):
+    admission: DiscoveryAdmission = Field(repr=False, exclude=True)
 
 
 DiscoveryResult = Annotated[

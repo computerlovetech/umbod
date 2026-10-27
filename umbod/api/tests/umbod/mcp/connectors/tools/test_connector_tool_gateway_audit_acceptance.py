@@ -1,3 +1,4 @@
+from tests.support.native_tool_states import enabled_native_tool_states
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
 from tests.persistence_runtime import create_inmemory_runtime
@@ -66,6 +67,7 @@ async def _audited_gateway() -> tuple[FastMCP, StringIO]:
         connector_registrations=[{'id': 'slack', 'display_name': 'Slack', 'capability_description': 'Access connector capabilities.', 'description': 'Slack', 'configuration_schema': SlackAdminConfiguration}],
         connector_configuration_store=configurations,
         connector_publishing_store=publications,
+        connector_tool_runtime_state_store=enabled_native_tool_states(("slack", "list_readable_channels")),
         connector_tool_mappings=[ConnectorToolMapping('slack', 'list_readable_channels', 'List Slack channels.', lambda limit: {'channels': []})],
         connector_tool_exposure_mode='gateway',
     )

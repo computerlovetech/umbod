@@ -1,4 +1,7 @@
 import json
+
+from umbod.core.messaging.discovery_events import connector_discovery_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
 from collections.abc import Mapping
 from typing import Optional, Union
 
@@ -215,10 +218,11 @@ class OpenApiConnectorStoreService:
         )
 
     async def save_connector(self, connector: OpenApiConnector) -> None:
-        async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
+        async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
             await _upsert_document(
                 session, self._connectors, connector.connector_id, _dump(connector)
             )
+            await append_event_in_session(session, connector_discovery_changed_event("openapi", connector.connector_id))
 
     async def delete_connector(self, connector_id: str) -> None:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
@@ -228,6 +232,7 @@ class OpenApiConnectorStoreService:
             if deleted == 0:
                 raise KeyError(connector_id)
             await delete_connector_invocation_policies(session, "openapi", connector_id)
+            await append_event_in_session(session, connector_discovery_changed_event("openapi", connector_id))
 
     async def get_connector(self, connector_id: str) -> OpenApiConnector:
         async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
@@ -332,6 +337,7 @@ class OpenApiConnectorStoreService:
                 ),
             )
             await self._write_header(session, catalog)
+            await append_event_in_session(session, connector_discovery_changed_event("openapi", catalog.connector_id))
         return catalog
 
     async def _write_header(

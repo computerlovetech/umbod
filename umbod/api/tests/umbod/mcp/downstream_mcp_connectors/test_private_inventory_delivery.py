@@ -23,7 +23,7 @@ __all__ = ["runtime_case"]
 @pytest.mark.asyncio
 async def test_private_new_tools_require_rediscovery_but_not_global_configuration(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     held = await provider.get_tool("Personal_read")
     new_tool = approved_tool("new_private")
     execution.transport.inventories[runtime_case.query.key] = PersonalToolInventory(tools=(approved_tool("read"), new_tool))
@@ -45,7 +45,7 @@ async def test_private_new_tools_require_rediscovery_but_not_global_configuratio
 @pytest.mark.asyncio
 async def test_legacy_policy_activation_and_tool_grants_do_not_control_private_inventory(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     held = await provider.get_tool("Personal_read")
     await replace_policy(runtime_case, (approved_tool("legacy_only"),))
     await runtime_case.bundle.catalogs.replace(ReplaceToolCatalog(snapshot=ToolCatalogSnapshot(connector_id="personal", discovered_at=runtime_case.query.now, tools=(approved_tool("legacy-name"), approved_tool("legacy_name")))))
@@ -64,7 +64,7 @@ async def test_namespace_reservation_uses_mangled_definition_prefix(runtime_case
     definition = (await runtime_case.bundle.definitions.get(ConnectorIdQuery(connector_id="personal"))).definition
     await runtime_case.bundle.definitions.save(SaveConnectorDefinition(definition=definition.model_copy(update={"tool_name_prefix": prefix})))
     execution.contexts.contexts.clear()
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     assert await provider.is_personal_tool_name(reserved)
     assert await provider.is_personal_tool_name(reserved.removesuffix("new").rstrip("_"))
     assert await provider.owns_tool(reserved)
@@ -77,7 +77,7 @@ async def test_degenerate_personal_namespace_fails_closed_instead_of_claiming_al
     execution = await execution_case(runtime_case)
     definition = (await runtime_case.bundle.definitions.get(ConnectorIdQuery(connector_id="personal"))).definition
     await runtime_case.bundle.definitions.save(SaveConnectorDefinition(definition=definition.model_copy(update={"tool_name_prefix": prefix})))
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     for name in ("read", "Shared_read"):
         with pytest.raises(ToolError, match="public_tool_name_conflict"):
             await provider.is_personal_tool_name(name)

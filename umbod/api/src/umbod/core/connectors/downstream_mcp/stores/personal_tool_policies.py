@@ -1,4 +1,9 @@
 from collections.abc import Callable
+
+from messaging.events import McpGroupPermissionChanged
+from umbod.core.activation.events import connector_capability_activation_changed_event
+from umbod.core.configuration.events import connector_configuration_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
 from datetime import datetime
 from uuid import uuid4
 
@@ -55,9 +60,12 @@ class PersonalToolPolicyStoreService:
 
     async def replace(self, command: ReplacePersonalToolPolicy) -> PersonalToolPolicyReplacement:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
-            return await self._replace(session, command)
+            replacement, changed = await self._replace(session, command)
+            if changed:
+                await self._append_events(session, replacement)
+            return replacement
 
-    async def _replace(self, session: DatabaseSession, command: ReplacePersonalToolPolicy) -> PersonalToolPolicyReplacement:
+    async def _replace(self, session: DatabaseSession, command: ReplacePersonalToolPolicy) -> tuple[PersonalToolPolicyReplacement, bool]:
         row = await session.find_one(CONNECTOR_DEFINITION_TABLE, _query(Equals(CONNECTOR_DEFINITION_CONNECTOR_ID, command.connector_id)))
         if row is None:
             raise PersonalToolPolicyUnavailable("Personal connector unavailable")
@@ -72,7 +80,7 @@ class PersonalToolPolicyStoreService:
             catalog = await find_catalog_record(session, TOOL_CATALOG_TABLE, command.connector_id)
             expected = ToolCatalogSnapshot(connector_id=previous.connector_id, discovered_at=previous.approved_at, tools=previous.tools)
             if catalog is not None and ToolCatalogSnapshot.model_validate(catalog.snapshot) == expected:
-                return PersonalToolPolicyReplacement(policy=previous, changed_tools=(), revoked_grants=())
+                return PersonalToolPolicyReplacement(policy=previous, changed_tools=(), revoked_grants=()), False
         identities = list(command.native_identities)
         identities.extend(PublicToolIdentity(connector_id=command.connector_id, tool_name_prefix=definition.tool_name_prefix, operation_name=tool.identity.downstream_name) for tool in command.tools)
         for other in await session.find_many(CONNECTOR_DEFINITION_TABLE, _query(NoFilter())):
@@ -89,7 +97,7 @@ class PersonalToolPolicyStoreService:
             raise PersonalToolPolicyInvalid(str(error)) from error
         if unchanged:
             await self._project(session, previous)
-            return PersonalToolPolicyReplacement(policy=previous, changed_tools=(), revoked_grants=())
+            return PersonalToolPolicyReplacement(policy=previous, changed_tools=(), revoked_grants=()), True
         policy = PersonalToolPolicy(connector_id=command.connector_id, revision=str(uuid4()), approved_at=self._clock(), tools=command.tools)
         old = {tool.identity.downstream_name: contract_fingerprint(tool) for tool in previous.tools}
         current = {tool.identity.downstream_name: contract_fingerprint(tool) for tool in policy.tools}
@@ -98,7 +106,21 @@ class PersonalToolPolicyStoreService:
         await session.upsert(PERSONAL_TOOL_POLICY_TABLE, UpsertCommand(key=PersonalToolPolicyKey(connector_id=command.connector_id), row=PersonalToolPolicyRecord(connector_id=command.connector_id, document=policy.model_dump_json())))
         await self._project(session, policy)
         self._fault("personal_tool_policy_saved")
-        return PersonalToolPolicyReplacement(policy=policy, changed_tools=changed, revoked_grants=())
+        return PersonalToolPolicyReplacement(policy=policy, changed_tools=changed, revoked_grants=()), True
+
+    async def _append_events(self, session: DatabaseSession, replacement: PersonalToolPolicyReplacement) -> None:
+        connector_id = replacement.policy.connector_id
+        await append_event_in_session(session, connector_configuration_changed_event(connector_id))
+        for name in replacement.changed_tools:
+            await append_event_in_session(session, connector_capability_activation_changed_event(
+                "downstream_mcp", connector_id, "tool", name,
+            ))
+        for grant in replacement.revoked_grants:
+            await append_event_in_session(session, McpGroupPermissionChanged(
+                group_id=grant.group_id, action="revoke", target_kind="tool",
+                connector_id=connector_id, capability_kind="tool",
+                capability_key=grant.capability_key, operation_name=grant.capability_key,
+            ).to_messaging_event())
 
     async def _project(self, session: DatabaseSession, policy: PersonalToolPolicy) -> None:
         await replace_catalog(session, TOOL_CATALOG_TABLE, ReplaceToolCatalog(snapshot=ToolCatalogSnapshot(connector_id=policy.connector_id, discovered_at=policy.approved_at, tools=policy.tools)))

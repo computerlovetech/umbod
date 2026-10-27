@@ -1,3 +1,10 @@
+from umbod.core.connectors.downstream_mcp.management.discovery_admission import catalog_revision
+from umbod.core.connectors.downstream_mcp.models import DiscoveryAdmission, ToolCatalogSnapshot, MissingCatalogRevision, PresentCatalogRevision
+from umbod.core.connectors.downstream_mcp.stores.ports import CredentialFound
+from umbod.core.connectors.downstream_mcp.errors import ObsoleteDownstreamCatalogError
+from messaging.ports import EventStream
+from umbod.core.publishing.events import connector_publication_changed_event
+from umbod.core.messaging.discovery_events import connector_discovery_changed_event
 import asyncio
 
 from ..personal_tools import PersonalToolAccessStore, PersonalToolPolicyStore
@@ -70,7 +77,9 @@ class InMemoryDownstreamConnectorUnitOfWork:
         personal_oauth_configurations: PersonalOAuthConfigurationStore,
         personal_tool_policies: PersonalToolPolicyStore,
         personal_tool_access: PersonalToolAccessStore,
+        events: EventStream,
     ) -> None:
+        self._events = events
         self._definitions = definitions
         self._credentials = credentials
         self._catalogs = catalogs
@@ -83,9 +92,26 @@ class InMemoryDownstreamConnectorUnitOfWork:
         self._personal_tool_policies = personal_tool_policies
         self._personal_tool_access = personal_tool_access
         self._lock = asyncio.Lock()
+        self._discovery_revisions: dict[str, int] = {}
+
+    async def _admit_discovery(self, connector_id: str) -> DiscoveryAdmission:
+        definition = await self._definition(connector_id)
+        credential = await self._credentials.get(ConnectorIdQuery(connector_id=connector_id))
+        if not isinstance(credential, CredentialFound):
+            raise DownstreamConnectorUnavailableError(connector_id)
+        catalog = await self._catalogs.get(ConnectorIdQuery(connector_id=connector_id))
+        return DiscoveryAdmission(
+            definition=definition, credential=credential.credential,
+            aggregate_revision=self._discovery_revisions.get(connector_id, 0),
+            catalog_revision=PresentCatalogRevision(state="present", fingerprint=catalog_revision(catalog.snapshot)) if isinstance(catalog, ToolCatalogFound) else MissingCatalogRevision(state="missing"),
+        )
+
+    async def admit_discovery(self, connector_id: str) -> DiscoveryAdmission:
+        async with self._lock:
+            return await self._admit_discovery(connector_id)
 
     async def create(self, command: CreateDownstreamConnectorAggregate) -> None:
-        await self._atomic(lambda: self._replace(command))
+        await self._atomic(lambda: self._replace(command), command.definition.connector_id)
 
     async def create_personal_oauth(self, command: CreatePersonalOAuthConnectorAggregate) -> None:
         async def mutate() -> None:
@@ -97,10 +123,10 @@ class InMemoryDownstreamConnectorUnitOfWork:
             ))
             self._phase("personal_oauth_configuration_saved")
 
-        await self._atomic(mutate)
+        await self._atomic(mutate, command.aggregate.definition.connector_id)
 
     async def replace(self, command: ReplaceDownstreamConnectorAggregate) -> None:
-        await self._atomic(lambda: self._replace(command))
+        await self._atomic(lambda: self._replace(command), command.definition.connector_id)
 
     async def publish(self, command: PublishDownstreamConnectorAggregate) -> bool:
         async def mutate() -> bool:
@@ -117,9 +143,12 @@ class InMemoryDownstreamConnectorUnitOfWork:
             await self._validate_namespace(definition, command.native_identities, True)
             self._phase("publication")
             await self._publishing.publish_connector(command.connector_id)
+            self._phase("event")
+            await self._events.append(connector_publication_changed_event(command.connector_id, "published"))
             return True
 
-        return await self._atomic(mutate)
+        async with self._lock:
+            return await self._atomic_locked(mutate)
 
     async def _validate_namespace(
         self,
@@ -161,7 +190,7 @@ class InMemoryDownstreamConnectorUnitOfWork:
                 )
             )
 
-        await self._atomic(mutate)
+        await self._atomic(mutate, command.definition.connector_id)
 
     async def delete(self, command: DeleteDownstreamConnectorAggregate) -> None:
         async def mutate() -> None:
@@ -186,7 +215,7 @@ class InMemoryDownstreamConnectorUnitOfWork:
             self._phase("publication")
             await self._publishing.delete_connector(command.connector_id)
 
-        await self._atomic(mutate)
+        await self._atomic(mutate, command.connector_id)
 
     async def invalidate(self, command: InvalidateDownstreamConnectorAggregate) -> None:
         async def mutate() -> None:
@@ -200,26 +229,36 @@ class InMemoryDownstreamConnectorUnitOfWork:
                 publication=UnpublishConnector(),
             ))
 
-        await self._atomic(mutate)
+        await self._atomic(mutate, command.connector_id)
 
     async def apply_discovery(self, command: ApplyDiscoveredCatalog) -> None:
         async def mutate() -> None:
+            try:
+                current = await self._admit_discovery(command.connector_id)
+            except (DownstreamConnectorNotFoundError, DownstreamConnectorUnavailableError) as error:
+                raise ObsoleteDownstreamCatalogError(command.connector_id) from error
+            if current != command.admission:
+                raise ObsoleteDownstreamCatalogError(command.connector_id)
             catalog = command.catalog
             await self._replace(ReplaceDownstreamConnectorAggregate(
                 native_identities=command.native_identities,
                 definition=await self._definition(command.connector_id),
                 credential=KeepCredential(),
-                catalog=DeleteCatalog()
-                if isinstance(catalog, DeleteCatalog)
-                else ReplaceCatalog(snapshot=catalog),
+                catalog=ReplaceCatalog(snapshot=catalog) if isinstance(catalog, ToolCatalogSnapshot) else catalog,
                 health=ReplaceHealth(health=command.health),
-                activation=PreserveActivation()
-                if isinstance(catalog, DeleteCatalog)
-                else ReconcileActivation(operation_names=command.operation_names),
+                activation=ReconcileActivation(operation_names=command.operation_names)
+                if isinstance(catalog, ToolCatalogSnapshot) else PreserveActivation(),
                 publication=PreservePublication(),
             ))
+            if isinstance(catalog, ToolCatalogSnapshot):
+                for kind, names in (
+                    ("prompt", tuple(prompt.name for prompt in catalog.prompts)),
+                    ("resource", tuple(resource.uri for resource in catalog.resources)),
+                    ("resource_template", tuple(template.uri_template for template in catalog.resource_templates)),
+                ):
+                    await self._activations.reconcile("downstream_mcp", command.connector_id, kind, names)
 
-        await self._atomic(mutate)
+        await self._atomic(mutate, command.connector_id)
 
     async def _replace(
         self, command: CreateDownstreamConnectorAggregate | ReplaceDownstreamConnectorAggregate
@@ -271,14 +310,23 @@ class InMemoryDownstreamConnectorUnitOfWork:
     def _phase(self, phase: str) -> None:
         self._fault(phase)
 
-    async def _atomic(self, mutation: Callable[[], Awaitable[MutationResult]]) -> MutationResult:
+    async def _atomic(self, mutation: Callable[[], Awaitable[MutationResult]], connector_id: str) -> MutationResult:
+        async def mutate_and_publish() -> MutationResult:
+            result = await mutation()
+            self._phase("event")
+            await self._events.append(connector_discovery_changed_event("downstream_mcp", connector_id))
+            return result
+
         async with self._lock:
-            return await self._atomic_locked(mutation)
+            result = await self._atomic_locked(mutate_and_publish)
+            self._discovery_revisions[connector_id] = self._discovery_revisions.get(connector_id, 0) + 1
+            return result
 
     async def _atomic_locked(self, mutation: Callable[[], Awaitable[MutationResult]]) -> MutationResult:
         targets = tuple(
             target
             for target in (
+                self._events,
                 self._personal_connections,
                 self._personal_oauth_configurations,
                 self._personal_tool_policies,

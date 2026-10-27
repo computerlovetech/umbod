@@ -1,13 +1,14 @@
 from umbod.core.capabilities.tools.names import mangle_public_tool_name
-from umbod.core.connectors.downstream_mcp.catalog import StoreBackedDownstreamCapabilityCatalog
+from collections.abc import Sequence
+
+from umbod.core.connectors.downstream_mcp.catalog import DownstreamCapabilityRecord
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
-from umbod.core.connectors.downstream_mcp.stores import ConnectorDefinitionStore, ToolCatalogStore
 from umbod.mcp.signals import McpToolIdentity, ToolInventoryObserved
 
 
-async def read_shared_tool_inventory(definitions: ConnectorDefinitionStore, catalogs: ToolCatalogStore) -> ToolInventoryObserved:
+def shared_tool_inventory(records: Sequence[DownstreamCapabilityRecord]) -> ToolInventoryObserved:
     identities: list[McpToolIdentity] = []
-    for record in await StoreBackedDownstreamCapabilityCatalog(definitions, catalogs).list_records():
+    for record in records:
         if uses_personal_oauth(record.definition) or record.capability.identity.capability_kind != "tool" or record.source_tool is None:
             continue
         definition = record.definition

@@ -134,12 +134,10 @@ class NativeCapabilityCatalog:
 
 
 class NativeCapabilityActivation:
-    def __init__(self, runtime_states: ConnectorToolRuntimeStateReader | None) -> None:
+    def __init__(self, runtime_states: ConnectorToolRuntimeStateReader) -> None:
         self._runtime_states = runtime_states
 
     async def is_enabled(self, identity: CapabilityIdentity) -> bool:
-        if self._runtime_states is None:
-            return True
         state = self._runtime_states.get_runtime_state(
             ConnectorToolRef(identity.connector_id, identity.capability_key)
         )

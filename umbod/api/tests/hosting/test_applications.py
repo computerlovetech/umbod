@@ -77,7 +77,6 @@ def test_explicit_rest_settings_and_verifiers_are_isolated(
 async def test_actual_mcp_app_serves_health_and_enters_lifespan(
     settings: AppConfig, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(public_app, "_create_public_polling_synchronizers", AsyncMock(return_value=(None,) * 5))
     create_runtime = public_app.ConfiguredPersistenceRuntimeProvider.create
     shutdown = AsyncMock()
 

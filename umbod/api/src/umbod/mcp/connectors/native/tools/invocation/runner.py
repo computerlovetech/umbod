@@ -21,6 +21,7 @@ from umbod.mcp.connectors.native.tools.invocation.errors import (
     ConnectorToolFailureResult,
 )
 from umbod.mcp.connectors.native.tools.definition.naming import _tool_name
+from umbod.mcp.connectors.native.tools.invocation.ports import NativeToolExecutionAdmission
 from umbod_sdk.connectors.uploaded_file import UploadedFile
 
 
@@ -46,10 +47,12 @@ class ConnectorToolInvocationRunner:
         mapping: ConnectorToolMapping,
         error_formatter: ConnectorToolErrorFormatter,
         execution_pipeline: ToolExecutionPipeline[ToolResult],
+        execution_admission: NativeToolExecutionAdmission,
     ) -> None:
         self._mapping = mapping
         self._error_formatter = error_formatter
         self._execution_pipeline = execution_pipeline
+        self._execution_admission = execution_admission
 
     async def invoke(self, arguments: Mapping[str, Any]) -> ToolResult:
         try:
@@ -107,6 +110,12 @@ class ConnectorToolInvocationRunner:
         )
 
     async def _invoke_operation(self, arguments: Mapping[str, Any]) -> ToolResult:
+        await self._execution_admission(CapabilityIdentity(
+            connector_kind="native",
+            connector_id=self._mapping.connector_id,
+            capability_kind="tool",
+            capability_key=self._mapping.operation_name,
+        ))
         try:
             operation_result = self._mapping.operation(**arguments)
             if isawaitable(operation_result):

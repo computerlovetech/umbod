@@ -1,3 +1,4 @@
+from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryStores, create_downstream_discovery_runtime
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
 from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
 from dataclasses import dataclass
@@ -131,11 +132,13 @@ async def ownership() -> OwnershipFixture:
     factory = RejectingDownstreamFactory()
     permissions = MutablePermissionPolicy()
     signals = invocation_signals(InMemoryMcpMetricsRecorder())
-    provider = ConnectorAwareDownstreamMcpToolProvider(personal_runtime=DisabledPersonalToolRuntime(),
+    discovery_runtime = create_downstream_discovery_runtime(DownstreamDiscoveryStores(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, descriptions=SystemConnectorCapabilityDescriptionOverrideStore()))
+    await discovery_runtime.reconcile()
+    provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_runtime=DisabledPersonalToolRuntime(),
         definitions=stores.definitions, credentials=stores.credentials,
         catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations,
         client_factory=factory, permission_policy=permissions,
-        connector_scope="", capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(),
+        connector_scope="",
         signals=signals,
         execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()),
     )
@@ -145,6 +148,7 @@ async def ownership() -> OwnershipFixture:
 @pytest.mark.asyncio
 async def test_personal_definition_is_hidden_from_all_capability_lists_and_search(ownership: OwnershipFixture) -> None:
     await ownership.make_personal()
+    await ownership.provider.reconcile_runtime()
     public = FastMCP("public", providers=[ownership.provider])
     async with Client(public) as client:
         assert await client.list_tools() == []

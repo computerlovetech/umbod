@@ -18,7 +18,7 @@
 
 ### `activation/`
 
-**Read when working with:** Capability activation state (tools, prompts, resources), enable/disable workflows, or activation persistence shared by connector kinds.
+**Read when working with:** Capability activation state (tools, prompts, resources), enable/disable workflows, or activation persistence shared by connector kinds. Public database-store mutations append events transactionally; session-level helpers leave event ownership to the enclosing aggregate. `events.py` constructs generic capability-activation events; obsolete tool-only aliases and typed stream wrappers are removed.
 
 ### `groups/`
 
@@ -26,7 +26,7 @@
 
 ### `permissions/`
 
-**Read when working with:** Group access, tool permissions, authorization state, or permission notifications. `stores/service.py` exposes session-bound permission reads and updates for atomic configuration writes. `runtime.py` evaluates typed `GroupMembership` through `RuntimeGroupPermissions`, without parsing claims. Legacy constructor claim selectors remain adapter metadata for hosting compatibility. FastMCP callbacks and policy-specific claim capture live in `umbod.mcp.authorization` and `umbod.mcp.auth.groups`.
+**Read when working with:** Group access, tool permissions, authorization state, or permission notifications. `stores/service.py` exposes session-bound permission reads and updates for atomic configuration writes. Public update/save operations append grant/revoke events in their serialized transaction, while enclosing administrator aggregates own events for session-bound updates. `runtime.py` evaluates typed `GroupMembership` through `RuntimeGroupPermissions`, without parsing claims. Legacy constructor claim selectors remain adapter metadata for hosting compatibility. FastMCP callbacks and policy-specific claim capture live in `umbod.mcp.authorization` and `umbod.mcp.auth.groups`.
 
 ### `signals/`
 
@@ -34,7 +34,7 @@
 
 ### `invocation/`
 
-**Read when working with:** Cross-kind invocation policy, approval nonces, gated tool execution, or invocation-policy events. `failure_evidence.py` captures bounded exception types and traceback frames without messages, source lines or locals, with explicit internal, connector, downstream OpenAPI and downstream MCP origins. `tools/execution.py` scopes this evidence to each pipeline execution, restoring enclosing context on completion or cancellation.
+**Read when working with:** Cross-kind invocation policy, approval nonces, gated tool execution, or invocation-policy events. `tools/database_configuration_mutation.py` atomically persists tool activation/policy changes and their events; its result identifies persisted event ownership so boundary orchestration does not append duplicates. `failure_evidence.py` captures bounded exception types and traceback frames without messages, source lines or locals, with explicit internal, connector, downstream OpenAPI and downstream MCP origins. `tools/execution.py` scopes this evidence to each pipeline execution, restoring enclosing context on completion or cancellation.
 
 ### `publishing/`
 
@@ -50,11 +50,11 @@
 
 ### `capabilities/`
 
-**Read when working with:** Shared capability vocabulary (identity, catalog, availability), capability description overrides, or public tool naming/schemas.
+**Read when working with:** Shared capability vocabulary (identity, catalog, availability), capability description overrides, or public tool naming/schemas. Public description-store mutations persist their events atomically; administrator aggregate mutations own events when using session-level compare-and-swap.
 
 ### `configuration/`
 
-**Read when working with:** Encrypted connector configuration, configuration secrets/ciphers, or configuration-changed events.
+**Read when working with:** Encrypted connector configuration, configuration secrets/ciphers, or configuration-changed events. `events.py` constructs generic change events for transactional writers; delivery uses the shared messaging ports rather than connector-specific stream wrappers.
 
 ### `network/`
 
@@ -88,7 +88,7 @@
 
 ### `messaging/`
 
-**Read when working with:** Core messaging contracts shared with transport implementations. `stores/event_stream.py` provides durable stream storage and `append_event_in_session` for atomic state-and-event writes.
+**Read when working with:** Core messaging contracts shared with transport implementations. `stores/event_stream.py` provides durable stream storage and `append_event_in_session` for atomic state-and-event writes. `discovery_events.py` defines connector-kind/identity change events for definition and catalog reconciliation.
 
 ### `telemetry/`
 

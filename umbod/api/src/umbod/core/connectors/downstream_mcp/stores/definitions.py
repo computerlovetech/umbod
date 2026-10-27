@@ -1,5 +1,7 @@
 from pydantic import TypeAdapter
 
+from umbod.core.connectors.downstream_mcp.stores.discovery_generation import advance_discovery_generation
+
 from umbod.core.connectors.downstream_mcp.models import ConnectorDefinition
 from umbod.core.connectors.downstream_mcp.stores.ports import (
     ConnectorDefinitionFound,
@@ -68,6 +70,7 @@ class ConnectorDefinitionStoreService:
                     row=record,
                 ),
             )
+            await advance_discovery_generation(session, definition.connector_id)
         return ConnectorDefinitionFound(definition=definition)
 
     async def get(
@@ -115,6 +118,7 @@ class ConnectorDefinitionStoreService:
                     self._table,
                     DeleteQuery(Equals(CONNECTOR_DEFINITION_CONNECTOR_ID, command.connector_id)),
                 )
+                await advance_discovery_generation(session, command.connector_id)
         if row is None:
             return ConnectorDefinitionMissing(connector_id=command.connector_id)
         return ConnectorDefinitionFound(definition=_decode_definition(row))

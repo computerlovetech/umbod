@@ -1,3 +1,4 @@
+from asyncio import Lock
 from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
@@ -23,6 +24,7 @@ from umbod.mcp.connectors.native.tools.infrastructure.authorization import (
     ConnectorToolAuthorizationScope,
 )
 from umbod.mcp.connectors.native.tools.invocation.runner import ConnectorToolInvocationRunner
+from umbod.mcp.connectors.native.tools.invocation.ports import NativeToolExecutionAdmission
 
 
 class NativeCapabilityRuntime:
@@ -31,10 +33,12 @@ class NativeCapabilityRuntime:
         catalog: NativeCapabilityCatalog,
         availability: CapabilityAvailability,
         invoker_factory: Callable[[ConnectorToolMapping], ConnectorToolInvocationRunner],
+        execution_admission: NativeToolExecutionAdmission,
     ) -> None:
         self.catalog = catalog
         self._availability = availability
         self._invoker_factory = invoker_factory
+        self._execution_admission = execution_admission
 
     async def eligible_mappings(self, connector_id: str) -> list[ConnectorToolMapping]:
         mappings: list[ConnectorToolMapping] = []
@@ -47,6 +51,9 @@ class NativeCapabilityRuntime:
             ):
                 mappings.append(binding.mapping)
         return mappings
+
+    async def admit_execution(self, identity: CapabilityIdentity) -> None:
+        await self._execution_admission(identity)
 
     async def is_available(self, identity: CapabilityIdentity) -> bool:
         return await self._availability.is_available(identity)
@@ -84,24 +91,42 @@ class NativeCapabilitySearch:
         self._display_names = connector_display_names
         self._descriptions = connector_descriptions
         self._description_overrides = description_overrides
+        self._candidates: tuple[ConnectorToolSearchCandidate, ...] = ()
+        self._refresh_lock = Lock()
+
+    def invalidate(self) -> None:
+        self._candidates = ()
+
+    async def refresh(self) -> None:
+        async with self._refresh_lock:
+            await self._refresh()
+
+    async def _refresh(self) -> None:
+        try:
+            capabilities = tuple([
+                capability
+                for capability in await self._runtime.catalog.list_capabilities()
+                if await self._runtime.is_available(capability.identity)
+            ])
+            descriptions = await self._effective_descriptions(capabilities)
+            candidates = tuple(
+                self._candidate(capability.identity, descriptions) for capability in capabilities
+            )
+        except Exception:
+            self._candidates = ()
+            raise
+        self._candidates = candidates
 
     async def candidates(
         self, authorization_scope: ConnectorToolAuthorizationScope
     ) -> list[ConnectorToolSearchCandidate]:
-        capabilities = await self._authorized_capabilities(authorization_scope)
-        descriptions = await self._effective_descriptions(capabilities)
-        return [self._candidate(capability.identity, descriptions) for capability in capabilities]
-
-    async def _authorized_capabilities(
-        self, authorization_scope: ConnectorToolAuthorizationScope
-    ) -> tuple[NormalizedCapability, ...]:
-        eligible = []
-        for capability in await self._runtime.catalog.list_capabilities():
-            identity = capability.identity
-            tool_ref = ConnectorToolRef(identity.connector_id, identity.capability_key)
-            if authorization_scope.allows(tool_ref) and await self._runtime.is_available(identity):
-                eligible.append(capability)
-        return tuple(eligible)
+        snapshot = self._candidates
+        return [
+            candidate.model_copy(deep=True) for candidate in snapshot
+            if authorization_scope.allows(
+                ConnectorToolRef(candidate.connector_id, candidate.operation_name)
+            )
+        ]
 
     async def _effective_descriptions(
         self, capabilities: Sequence[NormalizedCapability]

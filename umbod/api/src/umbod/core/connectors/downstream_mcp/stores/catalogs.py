@@ -1,3 +1,4 @@
+from umbod.core.connectors.downstream_mcp.stores.discovery_generation import advance_discovery_generation
 from umbod.core.connectors.downstream_mcp.models import (
     CatalogReconciliation,
     DiscoveredTool,
@@ -94,6 +95,7 @@ async def replace_catalog(
             ),
         ),
     )
+    await advance_discovery_generation(session, snapshot.connector_id)
     return reconciliation
 
 
@@ -124,6 +126,7 @@ class ToolCatalogStoreService:
                 self._table,
                 DeleteQuery(Equals(TOOL_CATALOG_CONNECTOR_ID, command.connector_id)),
             )
+            await advance_discovery_generation(session, command.connector_id)
         if row is None:
             return ToolCatalogMissing(connector_id=command.connector_id)
         return ToolCatalogFound(snapshot=ToolCatalogSnapshot.model_validate(row.snapshot))

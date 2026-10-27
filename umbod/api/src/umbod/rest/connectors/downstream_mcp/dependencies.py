@@ -37,15 +37,12 @@ from umbod.core.connectors.downstream_mcp.adapters.settings import (
 )
 from umbod.rest.connectors.dependencies import (
     get_capability_activation_store,
-    get_connector_event_stream,
     get_connector_publishing_store,
 )
 from umbod.rest.connectors.native.dependencies import get_connector_registry
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.mcp_permissions.dependencies import get_group_permission_store
-from messaging.no_op import NoOpEventStream
-from messaging.ports import EventStream
 Factories = Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)]
 
 class UuidDownstreamConnectorIdGenerator:
@@ -89,7 +86,7 @@ def get_downstream_connector_probe(
 ) -> DownstreamMcpProbe:
     return FaviconDiscoveringMcpProbe(connections.connection, discovery)
 
-def get_downstream_connector_preparation(probe: Annotated[DownstreamMcpProbe, Depends(get_downstream_connector_probe)], settings: Annotated[DownstreamMcpInfrastructureSettings, Depends(get_downstream_infrastructure_settings)]) -> DownstreamConnectorPreparation:
+def get_downstream_connector_preparation(probe: Annotated[DownstreamMcpProbe, Depends(get_downstream_connector_probe)]) -> DownstreamConnectorPreparation:
     return DownstreamConnectorPreparation(probe)
 
 def get_downstream_connector_queries(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], publishing: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)]) -> DownstreamConnectorQueries:
@@ -109,26 +106,26 @@ class RegistryPublicToolIdentitySource:
 def get_public_tool_identity_source(registry: Annotated[ConnectorRegistry, Depends(get_connector_registry)]) -> PublicToolIdentitySource:
     return RegistryPublicToolIdentitySource(registry)
 
-def get_downstream_connector_updater(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], publishing: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)], event_stream: Annotated[EventStream | None, Depends(get_connector_event_stream)], preparation: Annotated[DownstreamConnectorPreparation, Depends(get_downstream_connector_preparation)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)], validator: Annotated[PublicToolNameValidator, Depends(get_public_tool_name_validator)], identity_source: Annotated[PublicToolIdentitySource, Depends(get_public_tool_identity_source)]) -> DownstreamConnectorUpdater:
-    return DownstreamConnectorUpdater(stores.credentials, stores.catalogs, publishing, event_stream or NoOpEventStream(), stores.unit_of_work, preparation, queries, validator, identity_source)
+def get_downstream_connector_updater(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], publishing: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)], preparation: Annotated[DownstreamConnectorPreparation, Depends(get_downstream_connector_preparation)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)], validator: Annotated[PublicToolNameValidator, Depends(get_public_tool_name_validator)], identity_source: Annotated[PublicToolIdentitySource, Depends(get_public_tool_identity_source)]) -> DownstreamConnectorUpdater:
+    return DownstreamConnectorUpdater(stores.credentials, publishing, stores.unit_of_work, preparation, queries, validator, identity_source)
 
-def get_downstream_connector_catalog_lifecycle(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], probe: Annotated[DownstreamMcpProbe, Depends(get_downstream_connector_probe)], publishing: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)], event_stream: Annotated[EventStream | None, Depends(get_connector_event_stream)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)], factories: Factories, identity_source: Annotated[PublicToolIdentitySource, Depends(get_public_tool_identity_source)]) -> DownstreamConnectorCatalogLifecycle:
+def get_downstream_connector_catalog_lifecycle(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], probe: Annotated[DownstreamMcpProbe, Depends(get_downstream_connector_probe)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)], factories: Factories, identity_source: Annotated[PublicToolIdentitySource, Depends(get_public_tool_identity_source)]) -> DownstreamConnectorCatalogLifecycle:
     discovery = create_downstream_mcp_discovery(downstream_mcp_infrastructure_settings_from_app_config(factories.settings), probe)
-    return DownstreamConnectorCatalogLifecycle(stores.credentials, stores.catalogs, discovery, publishing, event_stream or NoOpEventStream(), stores.unit_of_work, queries, identity_source)
+    return DownstreamConnectorCatalogLifecycle(discovery, stores.unit_of_work, queries, identity_source)
 
-def get_downstream_connector_publisher(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], publishing: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)], event_stream: Annotated[EventStream | None, Depends(get_connector_event_stream)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)], identity_source: Annotated[PublicToolIdentitySource, Depends(get_public_tool_identity_source)]) -> DownstreamConnectorPublisher:
-    return DownstreamConnectorPublisher(publishing, event_stream or NoOpEventStream(), queries, stores.unit_of_work, identity_source)
+def get_downstream_connector_publisher(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], publishing: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)], identity_source: Annotated[PublicToolIdentitySource, Depends(get_public_tool_identity_source)]) -> DownstreamConnectorPublisher:
+    return DownstreamConnectorPublisher(publishing, queries, stores.unit_of_work, identity_source)
 
-def get_downstream_connector_deleter(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], permissions: Annotated[GroupPermissionStore, Depends(get_group_permission_store)], publishing: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)], event_stream: Annotated[EventStream | None, Depends(get_connector_event_stream)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)]) -> DownstreamConnectorDeleter:
-    return DownstreamConnectorDeleter(permissions, publishing, event_stream or NoOpEventStream(), stores.unit_of_work, queries)
+def get_downstream_connector_deleter(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], permissions: Annotated[GroupPermissionStore, Depends(get_group_permission_store)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)]) -> DownstreamConnectorDeleter:
+    return DownstreamConnectorDeleter(permissions, stores.unit_of_work, queries)
 
 def get_downstream_tool_activation_port(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], catalogs: Annotated[ToolCatalogStore, Depends(get_catalog_store)], activations: Annotated[ActivationStore, Depends(get_capability_activation_store)]) -> ActivationPort:
     capabilities = StoreBackedDownstreamCapabilityCatalog(stores.definitions, catalogs)
     catalog = CapabilitySourceActivationCatalog(capabilities, activations, 'downstream_mcp')
     return CapabilityActivationService(catalog, activations, InMemoryActivationNotifier())
 
-def get_downstream_connector_activation(activations: Annotated[ActivationStore, Depends(get_capability_activation_store)], activation_port: Annotated[ActivationPort, Depends(get_downstream_tool_activation_port)], event_stream: Annotated[EventStream | None, Depends(get_connector_event_stream)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)]) -> DownstreamConnectorActivation:
-    return DownstreamConnectorActivation(activations, activation_port, event_stream or NoOpEventStream(), queries)
+def get_downstream_connector_activation(activation_port: Annotated[ActivationPort, Depends(get_downstream_tool_activation_port)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)]) -> DownstreamConnectorActivation:
+    return DownstreamConnectorActivation(activation_port, queries)
 
 class RegistryIdentitySource:
 

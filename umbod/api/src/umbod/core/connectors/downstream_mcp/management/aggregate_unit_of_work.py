@@ -1,3 +1,10 @@
+from umbod.core.connectors.downstream_mcp.stores.discovery_generation import advance_discovery_generation, discovery_generation
+from umbod.core.connectors.downstream_mcp.management.discovery_admission import catalog_revision
+from umbod.core.connectors.downstream_mcp.models import DiscoveryAdmission, MissingCatalogRevision, PresentCatalogRevision
+from umbod.core.connectors.downstream_mcp.errors import ObsoleteDownstreamCatalogError
+from umbod.core.publishing.events import connector_publication_changed_event
+from umbod.core.messaging.discovery_events import connector_discovery_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
 from collections.abc import Awaitable, Callable
 
 from ..stores.personal_refresh_schema import PERSONAL_REFRESH_TABLE, PERSONAL_REFRESH_CONNECTOR_ID
@@ -34,9 +41,10 @@ from umbod.core.activation.stores.schema import (
 from umbod.core.connectors.downstream_mcp.errors import DownstreamConnectorNotFoundError, DownstreamConnectorUnavailableError
 from umbod.core.connectors.downstream_mcp.models import ConnectorDefinition, ConnectorHealth, ToolCatalogSnapshot
 from umbod.core.connectors.downstream_mcp.stores.catalogs import find_catalog_record, replace_catalog
-from umbod.core.connectors.downstream_mcp.stores.credentials import save_credential
+from umbod.core.connectors.downstream_mcp.stores.credentials import save_credential, find_credential_record
 from umbod.core.connectors.downstream_mcp.stores.ports import (
     CONNECTOR_DEFINITION_ADAPTER,
+    CREDENTIAL_STATE_ADAPTER,
     ReplaceToolCatalog,
     SaveCredential,
 )
@@ -154,13 +162,14 @@ async def _reconcile_activation(
     connector_id: str,
     names: tuple[str, ...],
     fault: DownstreamConnectorMutationFault,
+    capability_kind: str,
 ) -> None:
     fault("activation")
     predicate = AllOf(
         (
             Equals(CAPABILITY_ACTIVATION_STATE_CONNECTOR_KIND, "downstream_mcp"),
             Equals(CAPABILITY_ACTIVATION_STATE_CONNECTOR_ID, connector_id),
-            Equals(CAPABILITY_ACTIVATION_STATE_CAPABILITY_KIND, "tool"),
+            Equals(CAPABILITY_ACTIVATION_STATE_CAPABILITY_KIND, capability_kind),
         )
     )
     if names:
@@ -287,6 +296,7 @@ async def _replace_activation(
             command.definition.connector_id,
             command.activation.operation_names,
             fault,
+            "tool",
         )
 
 
@@ -473,6 +483,23 @@ async def _delete(
         await session.delete(table, DeleteQuery(Equals(field, command.connector_id)))
 
 
+async def _admit_discovery(session: DatabaseSession, connector_id: str, cipher: TextCipher) -> DiscoveryAdmission:
+    definition = await session.find_one(
+        CONNECTOR_DEFINITION_TABLE,
+        Query(filter=Equals(CONNECTOR_DEFINITION_CONNECTOR_ID, connector_id), projection=AllFields(), ordering=Unordered()),
+    )
+    credential = await find_credential_record(session, CONNECTOR_CREDENTIAL_TABLE, connector_id)
+    if definition is None or credential is None:
+        raise DownstreamConnectorUnavailableError(connector_id)
+    catalog = await find_catalog_record(session, TOOL_CATALOG_TABLE, connector_id)
+    return DiscoveryAdmission(
+        definition=CONNECTOR_DEFINITION_ADAPTER.validate_python(definition.document),
+        credential=CREDENTIAL_STATE_ADAPTER.validate_json(cipher.decrypt(credential.document)),
+        catalog_revision=MissingCatalogRevision(state="missing") if catalog is None else PresentCatalogRevision(state="present", fingerprint=catalog_revision(ToolCatalogSnapshot.model_validate(catalog.snapshot))),
+        aggregate_revision=await discovery_generation(session, connector_id),
+    )
+
+
 class DownstreamConnectorUnitOfWorkService:
     def __init__(
         self,
@@ -484,8 +511,12 @@ class DownstreamConnectorUnitOfWorkService:
         self._database = database
         self._context = MutationContext(cipher=cipher, fault=fault, clock=clock)
 
+    async def admit_discovery(self, connector_id: str) -> DiscoveryAdmission:
+        async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
+            return await _admit_discovery(session, connector_id, self._context.cipher)
+
     async def create(self, command: CreateDownstreamConnectorAggregate) -> None:
-        await self._run(lambda session: _replace(session, command, self._context))
+        await self._run(lambda session: _replace(session, command, self._context), command.definition.connector_id)
 
     async def create_personal_oauth(self, command: CreatePersonalOAuthConnectorAggregate) -> None:
         async def mutate(session: DatabaseSession) -> None:
@@ -496,22 +527,25 @@ class DownstreamConnectorUnitOfWorkService:
             await install_personal_oauth_configuration(session, self._context.cipher, command.aggregate.definition.connector_id, command.configuration)
             self._context.fault("personal_oauth_configuration_saved")
 
-        await self._run(mutate)
+        await self._run(mutate, command.aggregate.definition.connector_id)
 
     async def replace(self, command: ReplaceDownstreamConnectorAggregate) -> None:
-        await self._run(lambda session: _replace(session, command, self._context))
+        await self._run(lambda session: _replace(session, command, self._context), command.definition.connector_id)
 
     async def publish(self, command: PublishDownstreamConnectorAggregate) -> bool:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
-            return await _publish(session, command, self._context)
+            changed = await _publish(session, command, self._context)
+            if changed:
+                await append_event_in_session(session, connector_publication_changed_event(command.connector_id, "published"))
+            return changed
 
     async def update_published_prefix(self, command: UpdatePublishedConnectorPrefix) -> None:
         await self._run(
-            lambda session: _update_published_prefix(session, command, self._context)
+            lambda session: _update_published_prefix(session, command, self._context), command.definition.connector_id
         )
 
     async def delete(self, command: DeleteDownstreamConnectorAggregate) -> None:
-        await self._run(lambda session: _delete(session, command, self._context.fault))
+        await self._run(lambda session: _delete(session, command, self._context.fault), command.connector_id)
 
     async def invalidate(self, command: InvalidateDownstreamConnectorAggregate) -> None:
         async def mutate(session: DatabaseSession) -> None:
@@ -523,14 +557,20 @@ class DownstreamConnectorUnitOfWorkService:
                 session, command.connector_id, self._context.fault, self._context.clock
             )
 
-        await self._run(mutate)
+        await self._run(mutate, command.connector_id)
 
     async def apply_discovery(self, command: ApplyDiscoveredCatalog) -> None:
         async def mutate(session: DatabaseSession) -> None:
+            try:
+                current = await _admit_discovery(session, command.connector_id, self._context.cipher)
+            except DownstreamConnectorUnavailableError as error:
+                raise ObsoleteDownstreamCatalogError(command.connector_id) from error
+            if current != command.admission:
+                raise ObsoleteDownstreamCatalogError(command.connector_id)
             self._context.fault("catalog")
             if isinstance(command.catalog, DeleteCatalog):
                 await _delete_catalog(session, command.connector_id)
-            else:
+            elif isinstance(command.catalog, ToolCatalogSnapshot):
                 await replace_catalog(
                     session,
                     TOOL_CATALOG_TABLE,
@@ -539,16 +579,25 @@ class DownstreamConnectorUnitOfWorkService:
             await _validate_published_namespace(session, command.native_identities)
             await _write_health(session, command.health, self._context.fault)
             # A failed discovery is not an authoritative empty tool catalog.
-            if not isinstance(command.catalog, DeleteCatalog):
+            if isinstance(command.catalog, ToolCatalogSnapshot):
                 await _reconcile_activation(
-                    session, command.connector_id, command.operation_names, self._context.fault
+                    session, command.connector_id, command.operation_names, self._context.fault, "tool"
                 )
+                for kind, names in (
+                    ("prompt", tuple(prompt.name for prompt in command.catalog.prompts)),
+                    ("resource", tuple(resource.uri for resource in command.catalog.resources)),
+                    ("resource_template", tuple(template.uri_template for template in command.catalog.resource_templates)),
+                ):
+                    await _reconcile_activation(session, command.connector_id, names, self._context.fault, kind)
 
-        await self._run(mutate)
+        await self._run(mutate, command.connector_id)
 
-    async def _run(self, mutation: Callable[[DatabaseSession], Awaitable[None]]) -> None:
+    async def _run(self, mutation: Callable[[DatabaseSession], Awaitable[None]], connector_id: str) -> None:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
             await mutation(session)
+            await advance_discovery_generation(session, connector_id)
+            self._context.fault("event")
+            await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", connector_id))
 
 
 def utc_clock() -> datetime:

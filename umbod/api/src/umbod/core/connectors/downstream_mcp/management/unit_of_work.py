@@ -4,6 +4,7 @@ from umbod.core.capabilities.tools.names import PublicToolIdentity
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthSettings
 from umbod.core.connectors.downstream_mcp.models import (
     ConnectorDefinition,
+    DiscoveryAdmission,
     ConnectorHealth,
     CredentialState,
     DomainModel,
@@ -130,14 +131,17 @@ class InvalidateDownstreamConnectorAggregate(DomainModel):
 
 
 class ApplyDiscoveredCatalog(DomainModel):
+    admission: DiscoveryAdmission
     native_identities: tuple[PublicToolIdentity, ...]
     connector_id: str
-    catalog: ToolCatalogSnapshot | DeleteCatalog
+    catalog: ToolCatalogSnapshot | DeleteCatalog | KeepCatalog
     health: ConnectorHealth
     operation_names: tuple[str, ...]
 
 
 class DownstreamConnectorUnitOfWork(Protocol):
+    async def admit_discovery(self, connector_id: str) -> DiscoveryAdmission: ...
+
     async def create(self, command: CreateDownstreamConnectorAggregate) -> None: ...
 
     async def create_personal_oauth(self, command: CreatePersonalOAuthConnectorAggregate) -> None: ...

@@ -1,3 +1,5 @@
+from messaging.ports import EventStream
+from umbod.core.messaging.stores.event_stream import DatabaseEventStream
 from dataclasses import replace
 from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalConnectionKey, PersonalConnectionStore, SetPersonalConnectionEnabled, InMemoryPersonalConnectionStore
 from umbod.core.connectors.downstream_mcp.stores.personal_connections import EncryptedPersonalConnectionStore
@@ -28,6 +30,7 @@ from umbod.core.connectors.downstream_mcp.management import CreateDownstreamConn
 
 class AggregateHarness(Protocol):
     unit_of_work: DownstreamConnectorUnitOfWork
+    events: EventStream
     personal_connections: PersonalConnectionStore
     definitions: ConnectorDefinitionStore
     credentials: EncryptedCredentialStore
@@ -38,7 +41,8 @@ class AggregateHarness(Protocol):
 
 class Harness:
 
-    def __init__(self, unit_of_work: DownstreamConnectorUnitOfWork, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, health: ConnectorHealthStore, publishing: ConnectorPublishingStore, activations: ActivationStore, personal_connections: PersonalConnectionStore) -> None:
+    def __init__(self, unit_of_work: DownstreamConnectorUnitOfWork, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, health: ConnectorHealthStore, publishing: ConnectorPublishingStore, activations: ActivationStore, personal_connections: PersonalConnectionStore, events: EventStream) -> None:
+        self.events = events
         self.unit_of_work = unit_of_work
         self.personal_connections = personal_connections
         self.definitions = definitions
@@ -70,7 +74,8 @@ async def _inmemory(_: Path, fault: Callable[[str], None]) -> AggregateHarness:
     activations = CapabilityActivationStoreService(database, CAPABILITY_ACTIVATION_STATE_TABLE)
     publishing = ConnectorPublishingStoreService(database, PUBLICATION_STATE_TABLE)
     personal = InMemoryPersonalConnectionStore()
-    return Harness(InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activations, publishing, fault, personal, configurations, personal_policies, personal_access), definitions, credentials, catalogs, health, publishing, activations, personal)
+    events = DatabaseEventStream(create_inmemory_runtime().database)
+    return Harness(InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activations, publishing, fault, personal, configurations, personal_policies, personal_access, events), definitions, credentials, catalogs, health, publishing, activations, personal, events)
 
 async def _sqlite(path: Path, fault: Callable[[str], None]) -> AggregateHarness:
     definitions = ConnectorDefinitionStoreService(create_sqlite_runtime(path).database, CONNECTOR_DEFINITION_TABLE)
@@ -80,7 +85,7 @@ async def _sqlite(path: Path, fault: Callable[[str], None]) -> AggregateHarness:
     database = (await prepared_sqlite_runtime(path)).database
     activations = await create_capability_activation_store(database)
     publishing = await create_connector_publishing_store(database)
-    return Harness(DownstreamConnectorUnitOfWorkService(create_sqlite_runtime(path).database, AuthenticatedTextCipher('unit-of-work-secret'), fault, utc_clock), definitions, credentials, catalogs, health, publishing, activations, EncryptedPersonalConnectionStore(database, AuthenticatedTextCipher('unit-of-work-secret')))
+    return Harness(DownstreamConnectorUnitOfWorkService(create_sqlite_runtime(path).database, AuthenticatedTextCipher('unit-of-work-secret'), fault, utc_clock), definitions, credentials, catalogs, health, publishing, activations, EncryptedPersonalConnectionStore(database, AuthenticatedTextCipher('unit-of-work-secret')), DatabaseEventStream(database))
 
 @pytest.mark.parametrize('factory', (_inmemory, _sqlite), ids=('inmemory', 'sqlite'))
 @pytest.mark.asyncio
@@ -98,7 +103,7 @@ async def test_atomic_create_persists_complete_aggregate(tmp_path: Path, factory
     assert (await harness.health.get(query)).found is True
 
 @pytest.mark.parametrize('factory', (_inmemory, _sqlite), ids=('inmemory', 'sqlite'))
-@pytest.mark.parametrize('failed_phase', ('definition', 'credential', 'catalog', 'health', 'activation'))
+@pytest.mark.parametrize('failed_phase', ('definition', 'credential', 'catalog', 'health', 'activation', 'event'))
 @pytest.mark.asyncio
 async def test_create_failure_at_each_phase_rolls_back_all_state(tmp_path: Path, factory: Callable[[Path, Callable[[str], None]], Awaitable[AggregateHarness]], failed_phase: str) -> None:
 
@@ -197,6 +202,7 @@ async def test_reconnect_preserves_tool_choices(
     for _ in range(2):
         if interruption == "discovery_failure":
             await harness.unit_of_work.apply_discovery(ApplyDiscoveredCatalog(
+                admission=await harness.unit_of_work.admit_discovery("alpha"),
                 native_identities=(), connector_id="alpha", catalog=DeleteCatalog(), health=health, operation_names=(),
             ))
         else:
@@ -212,9 +218,114 @@ async def test_reconnect_preserves_tool_choices(
     )})
     for _ in range(2):
         await harness.unit_of_work.apply_discovery(ApplyDiscoveredCatalog(
+                admission=await harness.unit_of_work.admit_discovery("alpha"),
             native_identities=(), connector_id="alpha", catalog=snapshot, health=command.health.health,
             operation_names=("search", "disabled", "new"),
         ))
         assert await harness.activations.get_status(enabled) == ActivationStatus.ENABLED
         assert await harness.activations.get_status(disabled) == ActivationStatus.DISABLED
         assert await harness.activations.get_status(added) == ActivationStatus.DISABLED
+
+
+@pytest.mark.parametrize("factory", (_inmemory, _sqlite), ids=("inmemory", "sqlite"))
+@pytest.mark.parametrize("personal", (False, True), ids=("shared", "personal"))
+@pytest.mark.asyncio
+async def test_unpublished_create_and_delete_publish_discovery_events(
+    tmp_path: Path,
+    factory: Callable[[Path, Callable[[str], None]], Awaitable[AggregateHarness]],
+    personal: bool,
+) -> None:
+    path = tmp_path / "discovery-events.sqlite3"
+    await prepared_sqlite_runtime(path)
+    harness = await factory(path, lambda phase: None)
+    command = _command()
+    if personal:
+        from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
+        from umbod.core.connectors.downstream_mcp.management import DeleteCredential, DeleteHealth
+
+        command = command.model_copy(update={
+            "definition": OAuthConnectorDefinition(connector_id="alpha", display_name="Alpha", endpoint_url="https://example.test/mcp", authorization_mode="personal"),
+            "credential": DeleteCredential(), "catalog": DeleteCatalog(), "health": DeleteHealth(),
+        })
+    await harness.unit_of_work.create(command)
+    await harness.unit_of_work.delete(DeleteDownstreamConnectorAggregate(connector_id="alpha"))
+    events = await harness.events.list_after(0, 100)
+    assert [entry.event.event_type for entry in events] == ["connector.discovery.changed"] * 2
+    assert all(entry.event.metadata == {"connector_kind": "downstream_mcp", "connector_id": "alpha"} for entry in events)
+
+
+@pytest.mark.parametrize("factory", (_inmemory, _sqlite), ids=("inmemory", "sqlite"))
+@pytest.mark.asyncio
+async def test_delete_event_failure_restores_unpublished_definition(
+    tmp_path: Path,
+    factory: Callable[[Path, Callable[[str], None]], Awaitable[AggregateHarness]],
+) -> None:
+    deleting = False
+
+    def fault(phase: str) -> None:
+        if deleting and phase == "event":
+            raise RuntimeError("event append failed")
+
+    path = tmp_path / "delete-event-failure.sqlite3"
+    await prepared_sqlite_runtime(path)
+    harness = await factory(path, fault)
+    await harness.unit_of_work.create(_command())
+    deleting = True
+    with pytest.raises(RuntimeError, match="event append failed"):
+        await harness.unit_of_work.delete(DeleteDownstreamConnectorAggregate(connector_id="alpha"))
+    assert (await harness.definitions.get(ConnectorIdQuery(connector_id="alpha"))).found
+    assert len(await harness.events.list_after(0, 100)) == 1
+
+
+@pytest.mark.parametrize("factory", (_inmemory, _sqlite), ids=("inmemory", "sqlite"))
+@pytest.mark.asyncio
+async def test_stale_discovery_does_not_restore_deleted_connector(
+    tmp_path: Path,
+    factory: Callable[[Path, Callable[[str], None]], Awaitable[AggregateHarness]],
+) -> None:
+    path = tmp_path / "stale-discovery.sqlite3"
+    await prepared_sqlite_runtime(path)
+    harness = await factory(path, lambda phase: None)
+    command = _command()
+    await harness.unit_of_work.create(command)
+    admission = await harness.unit_of_work.admit_discovery("alpha")
+    await harness.unit_of_work.delete(DeleteDownstreamConnectorAggregate(connector_id="alpha"))
+    from umbod.core.connectors.downstream_mcp.errors import DownstreamConnectorNotFoundError, DownstreamConnectorUnavailableError
+
+    with pytest.raises((DownstreamConnectorNotFoundError, DownstreamConnectorUnavailableError)):
+        await harness.unit_of_work.apply_discovery(ApplyDiscoveredCatalog(
+            admission=admission,
+            native_identities=(), connector_id="alpha", catalog=command.catalog.snapshot,
+            health=command.health.health, operation_names=(),
+        ))
+    assert not (await harness.catalogs.get(ConnectorIdQuery(connector_id="alpha"))).found
+    assert len(await harness.events.list_after(0, 100)) == 2
+
+
+@pytest.mark.parametrize("factory", (_inmemory, _sqlite), ids=("inmemory", "sqlite"))
+@pytest.mark.asyncio
+async def test_catalog_generation_rejects_a_later_commit_even_when_content_is_identical(
+    tmp_path: Path,
+    factory: Callable[[Path, Callable[[str], None]], Awaitable[AggregateHarness]],
+) -> None:
+    from umbod.core.connectors.downstream_mcp.errors import ObsoleteDownstreamCatalogError
+
+    path = tmp_path / "obsolete.sqlite3"
+    await prepared_sqlite_runtime(path)
+    harness = await factory(path, lambda phase: None)
+    command = _command()
+    await harness.unit_of_work.create(command)
+    admission = await harness.unit_of_work.admit_discovery("alpha")
+    newer = command.catalog.snapshot
+    await harness.unit_of_work.apply_discovery(ApplyDiscoveredCatalog(
+        admission=admission, native_identities=(), connector_id="alpha",
+        catalog=newer, health=command.health.health, operation_names=(),
+    ))
+    with pytest.raises(ObsoleteDownstreamCatalogError):
+        await harness.unit_of_work.apply_discovery(ApplyDiscoveredCatalog(
+            admission=admission, native_identities=(), connector_id="alpha",
+            catalog=command.catalog.snapshot, health=command.health.health, operation_names=(),
+        ))
+    persisted = await harness.catalogs.get(ConnectorIdQuery(connector_id="alpha"))
+    assert isinstance(persisted, ToolCatalogFound)
+    assert persisted.snapshot == newer

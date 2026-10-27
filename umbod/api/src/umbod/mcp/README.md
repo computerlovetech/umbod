@@ -4,6 +4,8 @@
 
 **Read when working with:** MCP server setup, tool exposure, tool invocation, protocol middleware, authentication, or MCP observability.
 
+**Required runtime architecture:** Read [ADR-008: Event-Synchronized In-Memory Tool Runtime](../../../../project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) before changing registration, discovery, namespace lookup, reconciliation or invocation admission. It requires an application-scoped runtime projection synchronized through messaging across connector kinds and exposure modes, with fresh caller-specific and execution authority. The downstream runtime and messaging indexes describe explicit projection loading, reconciliation and failure handling; request-time catalog rebuilding is not an alternate discovery architecture.
+
 ## Entry modules
 
 ### `main.py` and `public_app.py`
@@ -30,7 +32,7 @@ Connector kinds are grouped under `native/`, `openapi/`, and `downstream_mcp/`, 
 
 ### `connectors/native/`
 
-**Read when working with:** Native connector tool registration, exposure modes, approval, invocation, or direct request-lifetime file input apps.
+**Read when working with:** Native connector tool registration, exposure modes, approval, invocation, or direct request-lifetime file input apps. See the [tool runtime index](connectors/native/tools/runtime/README.md) for explicit discovery reconciliation and the [discovery index](connectors/native/tools/discovery/README.md) for snapshot consumers.
 
 `approval_principal.py` exposes a fresh approval caller capture boundary over invocation actor identity. `approval.py` captures its immutable binding once per Ask evaluation, including continuations; `approval_state.py` preserves the existing client/user or session-only wire binding without substituting canonical ownership or authentication observations.
 
@@ -42,9 +44,9 @@ File-input connector tools keep uploaded bytes only for the current app-backend 
 
 **Read when working with:** Downstream discovery, reconciliation, publication, or invocation.
 
-`connectors/downstream_mcp/permissions.py` separates current-caller capture from grant evaluation. Capture sources produce an immutable `CallerContext` and membership snapshot; listing loops reuse it while consulting current grant state. `provider.py` builds availability and shared runtime resolution per operation, never retaining caller-bound evaluators on shared providers or materialized tools.
+`connectors/downstream_mcp/permissions.py` separates current-caller capture from grant evaluation. Capture sources produce an immutable `CallerContext` and membership snapshot; listing loops reuse it while consulting current grant state. `provider.py` captures application-scoped discovery state from [`runtime/`](connectors/downstream_mcp/runtime/README.md), never rebuilding shared catalogs during listing, search or name lookup. Execution still builds availability and shared runtime resolution per operation, never retaining caller-bound evaluators on shared providers or materialized tools.
 
-`connectors/downstream_mcp/inventory.py` projects persisted shared tool identities into neutral `ToolInventoryObserved` events for startup and catalog refresh, including prefixed and connector-scoped routes without enumerating personal inventories. Shared materialization publishes only its actual public identity; personal listing publishes no inventory. Providers receive signals and an execution-pipeline factory, and materialized tools receive ready pipelines instead of telemetry dependencies.
+`connectors/downstream_mcp/inventory.py` projects initialized shared-runtime records into neutral `ToolInventoryObserved` events for startup and catalog refresh, including prefixed and connector-scoped routes without enumerating personal inventories. Shared materialization publishes only its actual public identity; personal listing publishes no inventory. Providers receive signals and an execution-pipeline factory, and materialized tools receive ready pipelines instead of telemetry dependencies.
 
 `connectors/downstream_mcp/tool_projection.py` is the pure descriptor projection shared by shared and personal tool materialization, preserving SDK metadata, tags, annotations, icons, execution and output-schema presence without deriving trusted invocation identity from metadata. Successful personal results preserve validated result `_meta`, content and structured output; failures remain sanitized without downstream metadata.
 
@@ -55,6 +57,8 @@ Personal caller adapters normalize an already authenticated local `single_test_u
 Personal OAuth definitions remain unavailable to shared runtime execution and background discovery. `connectors/downstream_mcp/personal_runtime.py` captures the current accepted access-token claims on every caller lookup using the REST-equivalent canonical principal and group policy. `public_app.py` selects the active tools-only runtime only when both personal selection and OAuth policies are enabled; all other profiles use the disabled adapter. `provider.py` merges the current owner’s private discovered inventory into the existing provider without consulting the legacy global personal tool policy, per-tool activation or per-tool grants and fails closed on shared/personal public-name collisions. `tool_invocation.py` shares approval, validation and telemetry between real shared proxy delegation and personal runtime delegation; invocation-local bounded core diagnostics enrich the single existing ERROR completion with `mcp.failure.stage`, `mcp.failure.reason` and `mcp.execution_mode`, without changing client responses, audit categories or metric labels; held personal tools retain only public contract metadata and identity/revision/fingerprint, never an owner or credential. Personal admission runs again after approval, including gateway/codemode internal calls. Global auth dispatches the server-owned `AuthorizedPersonalTool` component type through authoritative personal availability instead of cached group allow/deny; metadata cannot select this path. Component cloning preserves that type. `PersonalToolReservationMiddleware` remains installed even when personal execution is disabled. It reserves personal definition namespaces independently of global catalogs, owner availability, stored observations and publication, rejects alternate resolved component types and filters conflicting listing metadata. Namespace stems use public-name mangling; ambiguous empty stems fail closed. Personal connector scope reserves unprefixed names. Gateway and codemode collision checks apply the same namespace predicate before native dispatch. Gateway dispatch validates configured native/provider name claims before eligibility or execution, so an unavailable personal tool cannot fall through to another provider. Unpublished shared drafts do not reserve names. `provider.py` composes core's `downstream_mcp/runtime/` resolver with shared stores and full capability availability. Every operation factory binds the complete capability identity and resolves afresh, including held tools after invocation approval. `resource_access.py` uses access-checked template and resource wrappers to recheck full capability availability before template creation and cached-content reads. There is no connector-only fallback factory. Shared group permissions still use polling memory, so cross-worker grant revocation is not immediate. Admission does not bind a catalogue contract fingerprint; a held tool can retain its previously listed schema. Personal tools instead bind the listed private inventory revision and fingerprint, validate output offline and use a fresh operation-scoped live-contract preflight. Rediscovery is required before new tools appear; retained tools cannot cross an inventory revision. Current server grants, group membership, owner enablement and OAuth authorization are checked again after approval. Resources, prompts, templates and retained shared-content wrappers remain shared-only.
 
 ### `connectors/openapi/`
+
+See the [OpenAPI MCP index](connectors/openapi/README.md) for application-scoped discovery initialization, reconciliation and current-grant filtering.
 
 `connectors/openapi/inventory.py` projects persisted OpenAPI connector identities into neutral inventory events before traffic. `codemode_execution.py` receives an execution-pipeline factory; centrally registered listeners own invocation logging, metrics and audit.
 
@@ -80,7 +84,7 @@ Authorization, list filtering, name validation, ownership, and persistence remai
 
 ### `messaging/`
 
-**Read when working with:** Event transport and state synchronization used by the MCP process.
+**Read when working with:** Event transport and state synchronization used by the MCP process. See the [messaging index](messaging/README.md) for per-application replay checkpoints, bootstrap, retry, health and the polling consistency window. `public_app.py` initializes downstream and OpenAPI discovery before exposing them, refreshes projections before capability notifications, and routes scoped endpoints from runtime snapshots.
 
 ### `signals/` and `listeners/`
 

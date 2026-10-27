@@ -2,11 +2,12 @@ from collections.abc import Mapping, Sequence
 from typing import cast
 
 from fastmcp import FastMCP
-from pydantic import BaseModel, ConfigDict, Field, SkipValidation
+from pydantic import BaseModel, ConfigDict, Field, SkipValidation, field_validator
 from umbod.mcp.proxies import Model
 from umbod.proxies import Model as ConnectorConfigurationModel
 
 from umbod.core.configuration import ConnectorCurrentConfigurationStore
+from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.capabilities.descriptions import (
     ConnectorCapabilityDescriptionOverrideStore,
     SystemConnectorCapabilityDescriptionOverrideStore,
@@ -22,6 +23,7 @@ from umbod.mcp.connectors.native.tools.file_input import (
     DEFAULT_MAXIMUM_UPLOADED_FILE_BYTES,
     uploaded_file_parameter_name,
 )
+from umbod.mcp.connectors.native.tools.infrastructure.dependencies import get_allowed_connector_tool_refs
 from umbod.mcp.connectors.native.tools.infrastructure.client_notifications import (
     install_tool_list_changed_notifier,
 )
@@ -57,7 +59,7 @@ class ConnectorToolRegistrationOptions(Model):
         default_factory=SystemConnectorCapabilityDescriptionOverrideStore
     )
     error_formatter: ConnectorToolErrorFormatter | None
-    connector_tool_runtime_state_store: SkipValidation[ConnectorToolRuntimeStateReader | None]
+    connector_tool_runtime_state_store: SkipValidation[ConnectorToolRuntimeStateReader]
     signals: SkipValidation[McpSignals]
     execution_pipelines: SkipValidation[McpToolExecutionPipelineFactory]
     connector_tool_exposure_mode: ConnectorToolExposureMode = "flat"
@@ -67,13 +69,23 @@ class ConnectorToolRegistrationOptions(Model):
         gt=0,
     )
 
+    @field_validator("connector_tool_runtime_state_store")
+    @classmethod
+    def validate_runtime_state_reader(
+        cls, reader: ConnectorToolRuntimeStateReader,
+    ) -> ConnectorToolRuntimeStateReader:
+        if reader is None:
+            raise ValueError("Native tool registration requires a runtime state reader")
+        return reader
+
 
 async def register_connector_tools(
     mcp: FastMCP,
-    *option_arguments: ConnectorToolRegistrationOptions | None,
     **registration_options: object,
 ) -> None:
-    resolved_options = _resolve_registration_options(option_arguments, registration_options)
+    resolved_options = ConnectorToolRegistrationOptions.model_validate(
+        _registration_option_data(registration_options)
+    )
     if not _has_required_registration_options(resolved_options):
         return
     connector_tool_mappings = cast(
@@ -91,12 +103,17 @@ async def register_connector_tools(
         resolved_options.connector_code_execution_timeout_seconds,
         resolved_options.maximum_uploaded_file_bytes,
     )
+
+    async def admit_execution(identity: CapabilityIdentity) -> None:
+        await registry.admit_execution(identity)
+
     exposure_strategy = deployment_factory.create_exposure_strategy(
         mcp,
         create_connector_tool_invoker_factory(
             ConnectorToolInvokerDependencies(
                 error_formatter=error_formatter,
                 execution_pipelines=resolved_options.execution_pipelines,
+                execution_admission=admit_execution,
                 connector_display_names=_connector_display_names(
                     cast(Sequence[Mapping[str, object]], resolved_options.connector_registrations)
                 ),
@@ -129,7 +146,6 @@ async def register_connector_tools(
         )
     )
     registry = RuntimeConnectorToolRegistry(
-        mcp,
         schemas=_valid_configuration_schemas(
             cast(Sequence[Mapping[str, object]], resolved_options.connector_registrations)
         ),
@@ -152,6 +168,7 @@ async def register_connector_tools(
         error_formatter=error_formatter,
         connector_tool_runtime_state_store=resolved_options.connector_tool_runtime_state_store,
         execution_pipelines=resolved_options.execution_pipelines,
+        execution_authorization_scope=get_allowed_connector_tool_refs,
         client_notifier=client_notifier,
         exposure_strategy=exposure_strategy,
     )
@@ -172,55 +189,17 @@ async def register_connector_tools(
         )
 
 
-def _resolve_registration_options(
-    option_arguments: Sequence[ConnectorToolRegistrationOptions | None],
-    registration_options: Mapping[str, object],
-) -> ConnectorToolRegistrationOptions:
-    if len(option_arguments) > 1:
-        raise TypeError("register_connector_tools() takes from 1 to 2 positional arguments")
-    if option_arguments and "options" in registration_options:
-        raise TypeError("register_connector_tools() got multiple values for argument 'options'")
-    options = _explicit_registration_options(option_arguments, registration_options)
-    legacy_options = _legacy_registration_options(registration_options)
-    if options is not None and legacy_options:
-        unknown_option = next(iter(legacy_options))
-        raise TypeError(
-            f"register_connector_tools() got an unexpected keyword argument '{unknown_option}'"
-        )
-    if options is not None:
-        return options
-    return ConnectorToolRegistrationOptions.model_validate(
-        _registration_option_data(legacy_options)
-    )
-
-
-def _explicit_registration_options(
-    option_arguments: Sequence[ConnectorToolRegistrationOptions | None],
-    registration_options: Mapping[str, object],
-) -> ConnectorToolRegistrationOptions | None:
-    if option_arguments:
-        return option_arguments[0]
-    return cast(ConnectorToolRegistrationOptions | None, registration_options.get("options"))
-
-
-def _legacy_registration_options(
-    registration_options: Mapping[str, object],
-) -> Mapping[str, object]:
-    return {key: value for key, value in registration_options.items() if key != "options"}
-
-
-def _registration_option_data(legacy_options: Mapping[str, object]) -> dict[str, object]:
+def _registration_option_data(registration_options: Mapping[str, object]) -> dict[str, object]:
     return {
         "connector_registrations": None,
         "connector_configuration_store": None,
         "connector_publishing_store": None,
         "connector_tool_mappings": None,
         "error_formatter": None,
-        "connector_tool_runtime_state_store": None,
         "connector_tool_exposure_mode": "flat",
         "connector_code_execution_timeout_seconds": 30.0,
         "maximum_uploaded_file_bytes": DEFAULT_MAXIMUM_UPLOADED_FILE_BYTES,
-        **legacy_options,
+        **registration_options,
     }
 
 

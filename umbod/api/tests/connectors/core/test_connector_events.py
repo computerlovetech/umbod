@@ -1,33 +1,28 @@
-from umbod.core.publishing.events import ConnectorPublicationChanged, ConnectorPublicationStreamEvent
-from umbod.core.configuration.events import ConnectorRuntimeStateChanged, ConnectorRuntimeStateStreamEvent
-from messaging.models import StreamEvent
+from umbod.core.activation.events import connector_capability_activation_changed_event
+from umbod.core.configuration.events import connector_configuration_changed_event
+from umbod.core.publishing.events import connector_publication_changed_event
 
 
-def test_connector_publication_changed_converts_to_and_from_messaging_event() -> None:
-    event = ConnectorPublicationChanged(connector_id="slack", state="published")
-
-    messaging_event = event.to_messaging_event()
-    stream_event = ConnectorPublicationStreamEvent.from_stream_event(
-        StreamEvent(sequence=7, event=messaging_event)
-    )
-
-    assert messaging_event.event_type == "connector.publication.changed"
-    assert messaging_event.subject == "connector:slack"
-    assert messaging_event.metadata == {"connector_id": "slack", "state": "published"}
-    assert stream_event.sequence == 7
-    assert stream_event.event == event
+def test_connector_publication_event_contains_only_change_metadata() -> None:
+    event = connector_publication_changed_event("slack", "published")
+    assert event.event_type == "connector.publication.changed"
+    assert event.subject == "connector:slack"
+    assert event.metadata == {"connector_id": "slack", "state": "published"}
 
 
-def test_connector_runtime_state_changed_converts_to_and_from_messaging_event() -> None:
-    event = ConnectorRuntimeStateChanged(connector_id="slack")
+def test_connector_configuration_event_contains_only_identity() -> None:
+    event = connector_configuration_changed_event("slack")
+    assert event.event_type == "connector.configuration.changed"
+    assert event.subject == "connector:slack"
+    assert event.metadata == {"connector_id": "slack"}
 
-    messaging_event = event.to_messaging_event()
-    stream_event = ConnectorRuntimeStateStreamEvent.from_stream_event(
-        StreamEvent(sequence=8, event=messaging_event)
-    )
 
-    assert messaging_event.event_type == "connector.configuration.changed"
-    assert messaging_event.subject == "connector:slack"
-    assert messaging_event.metadata == {"connector_id": "slack"}
-    assert stream_event.sequence == 8
-    assert stream_event.event == event
+def test_capability_activation_event_does_not_capture_authorization_state() -> None:
+    event = connector_capability_activation_changed_event("native", "slack", "tool", "read")
+    assert event.event_type == "connector.capability_activation.changed"
+    assert event.metadata == {
+        "connector_kind": "native",
+        "connector_id": "slack",
+        "capability_kind": "tool",
+        "capability_key": "read",
+    }

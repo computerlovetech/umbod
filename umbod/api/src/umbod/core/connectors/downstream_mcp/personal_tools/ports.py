@@ -3,7 +3,7 @@ from typing import Protocol
 from umbod.core.connectors.downstream_mcp.personal_connections.health_models import RejectPersonalAuthorization
 
 from ..personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalToolResult
-from ..stores.ports import ConnectorIdQuery
+from ..stores.ports import ConnectorDefinitionList, ConnectorIdQuery
 from .models import (
     AdmitPersonalTool,
     InvokePersonalTool,
@@ -16,6 +16,10 @@ from .models import (
     SavePersonalToolObservation,
     UnconfiguredPersonalToolPolicy,
 )
+
+
+class PersonalToolDefinitionReader(Protocol):
+    async def list(self) -> ConnectorDefinitionList: ...
 
 
 class PersonalToolRuntime(Protocol):

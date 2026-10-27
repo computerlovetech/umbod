@@ -23,7 +23,7 @@ async def test_real_empty_normalized_personal_stem_keeps_selection_but_never_adv
     stored = await runtime_case.bundle.definitions.get(ConnectorIdQuery(connector_id="personal"))
     definition = OAuthConnectorDefinition.model_validate(dict(stored.definition.model_dump(), tool_name_prefix="___"))
     await runtime_case.bundle.definitions.save(SaveConnectorDefinition(definition=definition))
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     with pytest.raises(ToolError, match="public_tool_name_conflict"):
         await provider.is_personal_tool_name("read")
     connector = CatalogueConnector(

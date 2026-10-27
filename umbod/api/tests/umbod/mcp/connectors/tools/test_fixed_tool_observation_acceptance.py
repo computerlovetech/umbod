@@ -1,3 +1,4 @@
+from tests.support.native_tool_states import enabled_native_tool_states
 import hashlib
 import json
 from io import StringIO
@@ -57,6 +58,7 @@ async def _observed_server(mode: str) -> tuple[FastMCP, InMemoryMcpMetricsRecord
         connector_registrations=[{"id": "slack", "display_name": "Slack", "capability_description": "Slack operations", "configuration_schema": SlackAdminConfiguration}],
         connector_configuration_store=configurations,
         connector_publishing_store=publications,
+        connector_tool_runtime_state_store=enabled_native_tool_states(("slack", "first"), ("slack", "second")),
         connector_tool_mappings=[
             ConnectorToolMapping("slack", "first", "First operation", operation),
             ConnectorToolMapping("slack", "second", "Second operation", operation),
@@ -145,7 +147,7 @@ async def test_fixed_execution_records_one_request_and_distinct_connector_comple
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode,tool_name,arguments,request_outcome", [
     ("gateway", "execute_tool", {"tool_name": "slack_first", "arguments": {"limit": -1}}, "failure"),
-    ("codemode", "execute_code", {"code": "slack_first(limit=-1)"}, "success"),
+    ("codemode", "execute_code", {"code": "slack_first(limit=-1)"}, "failure"),
 ])
 async def test_connector_failure_is_counted_once_independently_of_outer_request(
     mode: str, tool_name: str, arguments: dict[str, Any], request_outcome: str,

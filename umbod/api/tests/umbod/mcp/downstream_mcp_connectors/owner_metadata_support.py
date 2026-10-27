@@ -1,3 +1,4 @@
+from tests.support.native_tool_states import enabled_native_tool_states
 from dataclasses import replace
 from typing import cast
 
@@ -47,7 +48,7 @@ async def metadata_server(case: RuntimeCase, exposure: str) -> FastMCP:
     settings = _settings(namespace="trusted")
     settings = settings.model_copy(update={"mcp": settings.mcp.model_copy(update={"permission_group_claim": "groups"})})
     runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), case.bundle.definitions, case.bundle.personal_tool_access, execution.transport, lambda: case.query.now)
-    provider = provider_for(replace(execution, runtime=runtime), PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(replace(execution, runtime=runtime), PermitAllConnectorInvocationPolicy(), InvocationLog())
     public = FastMCP("owner-metadata", middleware=[PersonalToolReservationMiddleware(provider)])
     if exposure == "flat":
         public.add_provider(provider)
@@ -61,6 +62,7 @@ async def metadata_server(case: RuntimeCase, exposure: str) -> FastMCP:
         connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(),
         connector_publishing_store=case.bundle.publishing,
         connector_tool_mappings=[],
+        connector_tool_runtime_state_store=enabled_native_tool_states(),
         connector_tool_exposure_mode=exposure,
     )
     cast(RuntimeConnectorToolRegistry, public.connector_tool_registry).add_gateway_provider(provider)

@@ -27,7 +27,7 @@ async def test_unavailable_personal_namespace_blocks_normalized_shared_collision
     await _prefix(runtime_case, "personal", personal_prefix)
     await install_shared_alias(runtime_case, True)
     await _prefix(runtime_case, "shared", shared_prefix)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     name = mangle_public_tool_name(shared_prefix, "read")
     assert await provider.is_personal_tool_name(name)
     for operation in (provider.list_tools(), provider.eligible_search_candidates(), provider.execute_tool(name, {"value": "same"})):
@@ -42,7 +42,7 @@ async def test_unavailable_personal_namespace_blocks_normalized_native_collision
     execution = await execution_case(runtime_case)
     execution.contexts.contexts.clear()
     await _prefix(runtime_case, "personal", personal_prefix)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     public = FastMCP("normalized-native", providers=[provider], middleware=[PersonalToolReservationMiddleware(provider)])
     name = mangle_public_tool_name(native_prefix, "read")
     calls: list[str] = []
@@ -66,6 +66,6 @@ async def test_unavailable_personal_definitions_with_overlapping_namespaces_are_
     await _prefix(runtime_case, "personal", first_prefix)
     definition = (await runtime_case.bundle.definitions.get(ConnectorIdQuery(connector_id="personal"))).definition
     await runtime_case.bundle.definitions.save(SaveConnectorDefinition(definition=definition.model_copy(update={"connector_id": "other", "public_path": "/mcp/proxies/other", "tool_name_prefix": second_prefix})))
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     with pytest.raises(ToolError, match="public_tool_name_conflict"):
         await provider.is_personal_tool_name(mangle_public_tool_name(second_prefix, "read"))

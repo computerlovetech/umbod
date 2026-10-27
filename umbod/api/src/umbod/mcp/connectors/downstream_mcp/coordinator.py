@@ -1,6 +1,11 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from umbod.core.capabilities.tools.names import PublicToolIdentitySource
+from umbod.core.connectors.downstream_mcp.management import DownstreamConnectorUnitOfWork
+from umbod.core.connectors.downstream_mcp.models import DefinitionDiscoveryFailed, DefinitionDiscoverySucceeded, DiscoveryFailed, DiscoveryResult, DiscoverySucceeded
+from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
+
 from umbod.core.publishing import ConnectorPublishingStore
 from umbod.core.activation import ActivationStore
 from umbod.core.connectors.downstream_mcp.stores import (
@@ -58,6 +63,7 @@ class DownstreamDiscoveryStores:
     health: ConnectorHealthStore
     activations: ActivationStore
     publishing: ConnectorPublishingStore
+    unit_of_work: DownstreamConnectorUnitOfWork
 
 
 @dataclass(frozen=True)
@@ -67,6 +73,7 @@ class DownstreamDiscoveryAdapters:
     native_capabilities: NativeCapabilityProjection
     monotonic_clock: Callable[[], float]
     random_source: Callable[[], float]
+    identity_source: PublicToolIdentitySource
 
 
 @dataclass(frozen=True)
@@ -110,12 +117,12 @@ def create_downstream_discovery_coordinator(
 ) -> DownstreamDiscoveryCoordinator:
     schedule = _create_schedule(adapters, options)
     native_monitor = NativeCapabilityChangeMonitor(adapters.native_capabilities, adapters.notifier)
-    reconciler = _create_reconciler(stores, native_monitor)
+    reconciler = _create_reconciler(stores, native_monitor, adapters.identity_source)
     executor = ConnectorDiscoveryExecutor(
         ConnectorDiscoveryExecutionDependencies(
             definitions=stores.definitions,
             credentials=stores.credentials,
-            discovery=adapters.discovery,
+            discovery=DefinitionBoundDiscovery(adapters.discovery, stores.unit_of_work),
         )
     )
     connector_refresher = BoundedConnectorDiscoveryRefresher(
@@ -150,6 +157,7 @@ def _create_schedule(
 def _create_reconciler(
     stores: DownstreamDiscoveryStores,
     native_monitor: NativeCapabilityChangeMonitor,
+    identity_source: PublicToolIdentitySource,
 ) -> DiscoveredCatalogReconciler:
     return DiscoveredCatalogReconciler(
         CatalogReconciliationDependencies(
@@ -158,5 +166,27 @@ def _create_reconciler(
             stores.activations,
             stores.publishing,
             native_monitor,
+            stores.unit_of_work,
+            identity_source,
         )
     )
+
+
+class DefinitionBoundDiscovery:
+    def __init__(self, discovery: DownstreamDiscovery, unit_of_work: DownstreamConnectorUnitOfWork) -> None:
+        self._discovery = discovery
+        self._unit_of_work = unit_of_work
+
+    async def discover(self, request: DiscoverDownstreamTools) -> DiscoveryResult:
+        admission = await self._unit_of_work.admit_discovery(request.definition.connector_id)
+        result = await self._discovery.discover(DiscoverDownstreamTools(
+            definition=admission.definition, credential=admission.credential,
+        ))
+        if isinstance(result, DiscoverySucceeded):
+            return DefinitionDiscoverySucceeded(snapshot=result.snapshot, admission=admission)
+        if isinstance(result, DiscoveryFailed):
+            return DefinitionDiscoveryFailed(
+                connector_id=result.connector_id, attempted_at=result.attempted_at,
+                reason=result.reason, admission=admission,
+            )
+        return result

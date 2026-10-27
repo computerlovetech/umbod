@@ -1,8 +1,6 @@
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
 from tests.persistence_runtime import create_inmemory_runtime
-from tests.connector_event_adapters import ConnectorEventCheckpointStoreAdapter
-from collections.abc import Callable
 import pytest
 from pydantic import ConfigDict, SecretStr
 from umbod.proxies import Model
@@ -10,17 +8,12 @@ from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.registry import InMemoryConnectorRegistry
 from tests.support.connector_plugins import TestConnectorPlugin as test_connector
 from umbod.mcp.connectors.native import (
-    CONNECTOR_PUBLICATION_POLLING_BATCH_LIMIT,
-    CONNECTOR_PUBLICATION_POLLING_INTERVAL_SECONDS,
-    ConnectorPublicationPollingSynchronizer,
     ConnectorRuntimeState,
     ConnectorRuntimeStateSynchronizer,
     HttpConnectorRuntimeStateSynchronizationSource,
     LocalConnectorRuntimeStateSynchronizationSource,
     SQLiteConnectorRuntimeStateReader,
 )
-from umbod.core.publishing.events import ConnectorPublicationChanged, ConnectorPublicationStreamEvent
-from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages
 
 class SlackAdminConfiguration(Model):
     model_config = ConfigDict(extra='forbid')
@@ -86,27 +79,18 @@ class RecordingToolRegistry:
     async def reconcile_all(self) -> None:
         self.reconciled_all = True
 
-class RecordingStreamReader:
-
-    async def list_after(self, sequence: int, limit: int) -> list[ConnectorPublicationStreamEvent]:
-        return [ConnectorPublicationStreamEvent(sequence=1, event=ConnectorPublicationChanged(connector_id='slack', state='published'))]
-
 def make_slack_runtime_state(published: bool) -> ConnectorRuntimeState:
     return ConnectorRuntimeState(connector_id='slack', available=True, published=published, configuration={'workspace_name': 'Acme', 'bot_token': 'xoxb-secret', 'default_channel_id': 'C123'})
 
 def make_reader_with_slack_state(published: bool) -> RecordingRuntimeStateReader:
     return RecordingRuntimeStateReader(states={'slack': make_slack_runtime_state(published=published)}, single_requests=[])
 
-def make_checkpoint_store() -> ConnectorEventCheckpointStoreAdapter:
-    return ConnectorEventCheckpointStoreAdapter(InMemoryEventCheckpointStoreFactory(InMemoryEventCheckpointStoreMessages(closed_error_message='Connector publication event checkpoint store is closed', lower_sequence_error_message='Cannot save a lower connector publication checkpoint sequence')).create())
 ConnectorStores = tuple[InMemoryConnectorCurrentConfigurationStore, ConnectorPublishingStoreService]
+
 
 def make_runtime_synchronizer(reader: RecordingRuntimeStateReader, target_stores: ConnectorStores, tool_registry: RecordingToolRegistry, source_stores: ConnectorStores | None) -> ConnectorRuntimeStateSynchronizer:
     synchronization_source = HttpConnectorRuntimeStateSynchronizationSource(reader) if source_stores is None else LocalConnectorRuntimeStateSynchronizationSource(source_stores[0], source_stores[1])
     return ConnectorRuntimeStateSynchronizer(reader=reader, configuration_store=target_stores[0], publishing_store=target_stores[1], tool_registry=tool_registry, synchronization_source=synchronization_source)
-
-def make_polling_synchronizer(checkpoint_store: ConnectorEventCheckpointStoreAdapter, handler: Callable[[str], object]) -> ConnectorPublicationPollingSynchronizer:
-    return ConnectorPublicationPollingSynchronizer(consumer_id='consumer', checkpoint_store=checkpoint_store, stream_reader=RecordingStreamReader(), handler=handler, interval_seconds=CONNECTOR_PUBLICATION_POLLING_INTERVAL_SECONDS, batch_limit=CONNECTOR_PUBLICATION_POLLING_BATCH_LIMIT)
 
 async def save_source_slack_configuration(configuration_store: InMemoryConnectorCurrentConfigurationStore, publishing_store: ConnectorPublishingStoreService) -> None:
     await configuration_store.save_current_configuration('slack', SlackAdminConfiguration(workspace_name='Acme', bot_token=SecretStr('xoxb-source'), default_channel_id='C123'))
@@ -117,43 +101,6 @@ async def make_source_slack_stores() -> tuple[InMemoryConnectorCurrentConfigurat
     publishing_store = ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE)
     await save_source_slack_configuration(configuration_store=configuration_store, publishing_store=publishing_store)
     return (configuration_store, publishing_store)
-
-@pytest.mark.asyncio
-async def test_polling_event_fetches_runtime_state_updates_stores_reconciles_then_checkpoints() -> None:
-    configuration_store = InMemoryConnectorCurrentConfigurationStore()
-    publishing_store = ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE)
-    tool_registry = RecordingToolRegistry()
-    reader = make_reader_with_slack_state(published=True)
-    runtime_synchronizer = make_runtime_synchronizer(reader=reader, target_stores=(configuration_store, publishing_store), tool_registry=tool_registry, source_stores=None)
-    checkpoint_store = make_checkpoint_store()
-    polling_synchronizer = make_polling_synchronizer(checkpoint_store=checkpoint_store, handler=runtime_synchronizer.sync_connector)
-    await polling_synchronizer.poll_once()
-    configuration = await configuration_store.get_current_configuration('slack')
-    assert reader.single_requests == ['slack']
-    assert isinstance(configuration, SlackAdminConfiguration)
-    assert configuration.bot_token.get_secret_value() == 'xoxb-secret'
-    assert await publishing_store.is_published('slack') is True
-    assert tool_registry.reconciled_connectors == ['slack']
-    assert await checkpoint_store.get_last_processed_sequence('consumer') == 1
-
-@pytest.mark.asyncio
-async def test_polling_event_reads_configuration_from_source_store_before_reconcile() -> None:
-    runtime_configuration_store = InMemoryConnectorCurrentConfigurationStore()
-    runtime_publishing_store = ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE)
-    (source_configuration_store, source_publishing_store) = await make_source_slack_stores()
-    tool_registry = RecordingToolRegistry()
-    reader = RecordingRuntimeStateReader(states={}, single_requests=[])
-    runtime_synchronizer = make_runtime_synchronizer(reader=reader, target_stores=(runtime_configuration_store, runtime_publishing_store), tool_registry=tool_registry, source_stores=(source_configuration_store, source_publishing_store))
-    checkpoint_store = make_checkpoint_store()
-    polling_synchronizer = make_polling_synchronizer(checkpoint_store=checkpoint_store, handler=runtime_synchronizer.sync_connector)
-    await polling_synchronizer.poll_once()
-    configuration = await runtime_configuration_store.get_current_configuration('slack')
-    assert reader.single_requests == []
-    assert isinstance(configuration, SlackAdminConfiguration)
-    assert configuration.bot_token.get_secret_value() == 'xoxb-source'
-    assert await runtime_publishing_store.is_published('slack') is True
-    assert tool_registry.reconciled_connectors == ['slack']
-    assert await checkpoint_store.get_last_processed_sequence('consumer') == 1
 
 @pytest.mark.asyncio
 async def test_sync_all_updates_all_states_before_reconcile_all() -> None:

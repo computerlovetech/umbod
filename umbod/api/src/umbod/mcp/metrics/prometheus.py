@@ -7,6 +7,7 @@ from umbod.mcp.metrics.models import (
     InvocationScope,
     ToolInvocationMetricIdentity,
 )
+from umbod.mcp.metrics.protocol_models import CompletedProtocolRequest, SuccessfulToolsList
 
 
 INVOCATION_LABELS = ("connector_name", "tool_name", "outcome")
@@ -43,6 +44,18 @@ class PrometheusMcpMetricsRecorder:
             ("tool_name", "outcome"),
             registry=self._registry,
         )
+        self._protocol_duration = Histogram(
+            "umbod_mcp_protocol_request_duration_seconds",
+            "Completed MCP protocol request duration in seconds",
+            ("method", "outcome"),
+            registry=self._registry,
+        )
+        self._tools_list_count = Histogram(
+            "umbod_mcp_tools_list_tool_count",
+            "Tool count returned by successful MCP tools/list requests",
+            buckets=(0, 1, 5, 10, 25, 50, 100, 250, 500, 1000),
+            registry=self._registry,
+        )
         self._families = {
             InvocationScope.CONNECTOR: (self._invocations, self._invocation_duration),
             InvocationScope.REQUEST: (self._requests, self._request_duration),
@@ -76,6 +89,14 @@ class PrometheusMcpMetricsRecorder:
         if scope == InvocationScope.CONNECTOR:
             labels["connector_name"] = connector_name
         return labels
+
+    def record_protocol_request(self, observation: CompletedProtocolRequest) -> None:
+        self._protocol_duration.labels(
+            method=observation.method.value, outcome=observation.outcome.value,
+        ).observe(observation.duration_seconds)
+
+    def record_tools_list(self, observation: SuccessfulToolsList) -> None:
+        self._tools_list_count.observe(observation.tool_count)
 
     def prometheus_text(self) -> bytes:
         return generate_latest(self._registry)

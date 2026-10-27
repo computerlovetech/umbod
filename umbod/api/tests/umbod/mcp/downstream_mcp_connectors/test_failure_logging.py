@@ -125,7 +125,7 @@ async def test_shared_failures_enrich_normal_stdout_completion(configured_signal
 async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: RuntimeCase, configured_signals: McpSignals, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, reason: str, stage: str) -> None:
     configure_logging("failure-test", "INFO")
     execution = await execution_case(runtime_case)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), configured_signals.invocation_completed.send)
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), configured_signals.invocation_completed.send)
     held = await provider.get_tool("Personal_read")
     arguments: dict[str, Any] = {"value": SENSITIVE}
     if reason == "context_unavailable":
@@ -173,7 +173,7 @@ async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: R
 async def test_concurrent_failures_do_not_contaminate_success_or_later_invocations(runtime_case: RuntimeCase, configured_signals: McpSignals, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch) -> None:
     configure_logging("failure-test", "INFO")
     execution = await execution_case(runtime_case)
-    held = await provider_for(execution, PermitAllConnectorInvocationPolicy(), configured_signals.invocation_completed.send).get_tool("Personal_read")
+    held = await (await provider_for(execution, PermitAllConnectorInvocationPolicy(), configured_signals.invocation_completed.send)).get_tool("Personal_read")
     failed = asyncio.Event()
     success = PersonalToolResult(result={"content": [], "structuredContent": {"owner": "unchanged"}})
 

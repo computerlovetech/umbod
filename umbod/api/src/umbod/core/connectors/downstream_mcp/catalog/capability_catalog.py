@@ -15,6 +15,7 @@ from umbod.core.connectors.downstream_mcp.models import (
     DiscoveredResourceTemplate,
     DiscoveredTool,
     DiscoveredToolWithOutputSchema,
+    ToolCatalogSnapshot,
 )
 from umbod.core.connectors.downstream_mcp.stores.ports import (
     ConnectorDefinitionFound,
@@ -87,45 +88,51 @@ class StoreBackedDownstreamCapabilityCatalog:
         result = await self._catalogs.get(ConnectorIdQuery(connector_id=definition.connector_id))
         if not isinstance(result, ToolCatalogFound):
             return ()
-        records: list[DownstreamCapabilityRecord] = []
-        for tool in result.snapshot.tools:
-            records.append(
-                DownstreamCapabilityRecord(
-                    definition,
-                    _normalize_tool(tool).model_copy(
-                        update={"connector_display_name": definition.display_name}
-                    ),
-                    tool,
-                )
+        return normalize_catalog(definition, result.snapshot)
+
+
+def normalize_catalog(
+    definition: ConnectorDefinitionModel, snapshot: ToolCatalogSnapshot
+) -> tuple[DownstreamCapabilityRecord, ...]:
+    records: list[DownstreamCapabilityRecord] = []
+    for tool in snapshot.tools:
+        records.append(
+            DownstreamCapabilityRecord(
+                definition,
+                _normalize_tool(tool).model_copy(
+                    update={"connector_display_name": definition.display_name}
+                ),
+                tool,
             )
-        for prompt in result.snapshot.prompts:
-            records.append(
-                DownstreamCapabilityRecord(
-                    definition,
-                    _normalize_prompt(definition.connector_id, prompt).model_copy(
-                        update={"connector_display_name": definition.display_name}
-                    ),
-                )
+        )
+    for prompt in snapshot.prompts:
+        records.append(
+            DownstreamCapabilityRecord(
+                definition,
+                _normalize_prompt(definition.connector_id, prompt).model_copy(
+                    update={"connector_display_name": definition.display_name}
+                ),
             )
-        for resource in result.snapshot.resources:
-            records.append(
-                DownstreamCapabilityRecord(
-                    definition,
-                    _normalize_resource(definition.connector_id, resource).model_copy(
-                        update={"connector_display_name": definition.display_name}
-                    ),
-                )
+        )
+    for resource in snapshot.resources:
+        records.append(
+            DownstreamCapabilityRecord(
+                definition,
+                _normalize_resource(definition.connector_id, resource).model_copy(
+                    update={"connector_display_name": definition.display_name}
+                ),
             )
-        for template in result.snapshot.resource_templates:
-            records.append(
-                DownstreamCapabilityRecord(
-                    definition,
-                    _normalize_resource_template(definition.connector_id, template).model_copy(
-                        update={"connector_display_name": definition.display_name}
-                    ),
-                )
+        )
+    for template in snapshot.resource_templates:
+        records.append(
+            DownstreamCapabilityRecord(
+                definition,
+                _normalize_resource_template(definition.connector_id, template).model_copy(
+                    update={"connector_display_name": definition.display_name}
+                ),
             )
-        return tuple(records)
+        )
+    return tuple(records)
 
 
 def _identity(

@@ -1,5 +1,10 @@
 import logging
+
+from umbod.core.connectors.downstream_mcp.errors import ObsoleteDownstreamCatalogError
 from dataclasses import dataclass
+
+from umbod.core.capabilities.tools.names import PublicToolIdentitySource
+from umbod.core.connectors.downstream_mcp.management import ApplyDiscoveredCatalog, DownstreamConnectorUnitOfWork, KeepCatalog
 
 from umbod.core.publishing import ConnectorPublishingStore
 from umbod.core.activation import (
@@ -10,15 +15,14 @@ from umbod.core.activation import (
 from umbod.core.connectors.downstream_mcp.models import (
     ConnectorHealthy,
     ConnectorUnhealthy,
-    CatalogReconciliation,
+    DefinitionDiscoverySucceeded,
+    DefinitionDiscoveryFailed,
     DiscoveryFailed,
     DiscoverySucceeded,
 )
 from umbod.core.connectors.downstream_mcp.stores import (
     ConnectorHealthStore,
     ConnectorIdQuery,
-    ReplaceToolCatalog,
-    SaveConnectorHealth,
     ToolCatalogFound,
     ToolCatalogStore,
 )
@@ -36,6 +40,8 @@ class CatalogReconciliationDependencies:
     activations: ActivationStore
     publishing: ConnectorPublishingStore
     native_monitor: NativeCapabilityChangeMonitor
+    unit_of_work: DownstreamConnectorUnitOfWork
+    identity_source: PublicToolIdentitySource
 
 
 class DiscoveredCatalogReconciler:
@@ -43,15 +49,19 @@ class DiscoveredCatalogReconciler:
         self._dependencies = dependencies
 
     async def record_failure(self, result: DiscoveryFailed) -> None:
-        await self._dependencies.health.save(
-            SaveConnectorHealth(
+        if not isinstance(result, DefinitionDiscoveryFailed):
+            raise ValueError("Discovery must retain its admission")
+        try:
+            await self._dependencies.unit_of_work.apply_discovery(ApplyDiscoveredCatalog(
+                admission=result.admission,
+                native_identities=await self._dependencies.identity_source.identities(),
+                connector_id=result.connector_id, catalog=KeepCatalog(), operation_names=(),
                 health=ConnectorUnhealthy(
-                    connector_id=result.connector_id,
-                    checked_at=result.attempted_at,
-                    reason=result.reason,
-                )
-            )
-        )
+                    connector_id=result.connector_id, checked_at=result.attempted_at, reason=result.reason,
+                ),
+            ))
+        except ObsoleteDownstreamCatalogError:
+            return
 
     async def reconcile(self, result: DiscoverySucceeded) -> None:
         connector_id = result.snapshot.connector_id
@@ -59,60 +69,27 @@ class DiscoveredCatalogReconciler:
         previous = await self._dependencies.catalogs.get(query)
         previously_enabled = await self._enabled_names(connector_id, previous)
 
-        async def replace_catalog() -> CatalogReconciliation:
-            return await self._dependencies.catalogs.replace(
-                ReplaceToolCatalog(snapshot=result.snapshot)
-            )
+        if not isinstance(result, DefinitionDiscoverySucceeded):
+            raise ValueError("Discovery must retain its probed definition")
 
-        reconciliation = await self._dependencies.native_monitor.apply_and_notify(replace_catalog)
-        await self._persist_success(result)
-        changed_names = {
-            identity.downstream_name for identity in reconciliation.changed + reconciliation.removed
-        }
-        await self._notify_tool_changes(connector_id, changed_names, previously_enabled)
-        logger.info(
-            "Downstream MCP discovery reconciled",
-            extra={
-                "connector_id": connector_id,
-                "added_count": len(reconciliation.added),
-                "changed_count": len(reconciliation.changed),
-                "removed_count": len(reconciliation.removed),
-            },
-        )
-
-    async def _persist_success(self, result: DiscoverySucceeded) -> None:
-        await self._dependencies.activations.reconcile(
-            "downstream_mcp",
-            result.snapshot.connector_id,
-            "tool",
-            tuple(tool.identity.downstream_name for tool in result.snapshot.tools),
-        )
-        await self._dependencies.activations.reconcile(
-            "downstream_mcp",
-            result.snapshot.connector_id,
-            "prompt",
-            tuple(prompt.name for prompt in result.snapshot.prompts),
-        )
-        await self._dependencies.activations.reconcile(
-            "downstream_mcp",
-            result.snapshot.connector_id,
-            "resource",
-            tuple(resource.uri for resource in result.snapshot.resources),
-        )
-        await self._dependencies.activations.reconcile(
-            "downstream_mcp",
-            result.snapshot.connector_id,
-            "resource_template",
-            tuple(template.uri_template for template in result.snapshot.resource_templates),
-        )
-        await self._dependencies.health.save(
-            SaveConnectorHealth(
-                health=ConnectorHealthy(
-                    connector_id=result.snapshot.connector_id,
-                    checked_at=result.snapshot.discovered_at,
+        async def replace_catalog() -> None:
+            await self._dependencies.unit_of_work.apply_discovery(
+                ApplyDiscoveredCatalog(
+                    admission=result.admission,
+                    native_identities=await self._dependencies.identity_source.identities(),
+                    connector_id=connector_id,
+                    catalog=result.snapshot,
+                    health=ConnectorHealthy(connector_id=connector_id, checked_at=result.snapshot.discovered_at),
+                    operation_names=tuple(tool.identity.downstream_name for tool in result.snapshot.tools),
                 )
             )
-        )
+
+        try:
+            await self._dependencies.native_monitor.apply_and_notify(replace_catalog)
+        except ObsoleteDownstreamCatalogError:
+            return
+        await self._notify_tool_changes(connector_id, previously_enabled, previously_enabled)
+        logger.info("Downstream MCP discovery reconciled", extra={"connector_id": connector_id})
 
     async def _notify_tool_changes(
         self,

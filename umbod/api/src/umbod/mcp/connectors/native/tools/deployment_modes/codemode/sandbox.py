@@ -11,6 +11,7 @@ from umbod.mcp.connectors.native.tools.infrastructure.authorization import (
     ConnectorToolAuthorizationScope,
 )
 from umbod.mcp.connectors.native.tools.runtime.registry import RuntimeConnectorToolRegistry
+from umbod.mcp.connectors.native.tools.invocation.errors import ConnectorToolFailureResult
 
 
 class SuccessfulNestedConnectorCall(BaseModel):
@@ -180,6 +181,8 @@ class FastMcpMontyCodeModeAdapter:
         async def invoke(tool_name: str, **arguments: Any) -> Any:
             try:
                 result = await registry.execute_tool(tool_name, arguments, authorization_scope)
+                if isinstance(result, ConnectorToolFailureResult):
+                    raise RuntimeError("connector_execution_failed")
                 value = result.structured_content
                 nested_calls.append(
                     SuccessfulNestedConnectorCall(tool_name=tool_name, arguments={}, result=value)

@@ -16,6 +16,8 @@ def test_admin_replaces_personal_tool_contracts_with_cas_without_enabling_runtim
     initial = client.get(url, headers=headers)
     assert initial.status_code == 200
     assert initial.json()["tools"] == []
+    existing_events = client.get("/system/events?after_sequence=0&limit=100").json()
+    checkpoint = existing_events[-1]["sequence"]
     request = {"expected_revision": initial.json()["revision"], "tools": [tool(personal_api.connector_id)]}
     changed = client.put(url, headers=headers, json=request)
     assert changed.status_code == 200
@@ -25,6 +27,10 @@ def test_admin_replaces_personal_tool_contracts_with_cas_without_enabling_runtim
     same = client.put(url, headers=headers, json={"expected_revision": changed.json()["revision"], "tools": changed.json()["tools"]})
     assert same.status_code == 200
     assert same.json()["revision"] == changed.json()["revision"]
+    events = client.get(f"/system/events?after_sequence={checkpoint}&limit=100").json()
+    assert [entry["event"]["event_type"] for entry in events] == [
+        "connector.configuration.changed", "connector.capability_activation.changed",
+    ]
     assert client.get(personal_api.url, headers=personal_api.headers("alice")).json()["runtime_available"] is False
 
 

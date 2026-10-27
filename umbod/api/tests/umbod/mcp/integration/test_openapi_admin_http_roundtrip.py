@@ -3,6 +3,7 @@ from umbod.core.connectors.openapi.stores import CATALOG_OPERATION_TABLE, CATALO
 from umbod.core.permissions.factories import create_group_permission_store
 from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
 import json
+import asyncio
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import replace
@@ -124,7 +125,11 @@ async def test_admin_openapi_connector_roundtrips_through_public_mcp_http(tmp_pa
             tools = await client.list_tools()
             search = await client.call_tool('search_tools', {'query': 'inventory'})
             executed = await client.call_tool('execute_code', {'code': code})
+            applied_sequence = context.mcp.runtime_projection_health.last_applied_sequence
             disabled = admin.put(activation_path, json={'tools': [{'tool_id': 'getItem', 'activation_status': 'disabled'}]})
+            async with asyncio.timeout(5):
+                while context.mcp.runtime_projection_health.last_applied_sequence <= applied_sequence:
+                    await asyncio.sleep(0.01)
             unavailable_search = await client.call_tool('search_tools', {'query': 'inventory'})
             stale = await client.call_tool('execute_code', {'code': code})
     assert {tool.name for tool in tools} >= {'search_tools', 'execute_code'}

@@ -4,7 +4,7 @@ from messaging.ports import EventStream
 from pydantic import BaseModel, ConfigDict, Field
 
 from umbod.core.invocation.events import connector_invocation_policy_changed_event
-from umbod.core.activation.events import connector_tool_activation_changed_event
+from umbod.core.activation.events import connector_capability_activation_changed_event
 from umbod.core.invocation.policy import (
     ConnectorInvocationPolicyKey,
     ConnectorInvocationPolicyRecord,
@@ -132,8 +132,11 @@ class SetConnectorToolConfiguration:
     async def execute(
         self, command: SetConnectorToolConfigurationCommand
     ) -> ConnectorToolConfigurationMutationResult:
-        result = await self._mutation_port.apply(self._mutation(command))
-        if isinstance(self._event_stream, NoConnectorToolConfigurationEventStream):
+        publish_activation_events = await self._activation_event_publication.should_publish(
+            command.connector_kind, command.connector_id
+        )
+        result = await self._mutation_port.apply(self._mutation(command, publish_activation_events))
+        if result.events_persisted or isinstance(self._event_stream, NoConnectorToolConfigurationEventStream):
             return result
         await self._publish_activation_events(command, result)
         await self._publish_policy_events(command, result)
@@ -150,10 +153,11 @@ class SetConnectorToolConfiguration:
             return
         for changed in result.changed_activations:
             await self._event_stream.append(
-                connector_tool_activation_changed_event(
+                connector_capability_activation_changed_event(
+                    command.connector_kind,
                     command.connector_id,
+                    "tool",
                     changed.operation_name,
-                    connector_kind=command.connector_kind,
                 )
             )
 
@@ -176,7 +180,7 @@ class SetConnectorToolConfiguration:
                 await self._event_stream.append(connector_invocation_policy_changed_event(record))
 
     def _mutation(
-        self, command: SetConnectorToolConfigurationCommand
+        self, command: SetConnectorToolConfigurationCommand, publish_activation_events: bool
     ) -> ConnectorToolConfigurationMutation:
         return ConnectorToolConfigurationMutation(
             connector_kind=command.connector_kind,
@@ -184,6 +188,7 @@ class SetConnectorToolConfiguration:
             operation_names=tuple(dict.fromkeys(item.operation_name for item in command.items)),
             activation_changes=_activation_changes(command.items),
             policy_changes=_policy_changes(command.items),
+            publish_activation_events=publish_activation_events,
         )
 
 

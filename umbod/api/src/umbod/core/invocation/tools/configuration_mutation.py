@@ -35,6 +35,7 @@ class ConnectorToolConfigurationMutation(BaseModel):
     operation_names: tuple[str, ...] = ()
     activation_changes: tuple[ConnectorToolActivationChange, ...] = ()
     policy_changes: tuple[ConnectorToolInvocationPolicyChange, ...] = ()
+    publish_activation_events: bool = True
 
     @property
     def submitted_operation_names(self) -> tuple[str, ...]:
@@ -68,6 +69,7 @@ class ConnectorToolConfigurationSnapshot(BaseModel):
 class ConnectorToolConfigurationMutationResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    events_persisted: bool = False
     snapshots: tuple[ConnectorToolConfigurationSnapshot, ...]
     changed_activations: tuple[ConnectorToolActivationChange, ...]
     policies: tuple[ConnectorToolInvocationPolicyMutationResult, ...]

@@ -1,3 +1,6 @@
+from umbod.core.activation.events import connector_capability_activation_changed_event
+from umbod.core.messaging.discovery_events import connector_discovery_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
 from datetime import UTC, datetime
 
 from umbod.core.activation.domain import (
@@ -85,15 +88,20 @@ class CapabilityActivationStoreService:
             return await get_status_in_session(session, ref)
 
     async def set_status(self, ref: CapabilityRef, status: ActivationStatus) -> None:
-        async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
-            await session.upsert(
-                self._activation_states,
-                UpsertCommand(key=_key(ref), row=_record(ref, status)),
-            )
+        await self.set_statuses((CapabilityActivationState(ref=ref, activation_status=status),))
 
     async def set_statuses(self, states: tuple[CapabilityActivationState, ...]) -> None:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
+            changed = tuple([
+                state for state in states
+                if await get_status_in_session(session, state.ref) != state.activation_status
+            ])
             await set_statuses_in_session(session, states)
+            for state in changed:
+                ref = state.ref
+                await append_event_in_session(session, connector_capability_activation_changed_event(
+                    ref.connector_kind, ref.connector_id, ref.capability_kind, ref.capability_key,
+                ))
 
     async def reconcile(
         self,
@@ -103,7 +111,7 @@ class CapabilityActivationStoreService:
         current_keys: tuple[str, ...],
     ) -> None:
         async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
-            await session.delete(
+            deleted = await session.delete(
                 self._activation_states,
                 DeleteQuery(
                     AllOf(
@@ -121,6 +129,8 @@ class CapabilityActivationStoreService:
                     )
                 ),
             )
+            if deleted:
+                await append_event_in_session(session, connector_discovery_changed_event(connector_kind, connector_id))
 
 
 def _key(ref: CapabilityRef) -> CapabilityActivationStateKey:

@@ -1,3 +1,4 @@
+from tests.support.native_tool_states import enabled_native_tool_states
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
 from tests.persistence_runtime import create_inmemory_runtime
@@ -19,7 +20,7 @@ from umbod.mcp.logging import create_default_mcp_audit_recorder
 import pytest
 from fastmcp import Client, FastMCP
 from fastmcp.client.messages import MessageHandler
-from pydantic import ConfigDict, SecretStr
+from pydantic import ConfigDict, SecretStr, ValidationError
 from umbod.proxies import Model
 from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore, RuntimeConnectorToolRegistry, register_connector_tools
 from umbod.mcp.logging import McpAuditRecorder, StdoutMcpAuditEventSink, StructuredMcpAuditFormatter, create_default_mcp_tool_invocation_log_sink
@@ -63,6 +64,7 @@ async def test_connector_tool_invocation_emits_invocation_and_audit_logs() -> No
         connector_configuration_store=configuration_store,
         connector_publishing_store=publishing_store,
         connector_tool_mappings=[_tool_mapping('slack', 'search_messages')],
+        connector_tool_runtime_state_store=enabled_native_tool_states(("slack", "search_messages")),
     )
     async with Client(mcp) as client:
         await client.call_tool('slack_search_messages', {})
@@ -87,6 +89,9 @@ async def test_registration_observes_all_configured_tools_before_publication() -
             signals, PermitAllConnectorInvocationPolicy()
         ),
         connector_registrations=[SLACK_REGISTRATION, GITHUB_REGISTRATION],
+        connector_tool_runtime_state_store=enabled_native_tool_states(
+            ("slack", "search_messages"), ("github", "list_repositories"),
+        ),
         connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(),
         connector_publishing_store=ConnectorPublishingStoreService(
             create_inmemory_runtime().database, PUBLICATION_STATE_TABLE
@@ -336,6 +341,25 @@ async def _build_mcp_with_runtime_state(configuration_store: InMemoryConnectorCu
         connector_tool_runtime_state_store=runtime_state_store,
     )
     return mcp
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state_options", [{}, {"connector_tool_runtime_state_store": None}])
+async def test_registration_requires_an_explicit_activation_reader(state_options: dict[str, object]) -> None:
+    signals = McpSignals(InMemorySignalFailureHandler())
+    with pytest.raises(ValidationError):
+        await register_connector_tools(
+            FastMCP("missing-activation"),
+            signals=signals,
+            execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()),
+            connector_registrations=[],
+            connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(),
+            connector_publishing_store=ConnectorPublishingStoreService(
+                create_inmemory_runtime().database, PUBLICATION_STATE_TABLE,
+            ),
+            connector_tool_mappings=[],
+            **state_options,
+        )
+
 
 def _slack_search_messages_ref() -> ConnectorToolRef:
     return ConnectorToolRef(connector_id='slack', operation_name='search_messages')

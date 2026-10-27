@@ -43,7 +43,7 @@ async def test_gateway_rejects_native_collision_before_execution(runtime_case: R
             await session.delete(PERSONAL_TOOL_OBSERVATION_TABLE, DeleteQuery(NoFilter()))
     else:
         await runtime_case.bundle.publishing.unpublish_connector("personal")
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     configurations = InMemoryConnectorCurrentConfigurationStore()
     await configurations.save_current_configuration("Personal", _configuration())
     publications = ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE)
@@ -85,7 +85,7 @@ async def test_flat_reserved_name_never_executes_or_lists_alternate_component(ru
     elif withdrawal == "inventory":
         async with runtime_case.database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
             await session.delete(PERSONAL_TOOL_OBSERVATION_TABLE, DeleteQuery(NoFilter()))
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     public = FastMCP("reserved", providers=[provider], middleware=[PersonalToolReservationMiddleware(provider)])
     alternate_calls: list[str] = []
 
@@ -112,7 +112,7 @@ async def test_flat_reserved_name_never_executes_or_lists_alternate_component(ru
 async def test_personal_namespace_follows_connector_scope_without_owner_context(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
     execution.contexts.contexts.clear()
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     assert await provider.is_personal_tool_name("Personal_never_discovered")
     assert not await provider.is_personal_tool_name("Shared_read")
     for scope, expected in (("other", False), ("personal", True)):
@@ -126,7 +126,7 @@ async def test_personal_namespace_follows_connector_scope_without_owner_context(
 @pytest.mark.asyncio
 async def test_reservation_middleware_preserves_authorized_personal_and_unrelated_shared(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     public = FastMCP("reserved", providers=[provider], middleware=[PersonalToolReservationMiddleware(provider)])
 
     @public.tool(name="Shared_read")

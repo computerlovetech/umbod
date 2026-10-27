@@ -1,5 +1,8 @@
 from datetime import UTC, datetime
 
+from umbod.core.messaging.stores.event_stream import append_event_in_session
+from umbod.core.publishing.events import connector_publication_changed_event
+
 from umbod.core.publishing.stores.events import (
     ConnectorPublishStateChanged,
     PublishStateChangeSubscriber,
@@ -53,6 +56,7 @@ class ConnectorPublishingStoreService:
                 updated_at=_updated_at(),
             )
             await self._upsert_publication_state(session, connector_id, write)
+            await append_event_in_session(session, connector_publication_changed_event(connector_id, "published"))
         await self._publish_state_changed(
             ConnectorPublishStateChanged(connector_id=connector_id, state="published")
         )
@@ -68,6 +72,7 @@ class ConnectorPublishingStoreService:
                     updated_at=_updated_at(),
                 )
                 await self._upsert_publication_state(session, connector_id, write)
+                await append_event_in_session(session, connector_publication_changed_event(connector_id, "unpublished"))
         await self._publish_state_changed(
             ConnectorPublishStateChanged(connector_id=connector_id, state="unpublished")
         )

@@ -1,112 +1,57 @@
-from typing import Callable, Generic, Literal, TypeVar
+import asyncio
+import json
+from typing import Literal
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
-from umbod.core.capabilities.descriptions.events import ConnectorCapabilityDescriptionOverrideChangedStreamEvent
-from umbod.core.publishing.events import ConnectorPublicationStreamEvent
-from umbod.core.configuration.events import ConnectorRuntimeStateStreamEvent
-from umbod.core.activation.events import ConnectorToolChangedStreamEvent
-from umbod.core.persistence import Database
-from umbod.core.messaging import DatabaseEventCheckpointStore, DatabaseEventStream
-from umbod.mcp.connectors.native import (
-    ConnectorCapabilityDescriptionOverrideStreamReader,
-    ConnectorPublicationStreamReader,
-    ConnectorRuntimeStateStreamReader,
-    HttpConnectorCapabilityDescriptionOverrideStreamReader,
-    HttpConnectorPublicationStreamReader,
-    HttpConnectorRuntimeStateStreamReader,
-)
-from umbod.mcp.connectors.native.tools import (
-    ConnectorToolChangeStreamReader,
-    HttpConnectorToolChangeStreamReader,
-)
-from umbod.mcp.live_permission_updates import (
-    GroupPermissionChangeStreamReader,
-    HttpGroupPermissionChangeStreamReader,
-)
-from messaging.in_memory import (
-    InMemoryEventCheckpointStoreFactory,
-    InMemoryEventCheckpointStoreMessages,
-)
-from messaging.models import MessagingEventType, StreamEvent
+from pydantic import TypeAdapter
+
+from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages
+from messaging.models import StreamEvent
 from messaging.ports import EventCheckpointStore
+from umbod.core.messaging import DatabaseEventStream
+from umbod.core.persistence import Database
+from umbod.mcp.messaging.projection import ProjectionEventReader
 
-T = TypeVar("T")
+
+class HttpProjectionEventReader:
+    def __init__(self, api_base_url: str) -> None:
+        self._base_url = api_base_url.rstrip('/')
+
+    async def list_after(self, sequence: int, limit: int) -> list[StreamEvent]:
+        return await asyncio.to_thread(self._list_after, sequence, limit)
+
+    def _list_after(self, sequence: int, limit: int) -> list[StreamEvent]:
+        query = urlencode({'after_sequence': sequence, 'limit': limit})
+        with urlopen(f'{self._base_url}/system/events?{query}', timeout=10) as response:
+            return TypeAdapter(list[StreamEvent]).validate_python(json.loads(response.read()))
 
 
-class DatabaseDomainEventReader(Generic[T]):
-    def __init__(
-        self,
-        database: Database,
-        event_type: MessagingEventType,
-        mapper: Callable[[StreamEvent], T],
-    ) -> None:
+class DatabaseProjectionEventReader:
+    def __init__(self, database: Database) -> None:
         self._stream = DatabaseEventStream(database)
-        self._event_type = event_type
-        self._mapper = mapper
 
-    async def list_after(self, sequence: int, limit: int) -> list[T]:
-        events = await self._stream.list_after_types(sequence, limit, (self._event_type,))
-        return [self._mapper(event) for event in events]
+    async def list_after(self, sequence: int, limit: int) -> list[StreamEvent]:
+        return await self._stream.list_after_types(sequence, limit, (
+            'connector.publication.changed',
+            'connector.configuration.changed',
+            'connector.capability_activation.changed',
+            'connector.capability_description_override.changed',
+            'connector.discovery.changed',
+            'mcp.group_permission.changed',
+        ))
 
 
 class McpMessagingAdapterFactory:
-    def __init__(
-        self,
-        transport: Literal["http", "sql"],
-        api_base_url: str,
-        database: Database,
-    ) -> None:
+    def __init__(self, transport: Literal['http', 'sql'], api_base_url: str, database: Database) -> None:
         self._transport = transport
         self._api_base_url = api_base_url
         self._database = database
 
     def create_checkpoint_store(self) -> EventCheckpointStore:
-        if self._transport == "sql":
-            return DatabaseEventCheckpointStore(self._database)
         return InMemoryEventCheckpointStoreFactory(InMemoryEventCheckpointStoreMessages()).create()
 
-    def create_publication_reader(self) -> ConnectorPublicationStreamReader:
-        if self._transport == "sql":
-            return DatabaseDomainEventReader(
-                self._database,
-                "connector.publication.changed",
-                ConnectorPublicationStreamEvent.from_stream_event,
-            )
-        return HttpConnectorPublicationStreamReader(self._api_base_url)
-
-    def create_runtime_state_reader(self) -> ConnectorRuntimeStateStreamReader:
-        if self._transport == "sql":
-            return DatabaseDomainEventReader(
-                self._database,
-                "connector.configuration.changed",
-                ConnectorRuntimeStateStreamEvent.from_stream_event,
-            )
-        return HttpConnectorRuntimeStateStreamReader(self._api_base_url)
-
-    def create_tool_activation_reader(self) -> ConnectorToolChangeStreamReader:
-        if self._transport == "sql":
-            return DatabaseDomainEventReader(
-                self._database,
-                "connector.capability_activation.changed",
-                ConnectorToolChangedStreamEvent.from_stream_event,
-            )
-        return HttpConnectorToolChangeStreamReader(self._api_base_url)
-
-    def create_capability_description_override_reader(
-        self,
-    ) -> ConnectorCapabilityDescriptionOverrideStreamReader:
-        if self._transport == "sql":
-            return DatabaseDomainEventReader(
-                self._database,
-                "connector.capability_description_override.changed",
-                ConnectorCapabilityDescriptionOverrideChangedStreamEvent.from_stream_event,
-            )
-        return HttpConnectorCapabilityDescriptionOverrideStreamReader(self._api_base_url)
-
-    def create_group_permission_reader(self) -> GroupPermissionChangeStreamReader:
-        if self._transport == "sql":
-            return DatabaseDomainEventReader(
-                self._database,
-                "mcp.group_permission.changed",
-                lambda event: event,
-            )
-        return HttpGroupPermissionChangeStreamReader(self._api_base_url)
+    def create_projection_reader(self) -> ProjectionEventReader:
+        if self._transport == 'sql':
+            return DatabaseProjectionEventReader(self._database)
+        return HttpProjectionEventReader(self._api_base_url)

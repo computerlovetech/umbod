@@ -1,3 +1,5 @@
+from messaging.events import McpGroupPermissionChanged
+from umbod.core.messaging.stores.event_stream import append_event_in_session
 from umbod.core.groups import RegisterGroup
 from umbod.core.groups.stores.composition import create_group_management
 from umbod.core.groups.stores.registration import register_group_in_session
@@ -112,7 +114,10 @@ class GroupPermissionStoreService:
 
     async def update_group_permissions(self, request: UpdateGroupPermissionsRequest) -> None:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
+            previous = await self.list_group_permissions_in_session(session, request.group_id)
             await self.update_group_permissions_in_session(session, request)
+            current = await self.list_group_permissions_in_session(session, request.group_id)
+            await _append_permission_changes(session, previous, current)
 
     async def update_group_permissions_in_session(
         self,
@@ -127,6 +132,7 @@ class GroupPermissionStoreService:
 
     async def save_group_permissions(self, request: SaveGroupPermissionsRequest) -> None:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
+            previous = await self.list_group_permissions_in_session(session, request.group_id)
             await register_group_in_session(session, request.group_id)
             await session.delete(
                 self._connector_permissions,
@@ -140,6 +146,8 @@ class GroupPermissionStoreService:
                 await self._insert_connector_permission(session, request.group_id, connector_id)
             for capability in sorted(request.capabilities, key=_capability_sort_key):
                 await self._insert_capability_permission(session, request.group_id, capability)
+            current = await self.list_group_permissions_in_session(session, request.group_id)
+            await _append_permission_changes(session, previous, current)
 
     async def _update_connector_permission(
         self,
@@ -206,3 +214,21 @@ def _capability_kind(value: str) -> CapabilityKind:
     if value not in {"tool", "prompt", "resource", "resource_template"}:
         raise ValueError(f"Unsupported capability kind: {value}")
     return value  # type: ignore[return-value]
+
+
+async def _append_permission_changes(session: DatabaseSession, previous: GroupPermissionSet, current: GroupPermissionSet) -> None:
+    for action, connectors, capabilities in (
+        ("grant", set(current.connector_ids) - set(previous.connector_ids), set(current.capabilities) - set(previous.capabilities)),
+        ("revoke", set(previous.connector_ids) - set(current.connector_ids), set(previous.capabilities) - set(current.capabilities)),
+    ):
+        for connector_id in sorted(connectors):
+            await append_event_in_session(session, McpGroupPermissionChanged(
+                group_id=current.group_id, action=action, target_kind="connector", connector_id=connector_id,
+            ).to_messaging_event())
+        for capability in sorted(capabilities, key=_capability_sort_key):
+            await append_event_in_session(session, McpGroupPermissionChanged(
+                group_id=current.group_id, action=action, target_kind=capability.capability_kind,
+                connector_id=capability.connector_id, capability_kind=capability.capability_kind,
+                capability_key=capability.capability_key,
+                operation_name=capability.capability_key if capability.capability_kind == "tool" else None,
+            ).to_messaging_event())

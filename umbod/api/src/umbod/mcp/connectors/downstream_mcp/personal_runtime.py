@@ -1,6 +1,5 @@
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import datetime
-from typing import Protocol
 
 import mcp.types as mt
 from fastmcp.exceptions import ToolError
@@ -19,12 +18,12 @@ from umbod.core.connectors.downstream_mcp.personal_connections.caller import Per
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolResult
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
 from umbod.core.connectors.downstream_mcp.personal_tools import InvokePersonalTool, PersonalToolRecord, PersonalToolRuntimeService
-from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolAccessStore
-from umbod.core.connectors.downstream_mcp.stores.ports import ConnectorDefinitionStore
+from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolAccessStore, PersonalToolDefinitionReader
 from umbod.core.connectors.downstream_mcp.personal_connections.identity_models import ResolvedPersonalIdentity
 from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
 from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
 
+from .namespaces import PersonalToolNameMatcher, PersonalToolNamespace
 from .tool_invocation import AuthorizedPersonalTool
 
 
@@ -59,7 +58,7 @@ class McpPersonalToolRuntime:
     def __init__(
         self,
         callers: PersonalCallerProvider,
-        definitions: ConnectorDefinitionStore,
+        definitions: PersonalToolDefinitionReader,
         access: PersonalToolAccessStore,
         transport: PersonalMcpTransport,
         clock: Callable[[], datetime],
@@ -83,44 +82,42 @@ class McpPersonalToolRuntime:
         return await operation.execute(command)
 
 
-class PersonalToolNamespace(Protocol):
-    async def is_personal_tool_name(self, name: str) -> bool: ...
-
-
 class PersonalToolReservationMiddleware(Middleware):
     def __init__(self, claims: PersonalToolNamespace) -> None:
         self._claims = claims
 
-    async def _allows(self, tool: Tool) -> bool:
-        reserved = await self._claims.is_personal_tool_name(tool.name)
+    async def _allows(self, tool: Tool, namespace: PersonalToolNameMatcher) -> bool:
+        reserved = namespace.is_personal_tool_name(tool.name)
         if isinstance(tool, AuthorizedPersonalTool):
             return reserved and await tool.is_authorized()
         return not reserved
 
     async def on_list_tools(self, context: MiddlewareContext[mt.ListToolsRequest], call_next: CallNext[mt.ListToolsRequest, Sequence[Tool]]) -> Sequence[Tool]:
         tools = await call_next(context)
+        namespace = await self._claims.capture_personal_tool_namespace()
         authorized: list[Tool] = []
         for tool in tools:
-            if not await self._allows(tool):
+            if not await self._allows(tool, namespace):
                 continue
-            if await self._claims.is_personal_tool_name(tool.name):
+            if namespace.is_personal_tool_name(tool.name):
                 runtime = context.fastmcp_context
                 if runtime is None:
                     continue
                 resolved = await runtime.fastmcp.get_tool(tool.name, version=_requested_version({"fastmcp": {"version": tool.version}}))
-                if resolved is None or not await self._allows(resolved):
+                if resolved is None or not await self._allows(resolved, namespace):
                     continue
             authorized.append(tool)
         return authorized
 
     async def on_call_tool(self, context: MiddlewareContext[mt.CallToolRequestParams], call_next: CallNext[mt.CallToolRequestParams, ToolResult]) -> ToolResult:
-        if not await self._claims.is_personal_tool_name(context.message.name):
+        namespace = await self._claims.capture_personal_tool_namespace()
+        if not namespace.is_personal_tool_name(context.message.name):
             return await call_next(context)
         runtime = context.fastmcp_context
         if runtime is None:
             raise ToolError("Tool is not available")
         tool = await runtime.fastmcp.get_tool(context.message.name, version=_requested_version(context.message.meta))
-        if tool is None or not await self._allows(tool):
+        if tool is None or not await self._allows(tool, namespace):
             raise ToolError("Tool is not available")
         return await call_next(context)
 

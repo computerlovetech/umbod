@@ -14,6 +14,10 @@ class DownstreamConnectorUnavailableError(DownstreamConnectorConflictError):
     pass
 
 
+class ObsoleteDownstreamCatalogError(DownstreamConnectorUnavailableError):
+    pass
+
+
 class DownstreamCredentialMissingError(ValueError):
     pass
 

@@ -2,14 +2,11 @@ from importlib import import_module
 from typing import Any
 
 __all__ = [
-    "ConnectorToolChangePollingSynchronizer",
-    "ConnectorToolChangeStreamReader",
     "ConnectorToolErrorFormatter",
     "ConnectorToolInvocationIdentity",
     "ConnectorToolMapping",
     "ConnectorToolRuntimeStateSynchronizer",
     "ConnectorToolSearchCandidate",
-    "HttpConnectorToolChangeStreamReader",
     "HttpConnectorToolRuntimeStateReader",
     "InMemoryConnectorToolRuntimeStateStore",
     "RuntimeConnectorToolRegistry",
@@ -19,14 +16,11 @@ __all__ = [
 ]
 
 _EXPORTS: dict[str, str] = {
-    "ConnectorToolChangePollingSynchronizer": ".runtime.synchronization",
-    "ConnectorToolChangeStreamReader": ".runtime.synchronization",
     "ConnectorToolErrorFormatter": ".invocation.errors",
     "ConnectorToolInvocationIdentity": ".invocation.identity",
     "ConnectorToolMapping": "umbod.core.connectors.native.runtime.tools",
     "ConnectorToolRuntimeStateSynchronizer": ".runtime.synchronization",
     "ConnectorToolSearchCandidate": ".discovery.search",
-    "HttpConnectorToolChangeStreamReader": ".infrastructure.http_clients",
     "HttpConnectorToolRuntimeStateReader": ".infrastructure.http_clients",
     "InMemoryConnectorToolRuntimeStateStore": ".runtime.state",
     "RuntimeConnectorToolRegistry": ".runtime.registry",

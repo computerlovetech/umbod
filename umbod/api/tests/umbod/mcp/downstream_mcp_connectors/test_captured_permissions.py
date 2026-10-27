@@ -11,11 +11,15 @@ from fastmcp.tools import ToolResult
 
 from tests.umbod.mcp.downstream_mcp_connectors.test_provider import _downstream, _provider
 from umbod.core.callers import AuthenticationProvenance, CallerContext, UnavailableSubject
+from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.invocation import ConnectorInvocation, PermitAllConnectorInvocationPolicy
 from umbod.core.permissions import ConnectorCapabilityPermission, InMemoryGroupConnectorToolPermissions
 from umbod.mcp.connectors.downstream_mcp import GroupDownstreamToolPermissionPolicy, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.connectors.downstream_mcp import permissions as permission_boundary
 from umbod.mcp.auth.local_test_auth import SingleTestUserOAuthProvider
+from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolRecord
+from umbod.core.connectors.downstream_mcp.stores import ToolCatalogFound
+from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoverySnapshot
 
 
 def _permissions() -> InMemoryGroupConnectorToolPermissions:
@@ -94,7 +98,7 @@ def test_capture_uses_same_token_and_actual_server_authentication(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("operation", ["tools", "search", "resources", "templates", "prompts", "enabled"])
+@pytest.mark.parametrize("operation", ["tools", "search", "resources", "templates", "prompts", "access"])
 async def test_listing_io_cannot_switch_captured_caller(
     monkeypatch: pytest.MonkeyPatch, operation: str,
 ) -> None:
@@ -103,13 +107,18 @@ async def test_listing_io_cannot_switch_captured_caller(
     read_token = Mock(return_value=token)
     monkeypatch.setattr(permission_boundary, "get_access_token", read_token)
     provider._permission_policy = GroupDownstreamToolPermissionPolicy(_permissions())
-    original_list = provider._stores.definitions.list
+    original_catalogs = provider._eligible_catalogs
 
-    async def list_and_mutate() -> object:
+    async def list_and_mutate() -> tuple[PersonalToolRecord, ...]:
         token.claims["groups"] = ["support"]
-        return await original_list()
+        return ()
 
-    monkeypatch.setattr(provider._stores.definitions, "list", list_and_mutate)
+    async def catalogs_and_mutate(snapshot: DownstreamDiscoverySnapshot) -> list[tuple[str, ToolCatalogFound]]:
+        token.claims["groups"] = ["support"]
+        return await original_catalogs(snapshot)
+
+    monkeypatch.setattr(provider._personal_runtime, "list_tools", list_and_mutate)
+    monkeypatch.setattr(provider, "_eligible_catalogs", catalogs_and_mutate)
     if operation == "tools":
         assert [tool.name for tool in await provider.list_tools()] == ["weather_forecast"]
     elif operation == "search":
@@ -128,7 +137,7 @@ async def test_listing_io_cannot_switch_captured_caller(
             return await original_get(query)
 
         monkeypatch.setattr(provider._stores.definitions, "get", get_and_mutate)
-        assert await provider._capability_enabled("weather", "tool", "forecast")
+        await provider._ensure_capability_access(CapabilityIdentity(connector_kind="downstream_mcp", connector_id="weather", capability_kind="tool", capability_key="forecast"))
     read_token.assert_called_once_with()
 
 
@@ -138,13 +147,11 @@ async def test_listing_capture_does_not_freeze_grants_during_io(monkeypatch: pyt
     permissions = _permissions()
     monkeypatch.setattr(permission_boundary, "get_access_token", lambda: SimpleNamespace(claims={"groups": ["engineering"]}))
     provider._permission_policy = GroupDownstreamToolPermissionPolicy(permissions)
-    original_list = provider._stores.definitions.list
-
-    async def list_and_revoke() -> object:
+    async def list_and_revoke() -> tuple[PersonalToolRecord, ...]:
         permissions.replace_group_permissions({}, {})
-        return await original_list()
+        return ()
 
-    monkeypatch.setattr(provider._stores.definitions, "list", list_and_revoke)
+    monkeypatch.setattr(provider._personal_runtime, "list_tools", list_and_revoke)
 
     assert await provider.list_tools() == []
 

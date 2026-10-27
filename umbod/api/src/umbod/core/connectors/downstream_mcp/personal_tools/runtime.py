@@ -18,10 +18,9 @@ from ..personal_connections.runtime_models import PersonalAuthorizationRejected
 from ..personal_connections.models import PersonalConnectionKey
 from ..personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolResult
 from ..personal_connections.runtime_ports import PersonalMcpTransport
-from ..stores.ports import ConnectorDefinitionStore
 from .contract_validation import validate_arguments, validate_output
 from .models import AdmitPersonalTool, InvokePersonalTool, PersonalToolRecord
-from .ports import PersonalToolAccessStore
+from .ports import PersonalToolAccessStore, PersonalToolDefinitionReader
 from ..personal_connections.caller import PersonalCaller, UnavailablePersonalCaller, require_personal_caller
 from ..personal_connections.models import MissingCanonicalPrincipal
 from .schema_validation import PersonalToolPolicyInvalid
@@ -57,7 +56,7 @@ class PersonalToolRuntimeService:
     def __init__(
         self,
         caller: PersonalCaller | UnavailablePersonalCaller,
-        definitions: ConnectorDefinitionStore,
+        definitions: PersonalToolDefinitionReader,
         access: PersonalToolAccessStore,
         transport: PersonalMcpTransport,
         clock: Callable[[], datetime],

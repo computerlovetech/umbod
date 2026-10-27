@@ -14,6 +14,7 @@ from umbod.core.capabilities.descriptions.factories import ConfiguredConnectorCa
 from umbod.core.configuration.persistence.factories import create_encrypted_connector_configuration_store
 from umbod.core.publishing.factories import ConfiguredConnectorPublishingStoreFactory
 from umbod.core.activation.factories import create_capability_activation_store
+from umbod.core.activation import ActivationStatus, CapabilityRef
 from umbod.core.permissions.factories import create_group_permission_store
 from umbod.core.connectors.downstream_mcp.stores import create_downstream_mcp_stores
 from umbod.core.connectors.openapi.stores.factories import ConfiguredOpenApiConnectorStoreFactory
@@ -29,7 +30,6 @@ from contextlib import AsyncExitStack, asynccontextmanager, suppress
 from functools import partial
 from pathlib import Path
 from typing import Literal
-from urllib.error import URLError
 from fastmcp import FastMCP
 from fastmcp.server.middleware import AuthMiddleware, Middleware
 from mcp.server.request_state import RequestStateSecurity
@@ -40,13 +40,12 @@ from starlette.routing import Mount, Route
 from starlette.types import ASGIApp, Receive, Scope, Send
 from umbod.core.connectors.native.bootstrap import DefaultConnectorRuntimeFactory
 from umbod.core.invocation import ConnectorInvocationPolicy, StoredConnectorInvocationPolicy
-from umbod.core.publishing import ConnectorPublishingStore
-from umbod.core.connectors.native.registry import InMemoryConnectorRegistry
+from umbod.core.connectors.native.registry import ConnectorDefinitionFilter, InMemoryConnectorRegistry
 from umbod.core.connectors.native.runtime import ConnectorRuntime
-from umbod.core.connectors.downstream_mcp.stores import ConnectorDefinitionFound, ConnectorDefinitionStore, PublicPathQuery
+from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryRuntime, DownstreamDiscoveryStores as DownstreamRuntimeStores, DownstreamDiscoveryUnavailable, DownstreamRuntimeDefinitions, create_downstream_discovery_runtime
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
+from umbod.core.capabilities.tools.names import PublicToolIdentity
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
-from umbod.core.activation.events import ConnectorCapabilityActivationChanged
 from umbod_sdk.connectors.discovery import load_connector_plugins
 from umbod.mcp.agent_instructions import register_agent_instructions
 from umbod.mcp.administrator import register_administrator_connector_configuration_tools
@@ -59,11 +58,7 @@ from umbod.core.invocation import DatabaseApprovalNonceStore
 from umbod.core.invocation import DatabaseConnectorInvocationPolicyStore
 from umbod.mcp.connectors.native import (
     APPROVAL_TTL_SECONDS,
-    CONNECTOR_PUBLICATION_POLLING_BATCH_LIMIT,
-    CONNECTOR_PUBLICATION_POLLING_INTERVAL_SECONDS,
     ApprovalStateCodec,
-    ConnectorPublicationPollingSynchronizer,
-    ConnectorRuntimeStateChangePollingSynchronizer,
     ConnectorRuntimeStateSynchronizer,
     CurrentInvocationApprovalCallerCapture,
     HttpConnectorRuntimeStateReader,
@@ -77,7 +72,6 @@ from umbod.mcp.connectors.native import (
 from umbod.mcp.connectors.native.prompts import ConnectorPromptRegistrationOptions, register_connector_prompts
 from umbod.mcp.connectors.native.resources import ConnectorResourceRegistrationOptions, register_connector_resources
 from umbod.mcp.connectors.native.tools import (
-    ConnectorToolChangePollingSynchronizer,
     ConnectorToolRuntimeStateSynchronizer,
     HttpConnectorToolRuntimeStateReader,
     InMemoryConnectorToolRuntimeStateStore,
@@ -89,8 +83,9 @@ from umbod.mcp.metrics.http_server import McpMetricsHttpServer
 from umbod.mcp.logging import McpAuditIdentityAdapter, McpToolInvocationLogSink, create_default_mcp_audit_recorder, create_default_mcp_tool_invocation_log_sink
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import McpInvocationPublisher, McpSignals, McpToolExecutionPipelineFactory, SignalToolExecutionPipelineFactory
-from umbod.mcp.connectors.downstream_mcp.inventory import read_shared_tool_inventory
+from umbod.mcp.connectors.downstream_mcp.inventory import shared_tool_inventory
 from umbod.mcp.middleware import McpAuditMiddleware
+from umbod.mcp.middleware.protocol_metrics import McpProtocolMetricsMiddleware
 from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesystemServiceFactory, RuntimeFilesystemGroupClaimFields, StaticFilesystemGroupClaimFields, register_filesystem_tools
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.core.persistence import Database, PersistenceRuntime
@@ -99,27 +94,26 @@ from umbod.core.connectors.downstream_mcp.adapters.settings import (
 )
 from umbod.mcp.connectors.downstream_mcp.coordinator import DownstreamDiscoveryAdapters, DownstreamDiscoveryCoordinator, DownstreamDiscoveryCoordinatorOptions, DownstreamDiscoveryStores, create_downstream_discovery_coordinator
 from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolProvider, GroupDownstreamToolPermissionPolicy, NativeCapabilityProviderView, UnrestrictedDownstreamToolPermissionPolicy
-from umbod.mcp.live_permission_updates import DatabaseGroupPermissionReader, GROUP_PERMISSION_CHANGE_POLL_BATCH_LIMIT, GROUP_PERMISSION_CHANGE_POLL_INTERVAL_SECONDS, GroupPermissionChangePollingSynchronizer, GroupPermissionStateReloader, HttpGroupPermissionReader, RuntimeGroupPermissionSynchronizer
+from umbod.mcp.live_permission_updates import DatabaseGroupPermissionReader, GroupPermissionStateReloader, HttpGroupPermissionReader, RuntimeGroupPermissionSynchronizer
 from umbod.core.connectors.openapi.execution import OutboundHttpClientFactory
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.authorization import connector_tool_permission_check
 from umbod.mcp.connectors.openapi import DatabaseGroupPermissionReaderFactory, OutboundHttpClientFactoryPort, build_openapi_codemode_executor
 from umbod.mcp.connectors.openapi.inventory import read_openapi_tool_inventory
+from umbod.mcp.connectors.openapi.discovery_runtime import initialize_openapi_discovery, reconcile_openapi_discovery
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, ConnectorStorePair, HttpConnectorRuntimeStateSourceStrategy, LocalConnectorRuntimeStateSourceStrategy, StoreBackedConnectorRuntimeStateSourceStrategy, resolve_connector_runtime_state_source_strategy
 from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
 from umbod.config import AppConfig, InMemoryConnectorStoreConfig, SQLiteConnectorStoreConfig, load_server_app_config
 from umbod.logging import flush_logging
 from umbod.mcp.settings import MCPAppSettings
-from umbod.mcp.messaging import McpMessagingAdapterFactory
+from umbod.mcp.messaging import McpMessagingAdapterFactory, RuntimeProjectionHealth, RuntimeProjectionSynchronizer
 _CORS_HEADERS = {'Access-Control-Allow-Origin': '*'}
 _MCP_HTTP_PATH = '/mcp'
 _HEALTH_ROUTE = '/system/health'
 _LOGO_ROUTE = '/assets/logo.png'
 _LOGO_FILE = Path(__file__).resolve().parent / 'assets' / 'logo.png'
-_STARTUP_SYNC_RETRY_DELAY_SECONDS = 1.0
 _INITIAL_RUNTIME_STATE_SYNC_TIMEOUT_SECONDS = 60.0
 logger = logging.getLogger(__name__)
-PollingSynchronizer = ConnectorPublicationPollingSynchronizer | ConnectorRuntimeStateChangePollingSynchronizer | ConnectorToolChangePollingSynchronizer | GroupPermissionChangePollingSynchronizer
 RuntimeStateArgument = InMemoryConnectorToolRuntimeStateStore | InMemoryGroupConnectorToolPermissions | None
 RuntimeStateStores = tuple[InMemoryConnectorToolRuntimeStateStore | None, InMemoryGroupConnectorToolPermissions | None]
 OpenApiCodemodeDiscoveryExposureMode = Literal['codemode']
@@ -142,7 +136,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     invocation_log_sink = invocation_log_sinks[0] if invocation_log_sinks else create_default_mcp_tool_invocation_log_sink()
     signals = create_mcp_signals(invocation_log_sink, metrics_recorder, audit_recorder)
     publisher = McpInvocationPublisher(signals)
-    middleware: list[Middleware] = [McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
+    middleware: list[Middleware] = [McpProtocolMetricsMiddleware(metrics_recorder, clock=time.monotonic), McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
     if group_permission_runtime_state is not None:
         auth_check = personal_tool_permission_check(connector_tool_permission_check(group_permission_runtime_state))
         if settings.mcp.auth_debug_enabled:
@@ -225,25 +219,43 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
         ),
         DatabaseFilesystemServiceFactory(persistence_runtime.database),
     )
+    await initialize_openapi_discovery(mcp)
     await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, signals, mcp.execution_pipelines, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes)
     mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.execution_pipelines)
     signals.tool_inventory_observed.send(await read_openapi_tool_inventory(await mcp.openapi_connector_store_factory.create()))
     downstream_permission_policy = UnrestrictedDownstreamToolPermissionPolicy() if group_permission_runtime_state is None else GroupDownstreamToolPermissionPolicy(group_permission_runtime_state)
-    await _register_downstream_mcp_provider(mcp, settings, downstream_permission_policy, persistence_runtime.database, invocation_policy)
+    await _register_downstream_mcp_provider(mcp, settings, downstream_permission_policy, persistence_runtime.database, invocation_policy, runtime)
     register_agent_instructions(mcp)
     return mcp
 
-async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettings, permission_policy: UnrestrictedDownstreamToolPermissionPolicy | GroupDownstreamToolPermissionPolicy, database: Database, invocation_policy: ConnectorInvocationPolicy) -> None:
+@dataclass(frozen=True)
+class RuntimePublicToolIdentitySource:
+    native_runtimes: tuple[ConnectorRuntime, ...]
+
+    async def identities(self) -> tuple[PublicToolIdentity, ...]:
+        identities: list[PublicToolIdentity] = []
+        for runtime in self.native_runtimes:
+            registrations = runtime.connector_registrations
+            registry = InMemoryConnectorRegistry(registrations, [str(registration['id']) for registration in registrations])
+            for definition in registry.list_connector_definitions(ConnectorDefinitionFilter(availability='available')):
+                identities.extend(PublicToolIdentity(connector_id=definition.metadata.id, tool_name_prefix=definition.tool_name_prefix, operation_name=name) for name in definition.tool_descriptions)
+        return tuple(identities)
+
+
+async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettings, permission_policy: UnrestrictedDownstreamToolPermissionPolicy | GroupDownstreamToolPermissionPolicy, database: Database, invocation_policy: ConnectorInvocationPolicy, *native_runtimes: ConnectorRuntime) -> None:
     infrastructure_settings = downstream_mcp_infrastructure_settings_from_app_config(settings)
     stores = await create_downstream_mcp_stores(
         infrastructure_settings.credential_secret, database
     )
     connections = create_downstream_mcp_connections(infrastructure_settings, stores.credentials)
+    discovery_runtime = create_downstream_discovery_runtime(DownstreamRuntimeStores(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, descriptions=mcp.capability_description_overrides))
+    await discovery_runtime.reconcile()
+    mcp.downstream_mcp_discovery_runtime = discovery_runtime
     personal_runtime: PersonalToolRuntime = DisabledPersonalToolRuntime()
     if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled:
-        personal_runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), stores.definitions, stores.personal_tool_access, create_personal_mcp_transport(), utc_clock)
-    provider = ConnectorAwareDownstreamMcpToolProvider(personal_runtime=personal_runtime, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=connections.client_factory, permission_policy=permission_policy, connector_scope='', capability_description_overrides=mcp.capability_description_overrides, signals=mcp.invocation_signals, execution_pipelines=mcp.execution_pipelines)
-    mcp.invocation_signals.tool_inventory_observed.send(await read_shared_tool_inventory(stores.definitions, stores.catalogs))
+        personal_runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), DownstreamRuntimeDefinitions(discovery_runtime), stores.personal_tool_access, create_personal_mcp_transport(), utc_clock)
+    provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_runtime=personal_runtime, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=connections.client_factory, permission_policy=permission_policy, connector_scope='', signals=mcp.invocation_signals, execution_pipelines=mcp.execution_pipelines)
+    mcp.invocation_signals.tool_inventory_observed.send(shared_tool_inventory(discovery_runtime.capture().records))
     mcp.downstream_mcp_tool_provider = provider
     mcp.add_middleware(PersonalToolReservationMiddleware(provider))
     if settings.mcp.connector_tool_exposure_mode == 'flat':
@@ -256,7 +268,8 @@ async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettin
         connector_tool_registry.add_gateway_provider(provider)
     connector_tool_registry = getattr(mcp, 'connector_tool_registry', None)
     notifier = connector_tool_registry.client_notifier if connector_tool_registry is not None else install_tool_list_changed_notifier(mcp)
-    mcp.downstream_mcp_discovery_coordinator = create_downstream_discovery_coordinator(DownstreamDiscoveryStores(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, health=stores.health, activations=stores.activations, publishing=stores.publishing), DownstreamDiscoveryAdapters(discovery=connections.discovery, notifier=notifier, native_capabilities=provider, monotonic_clock=time.monotonic, random_source=random.random), DownstreamDiscoveryCoordinatorOptions(refresh_interval_seconds=settings.mcp.downstream_refresh_interval_seconds, maximum_concurrency=settings.mcp.downstream_discovery_concurrency, jitter_ratio=settings.mcp.downstream_discovery_jitter_ratio, maximum_backoff_seconds=settings.mcp.downstream_discovery_maximum_backoff_seconds))
+    mcp.capability_list_change_notifier = notifier
+    mcp.downstream_mcp_discovery_coordinator = create_downstream_discovery_coordinator(DownstreamDiscoveryStores(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, health=stores.health, activations=stores.activations, publishing=stores.publishing, unit_of_work=stores.unit_of_work), DownstreamDiscoveryAdapters(discovery=connections.discovery, notifier=notifier, native_capabilities=provider, monotonic_clock=time.monotonic, random_source=random.random, identity_source=RuntimePublicToolIdentitySource(native_runtimes)), DownstreamDiscoveryCoordinatorOptions(refresh_interval_seconds=settings.mcp.downstream_refresh_interval_seconds, maximum_concurrency=settings.mcp.downstream_discovery_concurrency, jitter_ratio=settings.mcp.downstream_discovery_jitter_ratio, maximum_backoff_seconds=settings.mcp.downstream_discovery_maximum_backoff_seconds))
     mcp.downstream_mcp_periodic_discovery_enabled = settings.mcp.downstream_discovery_enabled
 
 def _default_openapi_runtime_adapters(settings: MCPAppSettings) -> OpenApiRuntimeAdapters:
@@ -326,28 +339,36 @@ async def health_response(_request: Request) -> JSONResponse:
 
 class DynamicPublicMcpDispatcher:
 
-    def __init__(self, app: ASGIApp, definitions: ConnectorDefinitionStore, publishing: ConnectorPublishingStore) -> None:
+    def __init__(self, app: ASGIApp, runtime: DownstreamDiscoveryRuntime, health: RuntimeProjectionHealth) -> None:
         self._app = app
-        self._definitions = definitions
-        self._publishing = publishing
+        self._runtime = runtime
+        self._health = health
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         path = scope.get('path', '')
         if logger.isEnabledFor(logging.DEBUG):
             headers = {key.decode('latin-1').lower(): value.decode('latin-1') for (key, value) in scope.get('headers', [])}
             logger.debug('MCP HTTP request received', extra={'mcp_event': 'http_request', 'mcp_http_method': scope.get('method'), 'mcp_request_path': path, 'mcp_session_id_header': headers.get('mcp-session-id')})
+        if path.startswith(_MCP_HTTP_PATH) and not self._health.ready:
+            await JSONResponse({'detail': 'Runtime synchronization unavailable'}, status_code=503)(scope, receive, send)
+            return
         if path == _MCP_HTTP_PATH or not path.startswith('/mcp/proxies/'):
             await self._app(scope, receive, send)
             return
         path_parts = path.split('/', 4)
         public_path = '/'.join(path_parts[:4])
         downstream_subpath = f'/{path_parts[4]}' if len(path_parts) == 5 else ''
-        result = await self._definitions.get_by_public_path(PublicPathQuery(public_path=public_path))
-        if not isinstance(result, ConnectorDefinitionFound) or not await self._publishing.is_published(result.definition.connector_id):
+        try:
+            snapshot = self._runtime.capture()
+        except DownstreamDiscoveryUnavailable:
+            await JSONResponse({'detail': 'Runtime synchronization unavailable'}, status_code=503)(scope, receive, send)
+            return
+        definition = next((definition for definition in snapshot.definitions if definition.public_path == public_path and definition.connector_id in snapshot.published_connector_ids), None)
+        if definition is None:
             await JSONResponse({'detail': 'Not found'}, status_code=404)(scope, receive, send)
             return
         from umbod.mcp.connectors.downstream_mcp.provider import reset_request_connector_scope, set_request_connector_scope
-        token = set_request_connector_scope(result.definition.connector_id)
+        token = set_request_connector_scope(definition.connector_id)
         rewritten_path = f'{_MCP_HTTP_PATH}{downstream_subpath}'
         rewritten_scope = {**scope, 'path': rewritten_path, 'raw_path': rewritten_path.encode()}
         try:
@@ -357,13 +378,16 @@ class DynamicPublicMcpDispatcher:
 
 async def build_starlette_app(context: PublicAppRuntimeContext) -> Starlette:
     remote_url = f"{context.settings.endpoints.mcp_base_url.rstrip('/')}{_MCP_HTTP_PATH}"
-    downstream_infrastructure_settings = downstream_mcp_infrastructure_settings_from_app_config(context.settings)
-    downstream_stores = await create_downstream_mcp_stores(
-        downstream_infrastructure_settings.credential_secret,
-        context.persistence_runtime.database,
-    )
+    health = RuntimeProjectionHealth()
+    context.mcp.runtime_projection_health = health
+
+    async def runtime_health_response(request: Request) -> JSONResponse:
+        if health.ready:
+            return await health_response(request)
+        return JSONResponse({'status': 'unavailable', 'runtime_synchronization_failed': health.failed, 'runtime_last_applied_sequence': health.last_applied_sequence}, status_code=503)
+
     server_card: dict[str, object] = {'$schema': 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json', 'name': 'tech.computerlove/umbod', 'title': 'Umbod MCP', 'version': '0.0.1', 'description': 'Umbod MCP server for connector-backed tools.', 'remotes': [{'type': 'streamable-http', 'url': remote_url, 'supportedProtocolVersions': ['2025-06-18']}]}
-    return Starlette(routes=[Route(_HEALTH_ROUTE, health_response, methods=['GET']), Route('/.well-known/mcp/server-card.json', lambda _request: JSONResponse(server_card, headers=_CORS_HEADERS), methods=['GET']), Route(_LOGO_ROUTE, lambda _request: FileResponse(_LOGO_FILE, media_type='image/png'), methods=['GET']), Mount('/', app=DynamicPublicMcpDispatcher(context.http_app, downstream_stores.definitions, downstream_stores.publishing))], lifespan=_create_public_http_lifespan(context))
+    return Starlette(routes=[Route(_HEALTH_ROUTE, runtime_health_response, methods=['GET']), Route('/.well-known/mcp/server-card.json', lambda _request: JSONResponse(server_card, headers=_CORS_HEADERS), methods=['GET']), Route(_LOGO_ROUTE, lambda _request: FileResponse(_LOGO_FILE, media_type='image/png'), methods=['GET']), Mount('/', app=DynamicPublicMcpDispatcher(context.http_app, context.mcp.downstream_mcp_discovery_runtime, health))], lifespan=_create_public_http_lifespan(context))
 
 async def create_production_app() -> Starlette:
     from umbod.hosting import create_mcp_app
@@ -376,7 +400,7 @@ async def create_configured_production_app(settings: AppConfig) -> Starlette:
     return await create_mcp_app(settings, auth_provider=None, group_permission_runtime_state=None, invocation_log_sink=None)
 
 def runtime_state_synchronizer_options(context: PublicAppRuntimeContext) -> ConnectorRuntimeStateSynchronizerOptions | None:
-    if context.api_base_url is None:
+    if context.api_base_url is None and not isinstance(context.source_strategy, LocalConnectorRuntimeStateSourceStrategy):
         return None
     configuration_store = context.target_stores.connector_configuration_store
     publishing_store = context.target_stores.connector_publishing_store
@@ -384,8 +408,12 @@ def runtime_state_synchronizer_options(context: PublicAppRuntimeContext) -> Conn
         return None
     target_stores = LocalConnectorRuntimeStateSourceStrategy(configuration_store, publishing_store)
     if isinstance(context.source_strategy, LocalConnectorRuntimeStateSourceStrategy):
-        reader = HttpConnectorRuntimeStateReader(context.api_base_url)
-        synchronization_source = LocalConnectorRuntimeStateSynchronizationSource(context.source_strategy.connector_configuration_store, context.source_strategy.connector_publishing_store)
+        registrations = context.connector_runtime.connector_registrations
+        connector_registry = InMemoryConnectorRegistry(registrations, [str(registration['id']) for registration in registrations])
+        source_configuration = context.source_strategy.connector_configuration_store
+        source_publishing = context.source_strategy.connector_publishing_store
+        reader = StoreBackedConnectorRuntimeStateReader(connector_registry, source_configuration, source_publishing)
+        synchronization_source = StoreBackedConnectorRuntimeStateSynchronizationSource(reader) if source_configuration is configuration_store and source_publishing is publishing_store else LocalConnectorRuntimeStateSynchronizationSource(source_configuration, source_publishing)
     elif isinstance(context.source_strategy, StoreBackedConnectorRuntimeStateSourceStrategy):
         registrations = context.connector_runtime.connector_registrations
         connector_registry = InMemoryConnectorRegistry(registrations, [str(registration['id']) for registration in registrations])
@@ -402,70 +430,14 @@ def create_connector_runtime_state_synchronizer(options: ConnectorRuntimeStateSy
     registry = options.mcp.connector_tool_registry
     return ConnectorRuntimeStateSynchronizer(reader=options.reader, configuration_store=options.target_stores.connector_configuration_store, publishing_store=options.target_stores.connector_publishing_store, tool_registry=registry, synchronization_source=options.synchronization_source)
 
-def create_connector_publication_synchronizer(options: ConnectorRuntimeStateSynchronizerOptions, api_base_url: str, runtime_state_synchronizer: ConnectorRuntimeStateSynchronizer, downstream_coordinator: DownstreamDiscoveryCoordinator) -> ConnectorPublicationPollingSynchronizer:
-
-    async def handle(connector_id: str) -> None:
-        await runtime_state_synchronizer.sync_connector(connector_id)
-        await downstream_coordinator.reconcile_native_capabilities()
-    adapters = McpMessagingAdapterFactory(options.settings.mcp.messaging_transport, api_base_url, options.database)
-    return ConnectorPublicationPollingSynchronizer(consumer_id='umbod-mcp-runtime-connectors', checkpoint_store=adapters.create_checkpoint_store(), stream_reader=adapters.create_publication_reader(), handler=handle, interval_seconds=CONNECTOR_PUBLICATION_POLLING_INTERVAL_SECONDS, batch_limit=CONNECTOR_PUBLICATION_POLLING_BATCH_LIMIT)
-
-def create_connector_runtime_state_change_synchronizer(options: ConnectorRuntimeStateSynchronizerOptions, api_base_url: str, runtime_state_synchronizer: ConnectorRuntimeStateSynchronizer, downstream_coordinator: DownstreamDiscoveryCoordinator) -> ConnectorRuntimeStateChangePollingSynchronizer:
-
-    async def handle(connector_id: str) -> None:
-        await runtime_state_synchronizer.sync_connector(connector_id)
-        await downstream_coordinator.reconcile_native_capabilities()
-    adapters = McpMessagingAdapterFactory(options.settings.mcp.messaging_transport, api_base_url, options.database)
-    return ConnectorRuntimeStateChangePollingSynchronizer(consumer_id='umbod-mcp-runtime-state-connectors', checkpoint_store=adapters.create_checkpoint_store(), stream_reader=adapters.create_runtime_state_reader(), handler=handle, interval_seconds=CONNECTOR_PUBLICATION_POLLING_INTERVAL_SECONDS, batch_limit=CONNECTOR_PUBLICATION_POLLING_BATCH_LIMIT)
-
-def create_capability_description_override_synchronizer(options: ConnectorRuntimeStateSynchronizerOptions, api_base_url: str) -> ConnectorRuntimeStateChangePollingSynchronizer:
-    notifier = options.mcp.connector_tool_registry.client_notifier
-    adapters = McpMessagingAdapterFactory(options.settings.mcp.messaging_transport, api_base_url, options.database)
-
-    async def handle(_connector_id: str) -> None:
-        if notifier is not None:
-            notifier.notify_tool_list_changed()
-    return ConnectorRuntimeStateChangePollingSynchronizer(consumer_id='umbod-mcp-capability-description-overrides', checkpoint_store=adapters.create_checkpoint_store(), stream_reader=adapters.create_capability_description_override_reader(), handler=handle, interval_seconds=CONNECTOR_PUBLICATION_POLLING_INTERVAL_SECONDS, batch_limit=CONNECTOR_PUBLICATION_POLLING_BATCH_LIMIT)
-
-def create_connector_tool_runtime_state_synchronizer(context: PublicAppRuntimeContext, api_base_url: str) -> ConnectorToolRuntimeStateSynchronizer:
-    return ConnectorToolRuntimeStateSynchronizer(reader=HttpConnectorToolRuntimeStateReader(api_base_url), store=context.connector_tool_runtime_state_store, reconciler=context.mcp.connector_tool_registry)
-
-def create_connector_tool_change_synchronizer(context: PublicAppRuntimeContext, api_base_url: str, runtime_state_synchronizer: ConnectorToolRuntimeStateSynchronizer) -> ConnectorToolChangePollingSynchronizer:
-    adapters = McpMessagingAdapterFactory(context.settings.mcp.messaging_transport, api_base_url, context.persistence_runtime.database)
-    prompt_registry = getattr(context.mcp, 'connector_prompt_registry', None)
-    resource_registry = getattr(context.mcp, 'connector_resource_registry', None)
-    tool_registry = getattr(context.mcp, 'connector_tool_registry', None)
-    notifier = tool_registry.client_notifier if tool_registry is not None else None
-
-    async def handle(event: ConnectorCapabilityActivationChanged) -> None:
-        if event.capability_kind == 'tool':
-            await runtime_state_synchronizer.sync_runtime_state(event.key)
-            return
-        if event.capability_kind == 'prompt':
-            if prompt_registry is not None:
-                await prompt_registry.reconcile_connector(event.connector_id)
-            if notifier is not None:
-                notifier.notify_prompt_list_changed()
-            return
-        if event.capability_kind in ('resource', 'resource_template'):
-            if resource_registry is not None:
-                await resource_registry.reconcile_connector(event.connector_id)
-            if notifier is not None:
-                notifier.notify_resource_list_changed()
-
-    return ConnectorToolChangePollingSynchronizer(consumer_id='umbod-mcp-runtime-connector-tools', checkpoint_store=adapters.create_checkpoint_store(), stream_reader=adapters.create_tool_activation_reader(), handler=handle)
-
 def create_group_permission_runtime_synchronizer(context: PublicAppRuntimeContext, api_base_url: str) -> RuntimeGroupPermissionSynchronizer:
-    registry = context.mcp.connector_tool_registry
+    registry = getattr(context.mcp, 'connector_tool_registry', None)
+    notifier = registry.client_notifier if registry is not None else context.mcp.capability_list_change_notifier
     runtime_permissions = context.group_permission_runtime_state
     if runtime_permissions is None:
         raise ValueError("Group permission synchronization requires group permission runtime state")
-    reader = DatabaseGroupPermissionReader(context.persistence_runtime.database) if context.settings.mcp.messaging_transport == 'sql' else HttpGroupPermissionReader(f"{api_base_url.rstrip('/')}/system")
-    return RuntimeGroupPermissionSynchronizer(permission_state_reloader=GroupPermissionStateReloader(permission_reader=reader, runtime_permissions=runtime_permissions), client_notifier=registry.client_notifier)
-
-def create_group_permission_change_synchronizer(context: PublicAppRuntimeContext, api_base_url: str, interval_seconds: float, batch_limit: int) -> GroupPermissionChangePollingSynchronizer:
-    adapters = McpMessagingAdapterFactory(context.settings.mcp.messaging_transport, api_base_url, context.persistence_runtime.database)
-    return GroupPermissionChangePollingSynchronizer(consumer_id='umbod-mcp-runtime-group-permissions', checkpoint_store=adapters.create_checkpoint_store(), stream_reader=adapters.create_group_permission_reader(), runtime_synchronizer=create_group_permission_runtime_synchronizer(context, api_base_url), interval_seconds=interval_seconds, batch_limit=batch_limit)
+    reader = DatabaseGroupPermissionReader(context.persistence_runtime.database) if context.settings.mcp.messaging_transport == 'sql' or context.api_base_url is None else HttpGroupPermissionReader(f"{api_base_url.rstrip('/')}/system")
+    return RuntimeGroupPermissionSynchronizer(permission_state_reloader=GroupPermissionStateReloader(permission_reader=reader, runtime_permissions=runtime_permissions), client_notifier=notifier)
 
 def _create_public_http_lifespan(context: PublicAppRuntimeContext) -> object:
 
@@ -473,17 +445,17 @@ def _create_public_http_lifespan(context: PublicAppRuntimeContext) -> object:
     async def lifespan(_app: Starlette) -> AsyncIterator[None]:
         try:
             await context.persistence_runtime.readiness.ensure_ready()
-            synchronizers = await _create_public_polling_synchronizers(context)
+            synchronizer = await _initialize_runtime_projection(context)
             async with AsyncExitStack() as stack:
                 await stack.enter_async_context(context.http_app.lifespan(context.http_app))
                 metrics_server = McpMetricsHttpServer(context.metrics_recorder, context.settings.mcp.metrics_port, '0.0.0.0')
                 if context.settings.mcp.metrics_enabled:
                     await metrics_server.start()
                     stack.push_async_callback(metrics_server.stop)
-                synchronizer_tasks = [asyncio.create_task(synchronizer.run()) if synchronizer is not None else None for synchronizer in synchronizers]
                 downstream_coordinator: DownstreamDiscoveryCoordinator | None = getattr(context.mcp, 'downstream_mcp_discovery_coordinator', None)
                 if downstream_coordinator is not None:
                     await downstream_coordinator.initialize_native_capabilities()
+                synchronizer_task = asyncio.create_task(synchronizer.run())
                 downstream_task = asyncio.create_task(downstream_coordinator.run()) if downstream_coordinator is not None and getattr(context.mcp, 'downstream_mcp_periodic_discovery_enabled', False) else None
                 try:
                     yield
@@ -494,37 +466,62 @@ def _create_public_http_lifespan(context: PublicAppRuntimeContext) -> object:
                         downstream_task.cancel()
                         with suppress(asyncio.CancelledError):
                             await downstream_task
-                    for (synchronizer, synchronizer_task) in zip(synchronizers, synchronizer_tasks, strict=True):
-                        if synchronizer is not None:
-                            synchronizer.stop()
-                        if synchronizer_task is not None:
-                            synchronizer_task.cancel()
-                            with suppress(asyncio.CancelledError):
-                                await synchronizer_task
-                        flush_logging()
+                    synchronizer.stop()
+                    synchronizer_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await synchronizer_task
+                    flush_logging()
         finally:
             await context.persistence_runtime.shutdown()
     return lifespan
 
-async def _create_public_polling_synchronizers(context: PublicAppRuntimeContext) -> tuple[PollingSynchronizer | None, ...]:
-    synchronizer_options = runtime_state_synchronizer_options(context)
-    api_base_url = context.api_base_url
-    if synchronizer_options is None or api_base_url is None:
-        return (None,) * 5
-    runtime_synchronizer = create_connector_runtime_state_synchronizer(synchronizer_options)
-    tool_synchronizer = create_connector_tool_runtime_state_synchronizer(context, api_base_url)
-    logger.info('Initial MCP runtime state synchronization started')
-    try:
-        await asyncio.wait_for(_sync_initial_public_runtime_states(context, api_base_url, runtime_synchronizer, tool_synchronizer), timeout=_INITIAL_RUNTIME_STATE_SYNC_TIMEOUT_SECONDS)
-    except TimeoutError:
-        logger.exception('Initial MCP runtime state synchronization exceeded %.1f seconds', _INITIAL_RUNTIME_STATE_SYNC_TIMEOUT_SECONDS)
-        raise
-    logger.info('Initial MCP runtime state synchronization completed')
-    downstream_coordinator = getattr(context.mcp, 'downstream_mcp_discovery_coordinator', None)
-    group_permission_change_synchronizer = None
-    if context.group_permission_runtime_state is not None:
-        group_permission_change_synchronizer = create_group_permission_change_synchronizer(context, api_base_url, GROUP_PERMISSION_CHANGE_POLL_INTERVAL_SECONDS, GROUP_PERMISSION_CHANGE_POLL_BATCH_LIMIT)
-    return (create_connector_publication_synchronizer(synchronizer_options, api_base_url, runtime_synchronizer, downstream_coordinator), create_connector_runtime_state_change_synchronizer(synchronizer_options, api_base_url, runtime_synchronizer, downstream_coordinator), create_connector_tool_change_synchronizer(context, api_base_url, tool_synchronizer), create_capability_description_override_synchronizer(synchronizer_options, api_base_url), group_permission_change_synchronizer)
+def _create_runtime_projection_synchronizer(context: PublicAppRuntimeContext) -> RuntimeProjectionSynchronizer:
+    transport = context.settings.mcp.messaging_transport if context.api_base_url is not None else 'sql'
+    adapters = McpMessagingAdapterFactory(transport, context.api_base_url or '', context.persistence_runtime.database)
+    health = context.mcp.runtime_projection_health
+
+    async def reconcile() -> None:
+        await context.mcp.downstream_mcp_discovery_coordinator.reconcile_native_capabilities()
+        await reconcile_openapi_discovery(context.mcp)
+        if context.settings.mcp.messaging_transport == 'http' and context.api_base_url is not None:
+            options = runtime_state_synchronizer_options(context)
+            if options is None:
+                raise ValueError('HTTP runtime synchronization requires source options')
+            await create_connector_runtime_state_synchronizer(options).sync_all()
+            tool_synchronizer = ConnectorToolRuntimeStateSynchronizer(reader=HttpConnectorToolRuntimeStateReader(context.api_base_url), store=context.connector_tool_runtime_state_store, reconciler=context.mcp.connector_tool_registry)
+            for mapping in context.connector_runtime.connector_tool_mappings:
+                await tool_synchronizer.sync_runtime_state(ConnectorToolRef(mapping.connector_id, mapping.operation_name))
+        if transport == 'sql':
+            for mapping in context.connector_runtime.connector_tool_mappings:
+                ref = CapabilityRef(connector_kind='native', connector_id=mapping.connector_id, capability_kind='tool', capability_key=mapping.operation_name)
+                status = await context.mcp.capability_activation_store.get_status(ref)
+                state = ConnectorToolRuntimeState(key=ConnectorToolRef(mapping.connector_id, mapping.operation_name), status='enabled' if status == ActivationStatus.ENABLED else 'disabled')
+                context.connector_tool_runtime_state_store.save_runtime_state(state)
+        tool_registry = getattr(context.mcp, 'connector_tool_registry', None)
+        if tool_registry is not None:
+            await tool_registry.reconcile_all()
+        for registry in (getattr(context.mcp, 'connector_prompt_registry', None), getattr(context.mcp, 'connector_resource_registry', None)):
+            if registry is not None:
+                await registry.reconcile_all()
+        if context.group_permission_runtime_state is not None:
+            await create_group_permission_runtime_synchronizer(context, context.api_base_url or '').sync_group_permissions()
+        notifier = tool_registry.client_notifier if tool_registry is not None else context.mcp.capability_list_change_notifier
+        notifier.notify_tool_list_changed()
+        notifier.notify_prompt_list_changed()
+        notifier.notify_resource_list_changed()
+
+    return RuntimeProjectionSynchronizer(adapters.create_projection_reader(), adapters.create_checkpoint_store(), reconcile, health, interval_seconds=1.0, batch_limit=100)
+
+
+async def _initialize_runtime_projection(context: PublicAppRuntimeContext) -> RuntimeProjectionSynchronizer:
+    if isinstance(context.source_strategy, LocalConnectorRuntimeStateSourceStrategy):
+        options = runtime_state_synchronizer_options(context)
+        if options is None:
+            raise ValueError('Local native synchronization requires target stores')
+        await create_connector_runtime_state_synchronizer(options).sync_all()
+    synchronizer = _create_runtime_projection_synchronizer(context)
+    await asyncio.wait_for(synchronizer.bootstrap(), timeout=_INITIAL_RUNTIME_STATE_SYNC_TIMEOUT_SECONDS)
+    return synchronizer
 
 def api_base_url_from_settings(settings: MCPAppSettings) -> str | None:
     private_api_base_url = settings.endpoints.private_api_base_url.strip()
@@ -532,26 +529,3 @@ def api_base_url_from_settings(settings: MCPAppSettings) -> str | None:
         return private_api_base_url
     api_base_url = settings.endpoints.api_base_url.strip()
     return api_base_url or None
-
-async def _sync_initial_public_runtime_states(context: PublicAppRuntimeContext, api_base_url: str, runtime_state_synchronizer: ConnectorRuntimeStateSynchronizer, tool_runtime_state_synchronizer: ConnectorToolRuntimeStateSynchronizer) -> None:
-    attempt = 1
-    while True:
-        try:
-            logger.info('Connector runtime state synchronization started')
-            await runtime_state_synchronizer.sync_all()
-            logger.info('Connector runtime state synchronization completed')
-            logger.info('Connector tool runtime state synchronization started')
-            for mapping in context.connector_runtime.connector_tool_mappings:
-                tool_ref = ConnectorToolRef(connector_id=mapping.connector_id, operation_name=mapping.operation_name)
-                await tool_runtime_state_synchronizer.sync_runtime_state(tool_ref)
-            logger.info('Connector tool runtime state synchronization completed')
-            if context.group_permission_runtime_state is not None:
-                group_permission_synchronizer = create_group_permission_runtime_synchronizer(context, api_base_url)
-                logger.info('Group permission synchronization started')
-                await group_permission_synchronizer.sync_group_permissions()
-                logger.info('Group permission synchronization completed')
-            return
-        except URLError as error:
-            logger.warning('Initial MCP runtime state synchronization failed on attempt %s; retrying in %.1f seconds: %s', attempt, _STARTUP_SYNC_RETRY_DELAY_SECONDS, error)
-            attempt += 1
-            await asyncio.sleep(_STARTUP_SYNC_RETRY_DELAY_SECONDS)

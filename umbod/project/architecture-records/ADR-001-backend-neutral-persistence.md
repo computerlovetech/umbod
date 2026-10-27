@@ -24,6 +24,10 @@ Bounded contexts own their neutral store ports, schemas, codecs, and services. T
 
 [ADR-006](ADR-006-filesystem-infrastructure-boundary.md) extends infrastructure placement to concrete filesystem content drivers and their configuration/composition boundary. Its database amendment places namespace/ownership/grant schemas and database-neutral stores in core, over this ADR's shared Database port and existing drivers. It preserves persistence runtime ownership and inward dependency rules; it does not create a separate filesystem database runtime, move domain services into infrastructure, or broaden infrastructure to arbitrary connector adapters.
 
+### Related runtime read-model extension
+
+[ADR-008](ADR-008-event-synchronized-tool-runtime.md) establishes application-scoped, concurrency-safe tool-runtime projections loaded from this ADR's shared persistence runtime and synchronized through messaging. It extends the application-lifetime rule to those derived read models without changing persistence ownership or allowing caller-bound services, credentials or authorization decisions to become shared runtime state. Discovery reads the runtime projection; authoritative execution checks remain operation-scoped.
+
 ### Target module structure
 
 ```text
@@ -192,7 +196,7 @@ Arrows represent allowed compile-time or composition dependencies. Dashed `imple
 2. Lifespan readiness and request-time readiness fallback use the same runtime instance.
 3. Backend configuration is consumed only by `ConfiguredPersistenceRuntimeProvider` at the outer composition boundary.
 4. Routes, MCP tools, handlers, repositories, and application services receive neutral ports or bounded-context services.
-5. Request operation objects remain request-scoped. Only concurrency-safe persistence infrastructure and stateless store services may be application-scoped.
+5. Request operation objects remain request-scoped. Concurrency-safe persistence infrastructure and stateless store services may be application-scoped. ADR-008 additionally permits concurrency-safe, event-synchronized tool-runtime read models at application scope; these must not retain caller-bound operation objects, credentials or final authorization decisions.
 6. Store constructors accept `Database`; they do not accept paths, backend names, or backend configuration.
 7. In-memory stores never create an implicit `InMemoryDatabase` in production composition.
 8. SQLite stores never create an implicit `SQLiteDatabase` from a path.

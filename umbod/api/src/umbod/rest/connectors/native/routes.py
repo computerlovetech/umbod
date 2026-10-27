@@ -16,9 +16,6 @@ from umbod.core.connectors.native.models import ConnectorConfigurationCheckResul
 from umbod.core.invocation import (
     ConnectorInvocationPolicyStore,
 )
-from umbod.core.activation.events import connector_capability_activation_changed_event
-from umbod.core.configuration.events import connector_configuration_changed_event
-from umbod.core.publishing.events import connector_publication_changed_event
 from umbod.core.publishing import ConnectorPublishingStore
 from umbod.core.invocation.tools.configuration import AlwaysPublishActivationEvents
 from umbod.core.invocation.tools.configuration_mutation import ConnectorToolConfigurationMutationPort
@@ -170,10 +167,6 @@ async def put_connector_publication(
     if validation_error is not None:
         return validation_error
     await dependencies.publishing_store.publish_connector(connector_id)
-    if dependencies.event_stream is not None:
-        await dependencies.event_stream.append(
-            connector_publication_changed_event(connector_id, "published")
-        )
     return ConnectorPublicationResponse(connector_id=connector_id, publication_status="published")
 
 
@@ -182,10 +175,6 @@ async def delete_connector_publication(
     connector_id: str,
     connector_registry: Annotated[ConnectorRegistry, Depends(get_connector_registry)],
     publishing_store: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)],
-    event_stream: Annotated[
-        EventStream | None,
-        Depends(get_connector_event_stream),
-    ],
 ) -> ConnectorPublicationResponse:
     if (
         connector_registry.get_connector_definition(
@@ -195,8 +184,6 @@ async def delete_connector_publication(
     ):
         raise HTTPException(status_code=404, detail="Connector is not available for publication")
     await publishing_store.unpublish_connector(connector_id)
-    if event_stream is not None:
-        await event_stream.append(connector_publication_changed_event(connector_id, "unpublished"))
     return ConnectorPublicationResponse(connector_id=connector_id, publication_status="unpublished")
 
 
@@ -247,10 +234,6 @@ async def put_connector_prompt_activations(
     connector_id: str,
     request: ConnectorPromptActivationBatchRequest,
     activation_port: Annotated[ActivationPort, Depends(get_capability_activation_port)],
-    event_stream: Annotated[
-        EventStream | None,
-        Depends(get_connector_event_stream),
-    ],
 ) -> ConnectorPromptActivationBatchResponse:
     known = {
         state.ref.capability_key
@@ -276,16 +259,6 @@ async def put_connector_prompt_activations(
     )
     if batch.failure is not None:
         raise HTTPException(status_code=404, detail=batch.failure.message)
-    if event_stream is not None:
-        for state in batch.changed_states:
-            await event_stream.append(
-                connector_capability_activation_changed_event(
-                    state.ref.connector_kind,
-                    state.ref.connector_id,
-                    state.ref.capability_kind,
-                    state.ref.capability_key,
-                )
-            )
     return ConnectorPromptActivationBatchResponse(
         connector_id=connector_id,
         prompts=[
@@ -349,10 +322,6 @@ async def put_connector_resource_activations(
     connector_id: str,
     request: ConnectorResourceActivationBatchRequest,
     activation_port: Annotated[ActivationPort, Depends(get_capability_activation_port)],
-    event_stream: Annotated[
-        EventStream | None,
-        Depends(get_connector_event_stream),
-    ],
 ) -> ConnectorResourceActivationBatchResponse:
     known = {
         ("resource", state.ref.capability_key)
@@ -383,16 +352,6 @@ async def put_connector_resource_activations(
     )
     if batch.failure is not None:
         raise HTTPException(status_code=404, detail=batch.failure.message)
-    if event_stream is not None:
-        for state in batch.changed_states:
-            await event_stream.append(
-                connector_capability_activation_changed_event(
-                    state.ref.connector_kind,
-                    state.ref.connector_id,
-                    state.ref.capability_kind,
-                    state.ref.capability_key,
-                )
-            )
     return ConnectorResourceActivationBatchResponse(
         connector_id=connector_id,
         resources=[
@@ -516,8 +475,6 @@ async def put_connector_configuration(
         )
     except ValidationError as error:
         raise HTTPException(status_code=422, detail=error.errors(include_input=False)) from error
-    if dependencies.event_stream is not None:
-        await dependencies.event_stream.append(connector_configuration_changed_event(connector_id))
     masked_configuration = masked_configuration_dump(configuration)
     return ConnectorConfigurationSaveResponse(
         connector_id=connector_id,

@@ -1,3 +1,4 @@
+from umbod.mcp.connectors.openapi.discovery_runtime import reconcile_openapi_discovery
 from umbod.core.activation import CAPABILITY_ACTIVATION_STATE_TABLE
 from umbod.core.connectors.openapi.stores import CATALOG_OPERATION_TABLE, CATALOG_SOURCE_TABLE, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, OpenApiConnectorStoreService
 from umbod.core.permissions.factories import create_group_permission_store
@@ -186,6 +187,7 @@ async def test_admin_to_codemode_execution_enforces_live_sqlite_state(tmp_path: 
         assert result == {'status': 'success', 'code': None, 'message': 'OpenAPI capability executed.', 'http_status': 200, 'content_type': 'application/json', 'response_size_bytes': 4096, 'truncated': True}
         assert outbound_factory.client.requests == [('GET', 'https://api.example.test/items/safe-item?filter=raw-request-canary', {'headers': {'x-trace': 'secret-canary', 'Authorization': 'Bearer runtime-token'}, 'timeout': settings.openapi_connectors.execution_read_timeout_seconds, 'follow_redirects': False})]
         assert admin.put(activation_path, json=disabled_activation).status_code == 200
+        await reconcile_openapi_discovery(mcp)
         targets = admin.get('/api/admin/mcp-permissions/assignable-targets').json()
         assert (connector_id, 'getItem') not in {(item['connector_id'], item['capability_key']) for item in targets['capabilities']}
         unavailable_tools = await client.list_tools()
@@ -198,6 +200,7 @@ async def test_admin_to_codemode_execution_enforces_live_sqlite_state(tmp_path: 
         assert len(outbound_factory.client.requests) == 1
         assert (await permissions.list_group_permissions('engineering')).tools == (operation,)
         assert admin.put(activation_path, json=enabled_activation).status_code == 200
+        await reconcile_openapi_discovery(mcp)
         await permissions.update_group_permissions(UpdateGroupPermissionsRequest(group_id='engineering', connectors=(), capabilities=(ToolPermissionUpdate(operation, 'disabled').as_capability_update(),)))
         denied = await client.call_tool('execute_code', {'code': code})
         assert denied.structured_content['final_value']['code'] == 'capability_unavailable'
@@ -206,12 +209,14 @@ async def test_admin_to_codemode_execution_enforces_live_sqlite_state(tmp_path: 
         connector_authorized = await client.call_tool('search_tools', {'query': 'inventory'})
         assert len(connector_authorized.structured_content['matches']) == 1
         assert admin.put(activation_path, json=disabled_activation).status_code == 200
+        await reconcile_openapi_discovery(mcp)
         connector_disabled = await client.call_tool('search_tools', {'query': 'inventory'})
         assert connector_disabled.structured_content['matches'] == []
         disabled_execution = await client.call_tool('execute_code', {'code': code})
         assert disabled_execution.structured_content['final_value']['code'] == 'capability_unavailable'
         assert len(outbound_factory.client.requests) == 1
         assert admin.put(activation_path, json=enabled_activation).status_code == 200
+        await reconcile_openapi_discovery(mcp)
         assert (await permissions.update_group_permissions(UpdateGroupPermissionsRequest(group_id='engineering', connectors=(ConnectorPermissionUpdate(connector_id, 'disabled'),), capabilities=()))).status == 'applied'
         revoked_tools = await client.list_tools()
         revoked_description = next((tool.description for tool in revoked_tools if tool.name == 'search_tools'))

@@ -1,3 +1,4 @@
+from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryStores, create_downstream_discovery_runtime
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
 from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
 from tests.umbod.core.downstream_mcp_connectors.personal_caller_support import captured_personal_caller
@@ -52,10 +53,12 @@ class ApprovalMutation:
         await self._mutation()
 
 
-def provider_for(execution: ExecutionCase, policy: ConnectorInvocationPolicy, log: Callable[[McpToolInvocationCompleted], None], metrics_recorder: Optional[InMemoryMcpMetricsRecorder]=None) -> ConnectorAwareDownstreamMcpToolProvider:
+async def provider_for(execution: ExecutionCase, policy: ConnectorInvocationPolicy, log: Callable[[McpToolInvocationCompleted], None], metrics_recorder: Optional[InMemoryMcpMetricsRecorder]=None) -> ConnectorAwareDownstreamMcpToolProvider:
     stores = execution.case.bundle
     signals = invocation_signals(metrics_recorder or InMemoryMcpMetricsRecorder(), log)
-    return ConnectorAwareDownstreamMcpToolProvider(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=RejectingDownstreamFactory(), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope="", capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, policy), personal_runtime=execution.runtime)
+    discovery_runtime = create_downstream_discovery_runtime(DownstreamDiscoveryStores(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, descriptions=SystemConnectorCapabilityDescriptionOverrideStore()))
+    await discovery_runtime.reconcile()
+    return ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=RejectingDownstreamFactory(), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope="", signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, policy), personal_runtime=execution.runtime)
 
 
 @pytest.mark.asyncio
@@ -64,7 +67,7 @@ async def test_listing_personal_tools_does_not_expose_metric_identities(runtime_
     execution = await execution_case(runtime_case)
     metrics = InMemoryMcpMetricsRecorder()
     log = InvocationLog()
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), log, metrics)
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), log, metrics)
     await provider.native_capability_projection()
     assert metrics.metric_samples() == ()
     token = set_request_connector_scope(connector_scope)
@@ -83,7 +86,7 @@ async def test_listing_personal_tools_does_not_expose_metric_identities(runtime_
 async def test_personal_invocation_initializes_only_invoked_metric_identity(runtime_case: RuntimeCase, connector_scope: str) -> None:
     execution = await execution_case(runtime_case)
     metrics = InMemoryMcpMetricsRecorder()
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog(), metrics)
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog(), metrics)
     token = set_request_connector_scope(connector_scope)
     tool_name = "read" if connector_scope else "Personal_read"
     try:
@@ -121,7 +124,7 @@ async def test_personal_exposure_modes_share_approval_and_telemetry(runtime_case
     log = InvocationLog()
     payload = {"content": [{"type": "text", "text": "unchanged"}], "structuredContent": {"owner": "owner"}, "_meta": {"vendor": {"trace": ["unchanged"]}}}
     execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result=payload)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), log)
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), log)
     public = FastMCP("personal", providers=[provider])
     if exposure == "gateway":
         @public.tool(name="execute_personal")
@@ -160,12 +163,13 @@ async def test_shared_and_personal_listing_preserve_same_descriptor_without_trus
     execution.transport.inventories[runtime_case.query.key] = PersonalToolInventory(tools=(tool,))
     await PersonalToolDiscoveryService(runtime_case.store, runtime_case.bundle.personal_tool_access, execution.transport, lambda: runtime_case.query.now).discover(runtime_case.query)
     personal_policy = RecordingInvocationPolicy([])
-    personal = provider_for(execution, personal_policy, InvocationLog())
+    personal = await provider_for(execution, personal_policy, InvocationLog())
     shared_policy = RecordingInvocationPolicy([])
     shared, factory, _, _, catalogs = await _provider({"weather": _downstream()}, invocation_policy=shared_policy)
     snapshot = (await catalogs.get(ConnectorIdQuery(connector_id="weather"))).snapshot
     shared_tool = tool.model_copy(update={"identity": tool.identity.model_copy(update={"connector_id": "weather", "downstream_name": "forecast"})})
     await catalogs.replace(ReplaceToolCatalog(snapshot=snapshot.model_copy(update={"tools": (shared_tool,)})))
+    await shared.reconcile_runtime()
     async with Client(FastMCP("shared", providers=[shared])) as client:
         shared_descriptor = (await client.list_tools())[0].model_dump(mode="json", exclude={"name"})
         assert factory.created == []
@@ -191,7 +195,7 @@ async def test_held_personal_tool_resolves_new_owner_after_approval(runtime_case
         execution.contexts.contexts[:] = [captured_personal_caller(CanonicalPrincipal(namespace="trusted", subject="other"), ("team",))]
 
     policy = ApprovalMutation(switch_owner)
-    provider = provider_for(execution, policy, InvocationLog())
+    provider = await provider_for(execution, policy, InvocationLog())
     held = await provider.get_tool("Personal_read")
     assert isinstance(held, AuthorizedPersonalTool)
     result = await held.run({"value": "same"})
@@ -221,7 +225,7 @@ async def test_authority_withdrawn_during_approval_prevents_call(runtime_case: R
                 await session.delete(CONNECTOR_PERMISSION_TABLE, DeleteQuery(NoFilter()))
 
     policy = ApprovalMutation(revoke)
-    held = await provider_for(execution, policy, InvocationLog()).get_tool("Personal_read")
+    held = await (await provider_for(execution, policy, InvocationLog())).get_tool("Personal_read")
     result = await held.run({"value": "same"})
     assert result.is_error
     assert execution.transport.calls == []
@@ -230,7 +234,7 @@ async def test_authority_withdrawn_during_approval_prevents_call(runtime_case: R
 @pytest.mark.asyncio
 async def test_authoritative_component_type_ignores_cached_allow_and_deny(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     held = await provider.get_tool("Personal_read")
     clone = held.model_copy()
     assert isinstance(clone, AuthorizedPersonalTool)
@@ -242,7 +246,7 @@ async def test_authoritative_component_type_ignores_cached_allow_and_deny(runtim
 @pytest.mark.asyncio
 async def test_connector_scope_prevents_personal_cross_connector_dispatch(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     token = set_request_connector_scope("other")
     try:
         assert await provider.list_tools() == []

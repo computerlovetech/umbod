@@ -1,5 +1,8 @@
 from datetime import UTC, datetime
 
+from umbod.core.configuration.events import connector_configuration_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
+
 from umbod.core.configuration.models import EncryptedConnectorConfiguration
 from umbod.core.configuration.persistence.stores.schema import (
     CONNECTOR_CONFIGURATION_CONNECTOR_ID,
@@ -37,7 +40,7 @@ class EncryptedConnectorConfigurationStoreService:
             ciphertext=configuration.ciphertext,
             updated_at=_updated_at(),
         )
-        async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
+        async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
             await session.upsert(
                 self._connector_configurations,
                 UpsertCommand(
@@ -45,6 +48,7 @@ class EncryptedConnectorConfigurationStoreService:
                     row=record,
                 ),
             )
+            await append_event_in_session(session, connector_configuration_changed_event(configuration.connector_id))
 
     async def get_encrypted_configuration(
         self, connector_id: str
@@ -78,11 +82,12 @@ class EncryptedConnectorConfigurationStoreService:
         return 1 if result is not None else 0
 
     async def delete_encrypted_configuration(self, connector_id: str) -> None:
-        async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
+        async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
             await session.delete(
                 self._connector_configurations,
                 DeleteQuery(Equals(CONNECTOR_CONFIGURATION_CONNECTOR_ID, connector_id)),
             )
+            await append_event_in_session(session, connector_configuration_changed_event(connector_id))
 
 
 def _updated_at() -> str:

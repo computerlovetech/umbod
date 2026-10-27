@@ -7,6 +7,7 @@ from umbod.core.connectors.downstream_mcp.models import DiscoveredTool
 
 
 def tool_descriptor_options(catalog: DiscoveredTool) -> dict[str, Any]:
+    catalog = catalog.model_copy(deep=True)
     descriptor = McpTool(
         name=catalog.identity.downstream_name,
         title=catalog.title,

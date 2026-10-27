@@ -1,3 +1,4 @@
+from tests.support.native_tool_states import enabled_native_tool_states
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -117,7 +118,7 @@ async def test_actual_runtime_rejects_gateway_collisions_without_disabling_unrel
 ) -> None:
     execution = await execution_case(runtime_case)
     await _shared_collision(runtime_case.bundle, runtime_case.query.now)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     runtime = create_inmemory_runtime()
     configurations = InMemoryConnectorCurrentConfigurationStore()
     publishing = ConnectorPublishingStoreService(runtime.database, PUBLICATION_STATE_TABLE)
@@ -146,6 +147,9 @@ async def test_actual_runtime_rejects_gateway_collisions_without_disabling_unrel
         connector_configuration_store=configurations,
         connector_publishing_store=publishing,
         connector_tool_mappings=mappings,
+        connector_tool_runtime_state_store=enabled_native_tool_states(
+            *((mapping.connector_id, mapping.operation_name) for mapping in mappings)
+        ),
         connector_tool_exposure_mode=mode,
     )
     if mode == "flat":

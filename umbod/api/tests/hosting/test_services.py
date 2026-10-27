@@ -99,11 +99,9 @@ def test_fresh_process_uvicorn_serves_mcp_public_health(tmp_path: Path) -> None:
     program = '''
 import asyncio
 import socket
-from unittest.mock import AsyncMock
 import httpx
 import uvicorn
 import umbod.config
-from umbod.mcp import public_app
 
 async def verify() -> None:
     settings = umbod.config.AppConfig.model_validate({
@@ -111,7 +109,6 @@ async def verify() -> None:
         "connector_store": {"type": "sqlite", "sqlite_path": "backend.sqlite3"},
     })
     umbod.config.load_server_app_config = lambda path: settings
-    public_app._create_public_polling_synchronizers = AsyncMock(return_value=(None,) * 5)
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         listener.listen(128)

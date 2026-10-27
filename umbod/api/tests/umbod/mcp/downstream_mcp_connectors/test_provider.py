@@ -1,3 +1,4 @@
+from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryStores, create_downstream_discovery_runtime
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import McpSignals, SignalToolExecutionPipelineFactory
 from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
@@ -89,7 +90,9 @@ async def _provider(servers: dict[str, FastMCP], options: ProviderOptions=Provid
         await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="resource", capability_key=f'data://{connector_id}/weather'), ActivationStatus.ENABLED)
         await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=connector_id, capability_kind="resource_template", capability_key=f'data://{connector_id}/{{city}}'), ActivationStatus.ENABLED)
     signals = options.signals or invocation_signals(metrics_recorder or InMemoryMcpMetricsRecorder())
-    return (ConnectorAwareDownstreamMcpToolProvider(personal_runtime=personal_runtime or DisabledPersonalToolRuntime(), definitions=definitions, credentials=credentials, catalogs=catalogs, publishing=publishing, activations=activations, client_factory=factory, permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', capability_description_overrides=SystemConnectorCapabilityDescriptionOverrideStore(), signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, invocation_policy)), factory, publishing, activations, catalogs)
+    discovery_runtime = create_downstream_discovery_runtime(DownstreamDiscoveryStores(definitions=definitions, credentials=credentials, catalogs=catalogs, publishing=publishing, activations=activations, descriptions=SystemConnectorCapabilityDescriptionOverrideStore()))
+    await discovery_runtime.reconcile()
+    return (ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_runtime=personal_runtime or DisabledPersonalToolRuntime(), definitions=definitions, credentials=credentials, catalogs=catalogs, publishing=publishing, activations=activations, client_factory=factory, permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, invocation_policy)), factory, publishing, activations, catalogs)
 
 def _downstream(calls: list[str] | None=None, *, is_error: bool=False) -> FastMCP:
     server = FastMCP('downstream')
@@ -320,6 +323,7 @@ async def test_prompt_and_resources_require_publication_and_activation(monkeypat
     await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id='weather', capability_kind="prompt", capability_key='weather_prompt'), ActivationStatus.DISABLED)
     await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id='weather', capability_kind="resource", capability_key='data://weather/weather'), ActivationStatus.DISABLED)
     await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id='weather', capability_kind="resource_template", capability_key='data://weather/{city}'), ActivationStatus.DISABLED)
+    await provider.reconcile_runtime()
     public = FastMCP('public', providers=[provider])
     async with Client(public) as client:
         assert await client.list_prompts() == []
@@ -328,10 +332,12 @@ async def test_prompt_and_resources_require_publication_and_activation(monkeypat
         await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id='weather', capability_kind="prompt", capability_key='weather_prompt'), ActivationStatus.ENABLED)
         await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id='weather', capability_kind="resource", capability_key='data://weather/weather'), ActivationStatus.ENABLED)
         await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id='weather', capability_kind="resource_template", capability_key='data://weather/{city}'), ActivationStatus.ENABLED)
+        await provider.reconcile_runtime()
         assert [prompt.name for prompt in await client.list_prompts()] == ['weather_weather_prompt']
         assert len(await client.list_resources()) == 1
         assert len(await client.list_resource_templates()) == 1
         await publishing.unpublish_connector('weather')
+        await provider.reconcile_runtime()
         assert await client.list_prompts() == []
         assert await client.list_resources() == []
         assert await client.list_resource_templates() == []
@@ -358,6 +364,7 @@ async def test_resource_collisions_withhold_every_owner_and_leave_unrelated_capa
         assert isinstance(result, ToolCatalogFound)
         snapshot = result.snapshot
         await catalogs.replace(ReplaceToolCatalog(snapshot=snapshot.model_copy(update={'resources': (snapshot.resources[0].model_copy(update={'uri': 'data://shared'}),)})))
+    await provider.reconcile_runtime()
     resources = await provider.list_resources()
     templates = await provider.list_resource_templates()
     assert resources == []
@@ -387,6 +394,9 @@ async def test_stale_tool_rechecks_publication_activation_and_catalog() -> None:
         await provider.execute_tool('weather_forecast', {'city': 'Copenhagen'})
     await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id='weather', capability_kind="tool", capability_key='forecast'), ActivationStatus.ENABLED)
     await catalogs.delete(ConnectorIdQuery(connector_id='weather'))
+    with pytest.raises(Exception, match='not available'):
+        await provider.execute_tool('weather_forecast', {'city': 'Copenhagen'})
+    await provider.reconcile_runtime()
     with pytest.raises(Exception, match='Unknown tool'):
         await provider.execute_tool('weather_forecast', {'city': 'Copenhagen'})
 

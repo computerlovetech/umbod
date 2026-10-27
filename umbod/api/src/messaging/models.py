@@ -5,6 +5,7 @@ from pydantic import ConfigDict, Field
 from messaging.proxies import Model
 
 MessagingEventType = Literal[
+    "connector.discovery.changed",
     "connector.publication.changed",
     "connector.configuration.changed",
     "connector.capability_activation.changed",

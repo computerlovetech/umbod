@@ -1,4 +1,5 @@
 import json
+from umbod.core.connectors.downstream_mcp.stores.discovery_generation import advance_discovery_generation
 from pydantic import SecretStr
 
 from umbod.core.configuration.persistence import TextCipher
@@ -51,6 +52,7 @@ async def save_credential(
             ),
         ),
     )
+    await advance_discovery_generation(session, credential.connector_id)
     return CredentialFound(credential=credential)
 
 
@@ -116,6 +118,7 @@ class EncryptedCredentialStoreService:
                 self._table,
                 DeleteQuery(Equals(CONNECTOR_CREDENTIAL_CONNECTOR_ID, command.connector_id)),
             )
+            await advance_discovery_generation(session, command.connector_id)
         if row is None:
             return CredentialMissing(connector_id=command.connector_id)
         return CredentialFound(

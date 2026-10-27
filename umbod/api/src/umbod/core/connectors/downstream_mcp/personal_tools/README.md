@@ -1,10 +1,12 @@
 # Personal tools
 
 - `models.py`: legacy administrator policy metadata, validated version-2 complete private inventories, explicit missing/present inventory revisions, public records and typed invocation/admission commands.
-- `ports.py`: contract/access storage and tools-only runtime interfaces. Captured caller values and the deferred MCP caller port live in `../personal_connections/caller.py`.
+- `ports.py`: contract/access storage, list-only personal-definition enumeration and tools-only runtime interfaces. The MCP host supplies enumeration from its initialized runtime projection; owner availability and execution admission still read authoritative state. Captured caller values and the deferred MCP caller port live in `../personal_connections/caller.py`.
 - `schema_validation.py` and `contract_validation.py`: bounded offline local-reference validation, live-session safety fingerprints and private input/output validation.
 - `service.py`: explicit owner discovery captures the private inventory revision before provider I/O and saves the complete encrypted inventory through compare-and-swap without publication, global catalogue writes or invocation. Legacy match-only observations require explicit rediscovery; failed and cancelled discovery preserve the previous inventory.
 - `runtime.py`: disabled runtime and admitted execution from a captured personal caller value only. Listing rereads current owner availability without network access. The MCP boundary captures current callers after invocation approval and constructs operation-local services. Execution admits the captured inventory revision/fingerprint, validates input, calls the dedicated transport once and validates structured output. Missing structured output is rejected when the discovered output schema requires it.
+
+`../stores/personal_tool_policies.py` owns legacy metadata and catalog projection transactions, including durable configuration, changed-tool activation and returned revoked-grant events. REST delegates through the policy port without appending events after commit. Failed event persistence rolls back policy and projection changes. This event ownership does not change private inventory or execution authority.
 
 Personal tool eligibility depends on current published server approval, verified connector-group membership, owner enablement, valid owner OAuth and the eligible private inventory. Administrator per-tool policy, activation and tool grants do not authorize or restrict personal execution. Policy edits retain private inventories. Shared and native policy remain independent.
 

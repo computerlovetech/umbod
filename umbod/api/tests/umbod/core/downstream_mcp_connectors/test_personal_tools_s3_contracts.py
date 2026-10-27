@@ -374,17 +374,13 @@ async def test_personal_publication_checks_approved_names_but_allows_catalogue_f
     from umbod.core.connectors.downstream_mcp.management.queries import DownstreamConnectorQueries
     from umbod.core.connectors.downstream_mcp.publishing.service import DownstreamConnectorPublisher
 
-    class Events:
-        async def append(self, event: object) -> None:
-            pass
-
     class NativeIdentities:
         async def identities(self) -> tuple[PublicToolIdentity, ...]:
             return (PublicToolIdentity(connector_id="native", tool_name_prefix="Personal", operation_name="read"),)
 
     bundle = runtime_case.bundle
     queries = DownstreamConnectorQueries(bundle.definitions, bundle.credentials, bundle.catalogs, bundle.health, bundle.publishing)
-    publisher = DownstreamConnectorPublisher(bundle.publishing, Events(), queries, bundle.unit_of_work, NativeIdentities())
+    publisher = DownstreamConnectorPublisher(bundle.publishing, queries, bundle.unit_of_work, NativeIdentities())
     await bundle.publishing.unpublish_connector("personal")
     await publisher.publish("personal")
     assert await bundle.publishing.is_published("personal")
@@ -410,7 +406,9 @@ async def test_detached_inmemory_unit_of_work_snapshots_personal_tool_stores(run
         if phase == "definition":
             raise RuntimeError("injected")
 
-    unit_of_work = InMemoryDownstreamConnectorUnitOfWork(bundle.definitions, bundle.credentials, bundle.catalogs, bundle.health, bundle.activations, bundle.publishing, fail, bundle.personal_connections, bundle.personal_oauth_configurations, bundle.personal_tool_policies, bundle.personal_tool_access)
+    from umbod.core.messaging.stores.event_stream import DatabaseEventStream
+
+    unit_of_work = InMemoryDownstreamConnectorUnitOfWork(bundle.definitions, bundle.credentials, bundle.catalogs, bundle.health, bundle.activations, bundle.publishing, fail, bundle.personal_connections, bundle.personal_oauth_configurations, bundle.personal_tool_policies, bundle.personal_tool_access, DatabaseEventStream(runtime_case.database))
     with pytest.raises(RuntimeError, match="injected"):
         await unit_of_work.delete(DeleteDownstreamConnectorAggregate(connector_id="personal"))
     assert await bundle.personal_tool_policies.get(ConnectorIdQuery(connector_id="personal")) == policy

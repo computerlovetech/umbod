@@ -1,3 +1,5 @@
+from umbod.core.permissions.factories import create_group_permission_store
+from umbod.core.permissions.domain import ConnectorCapabilityRef, SaveGroupPermissionsRequest
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
 from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
@@ -73,6 +75,9 @@ async def _build_public_app(tmp_path: Path, exposure_mode: Literal['flat', 'gate
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
     await persistence_runtime.readiness.ensure_ready()
     activation_store = await create_capability_activation_store(persistence_runtime.database)
+    await activation_store.set_status(CapabilityRef('native', 'echo', 'tool', 'echo_message'), ActivationStatus.ENABLED)
+    permission_store = await create_group_permission_store(persistence_runtime.database)
+    await permission_store.save_group_permissions(SaveGroupPermissionsRequest(group_id='agents', connector_ids=('echo',), capabilities=(ConnectorCapabilityRef('echo', 'tool', 'echo_message'), ConnectorCapabilityRef('echo', 'prompt', 'repeat_message'), ConnectorCapabilityRef('echo', 'resource_template', 'echo://messages/{message}'))))
     await activation_store.set_status(
         CapabilityRef('native', 'echo', 'prompt', 'repeat_message'),
         ActivationStatus.ENABLED,

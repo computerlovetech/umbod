@@ -1,3 +1,6 @@
+from umbod.core.activation.events import connector_capability_activation_changed_event
+from umbod.core.invocation.events import connector_invocation_policy_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
 from umbod.core.activation import (
     CapabilityActivationState,
     CapabilityRef,
@@ -111,6 +114,14 @@ class DatabaseConnectorToolConfigurationMutationAdapter:
                         policy_revision=policy.revision if policy is not None else 0,
                     )
                 )
+            if mutation.publish_activation_events:
+                for change in changed_activations:
+                    await append_event_in_session(session, connector_capability_activation_changed_event(
+                        mutation.connector_kind, mutation.connector_id, "tool", change.operation_name,
+                    ))
+            for change, record in zip(mutation.policy_changes, records, strict=True):
+                if record.revision != change.expected_revision:
+                    await append_event_in_session(session, connector_invocation_policy_changed_event(record))
         policies = tuple(
             ConnectorToolInvocationPolicyMutationResult(
                 operation_name=record.key.operation_name,
@@ -121,6 +132,7 @@ class DatabaseConnectorToolConfigurationMutationAdapter:
             for change, record in zip(mutation.policy_changes, records, strict=True)
         )
         return ConnectorToolConfigurationMutationResult(
+            events_persisted=True,
             snapshots=tuple(snapshots),
             changed_activations=changed_activations,
             policies=policies,

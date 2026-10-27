@@ -1,3 +1,4 @@
+from tests.support.native_tool_states import enabled_native_tool_states
 from typing import Any
 
 from umbod.mcp.listeners import create_mcp_signals
@@ -57,6 +58,7 @@ async def test_codemode_registration_does_not_mutate_unrelated_tools() -> None:
         connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(),
         connector_publishing_store=InMemoryConnectorPublishingStore(),
         connector_tool_mappings=[],
+        connector_tool_runtime_state_store=enabled_native_tool_states(),
         connector_tool_exposure_mode="codemode",
     )
 

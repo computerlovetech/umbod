@@ -1,4 +1,5 @@
 from functools import partial
+from collections.abc import Awaitable, Callable
 
 import anyio
 import httpx2
@@ -123,12 +124,14 @@ class AuthorizedDownstreamTool(Tool):
 
 
 class AuthorizedDownstreamProxyTool(AuthorizedDownstreamTool):
-    def __init__(self, *, identity: McpToolIdentity, backend_tool: ProxyTool, client_factory: object, public_name: str, execution_pipeline: ToolExecutionPipeline[ToolResult]) -> None:
+    def __init__(self, *, identity: McpToolIdentity, backend_tool: ProxyTool, ensure_access: Callable[[], Awaitable[None]], public_name: str, execution_pipeline: ToolExecutionPipeline[ToolResult]) -> None:
         options = _proxy_tool_options(backend_tool)
         super().__init__(identity=identity, options=options, public_name=public_name, execution_pipeline=execution_pipeline)
         self._backend_tool = backend_tool
+        self._ensure_access = ensure_access
 
     async def _invoke_downstream(self, arguments: dict[str, Any]) -> ToolResult:
+        await self._ensure_access()
         context = get_context()
         try:
             result = await self._backend_tool.run(

@@ -22,7 +22,7 @@ async def test_duplicate_shared_and_personal_public_names_fail_closed(runtime_ca
     elif withdrawal == "publication":
         await runtime_case.bundle.publishing.unpublish_connector("personal")
     await install_shared_alias(runtime_case, True)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     for operation in (provider.list_tools(), provider.eligible_search_candidates(), provider.execute_tool("Personal_read", {"value": "same"}), provider.owns_tool("Personal_read"), provider.is_eligible("personal", "read")):
         with pytest.raises(Exception, match="public_tool_name_conflict"):
             await operation
@@ -43,7 +43,7 @@ async def install_shared_alias(runtime_case: RuntimeCase, published: bool) -> No
 async def test_unpublished_shared_draft_does_not_claim_personal_runtime_name(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
     await install_shared_alias(runtime_case, False)
-    provider = provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
     assert [tool.name for tool in await provider.list_tools()] == ["Personal_read"]
     assert await provider.owns_tool("Personal_read")
     assert not (await provider.execute_tool("Personal_read", {"value": "same"})).is_error

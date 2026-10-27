@@ -2,7 +2,6 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, Query
-from messaging.ports import EventStream
 from pydantic import Field
 
 from umbod.core.activation import (
@@ -21,7 +20,6 @@ from umbod.core.publishing import ConnectorPublishingStore
 from umbod.rest.connectors.dependencies import (
     get_capability_activation_store,
     get_connector_capability_description_override_store,
-    get_connector_event_stream,
     get_connector_publishing_store,
 )
 from umbod.rest.connectors.native.service import (
@@ -38,14 +36,12 @@ class ConnectorPublicationDependencies:
     connector_registry: ConnectorRegistry
     configuration_store: ConnectorCurrentConfigurationStore
     publishing_store: ConnectorPublishingStore
-    event_stream: EventStream | None
 
 
 @dataclass(frozen=True)
 class ConnectorConfigurationSaveDependencies:
     connector_registry: ConnectorRegistry
     store: ConnectorCurrentConfigurationStore
-    event_stream: EventStream | None
 
 
 class ActivationFilterQuery(Model):
@@ -92,13 +88,11 @@ def get_connector_publication_dependencies(
         ConnectorCurrentConfigurationStore, Depends(get_connector_current_configuration_store)
     ],
     publishing_store: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)],
-    event_stream: Annotated[EventStream | None, Depends(get_connector_event_stream)],
 ) -> ConnectorPublicationDependencies:
     return ConnectorPublicationDependencies(
         connector_registry=connector_registry,
         configuration_store=configuration_store,
         publishing_store=publishing_store,
-        event_stream=event_stream,
     )
 
 
@@ -122,8 +116,7 @@ def get_connector_configuration_save_dependencies(
     store: Annotated[
         ConnectorCurrentConfigurationStore, Depends(get_connector_current_configuration_store)
     ],
-    event_stream: Annotated[EventStream | None, Depends(get_connector_event_stream)],
 ) -> ConnectorConfigurationSaveDependencies:
     return ConnectorConfigurationSaveDependencies(
-        connector_registry=connector_registry, store=store, event_stream=event_stream
+        connector_registry=connector_registry, store=store
     )

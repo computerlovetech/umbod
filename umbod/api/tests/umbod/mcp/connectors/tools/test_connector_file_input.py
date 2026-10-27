@@ -1,3 +1,4 @@
+from tests.support.native_tool_states import enabled_native_tool_states
 import base64
 from collections.abc import Callable
 from hashlib import sha256
@@ -136,6 +137,7 @@ async def test_safe_arguments_distinguish_files_with_identical_metadata() -> Non
         connector_registrations=[connector.registration()],
         connector_configuration_store=configuration_store,
         connector_publishing_store=publishing_store,
+        connector_tool_runtime_state_store=enabled_native_tool_states(("files", "upload")),
         connector_tool_mappings=[ConcreteConnectorToolMapping(
             connector_id="files",
             operation_name="upload",

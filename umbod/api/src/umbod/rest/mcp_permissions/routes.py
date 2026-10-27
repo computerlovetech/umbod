@@ -5,9 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from umbod.rest.mcp_permissions.dependencies import (
     get_admin_group_permission_management,
     get_connector_permission_catalog,
-    get_mcp_permission_event_publisher,
 )
-from umbod.rest.mcp_permissions.events import McpPermissionEventPublisher
 from umbod.rest.mcp_permissions.mappers import (
     assignable_permission_targets_response,
     group_permission_response,
@@ -104,15 +102,8 @@ async def update_group_permissions(
     management: Annotated[
         AdminGroupPermissionManagement, Depends(get_admin_group_permission_management)
     ],
-    event_publisher: Annotated[
-        McpPermissionEventPublisher, Depends(get_mcp_permission_event_publisher)
-    ],
 ) -> PermissionChangeResponse:
-    previous_permissions = await management.list_group_permissions(group_id)
     result = await management.update_group_permissions(
         update_group_permissions_request(group_id, request)
     )
-    response = permission_change_or_not_found(result)
-    next_permissions = await management.list_group_permissions(group_id)
-    await event_publisher.publish_saved_permission_changes(previous_permissions, next_permissions)
-    return response
+    return permission_change_or_not_found(result)
