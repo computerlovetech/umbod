@@ -4,5 +4,5 @@ export interface AuthorizationWindow {
 }
 
 export interface AuthorizationBrowser {
-  reserve(): AuthorizationWindow | null;
+  reserve(displayName: string): AuthorizationWindow | null;
 }

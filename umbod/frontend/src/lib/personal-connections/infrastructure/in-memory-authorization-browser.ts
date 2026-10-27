@@ -5,6 +5,8 @@ export class InMemoryAuthorizationWindow implements AuthorizationWindow {
   closed = false;
   url = 'about:blank';
 
+  constructor(readonly displayName: string) {}
+
   navigate = (url: string): boolean => {
     if (this.closed || !authorizationUrlSchema.safeParse(url).success) return false;
     this.url = url;
@@ -19,8 +21,8 @@ export class InMemoryAuthorizationWindow implements AuthorizationWindow {
 export class InMemoryAuthorizationBrowser implements AuthorizationBrowser {
   readonly windows: InMemoryAuthorizationWindow[] = [];
 
-  reserve = (): AuthorizationWindow => {
-    const reserved = new InMemoryAuthorizationWindow();
+  reserve = (displayName: string): AuthorizationWindow => {
+    const reserved = new InMemoryAuthorizationWindow(displayName);
     this.windows.push(reserved);
     return reserved;
   };

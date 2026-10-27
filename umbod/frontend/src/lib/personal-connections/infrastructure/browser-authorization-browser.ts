@@ -1,5 +1,6 @@
 import type { AuthorizationBrowser, AuthorizationWindow } from '../authorization-browser';
 import { authorizationUrlSchema } from '../domain/schemas';
+import { renderAuthorizationLoadingScreen } from './authorization-loading-screen';
 
 class BrowserAuthorizationWindow implements AuthorizationWindow {
   constructor(private readonly popup: Window) {}
@@ -24,14 +25,21 @@ class BrowserAuthorizationWindow implements AuthorizationWindow {
 
 export function browserAuthorizationBrowser(): AuthorizationBrowser {
   return {
-    reserve: (): AuthorizationWindow | null => {
+    reserve: (displayName: string): AuthorizationWindow | null => {
       let popup: Window | null = null;
       try {
-        popup = window.open('about:blank', '_blank');
+        if (window.matchMedia('(max-width: 640px), (hover: none) and (pointer: coarse)').matches) {
+          popup = window.open('about:blank', '_blank');
+        } else {
+          const width = Math.min(520, window.screen.availWidth);
+          const height = Math.min(680, window.screen.availHeight);
+          const left = Math.round(window.screenX + Math.max(0, (window.outerWidth - width) / 2));
+          const top = Math.round(window.screenY + Math.max(0, (window.outerHeight - height) / 2));
+          popup = window.open('about:blank', '_blank', `popup=yes,width=${width},height=${height},left=${left},top=${top}`);
+        }
         if (!popup) return null;
         popup.opener = null;
-        popup.document.title = 'Opening sign-in';
-        popup.document.body.textContent = 'Opening sign-in…';
+        renderAuthorizationLoadingScreen(popup, displayName);
         return new BrowserAuthorizationWindow(popup);
       } catch {
         if (popup) new BrowserAuthorizationWindow(popup).close();

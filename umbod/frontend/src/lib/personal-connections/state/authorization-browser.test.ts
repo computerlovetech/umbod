@@ -1,3 +1,4 @@
+import { Window as TestWindow } from 'happy-dom';
 import { InMemoryAttemptScheduler } from '../infrastructure/in-memory-attempt-scheduler';
 import { describe, expect, test, vi } from 'vitest';
 import type { DashboardApi } from '$lib/dashboard/api';
@@ -28,6 +29,7 @@ describe('explicit authorization browser ownership', () => {
     const start = vi.spyOn(api.authorization, 'start').mockImplementation(() => {
       expect(memory.windows).toHaveLength(1);
       expect(memory.windows[0].url).toBe('about:blank');
+      expect(memory.windows[0].displayName).toBe(selection.display_name);
       return pending.promise;
     });
     const operation = state.start();
@@ -82,7 +84,7 @@ describe('explicit authorization browser ownership', () => {
     const reserve = (): AuthorizationWindow | null => {
       if (mode === 'blocked') return null;
       if (mode === 'reserve-error') throw new Error('Browser unavailable');
-      const reserved = memory.reserve();
+      const reserved = memory.reserve(selection.display_name);
       if (mode === 'closed') reserved.close();
       if (mode === 'failed') vi.spyOn(reserved, 'navigate').mockReturnValue(false);
       if (mode === 'throwing') vi.spyOn(reserved, 'navigate').mockImplementation(() => { throw new Error('Navigation failed'); });
@@ -171,7 +173,7 @@ describe('explicit authorization browser ownership', () => {
 
   test('detail switches retain ownership, while owner replacement closes only owned windows', async (): Promise<void> => {
     const { api, memory } = setup();
-    const unrelated = memory.reserve();
+    const unrelated = memory.reserve('Unrelated');
     const dashboardApi: DashboardApi = new InMemoryDashboardApi(catalogue);
     const page: DashboardController = new DashboardState(dashboardApi, api, memory, new InMemoryAttemptScheduler());
     await page.loadCatalogue();
@@ -198,7 +200,7 @@ describe('explicit authorization browser ownership', () => {
 describe('authorization browser adapter contract', () => {
   test.each(['http://provider.example', 'https://user:password@provider.example', 'javascript:alert(1)'])('in-memory windows reject unsafe URL %s', (url): void => {
     const browser: AuthorizationBrowser = new InMemoryAuthorizationBrowser();
-    const popup = browser.reserve();
+    const popup = browser.reserve(selection.display_name);
     expect(popup?.navigate(url)).toBe(false);
     popup?.close();
   });
@@ -207,15 +209,17 @@ describe('authorization browser adapter contract', () => {
     const browser: AuthorizationBrowser = browserAuthorizationBrowser();
     const replace = vi.fn<(url: string) => void>();
     const close = vi.fn<() => void>();
-    const popup = { opener: {}, closed: false, document: { title: '', body: { textContent: '' } }, location: { replace }, close };
+    const popup = { opener: {}, closed: false, document: new TestWindow().document, location: { replace }, close };
     const open = vi.fn<() => Window>().mockReturnValue(popup as unknown as Window);
-    vi.stubGlobal('window', { open });
+    vi.stubGlobal('window', { open, matchMedia: () => ({ matches: false }), screen: { availWidth: 1920, availHeight: 1080 }, screenX: 100, screenY: 50, outerWidth: 1200, outerHeight: 900 });
     try {
-      const reserved = browser.reserve();
-      expect(open).toHaveBeenCalledExactlyOnceWith('about:blank', '_blank');
+      expect(open).not.toHaveBeenCalled();
+      const reserved = browser.reserve(selection.display_name);
+      expect(open).toHaveBeenCalledExactlyOnceWith('about:blank', '_blank', 'popup=yes,width=520,height=680,left=440,top=160');
       expect(popup.opener).toBeNull();
-      expect(popup.document.title).toBe('Opening sign-in');
-      expect(popup.document.body.textContent).toContain('Opening sign-in');
+      expect(popup.document.title).toBe('Connecting to Calendar · Umbod');
+      expect(popup.document.body.textContent).toContain('Connecting to Calendar…');
+      expect(popup.document.querySelector('[role="status"]')).not.toBeNull();
       expect(reserved?.navigate('https://user@provider.example')).toBe(false);
       expect(replace).not.toHaveBeenCalled();
       expect(reserved?.navigate(pendingAttempt.authorization_url)).toBe(true);

@@ -48,7 +48,7 @@ export function personalAccessStatus(state: PersonalConnectionController): Acces
     const fallback = Boolean(state.authorizationUrl && !state.authorizationOpened);
     return {
       label: state.checking ? 'Checking sign-in…' : fallback ? 'Sign-in needs attention' : 'Waiting for sign-in',
-      description: fallback ? 'The sign-in tab could not be opened automatically. Continue sign-in below. Your tools will load automatically when sign-in completes.' : 'Finish signing in using the browser tab, your tools will load automatically when sign-in completes.',
+      description: fallback ? 'The sign-in window could not be opened automatically. Continue sign-in below. Your tools will load automatically when sign-in completes.' : 'Complete sign-in in the window or tab that opened. It will close automatically and your tools will load when sign-in completes.',
       tone: fallback && !state.checking ? 'warning' : 'pending', action: state.monitoring && !state.error ? null : 'check'
     };
   }

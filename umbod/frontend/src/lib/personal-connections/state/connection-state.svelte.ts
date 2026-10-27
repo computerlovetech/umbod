@@ -202,7 +202,7 @@ export class ConnectionState implements PersonalConnectionController {
 
   private reserveAuthorizationWindow = (): AuthorizationWindow | null => {
     try {
-      return this.authorizationBrowser?.reserve() ?? null;
+      return this.authorizationBrowser?.reserve(this.selection.display_name) ?? null;
     } catch {
       return null;
     }

@@ -50,7 +50,8 @@ describe('personal connections presentation', () => {
     await state.start();
     expect(state.authorizationOpened).toBe(true);
     const body = render(ConnectionCard, { props: { state, embedded: true } }).body;
-    expect(body).toContain('Finish signing in using the browser tab');
+    expect(body).toContain('Complete sign-in in the window or tab that opened');
+    expect(body).toContain('It will close automatically');
     expect(body).not.toContain('Check sign-in status');
     expect(body).toContain('Waiting for sign-in');
     expect(body).not.toContain('Continue sign-in');
