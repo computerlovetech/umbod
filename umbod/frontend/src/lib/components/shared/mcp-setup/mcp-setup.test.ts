@@ -3,7 +3,6 @@ import { describe, expect, test, vi } from 'vitest';
 import type { ClipboardWriter } from '$lib/admin/clipboard';
 import type { ToastApi } from '$lib/components/feedback/toast-state.svelte';
 import McpSetupGuide from './McpSetupGuide.svelte';
-import AdminMcpSetupGuide from '$lib/components/admin/mcp-setup/McpSetupGuide.svelte';
 import { McpSetupState, setupPrompt } from './mcp-setup-state.svelte';
 
 vi.mock('$lib/components/feedback', () => ({
@@ -28,16 +27,6 @@ describe('endpoint-driven MCP setup interface', () => {
     for (const client of ['ChatGPT', 'Claude Code', 'Claude Cowork', 'GitHub Copilot']) {
       expect(body).toContain(client);
     }
-  });
-
-  test('admin wrapper retains full setup presentation', () => {
-    const { body } = render(AdminMcpSetupGuide, { props: { mcpEndpoint: '/custom/mcp' } });
-    expect(body).toContain('Connect Umbod</h1>');
-    expect(body).toContain('Give your AI tools');
-    expect(body).toContain('Copy once, connect anywhere');
-    expect(body).toContain('After connecting, paste this prompt');
-    expect(body).not.toContain('<details');
-    expect(body).toContain('claude mcp add --transport http --scope user umbod /custom/mcp');
   });
 
   test('configuration reads the latest endpoint and escapes it as JSON', () => {

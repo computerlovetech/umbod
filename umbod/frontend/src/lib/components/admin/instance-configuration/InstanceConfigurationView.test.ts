@@ -28,7 +28,9 @@ describe('instance settings view', () => {
     expect(withoutTechnicalDetails).not.toContain('UMBOD_');
     expect(body).not.toMatch(/<(input|select|textarea)\b/);
     expect(body).not.toContain('Save');
-    for (const href of ['/admin/group-permissions/connectors', '/admin/connectors', '/admin/mcp-setup']) expect(body).toContain(`href="${href}"`);
+    for (const href of ['/admin/group-permissions/connectors', '/admin/connectors']) expect(body).toContain(`href="${href}"`);
+    expect(body).not.toContain('/admin/mcp-setup');
+    expect(body).not.toContain('MCP setup guide');
   });
 
   it('preserves the failed state and retry route', () => {

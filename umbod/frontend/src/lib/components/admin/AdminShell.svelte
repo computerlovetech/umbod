@@ -9,7 +9,6 @@
     | 'overview'
     | 'connectors'
     | 'groupPermissions'
-    | 'mcpSetup'
     | 'instanceConfiguration';
 
   type AdminShellProps = {

@@ -10,7 +10,7 @@
   const copyState = new InstanceConfigurationCopyState(new BrowserClipboardWriter(), useToast());
   const settings = new InstanceSettingsState(() => state);
   const sections = [
-    { id: 'addresses', label: 'Addresses and browser access', description: 'Find the public addresses and allowed browser origins for this instance.', href: '/admin/mcp-setup', link: 'MCP setup guide' },
+    { id: 'addresses', label: 'Addresses and browser access', description: 'Find the public addresses and allowed browser origins for this instance.' },
     { id: 'access', label: 'Access and sign-in', description: 'Review who can sign in and use administration. Group permissions control connector and filesystem access, not membership of the administrator group.', href: '/admin/group-permissions/connectors', link: 'Manage group permissions' },
     { id: 'tools', label: 'Tool behavior and limits', description: 'Review how tools are offered and the limits applied to their use.', href: '/admin/connectors', link: 'Manage connectors' }
   ] as const;
@@ -44,7 +44,7 @@
     {#each sections as section (section.id)}
       <section class="panel" aria-labelledby={`section-${section.id}`}>
         <h2 id={`section-${section.id}`}>{section.label}</h2>
-        <p class="supporting">{section.description} <a href={section.href}>{section.link}</a></p>
+        <p class="supporting">{section.description}{#if 'href' in section} <a href={section.href}>{section.link}</a>{/if}</p>
         <dl>
           {#each settings.presentation[section.id] as setting (setting.entry.variable)}
             <SettingRow {setting} {copyState} />
