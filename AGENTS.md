@@ -21,6 +21,8 @@ Architecture decision records live in [`umbod/project/architecture-records/`](um
 
 ## Where to start by task
 
+Use the `write-module-readme` skill to maintain module `README.md` files and keep them up to date with module content.
+
 - [Backend — API, MCP, and CLI](umbod/api/src/README.md)
 - [Frontend — workspace UI](umbod/frontend/src/README.md)
 - [SDK — connector development](packages/umbod-sdk/src/README.md)

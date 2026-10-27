@@ -14,6 +14,6 @@ description: "Shared capability identities, catalogues and availability contract
 - [domain.py](./domain.py) — Capability vocabulary.
 - [tools/](./tools/) — Tool schema and naming helpers.
 
-# Context
+# Related links
 
-See the [permission boundary](../../rest/mcp_permissions/README.md) for request-local catalogue scope and lifetimes.
+- [Permission boundary](../../rest/mcp_permissions/README.md) — Request-local catalogue scope and lifetimes.

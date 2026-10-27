@@ -1,5 +1,6 @@
 export interface AuthorizationWindow {
   navigate(url: string): boolean;
+  focus(): boolean;
   close(): void;
 }
 

@@ -6,14 +6,14 @@ description: Public connector authoring contracts, capability metadata and plugi
 
 # Files
 
-- [__init__.py](./__init__.py)
+- [__init__.py](./__init__.py) — Public connector exports.
 - [capability_description.py](./capability_description.py) — Capability descriptions.
 - [discovery.py](./discovery.py) — Connector package discovery.
-- [models.py](./models.py)
+- [models.py](./models.py) — Configuration check results.
 - [output_schema.py](./output_schema.py) — Output schema definitions.
 - [plugin_api.py](./plugin_api.py) — Public connector authoring API.
-- [proxies.py](./proxies.py)
-- [types.py](./types.py)
+- [proxies.py](./proxies.py) — Model serialization and schema contracts.
+- [types.py](./types.py) — Plugin registration and operation contracts.
 - [uploaded_file.py](./uploaded_file.py) — File input contract.
 - [api](./api/) — Connector definitions, parameters and registration.
 

@@ -14,7 +14,7 @@ on:
       - '.github/workflows/umbod-release.yml'
       - '.github/workflows/website-ci.yml'
       - '.github/workflows/harness-linting.yml'
-      - 'umbod/scripts/check_module_readmes.py'
+      - 'skills/development/write-module-readme/**'
   push:
     branches: [main]
     paths:
@@ -30,7 +30,7 @@ on:
       - '.github/workflows/umbod-release.yml'
       - '.github/workflows/website-ci.yml'
       - '.github/workflows/harness-linting.yml'
-      - 'umbod/scripts/check_module_readmes.py'
+      - 'skills/development/write-module-readme/**'
   workflow_dispatch:
 permissions:
   contents: read

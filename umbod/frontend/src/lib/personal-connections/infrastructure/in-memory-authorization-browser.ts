@@ -3,6 +3,7 @@ import { authorizationUrlSchema } from '../domain/schemas';
 
 export class InMemoryAuthorizationWindow implements AuthorizationWindow {
   closed = false;
+  focusCount = 0;
   url = 'about:blank';
 
   constructor(readonly displayName: string) {}
@@ -10,6 +11,12 @@ export class InMemoryAuthorizationWindow implements AuthorizationWindow {
   navigate = (url: string): boolean => {
     if (this.closed || !authorizationUrlSchema.safeParse(url).success) return false;
     this.url = url;
+    return true;
+  };
+
+  focus = (): boolean => {
+    if (this.closed) return false;
+    this.focusCount++;
     return true;
   };
 

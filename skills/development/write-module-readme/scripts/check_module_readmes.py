@@ -57,7 +57,7 @@ def find_module_readmes(repository: Path) -> List[Path]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Check source module READMEs for OKF frontmatter.")
-    parser.add_argument("repository", nargs="?", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument("repository", type=Path)
     repository = parser.parse_args().repository.resolve()
     if not repository.is_dir():
         parser.error(f"repository is not a directory: {repository}")

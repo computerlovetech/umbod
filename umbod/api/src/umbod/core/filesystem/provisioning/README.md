@@ -9,8 +9,8 @@ description: "Explicit one-time root bootstrap for trusted filesystem configurat
 - [__init__.py](./__init__.py) — Public module exports.
 - [models.py](./models.py) — Bootstrap specifications.
 - [ports.py](./ports.py) — Provisioning contract.
-- [service.py](./service.py) — Root bootstrap transaction.
+- [service.py](./service.py) — One-time root bootstrap, not reconciliation of existing roots.
 
-# Context
+# Related links
 
-Bootstrap is not reconciliation: configuration changes do not update an already provisioned root. Use [root policy administration](../administration/README.md) for ongoing group access editing.
+- [Root policy administration](../administration/README.md) — Ongoing group access editing after root provisioning.

@@ -1,6 +1,6 @@
 import type { PersonalConnectionController } from './state/port';
 
-export type ConnectionAction = 'retry-tools' | 'connect' | 'toggle' | 'sign-in' | 'discover' | 'renew' | 'refresh' | 'check' | 'cancel' | 'disconnect';
+export type ConnectionAction = 'retry-tools' | 'toggle' | 'sign-in' | 'continue-sign-in' | 'discover' | 'renew' | 'refresh' | 'check' | 'cancel' | 'disconnect';
 export type AccessTone = 'success' | 'warning' | 'neutral' | 'pending';
 
 export interface AccessStatus {
@@ -20,11 +20,8 @@ export interface ConnectionMenuAction {
 
 export interface PersonalAccessViewController {
   readonly status: AccessStatus;
-  readonly primaryLabel: string;
-  readonly primaryDisabled: boolean;
   readonly menuOpen: boolean;
   readonly menuActions: ConnectionMenuAction[];
-  readonly fallbackRequired: boolean;
   setMenuOpen(open: boolean): void;
   perform(action: ConnectionAction): Promise<void>;
 }
@@ -43,13 +40,13 @@ export function personalAccessStatus(state: PersonalConnectionController): Acces
     label: state.renewing ? 'Renewing access…' : state.readingDetails ? 'Checking access…' : 'Updating access…',
     description: 'Please wait while your personal access is updated.', tone: 'pending', action: null
   };
-  if (!state.selection.enabled) return { label: 'Disabled', description: 'Personal access is turned off. Enable it when you want to use this connector.', tone: 'neutral', action: 'connect' };
+  if (!state.selection.enabled) return { label: 'Disabled', description: 'Personal access is turned off. Enable it when you want to use this connector.', tone: 'neutral', action: 'toggle' };
   if (state.attempt) {
     const fallback = Boolean(state.authorizationUrl && !state.authorizationOpened);
     return {
-      label: state.checking ? 'Checking sign-in…' : fallback ? 'Sign-in needs attention' : 'Waiting for sign-in',
-      description: fallback ? 'The sign-in window could not be opened automatically. Continue sign-in below. Your tools will load automatically when sign-in completes.' : 'Complete sign-in in the window or tab that opened. It will close automatically and your tools will load when sign-in completes.',
-      tone: fallback && !state.checking ? 'warning' : 'pending', action: state.monitoring && !state.error ? null : 'check'
+      label: fallback ? 'Sign-in unfinished' : 'Waiting for sign-in',
+      description: fallback ? 'The sign-in window could not be opened automatically. Use Continue sign-in in the actions menu. Your tools will load automatically when sign-in completes.' : 'Complete sign-in in the window or tab that opened. It will close automatically and your tools will load when sign-in completes.',
+      tone: fallback ? 'warning' : 'pending', action: state.monitoring && !state.error ? null : 'check'
     };
   }
   if (state.healthPhase === 'loading') return { label: 'Checking access…', description: 'Checking your saved authorization and tool availability.', tone: 'pending', action: null };

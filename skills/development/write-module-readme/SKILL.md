@@ -1,6 +1,6 @@
 ---
 name: write-module-readme
-description: Use when creating, editing, or reviewing module README.md files or related knowledge Markdown. Applies Open Knowledge Format (OKF) v0.2 with Markdown templates, progressive-disclosure links, and concise context that does not duplicate the code.
+description: Use when creating, editing, or reviewing module README.md files or related knowledge Markdown. Applies Open Knowledge Format (OKF) v0.2 with Markdown templates, progressive-disclosure links, and short relevance descriptions.
 ---
 
 # Write module knowledge in Open Knowledge Format
@@ -43,13 +43,14 @@ Use these optional v0.2 fields only when useful and supported by evidence:
 
 OKF also supports `type: Attested Computation`, with required `runtime` and a sanctioned computation linked or embedded under `# Computation`. Do not introduce this type for ordinary module documentation; consult specification §10 when that contract is actually needed.
 
-## Repository policy: useful context, not duplicated code
+## Repository policy: links and short descriptions only
 
 The following restrictions are repository policy, not requirements imposed by OKF:
 
 - A module README primarily helps an agent decide which files to read. Use `type: Software Module`, a concise title and description, and a linked file table of contents.
-- Keep descriptions to short relevance cues. Do not reproduce implementation walkthroughs, function or class inventories, signatures, schemas, branching logic, dependency lists, or examples that merely restate the source or tests.
-- Include extra knowledge only when it cannot be learned from the code: for example, an externally imposed constraint or a decision's rationale. Prefer a link to the authoritative ADR, specification, or runbook over copying its content. Omit the context section when there is nothing to add.
+- Keep descriptions to short relevance cues of at most 160 characters, excluding the leading link and optional separator. Do not reproduce implementation walkthroughs, function or class inventories, signatures, schemas, branching logic, dependency lists, or examples that merely restate the source or tests.
+- Limit module README bodies to headings and bullet entries containing a Markdown link followed by one short relevance sentence. Do not include standalone paragraphs, code blocks, tables, or extra context sections, including “Context not available from the code”.
+- Link to authoritative ADRs, specifications, or runbooks when relevant; do not copy their explanations, constraints, or rationale into the README.
 - Link to child module READMEs rather than flattening their file lists. Exclude caches and generated build artifacts. Never invent links or create a companion knowledge document per source file merely to satisfy OKF.
 - Keep the existing `README.md` entrypoint. Do not rename files or add parallel `index.md` files unless explicitly creating an OKF bundle.
 - Applying these conventions to selected READMEs does not make the entire repository an OKF bundle. Full bundle conformance requires every non-reserved Markdown file within the declared bundle boundary to have parseable frontmatter and a non-empty `type`.
@@ -57,11 +58,23 @@ The following restrictions are repository policy, not requirements imposed by OK
 ## Templates and workflow
 
 1. Inspect the target module's files and existing README. Read source as needed to establish accurate relevance cues; do not document inferred behavior as curated knowledge.
-2. Start from [the module README template](templates/module-readme.md). Replace every placeholder, include only links that resolve, and remove the optional context section if unnecessary. Adjust file entries to the real module.
+2. Start from [the module README template](templates/module-readme.md). Replace every placeholder, include only links that resolve, and adjust entries to the real module. Do not add context sections.
 3. When explicitly authoring a bundle navigation file, use [the index template](templates/index.md) instead. It is not a README/concept template. Only a bundle-root index may add version frontmatter.
 4. Add optional metadata only when grounded in known facts. Preserve legitimate existing metadata and links; update stale content rather than blindly replacing it with the template.
-5. Check YAML validity, `type`, link targets, and concise descriptions. Remove unfilled placeholders, empty headings, and anything the reader can simply find in the code.
+5. Check YAML validity, `type`, link targets, and concise descriptions. Keep only headings and linked bullet entries in module README bodies. Remove unfilled placeholders, empty headings, extra context sections, and standalone explanations.
 6. Update affected links when files move or disappear. OKF consumers tolerate broken links, but repository-authored indexes should not knowingly introduce them.
+7. After using this skill to create or edit README files, run all bundled checks below against the target repository. Fix every reported README issue and rerun until all checks pass.
+
+## Required post-edit checks
+
+Resolve the paths below relative to this skill directory, whether using the repository source or an installed copy. Pass the target repository's absolute root path as the required `repository` argument; do not infer it from the skill's installation location or current working directory.
+
+- [requirements.txt](requirements.txt) — Python dependencies shared by agents and CI; use `uv run --with-requirements` with this manifest when running each script.
+- [check_module_readmes.py](scripts/check_module_readmes.py) — Run with the repository argument to validate YAML frontmatter in READMEs beneath `src` directories.
+- [check_readme_bodies.py](scripts/check_readme_bodies.py) — Run with the repository argument to enforce headings and linked bullets with descriptions of at most 160 characters.
+- [check_readme_links.py](scripts/check_readme_links.py) — Run with the repository argument to validate local file and directory links in all repository READMEs, excluding dependencies and generated files.
+
+All three scripts must exit successfully before reporting README work complete. The harness workflow runs these same source scripts directly without installing the skill.
 
 ## Scope
 

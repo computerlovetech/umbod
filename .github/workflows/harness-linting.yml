@@ -19,7 +19,13 @@ jobs:
           python-version: '3.12'
 
       - name: Install lint dependencies
-        run: python -m pip install 'PyYAML>=6.0.3,<7'
+        run: python -m pip install -r skills/development/write-module-readme/requirements.txt
 
       - name: Validate source module READMEs against OKF v0.2
-        run: python umbod/scripts/check_module_readmes.py
+        run: python skills/development/write-module-readme/scripts/check_module_readmes.py .
+
+      - name: Validate source module README body format
+        run: python skills/development/write-module-readme/scripts/check_readme_bodies.py .
+
+      - name: Validate local links in all repository READMEs
+        run: python skills/development/write-module-readme/scripts/check_readme_links.py .

@@ -10,6 +10,6 @@ description: "Administrator-owned client and scope policy for personal downstrea
 - [models.py](./models.py) — Client policies and revision commands.
 - [ports.py](./ports.py) — Configuration storage contracts.
 
-# Context
+# Related links
 
-See the [provider-policy specification](../../../../../../../docs/operations/personal-downstream-mcp-provider-policy-specification.md) for administrator and provider contracts.
+- [Provider-policy specification](../../../../../../../docs/operations/personal-downstream-mcp-provider-policy-specification.md) — Administrator and provider contracts.

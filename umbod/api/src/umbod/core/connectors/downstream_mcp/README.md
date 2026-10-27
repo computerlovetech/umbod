@@ -17,8 +17,8 @@ description: "Shared and personal downstream MCP connector coordination."
 - [oauth/](./oauth/) — Shared authorization.
 - [permissions.py](./permissions.py) — Personal connector permission targets.
 - [personal_connections/](./personal_connections/README.md) — Owner-bound connection lifecycle.
-- [personal_oauth_configuration/](./personal_oauth_configuration/README.md) — Administrator OAuth policy.
-- [personal_tools/](./personal_tools/README.md) — Private inventories and execution.
+- [personal_oauth_configuration/](./personal_oauth_configuration/README.md) — Personal OAuth policy, separate from shared connector authority.
+- [personal_tools/](./personal_tools/README.md) — Owner-bound private inventories and execution.
 - [probe/](./probe/) — Shared discovery.
 - [publishing/](./publishing/) — Namespace publication.
 - [runtime/](./runtime/) — Shared runtime resolution.
@@ -26,9 +26,7 @@ description: "Shared and personal downstream MCP connector coordination."
 - [stores/](./stores/) — Connector persistence.
 - [user_catalogue.py](./user_catalogue.py) — User-facing catalogue projections.
 
-# Context
-
-See [personal OAuth policy](./personal_oauth_configuration/README.md) and [personal execution](./personal_tools/README.md) for the separate personal path; shared credentials are not personal authority.
+# Related links
 
 - [Foundation specification](../../../../../../docs/operations/personal-downstream-mcp-oauth-specification.md) — Personal ownership and authorization boundaries.
 - [Catalogue specification](../../../../../../docs/operations/personal-downstream-mcp-catalogue-specification.md) — Personal selection and catalogue scope.

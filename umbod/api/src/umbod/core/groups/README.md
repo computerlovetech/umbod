@@ -10,9 +10,5 @@ description: "Shared catalogue of exact group values and usage-checked registrat
 - [in_memory.py](./in_memory.py) — In-memory transaction adapter.
 - [models.py](./models.py) — Catalogue data and commands.
 - [ports.py](./ports.py) — Catalogue and usage contracts.
-- [service.py](./service.py) — Registration and deletion.
+- [service.py](./service.py) — Registration and deletion without access grants or identity-provider group management.
 - [stores/](./stores/) — Catalogue persistence and usage composition.
-
-# Context
-
-Catalogue registration grants no connector or filesystem access and does not manage identity-provider groups.

@@ -1,11 +1,12 @@
+import { InMemoryAuthorizationBrowser } from '../infrastructure/in-memory-authorization-browser';
 import { InMemoryAttemptScheduler } from '../infrastructure/in-memory-attempt-scheduler';
 import { describe, expect, test, vi } from 'vitest';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { PersonalConnectionsApi } from '../api';
-import type { AuthorizationHealth, Selection } from '../domain/schemas';
+import type { Attempt, AuthorizationHealth, Selection } from '../domain/schemas';
 import { InMemoryPersonalConnectionsApi } from '../infrastructure/in-memory-api';
-import type { PersonalAccessViewController } from '../presentation';
-import { authorizationHealth, deferred, selection } from '../test-fixtures';
+import type { ConnectionAction, PersonalAccessViewController } from '../presentation';
+import { authorizationHealth, deferred, pendingAttempt, selection } from '../test-fixtures';
 import { PersonalAccessViewState } from './access-view-state.svelte';
 import { ConnectionState } from './connection-state.svelte';
 import type { PersonalConnectionController } from './port';
@@ -24,20 +25,20 @@ function harness(health: AuthorizationHealth, overrides: Partial<Selection>): Ha
 }
 
 describe('personal access presentation contract', () => {
-  test.each<{ health: AuthorizationHealth; overrides: Partial<Selection>; label: string; tone: string; primary: string }>([
-    { health: authorizationHealth, overrides: {}, label: 'Ready to use', tone: 'success', primary: '' },
-    { health: authorizationHealth, overrides: { enabled: false }, label: 'Disabled', tone: 'neutral', primary: 'Connect' },
-    { health: { state: 'not_authorized' }, overrides: { has_authorization: false }, label: 'Sign-in required', tone: 'warning', primary: 'Connect' },
-    { health: authorizationHealth, overrides: { runtime_available: false }, label: 'Tools not ready', tone: 'warning', primary: 'Retry loading tools' },
-    { health: { state: 'expired', expires_at: '2030-01-01T00:00:00Z', refresh_supported: true }, overrides: {}, label: 'Authorization expired', tone: 'warning', primary: 'Renew access' },
-    { health: { state: 'expired', expires_at: '2030-01-01T00:00:00Z', refresh_supported: false }, overrides: {}, label: 'Authorization expired', tone: 'warning', primary: 'Connect' },
-    { health: { state: 'unsupported' }, overrides: {}, label: 'Sign-in required', tone: 'warning', primary: 'Connect' },
-    { health: { state: 'reconnect_required', reason: 'provider_rejected' }, overrides: {}, label: 'Sign-in required', tone: 'warning', primary: 'Connect' },
-    { health: { state: 'reconnect_required', reason: 'refresh_denied' }, overrides: {}, label: 'Sign-in required', tone: 'warning', primary: 'Connect' },
-    { health: { state: 'reconnect_required', reason: 'refresh_uncertain' }, overrides: {}, label: 'Sign-in required', tone: 'warning', primary: 'Connect' },
-    { health: { state: 'refreshing', deadline: '2000-01-01T00:00:00Z' }, overrides: {}, label: 'Renewal in progress', tone: 'pending', primary: 'Check authorization status' },
-    { health: authorizationHealth, overrides: { has_authorization: false }, label: 'Status needs checking', tone: 'warning', primary: 'Check authorization status' }
-  ])('$label provides the appropriate single next step: $primary', async ({ health, overrides, label, tone, primary }): Promise<void> => {
+  test.each<{ health: AuthorizationHealth; overrides: Partial<Selection>; label: string; tone: string; action: ConnectionAction | null }>([
+    { health: authorizationHealth, overrides: {}, label: 'Ready to use', tone: 'success', action: null },
+    { health: authorizationHealth, overrides: { enabled: false }, label: 'Disabled', tone: 'neutral', action: 'toggle' },
+    { health: { state: 'not_authorized' }, overrides: { has_authorization: false }, label: 'Sign-in required', tone: 'warning', action: 'sign-in' },
+    { health: authorizationHealth, overrides: { runtime_available: false }, label: 'Tools not ready', tone: 'warning', action: 'discover' },
+    { health: { state: 'expired', expires_at: '2030-01-01T00:00:00Z', refresh_supported: true }, overrides: {}, label: 'Authorization expired', tone: 'warning', action: 'renew' },
+    { health: { state: 'expired', expires_at: '2030-01-01T00:00:00Z', refresh_supported: false }, overrides: {}, label: 'Authorization expired', tone: 'warning', action: 'sign-in' },
+    { health: { state: 'unsupported' }, overrides: {}, label: 'Sign-in required', tone: 'warning', action: 'sign-in' },
+    { health: { state: 'reconnect_required', reason: 'provider_rejected' }, overrides: {}, label: 'Sign-in required', tone: 'warning', action: 'sign-in' },
+    { health: { state: 'reconnect_required', reason: 'refresh_denied' }, overrides: {}, label: 'Sign-in required', tone: 'warning', action: 'sign-in' },
+    { health: { state: 'reconnect_required', reason: 'refresh_uncertain' }, overrides: {}, label: 'Sign-in required', tone: 'warning', action: 'sign-in' },
+    { health: { state: 'refreshing', deadline: '2000-01-01T00:00:00Z' }, overrides: {}, label: 'Renewal in progress', tone: 'pending', action: 'refresh' },
+    { health: authorizationHealth, overrides: { has_authorization: false }, label: 'Status needs checking', tone: 'warning', action: 'refresh' }
+  ])('$label recommends $action in the actions menu', async ({ health, overrides, label, tone, action }): Promise<void> => {
     const { connection, view, api } = harness(health, overrides);
     const start = vi.spyOn(api.authorization, 'start');
     const discover = vi.spyOn(api.connections, 'discover');
@@ -45,8 +46,8 @@ describe('personal access presentation contract', () => {
     await connection.loadHealth();
     expect(view.status.label).toBe(label);
     expect(view.status.tone).toBe(tone);
-    expect(view.primaryLabel).toBe(primary);
-    if (primary) expect(view.primaryDisabled).toBe(false);
+    expect(view.status.action).toBe(action);
+    if (action) expect(view.menuActions.find((item) => item.id === action)?.disabled).toBe(false);
     expect(start).not.toHaveBeenCalled();
     expect(discover).not.toHaveBeenCalled();
     expect(renew).not.toHaveBeenCalled();
@@ -59,7 +60,7 @@ describe('personal access presentation contract', () => {
     vi.spyOn(api.authorization, 'getHealth').mockRejectedValue(new HttpError(503, 'private', {}));
     await connection.loadHealth();
     expect(view.status.label).toBe('Status unavailable');
-    expect(view.primaryLabel).toBe('Check authorization status');
+    expect(view.status.action).toBe('refresh');
     expect(view.status.description).not.toContain('expired');
     expect(view.menuActions.some((action) => action.id === 'renew')).toBe(false);
     expect(view.menuActions.find((action) => action.id === 'discover')?.disabled).toBe(true);
@@ -73,7 +74,7 @@ describe('personal access presentation contract', () => {
     const discover = vi.spyOn(api.connections, 'discover');
     await connection.renew();
     expect(view.status.label).toBe('Status needs checking');
-    expect(view.primaryLabel).toBe('Check authorization status');
+    expect(view.status.action).toBe('refresh');
     await view.perform('sign-in');
     await view.perform('discover');
     expect(start).not.toHaveBeenCalled();
@@ -91,16 +92,49 @@ describe('personal access presentation contract', () => {
     const start = vi.spyOn(api.authorization, 'start');
     await connection.loadHealth();
     await view.perform('sign-in');
-    expect(view.status.label).toBe('Sign-in needs attention');
+    expect(view.status.label).toBe('Sign-in unfinished');
     expect(view.status.tone).toBe('warning');
-    expect(view.primaryLabel).toBe('');
-    expect(view.fallbackRequired).toBe(true);
+    expect(view.menuActions.find((action) => action.id === 'continue-sign-in')?.disabled).toBe(false);
+    expect(view.menuActions.some((action) => action.id === 'sign-in')).toBe(false);
     expect(view.menuActions.find((action) => action.id === 'cancel')?.disabled).toBe(false);
     await view.perform('sign-in');
     expect(start).toHaveBeenCalledOnce();
     expect(enable).not.toHaveBeenCalled();
     expect(renew).not.toHaveBeenCalled();
     expect(discover).not.toHaveBeenCalled();
+  });
+
+  test('continue is synchronous during a status read without starting another attempt and cancel remains actionable', async (): Promise<void> => {
+    const current: Selection = { ...selection, has_authorization: false };
+    const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([current], { calendar: { state: 'not_authorized' } });
+    const browser = new InMemoryAuthorizationBrowser();
+    const connection = new ConnectionState(current, api, vi.fn<() => void>(), undefined, browser, new InMemoryAttemptScheduler());
+    const view = new PersonalAccessViewState(() => connection);
+    const start = vi.spyOn(api.authorization, 'start');
+    await view.perform('sign-in');
+    const attempt = connection.attempt;
+    const pending = deferred<Attempt>();
+    vi.spyOn(api.authorization, 'get').mockReturnValue(pending.promise);
+    const checking = connection.check();
+    const resume = vi.spyOn(connection, 'continueSignIn');
+    expect(connection.checking).toBe(true);
+    expect(view.status.label).toBe('Waiting for sign-in');
+    expect(view.menuActions.find((action) => action.id === 'continue-sign-in')?.disabled).toBe(false);
+    expect(view.menuActions.some((action) => action.id === 'sign-in')).toBe(false);
+    expect(view.menuActions.find((action) => action.id === 'check')?.disabled).toBe(true);
+    expect(view.menuActions.find((action) => action.id === 'cancel')?.disabled).toBe(false);
+    view.setMenuOpen(true);
+    const continuing = view.perform('continue-sign-in');
+    expect(resume).toHaveBeenCalledOnce();
+    expect(view.menuOpen).toBe(false);
+    expect(connection.attempt).toEqual(attempt);
+    expect(start).toHaveBeenCalledOnce();
+    await continuing;
+    await view.perform('cancel');
+    pending.resolve(pendingAttempt);
+    await checking;
+    expect(connection.attempt).toBeNull();
+    connection.dispose();
   });
 
   test('progress blocks conflicting actions and exposes safe reasons', async (): Promise<void> => {
@@ -139,7 +173,7 @@ describe('personal access presentation contract', () => {
     expect(view.menuActions.some((action) => action.id === 'sign-in')).toBe(false);
     await view.perform('toggle');
     expect(connection.selection.enabled).toBe(true);
-    expect(view.primaryLabel).toBe('Connect');
+    expect(view.menuActions.find((action) => action.id === 'sign-in')?.label).toBe('Sign in');
     expect(start).not.toHaveBeenCalled();
   });
 });

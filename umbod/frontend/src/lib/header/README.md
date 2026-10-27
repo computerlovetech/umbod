@@ -6,8 +6,4 @@ description: "Current-user validation and identity mapping for account presentat
 
 # Files
 
-- [accountIdentity.ts](./accountIdentity.ts) — Header identity validation and mapping.
-
-# Context not available from the code
-
-- Deploy nullable email API responses with a rebuilt frontend; older frontend builds require string emails.
+- [accountIdentity.ts](./accountIdentity.ts) — Header identity mapping; nullable email API changes require a rebuilt frontend.

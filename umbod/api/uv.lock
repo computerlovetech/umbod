@@ -1487,6 +1487,7 @@ api = [
 ]
 dev = [
     { name = "httpx2" },
+    { name = "markdown-it-py" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -1546,6 +1547,7 @@ api = [
 ]
 dev = [
     { name = "httpx2", specifier = ">=2.4.0" },
+    { name = "markdown-it-py", specifier = ">=4,<5" },
     { name = "pytest", specifier = ">=9.0.3" },
     { name = "pytest-asyncio", specifier = ">=1.3.0" },
     { name = "pytest-cov", specifier = ">=7,<8" },

@@ -197,6 +197,92 @@ describe('explicit authorization browser ownership', () => {
   });
 });
 
+describe('continuing the existing sign-in', () => {
+  test('focuses the existing window without navigating or starting another attempt', async (): Promise<void> => {
+    const { api, state, memory } = setup();
+    const start = vi.spyOn(api.authorization, 'start');
+    await state.start();
+    const navigate = vi.spyOn(memory.windows[0], 'navigate');
+    state.continueSignIn();
+    state.continueSignIn();
+    expect(memory.windows).toHaveLength(1);
+    expect(memory.windows[0].focusCount).toBe(2);
+    expect(navigate).not.toHaveBeenCalled();
+    expect(start).toHaveBeenCalledOnce();
+    expect(state.selection.has_authorization).toBe(true);
+    state.dispose();
+  });
+
+  test('reopens a closed window with the identical authorization URL and attempt', async (): Promise<void> => {
+    const { api, state, memory } = setup();
+    const start = vi.spyOn(api.authorization, 'start');
+    await state.start();
+    const attempt = state.attempt;
+    const url = state.authorizationUrl;
+    memory.windows[0].close();
+    state.continueSignIn();
+    expect(memory.windows).toHaveLength(2);
+    expect(memory.windows[1].url).toBe(url);
+    expect(state.attempt).toBe(attempt);
+    expect(state.authorizationOpened).toBe(true);
+    expect(state.monitoring).toBe(true);
+    expect(start).toHaveBeenCalledOnce();
+    state.dispose();
+  });
+
+  test('blocked reopening can be retried without losing saved authorization or creating another attempt', async (): Promise<void> => {
+    const { api, state, memory } = setup();
+    const reserve = vi.spyOn(memory, 'reserve');
+    const start = vi.spyOn(api.authorization, 'start');
+    await state.start();
+    memory.windows[0].close();
+    reserve.mockImplementationOnce(() => { throw new Error('Blocked'); });
+    state.continueSignIn();
+    expect(state.authorizationOpened).toBe(false);
+    expect(state.needsRefresh).toBe(false);
+    expect(state.error).toContain('Allow popups for Umbod');
+    expect(state.attempt?.status).toBe('pending');
+    expect(state.selection.has_authorization).toBe(true);
+    state.continueSignIn();
+    expect(state.authorizationOpened).toBe(true);
+    expect(state.error).toBe('');
+    expect(start).toHaveBeenCalledOnce();
+    state.dispose();
+  });
+
+  test('continuing during polling does not invalidate a completed result and closes the reopened window', async (): Promise<void> => {
+    const { api, state, memory } = setup();
+    await state.start();
+    const result = deferred<typeof completedAttempt>();
+    vi.spyOn(api.authorization, 'get').mockReturnValue(result.promise);
+    const checking = state.check();
+    memory.windows[0].close();
+    state.continueSignIn();
+    expect(state.checking).toBe(true);
+    expect(memory.windows).toHaveLength(2);
+    result.resolve(completedAttempt);
+    await checking;
+    expect(state.attempt).toBeNull();
+    expect(memory.windows[1].closed).toBe(true);
+    state.dispose();
+  });
+
+  test.each(['cancelled', 'disabled', 'disposed', 'uncertain'] as const)('does not reopen after %s', async (condition): Promise<void> => {
+    const { api, state, memory } = setup();
+    await state.start();
+    if (condition === 'cancelled') await state.cancel();
+    if (condition === 'disabled') await state.setEnabled();
+    if (condition === 'disposed') state.dispose();
+    if (condition === 'uncertain') {
+      vi.spyOn(api.connections, 'get').mockRejectedValue(new Error('Unavailable'));
+      await state.refresh();
+    }
+    state.continueSignIn();
+    expect(memory.windows).toHaveLength(1);
+    state.dispose();
+  });
+});
+
 describe('authorization browser adapter contract', () => {
   test.each(['http://provider.example', 'https://user:password@provider.example', 'javascript:alert(1)'])('in-memory windows reject unsafe URL %s', (url): void => {
     const browser: AuthorizationBrowser = new InMemoryAuthorizationBrowser();
@@ -209,7 +295,8 @@ describe('authorization browser adapter contract', () => {
     const browser: AuthorizationBrowser = browserAuthorizationBrowser();
     const replace = vi.fn<(url: string) => void>();
     const close = vi.fn<() => void>();
-    const popup = { opener: {}, closed: false, document: new TestWindow().document, location: { replace }, close };
+    const focus = vi.fn<() => void>();
+    const popup = { opener: {}, closed: false, document: new TestWindow().document, location: { replace }, close, focus };
     const open = vi.fn<() => Window>().mockReturnValue(popup as unknown as Window);
     vi.stubGlobal('window', { open, matchMedia: () => ({ matches: false }), screen: { availWidth: 1920, availHeight: 1080 }, screenX: 100, screenY: 50, outerWidth: 1200, outerHeight: 900 });
     try {
@@ -224,7 +311,12 @@ describe('authorization browser adapter contract', () => {
       expect(replace).not.toHaveBeenCalled();
       expect(reserved?.navigate(pendingAttempt.authorization_url)).toBe(true);
       expect(replace).toHaveBeenCalledWith(pendingAttempt.authorization_url);
+      expect(reserved?.focus()).toBe(true);
+      expect(focus).toHaveBeenCalledOnce();
+      focus.mockImplementationOnce(() => { throw new Error('Unavailable'); });
+      expect(reserved?.focus()).toBe(false);
       popup.closed = true;
+      expect(reserved?.focus()).toBe(false);
       expect(reserved?.navigate(pendingAttempt.authorization_url)).toBe(false);
       reserved?.close();
       expect(close).toHaveBeenCalledOnce();

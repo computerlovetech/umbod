@@ -18,6 +18,7 @@ export interface PersonalConnectionController {
   readonly health: AuthorizationHealth | null;
   readonly healthPhase: 'loading' | 'ready' | 'unavailable';
   readonly healthCheckedAt: string;
+  readonly healthRefreshError: string;
   readonly renewing: boolean;
   readonly readingDetails: boolean;
   readonly renewableAuthorization: boolean;
@@ -32,6 +33,7 @@ export interface PersonalConnectionController {
   setEnabled(): Promise<void>;
   connect(): Promise<void>;
   start(): Promise<void>;
+  continueSignIn(): void;
   check(): Promise<void>;
   cancel(): Promise<void>;
   renew(): Promise<void>;

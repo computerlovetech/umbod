@@ -7,12 +7,8 @@ description: "User catalogue contracts and dashboard lifetime independent of adm
 # Files
 
 - [api.ts](./api.ts) — User catalogue port.
-- [domain/](./domain/) — Catalogue validation contracts.
+- [domain/](./domain/) — Catalogue validation; tool schema changes require coordinated backend/frontend deployment.
 - [infrastructure/](./infrastructure/) — Catalogue HTTP and in-memory adapters.
 - [presentation.ts](./presentation.ts) — Connector labels and sidebar identities.
 - [state/](./state/) — Catalogue lifetime and capability search.
 - [test-fixtures.ts](./test-fixtures.ts) — Catalogue test fixtures.
-
-# Context not available from the code
-
-- Catalogue tool schema changes require coordinated backend/frontend deployment because older strict clients reject additional tool fields.

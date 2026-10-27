@@ -31,11 +31,14 @@ describe('personal connections presentation', () => {
     const state = new ConnectionState(selection, api, vi.fn(), undefined, undefined, new InMemoryAttemptScheduler());
     await state.start();
     const body = render(ConnectionCard, { props: { state } }).body;
-    expect(body).toContain('target="_blank"');
-    expect(body).toContain('rel="noopener noreferrer"');
-    for (const label of ['Continue sign-in', 'could not be opened automatically']) expect(body).toContain(label);
+    expect(body).not.toContain('<a ');
+    expect(body).not.toContain('primary-action');
+    expect(body).not.toContain('next-step');
+    for (const label of ['actions menu', 'could not be opened automatically']) expect(body).toContain(label);
     const view: PersonalAccessViewController = new PersonalAccessViewState(() => state);
     expect(view.menuActions.find((action) => action.id === 'cancel')?.disabled).toBe(false);
+    expect(view.menuActions.find((action) => action.id === 'continue-sign-in')?.disabled).toBe(false);
+    expect(body).not.toMatch(/<button[^>]*>Continue sign-in/);
     expect(body).not.toContain('Cancel sign-in');
     expect(body).not.toContain('<iframe');
     await state.cancel();
@@ -56,7 +59,8 @@ describe('personal connections presentation', () => {
     expect(body).toContain('Waiting for sign-in');
     expect(body).not.toContain('Continue sign-in');
     expect(body).not.toContain('could not be opened automatically');
-    expect(body).toContain('Open sign-in page again');
+    expect(body).not.toContain('Open sign-in page again');
+    expect(body).not.toContain('<a ');
   });
   test('disconnect confirmation stays inline and separate from enablement', (): void => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
@@ -105,12 +109,28 @@ describe('personal connections presentation', () => {
     await state.loadHealth();
     const body = render(ConnectionCard, { props: { state } }).body;
     expect(body).toContain('Status unavailable');
-    expect(body).toContain('Check authorization status');
+    expect(body).toContain('Check status to try again');
     expect(body).not.toContain('Renew authorization');
     expect(body).not.toContain('Authorization expired');
     expect(body).not.toContain('unsupported authorization');
     expect(body).not.toContain('secret');
     expect(state.canDiscover).toBe(false);
+  });
+  test('a failed quiet health refresh preserves Ready and reports separate status feedback', async (): Promise<void> => {
+    const current = { ...selection, runtime_available: true };
+    const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([current], { calendar: authorizationHealth });
+    const state = new ConnectionState(current, api, vi.fn<() => void>(), undefined, undefined, new InMemoryAttemptScheduler());
+    await state.loadHealth();
+    vi.spyOn(api.authorization, 'getHealth').mockRejectedValue(new HttpError(503, 'secret', {}));
+    await state.loadHealth();
+    const body = render(ConnectionCard, { props: { state } }).body;
+    expect(body).toContain('Ready to use');
+    expect(body).toContain(`role="status">${state.healthRefreshError}`);
+    expect(state.healthRefreshError).not.toBe('');
+    expect(body).not.toContain('Status unavailable');
+    expect(body).not.toMatch(/<button[^>]*>Sign in/);
+    expect(body).not.toContain('<a ');
+    state.dispose();
   });
   test('catalogue notifications follow successful operations without replacing pending state', async (): Promise<void> => {
     const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
@@ -176,7 +196,8 @@ describe('personal connections presentation', () => {
     expect(body).not.toContain(selection.display_name);
     expect(body).not.toContain(selection.capability_description);
     expect(body).toContain('Personal access');
-    expect(body).toContain('Continue sign-in');
+    expect(body).toContain('actions menu');
+    expect(body).not.toContain('<a ');
     const reopened = render(ConnectionCard, { props: { state, embedded: true } }).body;
     expect(reopened).not.toContain('Check sign-in status');
     expect(state.attempt).toEqual(attempt);

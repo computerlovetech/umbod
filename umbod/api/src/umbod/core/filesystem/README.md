@@ -20,8 +20,7 @@ description: "Storage-independent filesystem operations with separate authorizat
 - [stores/](./stores/README.md) — Database-neutral namespace and policy stores.
 - [transactions.py](./transactions.py) — Combined namespace and policy transactions.
 
-# Context
+# Related links
 
-See [filesystem infrastructure](../../infrastructure/filesystem/README.md) for configured composition and concrete content adapters under ADR-006.
-
-Legacy JSON namespace data is not read, migrated or deleted. Byte garbage collection and the move-dependent portion of [P08 in the acceptance plan](../../../../../../.atdd/features/filesystem/04-acceptance-test-plan.md) remain deferred.
+- [Filesystem infrastructure](../../infrastructure/filesystem/README.md) — Configured composition and concrete content adapters under ADR-006.
+- [Acceptance plan](../../../../../../.atdd/features/filesystem/04-acceptance-test-plan.md) — Deferred byte garbage collection and move-dependent acceptance coverage.

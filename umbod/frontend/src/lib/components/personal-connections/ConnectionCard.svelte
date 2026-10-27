@@ -28,16 +28,6 @@
   </header>
   {#if !embedded}<p class="connector-description">{state.selection.capability_description}</p>{/if}
   <p class="status-description">{view.status.description}</p>
-  {#if !state.confirmingDisconnect && (view.fallbackRequired || view.status.action)}
-    <div class="next-step">
-      {#if view.fallbackRequired}
-        <a class="primary-action" href={state.authorizationUrl} target="_blank" rel="noopener noreferrer">Continue sign-in <span aria-hidden="true">↗</span><span class="sr-only"> (opens a new tab)</span></a>
-      {/if}
-      {#if view.status.action}
-        <button class={['primary-action', view.fallbackRequired && 'secondary']} type="button" disabled={view.primaryDisabled} onclick={() => act(view.performPrimary)}>{view.primaryLabel}</button>
-      {/if}
-    </div>
-  {/if}
   <details class="connection-details">
     <summary>Connection details</summary>
     <dl>
@@ -55,9 +45,6 @@
       {/if}
     </dl>
     <p class="hint">Authorization checks use saved records, not a live provider connection test.</p>
-    {#if state.attempt && state.authorizationOpened && state.authorizationUrl && !state.busy && !state.needsRefresh}
-      <a href={state.authorizationUrl} target="_blank" rel="noopener noreferrer">Open sign-in page again <span aria-hidden="true">↗</span><span class="sr-only"> (opens a new tab)</span></a>
-    {/if}
   </details>
   {#if state.confirmingDisconnect}
     <section class="confirmation" aria-label="Confirm disconnect">
@@ -70,6 +57,7 @@
     </section>
   {/if}
   {#if state.message}<p class="feedback" role="status">{state.message}</p>{/if}
+  {#if state.healthRefreshError}<p class="feedback" role="status">{state.healthRefreshError}</p>{/if}
   {#if state.error}<p class="error" role="alert">{state.error}</p>{/if}
 </svelte:element>
 
@@ -83,12 +71,8 @@
   .header-status { margin-left: auto; }
   p { line-height: 1.6; }
   .status-description, .connector-description { color: var(--admin-muted); font-size: 0.85rem; margin: 0.75rem 0 0; }
-  .next-step { align-items: center; display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; }
-  button, .primary-action { align-items: center; box-sizing: border-box; background: var(--admin-panel); border: 1px solid var(--admin-border-strong); border-radius: 6px; color: var(--admin-ink); cursor: pointer; display: inline-flex; font: inherit; font-size: 0.85rem; font-weight: 600; gap: 0.5rem; justify-content: center; line-height: 1.4; min-height: 2.75rem; padding: 0.6rem 0.9rem; text-decoration: none; }
-  .primary-action { background: var(--admin-action); border-color: var(--admin-action); color: var(--admin-on-action); }
-  .primary-action:hover:not(:disabled) { background: var(--admin-action-hover); border-color: var(--admin-action-hover); }
-  .secondary { background: var(--admin-panel); border-color: var(--admin-border-strong); color: var(--admin-ink); }
-  .secondary:hover:not(:disabled), button:hover:not(:disabled) { background: var(--admin-hover); }
+  button { align-items: center; box-sizing: border-box; background: var(--admin-panel); border: 1px solid var(--admin-border-strong); border-radius: 6px; color: var(--admin-ink); cursor: pointer; display: inline-flex; font: inherit; font-size: 0.85rem; font-weight: 600; gap: 0.5rem; justify-content: center; line-height: 1.4; min-height: 2.75rem; padding: 0.6rem 0.9rem; text-decoration: none; }
+  button:hover:not(:disabled) { background: var(--admin-hover); }
   button:disabled { opacity: 0.55; cursor: not-allowed; }
   .connection-details { border-top: 1px solid var(--admin-border); font-size: 0.8rem; margin-top: 1rem; padding-top: 0.85rem; }
   summary { color: var(--admin-muted); cursor: pointer; font-weight: 600; width: fit-content; }
@@ -98,9 +82,7 @@
   dt { color: var(--admin-muted); }
   dd { margin: 0; text-align: right; }
   .hint { color: var(--admin-muted); font-size: 0.75rem; margin: 0.85rem 0 0; }
-  .connection-details a { display: inline-block; margin-top: 0.75rem; }
-  a { color: var(--admin-accent); text-underline-offset: 3px; }
-  a:focus-visible, button:focus-visible, summary:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
+  button:focus-visible, summary:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
   .confirmation { background: var(--admin-danger-bg); border: 1px solid var(--admin-danger-border); border-radius: var(--admin-radius); color: var(--admin-danger-text); margin-top: 1rem; padding: 1rem; }
   h5 { font-size: 0.85rem; margin: 0; }
   .confirmation p { font-size: 0.8rem; margin: 0.5rem 0 0; }
@@ -110,5 +92,4 @@
   .feedback, .error { font-size: 0.8rem; margin: 0.85rem 0 0; }
   .feedback { color: var(--admin-muted); }
   .error { color: var(--admin-danger); }
-  .sr-only { clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 </style>

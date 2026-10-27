@@ -12,8 +12,16 @@ def test_harness_linting_is_reusable_and_runs_okf_checker() -> None:
     workflow = yaml.load((WORKFLOWS / "harness-linting.yml").read_text(), Loader=yaml.BaseLoader)
     assert "workflow_call" in workflow["on"]
     steps = workflow["jobs"]["harness-linting"]["steps"]
-    assert any(step.get("run") == "python umbod/scripts/check_module_readmes.py" for step in steps)
-    assert any("PyYAML" in step.get("run", "") for step in steps)
+    assert any(step.get("run") == "python skills/development/write-module-readme/scripts/check_module_readmes.py ." for step in steps)
+    assert any(
+        step.get("run") == "python -m pip install -r skills/development/write-module-readme/requirements.txt"
+        for step in steps
+    )
+    assert any(step.get("run") == "python skills/development/write-module-readme/scripts/check_readme_links.py ." for step in steps)
+    assert any(step.get("run") == "python skills/development/write-module-readme/scripts/check_readme_bodies.py ." for step in steps)
+    requirements = (WORKFLOWS.parents[1] / "skills/development/write-module-readme/requirements.txt").read_text()
+    assert "PyYAML" in requirements
+    assert "markdown-it-py" in requirements
 
 
 @pytest.mark.parametrize("filename", ["umbod-ci.yml", "website-ci.yml"])
@@ -43,6 +51,14 @@ def test_ci_runs_when_harness_workflow_changes(filename: str) -> None:
     assert ".github/workflows/harness-linting.yml" in workflow["on"]["pull_request"]["paths"]
 
 
-def test_module_readmes_in_any_src_tree_trigger_ci() -> None:
+@pytest.mark.parametrize("filename", ["umbod-ci.yml", "website-ci.yml"])
+def test_skill_source_changes_trigger_ci(filename: str) -> None:
+    workflow = yaml.load((WORKFLOWS / filename).read_text(), Loader=yaml.BaseLoader)
+    assert "skills/development/write-module-readme/**" in workflow["on"]["pull_request"]["paths"]
+    if filename == "website-ci.yml":
+        assert "skills/development/write-module-readme/**" in workflow["on"]["push"]["paths"]
+
+
+def test_readmes_anywhere_in_repository_trigger_ci() -> None:
     workflow = yaml.load((WORKFLOWS / "umbod-ci.yml").read_text(), Loader=yaml.BaseLoader)
-    assert "**/src/**/README.md" in workflow["on"]["pull_request"]["paths"]
+    assert "**/README.md" in workflow["on"]["pull_request"]["paths"]

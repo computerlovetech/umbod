@@ -7,7 +7,7 @@ description: "Resumable authorization and refresh integration for personal downs
 # Files
 
 - [__init__.py](./__init__.py) — Public module exports.
-- [callback.py](./callback.py) — Trusted callback policy.
+- [callback.py](./callback.py) — Issuer-bound callback policy for externally registered provider clients.
 - [factory.py](./factory.py) — Provider composition.
 - [network.py](./network.py) — Bounded public HTTP transport.
 - [provider.py](./provider.py) — Discovery and authorization exchange.
@@ -15,7 +15,3 @@ description: "Resumable authorization and refresh integration for personal downs
 - [refresh.py](./refresh.py) — Refresh exchange.
 - [transport.py](./transport.py) — HTTP contracts and in-memory adapter.
 - [validation.py](./validation.py) — Wire and provider-context validation.
-
-# Context
-
-Preconfigured provider clients must externally register issuer-bound callback URIs when issuer response support is absent; administrator policy is not rewritten during authorization.

@@ -32,7 +32,7 @@ async function authorize(api: PersonalConnectionsApi): Promise<void> {
 }
 
 describe('single click personal connection through public ports', () => {
-  test('primary Connect reserves before enabling and initiates exactly once', async (): Promise<void> => {
+  test('controller Connect reserves before enabling and initiates exactly once', async (): Promise<void> => {
     const { state, api, clock, browser } = harness();
     const enabling = deferred<Selection>();
     const enable = vi.spyOn(api.connections, 'setEnablement').mockImplementation(() => {
@@ -42,14 +42,14 @@ describe('single click personal connection through public ports', () => {
     vi.spyOn(api.connections, 'get').mockResolvedValue({ ...selection, has_authorization: false });
     const start = vi.spyOn(api.authorization, 'start').mockResolvedValue(pendingAttempt);
     const view = new PersonalAccessViewState(() => state);
-    const connecting = view.performPrimary();
-    await view.performPrimary();
+    const connecting = state.connect();
+    await state.connect();
     expect(enable).toHaveBeenCalledOnce();
     enabling.resolve({ ...selection, has_authorization: false });
     await connecting;
     expect(start).toHaveBeenCalledOnce();
     expect(browser.windows[0].url).toBe(pendingAttempt.authorization_url);
-    expect(view.fallbackRequired).toBe(false);
+    expect(state.authorizationOpened).toBe(true);
     expect(state.monitoring).toBe(true);
     expect(view.status.action).toBeNull();
     expect(view.menuActions.some((action) => action.id === 'check')).toBe(true);
@@ -149,8 +149,8 @@ describe('single click personal connection through public ports', () => {
     expect(discover).toHaveBeenCalledOnce();
     discover.mockResolvedValue();
     const view = new PersonalAccessViewState(() => state);
-    expect(view.primaryLabel).toBe('Retry loading tools');
-    await view.performPrimary();
+    expect(view.menuActions.find((action) => action.id === 'retry-tools')?.disabled).toBe(false);
+    await view.perform('retry-tools');
     expect(discover).toHaveBeenCalledTimes(2);
     expect(changed).toHaveBeenCalled();
     state.dispose();
@@ -243,8 +243,8 @@ describe('single click personal connection through public ports', () => {
     vi.mocked(api.connections.get).mockResolvedValue({ ...selection, runtime_available: true });
     expect(discover).not.toHaveBeenCalled();
     const view = new PersonalAccessViewState(() => state);
-    expect(view.primaryLabel).toBe('Retry loading tools');
-    await view.performPrimary();
+    expect(view.menuActions.find((action) => action.id === 'retry-tools')?.disabled).toBe(false);
+    await view.perform('retry-tools');
     expect(discover).toHaveBeenCalledOnce();
     expect(state.toolsNeedLoading).toBe(false);
     state.dispose();

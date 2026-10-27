@@ -6,6 +6,8 @@ import type { PersonalConnectionController } from './port';
 import { isTerminalAttempt, type AuthorizationHealth, type Attempt, type Selection, type StartAttempt } from '../domain/schemas';
 import { isUnavailable, requiresSignIn, safeActionError, safeRenewalError } from './errors';
 
+const authorizationWindowUnavailableMessage = 'Could not open the sign-in window. Allow popups for Umbod, then choose Continue sign-in in the actions menu.';
+
 export class ConnectionState implements PersonalConnectionController {
   selection: Selection;
   attempt: Attempt | null = $state.raw<Attempt | null>(null);
@@ -20,6 +22,7 @@ export class ConnectionState implements PersonalConnectionController {
   health: AuthorizationHealth | null = $state.raw<AuthorizationHealth | null>(null);
   healthPhase = $state<'loading' | 'ready' | 'unavailable'>('loading');
   healthCheckedAt = $state('');
+  healthRefreshError = $state('');
   renewing = $state(false);
   readingDetails = $state(false);
   loadingTools = $state(false);
@@ -31,6 +34,7 @@ export class ConnectionState implements PersonalConnectionController {
   private monitoringDeadline = 0;
   private readFailures = 0;
   private statusRead: Promise<void> | null = null;
+  private healthRead: Promise<void> | null = null;
   private revision = 0;
   private active = true;
   private authorizationWindow: AuthorizationWindow | null = null;
@@ -45,6 +49,7 @@ export class ConnectionState implements PersonalConnectionController {
     this.clearAttempt();
     this.health = null;
     this.healthCheckedAt = '';
+    this.healthRefreshError = '';
     this.healthPhase = 'loading';
     this.busy = false;
     this.loadingTools = false;
@@ -91,16 +96,29 @@ export class ConnectionState implements PersonalConnectionController {
 
   loadHealth = async (): Promise<void> => {
     if (!this.active || this.busy) return;
+    if (this.healthRead) return this.healthRead;
     const revision = ++this.revision;
-    this.healthPhase = 'loading';
+    const hadConfirmedHealth = this.healthPhase === 'ready' && this.health !== null;
+    if (!hadConfirmedHealth) this.healthPhase = 'loading';
+    const read = this.readHealth(revision, hadConfirmedHealth);
+    this.healthRead = read;
+    try {
+      await read;
+    } finally {
+      if (this.healthRead === read) this.healthRead = null;
+    }
+  };
+
+  private readHealth = async (revision: number, hadConfirmedHealth: boolean): Promise<void> => {
     try {
       const health = await this.api.authorization.getHealth(this.selection.connector_id);
-      if (!this.current(revision)) return;
-      this.installHealth(health);
+      if (this.current(revision)) this.installHealth(health);
     } catch (error) {
       if (!this.current(revision)) return;
       if (requiresSignIn(error)) this.authenticationLost();
-      else this.healthPhase = 'unavailable';
+      else if (hadConfirmedHealth) {
+        this.healthRefreshError = "Couldn't refresh access status. Showing the last confirmed status. Use Check authorization status in the actions menu to try again.";
+      } else this.healthPhase = 'unavailable';
     }
   };
 
@@ -108,6 +126,7 @@ export class ConnectionState implements PersonalConnectionController {
     this.health = health;
     this.healthPhase = 'ready';
     this.healthCheckedAt = new Date().toLocaleString();
+    this.healthRefreshError = '';
   };
 
   private ownerRead = async <T>(read: Promise<T>, revision: number): Promise<T> => {
@@ -371,6 +390,25 @@ export class ConnectionState implements PersonalConnectionController {
         if (this.authorizationWindow === reserved && (!this.current(revision) || !this.authorizationOpened)) this.closeAuthorizationWindow();
       }
     });
+  };
+
+  continueSignIn = (): void => {
+    if (!this.active || !this.selection.enabled || !this.attempt || !this.authorizationUrl || this.busy || this.needsRefresh) return;
+    try {
+      if (this.authorizationWindow?.focus()) {
+        this.authorizationOpened = true;
+        if (this.error === authorizationWindowUnavailableMessage) this.error = '';
+        return;
+      }
+    } catch {}
+    this.closeAuthorizationWindow();
+    const reserved = this.reserveAuthorizationWindow();
+    this.authorizationWindow = reserved;
+    this.authorizationOpened = this.navigateAuthorizationWindow(reserved, this.authorizationUrl);
+    if (!this.authorizationOpened) {
+      this.closeAuthorizationWindow();
+      this.error = authorizationWindowUnavailableMessage;
+    } else if (this.error === authorizationWindowUnavailableMessage) this.error = '';
   };
 
   check = async (): Promise<void> => {

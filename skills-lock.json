@@ -89,7 +89,7 @@
     "write-module-readme": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "53d3297cae62ebec032dbd3e8d60c80f0098544ac131677eca9e310c3d2daf9e"
+      "computedHash": "963f4ad3b33075bf637fcafdc5570d84dabaadebf73bb73afd4e02b7b4f31b91"
     }
   }
 }

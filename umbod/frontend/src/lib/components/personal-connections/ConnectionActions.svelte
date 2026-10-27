@@ -12,8 +12,10 @@
   async function act(action: ConnectionAction): Promise<void> {
     onaction?.();
     const operation = view.perform(action);
+    const transfersFocus = action === 'continue-sign-in' || action === 'sign-in';
+    if (transfersFocus) await operation;
     await tick();
-    view.focusTrigger();
+    if (!transfersFocus || !state.authorizationOpened) view.focusTrigger();
     await operation;
   }
 </script>

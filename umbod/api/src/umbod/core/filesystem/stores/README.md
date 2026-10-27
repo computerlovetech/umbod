@@ -15,6 +15,6 @@ description: "Database-neutral namespace and access-policy persistence."
 - [session.py](./session.py) — Storage failure translation.
 - [transactions.py](./transactions.py) — Combined namespace and policy writes.
 
-# Context
+# Related links
 
-Follow [ADR-001](../../../../../../project/architecture-records/ADR-001-backend-neutral-persistence.md) for store ownership and application-managed persistence lifetimes.
+- [ADR-001](../../../../../../project/architecture-records/ADR-001-backend-neutral-persistence.md) — Store ownership and application-managed persistence lifetimes.

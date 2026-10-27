@@ -14,6 +14,7 @@ description: "Direct-node permission evaluation and caller-to-principal resoluti
 - [resolver.py](./resolver.py) — Verified identity mapping.
 - [service.py](./service.py) — Shared policy evaluator.
 
-# Context
+# Related links
 
-Authorized [browsing](../browsing/README.md) and [creation](../creation/README.md) are separate operation boundaries; raw filesystem and policy capabilities remain trusted internal APIs.
+- [Browsing](../browsing/README.md) — Authorized browsing boundary, separate from trusted raw filesystem APIs.
+- [Creation](../creation/README.md) — Authorized creation boundary, separate from trusted policy APIs.

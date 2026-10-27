@@ -24,24 +24,6 @@ export class PersonalAccessViewState implements PersonalAccessViewController {
     return labels[state.health.state];
   }
 
-  get fallbackRequired(): boolean {
-    const state = this.connection();
-    return Boolean(state.attempt && state.authorizationUrl && !state.authorizationOpened && !state.busy && !state.needsRefresh);
-  }
-
-  get primaryLabel(): string {
-    const labels: Record<ConnectionAction, string> = { 'retry-tools': 'Retry loading tools', connect: 'Connect', toggle: 'Enable access', 'sign-in': 'Connect', discover: 'Retry loading tools', renew: 'Renew access', refresh: 'Check authorization status', check: 'Check sign-in status', cancel: 'Cancel sign-in', disconnect: 'Disconnect' };
-    return this.status.action ? labels[this.status.action] : '';
-  }
-
-  get primaryDisabled(): boolean {
-    if (this.status.action === 'connect') {
-      const state = this.connection();
-      return state.busy || state.checking || state.needsRefresh;
-    }
-    return this.menuActions.find((action) => action.id === this.status.action)?.disabled ?? true;
-  }
-
   get menuActions(): ConnectionMenuAction[] {
     const state = this.connection();
     const blockedReason = state.needsRefresh ? 'Check authorization status before another action.' : state.busy || state.checking ? 'Another action is in progress.' : state.attempt ? 'Finish or cancel the current sign-in first.' : state.renewalInProgress ? 'Renewal is in progress. Check authorization status.' : this.status.description;
@@ -49,7 +31,9 @@ export class PersonalAccessViewState implements PersonalAccessViewController {
     return [
       ...(state.toolsRecovery && state.selection.enabled ? [item('retry-tools', 'Retry loading tools', state.busy || state.checking || state.attempt !== null)] : []),
       item('toggle', state.selection.enabled ? 'Disable access' : 'Enable access', state.selection.enabled ? state.cleanupBlocked : state.busy || state.needsRefresh),
-      ...(state.selection.enabled ? [item('sign-in', this.signInLabel, state.busy || state.needsRefresh || state.attempt !== null || state.renewalInProgress)] : []),
+      ...(state.selection.enabled ? state.attempt
+        ? [item('continue-sign-in', 'Continue sign-in', !state.authorizationUrl || state.busy || state.needsRefresh)]
+        : [item('sign-in', this.signInLabel, state.busy || state.checking || state.needsRefresh || state.renewalInProgress)] : []),
       ...(state.selection.enabled && state.selection.has_authorization ? [item('discover', 'Refresh tools', !state.canDiscover)] : []),
       ...(state.renewableAuthorization ? [item('renew', 'Renew access', !state.canRenew)] : []),
       item('refresh', 'Check authorization status', state.busy || state.checking || state.loadingTools),
@@ -66,20 +50,13 @@ export class PersonalAccessViewState implements PersonalAccessViewController {
     this.root?.querySelector<HTMLButtonElement>('button')?.focus();
   };
 
-  performPrimary = async (): Promise<void> => {
-    const action = this.status.action;
-    if (!action || this.primaryDisabled) return;
-    if (action === 'connect' || action === 'sign-in') await this.connection().connect();
-    else await this.perform(action);
-  };
-
   perform = async (action: ConnectionAction): Promise<void> => {
     this.setMenuOpen(false);
     const item = this.menuActions.find((candidate) => candidate.id === action);
     if (!item || item.disabled) return;
     const state = this.connection();
     const operations: Record<ConnectionAction, () => Promise<void> | void> = {
-      'retry-tools': () => state.retryLoadingTools(), connect: () => state.connect(), toggle: () => state.setEnabled(), 'sign-in': () => state.start(), discover: () => state.discover(), renew: () => state.renew(), refresh: () => state.refresh(), check: () => state.check(), cancel: () => state.cancel(), disconnect: () => state.requestDisconnect()
+      'retry-tools': () => state.retryLoadingTools(), 'continue-sign-in': () => state.continueSignIn(), toggle: () => state.setEnabled(), 'sign-in': () => state.start(), discover: () => state.discover(), renew: () => state.renew(), refresh: () => state.refresh(), check: () => state.check(), cancel: () => state.cancel(), disconnect: () => state.requestDisconnect()
     };
     await operations[action]();
   };

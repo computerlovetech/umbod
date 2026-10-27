@@ -7,13 +7,12 @@ description: Planning and applying connector scaffolding within an existing Hatc
 # Files
 
 - [__init__.py](./__init__.py) — Public planning interface.
-- [adapters.py](./adapters.py) — Project file operations.
+- [adapters.py](./adapters.py) — Project file operations and non-atomic apply failures.
 - [cli.py](./cli.py) — Connector init command.
 - [models.py](./models.py) — Requests and plans.
 - [port.py](./port.py) — Project file contract.
 - [service.py](./service.py) — Initialization planning and application.
 
-# Context not available from the code
+# Related links
 
 - [ADR-003](../../../../../umbod/project/architecture-records/ADR-003-umbod-specific-connector-cli.md) — SDK connector CLI scope.
-- After an apply failure, inspect the reported paths rather than assuming automatic cleanup; writes across project files are not atomic.

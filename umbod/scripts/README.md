@@ -6,7 +6,7 @@ description: Source README validation, release version conversion and SDK versio
 
 # Files
 
-- [check_module_readmes.py](./check_module_readmes.py) — OKF frontmatter validation beneath source trees.
+- [README skill checks](../../skills/development/write-module-readme/SKILL.md) — Skill-owned README validation and post-edit checks.
 - [release_versions.py](./release_versions.py) — Release version conversion.
 - [stamp_sdk_version.py](./stamp_sdk_version.py) — SDK build-workspace stamping.
 - [tests](./tests/) — README checks, version and release workflow contracts.

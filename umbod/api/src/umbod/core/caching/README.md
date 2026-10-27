@@ -6,12 +6,12 @@ description: Operation-owned asynchronous cache policy over an injected key-valu
 
 # Files
 
-- [__init__.py](./__init__.py)
-- [errors.py](./errors.py)
-- [models.py](./models.py)
-- [ports.py](./ports.py)
-- [request_cache.py](./request_cache.py)
+- [__init__.py](./__init__.py) — Public cache exports.
+- [errors.py](./errors.py) — Recursive cache load failures.
+- [models.py](./models.py) — Namespaced storage keys and generations.
+- [ports.py](./ports.py) — Asynchronous request-cache contract.
+- [request_cache.py](./request_cache.py) — Concurrent loading and request-local invalidation.
 
-# Context not available from the code
+# Related links
 
 - [ADR-010](../../../../../project/architecture-records/ADR-010-key-value-storage-drivers.md) — Driver ownership, logical invalidation and constraints on future remote storage.

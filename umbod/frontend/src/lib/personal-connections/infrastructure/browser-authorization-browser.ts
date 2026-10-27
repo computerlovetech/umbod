@@ -16,6 +16,16 @@ class BrowserAuthorizationWindow implements AuthorizationWindow {
     }
   };
 
+  focus = (): boolean => {
+    try {
+      if (this.popup.closed) return false;
+      this.popup.focus();
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   close = (): void => {
     try {
       this.popup.close();

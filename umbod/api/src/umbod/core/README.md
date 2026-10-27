@@ -6,7 +6,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 
 # Files
 
-- [__init__.py](./__init__.py)
+- [__init__.py](./__init__.py) — Shared core exports; cross-kind composition belongs in delivery wiring.
 - [activation](./activation/README.md) — Capability enablement.
 - [admin_overview](./admin_overview/README.md) — Administration summary contracts.
 - [administrator](./administrator/) — Shared administrator configuration.
@@ -30,8 +30,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [telemetry](./telemetry/README.md) — Telemetry models and sink ports.
 - [user_catalogue](./user_catalogue/README.md) — Caller-visible connector catalogue.
 
-# Context not available from the code
+# Related links
 
-- Shared root packages must not import connector-kind packages. Cross-kind composition belongs in delivery wiring.
 - [ADR-001](../../../../project/architecture-records/ADR-001-backend-neutral-persistence.md) — Persistence boundary decisions.
 - [ADR-009](../../../../project/architecture-records/ADR-009-deferred-read-planning.md) — Read planning and authority boundaries.

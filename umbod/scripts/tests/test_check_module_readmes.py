@@ -3,10 +3,10 @@ import sys
 from pathlib import Path
 
 import pytest
-from scripts.check_module_readmes import find_module_readmes, validate_readme
+from check_module_readmes import find_module_readmes, validate_readme
 
 
-SCRIPT = Path(__file__).resolve().parents[1] / "check_module_readmes.py"
+SCRIPT = Path(__file__).resolve().parents[3] / "skills" / "development" / "write-module-readme" / "scripts" / "check_module_readmes.py"
 
 
 @pytest.mark.parametrize(
@@ -100,6 +100,7 @@ def test_cli_rejects_missing_repository(tmp_path: Path) -> None:
 
 
 def test_cli_checks_repository_independently_of_working_directory(tmp_path: Path) -> None:
-    result = subprocess.run([sys.executable, str(SCRIPT)], cwd=tmp_path, capture_output=True, text=True)
+    repository = Path(__file__).resolve().parents[3]
+    result = subprocess.run([sys.executable, str(SCRIPT), str(repository)], cwd=tmp_path, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     assert "OKF check passed" in result.stdout
