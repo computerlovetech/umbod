@@ -10,14 +10,14 @@ Use Vercel's [skills.sh](https://skills.sh/) to install agent skills. Repository
 
 Architecture decision records live in [`umbod/project/architecture-records/`](umbod/project/architecture-records/). Read the applicable accepted ADRs before changing architecture; document intentional changes there rather than introducing a parallel pattern.
 
-- [ADR-001: Neutral persistence](umbod/project/architecture-records/ADR-001-backend-neutral-persistence.md) — Read for database boundaries, migrations, or runtime lifetimes.
-- [ADR-002: Client-owned credentials](umbod/project/architecture-records/ADR-002-client-side-credential-storage.md) (Proposed) — Read for MCP credential ownership and authentication.
-- [ADR-003: Connector CLI](umbod/project/architecture-records/ADR-003-umbod-specific-connector-cli.md) — Read before adding SDK CLI commands.
-- [ADR-004: Shared backend](umbod/project/architecture-records/ADR-004-single-backend-api-and-desktop-boundary.md) — Read for backend APIs or Desktop integration.
-- [ADR-005: Unified workspace](umbod/project/architecture-records/ADR-005-unified-workspace-and-usable-controls.md) — Read for navigation or control eligibility.
-- [ADR-006: Filesystem boundaries](umbod/project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Read for file storage, namespaces, or ownership persistence.
-- [ADR-007: Actor-specific UI](umbod/project/architecture-records/ADR-007-actor-specific-ui-composition.md) — Read for shared components and actor-owned views.
-- [ADR-008: Event-synchronized tool runtime](umbod/project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Read before tool registration, discovery, routing, synchronization, or invocation changes.
+- [ADR-001: Backend-Neutral Persistence Module Boundaries](umbod/project/architecture-records/ADR-001-backend-neutral-persistence.md) — Read for database boundaries, migrations, or runtime lifetimes.
+- [ADR-002: Client-Owned Credentials for Multi-Provider MCP Tool Authentication](umbod/project/architecture-records/ADR-002-client-side-credential-storage.md) (Proposed) — Read for MCP credential ownership and authentication.
+- [ADR-003: Umbod-Specific Connector Development CLI](umbod/project/architecture-records/ADR-003-umbod-specific-connector-cli.md) — Read before adding SDK CLI commands.
+- [ADR-004: One Backend API and a Thin Desktop Boundary](umbod/project/architecture-records/ADR-004-single-backend-api-and-desktop-boundary.md) — Read for backend APIs or Desktop integration.
+- [ADR-005: One Workspace and Only Usable Controls](umbod/project/architecture-records/ADR-005-unified-workspace-and-usable-controls.md) — Read for navigation or control eligibility.
+- [ADR-006: Filesystem Storage Infrastructure Boundary](umbod/project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Read for file storage, namespaces, or ownership persistence.
+- [ADR-007: Actor-Specific Composition of Shared UI Components](umbod/project/architecture-records/ADR-007-actor-specific-ui-composition.md) — Read for shared components and actor-owned views.
+- [ADR-008: Event-Synchronized In-Memory Tool Runtime](umbod/project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Read before tool registration, discovery, routing, synchronization, or invocation changes.
 
 ## Where to start by task
 

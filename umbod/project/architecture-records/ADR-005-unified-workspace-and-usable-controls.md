@@ -5,10 +5,6 @@
 - **Decision owners:** Product / UX
 - **Scope:** Umbod web application
 
-## Context
-
-A landing page that asks users to choose between Dashboard and Administration makes them interpret internal roles before starting work. Showing administration destinations to people without access creates avoidable dead ends. Separate navigation also makes the same product feel like two applications.
-
 ## Decision
 
 Umbod presents one workspace. The root URL opens Dashboard directly for both ordinary users and administrators. The brand link always returns to Dashboard, and workspace structure, navigation, and account controls remain consistent across user and administration pages.
@@ -23,14 +19,15 @@ Until access is confirmed, privileged controls stay hidden. Resolve administrati
 
 Visibility is a usability rule, not a security mechanism. Backend authorization remains mandatory for every protected operation. Direct URLs, bookmarks, and access revoked after navigation must still receive safe authentication or access-denied handling without exposing protected content.
 
-## Acceptance criteria
+The [supporting detail](supporting/workspace-controls.md) preserves the accepted constraints and verification requirements that accompany this decision.
 
-- Opening `/` leads directly to `/dashboard`, with no role chooser.
-- Ordinary users see no administration navigation, including while access is being checked or when the check fails.
-- Administrators see Dashboard and the administration destinations in the same workspace navigation.
-- Navigating between Dashboard and administration preserves the workspace identity and Dashboard home destination.
-- A failed administration check does not block the user's connector catalogue.
-- Direct administration requests remain protected by backend authorization.
+## Context and rationale
+
+A landing page that asks users to choose between Dashboard and Administration makes them interpret internal roles before starting work. Showing administration destinations to people without access creates avoidable dead ends. Separate navigation also makes the same product feel like two applications.
+
+## Alternatives considered
+
+An alternatives evaluation was not recorded. The context describes the competing pressures, but does not establish which alternatives were seriously considered or their full trade-offs.
 
 ## Consequences
 
@@ -39,3 +36,13 @@ Visibility is a usability rule, not a security mechanism. Backend authorization 
 - Future UI changes must account for access and eligibility before rendering controls.
 - Access-state changes and direct navigation still require defensive handling; hidden links alone never establish authorization.
 - The frontend currently checks the existing administrator current-user endpoint. A dedicated capability contract can replace that check when the backend exposes one without changing the UX rule.
+
+## Confidence and reevaluation
+
+Confidence was not recorded. The decision relies on the administrator API boundary described above; that description is historical, not a fresh verification. Reevaluate through a new ADR if permission granularity or workspace requirements change the eligibility rule.
+
+## Supporting material
+
+- [Accepted constraints and supporting detail](supporting/workspace-controls.md)
+
+- [ADR-007: Actor-Specific Composition of Shared UI Components](ADR-007-actor-specific-ui-composition.md)

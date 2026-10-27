@@ -3,12 +3,7 @@
 - **Status:** Accepted
 - **Decision owners:** Product / Frontend architecture
 - **Scope:** Umbod web components
-
-## Context
-
-[ADR-005](ADR-005-unified-workspace-and-usable-controls.md) establishes one consistent workspace with actor-eligible controls. A consistent appearance does not require administration and ordinary-user experiences to share every presentation decision.
-
-Reusing a complete actor-owned view can make an unrelated actor change when its description, schema, status, or controls are changed. Duplicating entire cards, layouts, and interaction mechanics avoids that coupling but creates unnecessary maintenance and accessibility work.
+- **Date:** Not recorded
 
 ## Decision
 
@@ -22,26 +17,28 @@ A shared component change may intentionally affect every consumer. Such changes 
 
 Do not introduce extension points solely for hypothetical variation. Small amounts of composition markup are acceptable duplication; business rules, validation, formatting mechanisms, and accessibility behavior should not be copied merely to create separate actor views.
 
-## Tool Card Application
+The [supporting detail](supporting/actor-ui-composition.md) preserves the accepted constraints and verification requirements that accompany this decision.
 
-`frontend/src/lib/components/shared/tools/ToolCard.svelte` owns the card structure and tool identity. Description, parameters, output schema, and controls are optional typed snippets. It supplies no implicit description, parameter summary, absent-schema warning, or management action.
+## Context and rationale
 
-The administration `ToolCard.svelte` composes administration data, default presenters, and caller-supplied management controls. Dashboard `CatalogueToolCard.svelte` composes the user catalogue, full execution input schema, output-schema projection, and no administrative controls. Both select neutral presenters under `components/shared/tools/` without importing each other's view or data models.
+[ADR-005](ADR-005-unified-workspace-and-usable-controls.md) establishes one consistent workspace with actor-eligible controls. A consistent appearance does not require administration and ordinary-user experiences to share every presentation decision.
 
-Existing administration wire-format normalization remains administration-owned. Shared presentation does not require a unified backend DTO, a new backend service, or changes to permission and owner-lifetime boundaries.
+Reusing a complete actor-owned view can make an unrelated actor change when its description, schema, status, or controls are changed. Duplicating entire cards, layouts, and interaction mechanics avoids that coupling but creates unnecessary maintenance and accessibility work.
 
-## Acceptance Criteria
+## Alternatives considered
 
-- Shared tool presentation has no dependency on actor-owned modules.
-- Callers can replace or omit description, input, output, and control sections independently.
-- The shared card renders no role-specific defaults when sections are omitted.
-- Administration retains its management controls and existing presentation behavior.
-- Dashboard retains read-only schemas without inheriting administrative controls.
-- Component tests cover independent section replacement, actor compositions, and the shared dependency boundary.
-- Browser verification covers the affected views and responsive behavior without performing live authorization or management mutations.
+An alternatives evaluation was not recorded. The context describes the competing pressures, but does not establish which alternatives were seriously considered or their full trade-offs.
 
 ## Consequences
 
 Actor-specific requirements can evolve without copying shared card structure or modifying another actor's composition. Reusable presenters and accessibility behavior remain implemented once. Shared visual changes still have a deliberate cross-consumer impact and must be checked accordingly.
 
 This is a focused composition boundary, not a requirement to wrap every UI element, migrate every existing component immediately, duplicate business services, or prohibit deliberate shared styling.
+
+## Confidence and reevaluation
+
+Confidence and decision date were not recorded. The tool-card application and acceptance criteria describe the intended boundary, not evidence that checks passed. Reevaluate through a new ADR if actor-specific requirements cannot be composed without coupling shared presentation to actor-owned policy.
+
+## Supporting material
+
+- [Accepted constraints and supporting detail](supporting/actor-ui-composition.md)
