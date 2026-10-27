@@ -70,11 +70,11 @@
     </div>
   </aside>
 
-  <section class="content-shell" aria-busy={contentLoading || state.pendingNavigationItem !== undefined}>
-    <div class={["content-loading", (contentLoading || state.pendingNavigationItem !== undefined) && "active"]}>
-      <DelayedSpinner active={contentLoading || state.pendingNavigationItem !== undefined} label="Loading page" />
+  <section class="content-shell" aria-busy={contentLoading || state.navigationPending}>
+    <div class={["content-loading", (contentLoading || state.navigationPending) && "active"]}>
+      <DelayedSpinner active={contentLoading || state.navigationPending} label="Loading page" />
     </div>
-    <div class={["content-width", contentWidth === 'wide' && "wide"]} inert={contentLoading || state.pendingNavigationItem !== undefined}>
+    <div class={["content-width", contentWidth === 'wide' && "wide"]} inert={contentLoading || state.navigationPending}>
       {@render children()}
     </div>
   </section>

@@ -16,11 +16,12 @@
     activeItem: AdminShellActiveItem;
     accountIdentity: HeaderAccountIdentityState;
     contentWidth?: 'default' | 'wide';
+    contentLoading?: boolean;
     children: Snippet;
     logout?: LogoutNavigation;
   };
 
-  let { activeItem, accountIdentity, contentWidth = 'default', children, logout = logoutNavigation }: AdminShellProps = $props();
+  let { activeItem, accountIdentity, contentWidth = 'default', contentLoading = false, children, logout = logoutNavigation }: AdminShellProps = $props();
 
   const navigationItems = workspaceNavigation(true);
 </script>
@@ -31,6 +32,7 @@
   {activeItem}
   {accountIdentity}
   {contentWidth}
+  {contentLoading}
   {logout}
 >
   {@render children()}

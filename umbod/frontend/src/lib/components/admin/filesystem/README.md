@@ -1,6 +1,6 @@
 # Filesystem access editor
 
-- `FilesystemAccessPage.svelte`: Browser composition injecting both filesystem administration and shared group catalogue ports, mount loading and disposal.
+- `FilesystemAccessPage.svelte`: Browser composition injecting both filesystem administration and shared group catalogue ports, mount loading and disposal, and the administration shell with its page-loading overlay.
 - `FilesystemAccessEditor.svelte`: Shared group catalogue sidebar including zero-access identities and inspectable legacy grants. Selected group detail lists independent issuer-qualified grants or explicit no-access status. Registration uses the shared registration modal; assignment/editing and removal only stage filesystem policy changes until Save policy. Recursive grants remain read-only.
 - `FilesystemGroupDialog.svelte` and `filesystem-group-editor-state.svelte.ts`: Isolated assignment/edit drafts with immutable selected group identity, explicit editable issuer, multiple issuer grants, strict permission/duplicate validation and blank legacy identity repair. Cancel leaves the policy draft unchanged.
 - `../group-permissions/shared/GroupRegistrationDialog.svelte` and `group-registration-state.svelte.ts`: Shared exact group-claim registration, persisted independently without granting access or creating IdP membership.

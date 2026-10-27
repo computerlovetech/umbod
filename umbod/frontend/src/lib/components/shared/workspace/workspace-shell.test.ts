@@ -1,10 +1,15 @@
 import { render } from 'svelte/server';
 import { createRawSnippet } from 'svelte';
-import { describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'vitest';
 import WorkspaceShell from './WorkspaceShell.svelte';
 import { WorkspaceShellState, type WorkspaceNavigationContext } from './workspace-shell-state.svelte';
 
-vi.mock('$app/state', () => ({ navigating: { to: null, from: null } }));
+const navigating = vi.hoisted(() => ({
+  to: null as { url: URL } | null,
+  from: null as { url: URL } | null
+}));
+vi.mock('$app/state', () => ({ navigating }));
+afterEach((): void => { navigating.to = null; navigating.from = null; });
 
 const navigationItems = [
   { id: 'dashboard', label: 'Dashboard', href: '/dashboard' },
@@ -59,6 +64,25 @@ describe('workspace shell public interface', () => {
     expect(state.pendingNavigationItem).toBeUndefined();
     context = { ...context, destinationPath: '/tools', originPath: '/tools' };
     expect(state.pendingNavigationItem).toBeUndefined();
+  });
+
+  test.each([
+    ['/admin/group-permissions/connectors', '/admin/group-permissions/filesystem', true],
+    ['/admin/group-permissions/filesystem', '/admin/group-permissions/connectors', true],
+    ['/admin/group-permissions/connectors', '/admin/group-permissions/connectors', false]
+  ] as const)('permission navigation from %s to %s marks the content busy: %s', (origin, destination, busy): void => {
+    navigating.from = { url: new URL(origin, 'https://umbod.test') };
+    navigating.to = { url: new URL(destination, 'https://umbod.test') };
+    const { body } = render(WorkspaceShell, { props: {
+      workspaceLabel: 'Workspace', homeHref: '/dashboard',
+      navigationItems: [{ id: 'groupPermissions', label: 'Group permissions', href: '/admin/group-permissions/connectors' }],
+      activeItem: 'groupPermissions',
+      children: createRawSnippet(() => ({ render: (): string => '<p>Permissions</p>' }))
+    } });
+    expect(body).toContain(`aria-busy="${busy}"`);
+    expect(body.includes('content-loading active')).toBe(busy);
+    expect(body.includes(' inert')).toBe(busy);
+    expect(body).toContain('aria-current="page">Group permissions');
   });
 
   test('explicit logout blocks duplicate submissions', async () => {

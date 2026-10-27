@@ -15,6 +15,11 @@ export class WorkspaceShellState {
 
   constructor(private readonly context: () => WorkspaceNavigationContext) {}
 
+  get navigationPending(): boolean {
+    const context = this.context();
+    return context.destinationPath !== null && context.destinationPath !== context.originPath;
+  }
+
   get pendingNavigationItem(): WorkspaceNavigationItem | undefined {
     const context = this.context();
     if (context.destinationPath === null || context.destinationPath === context.originPath) return undefined;
