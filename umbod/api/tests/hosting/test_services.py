@@ -105,7 +105,7 @@ import umbod.config
 
 async def verify() -> None:
     settings = umbod.config.AppConfig.model_validate({
-        "mcp": {"auth_mode": "none", "metrics_enabled": False},
+        "mcp": {"auth_mode": "none", "metrics_enabled": False, "messaging_transport": "sql"},
         "connector_store": {"type": "sqlite", "sqlite_path": "backend.sqlite3"},
     })
     umbod.config.load_server_app_config = lambda path: settings

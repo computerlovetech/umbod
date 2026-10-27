@@ -44,7 +44,8 @@ def settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppConfig:
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(declaration))
     return AppConfig.model_validate({
         "rest": {"metrics_enabled": False},
-        "mcp": {"metrics_enabled": False, "auth_mode": "none"},
+        "mcp": {"metrics_enabled": False, "auth_mode": "none", "messaging_transport": "sql"},
+        "connector_store": {"type": "sqlite", "sqlite_path": str(tmp_path / "backend.sqlite3")},
         "admin_authentication": {
             "mode": "jwt", "membership_claim": "groups",
             "required_membership": "owners",

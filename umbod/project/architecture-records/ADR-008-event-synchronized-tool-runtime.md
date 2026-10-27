@@ -42,6 +42,8 @@ Each discovery operation captures a stable runtime snapshot and the current call
 8. Advance checkpoints only after successful application. Retry failures without silently skipping changes. Expose synchronization failures and lag. Until a complete initial projection exists, or when a detected synchronization failure makes availability unsafe, fail closed for affected capabilities rather than serving an unbounded stale authorization view.
 9. Shut down synchronization with the owning application. Replay or startup rebuilding restores the projection after restart.
 
+Messaging transport and authoritative data retrieval must remain independent over time. Future adapters and refactors must preserve this separation; changing the bus must not require changing data readers. The event adapter delivers change notifications through the messaging ports; reconciliation loads state through independently configured domain readers. The runtime source strategy selects native-state, activation and permission readers; existing downstream and OpenAPI store ports retain their own data-source configuration. Replacing the event adapter must not switch configuration, activation or permission readers, or change execution authorization.
+
 Polling a durable event stream is a valid messaging transport. Periodic full-state reloads may be an explicit recovery mechanism, but TTL caching, timer-only refresh and per-request rebuilding are not substitutes for change-event coverage. The implementation must document its consistency window; this ADR does not claim instantaneous cross-worker revocation.
 
 ### Authorization and personal tools

@@ -430,13 +430,17 @@ def create_connector_runtime_state_synchronizer(options: ConnectorRuntimeStateSy
     registry = options.mcp.connector_tool_registry
     return ConnectorRuntimeStateSynchronizer(reader=options.reader, configuration_store=options.target_stores.connector_configuration_store, publishing_store=options.target_stores.connector_publishing_store, tool_registry=registry, synchronization_source=options.synchronization_source)
 
+def _uses_http_runtime_data_readers(context: PublicAppRuntimeContext) -> bool:
+    return isinstance(context.source_strategy, HttpConnectorRuntimeStateSourceStrategy) and context.api_base_url is not None
+
+
 def create_group_permission_runtime_synchronizer(context: PublicAppRuntimeContext, api_base_url: str) -> RuntimeGroupPermissionSynchronizer:
     registry = getattr(context.mcp, 'connector_tool_registry', None)
     notifier = registry.client_notifier if registry is not None else context.mcp.capability_list_change_notifier
     runtime_permissions = context.group_permission_runtime_state
     if runtime_permissions is None:
         raise ValueError("Group permission synchronization requires group permission runtime state")
-    reader = DatabaseGroupPermissionReader(context.persistence_runtime.database) if context.settings.mcp.messaging_transport == 'sql' or context.api_base_url is None else HttpGroupPermissionReader(f"{api_base_url.rstrip('/')}/system")
+    reader = HttpGroupPermissionReader(f"{api_base_url.rstrip('/')}/system") if _uses_http_runtime_data_readers(context) else DatabaseGroupPermissionReader(context.persistence_runtime.database)
     return RuntimeGroupPermissionSynchronizer(permission_state_reloader=GroupPermissionStateReloader(permission_reader=reader, runtime_permissions=runtime_permissions), client_notifier=notifier)
 
 def _create_public_http_lifespan(context: PublicAppRuntimeContext) -> object:
@@ -476,14 +480,17 @@ def _create_public_http_lifespan(context: PublicAppRuntimeContext) -> object:
     return lifespan
 
 def _create_runtime_projection_synchronizer(context: PublicAppRuntimeContext) -> RuntimeProjectionSynchronizer:
-    transport = context.settings.mcp.messaging_transport if context.api_base_url is not None else 'sql'
+    transport = context.settings.mcp.messaging_transport
+    if transport == 'http' and context.api_base_url is None:
+        transport = 'sql'
     adapters = McpMessagingAdapterFactory(transport, context.api_base_url or '', context.persistence_runtime.database)
     health = context.mcp.runtime_projection_health
+    uses_http_readers = _uses_http_runtime_data_readers(context)
 
     async def reconcile() -> None:
         await context.mcp.downstream_mcp_discovery_coordinator.reconcile_native_capabilities()
         await reconcile_openapi_discovery(context.mcp)
-        if context.settings.mcp.messaging_transport == 'http' and context.api_base_url is not None:
+        if uses_http_readers:
             options = runtime_state_synchronizer_options(context)
             if options is None:
                 raise ValueError('HTTP runtime synchronization requires source options')
@@ -491,7 +498,7 @@ def _create_runtime_projection_synchronizer(context: PublicAppRuntimeContext) ->
             tool_synchronizer = ConnectorToolRuntimeStateSynchronizer(reader=HttpConnectorToolRuntimeStateReader(context.api_base_url), store=context.connector_tool_runtime_state_store, reconciler=context.mcp.connector_tool_registry)
             for mapping in context.connector_runtime.connector_tool_mappings:
                 await tool_synchronizer.sync_runtime_state(ConnectorToolRef(mapping.connector_id, mapping.operation_name))
-        if transport == 'sql':
+        else:
             for mapping in context.connector_runtime.connector_tool_mappings:
                 ref = CapabilityRef(connector_kind='native', connector_id=mapping.connector_id, capability_kind='tool', capability_key=mapping.operation_name)
                 status = await context.mcp.capability_activation_store.get_status(ref)

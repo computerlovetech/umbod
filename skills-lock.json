@@ -80,6 +80,11 @@
       "source": "./skills",
       "sourceType": "local",
       "computedHash": "7545fe39a3d7666f0deb87966369e6eb6a0d3b49f1e2f357e21e19625a864dcb"
+    },
+    "write-adr": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "d73fdd3e76a8a8f1766e21f13a6430343529762b134f7fe6244e4133760283bf"
     }
   }
 }
