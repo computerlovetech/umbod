@@ -1,6 +1,6 @@
 # Request-local caching
 
-Backend-independent asynchronous result reuse through explicit, injected cache instances. This module has no database, HTTP, FastAPI, infrastructure, global state, or implicit context dependency. It is not wired into the catalogue, persistence stores, or deferred read planner.
+Backend-independent asynchronous result reuse through explicit, injected cache instances. This module has no database, HTTP, FastAPI, infrastructure, global state, or implicit context dependency. The REST assignable-targets read path opts in through publication and capability-catalogue wrappers; persistence stores, deferred read plans and authoritative mutation/invocation checks remain uncached.
 
 ## Module index
 
@@ -44,4 +44,4 @@ There is no TTL, eviction limit, automatic mutation tracking, or security policy
 
 ## Existing boundaries
 
-[ADR-010](../../../../../project/architecture-records/ADR-010-key-value-storage-drivers.md) records the driver extraction and its limits. [ADR-001](../../../../../project/architecture-records/ADR-001-backend-neutral-persistence.md) retains database runtime and session ownership in composition. [ADR-009](../../../../../project/architecture-records/ADR-009-deferred-read-planning.md) remains unchanged: repeated read-plan executions perform fresh reads. No Redis implementation or production cache wiring is included.
+[ADR-010](../../../../../project/architecture-records/ADR-010-key-value-storage-drivers.md) records the driver extraction and its limits. [ADR-001](../../../../../project/architecture-records/ADR-001-backend-neutral-persistence.md) retains database runtime and session ownership in composition. [ADR-009](../../../../../project/architecture-records/ADR-009-deferred-read-planning.md) remains unchanged: repeated read-plan executions perform fresh reads. No Redis implementation is included. The [group-permission boundary](../../rest/mcp_permissions/README.md) documents the opt-in assignable-targets wiring.

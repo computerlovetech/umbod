@@ -84,7 +84,7 @@ When `personal_connections.oauth_enabled` is also enabled, owner-scoped POST/GET
 
 ### `mcp_permissions/`
 
-**Read when working with:** Group-to-tool permission APIs and permission events.
+**Read when working with:** Group-to-tool permission APIs and permission events. The [local index](mcp_permissions/README.md) separates request-cached assignable-target reads from uncached permission mutations and group reads.
 
 ### `capability_descriptions/`
 

@@ -1,8 +1,11 @@
+from collections.abc import Callable
 from typing import Annotated
 
 from fastapi import Depends
 
 from umbod.core.capabilities import (
+    CachedCapabilityCatalog,
+    CapabilityCatalog,
     CatalogCapabilityReadiness,
     ConnectorStoreCapabilityActivation,
     ConnectorStoreCapabilityPublication,
@@ -36,7 +39,12 @@ from umbod.core.permissions import (
     NoopPermissionChangeNotifier,
 )
 from umbod.core.configuration import ConnectorCurrentConfigurationStore
-from umbod.core.publishing import ConnectorPublishingStore
+from umbod.core.publishing import (
+    CachedConnectorPublicationReader,
+    ConnectorPublicationReader,
+    ConnectorPublishingStore,
+)
+from umbod.infrastructure import create_request_cache
 from umbod.core.connectors.native.registry import (
     ConnectorDefinitionFilter,
     ConnectorRegistry,
@@ -63,6 +71,17 @@ def get_native_permission_catalog(
     activation_store: Annotated[
         ActivationStore, Depends(get_capability_activation_store)
     ],
+) -> AssignablePermissionCatalog:
+    return _native_permission_catalog(
+        connector_registry, configuration_store, publishing_store, activation_store,
+    )
+
+
+def _native_permission_catalog(
+    connector_registry: ConnectorRegistry,
+    configuration_store: ConnectorCurrentConfigurationStore,
+    publishing_store: ConnectorPublicationReader,
+    activation_store: ActivationStore,
 ) -> AssignablePermissionCatalog:
     capabilities = NativeCapabilityCatalog.from_registry(connector_registry)
     schemas = {
@@ -94,25 +113,72 @@ async def get_connector_permission_catalog(
         Depends(get_connector_api_dependency_factories),
     ],
 ) -> AssignablePermissionCatalog:
-    await dependency_factories.persistence_runtime.readiness.ensure_ready()
-    openapi_catalog = await _openapi_permission_catalog(
-        dependency_factories, publishing_store, activation_store
+    return await _composite_permission_catalog(
+        native_catalog, publishing_store, activation_store, dependency_factories, _unchanged_catalog,
     )
-    downstream_catalog = _downstream_permission_catalog(
-        dependency_factories, publishing_store, activation_store
+
+
+def get_assignable_publication_reader(
+    publishing: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)],
+) -> ConnectorPublicationReader:
+    return CachedConnectorPublicationReader(publishing, create_request_cache())
+
+
+def get_assignable_native_permission_catalog(
+    connector_registry: Annotated[ConnectorRegistry, Depends(get_connector_registry)],
+    configuration_store: Annotated[
+        ConnectorCurrentConfigurationStore, Depends(get_connector_current_configuration_store),
+    ],
+    publishing: Annotated[ConnectorPublicationReader, Depends(get_assignable_publication_reader)],
+    activations: Annotated[ActivationStore, Depends(get_capability_activation_store)],
+) -> AssignablePermissionCatalog:
+    return _native_permission_catalog(connector_registry, configuration_store, publishing, activations)
+
+
+async def get_assignable_permission_catalog(
+    native_catalog: Annotated[
+        AssignablePermissionCatalog, Depends(get_assignable_native_permission_catalog),
+    ],
+    publishing: Annotated[ConnectorPublicationReader, Depends(get_assignable_publication_reader)],
+    activations: Annotated[ActivationStore, Depends(get_capability_activation_store)],
+    factories: Annotated[
+        ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories),
+    ],
+) -> AssignablePermissionCatalog:
+    return await _composite_permission_catalog(
+        native_catalog, publishing, activations, factories, _cached_catalog,
     )
-    return CompositeConnectorToolPermissionCatalog(
-        (native_catalog, openapi_catalog, downstream_catalog)
-    )
+
+
+async def _composite_permission_catalog(
+    native_catalog: AssignablePermissionCatalog,
+    publishing: ConnectorPublicationReader,
+    activations: ActivationStore,
+    factories: ConnectorApiDependencyFactories,
+    wrap_catalog: Callable[[CapabilityCatalog], CapabilityCatalog],
+) -> AssignablePermissionCatalog:
+    await factories.persistence_runtime.readiness.ensure_ready()
+    openapi_catalog = await _openapi_permission_catalog(factories, publishing, activations, wrap_catalog)
+    downstream_catalog = _downstream_permission_catalog(factories, publishing, activations, wrap_catalog)
+    return CompositeConnectorToolPermissionCatalog((native_catalog, openapi_catalog, downstream_catalog))
+
+
+def _unchanged_catalog(catalog: CapabilityCatalog) -> CapabilityCatalog:
+    return catalog
+
+
+def _cached_catalog(catalog: CapabilityCatalog) -> CapabilityCatalog:
+    return CachedCapabilityCatalog(catalog, create_request_cache())
 
 
 async def _openapi_permission_catalog(
     factories: ConnectorApiDependencyFactories,
-    publishing: ConnectorPublishingStore,
+    publishing: ConnectorPublicationReader,
     activations: ActivationStore,
+    wrap_catalog: Callable[[CapabilityCatalog], CapabilityCatalog],
 ) -> AssignablePermissionCatalog:
-    capabilities = StoreBackedOpenApiCapabilityCatalog(
-        await factories.openapi_connector_store.create()
+    capabilities = wrap_catalog(
+        StoreBackedOpenApiCapabilityCatalog(await factories.openapi_connector_store.create())
     )
     return CapabilityPermissionCatalog(
         capabilities,
@@ -128,12 +194,15 @@ async def _openapi_permission_catalog(
 
 def _downstream_permission_catalog(
     factories: ConnectorApiDependencyFactories,
-    publishing: ConnectorPublishingStore,
+    publishing: ConnectorPublicationReader,
     activations: ActivationStore,
+    wrap_catalog: Callable[[CapabilityCatalog], CapabilityCatalog],
 ) -> AssignablePermissionCatalog:
-    capabilities = StoreBackedDownstreamCapabilityCatalog(
-        factories.downstream_mcp_definition_store.create(),
-        factories.downstream_mcp_catalog_store.create(),
+    capabilities = wrap_catalog(
+        StoreBackedDownstreamCapabilityCatalog(
+            factories.downstream_mcp_definition_store.create(),
+            factories.downstream_mcp_catalog_store.create(),
+        )
     )
     catalog = CapabilityPermissionCatalog(
         capabilities,

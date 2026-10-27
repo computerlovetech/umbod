@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from umbod.rest.mcp_permissions.dependencies import (
     get_admin_group_permission_management,
-    get_connector_permission_catalog,
+    get_assignable_permission_catalog,
 )
 from umbod.rest.mcp_permissions.mappers import (
     assignable_permission_targets_response,
@@ -33,7 +33,7 @@ router = APIRouter(prefix="/mcp-permissions", tags=["mcp-permissions"])
 @router.get("/assignable-targets")
 async def list_assignable_permission_targets(
     catalog: Annotated[
-        AssignablePermissionCatalog, Depends(get_connector_permission_catalog)
+        AssignablePermissionCatalog, Depends(get_assignable_permission_catalog)
     ],
 ) -> AssignablePermissionTargetsResponse:
     return assignable_permission_targets_response(await catalog.list_assignable_targets())

@@ -1,7 +1,7 @@
 # ADR-010: Key-Value Storage Drivers Below Request Cache Policy
 
 - **Status:** Accepted
-- **Scope:** Standalone generic key-value storage and request-cache composition
+- **Scope:** Generic key-value storage, request-cache composition and opt-in assignable-target reader wrappers
 
 ## Decision
 
@@ -11,7 +11,7 @@ Concrete drivers belong in `umbod/infrastructure/key_value/`. Initially only an 
 
 `RequestCache` remains in `umbod/core/caching/` and requires an injected key-value driver. It owns request-cache policy: local pending-load coordination, task ownership, recursion detection, cancellation and logical invalidation. The driver stores successful values only, never futures, tasks, loaders or exception states. Completed cache calls consult the driver again rather than retaining a second result cache in core.
 
-Wrapping adapters depend on the core cache protocol, not concrete storage. No existing reader or delivery boundary is wrapped by this change.
+Wrapping adapters depend on the core cache protocol, not concrete storage. The initial driver extraction left production readers untouched; the assignable-target integration below opts in explicitly.
 
 ## Scope and invalidation
 
@@ -27,7 +27,15 @@ Composition owns one cache per request or explicit operation. A shared connectio
 
 A future Redis adapter must define typed key/value codecs, validation of external bytes, scoped key ownership, expiry/cleanup, connection lifetime and failure semantics. Arbitrary hashable Python keys and values are supported by the in-memory adapter; portable encodings and Python object identity are not promised for remote storage. Raw pickle loading is not an implicit part of this boundary. Driver exceptions propagate; a remote write timeout may have an ambiguous completion outcome and must be documented by the adapter.
 
-TTL, Redis configuration, Redis clients, distributed single-flight, cross-request result reuse, persistence integration and delivery wiring are deferred. No new backend selector is added to database runtime configuration.
+TTL, Redis configuration, Redis clients, distributed single-flight, cross-request result reuse, persistence integration and delivery wiring beyond the assignable-target GET path are deferred. No new backend selector is added to database runtime configuration.
+
+## First reader integration
+
+GET `/api/admin/mcp-permissions/assignable-targets` creates request-owned publication and capability-catalogue wrappers through its own dependency chain. Publication results are shared by operation and connector ID, including false values. OpenAPI and downstream catalogues are listed once, copied and indexed by complete capability identity, then reused for readiness resolution. Returned nested schemas cannot mutate the retained snapshot. Native catalogues retain their existing in-memory indexes; activation and native configuration readiness are unchanged.
+
+This intentionally captures read-model facts for the current request without claiming an atomic database snapshot. No cross-request values, credentials or grants are retained. Permission mutations, other group reads and invocation continue through their existing uncached dependencies. Subsequent requests observe committed state changes. A per-identity memoizer alone was rejected because list-to-resolve catalogue duplication was the measured bottleneck.
+
+The single-shared-connector query-budget fixture falls from 4N+4 reads/sessions to N+5 for N enabled tools on both persistence backends. Unique activation reads remain linear and batching is deferred. This is a scoped regression, not a universal budget or production latency guarantee.
 
 ## Relationship to accepted decisions
 

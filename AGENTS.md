@@ -21,7 +21,9 @@ Architecture decision records live in [`umbod/project/architecture-records/`](um
 
 ## Where to start by task
 
-Start at the public boundary or failing test, then trace inward; do not choose files by name alone. Use the boundary module's `README.md` as its local index, follow backend calls into `umbod/api/src/umbod/core/`, and inspect `infrastructure/` or other adapters only for external I/O. Update affected module `README.md` indexes when responsibilities, entrypoints, or submodule structures change.
+Start at the public boundary or failing test, then trace inward; do not choose files by name alone. Follow backend calls into `umbod/api/src/umbod/core/`, and inspect `infrastructure/` or other adapters only for external I/O.
+
+Module-level `README.md` files contain only YAML frontmatter with a `title` and a table of contents linking to module files. Consult this index before opening a file when unsure whether it is relevant to your search. Do not include module explanations or information available from reading the code. Use the `write-module-readme` skill when creating or updating these indexes; keep links current when files are added, renamed, moved, or removed.
 
 - REST/API behavior → `umbod/api/src/umbod/rest/`; MCP behavior → `umbod/api/src/umbod/mcp/`; CLI behavior → `umbod/api/src/umbod/cli/`.
 - Connector authoring → `packages/umbod-sdk/src/umbod_sdk/connectors/`; read `packages/umbod-sdk/src/umbod_sdk/connectors/README.md` and `packages/umbod-sdk/src/umbod_sdk/skills/draft-agent-connector/SKILL.md` before changing it or creating a connector.

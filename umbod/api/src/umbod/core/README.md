@@ -50,7 +50,7 @@
 
 ### `capabilities/`
 
-**Read when working with:** Shared capability vocabulary (identity, catalog, availability), capability description overrides, or public tool naming/schemas. Public description-store mutations persist their events atomically; administrator aggregate mutations own events when using session-level compare-and-swap.
+**Read when working with:** Shared capability vocabulary (identity, catalog, availability), request-cached catalogue wrappers, capability description overrides, or public tool naming/schemas. The [local index](capabilities/README.md) describes complete-identity snapshot reuse and schema-copy isolation. Public description-store mutations persist their events atomically; administrator aggregate mutations own events when using session-level compare-and-swap.
 
 ### `configuration/`
 
@@ -100,7 +100,7 @@
 
 ### `caching/`
 
-**Read when working with:** Explicit request-local asynchronous result reuse. The [local index](caching/README.md) defines the injectable generic cache protocol, key-value driver dependency, concurrent-load sharing, cancellation, generation-based invalidation and caller-owned key/lifetime boundaries. This standalone module is not integrated with persistence or catalogue reads.
+**Read when working with:** Explicit request-local asynchronous result reuse. The [local index](caching/README.md) defines the injectable generic cache protocol, key-value driver dependency, concurrent-load sharing, cancellation, generation-based invalidation and caller-owned key/lifetime boundaries. The assignable-targets GET boundary opts in through reader wrappers; persistence execution and authoritative mutation/invocation reads remain unchanged.
 
 ### `persistence/`
 

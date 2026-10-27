@@ -85,6 +85,11 @@
       "source": "./skills",
       "sourceType": "local",
       "computedHash": "cf8618756484920f561c5c07a117f358a6e4f53d04fa360e09e8dd77b6df5806"
+    },
+    "write-module-readme": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "28358ef7f809fec67e4aa43fabc3c3f5ecf1ee817554b7b58b115e503e2b9519"
     }
   }
 }

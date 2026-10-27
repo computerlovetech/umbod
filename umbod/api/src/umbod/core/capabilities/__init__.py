@@ -4,6 +4,8 @@ from typing import Any
 __all__ = [
     "AbsentCapabilityOutputSchema",
     "AvailabilityAwareCapabilityAuthorizer",
+    "CachedCapabilityCatalog",
+    "CapabilityCatalogSnapshot",
     "CapabilityActivation",
     "CapabilityAvailability",
     "CapabilityCatalog",
@@ -29,6 +31,8 @@ __all__ = [
 _EXPORTS: dict[str, str] = {
     "AbsentCapabilityOutputSchema": ".domain",
     "AvailabilityAwareCapabilityAuthorizer": ".availability",
+    "CachedCapabilityCatalog": ".cached",
+    "CapabilityCatalogSnapshot": ".cached",
     "CapabilityActivation": ".availability",
     "CapabilityAvailability": ".availability",
     "CapabilityCatalog": ".catalog",

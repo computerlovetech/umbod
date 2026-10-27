@@ -11,7 +11,7 @@ from umbod.core.permissions.domain import (
     ConnectorCapabilityRef,
     ConnectorToolRef,
 )
-from umbod.core.publishing import ConnectorPublishingStore
+from umbod.core.publishing import ConnectorPublicationReader
 
 
 class PersonalDownstreamPermissionCatalog:
@@ -19,7 +19,7 @@ class PersonalDownstreamPermissionCatalog:
         self,
         catalog: AssignablePermissionCatalog,
         definitions: ConnectorDefinitionStore,
-        publishing: ConnectorPublishingStore,
+        publishing: ConnectorPublicationReader,
     ) -> None:
         self._catalog = catalog
         self._definitions = definitions
