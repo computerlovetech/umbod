@@ -8,6 +8,6 @@ Read-only, safe connector and capability projections for authenticated users, in
 - `in_memory.py`: in-memory source implementing the same contract.
 - `service.py`: request-scoped composition and deterministic connector ordering.
 - `readiness.py`: request-local reuse of connector-invariant native configuration readiness; capability-dependent readiness must not use this adapter.
-- `shared.py`: publication, activation, readiness and explicit capability-grant filtering with effective descriptions and normalized tool schema projection after availability checks.
+- `shared.py`: publication, activation, readiness and explicit capability-grant filtering with effective descriptions and normalized tool schema projection after availability checks. Dashboard composition captures `IndexedCapabilityPermissions` once from the caller's planned group snapshots; its immutable grant union provides set membership without further group lookups. `ExplicitCapabilityPermissions` retains live lookup behavior for consumers requiring fresh checks.
 
 Kind adapters and REST dependency providers compose these contracts. Shared entries require an available capability; eligible personal entries may have no tools.

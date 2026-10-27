@@ -26,6 +26,25 @@ class ExplicitCapabilityPermissions:
         return False
 
 
+class IndexedCapabilityPermissions:
+    def __init__(self, capabilities: frozenset[ConnectorCapabilityRef]) -> None:
+        self._capabilities = capabilities
+
+    @classmethod
+    async def capture(
+        cls, permissions: GroupPermissionLookup, groups: tuple[str, ...],
+    ) -> "IndexedCapabilityPermissions":
+        capabilities: set[ConnectorCapabilityRef] = set()
+        for group in dict.fromkeys(groups):
+            capabilities.update((await permissions.list_group_permissions(group)).capabilities)
+        return cls(frozenset(capabilities))
+
+    async def allows(self, identity: CapabilityIdentity) -> bool:
+        return ConnectorCapabilityRef(
+            identity.connector_id, identity.capability_kind, identity.capability_key,
+        ) in self._capabilities
+
+
 class SharedCatalogueSource:
     def __init__(
         self, catalog: CapabilityCatalog, availability: CapabilityAvailability,

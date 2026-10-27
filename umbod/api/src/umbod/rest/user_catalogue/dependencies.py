@@ -33,7 +33,7 @@ from umbod.core.user_catalogue import CatalogueSource, UserCatalogueReader, User
 from umbod.core.user_catalogue.in_memory import InMemoryCatalogueSource
 from umbod.core.user_catalogue.read_state import plan_catalogue_state
 from umbod.core.user_catalogue.readiness import RequestConnectorReadiness
-from umbod.core.user_catalogue.shared import ExplicitCapabilityPermissions, SharedCatalogueSource
+from umbod.core.user_catalogue.shared import IndexedCapabilityPermissions, SharedCatalogueSource
 from umbod.rest.connectors.dependencies import get_connector_capability_description_override_store
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
 from umbod.rest.connectors.native.dependencies import get_connector_current_configuration_store, get_connector_registry
@@ -73,7 +73,7 @@ async def get_user_catalogue(
         results = await plan.execute(session)
     state = state_reads.resolve(results)
     publishing = state.publishing
-    policy = ExplicitCapabilityPermissions(state.permissions, groups.group_ids)
+    policy = await IndexedCapabilityPermissions.capture(state.permissions, groups.group_ids)
     api_loader = StoreBackedOpenApiCapabilityCatalog(openapi)
     api_capabilities: list[NormalizedCapability] = []
     for connector in openapi_connectors:
