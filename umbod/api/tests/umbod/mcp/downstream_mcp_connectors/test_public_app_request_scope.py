@@ -1,3 +1,4 @@
+from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.publishing.factories import create_connector_publishing_store
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
@@ -90,7 +91,8 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_p
     runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
     await persistence_runtime.readiness.ensure_ready()
-    context = await create_runtime_context(PublicAppConfig(settings=settings, connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=True, api_base_url=None, persistence_runtime=persistence_runtime))
+    config = PublicAppConfig(settings=settings, connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=True, api_base_url=None, persistence_runtime=persistence_runtime)
+    context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     browsing = Mock(spec=FilesystemBrowsing)
     browsing.get_root = AsyncMock(return_value=NodeSummary(
         id='00000000-0000-0000-0000-000000000001', parent_id=RootParent(),
@@ -158,13 +160,27 @@ class RecordingFastMCPTransport(FastMCPTransport):
         async with super().connect_session(**kwargs) as session:
             yield RecordingClientSession(session, self.observed_states)
 
+class ExecutionRecorder:
+
+    def __init__(self) -> None:
+        self.count = 0
+
+    async def search_tools(self) -> dict[str, bool]:
+        self.count += 1
+        return {'executed': True}
+
+
 class DownstreamApprovalHarness:
 
-    def __init__(self, context: PublicAppRuntimeContext, mutation_adapter: DatabaseConnectorToolConfigurationMutationAdapter, ask_revision: int) -> None:
+    def __init__(self, context: PublicAppRuntimeContext, mutation_adapter: DatabaseConnectorToolConfigurationMutationAdapter, ask_revision: int, recorder: ExecutionRecorder) -> None:
         self.context = context
         self.mutation_adapter = mutation_adapter
         self.ask_revision = ask_revision
-        self.execution_count = 0
+        self.recorder = recorder
+
+    @property
+    def execution_count(self) -> int:
+        return self.recorder.count
 
     async def reject(self) -> CallToolResult:
 
@@ -199,15 +215,12 @@ async def downstream_approval_harness(tmp_path: Path) -> AsyncIterator[Downstrea
     await persistence_runtime.readiness.ensure_ready()
     mutation_adapter = DatabaseConnectorToolConfigurationMutationAdapter(persistence_runtime.database)
     ask_result = await mutation_adapter.apply(ConnectorToolConfigurationMutation(connector_kind='downstream_mcp', connector_id=CONNECTOR_ID, policy_changes=(ConnectorToolInvocationPolicyChange(operation_name='search_tools', mode='ask', expected_revision=0),)))
-    context = await create_runtime_context(PublicAppConfig(settings=settings, connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime))
-    harness = DownstreamApprovalHarness(context, mutation_adapter, ask_result.policies[0].revision)
+    recorder = ExecutionRecorder()
     downstream = FastMCP('approval-downstream')
-
-    @downstream.tool(name='search_tools')
-    async def search_tools() -> dict[str, bool]:
-        harness.execution_count += 1
-        return {'executed': True}
-    context.mcp.downstream_mcp_tool_provider._downstream_client_factory = InMemoryServerClientFactory(downstream)
+    downstream.tool(name='search_tools')(recorder.search_tools)
+    config = PublicAppConfig(settings=settings, connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime)
+    context = await create_runtime_context(config, downstream_client_factory=InMemoryServerClientFactory(downstream), openapi_adapters=create_configured_openapi_runtime_adapters(settings))
+    harness = DownstreamApprovalHarness(context, mutation_adapter, ask_result.policies[0].revision, recorder)
     for group in ('test', settings.mcp.test_user_group):
         context.group_permission_runtime_state.grant_connector(group, CONNECTOR_ID)
         context.group_permission_runtime_state.grant_tool(group, CONNECTOR_ID, 'search_tools')
@@ -239,3 +252,38 @@ async def test_persisted_ask_changed_to_direct_executes_once_without_elicitation
     result = await downstream_approval_harness.call_direct()
     assert result.structured_content == {'executed': True}
     assert downstream_approval_harness.execution_count == 1
+
+
+@pytest.mark.asyncio
+async def test_separate_runtime_contexts_keep_injected_execution_factories_isolated(tmp_path: Path) -> None:
+    database_path = str(tmp_path / 'isolated-contexts.sqlite3')
+    await _persist_catalog(database_path)
+    settings = MCPAppSettings(mcp=MCPSettings(metrics_enabled=False, connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, _env_file=None), connector_store=ConnectorStoreConfig(type='sqlite', sqlite_path=database_path), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
+    recorders = (ExecutionRecorder(), ExecutionRecorder())
+    contexts: list[PublicAppRuntimeContext] = []
+    try:
+        for recorder in recorders:
+            persistence = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
+            await persistence.readiness.ensure_ready()
+            runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(persistence.database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
+            downstream = FastMCP('isolated-downstream')
+            downstream.tool(name='search_tools')(recorder.search_tools)
+            adapters = create_configured_openapi_runtime_adapters(settings)
+            config = PublicAppConfig(settings=settings, connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence)
+            context = await create_runtime_context(config, downstream_client_factory=InMemoryServerClientFactory(downstream), openapi_adapters=adapters)
+            contexts.append(context)
+            assert context.mcp.openapi_outbound_http_client_factory is adapters.outbound_http_client_factory
+            context.group_permission_runtime_state.grant_connector(settings.mcp.test_user_group, CONNECTOR_ID)
+            context.group_permission_runtime_state.grant_tool(settings.mcp.test_user_group, CONNECTOR_ID, 'search_tools')
+        token = auth_context_var.set(AuthenticatedUser(AccessToken(token=settings.mcp.test_bearer_token, client_id='isolation-user', scopes=[], claims={'sub': 'isolation-user', 'groups': [settings.mcp.test_user_group]})))
+        try:
+            for context, expected_counts in ((contexts[0], (1, 0)), (contexts[1], (1, 1)), (contexts[0], (2, 1))):
+                async with Client(context.mcp) as client:
+                    result = await client.call_tool('scope_test_search_tools', {})
+                assert result.structured_content == {'executed': True}
+                assert tuple(recorder.count for recorder in recorders) == expected_counts
+        finally:
+            auth_context_var.reset(token)
+    finally:
+        for context in contexts:
+            await context.persistence_runtime.shutdown()

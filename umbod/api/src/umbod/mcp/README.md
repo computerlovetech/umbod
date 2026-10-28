@@ -24,12 +24,13 @@ description: "MCP application composition, capability exposure, authentication a
 - [middleware/](./middleware/README.md) — Protocol middleware.
 - [proxies.py](./proxies.py) — Deferred runtime bindings.
 - [public_app.py](./public_app.py) — Application assembly and lifespan.
+- [runtime_adapters.py](./runtime_adapters.py) — Explicit production construction for injected invocation adapters.
 - [runtime_options.py](./runtime_options.py) — Runtime composition options.
 - [settings.py](./settings.py) — MCP settings.
 - [signals/](./signals/README.md) — Neutral execution events.
 - [tools/](./tools/) — Observed internal tool registration.
 
-# Context not available from the code
+# Architecture
 
-- [ADR-008](../../../../project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Required event-synchronized discovery architecture; projections are not invocation authority and cross-worker updates are not instantaneous.
+- [ADR-008](../../../../project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Event-synchronized discovery and operation-scoped invocation authority.
 - [Hosting boundary](../hosting/README.md) — Supported embedding API.

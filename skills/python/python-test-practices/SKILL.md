@@ -143,6 +143,7 @@ For units that depend on network, filesystem, database, or other external I/O, s
 - Write small, hand-rolled fakes that implement the same protocol/ABC as the real collaborator.
 - Prefer fakes (stateful, behavior-preserving) over ad-hoc mocks when the test exercises interaction over many calls.
 - Keep fakes in the test tree, next to the tests that use them, or in `conftest.py` when shared.
+- When a focused test needs private patching, investigate whether the production code is missing a dependency-injection seam. Don’t add abstractions merely to eliminate mocks.
 
 **Good:**
 

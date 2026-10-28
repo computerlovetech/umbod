@@ -1,4 +1,5 @@
 import asyncio
+from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
 
 from umbod.mcp.messaging import RuntimeProjectionHealth
 from messaging.models import MessagingEvent
@@ -38,7 +39,7 @@ def UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH(tmp_path: Path, monkeypatch: p
 @pytest.mark.asyncio
 async def test_default_public_mcp_has_connector_tool_registry_without_initial_connector_tools() -> None:
     config = await _default_public_app_config()
-    context = await create_runtime_context(config)
+    context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     assert context.persistence_runtime is config.persistence_runtime
     assert context.mcp.persistence_runtime is config.persistence_runtime
     async with Client(context.mcp) as client:
@@ -50,7 +51,8 @@ async def test_default_public_mcp_has_connector_tool_registry_without_initial_co
 
 @pytest.mark.asyncio
 async def test_projection_replays_native_activation_and_advances_delivery_checkpoint() -> None:
-    context = await create_runtime_context(await _default_public_app_config())
+    config = await _default_public_app_config()
+    context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     try:
         app = await build_starlette_app(context)
         async with app.router.lifespan_context(app):
@@ -68,7 +70,8 @@ async def test_projection_replays_native_activation_and_advances_delivery_checkp
 
 @pytest.mark.asyncio
 async def test_missing_api_base_url_bootstraps_durable_projection_without_http_source_options() -> None:
-    context = await create_runtime_context(await _default_public_app_config())
+    config = await _default_public_app_config()
+    context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     try:
         app = await build_starlette_app(context)
         async with app.router.lifespan_context(app):
@@ -87,7 +90,7 @@ async def test_no_api_bootstrap_preserves_explicit_host_owned_initial_configurat
     await source_configuration.save_current_configuration('test', configuration)
     await source_publishing.publish_connector('test')
     config = replace(await _default_public_app_config(), source_stores=ConnectorRuntimeSourceStores(connector_configuration_store=source_configuration, connector_publishing_store=source_publishing))
-    context = await create_runtime_context(config)
+    context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     try:
         app = await build_starlette_app(context)
         async with app.router.lifespan_context(app):
@@ -111,7 +114,8 @@ async def test_default_mcp_runtime_filters_built_ins_by_declared_ids_in_order(tm
 
 @pytest.mark.asyncio
 async def test_public_mcp_published_test_runtime_state_without_tool_state_hides_default_test_tools() -> None:
-    context = await create_runtime_context(await _default_public_app_config())
+    config = await _default_public_app_config()
+    context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     await _configure_connector(context.mcp, 'test', True)
     await context.mcp.connector_tool_registry.reconcile_all()
     async with Client(context.mcp) as client:
@@ -124,7 +128,8 @@ async def test_public_mcp_published_test_runtime_state_without_tool_state_hides_
 async def test_public_mcp_enabled_tool_state_hides_enabled_tool_without_group_permission() -> None:
     runtime_state_store = InMemoryConnectorToolRuntimeStateStore()
     runtime_state_store.save_runtime_state(ConnectorToolRuntimeState(key=ConnectorToolRef(connector_id='test', operation_name='echo'), status='enabled'))
-    context = await create_runtime_context(await _default_public_app_config(runtime_state_store))
+    config = await _default_public_app_config(runtime_state_store)
+    context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     await _configure_connector(context.mcp, 'test', True)
     await context.mcp.connector_tool_registry.reconcile_all()
     async with Client(context.mcp) as client:

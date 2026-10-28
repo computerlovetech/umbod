@@ -1,17 +1,18 @@
 import asyncio
 import json
 from collections.abc import Awaitable, Callable
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from fastmcp import FastMCP
-from fastmcp.server.context import Context, _current_context
+from fastmcp.server.context import Context
 from fastmcp.server.elicitation import (
     AcceptedElicitation,
     CancelledElicitation,
     DeclinedElicitation,
 )
-from mcp.types import ElicitResult
+from mcp.types import CallToolRequest, CallToolRequestParams, ElicitResult
 
 from umbod.core.invocation import InMemoryApprovalNonceStore
 from umbod.core.invocation import (
@@ -47,13 +48,28 @@ class FixedPolicy:
 
 class ApprovalContext(Context):
     def __init__(self, *, modern: bool) -> None:
-        super().__init__(FastMCP("approval-runtime-test"))
-        self.modern = modern
+        self.server = FastMCP("approval-runtime-test")
+        super().__init__(self.server)
+        self.request_data = SimpleNamespace(
+            protocol_version="2026-07-28" if modern else "2025-11-25",
+            request=CallToolRequest(params=CallToolRequestParams(name="connector_send")),
+        )
+        self.continuation_state: str | None = None
+        self.continuation_responses: dict[str, ElicitResult] | None = None
         self.legacy_response: Any = None
         self.elicitations: list[tuple[str, type[bool]]] = []
 
-    def _is_modern_protocol(self) -> bool:
-        return self.modern
+    @property
+    def request_context(self) -> Any:
+        return self.request_data
+
+    @property
+    def request_state(self) -> str | None:
+        return self.continuation_state
+
+    @property
+    def input_responses(self) -> dict[str, ElicitResult] | None:
+        return self.continuation_responses
 
     async def elicit(self, message: str, response_type: type[bool], **kwargs: Any) -> Any:
         self.elicitations.append((message, response_type))
@@ -89,11 +105,8 @@ def _identity_with_session(user_id: str, session_id: str) -> None:
 async def _with_context(
     context: ApprovalContext, operation: Callable[[], Awaitable[Any]]
 ) -> Any:
-    token = _current_context.set(context)
-    try:
+    async with context:
         return await operation()
-    finally:
-        _current_context.reset(token)
 
 
 def _approval_codec(clock: Callable[[], float]) -> ApprovalStateCodec:
@@ -154,8 +167,8 @@ async def test_continuation_captures_fresh_caller_once_and_rejects_other_user() 
         await _with_context(ApprovalContext(modern=True), lambda: policy.evaluate(_invocation()))
     _identity("user-2")
     resumed = ApprovalContext(modern=True)
-    resumed._task_request_state = raised.value.result.input_required.request_state
-    resumed._task_input_responses = {
+    resumed.continuation_state = raised.value.result.input_required.request_state
+    resumed.continuation_responses = {
         "connector_approval": ElicitResult(action="accept", content={"value": True})
     }
 
@@ -256,8 +269,8 @@ async def test_modern_acceptance_consumes_state_once_at_five_minute_boundary() -
         await _with_context(initial, lambda: policy.evaluate(_invocation()))
     state = raised.value.result.input_required.request_state
     resumed = ApprovalContext(modern=True)
-    resumed._task_request_state = state
-    resumed._task_input_responses = {
+    resumed.continuation_state = state
+    resumed.continuation_responses = {
         "connector_approval": ElicitResult(action="accept", content={"value": True})
     }
     now[0] = 1300.0
@@ -286,8 +299,8 @@ async def test_modern_concurrent_replay_has_exactly_one_winner() -> None:
 
     async def resume() -> bool:
         context = ApprovalContext(modern=True)
-        context._task_request_state = state
-        context._task_input_responses = {
+        context.continuation_state = state
+        context.continuation_responses = {
             "connector_approval": ElicitResult(action="accept", content={"value": True})
         }
         try:
@@ -304,8 +317,9 @@ async def test_modern_concurrent_replay_has_exactly_one_winner() -> None:
 async def test_modern_resume_rejects_changed_or_expired_approval(mutation: str) -> None:
     _identity()
     now = [1000.0]
+    fixed_policy = FixedPolicy(AskInvocationDecision(3))
     policy = McpConnectorInvocationApprovalPolicy(
-        FixedPolicy(AskInvocationDecision(3)),
+        fixed_policy,
         nonce_store=InMemoryApprovalNonceStore(),
         state_codec=_approval_codec(lambda: now[0]),
         caller_capture=CurrentInvocationApprovalCallerCapture(),
@@ -315,15 +329,15 @@ async def test_modern_resume_rejects_changed_or_expired_approval(mutation: str) 
         await _with_context(initial, lambda: policy.evaluate(_invocation()))
     state = raised.value.result.input_required.request_state
     resumed = ApprovalContext(modern=True)
-    resumed._task_request_state = state
-    resumed._task_input_responses = {
+    resumed.continuation_state = state
+    resumed.continuation_responses = {
         "connector_approval": ElicitResult(action="accept", content={"value": True})
     }
     invocation = _invocation({"message": "changed"}) if mutation == "arguments" else _invocation()
     if mutation == "principal":
         _identity("user-2")
     if mutation == "revision":
-        policy._policy = FixedPolicy(AskInvocationDecision(4))
+        fixed_policy.decision = AskInvocationDecision(4)
     if mutation == "expired":
         now[0] = 1300.0001
 
@@ -341,8 +355,8 @@ async def test_modern_resume_rejects_malformed_state_response_pair(
 ) -> None:
     _identity()
     context = ApprovalContext(modern=True)
-    context._task_request_state = state
-    context._task_input_responses = responses
+    context.continuation_state = state
+    context.continuation_responses = responses
     policy = McpConnectorInvocationApprovalPolicy(
         FixedPolicy(AskInvocationDecision(1)),
         nonce_store=InMemoryApprovalNonceStore(),
@@ -364,7 +378,7 @@ async def test_modern_codemode_fails_closed_before_side_effect() -> None:
         state_codec=_approval_codec(lambda: 1000.0),
         caller_capture=CurrentInvocationApprovalCallerCapture(),
     )
-    policy._is_codemode_request = lambda current: True
+    context.request_data.request = CallToolRequest(params=CallToolRequestParams(name="execute_code"))
 
     with pytest.raises(ConnectorInvocationDenied, match="unsupported"):
         await _with_context(context, lambda: policy.evaluate(_invocation()))

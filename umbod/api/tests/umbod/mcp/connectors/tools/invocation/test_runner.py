@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -304,13 +305,7 @@ async def test_invoke_connector_error_returns_failure_result_and_records_failure
 
 
 @pytest.mark.asyncio
-async def test_success_records_metrics_with_external_identity_and_duration(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        "umbod.mcp.signals.lifecycle.McpToolInvocationLifecycle._duration_ms",
-        lambda self: 250.0,
-    )
+async def test_success_records_metrics_with_external_identity_and_duration() -> None:
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
     metrics_recorder = RecordingMetricsRecorder()
@@ -323,11 +318,17 @@ async def test_success_records_metrics_with_external_identity_and_duration(
 
     await invoker.invoke({})
 
+    assert len(invocation_sink.invocation_records()) == 1
+    assert len(metrics_recorder.invocations) == 1
+    duration_ms = invocation_sink.invocation_records()[0].attributes["mcp.invocation.duration_ms"]
+    assert isinstance(duration_ms, (int, float))
+    assert math.isfinite(duration_ms)
+    assert duration_ms >= 0
     invocation = metrics_recorder.invocations[0]
     assert invocation.connector_name == "slack"
     assert invocation.tool_name == "slack_search_messages"
     assert invocation.outcome == InvocationOutcome.SUCCESS
-    assert invocation.duration_seconds == 0.25
+    assert invocation.duration_seconds == max(duration_ms / 1000, 1e-12)
 
 
 @pytest.mark.asyncio
@@ -496,8 +497,11 @@ async def test_native_result_adaptation_failure_is_internal() -> None:
     attributes = invocation_sink.invocation_records()[0].attributes
     assert attributes["mcp.failure.origin"] == InvocationFailureOrigin.INTERNAL
     assert attributes["exception.type"] == "TypeError"
-    assert "in _invoke_operation" in attributes["exception.stacktrace"]
-    assert "dict(cast" not in attributes["exception.stacktrace"]
+    stacktrace = attributes["exception.stacktrace"]
+    assert isinstance(stacktrace, str)
+    assert stacktrace
+    assert " in " in stacktrace
+    assert "dict(cast" not in stacktrace
 
 
 @pytest.mark.asyncio

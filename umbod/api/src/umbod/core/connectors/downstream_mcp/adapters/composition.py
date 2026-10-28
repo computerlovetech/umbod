@@ -40,6 +40,32 @@ def create_downstream_mcp_connections(
     )
 
 
+def _create_connection_factory(
+    settings: DownstreamMcpInfrastructureSettings,
+    credentials: EncryptedCredentialStore,
+) -> FastMCPDownstreamConnectionFactory:
+    return FastMCPDownstreamConnectionFactory(
+        settings.tls_verification, credentials, oauth_enabled=settings.oauth_enabled,
+    )
+
+
+def create_downstream_mcp_client_factory(
+    settings: DownstreamMcpInfrastructureSettings,
+    credentials: EncryptedCredentialStore,
+) -> FastMCPDownstreamClientFactory:
+    return FastMCPDownstreamClientFactory(_create_connection_factory(settings, credentials))
+
+
+def create_downstream_mcp_probe(
+    settings: DownstreamMcpInfrastructureSettings,
+    credentials: EncryptedCredentialStore,
+) -> FastMCPDownstreamConnection:
+    return FastMCPDownstreamConnection(
+        settings.tls_verification, settings.connection_timeout_seconds,
+        _create_connection_factory(settings, credentials),
+    )
+
+
 def create_downstream_mcp_discovery(
     settings: DownstreamMcpInfrastructureSettings,
     probe: DownstreamMcpProbe,

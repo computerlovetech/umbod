@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
@@ -98,6 +98,7 @@ async def test_actual_mcp_app_serves_health_and_enters_lifespan(
 
 @dataclass(frozen=True)
 class ConfigDouble:
+    settings: AppConfig
     persistence_runtime: Any
     auth_provider: Any
     group_permission_runtime_state: Any
@@ -109,11 +110,15 @@ class ConfigDouble:
 async def test_mcp_overrides_preserve_configured_defaults(
     settings: AppConfig, monkeypatch: pytest.MonkeyPatch, override: bool
 ) -> None:
-    configured = ConfigDouble(AsyncMock(), object(), object(), object())
+    configured = ConfigDouble(settings, AsyncMock(), object(), object(), object())
     load = AsyncMock(return_value=configured)
     context = AsyncMock(return_value=object())
     build = AsyncMock(return_value=object())
     monkeypatch.setattr(applications, "load_configured_public_app_config", load)
+    downstream = AsyncMock(return_value=object())
+    openapi = Mock(return_value=object())
+    monkeypatch.setattr(applications, "create_configured_downstream_client_factory", downstream)
+    monkeypatch.setattr(applications, "create_configured_openapi_runtime_adapters", openapi)
     monkeypatch.setattr(applications, "create_runtime_context", context)
     monkeypatch.setattr(applications, "build_starlette_app", build)
     permissions = InMemoryGroupConnectorToolPermissions(group_claim_fields=("groups",))
@@ -126,18 +131,23 @@ async def test_mcp_overrides_preserve_configured_defaults(
     assert selected.group_permission_runtime_state is (permissions if override else configured.group_permission_runtime_state)
     assert selected.invocation_log_sink is (sink if override else configured.invocation_log_sink)
     assert result is build.return_value
+    downstream.assert_awaited_once_with(settings, configured.persistence_runtime.database)
+    openapi.assert_called_once_with(settings)
+    assert context.await_args.kwargs == dict(downstream_client_factory=downstream.return_value, openapi_adapters=openapi.return_value)
     load.assert_awaited_once_with(settings)
     configured.persistence_runtime.shutdown.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("stage", ["context", "app"])
+@pytest.mark.parametrize("stage", ["downstream", "openapi", "context", "app"])
 @pytest.mark.parametrize("failure", [RuntimeError, asyncio.CancelledError])
 async def test_mcp_construction_failure_closes_persistence(
     settings: AppConfig, monkeypatch: pytest.MonkeyPatch, stage: str, failure: type[BaseException]
 ) -> None:
     persistence = AsyncMock()
-    config = ConfigDouble(persistence, None, None, None)
+    config = ConfigDouble(settings, persistence, None, None, None)
+    monkeypatch.setattr(applications, "create_configured_downstream_client_factory", AsyncMock(side_effect=failure() if stage == "downstream" else None))
+    monkeypatch.setattr(applications, "create_configured_openapi_runtime_adapters", Mock(side_effect=failure() if stage == "openapi" else None))
     monkeypatch.setattr(applications, "load_configured_public_app_config", AsyncMock(return_value=config))
     monkeypatch.setattr(applications, "create_runtime_context", AsyncMock(side_effect=failure() if stage == "context" else None))
     monkeypatch.setattr(applications, "build_starlette_app", AsyncMock(side_effect=failure()))

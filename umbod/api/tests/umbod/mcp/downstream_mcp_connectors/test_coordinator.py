@@ -25,7 +25,8 @@ from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.mcp.connectors.native.tools import install_tool_list_changed_notifier
 from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
 from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolProvider, UnrestrictedDownstreamToolPermissionPolicy
-from umbod.mcp.connectors.downstream_mcp.coordinator import DownstreamDiscoveryAdapters, DownstreamDiscoveryCoordinatorOptions, DownstreamDiscoveryStores, create_downstream_discovery_coordinator
+from umbod.mcp.connectors.downstream_mcp.capability_notifications import CapabilityListChangeNotifier, NativeCapabilityProjection
+from umbod.mcp.connectors.downstream_mcp.coordinator import DownstreamDiscoveryAdapters, DownstreamDiscoveryCoordinator, DownstreamDiscoveryCoordinatorOptions, DownstreamDiscoveryStores, create_downstream_discovery_coordinator
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
 from fastmcp import Client, FastMCP
 from fastmcp.client.messages import MessageHandler
@@ -117,7 +118,10 @@ class CoordinatorFixture:
         self.notifier = RecordingNotifier()
         self.clock = FakeClock()
         self.unit_of_work = DownstreamConnectorUnitOfWorkService(database, AuthenticatedTextCipher("test-key"), no_downstream_connector_mutation_fault, utc_clock)
-        self.coordinator = create_downstream_discovery_coordinator(DownstreamDiscoveryStores(definitions=self.definitions, credentials=self.credentials, catalogs=self.catalogs, health=self.health, activations=self.activations, publishing=self.publishing, unit_of_work=self.unit_of_work), DownstreamDiscoveryAdapters(discovery=self.discovery, notifier=self.notifier, native_capabilities=self, monotonic_clock=self.clock, random_source=lambda : 1.0, identity_source=self), DownstreamDiscoveryCoordinatorOptions(refresh_interval_seconds=refresh_interval_seconds, maximum_concurrency=maximum_concurrency, jitter_ratio=0.25, maximum_backoff_seconds=max(40, refresh_interval_seconds)))
+        self.coordinator = self.build_coordinator(self, self.notifier, maximum_concurrency, refresh_interval_seconds)
+
+    def build_coordinator(self, native_capabilities: NativeCapabilityProjection, notifier: CapabilityListChangeNotifier, maximum_concurrency: int, refresh_interval_seconds: float) -> DownstreamDiscoveryCoordinator:
+        return create_downstream_discovery_coordinator(DownstreamDiscoveryStores(definitions=self.definitions, credentials=self.credentials, catalogs=self.catalogs, health=self.health, activations=self.activations, publishing=self.publishing, unit_of_work=self.unit_of_work), DownstreamDiscoveryAdapters(discovery=self.discovery, notifier=notifier, native_capabilities=native_capabilities, monotonic_clock=self.clock, random_source=lambda : 1.0, identity_source=self), DownstreamDiscoveryCoordinatorOptions(refresh_interval_seconds=refresh_interval_seconds, maximum_concurrency=maximum_concurrency, jitter_ratio=0.25, maximum_backoff_seconds=max(40, refresh_interval_seconds)))
 
     @classmethod
     async def create(cls, maximum_concurrency: int=2, refresh_interval_seconds: float=10) -> 'CoordinatorFixture':
@@ -326,8 +330,7 @@ async def test_catalog_reconciliation_notifies_connected_session_and_updates_exp
     await discovery_runtime.reconcile()
     provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_runtime=DisabledPersonalToolRuntime(), definitions=fixture.definitions, credentials=fixture.credentials, catalogs=fixture.catalogs, publishing=fixture.publishing, activations=fixture.activations, client_factory=InMemoryClientFactory(downstream), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()))
     public.add_provider(provider)
-    fixture.coordinator._components.native_monitor._projection = provider
-    fixture.coordinator._components.native_monitor._notifier = notifier
+    coordinator = fixture.build_coordinator(provider, notifier, 2, 10)
     fixture.discovery.results['weather'].append(_success('weather', 'alerts'))
     handler = RecordingToolListChangedHandler()
     async with Client(public, message_handler=handler, mode='legacy') as client:
@@ -336,7 +339,7 @@ async def test_catalog_reconciliation_notifies_connected_session_and_updates_exp
         await asyncio.wait_for(handler.changed.wait(), timeout=1)
         handler.changed.clear()
         await fixture.activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id='weather', capability_kind="tool", capability_key='alerts'), ActivationStatus.ENABLED)
-        await fixture.coordinator.refresh_connector('weather')
+        await coordinator.refresh_connector('weather')
         await asyncio.wait_for(handler.changed.wait(), timeout=1)
         assert [tool.name for tool in await client.list_tools()] == ['weather_alerts']
 

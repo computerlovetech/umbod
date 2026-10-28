@@ -77,7 +77,9 @@ def test_safe_exception_log_exports_frames_without_sensitive_message(
     assert attributes["mcp.failure.origin"] == "internal"
 
 
-def test_configure_logging_is_idempotent_and_routes_framework_loggers() -> None:
+def test_configure_logging_is_idempotent_and_routes_framework_loggers(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     root = logging.getLogger()
     original_handlers = root.handlers[:]
     original_level = root.level
@@ -87,25 +89,45 @@ def test_configure_logging_is_idempotent_and_routes_framework_loggers() -> None:
         for name in framework_names
     }
     framework_logger = logging.getLogger("uvicorn.access")
+    original_framework_level = framework_logger.level
+    original_framework_disabled = framework_logger.disabled
+    framework_handler = logging.StreamHandler(StringIO())
     try:
-        framework_logger.addHandler(logging.StreamHandler(StringIO()))
+        for handler in original_handlers:
+            root.removeHandler(handler)
+        framework_logger.addHandler(framework_handler)
+        framework_logger.setLevel(logging.DEBUG)
+        framework_logger.disabled = False
 
         configure_logging("first", "INFO")
         configure_logging("second", "DEBUG")
 
-        owned_handlers = [
-            handler
-            for handler in root.handlers
-            if getattr(handler, "_umbod_otel_stdout_handler", False)
-        ]
-        assert len(owned_handlers) == 1
+        message = "framework-debug-delivery-after-reconfiguration"
+        framework_logger.debug(message)
+        records = [json.loads(line) for line in capsys.readouterr().out.splitlines()]
+        matching_records = [record for record in records if record["body"] == message]
+        assert len(matching_records) == 1
+        assert matching_records[0]["resource"] == {"service.name": "second"}
+        assert matching_records[0]["severity_text"] == "DEBUG"
+        assert matching_records[0]["severity_number"] == 5
         assert root.level == logging.DEBUG
         assert framework_logger.handlers == []
         assert framework_logger.propagate is True
     finally:
-        root.handlers = original_handlers
+        for handler in root.handlers[:]:
+            root.removeHandler(handler)
+            if handler not in original_handlers:
+                handler.close()
+        for handler in original_handlers:
+            root.addHandler(handler)
         root.setLevel(original_level)
         for name, (handlers, propagate) in framework_states.items():
             logger = logging.getLogger(name)
-            logger.handlers = handlers
+            for handler in logger.handlers[:]:
+                logger.removeHandler(handler)
+            for handler in handlers:
+                logger.addHandler(handler)
             logger.propagate = propagate
+        framework_logger.setLevel(original_framework_level)
+        framework_logger.disabled = original_framework_disabled
+        framework_handler.close()

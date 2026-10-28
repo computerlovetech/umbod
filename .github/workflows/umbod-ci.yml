@@ -8,6 +8,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - '.semgrep.yml'
+      - '.semgrepignore'
       - 'codecov.yml'
       - 'umbod/**'
       - 'packages/umbod-sdk/**'

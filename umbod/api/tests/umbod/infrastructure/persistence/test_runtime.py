@@ -77,12 +77,16 @@ async def test_sqlite_readiness_is_concurrent_and_idempotent(monkeypatch: pytest
     calls = 0
     received_databases: list[SQLiteDatabase] = []
 
-    async def execute(plan: SQLiteCurrentSchemaPreparation) -> None:
-        nonlocal calls
-        calls += 1
-        received_databases.append(plan._database)
-        await asyncio.sleep(0)
-    monkeypatch.setattr(SQLiteCurrentSchemaPreparation, 'execute', execute)
+    class RecordingSchemaPreparation:
+        def __init__(self, database: SQLiteDatabase) -> None:
+            received_databases.append(database)
+
+        async def execute(self) -> None:
+            nonlocal calls
+            calls += 1
+            await asyncio.sleep(0)
+
+    monkeypatch.setattr('umbod.infrastructure.persistence.runtime.SQLiteCurrentSchemaPreparation', RecordingSchemaPreparation)
     database_path = str(tmp_path / 'runtime.sqlite3')
     database = SQLiteDatabase(database_path, create_parent_dirs=True)
     readiness = SQLitePersistenceReadiness(database)

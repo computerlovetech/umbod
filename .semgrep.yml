@@ -1,4 +1,88 @@
 rules:
+  - id: python.tests.review-patching
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Test design review: is patching needed in this context? Patching may couple the test to
+      implementation details or bypass real behavior. When a focused test needs private patching,
+      investigate a missing dependency-injection seam. Prefer existing public operations and injected
+      or recording fakes when isolation is preserved. Boundary isolation, failure simulation, or
+      framework integration may justify retaining patching. Do not add abstractions merely to
+      eliminate mocks.
+    paths:
+      include:
+        - '**/tests/**'
+        - '**/live_runtime_tests/**'
+        - '**/test_*.py'
+        - '**/*_test.py'
+        - '**/conftest.py'
+    pattern-either:
+      - pattern: unittest.mock.patch(...)
+      - patterns:
+          - pattern: unittest.mock.patch.$METHOD(...)
+          - metavariable-regex:
+              metavariable: $METHOD
+              regex: '^(object|dict|multiple)$'
+      - patterns:
+          - pattern-either:
+              - pattern: mock.patch(...)
+              - patterns:
+                  - pattern: mock.patch.$METHOD(...)
+                  - metavariable-regex:
+                      metavariable: $METHOD
+                      regex: '^(object|dict|multiple)$'
+          - pattern-either:
+              - pattern-inside: |
+                  import mock
+                  ...
+              - pattern-inside: |
+                  from mock import patch
+                  ...
+      - patterns:
+          - pattern-either:
+              - pattern: $FIXTURE.patch(...)
+              - patterns:
+                  - pattern: $FIXTURE.patch.$METHOD(...)
+                  - metavariable-regex:
+                      metavariable: $METHOD
+                      regex: '^(object|dict|multiple)$'
+          - metavariable-regex:
+              metavariable: $FIXTURE
+              regex: '^(mocker|session_mocker|module_mocker|class_mocker|package_mocker)$'
+
+  - id: python.tests.review-private-monkeypatch
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Test design review: is private monkeypatching needed in this context? Patching may couple the
+      test to implementation details or bypass real behavior. When a focused test needs private
+      patching, investigate a missing dependency-injection seam. Prefer existing public operations
+      and injected or recording fakes when isolation is preserved. Boundary isolation, failure
+      simulation, or framework integration may justify retaining patching. Do not add abstractions
+      merely to eliminate mocks.
+    paths:
+      include:
+        - '**/tests/**'
+        - '**/live_runtime_tests/**'
+        - '**/test_*.py'
+        - '**/*_test.py'
+        - '**/conftest.py'
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: monkeypatch.setattr($OBJECT, $ATTRIBUTE, $VALUE, ...)
+              - pattern: monkeypatch.delattr($OBJECT, $ATTRIBUTE, ...)
+          - metavariable-regex:
+              metavariable: $ATTRIBUTE
+              regex: "^['\"]_(?!_)[A-Za-z0-9_]*['\"]$"
+      - patterns:
+          - pattern-either:
+              - pattern: monkeypatch.setattr($TARGET, $VALUE, ...)
+              - pattern: monkeypatch.delattr($TARGET, ...)
+          - metavariable-regex:
+              metavariable: $TARGET
+              regex: "^['\"][^'\"]+\\._(?!_)[A-Za-z0-9_]*['\"]$"
+
   - id: python.no-print-use-typer-output
     languages:
       - python

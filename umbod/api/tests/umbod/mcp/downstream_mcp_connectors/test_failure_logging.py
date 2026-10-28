@@ -5,26 +5,27 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
+from fastmcp import Client
 from fastmcp.tools import ToolResult
 from fastmcp.exceptions import ToolError
+from fastmcp.server.providers.proxy import ProxyTool
 
 from umbod.core.invocation.failure_evidence import current_invocation_failure
 
 from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import execution_case
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, runtime_case
 from tests.umbod.mcp.downstream_mcp_connectors.test_personal_execution_pipeline import provider_for
-from tests.umbod.mcp.downstream_mcp_connectors.test_provider import ProviderOptions, _downstream, _provider
 from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolResult
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
-from umbod.logging import configure_logging
+from umbod.logging import OpenTelemetryJsonFormatter, configure_logging
 from umbod.mcp.connectors.downstream_mcp.tool_invocation import AuthorizedDownstreamProxyTool
 from tests.umbod.mcp.downstream_mcp_connectors.signal_support import DiscardingAuditSink
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.logging import McpAuditRecorder
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
-from umbod.mcp.signals import McpSignals
+from umbod.mcp.signals import McpSignals, McpToolIdentity, SignalToolExecutionPipelineFactory
 from umbod.mcp.logging.invocation.sink import create_default_mcp_tool_invocation_log_sink
 
 __all__ = ["runtime_case"]
@@ -38,7 +39,7 @@ def configured_signals(capsys: pytest.CaptureFixture[str]) -> Iterator[McpSignal
     original_handlers, original_level = root.handlers[:], root.level
     names = ("uvicorn", "uvicorn.error", "uvicorn.access", "fastmcp", "mcp")
     states = {name: (logging.getLogger(name).handlers[:], logging.getLogger(name).propagate) for name in names}
-    root.handlers = [handler for handler in root.handlers if not getattr(handler, "_umbod_otel_stdout_handler", False)]
+    root.handlers = [handler for handler in root.handlers if not isinstance(handler.formatter, OpenTelemetryJsonFormatter)]
     try:
         yield create_mcp_signals(
             create_default_mcp_tool_invocation_log_sink(),
@@ -88,10 +89,6 @@ def assert_failure(record: dict[str, Any], connector_id: str, name: str, tool: s
 @pytest.mark.parametrize("failure", ["exception", "internal", "result"])
 async def test_shared_failures_enrich_normal_stdout_completion(configured_signals: McpSignals, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, failure: str) -> None:
     configure_logging("failure-test", "INFO")
-    provider, *_ = await _provider({"weather": _downstream()}, ProviderOptions({"weather": "Weather"}, configured_signals))
-    held = await provider.get_tool("Weather_forecast")
-    assert isinstance(held, AuthorizedDownstreamProxyTool)
-
     async def invoke(self: object, arguments: dict[str, Any], **options: Any) -> ToolResult:
         if failure in {"exception", "internal"}:
             try:
@@ -102,7 +99,29 @@ async def test_shared_failures_enrich_normal_stdout_completion(configured_signal
                 raise RuntimeError(SENSITIVE) from error
         return ToolResult(content=SENSITIVE, structured_content={"secret": SENSITIVE}, meta={"secret": SENSITIVE}, is_error=True)
 
-    monkeypatch.setattr(type(held._backend_tool), "run", invoke)
+    class FailingProxyTool(ProxyTool):
+        async def run(self, arguments: dict[str, Any], **options: Any) -> ToolResult:
+            return await invoke(self, arguments, **options)
+
+    def unused_client_factory() -> Client:
+        raise AssertionError("Downstream client must not be created")
+
+    async def ensure_access() -> None:
+        return None
+
+    held = AuthorizedDownstreamProxyTool(
+        identity=McpToolIdentity(tool_name="Weather_forecast", connector_id="weather", connector_name="Weather", operation_name="forecast"),
+        backend_tool=FailingProxyTool(
+            client_factory=unused_client_factory,
+            name="forecast",
+            parameters={"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]},
+        ),
+        ensure_access=ensure_access,
+        public_name="Weather_forecast",
+        execution_pipeline=SignalToolExecutionPipelineFactory(configured_signals, PermitAllConnectorInvocationPolicy()).create(
+            "Weather", lambda result: isinstance(result, ToolResult) and result.is_error,
+        ),
+    )
     monkeypatch.setattr("umbod.mcp.connectors.downstream_mcp.tool_invocation.get_context", lambda: object())
     result = await held.run({"city": SENSITIVE})
     assert result.is_error

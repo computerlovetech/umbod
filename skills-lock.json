@@ -79,7 +79,7 @@
     "python-test-practices": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "c30cb34295400af96d639441721d81422804c6989650d357598129db6f788d1b"
+      "computedHash": "659d59ae6a237b611927889577617c8975697b14465526a5b7aaee80e0a16753"
     },
     "svelte-docs-best-practices": {
       "source": "./skills",

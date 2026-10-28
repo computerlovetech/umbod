@@ -1,3 +1,4 @@
+from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
@@ -286,7 +287,7 @@ async def create_journey(
     )
     assert duplicate_activation.status_code == 200
     config = await public_app.load_configured_public_app_config(app_settings)
-    context = replace(await public_app.create_runtime_context(config), api_base_url=None)
+    context = replace(await public_app.create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings)), api_base_url=None)
     return AdminConnectorConfigurationJourney(
         await public_app.build_starlette_app(context),
         token,

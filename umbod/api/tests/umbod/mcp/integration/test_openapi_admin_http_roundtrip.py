@@ -1,3 +1,4 @@
+from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory
 from umbod.core.activation import CAPABILITY_ACTIVATION_STATE_TABLE
 from umbod.core.connectors.openapi.stores import CATALOG_OPERATION_TABLE, CATALOG_SOURCE_TABLE, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, OpenApiConnectorStoreService
 from umbod.core.permissions.factories import create_group_permission_store
@@ -113,9 +114,8 @@ async def test_admin_openapi_connector_roundtrips_through_public_mcp_http(tmp_pa
     assert enabled.status_code == 200
     await _grant_permission(database_path, connector_id)
     outbound_factory = RecordingOutboundHttpClientFactory()
-    monkeypatch.setattr(public_app, '_default_openapi_runtime_adapters', lambda _settings: OpenApiRuntimeAdapters(outbound_factory))
     config = await public_app.load_configured_public_app_config(settings)
-    context = await public_app.create_runtime_context(config)
+    context = await public_app.create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(settings, config.persistence_runtime.database), openapi_adapters=OpenApiRuntimeAdapters(outbound_factory))
     context = replace(context, api_base_url=None)
     context.group_permission_runtime_state.grant_tool('engineering', connector_id, 'getItem')
     app = await public_app.build_starlette_app(context)

@@ -1,3 +1,4 @@
+from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
 from umbod.core.permissions.factories import create_group_permission_store
 from umbod.core.permissions.domain import ConnectorCapabilityRef, SaveGroupPermissionsRequest
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
@@ -88,7 +89,8 @@ async def _build_public_app(tmp_path: Path, exposure_mode: Literal['flat', 'gate
         ),
         ActivationStatus.ENABLED,
     )
-    context = await create_runtime_context(PublicAppConfig(settings=settings, connector_runtime=connector_runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=LocalConnectorRuntimeStateSourceStrategy(configuration_store, publishing_store), stateless_http=True, api_base_url=None, persistence_runtime=persistence_runtime, connector_tool_runtime_state_store=tool_state_store))
+    config = PublicAppConfig(settings=settings, connector_runtime=connector_runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=LocalConnectorRuntimeStateSourceStrategy(configuration_store, publishing_store), stateless_http=True, api_base_url=None, persistence_runtime=persistence_runtime, connector_tool_runtime_state_store=tool_state_store)
+    context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     context.group_permission_runtime_state.grant_connector('agents', 'echo')
     context.group_permission_runtime_state.grant_tool('agents', 'echo', 'echo_message')
     context.group_permission_runtime_state.grant_capability(

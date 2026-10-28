@@ -1,3 +1,4 @@
+from umbod.mcp.runtime_adapters import create_configured_openapi_runtime_adapters
 from umbod.core.permissions.factories import create_group_permission_store
 from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
 from dataclasses import replace
@@ -18,7 +19,6 @@ from umbod.core.connectors.downstream_mcp.probe import DiscoveredCapabilities, D
 from umbod.core.permissions import ConnectorToolRef, SaveGroupPermissionsRequest
 from umbod.mcp import public_app
 from umbod.mcp.context import PublicAppRuntimeContext
-from umbod.mcp.connectors.downstream_mcp import UnrestrictedDownstreamToolPermissionPolicy
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_connector_probe
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
@@ -97,11 +97,9 @@ async def _build_journey(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Dow
     assert enabled.status_code == 200
     await _grant_permission(database_path, connector_id)
     downstream = DeterministicDownstream()
-    monkeypatch.setattr('umbod.core.connectors.downstream_mcp.adapters.fastmcp.client.FastMCPDownstreamClientFactory.create', downstream.create)
     config = await public_app.load_configured_public_app_config(settings)
-    context = await public_app.create_runtime_context(config)
+    context = await public_app.create_runtime_context(config, downstream_client_factory=downstream, openapi_adapters=create_configured_openapi_runtime_adapters(settings))
     context = replace(context, api_base_url=None)
-    context.mcp.downstream_mcp_tool_provider._permission_policy = UnrestrictedDownstreamToolPermissionPolicy()
     return DownstreamHttpJourney(await public_app.build_starlette_app(context), token, admin, connector_id, downstream, context)
 
 @pytest.mark.asyncio

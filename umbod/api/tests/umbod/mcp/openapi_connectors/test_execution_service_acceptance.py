@@ -132,8 +132,7 @@ class RecordingStore(OpenApiConnectorStoreService):
 
     @classmethod
     async def create(cls, events: list[str]) -> 'RecordingStore':
-        base = OpenApiConnectorStoreService(create_inmemory_runtime().database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)
-        return cls(base._database, events)
+        return cls(create_inmemory_runtime().database, events)
 
     async def read_operation(self, connector_id: str, operation_id: str) -> Optional[PersistedOpenApiOperation]:
         self.events.append('operation-read')
@@ -494,9 +493,15 @@ async def test_openapi_failure_evidence_preserves_origin_and_one_safe_completion
     assert attributes["mcp.failure.origin"] == expected_origin
     assert attributes["exception.type"] == expected_type
     assert attributes["exception.stacktrace"] == evidence.stacktrace
-    assert "_invoke_transport" in evidence.stacktrace or stage == "http"
     if stage == "http":
         assert "raising_context" in evidence.stacktrace
+    else:
+        expected_frame = {
+            "transport": "in send",
+            "authenticator": "in authenticate",
+            "normalizer": "in normalize",
+        }[stage]
+        assert expected_frame in evidence.stacktrace
     payload = json.dumps(dict(attributes)) + repr(audit_sink.events) + result.model_dump_json()
     for canary in ("private-exception-canary", "private-bearer-canary", "private-body-canary"):
         assert canary not in payload

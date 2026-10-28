@@ -4,7 +4,9 @@ import random
 import secrets
 import time
 
-from umbod.core.connectors.downstream_mcp.adapters.composition import create_downstream_mcp_connections
+from umbod.core.connectors.downstream_mcp.adapters.composition import create_downstream_mcp_discovery, create_downstream_mcp_probe
+from umbod.mcp.connectors.downstream_mcp.ports import DownstreamClientFactory
+from umbod.mcp.runtime_adapters import OpenApiRuntimeAdapters, create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.factory import create_personal_mcp_transport
 from umbod.core.connectors.downstream_mcp.management import utc_clock
 from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalToolRuntime
@@ -95,10 +97,9 @@ from umbod.core.connectors.downstream_mcp.adapters.settings import (
 from umbod.mcp.connectors.downstream_mcp.coordinator import DownstreamDiscoveryAdapters, DownstreamDiscoveryCoordinator, DownstreamDiscoveryCoordinatorOptions, DownstreamDiscoveryStores, create_downstream_discovery_coordinator
 from umbod.mcp.connectors.downstream_mcp import ConnectorAwareDownstreamMcpToolProvider, GroupDownstreamToolPermissionPolicy, NativeCapabilityProviderView, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.live_permission_updates import DatabaseGroupPermissionReader, GroupPermissionStateReloader, HttpGroupPermissionReader, RuntimeGroupPermissionSynchronizer
-from umbod.core.connectors.openapi.execution import OutboundHttpClientFactory
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.authorization import connector_tool_permission_check
-from umbod.mcp.connectors.openapi import DatabaseGroupPermissionReaderFactory, OutboundHttpClientFactoryPort, build_openapi_codemode_executor
+from umbod.mcp.connectors.openapi import DatabaseGroupPermissionReaderFactory, build_openapi_codemode_executor
 from umbod.mcp.connectors.openapi.inventory import read_openapi_tool_inventory
 from umbod.mcp.connectors.openapi.discovery_runtime import initialize_openapi_discovery, reconcile_openapi_discovery
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, ConnectorStorePair, HttpConnectorRuntimeStateSourceStrategy, LocalConnectorRuntimeStateSourceStrategy, StoreBackedConnectorRuntimeStateSourceStrategy, resolve_connector_runtime_state_source_strategy
@@ -119,14 +120,11 @@ RuntimeStateStores = tuple[InMemoryConnectorToolRuntimeStateStore | None, InMemo
 OpenApiCodemodeDiscoveryExposureMode = Literal['codemode']
 OPENAPI_CODEMODE_DISCOVERY_EXPOSURE_MODES: frozenset[OpenApiCodemodeDiscoveryExposureMode] = frozenset({'codemode'})
 
-@dataclass(frozen=True)
-class OpenApiRuntimeAdapters:
-    outbound_http_client_factory: OutboundHttpClientFactoryPort
-
 async def build_mcp(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, persistence_runtime: PersistenceRuntime, *runtime_state: RuntimeStateArgument) -> FastMCP:
-    return await build_mcp_with_openapi_adapters(settings, auth_provider, runtime, runtime_state, _default_openapi_runtime_adapters(settings), persistence_runtime)
+    downstream_client_factory = await create_configured_downstream_client_factory(settings, persistence_runtime.database)
+    return await build_mcp_with_openapi_adapters(settings, auth_provider, runtime, runtime_state, create_configured_openapi_runtime_adapters(settings), persistence_runtime, downstream_client_factory=downstream_client_factory)
 
-async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, runtime_state: tuple[RuntimeStateArgument, ...], openapi_adapters: OpenApiRuntimeAdapters, persistence_runtime: PersistenceRuntime, *invocation_log_sinks: McpToolInvocationLogSink) -> FastMCP:
+async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, runtime_state: tuple[RuntimeStateArgument, ...], openapi_adapters: OpenApiRuntimeAdapters, persistence_runtime: PersistenceRuntime, *invocation_log_sinks: McpToolInvocationLogSink, downstream_client_factory: DownstreamClientFactory) -> FastMCP:
     (requested_tool_state, group_permission_runtime_state) = _resolve_runtime_state(runtime_state)
     connector_tool_runtime_state_store = requested_tool_state if requested_tool_state is not None else _default_connector_tool_runtime_state_store(runtime)
     audit_recorder = create_default_mcp_audit_recorder(settings.runtime.app_name)
@@ -224,7 +222,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.execution_pipelines)
     signals.tool_inventory_observed.send(await read_openapi_tool_inventory(await mcp.openapi_connector_store_factory.create()))
     downstream_permission_policy = UnrestrictedDownstreamToolPermissionPolicy() if group_permission_runtime_state is None else GroupDownstreamToolPermissionPolicy(group_permission_runtime_state)
-    await _register_downstream_mcp_provider(mcp, settings, downstream_permission_policy, persistence_runtime.database, invocation_policy, runtime)
+    await _register_downstream_mcp_provider(mcp, settings, downstream_permission_policy, persistence_runtime.database, invocation_policy, runtime, downstream_client_factory=downstream_client_factory)
     register_agent_instructions(mcp)
     return mcp
 
@@ -242,19 +240,19 @@ class RuntimePublicToolIdentitySource:
         return tuple(identities)
 
 
-async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettings, permission_policy: UnrestrictedDownstreamToolPermissionPolicy | GroupDownstreamToolPermissionPolicy, database: Database, invocation_policy: ConnectorInvocationPolicy, *native_runtimes: ConnectorRuntime) -> None:
+async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettings, permission_policy: UnrestrictedDownstreamToolPermissionPolicy | GroupDownstreamToolPermissionPolicy, database: Database, invocation_policy: ConnectorInvocationPolicy, *native_runtimes: ConnectorRuntime, downstream_client_factory: DownstreamClientFactory) -> None:
     infrastructure_settings = downstream_mcp_infrastructure_settings_from_app_config(settings)
     stores = await create_downstream_mcp_stores(
         infrastructure_settings.credential_secret, database
     )
-    connections = create_downstream_mcp_connections(infrastructure_settings, stores.credentials)
+    discovery = create_downstream_mcp_discovery(infrastructure_settings, create_downstream_mcp_probe(infrastructure_settings, stores.credentials))
     discovery_runtime = create_downstream_discovery_runtime(DownstreamRuntimeStores(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, descriptions=mcp.capability_description_overrides))
     await discovery_runtime.reconcile()
     mcp.downstream_mcp_discovery_runtime = discovery_runtime
     personal_runtime: PersonalToolRuntime = DisabledPersonalToolRuntime()
     if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled:
         personal_runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), DownstreamRuntimeDefinitions(discovery_runtime), stores.personal_tool_access, create_personal_mcp_transport(), utc_clock)
-    provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_runtime=personal_runtime, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=connections.client_factory, permission_policy=permission_policy, connector_scope='', signals=mcp.invocation_signals, execution_pipelines=mcp.execution_pipelines)
+    provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_runtime=personal_runtime, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=downstream_client_factory, permission_policy=permission_policy, connector_scope='', signals=mcp.invocation_signals, execution_pipelines=mcp.execution_pipelines)
     mcp.invocation_signals.tool_inventory_observed.send(shared_tool_inventory(discovery_runtime.capture().records))
     mcp.downstream_mcp_tool_provider = provider
     mcp.add_middleware(PersonalToolReservationMiddleware(provider))
@@ -269,12 +267,8 @@ async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettin
     connector_tool_registry = getattr(mcp, 'connector_tool_registry', None)
     notifier = connector_tool_registry.client_notifier if connector_tool_registry is not None else install_tool_list_changed_notifier(mcp)
     mcp.capability_list_change_notifier = notifier
-    mcp.downstream_mcp_discovery_coordinator = create_downstream_discovery_coordinator(DownstreamDiscoveryStores(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, health=stores.health, activations=stores.activations, publishing=stores.publishing, unit_of_work=stores.unit_of_work), DownstreamDiscoveryAdapters(discovery=connections.discovery, notifier=notifier, native_capabilities=provider, monotonic_clock=time.monotonic, random_source=random.random, identity_source=RuntimePublicToolIdentitySource(native_runtimes)), DownstreamDiscoveryCoordinatorOptions(refresh_interval_seconds=settings.mcp.downstream_refresh_interval_seconds, maximum_concurrency=settings.mcp.downstream_discovery_concurrency, jitter_ratio=settings.mcp.downstream_discovery_jitter_ratio, maximum_backoff_seconds=settings.mcp.downstream_discovery_maximum_backoff_seconds))
+    mcp.downstream_mcp_discovery_coordinator = create_downstream_discovery_coordinator(DownstreamDiscoveryStores(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, health=stores.health, activations=stores.activations, publishing=stores.publishing, unit_of_work=stores.unit_of_work), DownstreamDiscoveryAdapters(discovery=discovery, notifier=notifier, native_capabilities=provider, monotonic_clock=time.monotonic, random_source=random.random, identity_source=RuntimePublicToolIdentitySource(native_runtimes)), DownstreamDiscoveryCoordinatorOptions(refresh_interval_seconds=settings.mcp.downstream_refresh_interval_seconds, maximum_concurrency=settings.mcp.downstream_discovery_concurrency, jitter_ratio=settings.mcp.downstream_discovery_jitter_ratio, maximum_backoff_seconds=settings.mcp.downstream_discovery_maximum_backoff_seconds))
     mcp.downstream_mcp_periodic_discovery_enabled = settings.mcp.downstream_discovery_enabled
-
-def _default_openapi_runtime_adapters(settings: MCPAppSettings) -> OpenApiRuntimeAdapters:
-    openapi_config = settings.openapi_connectors
-    return OpenApiRuntimeAdapters(outbound_http_client_factory=OutboundHttpClientFactory(connect_timeout_seconds=openapi_config.execution_connect_timeout_seconds, read_timeout_seconds=openapi_config.execution_read_timeout_seconds, write_timeout_seconds=openapi_config.execution_write_timeout_seconds, pool_timeout_seconds=openapi_config.execution_pool_timeout_seconds))
 
 def _default_connector_tool_runtime_state_store(runtime: ConnectorRuntime) -> InMemoryConnectorToolRuntimeStateStore:
     store = InMemoryConnectorToolRuntimeStateStore()
@@ -319,7 +313,7 @@ async def load_configured_public_app_config(settings: AppConfig) -> PublicAppCon
         await persistence_runtime.shutdown()
         raise
 
-async def create_runtime_context(config: PublicAppConfig) -> PublicAppRuntimeContext:
+async def create_runtime_context(config: PublicAppConfig, *, downstream_client_factory: DownstreamClientFactory, openapi_adapters: OpenApiRuntimeAdapters) -> PublicAppRuntimeContext:
     install_umbod_consent_screen()
     source_strategy = resolve_connector_runtime_state_source_strategy(config.source_stores, config.configured_source_strategy)
     connector_tool_runtime_state_store = config.connector_tool_runtime_state_store if config.connector_tool_runtime_state_store is not None else InMemoryConnectorToolRuntimeStateStore()
@@ -328,7 +322,7 @@ async def create_runtime_context(config: PublicAppConfig) -> PublicAppRuntimeCon
         group_permission_runtime_state = InMemoryGroupConnectorToolPermissions(group_claim_fields=(config.settings.mcp.permission_group_claim,))
     auth_provider = config.auth_provider if config.auth_provider is not None else MCPAuthProviderFactory().create(config.settings)
     persistence_runtime = config.persistence_runtime
-    mcp = await build_mcp_with_openapi_adapters(config.settings, auth_provider, config.connector_runtime, (connector_tool_runtime_state_store, group_permission_runtime_state), _default_openapi_runtime_adapters(config.settings), persistence_runtime, config.invocation_log_sink or create_default_mcp_tool_invocation_log_sink())
+    mcp = await build_mcp_with_openapi_adapters(config.settings, auth_provider, config.connector_runtime, (connector_tool_runtime_state_store, group_permission_runtime_state), openapi_adapters, persistence_runtime, config.invocation_log_sink or create_default_mcp_tool_invocation_log_sink(), downstream_client_factory=downstream_client_factory)
     metrics_recorder = mcp.metrics_recorder
     if not isinstance(metrics_recorder, PrometheusMcpMetricsRecorder):
         raise TypeError('MCP metrics recorder must be PrometheusMcpMetricsRecorder')

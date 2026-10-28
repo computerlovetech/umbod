@@ -7,7 +7,7 @@ description: "Integration adapters for downstream MCP discovery, identity and pe
 # Files
 
 - [__init__.py](./__init__.py) — Public module exports.
-- [composition.py](./composition.py) — Adapter composition.
+- [composition.py](./composition.py) — Independent invocation-client and discovery-probe construction with shared TLS and OAuth wiring.
 - [fastmcp/](./fastmcp/) — Shared FastMCP integration.
 - [icon_discovery.py](./icon_discovery.py) — Probe favicon enrichment.
 - [identity.py](./identity.py) — Accepted claim translation.
