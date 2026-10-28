@@ -36,6 +36,7 @@ _NON_PRODUCTION_USER_VARIABLES = {
     "UMBOD_MCP_TEST_USER_GROUP",
     "UMBOD_OAUTH_STORAGE_DIRECTORY",
     "UMBOD_CONNECTOR_STORE_SQLITE_PATH",
+    "UMBOD_FILESYSTEM_CONTENT_DIRECTORY",
     "UMBOD_ADMIN_AUTHENTICATION_SIMULATED_ADMIN",
     "UMBOD_ADMIN_AUTHENTICATION_SIMULATED_USER_ID",
     "UMBOD_ADMIN_AUTHENTICATION_SIMULATED_USER_EMAIL",
@@ -125,6 +126,7 @@ def test_catalog_order_is_deterministic_and_canonical_variables_are_unique() -> 
         "mcp",
         "identity",
         "storage",
+        "filesystem",
         "openapi",
         "security",
     ]

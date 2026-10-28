@@ -4,33 +4,20 @@ import logging
 from fastmcp import FastMCP
 from pydantic import JsonValue, TypeAdapter
 
-from umbod.core.capabilities import AvailabilityAwareCapabilityAuthorizer
-from umbod.core.invocation.tools.execution import ToolExecutionPipeline
 from umbod.core.connectors.openapi.execution import (
-    AggregateOpenApiOperationResolver,
-    AsyncStreamingHttpClient,
-    BearerOpenApiRequestAuthenticator,
-    ExactGroupOpenApiCapabilityAuthorizer,
-    ExactHttpsDestinationPolicy,
-    HttpxOutboundOperationAdapter,
-    IdentityOpenApiResponseNormalizer,
     MissingJsonBody,
-    OpenApiCapabilityExecutionService,
-    OpenApiExecutionLimits,
     OpenApiExecutionResponse,
     OpenApiOperationInput,
     PresentJsonBody,
-    StrictOpenApiRequestCompiler,
 )
 from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
-from umbod.core.permissions.ports import GroupPermissionReader
 from umbod.mcp.signals import McpToolExecutionPipelineFactory
 from umbod.mcp.connectors.native.tools.deployment_modes.codemode import (
     OpenApiCodeModeExecutor,
     OpenApiCodeModeInvocation,
 )
-from umbod.mcp.connectors.openapi.availability import openapi_availability_reader
-from umbod.mcp.connectors.openapi.configuration import openapi_configuration_adapter
+from umbod.mcp.connectors.openapi.execution_service_factory import OpenApiCapabilityExecutionServiceFactory
+from umbod.mcp.connectors.openapi.ports import OpenApiExecutionServiceFactory
 from umbod.mcp.connectors.openapi.deps import capture_openapi_groups
 
 logger = logging.getLogger(__name__)
@@ -52,9 +39,15 @@ async def _close_resource(resource: object) -> None:
 
 
 class OpenApiCodeModeExecutionAdapter:
-    def __init__(self, server: FastMCP, execution_pipelines: McpToolExecutionPipelineFactory) -> None:
+    def __init__(
+        self,
+        server: FastMCP,
+        execution_pipelines: McpToolExecutionPipelineFactory,
+        execution_services: OpenApiExecutionServiceFactory,
+    ) -> None:
         self._server = server
         self._execution_pipelines = execution_pipelines
+        self._execution_services = execution_services
 
     async def execute(self, invocation: OpenApiCodeModeInvocation) -> JsonValue:
         groups = capture_openapi_groups(self._server)
@@ -64,7 +57,7 @@ class OpenApiCodeModeExecutionAdapter:
         try:
             connector_name = await self._connector_display_name(store, invocation)
             execution_pipeline = self._execution_pipelines.create(connector_name, openapi_response_is_error)
-            service = await self._execution_service(store, permission_reader, client, execution_pipeline)
+            service = await self._execution_services.create(store, permission_reader, client, execution_pipeline)
             operation_input = self._operation_input(invocation)
             result = await service.execute(operation_input, groups.group_ids)
             return result.model_dump(mode='json')
@@ -72,35 +65,6 @@ class OpenApiCodeModeExecutionAdapter:
             await _close_resource(client)
             await _close_resource(permission_reader)
             await _close_resource(store)
-
-    async def _execution_service(
-        self,
-        store: OpenApiConnectorStore,
-        permission_reader: GroupPermissionReader,
-        client: AsyncStreamingHttpClient,
-        execution_pipeline: ToolExecutionPipeline[OpenApiExecutionResponse],
-    ) -> OpenApiCapabilityExecutionService:
-        availability = openapi_availability_reader(self._server, store)
-        permission_authorizer = ExactGroupOpenApiCapabilityAuthorizer(permission_reader)
-        authorizer = (
-            AvailabilityAwareCapabilityAuthorizer(permission_authorizer, availability, 'openapi')
-            if availability is not None
-            else permission_authorizer
-        )
-        return OpenApiCapabilityExecutionService(
-            active_catalog_reader=store,
-            authorizer=authorizer,
-            resolver=AggregateOpenApiOperationResolver(),
-            compiler=StrictOpenApiRequestCompiler(ExactHttpsDestinationPolicy()),
-            transport=HttpxOutboundOperationAdapter(client),
-            normalizer=IdentityOpenApiResponseNormalizer(),
-            limits=OpenApiExecutionLimits(
-                timeout_seconds=self._server.openapi_execution_timeout_seconds,
-                maximum_response_bytes=self._server.openapi_execution_maximum_response_bytes,
-            ),
-            authenticator=BearerOpenApiRequestAuthenticator(await openapi_configuration_adapter(self._server)),
-            execution_pipeline=execution_pipeline,
-        )
 
     @staticmethod
     def _operation_input(invocation: OpenApiCodeModeInvocation) -> OpenApiOperationInput:
@@ -128,12 +92,19 @@ class OpenApiCodeModeExecutionAdapter:
 
 
 class OpenApiCodeModeExecutionAdapterFactory:
-    def create(self, server: FastMCP, execution_pipelines: McpToolExecutionPipelineFactory) -> OpenApiCodeModeExecutor:
-        return OpenApiCodeModeExecutionAdapter(server, execution_pipelines).execute
+    def create(
+        self,
+        server: FastMCP,
+        execution_pipelines: McpToolExecutionPipelineFactory,
+        execution_services: OpenApiExecutionServiceFactory,
+    ) -> OpenApiCodeModeExecutor:
+        return OpenApiCodeModeExecutionAdapter(server, execution_pipelines, execution_services).execute
 
 
 def build_openapi_codemode_executor(
     server: FastMCP,
     execution_pipelines: McpToolExecutionPipelineFactory,
 ) -> OpenApiCodeModeExecutor:
-    return OpenApiCodeModeExecutionAdapterFactory().create(server, execution_pipelines)
+    return OpenApiCodeModeExecutionAdapterFactory().create(
+        server, execution_pipelines, OpenApiCapabilityExecutionServiceFactory(server)
+    )

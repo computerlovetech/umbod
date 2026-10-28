@@ -77,6 +77,8 @@ from umbod.core.connectors.downstream_mcp.adapters.settings import (
     downstream_mcp_infrastructure_settings_from_app_config,
 )
 from umbod.rest.settings import APISettings
+from umbod.core.filesystem import ContentDriver
+from umbod.infrastructure import InMemoryContentConfig, LocalContentConfig, create_content_driver
 
 
 class ConnectorRegistryFactory(Protocol):
@@ -241,6 +243,13 @@ class ConnectorApiDependencyFactories:
         self.downstream_mcp_catalog_store = downstream_mcp_catalog_store
         self.downstream_mcp_health_store = downstream_mcp_health_store
         self.openapi_json_import_max_bytes = openapi_json_import_max_bytes
+
+    @cached_property
+    def filesystem_content(self) -> ContentDriver:
+        config = self.settings.filesystem.content
+        if config.type == "local":
+            return create_content_driver(LocalContentConfig(type="local", directory=config.directory))
+        return create_content_driver(InMemoryContentConfig(type="inmemory"))
 
     def validate_startup(self) -> None:
         self.connector_registry.create()

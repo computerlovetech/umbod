@@ -9,18 +9,19 @@ from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSn
 from umbod.core.filesystem import FilesystemCreation, InvalidName, NameCollision, NodeMetadata, StorageFailure, WrongNodeKind
 from umbod.core.filesystem.authorization import PermissionDenied
 from umbod.core.filesystem.browsing import FilesystemBrowsing
+from umbod.core.filesystem.content import FilesystemContent
 from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import get_caller_context, get_verified_access_claims
 from umbod.rest.filesystem import deps
 
 from .conftest import FilesystemHttp
-from .test_http_contract import BASE, BODY
+from .test_http_contract import BASE, BODY, creation_payload
 
 OPERATIONS = [
     ("GET", "/root", "get_root"),
     ("GET", "/nodes/{id}", "get_node"),
     ("GET", "/nodes/{id}/children", "list_children"),
-    ("POST", "/nodes/{id}/files", "create_file"),
+    ("POST", "/nodes/{id}/files", "upload"),
     ("POST", "/nodes/{id}/directories", "create_directory"),
 ]
 
@@ -39,7 +40,8 @@ def test_port_delegation_and_fixed_error_translation(
 ) -> None:
     browsing = create_autospec(FilesystemBrowsing, instance=True)
     creation = create_autospec(FilesystemCreation, instance=True)
-    service = creation if method == "POST" else browsing
+    content = create_autospec(FilesystemContent, instance=True)
+    service = content if operation == "upload" else creation if method == "POST" else browsing
     getattr(service, operation).side_effect = error("secret storage/key owner credential")
 
     def provide_browsing() -> FilesystemBrowsing:
@@ -48,10 +50,17 @@ def test_port_delegation_and_fixed_error_translation(
     def provide_creation() -> FilesystemCreation:
         return creation
 
+    def provide_content() -> FilesystemContent:
+        return content
+
+    filesystem_http.app.dependency_overrides[deps.get_filesystem_content] = provide_content
     filesystem_http.app.dependency_overrides[deps.get_filesystem_browsing] = provide_browsing
     filesystem_http.app.dependency_overrides[deps.get_filesystem_creation] = provide_creation
     identifier = uuid4()
-    response = filesystem_http.client.request(method, BASE + path.format(id=identifier), json=BODY)
+    response = filesystem_http.client.request(
+        method, BASE + path.format(id=identifier),
+        **creation_payload("files" if operation == "upload" else "directories", BODY),
+    )
     assert response.status_code == status
     assert response.json() == {"detail": {"code": code, "message": message}}
     assert response.headers["cache-control"] == "no-store"
@@ -62,7 +71,10 @@ def test_port_delegation_and_fixed_error_translation(
     if operation != "get_root":
         assert arguments[1] == identifier and isinstance(arguments[1], UUID)
     if method == "POST":
-        assert arguments[2:] == ("child", NodeMetadata.model_validate(BODY["metadata"]))
+        assert arguments[2:4] == ("child", NodeMetadata.model_validate(BODY["metadata"]))
+    if operation == "upload":
+        content.authorize_upload.assert_awaited_once_with(arguments[0], identifier)
+        assert len(arguments) == 5
 
 
 def test_capture_reuses_accepted_state_once_and_never_promotes_provenance(filesystem_http: FilesystemHttp) -> None:

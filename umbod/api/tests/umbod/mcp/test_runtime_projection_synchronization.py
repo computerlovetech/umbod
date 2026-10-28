@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, Mock
 
 import httpx
 import pytest
+from fastmcp.server.http import StarletteWithLifespan
 from starlette.responses import JSONResponse
 from starlette.types import Receive, Scope, Send
 
@@ -251,26 +252,30 @@ async def test_cancellation_during_apply_does_not_advance_checkpoint(events: Eve
 async def test_sql_bootstrap_without_api_url_never_copies_authoritative_store_state(monkeypatch: pytest.MonkeyPatch, events: EventStream, checkpoints: EventCheckpointStore) -> None:
     configuration = Mock()
     publishing = Mock()
-    coordinator = SimpleNamespace(reconcile_native_capabilities=AsyncMock())
+    coordinator = SimpleNamespace(reconcile_native_capabilities=AsyncMock(), initialize_native_capabilities=AsyncMock(), stop=Mock())
     from umbod.mcp.connectors.downstream_mcp.capability_notifications import CapabilityListChangeNotifier
 
     registry = SimpleNamespace(reconcile_all=AsyncMock(), client_notifier=Mock(spec=CapabilityListChangeNotifier))
     context = SimpleNamespace(
         api_base_url=None,
         source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(),
-        settings=SimpleNamespace(mcp=SimpleNamespace(messaging_transport='sql')),
-        persistence_runtime=SimpleNamespace(database=object()),
+        settings=SimpleNamespace(endpoints=SimpleNamespace(mcp_base_url='http://test'), mcp=SimpleNamespace(messaging_transport='sql', metrics_enabled=False, metrics_port=0)),
+        persistence_runtime=SimpleNamespace(database=object(), readiness=SimpleNamespace(ensure_ready=AsyncMock()), shutdown=AsyncMock()),
+        http_app=StarletteWithLifespan(),
+        metrics_recorder=Mock(),
         group_permission_runtime_state=None,
         connector_runtime=SimpleNamespace(connector_tool_mappings=[], connector_configuration_store=configuration, connector_publishing_store=publishing),
-        mcp=SimpleNamespace(runtime_projection_health=RuntimeProjectionHealth(), downstream_mcp_discovery_coordinator=coordinator, connector_tool_registry=registry, connector_prompt_registry=SimpleNamespace(reconcile_all=AsyncMock()), connector_resource_registry=SimpleNamespace(reconcile_all=AsyncMock())),
+        mcp=SimpleNamespace(runtime_projection_health=RuntimeProjectionHealth(), downstream_mcp_discovery_runtime=Mock(), downstream_mcp_discovery_coordinator=coordinator, connector_tool_registry=registry, connector_prompt_registry=SimpleNamespace(reconcile_all=AsyncMock()), connector_resource_registry=SimpleNamespace(reconcile_all=AsyncMock())),
     )
     adapters = SimpleNamespace(create_projection_reader=lambda: events, create_checkpoint_store=lambda: checkpoints)
     monkeypatch.setattr(public_app, 'McpMessagingAdapterFactory', lambda *_args: adapters)
     monkeypatch.setattr(public_app, 'reconcile_openapi_discovery', AsyncMock())
-    synchronizer = await public_app._initialize_runtime_projection(context)
-    assert isinstance(synchronizer, RuntimeProjectionSynchronizer)
-    assert context.mcp.runtime_projection_health.ready
-    coordinator.reconcile_native_capabilities.assert_awaited_once()
-    registry.reconcile_all.assert_awaited_once()
+    app = await public_app.build_starlette_app(context)
+    async with app.router.lifespan_context(app):
+        assert context.mcp.runtime_projection_health.ready
+        coordinator.reconcile_native_capabilities.assert_awaited_once()
+        registry.reconcile_all.assert_awaited_once()
+        assert configuration.mock_calls == []
+        assert publishing.mock_calls == []
     assert configuration.mock_calls == []
     assert publishing.mock_calls == []

@@ -5,6 +5,7 @@ import type { FilesApi } from '$lib/files/api';
 import { deferred, fileId, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
 import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api';
 import { FilesState, filesHref } from '$lib/files/state/files-state.svelte';
+import { UploadState } from '$lib/files/state/upload-state.svelte';
 import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
 import { workspaceNavigation } from '$lib/workspace/navigation';
 import FilesContent from './FilesContent.svelte';
@@ -16,14 +17,14 @@ vi.mock('$app/navigation', () => ({
   afterNavigate: (callback: (event: { to: { url: URL } | null }) => void): void => { navigation.callback = callback; }
 }));
 
-function fixture(): { api: FilesApi; state: FilesState; folder: NewFolderState } {
+function fixture(): { api: FilesApi; state: FilesState; folder: NewFolderState; upload: UploadState } {
   const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture);
   const state = new FilesState(api);
-  return { api, state, folder: new NewFolderState(api, state) };
+  return { api, state, folder: new NewFolderState(api, state), upload: new UploadState(api, state) };
 }
 
-function content(state: FilesState, folder: NewFolderState): string {
-  return render(FilesContent, { props: { state, folder, signIn: vi.fn() } }).body;
+function content(state: FilesState, folder: NewFolderState, upload: UploadState): string {
+  return render(FilesContent, { props: { state, folder, upload, signIn: vi.fn() } }).body;
 }
 
 describe('Files user composition', () => {
@@ -59,10 +60,11 @@ describe('Files user composition', () => {
     expect(currentUser).not.toHaveBeenCalled();
   });
 
-  test('root is labelled Files with accessible compact items and no speculative controls', async (): Promise<void> => {
-    const { state, folder } = fixture();
+  test('root is labelled Files with accessible compact items and authorized upload', async (): Promise<void> => {
+    const { state, folder, upload } = fixture();
     await state.load(null);
-    const body = content(state, folder);
+    await vi.waitFor(() => expect(upload.available).toBe(true));
+    const body = content(state, folder, upload);
     expect(body).toContain('Files</h1>');
     expect(body).toContain('aria-label="Visited folders"');
     expect(body).toContain('New folder');
@@ -70,13 +72,14 @@ describe('Files user composition', () => {
     expect(body).toContain('aria-label="Folder"');
     expect(body).toContain('Updated');
     expect(body).toContain('href="' + filesHref(folderId) + '"');
-    expect(body).not.toMatch(/Upload|Download|Share|Search|Next page|Create file|New file/);
+    expect(body).toContain('Upload file');
+    expect(body).not.toMatch(/Download|Share|Search|Next page|Create file|New file/);
   });
 
   test('deep file details show metadata and an explicit parent link, with no ancestor names or writes', async (): Promise<void> => {
-    const { state, folder } = fixture();
+    const { state, folder, upload } = fixture();
     await state.load(fileId);
-    const body = content(state, folder);
+    const body = content(state, folder, upload);
     expect(body).toContain('aria-label="File details"');
     expect(body).toContain('Notes.txt');
     expect(body).toContain('text/plain');
@@ -88,20 +91,20 @@ describe('Files user composition', () => {
   });
 
   test('renders empty, loading, denied and failed states distinctly', async (): Promise<void> => {
-    const { api, state, folder } = fixture();
-    expect(content(state, folder)).toContain('Loading files');
+    const { api, state, folder, upload } = fixture();
+    expect(content(state, folder, upload)).toContain('Loading files');
     vi.spyOn(api.filesystem, 'listChildren').mockResolvedValueOnce([]);
     await state.load(null);
-    expect(content(state, folder)).toContain('This folder is empty.');
+    expect(content(state, folder, upload)).toContain('This folder is empty.');
     vi.spyOn(api.filesystem, 'getRoot').mockRejectedValueOnce(new HttpError(403, 'Forbidden', {}));
     await state.load(null);
-    expect(content(state, folder)).toContain("You don't have access");
-    expect(content(state, folder)).not.toContain('This folder is empty.');
-    expect(content(state, folder)).not.toContain('New folder');
+    expect(content(state, folder, upload)).toContain("You don't have access");
+    expect(content(state, folder, upload)).not.toContain('This folder is empty.');
+    expect(content(state, folder, upload)).not.toContain('New folder');
     vi.spyOn(api.filesystem, 'getRoot').mockRejectedValueOnce(new Error('private diagnostic'));
     await state.reload();
-    expect(content(state, folder)).toContain("Couldn't load files");
-    expect(content(state, folder)).not.toContain('private diagnostic');
+    expect(content(state, folder, upload)).toContain("Couldn't load files");
+    expect(content(state, folder, upload)).not.toContain('private diagnostic');
   });
 
   test('folder form preserves denied input, disables all submits while pending and exposes uncertainty reload', async (): Promise<void> => {

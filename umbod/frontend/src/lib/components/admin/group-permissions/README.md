@@ -13,4 +13,4 @@ description: "Connector group grant presentation and shared registration control
 - [group-permissions-state.test.ts](./group-permissions-state.test.ts) — Group selection and draft tests.
 - [GroupPermissionsManager.svelte](./GroupPermissionsManager.svelte) — Connector permissions workspace.
 - [GroupPermissionsTabs.svelte](./GroupPermissionsTabs.svelte) — Connector and filesystem navigation.
-- [shared/](./shared/) — Group registration and native dialog mechanics.
+- [shared/](./shared/) — Group registration controls and native dialog compatibility export.

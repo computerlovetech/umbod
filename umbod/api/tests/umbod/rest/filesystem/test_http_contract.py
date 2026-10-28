@@ -1,3 +1,5 @@
+import json
+from typing import Any
 from uuid import uuid4
 
 import pytest
@@ -11,11 +13,20 @@ METADATA = {"content_type": {}, "attributes": {"label": "safe"}}
 BODY = {"name": "child", "metadata": METADATA}
 
 
+def creation_payload(kind: str, body: dict[str, object]) -> dict[str, Any]:
+    if kind == "files":
+        return {
+            "files": {"file": ("child", b"")},
+            "data": {key: json.dumps(value) if key == "metadata" else value for key, value in body.items()},
+        }
+    return {"json": body}
+
+
 @pytest.mark.parametrize("kind", ["files", "directories"])
 def test_group_root_creation_and_private_children(filesystem_http: FilesystemHttp, kind: str) -> None:
     client = filesystem_http.client
     root = client.get(f"{BASE}/root").json()
-    response = client.post(f"{BASE}/nodes/{root['id']}/{kind}", json=BODY)
+    response = client.post(f"{BASE}/nodes/{root['id']}/{kind}", **creation_payload(kind, BODY))
     assert response.status_code == 201
     child = response.json()
     assert child["kind"] == ("file" if kind == "files" else "directory")
@@ -45,18 +56,18 @@ def test_all_paths_deny_untrusted_or_ungranted_callers(
     client = filesystem_http.client
     identifier = client.get(f"{BASE}/root").json()["id"]
     path = BASE + suffix.format(id=identifier)
-    outsider = client.request(method, path, json=BODY, headers={"Authorization": "Bearer outsider"})
+    payload = creation_payload("files" if suffix.endswith("/files") else "directories", BODY)
+    outsider = client.request(method, path, **payload, headers={"Authorization": "Bearer outsider"})
     assert outsider.status_code == 403
     del filesystem_http.app.dependency_overrides[get_caller_context]
-    untrusted = client.request(method, path, json=BODY)
+    untrusted = client.request(method, path, **payload)
     assert untrusted.status_code == 403
     assert untrusted.json() == outsider.json()
-    unauthenticated = client.request(method, path, json=BODY, headers={"Authorization": ""})
+    unauthenticated = client.request(method, path, **payload, headers={"Authorization": ""})
     assert unauthenticated.status_code == 401
     assert unauthenticated.headers["cache-control"] == "no-store"
 
 
-@pytest.mark.parametrize("kind", ["files", "directories"])
 @pytest.mark.parametrize("body", [
     {}, {"name": "child"}, {"metadata": METADATA},
     {"name": 12, "metadata": METADATA}, {"name": "child", "metadata": None},
@@ -64,11 +75,11 @@ def test_all_paths_deny_untrusted_or_ungranted_callers(
     {**BODY, "caller": {}}, {**BODY, "content": {"key": "secret"}},
 ])
 def test_creation_rejects_invalid_or_authority_injecting_bodies(
-    filesystem_http: FilesystemHttp, kind: str, body: dict[str, object],
+    filesystem_http: FilesystemHttp, body: dict[str, object],
 ) -> None:
     client = filesystem_http.client
     root_id = client.get(f"{BASE}/root").json()["id"]
-    response = client.post(f"{BASE}/nodes/{root_id}/{kind}", json=body)
+    response = client.post(f"{BASE}/nodes/{root_id}/directories", json=body)
     assert response.status_code == 422
     assert client.get(f"{BASE}/nodes/{root_id}/children").json() == {"nodes": []}
 
@@ -80,12 +91,15 @@ def test_creation_rejects_nested_metadata_extras(
 ) -> None:
     client = filesystem_http.client
     root_id = client.get(f"{BASE}/root").json()["id"]
-    response = client.post(f"{BASE}/nodes/{root_id}/{kind}", json={
+    response = client.post(f"{BASE}/nodes/{root_id}/{kind}", **creation_payload(kind, {
         **BODY, "metadata": {**METADATA, field: "injected"},
-    })
+    }))
     assert response.status_code == 422
-    assert response.json()["detail"][0]["loc"] == ["body", "metadata", field]
-    assert response.json()["detail"][0]["type"] == "extra_forbidden"
+    if kind == "files":
+        assert response.json()["detail"]["code"] == "filesystem_invalid_upload"
+    else:
+        assert response.json()["detail"][0]["loc"] == ["body", "metadata", field]
+        assert response.json()["detail"][0]["type"] == "extra_forbidden"
     assert client.get(f"{BASE}/nodes/{root_id}/children").json() == {"nodes": []}
 
 
@@ -96,9 +110,9 @@ def test_metadata_attributes_remain_arbitrary_data(
     client = filesystem_http.client
     root_id = client.get(f"{BASE}/root").json()["id"]
     attributes = {"owner": "not-an-owner", "content": "not-content", "caller": "not-a-caller"}
-    response = client.post(f"{BASE}/nodes/{root_id}/{kind}", json={
+    response = client.post(f"{BASE}/nodes/{root_id}/{kind}", **creation_payload(kind, {
         **BODY, "metadata": {**METADATA, "attributes": attributes},
-    })
+    }))
     assert response.status_code == 201
     assert response.json()["metadata"]["attributes"] == attributes
     bob = client.get(
@@ -123,19 +137,19 @@ def test_creation_domain_errors_and_cookie_csrf(filesystem_http: FilesystemHttp)
     client = filesystem_http.client
     root_id = client.get(f"{BASE}/root").json()["id"]
     path = f"{BASE}/nodes/{root_id}/files"
-    blocked = client.post(path, json=BODY, headers={"Cookie": "session=present"})
+    blocked = client.post(path, **creation_payload("files", BODY), headers={"Cookie": "session=present"})
     assert blocked.status_code == 403
     assert client.get(f"{BASE}/nodes/{root_id}/children").json() == {"nodes": []}
-    allowed = client.post(path, json=BODY, headers={
+    allowed = client.post(path, **creation_payload("files", BODY), headers={
         "Cookie": "session=present",
         "Origin": str(filesystem_http.factories.settings.endpoints.site_base_url).rstrip("/"),
         "X-Umbod-Web-Request": "1",
     })
     assert allowed.status_code == 201
-    collision = client.post(path, json=BODY)
+    collision = client.post(path, **creation_payload("files", BODY))
     assert collision.status_code == 409
     assert collision.json()["detail"]["code"] == "filesystem_name_collision"
-    invalid = client.post(path, json={**BODY, "name": "a/b"})
+    invalid = client.post(path, **creation_payload("files", {**BODY, "name": "a/b"}))
     assert invalid.status_code == 422
     assert invalid.json()["detail"]["code"] == "filesystem_invalid_name"
     wrong = client.post(f"{BASE}/nodes/{allowed.json()['id']}/directories", json=BODY)

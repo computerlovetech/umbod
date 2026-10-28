@@ -32,6 +32,23 @@ Set `persistence.enabled=true` to create a ReadWriteOnce PersistentVolumeClaim. 
 
 Umbod does not migrate SQLite schemas or persisted documents between incompatible versions. Reset persistent storage before installing an incompatible Umbod version.
 
+## Filesystem runtime
+
+The application environment contract selects local file-content storage for operator deployments, independently of the application database backend. Namespace, ownership and grants use the existing application database; content storage does not create another database runtime. Embedded hosts constructing `AppConfig` directly default to in-memory content.
+
+| Environment variable | Default | Contract |
+| --- | --- | --- |
+| `UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES` | `10485760` | Positive maximum filesystem upload size in bytes; independent of the MCP connector file-input limit |
+| `UMBOD_FILESYSTEM_CONTENT_DIRECTORY` | derived | Optional nonblank directory override; otherwise `filesystem-content` beneath `UMBOD_DATA_DIR`, whose default is `.data` |
+
+Directory configuration is normalized during operator-to-runtime assembly, preserving relative paths and expanding the home directory. Configuration does not create directories or inspect their contents. Retain the content directory alongside the application database to preserve file references across restarts. Workers sharing a namespace database must also share the same content directory. Instance configuration inspection exposes the upload limit but omits the host directory. These are application environment settings, not dedicated Helm values.
+
+The REST file endpoint accepts multipart uploads only; JSON empty-file creation is not supported. Zero-byte uploaded files are allowed. Uploads accept one file and reject duplicate names without overwriting. New files remain private to their creator; parent grants are not inherited. The byte limit is not a storage quota. Content is stored before namespace publication, so failed publication can leave unreferenced immutable objects; automatic garbage collection is not implemented.
+
+The frontend nginx proxy limits the entire request body to 12 MiB, including multipart overhead. Increasing the API file limit requires corresponding gateway/proxy configuration. Direct API ingress does not pass through that frontend limit.
+
+Downloads use the stable authenticated node-content endpoint and return attachments with no-store caching. Clients must tolerate a future temporary redirect to a short-lived storage URL without forwarding API credentials to another origin.
+
 ## Authentication and secrets
 
 Shared installations require an OIDC provider and stable secrets. Configure non-secret authentication settings with the typed `config` Helm values, including:

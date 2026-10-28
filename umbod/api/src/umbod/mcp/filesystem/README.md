@@ -16,8 +16,8 @@ description: "MCP adapters for authorized filesystem browsing and empty node cre
 - [ports.py](./ports.py) — Caller and service factory contracts.
 - [registration.py](./registration.py) — Filesystem tool registration.
 
-# Context not available from the code
+# Related links
 
 - [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Filesystem ownership and storage boundary.
 - [Root-access administration](../../rest/filesystem_administration/README.md) — Root initialization and grants are trusted administration, not MCP bootstrap; local test identities gain no implicit access.
-- [Planned HTTP contracts](../../rest/filesystem/planned/README.md) — Content, upload and mutation plans do not imply MCP support.
+- [Filesystem HTTP boundary](../../rest/filesystem/README.md) — REST uploads and downloads do not imply corresponding MCP tools.

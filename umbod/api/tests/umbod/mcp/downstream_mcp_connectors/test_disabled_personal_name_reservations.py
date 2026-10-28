@@ -1,18 +1,26 @@
 import pytest
-from fastmcp import Client, FastMCP
+from fastmcp import Client
 
 from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import execution_case
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, runtime_case
-from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
-from umbod.mcp.signals import SignalToolExecutionPipelineFactory
-from umbod.core.capabilities.descriptions import SystemConnectorCapabilityDescriptionOverrideStore
-from umbod.core.invocation import PermitAllConnectorInvocationPolicy
-from umbod.mcp.connectors.downstream_mcp import UnrestrictedDownstreamToolPermissionPolicy
-from umbod.mcp.metrics import InMemoryMcpMetricsRecorder
-from umbod.mcp.public_app import _register_downstream_mcp_provider
+from umbod.core.connectors.native.runtime import ConnectorRuntime
+from umbod.core.persistence import Database
+from umbod.mcp.public_app import build_mcp
 from umbod.mcp.settings import MCPAppSettings, MCPSettings
 
 __all__ = ["runtime_case"]
+
+
+class BorrowedDatabaseRuntime:
+    def __init__(self, database: Database) -> None:
+        self.database = database
+        self.readiness = self
+
+    async def ensure_ready(self) -> None:
+        pass
+
+    async def shutdown(self) -> None:
+        pass
 
 
 @pytest.mark.asyncio
@@ -21,11 +29,11 @@ async def test_disabled_personal_profile_keeps_private_namespace_reserved(runtim
     execution = await execution_case(runtime_case)
     settings = MCPAppSettings(mcp=MCPSettings(connector_tool_exposure_mode="flat", _env_file=None), _env_file=None)
     settings = settings.model_copy(update={"personal_connections": settings.personal_connections.model_copy(update={"enabled": selection_enabled, "oauth_enabled": oauth_enabled})})
-    public = FastMCP("disabled-personal")
-    public.capability_description_overrides = SystemConnectorCapabilityDescriptionOverrideStore()
-    public.invocation_signals = invocation_signals(InMemoryMcpMetricsRecorder())
-    public.execution_pipelines = SignalToolExecutionPipelineFactory(public.invocation_signals, PermitAllConnectorInvocationPolicy())
-    await _register_downstream_mcp_provider(public, settings, UnrestrictedDownstreamToolPermissionPolicy(), runtime_case.database, PermitAllConnectorInvocationPolicy())
+    public = await build_mcp(
+        settings, None,
+        ConnectorRuntime(connector_registrations=(), connector_configuration_store=None, connector_publishing_store=None, connector_tool_mappings=()),
+        BorrowedDatabaseRuntime(runtime_case.database),
+    )
     alternate_calls: list[str] = []
 
     @public.tool(name="Personal_read")

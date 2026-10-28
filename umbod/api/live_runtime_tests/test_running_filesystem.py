@@ -68,6 +68,35 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
         metadata = {"content_type": "text/plain", "attributes": {"label": "discover-visible"}}
         name = "private-" + uuid4().hex
         alice_directory = checked_summary(alice.post(FILESYSTEM + "/nodes/" + root["id"] + "/directories", json={"name": name, "metadata": metadata}), 201)
+        upload_policy_path = FILESYSTEM + "/nodes/" + alice_directory["id"] + "/upload-policy"
+        upload_policy = alice.get(upload_policy_path)
+        assert upload_policy.status_code == 200, upload_policy.text
+        assert upload_policy.json() == {"max_bytes": 10485760}
+        assert upload_policy.headers["cache-control"] == "no-store"
+        denied_policy = bob.get(upload_policy_path)
+        assert denied_policy.status_code == 403
+        assert denied_policy.json()["detail"]["code"] == "filesystem_permission_denied"
+        uploaded_bytes = b"\x00\xff\x80runtime upload\r\n\x00"
+        uploaded = checked_summary(alice.post(
+            FILESYSTEM + "/nodes/" + alice_directory["id"] + "/files",
+            files={"file": ("résumé-東京.bin", uploaded_bytes, "application/octet-stream")},
+        ), 201)
+        downloaded = alice_second.get(FILESYSTEM + "/nodes/" + uploaded["id"] + "/content")
+        assert downloaded.status_code == 200
+        assert downloaded.content == uploaded_bytes
+        assert downloaded.headers["cache-control"] == "no-store"
+        assert downloaded.headers["x-content-type-options"] == "nosniff"
+        assert downloaded.headers["content-disposition"].startswith("attachment;")
+        private_download = bob.get(FILESYSTEM + "/nodes/" + uploaded["id"] + "/content")
+        missing_download = bob.get(FILESYSTEM + "/nodes/" + str(uuid4()) + "/content")
+        assert private_download.status_code == missing_download.status_code == 403
+        assert private_download.json() == missing_download.json()
+        assert private_download.json()["detail"]["code"] == "filesystem_permission_denied"
+        private_upload = bob.post(
+            FILESYSTEM + "/nodes/" + alice_directory["id"] + "/files",
+            files={"file": ("forbidden.bin", b"private")},
+        )
+        assert private_upload.status_code == 403
         async with mcp_client(second_mcp, alice_token) as alice_mcp, mcp_client(runtime_endpoints.mcp_url, bob_token) as bob_mcp:
             assert tool_payload(await alice_mcp.call_tool("get_filesystem_root", {})) == root
             assert tool_payload(await alice_mcp.call_tool("get_filesystem_node", {"node_id": alice_directory["id"]})) == alice_directory
@@ -81,8 +110,16 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             injection = await bob_mcp.call_tool("create_filesystem_file", {"parent_id": root["id"], "name": forbidden_name, "metadata": metadata, "owner": "kind-ci"}, raise_on_error=False)
             assert injection.is_error
             assert forbidden_name not in {node["name"] for node in tool_payload(await bob_mcp.call_tool("list_filesystem_children", {"parent_id": root["id"]}))["nodes"]}
-            rest_injection = bob.post(FILESYSTEM + "/nodes/" + root["id"] + "/files", json={"name": forbidden_name, "metadata": metadata, "owner": "kind-ci"})
+            rest_injection = bob.post(
+                FILESYSTEM + "/nodes/" + root["id"] + "/files",
+                files={"file": (forbidden_name, b"")},
+                data={"metadata": json.dumps(metadata), "owner": "kind-ci"},
+            )
             assert rest_injection.status_code == 422
+            assert rest_injection.json()["detail"]["code"] == "filesystem_invalid_upload"
+            assert forbidden_name not in {
+                node["name"] for node in bob.get(FILESYSTEM + "/nodes/" + root["id"] + "/children").json()["nodes"]
+            }
             bob_file = tool_payload(await bob_mcp.call_tool("create_filesystem_file", {"parent_id": root["id"], "name": "bob-" + uuid4().hex, "metadata": metadata}))
             assert checked_summary(bob.get(FILESYSTEM + "/nodes/" + bob_file["id"]), 200) == bob_file
             forbidden = alice.get(FILESYSTEM + "/nodes/" + bob_file["id"])
@@ -92,7 +129,7 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             assert checked_summary(alice_second.get(FILESYSTEM + "/nodes/" + alice_file["id"]), 200) == alice_file
             child_response = alice.get(FILESYSTEM + "/nodes/" + alice_directory["id"] + "/children")
             assert child_response.status_code == 200
-            assert child_response.json() == {"nodes": [alice_file]}
+            assert {node["id"] for node in child_response.json()["nodes"]} == {alice_file["id"], uploaded["id"]}
             assert child_response.headers["cache-control"] == "no-store"
             hidden_parent = await bob_mcp.call_tool("list_filesystem_children", {"parent_id": alice_directory["id"]}, raise_on_error=False)
             assert hidden_parent.is_error
@@ -121,7 +158,6 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
     ("GET", "/nodes?scope=owned", {}),
     ("GET", "/nodes?scope=shared", {}),
     ("GET", "/nodes/{id}/breadcrumbs", {}),
-    ("GET", "/nodes/{id}/content", {}),
     ("PUT", "/nodes/{id}/content", {}),
     ("PATCH", "/nodes/{id}", {"name": "renamed"}),
     ("DELETE", "/nodes/{id}", {}),
@@ -174,15 +210,16 @@ def test_signed_rest_boundary_preserves_public_health(
     assert response.status_code == 200
 
 
-def test_planned_multipart_upload_does_not_create_an_empty_file(
+def test_multipart_upload_checks_parent_permissions_before_parsing(
     runtime_endpoints: RuntimeEndpoints,
 ) -> None:
     with httpx.Client(base_url=runtime_endpoints.api_base_url, headers={
         "Authorization": "Bearer " + runtime_endpoints.bearer_token,
     }, timeout=30) as client:
-        response = client.post(FILESYSTEM + "/nodes/" + str(uuid4()) + "/files", files={
-            "file": ("notes.txt", b"Upload content must not create a placeholder.", "text/plain"),
-        })
-    assert response.status_code == 501, response.text
-    assert response.json()["detail"]["code"] == "filesystem_not_implemented"
+        response = client.post(
+            FILESYSTEM + "/nodes/" + str(uuid4()) + "/files", content=b"malformed multipart",
+            headers={"Content-Type": "multipart/form-data; boundary=ignored"},
+        )
+    assert response.status_code == 403, response.text
+    assert response.json()["detail"]["code"] == "filesystem_permission_denied"
     assert response.headers["cache-control"] == "no-store"

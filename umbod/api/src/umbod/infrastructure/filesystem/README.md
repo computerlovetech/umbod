@@ -9,13 +9,13 @@ description: "Filesystem composition and concrete content storage over the appli
 - [__init__.py](./__init__.py) — Package exports.
 - [config.py](./config.py) — Content storage configuration.
 - [factory.py](./factory.py) — Filesystem service and store composition.
-- [inmemory.py](./inmemory.py) — In-memory content storage.
+- [inmemory.py](./inmemory.py) — Application-retained content storage with immutable publication and concurrent async reads/writes.
 - [io.py](./io.py) — Cancellation-safe host I/O.
-- [local_content.py](./local_content.py) — Local content storage.
+- [local_content.py](./local_content.py) — Concurrent local content storage through immutable object publication.
 - [objects.py](./objects.py) — Trusted content directory operations.
 
-# Context not available from the code
+# Related links
 
 - [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Shared-database namespace and policy storage, independently selected content storage.
-- [Filesystem boundary detail](../../../../../project/architecture-records/supporting/filesystem-boundaries.md) — Local content requires trusted POSIX directories; database transactions do not include byte publication. Retired JSON namespaces have no implicit migration.
-- [REST filesystem](../../rest/filesystem/README.md) — Implemented browsing and empty creation are separate from planned content operations.
+- [Filesystem boundary detail](../../../../../project/architecture-records/supporting/filesystem-boundaries.md) — Trusted POSIX directory requirements and byte publication outside database transactions.
+- [REST filesystem](../../rest/filesystem/README.md) — Request-scoped authorized content operations over an application-retained content adapter.

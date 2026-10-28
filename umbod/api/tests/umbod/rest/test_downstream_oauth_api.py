@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
 from umbod.core.connectors.downstream_mcp.oauth.service import OAuthService
+from tests.umbod.core.downstream_mcp_connectors.adapters.oauth_fakes import MemoryDiscovery, ScriptedSessionFactory
 from tests.umbod.core.downstream_mcp_connectors.adapters.test_oauth_service import (
     MemoryHost,
 )
@@ -23,7 +24,7 @@ def test_shared_oauth_api_authentication_contract_and_redaction(monkeypatch, tmp
             "jwt_header_name": "Authorization",
         },
     )
-    service = OAuthService(MemoryHost())
+    service = OAuthService(MemoryHost(), ScriptedSessionFactory(""), MemoryDiscovery())
     headers = {
         "Authorization": "Bearer "
         + json.dumps(

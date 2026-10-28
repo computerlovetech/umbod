@@ -1,0 +1,2 @@
+class UploadTooLarge(Exception):
+    pass

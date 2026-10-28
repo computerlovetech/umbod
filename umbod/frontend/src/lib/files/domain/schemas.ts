@@ -17,9 +17,17 @@ export const nodeSummarySchema = z.strictObject({
   revision: z.number().int().min(1)
 });
 export const childrenSchema = z.strictObject({ nodes: z.array(nodeSummarySchema) });
+export const fileNameSchema = z.string().min(1).refine((name) => name.trim().length > 0 && !name.includes('/') && !name.includes('\\') && !name.includes('\u0000') && name !== '.' && name !== '..', 'Enter a name without path separators.');
+export const uploadPolicySchema = z.strictObject({ max_bytes: z.number().int().positive() });
+export const fileUploadSchema = z.strictObject({
+  file: z.custom<File>((value) => typeof File !== 'undefined' && value instanceof File, 'Select a file.'),
+  name: fileNameSchema
+});
 export const createFolderSchema = z.strictObject({
-  name: z.string().min(1).refine((name) => name.trim().length > 0 && !name.includes('/') && !name.includes('\\') && !name.includes('\u0000') && name !== '.' && name !== '..', 'Enter a folder name without path separators.'),
+  name: fileNameSchema,
   metadata: z.strictObject({ content_type: emptyObjectSchema, attributes: z.record(z.string(), z.string()) })
 });
 export type NodeSummary = z.infer<typeof nodeSummarySchema>;
 export type CreateFolder = z.infer<typeof createFolderSchema>;
+export type UploadPolicy = z.infer<typeof uploadPolicySchema>;
+export type FileUpload = z.infer<typeof fileUploadSchema>;

@@ -37,15 +37,22 @@ class FilesystemHttp:
     factories: ConnectorApiDependencyFactories
 
 
+@pytest.fixture
+def filesystem_upload_max_bytes(request: pytest.FixtureRequest) -> int:
+    return getattr(request, "param", 10 * 1024 * 1024)
+
+
 @pytest.fixture(params=[False, True], ids=["personal-disabled", "personal-enabled"])
 def filesystem_http(
     request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    filesystem_upload_max_bytes: int,
 ) -> Iterator[FilesystemHttp]:
     deployment = tmp_path / "deployment.json"
     deployment.write_text('{"connectors": []}')
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
     settings = AppConfig(
         rest={"metrics_enabled": False},
+        filesystem={"upload_max_bytes": filesystem_upload_max_bytes},
         connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "filesystem.sqlite")},
         personal_connections={"enabled": request.param, "identity_namespace": "test:filesystem"},
         mcp={"permission_group_claim": "filesystem_groups"},

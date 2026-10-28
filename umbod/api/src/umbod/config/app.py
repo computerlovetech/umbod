@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 from typing import Annotated, Literal, Union
 from urllib.parse import urlsplit
 
@@ -171,6 +172,37 @@ class OpenApiConnectorConfig(ConfigModel):
     )
 
 
+class InMemoryFilesystemContentConfig(ConfigModel):
+    type: Literal["inmemory"] = "inmemory"
+
+
+class LocalFilesystemContentConfig(ConfigModel):
+    type: Literal["local"] = "local"
+    directory: Path
+
+    @field_validator("directory", mode="before")
+    @classmethod
+    def validate_directory(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("Filesystem content directory must not be blank")
+        return value
+
+
+FilesystemContentConfig = Annotated[
+    Union[InMemoryFilesystemContentConfig, LocalFilesystemContentConfig],
+    Field(discriminator="type"),
+]
+
+
+class FilesystemRuntimeConfig(ConfigModel):
+    content: FilesystemContentConfig = Field(
+        default_factory=InMemoryFilesystemContentConfig
+    )
+    upload_max_bytes: int = Field(
+        default=defaults.FILESYSTEM_UPLOAD_MAX_BYTES, gt=0
+    )
+
+
 class CorsConfig(ConfigModel):
     origins: list[str] = Field(default_factory=lambda: [defaults.PUBLIC_SITE_ORIGIN])
 
@@ -240,6 +272,7 @@ class AppConfig(ConfigModel):
     openapi_connectors: OpenApiConnectorConfig = Field(
         default_factory=OpenApiConnectorConfig
     )
+    filesystem: FilesystemRuntimeConfig = Field(default_factory=FilesystemRuntimeConfig)
     cors: CorsConfig = Field(default_factory=CorsConfig)
     feature_toggles: FeatureTogglesConfig = Field(default_factory=FeatureTogglesConfig)
     admin_authentication: AdminAuthConfig = Field(default_factory=AdminAuthConfig)

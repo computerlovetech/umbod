@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, PositiveInt
 
 from umbod.core.filesystem import NodeMetadata
 from umbod.core.filesystem.browsing import NodeSummary
@@ -16,6 +16,12 @@ class CreateNodeRequest(BaseModel):
 
     name: str
     metadata: FilesystemNodeMetadata
+
+
+class UploadPolicy(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    max_bytes: PositiveInt
 
 
 class ChildrenResponse(BaseModel):

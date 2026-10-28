@@ -1,19 +1,61 @@
 <script lang="ts">
   import { filesHref, type FilesState } from '$lib/files/state/files-state.svelte';
   import type { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
+  import { formatFileSize, type UploadState } from '$lib/files/state/upload-state.svelte';
+  import { FileDropState } from '$lib/files/state/file-drop-state.svelte';
+  import FileUploadForm from './FileUploadForm.svelte';
   import NewFolderForm from './NewFolderForm.svelte';
 
-  let { state, folder, signIn }: { state: FilesState; folder: NewFolderState; signIn: () => void } = $props();
+  let { state, folder, upload, signIn }: { state: FilesState; folder: NewFolderState; upload: UploadState; signIn: () => void } = $props();
+
+  const pageDrop = new FileDropState((files) => { void upload.drop(files); }, (message) => upload.rejectDrop(message), () => !upload.canDrop);
+
+  function enterWindow(event: DragEvent): void {
+    if (!event.defaultPrevented) pageDrop.enter(event);
+  }
+
+  function overWindow(event: DragEvent): void {
+    if (!event.defaultPrevented) pageDrop.over(event);
+  }
+
+  function leaveWindow(event: DragEvent): void {
+    if (event.relatedTarget === null && (event.clientX <= 0 || event.clientY <= 0 || event.clientX >= window.innerWidth || event.clientY >= window.innerHeight)) pageDrop.reset();
+    else pageDrop.leave();
+  }
+
+  function dropWindow(event: DragEvent): void {
+    if (!event.defaultPrevented) pageDrop.drop(event);
+  }
+
+  function cancelDrag(event: KeyboardEvent): void {
+    if (event.key === 'Escape') pageDrop.reset();
+  }
 
   function updatedAt(timestamp: string): string {
     return new Date(timestamp).toLocaleString();
   }
 </script>
 
+<svelte:window ondragenter={enterWindow} ondragover={overWindow} ondragleave={leaveWindow} ondrop={dropWindow} onblur={pageDrop.reset} onkeydown={cancelDrag} />
+
+{#if pageDrop.active && upload.canDrop}
+  <div class="page-file-drop" role="status" aria-atomic="true">
+    <div class="drop-prompt">
+      <svg aria-hidden="true" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6" /></svg>
+      <h2>Drop a file to upload</h2>
+      <p>To {state.node?.name || 'Files'} · {formatFileSize(upload.maxBytes)} maximum</p>
+      <p>One file at a time. Upload starts when you drop.</p>
+    </div>
+  </div>
+{/if}
+
 <div class="heading">
-  <h1 class="admin-title">Files</h1>
+  <h1 id="files-heading" class="admin-title" tabindex="-1">Files</h1>
   {#if state.phase === 'ready' && state.node?.kind === 'directory'}
-    <button id="new-folder-button" onclick={folder.show} disabled={folder.open}>New folder</button>
+    <div class="toolbar">
+      {#if upload.available}<button id="upload-file-button" onclick={upload.show} disabled={upload.open}>Upload file</button>{/if}
+      <button id="new-folder-button" onclick={folder.show} disabled={folder.open}>New folder</button>
+    </div>
   {/if}
 </div>
 <nav class="breadcrumbs" aria-label="Visited folders">
@@ -23,6 +65,7 @@
     <a href={filesHref(item.id)} aria-current={state.node?.id === item.id ? 'page' : undefined}>{item.name}</a>
   {/each}
 </nav>
+<p class="upload-status" role="status" aria-atomic="true">{upload.pending ? 'Uploading file…' : upload.status}</p>
 
 {#if state.phase === 'loading'}
   <p role="status">Loading files…</p>
@@ -35,6 +78,13 @@
   {/if}
 {:else if state.node}
   {#if state.node.kind === 'directory'}
+    {#if !upload.available && upload.error}<p role="alert">{upload.error}</p>{/if}
+    {#if state.uploadAvailability === 'error'}
+      <p class="availability-error">Couldn't check upload availability. <button onclick={state.checkUploadAvailability}>Retry upload check</button></p>
+    {:else if state.uploadAvailability === 'sign-in'}
+      <p class="availability-error">Sign in to check upload availability. <button onclick={signIn}>Sign in</button></p>
+    {/if}
+    {#if upload.open && upload.available}<FileUploadForm state={upload} destination={state.node.name || 'Files'} {signIn} />{/if}
     {#if folder.open}<NewFolderForm state={folder} />{/if}
     {#if state.children.length === 0}
       <p role="status">This folder is empty.</p>
@@ -79,7 +129,15 @@
 {/if}
 
 <style>
-  .heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .page-file-drop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 1rem; background: rgb(30 35 33 / 65%); pointer-events: none; }
+  .drop-prompt { box-sizing: border-box; width: min(100%, 32rem); padding: 2.5rem 1.5rem; border: 2px dashed var(--admin-accent); border-radius: var(--admin-radius); background: var(--admin-panel); text-align: center; color: var(--admin-ink); overflow-wrap: anywhere; }
+  .drop-prompt svg { color: var(--admin-accent); }
+  .drop-prompt p { line-height: 1.5; }
+  .heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; }
+  .upload-status:empty { margin: 0; }
+  .upload-status:not(:empty) { color: var(--admin-ink); }
+  .availability-error { font-size: 0.9rem; }
   .breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 1rem 0 1.5rem; }
   a { color: var(--admin-accent); overflow-wrap: anywhere; }
   button { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); color: var(--admin-ink); font: inherit; cursor: pointer; padding: 0.6rem 0.9rem; }

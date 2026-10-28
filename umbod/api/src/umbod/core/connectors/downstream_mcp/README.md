@@ -14,7 +14,7 @@ description: "Shared and personal downstream MCP connector coordination."
 - [errors.py](./errors.py) — Connector failures.
 - [management/](./management/) — Aggregate lifecycle and discovery.
 - [models.py](./models.py) — Definitions and creation commands.
-- [oauth/](./oauth/) — Shared authorization.
+- [oauth/](./oauth/README.md) — Shared authorization and injected session boundaries.
 - [permissions.py](./permissions.py) — Personal connector permission targets.
 - [personal_connections/](./personal_connections/README.md) — Owner-bound connection lifecycle.
 - [personal_oauth_configuration/](./personal_oauth_configuration/README.md) — Personal OAuth policy, separate from shared connector authority.

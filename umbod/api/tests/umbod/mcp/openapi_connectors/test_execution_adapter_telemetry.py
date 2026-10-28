@@ -10,9 +10,13 @@ from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.invocation.tools.execution import PreparedToolExecution, ToolExecutionPipeline, ToolExecutionRequest
 from umbod.core.connectors.openapi.execution import (
+    AsyncStreamingHttpClient,
     OpenApiCapabilityExecutionResult,
     OpenApiExecutionResponse,
+    OpenApiOperationInput,
 )
+from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
+from umbod.core.permissions.ports import GroupPermissionReader
 from umbod.mcp.connectors.native.tools.deployment_modes.codemode import (
     OpenApiCodeModeInvocation,
 )
@@ -79,7 +83,7 @@ class ExecutionService:
         self.executions = 0
 
     async def execute(
-        self, operation_input: object, groups: tuple[str, ...]
+        self, operation_input: OpenApiOperationInput, groups: tuple[str, ...]
     ) -> OpenApiCapabilityExecutionResult:
         self.executions += 1
         identity = CapabilityIdentity(
@@ -119,11 +123,27 @@ class ExecutionService:
         return self._result
 
 
+class ExecutionServiceFactory:
+    def __init__(self, result: OpenApiCapabilityExecutionResult) -> None:
+        self._result = result
+        self.services: list[ExecutionService] = []
+
+    async def create(
+        self,
+        store: OpenApiConnectorStore,
+        permission_reader: GroupPermissionReader,
+        client: AsyncStreamingHttpClient,
+        execution_pipeline: ToolExecutionPipeline[OpenApiExecutionResponse],
+    ) -> ExecutionService:
+        service = ExecutionService(self._result, execution_pipeline)
+        self.services.append(service)
+        return service
+
+
 async def _execute(
-    monkeypatch: pytest.MonkeyPatch,
     result: OpenApiCapabilityExecutionResult,
     store: ConnectorStore,
-    secret: str = "secret-marker",
+    secret: str,
 ) -> tuple[dict[str, Any], InMemoryMcpToolInvocationLogSink, RecordingAuditSink, ExecutionService, InMemoryMcpMetricsRecorder]:
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
@@ -138,17 +158,9 @@ async def _execute(
         connector_invocation_policy=PermitAllConnectorInvocationPolicy(),
         metrics_recorder=InMemoryMcpMetricsRecorder(),
     )
-    service: ExecutionService | None = None
-
-    async def _execution_service(*args: object) -> ExecutionService:
-        nonlocal service
-        execution_pipeline = args[-1]
-        service = ExecutionService(result, execution_pipeline)
-        return service
-
-    monkeypatch.setattr(OpenApiCodeModeExecutionAdapter, "_execution_service", _execution_service)
+    execution_services = ExecutionServiceFactory(result)
     signals = create_mcp_signals(invocation_sink, server.metrics_recorder, McpAuditRecorder(audit_sink, "test"))
-    adapter = OpenApiCodeModeExecutionAdapter(server, SignalToolExecutionPipelineFactory(signals, server.connector_invocation_policy))
+    adapter = OpenApiCodeModeExecutionAdapter(server, SignalToolExecutionPipelineFactory(signals, server.connector_invocation_policy), execution_services)
     response = await adapter.execute(
         OpenApiCodeModeInvocation(
             connector_id="weather-id",
@@ -159,17 +171,15 @@ async def _execute(
             body={"value": {"password": secret}},
         )
     )
-    if service is None:
-        raise RuntimeError("Execution service was not created")
-    return response, invocation_sink, audit_sink, service, server.metrics_recorder
+    return response, invocation_sink, audit_sink, execution_services.services[0], server.metrics_recorder
 
 
 @pytest.mark.asyncio
-async def test_execute_records_display_name_success(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_execute_records_display_name_success() -> None:
     _, invocation_sink, audit_sink, _, _ = await _execute(
-        monkeypatch,
         OpenApiCapabilityExecutionResult(status="success", message="done"),
         ConnectorStore("Weather API"),
+        "secret-marker",
     )
 
     assert invocation_sink.invocation_records()[0].attributes["mcp.connector.name"] == "Weather API"
@@ -178,22 +188,22 @@ async def test_execute_records_display_name_success(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
-async def test_execute_records_pipeline_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_execute_records_pipeline_failure() -> None:
     _, invocation_sink, _, _, _ = await _execute(
-        monkeypatch,
         OpenApiCapabilityExecutionResult(status="error", code="outbound_failed", message="failed"),
         ConnectorStore(),
+        "secret-marker",
     )
 
     assert invocation_sink.invocation_records()[0].attributes["mcp.invocation.outcome"] == "failure"
 
 
 @pytest.mark.asyncio
-async def test_execute_uses_id_when_metadata_lookup_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_execute_uses_id_when_metadata_lookup_fails() -> None:
     _, invocation_sink, _, service, _ = await _execute(
-        monkeypatch,
         OpenApiCapabilityExecutionResult(status="success", message="done"),
         ConnectorStore(lookup_error=RuntimeError("lookup failed")),
+        "secret-marker",
     )
 
     assert service.executions == 1
@@ -201,12 +211,9 @@ async def test_execute_uses_id_when_metadata_lookup_fails(monkeypatch: pytest.Mo
 
 
 @pytest.mark.asyncio
-async def test_execute_telemetry_excludes_input_and_result_secrets(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_execute_telemetry_excludes_input_and_result_secrets() -> None:
     secret = "never-serialize-this"
     _, invocation_sink, audit_sink, _, _ = await _execute(
-        monkeypatch,
         OpenApiCapabilityExecutionResult(status="success", message=secret),
         ConnectorStore(),
         secret,
@@ -223,7 +230,6 @@ async def test_execute_telemetry_excludes_input_and_result_secrets(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("http_status", [200, 302, 400, 401, 404, 500, 503])
 async def test_execute_classifies_http_status_for_telemetry_without_changing_transport_result(
-    monkeypatch: pytest.MonkeyPatch,
     http_status: int,
 ) -> None:
     secret = "response-body-secret"
@@ -231,7 +237,7 @@ async def test_execute_classifies_http_status_for_telemetry_without_changing_tra
         status="success", message=secret, http_status=http_status
     )
     response, invocation_sink, audit_sink, service, metrics = await _execute(
-        monkeypatch, result, ConnectorStore(), secret
+        result, ConnectorStore(), secret
     )
 
     assert response == result.model_dump(mode="json")

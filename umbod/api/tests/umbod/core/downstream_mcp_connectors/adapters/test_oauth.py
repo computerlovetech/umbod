@@ -1,10 +1,12 @@
 import asyncio
 import time
+from typing import cast
 from urllib.parse import parse_qs
 
 import httpx2
 import pytest
 import pytest_asyncio
+from fastmcp import Client
 from mcp.shared.auth import OAuthClientInformationFull, OAuthMetadata, OAuthToken
 from pydantic import SecretStr
 
@@ -15,7 +17,12 @@ from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
     ConnectorOAuthStorage,
     SignInRequired,
 )
-from umbod.core.connectors.downstream_mcp.adapters.fastmcp.connection import FastMCPDownstreamConnectionFactory
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.connection import FastMCPConnectionStrategy
+from umbod.core.connectors.downstream_mcp.connection import (
+    DownstreamMcpConnectionConfiguration,
+    NoAuthConnectionConfiguration,
+)
+from umbod.core.connectors.downstream_mcp.probe import ProbeFailed
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.probe import FastMCPDownstreamConnection
 from umbod.core.connectors.downstream_mcp.models import OAuthCredentialState
 from umbod.core.connectors.downstream_mcp.stores import (
@@ -153,18 +160,58 @@ async def test_authorization_is_scoped_to_connector_and_endpoint(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_runtime_never_starts_browser_authorization():
-    oauth = ConnectorOAuth(ConnectorOAuthStorage(document(), "", None))
-    with pytest.raises(SignInRequired):
-        await oauth._perform_authorization()
+async def test_runtime_never_starts_browser_authorization() -> None:
+    authorization = document()
+    authorization.tokens = None
+    oauth = ConnectorOAuth(ConnectorOAuthStorage(authorization, "", None))
+    requests: list[httpx2.Request] = []
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        if str(request.url) == authorization.endpoint_url:
+            return httpx2.Response(401)
+        assert request.method == "GET"
+        assert "/.well-known/" in request.url.path
+        return httpx2.Response(404)
+
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle), auth=oauth) as client:
+        with pytest.raises(SignInRequired):
+            await client.post(authorization.endpoint_url)
+    assert requests
+    assert str(requests[0].url) == authorization.endpoint_url
 
 
-def test_nested_unauthorized_response_is_not_reported_as_invalid_mcp():
+@pytest.mark.asyncio
+async def test_nested_unauthorized_response_is_not_reported_as_invalid_mcp() -> None:
     response = httpx2.Response(401, request=httpx2.Request("POST", "https://tools.example/mcp"))
     error = httpx2.HTTPStatusError("unauthorized", request=response.request, response=response)
-    failure = FastMCPDownstreamConnection(
-        True, 10, FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False)
-    )._classify_exception(
-        ExceptionGroup("transport", [error])
+
+    class UnauthorizedClient:
+        async def __aenter__(self) -> "UnauthorizedClient":
+            raise ExceptionGroup("transport", [error])
+
+        async def __aexit__(self, *args: object) -> None:
+            return None
+
+    class UnauthorizedConnection:
+        def __init__(self) -> None:
+            self.configuration: DownstreamMcpConnectionConfiguration = (
+                NoAuthConnectionConfiguration(endpoint_url="https://tools.example/mcp")
+            )
+
+        def create(
+            self, configuration: DownstreamMcpConnectionConfiguration
+        ) -> FastMCPConnectionStrategy:
+            self.configuration = configuration
+            return self
+
+        def create_client(self) -> Client:
+            return cast(Client, UnauthorizedClient())
+
+        def export_authorization(self, client: Client) -> SecretStr | None:
+            return None
+
+    failure = await FastMCPDownstreamConnection(True, 1, UnauthorizedConnection()).probe(
+        NoAuthConnectionConfiguration(endpoint_url="https://tools.example/mcp")
     )
-    assert failure.code == "auth_rejected"
+    assert failure == ProbeFailed(code="auth_rejected")

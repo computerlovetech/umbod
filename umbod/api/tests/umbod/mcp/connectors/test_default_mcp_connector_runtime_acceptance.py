@@ -1,4 +1,6 @@
-from umbod.mcp.messaging import RuntimeProjectionSynchronizer
+import asyncio
+
+from umbod.mcp.messaging import RuntimeProjectionHealth
 from messaging.models import MessagingEvent
 from umbod.core.messaging import DatabaseEventStream
 from umbod.core.configuration.persistence.factories import create_encrypted_connector_configuration_store
@@ -16,14 +18,14 @@ import pytest
 from fastmcp import Client, FastMCP
 from fastmcp.exceptions import ToolError
 from umbod.mcp.connectors.native import create_default_mcp_connector_runtime, create_default_mcp_connector_runtime_from_environment
-from umbod.mcp.settings import MCPAppSettings
+from umbod.mcp.settings import MCPAppSettings, MCPSettings
 from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
 from tests.support import connector_plugins as test_admin_configuration
 from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore
 from umbod.mcp.context import PublicAppConfig
-from umbod.mcp.public_app import _initialize_runtime_projection, build_starlette_app, create_runtime_context
+from umbod.mcp.public_app import build_starlette_app, create_runtime_context
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, HttpConnectorRuntimeStateSourceStrategy
 from umbod.core.activation import ActivationStatus, CapabilityRef
 from tests.mcp_fixtures import build_test_mcp
@@ -50,16 +52,17 @@ async def test_default_public_mcp_has_connector_tool_registry_without_initial_co
 async def test_projection_replays_native_activation_and_advances_delivery_checkpoint() -> None:
     context = await create_runtime_context(await _default_public_app_config())
     try:
-        await build_starlette_app(context)
-        synchronizer = await _initialize_runtime_projection(context)
-        await _configure_connector(context.mcp, 'test', True)
-        await context.mcp.capability_activation_store.set_status(CapabilityRef(connector_kind='native', connector_id='test', capability_kind='tool', capability_key='echo'), ActivationStatus.ENABLED)
-        stream = DatabaseEventStream(context.persistence_runtime.database)
-        event = await stream.append(MessagingEvent(event_type='connector.capability_activation.changed', subject='test'))
-        await synchronizer.poll_once()
-        state = context.connector_tool_runtime_state_store.get_runtime_state(ConnectorToolRef(connector_id='test', operation_name='echo'))
-        assert state.status == 'enabled'
-        assert context.mcp.runtime_projection_health.last_applied_sequence == event.sequence
+        app = await build_starlette_app(context)
+        async with app.router.lifespan_context(app):
+            assert context.mcp.runtime_projection_health.ready
+            await _configure_connector(context.mcp, 'test', True)
+            await context.mcp.capability_activation_store.set_status(CapabilityRef(connector_kind='native', connector_id='test', capability_kind='tool', capability_key='echo'), ActivationStatus.ENABLED)
+            stream = DatabaseEventStream(context.persistence_runtime.database)
+            event = await stream.append(MessagingEvent(event_type='connector.capability_activation.changed', subject='test'))
+            await _wait_for_projection_checkpoint(context.mcp.runtime_projection_health, event.sequence)
+            state = context.connector_tool_runtime_state_store.get_runtime_state(ConnectorToolRef(connector_id='test', operation_name='echo'))
+            assert state.status == 'enabled'
+            assert context.mcp.runtime_projection_health.last_applied_sequence == event.sequence
     finally:
         await context.persistence_runtime.shutdown()
 
@@ -67,10 +70,10 @@ async def test_projection_replays_native_activation_and_advances_delivery_checkp
 async def test_missing_api_base_url_bootstraps_durable_projection_without_http_source_options() -> None:
     context = await create_runtime_context(await _default_public_app_config())
     try:
-        await build_starlette_app(context)
-        synchronizer = await _initialize_runtime_projection(context)
-        assert isinstance(synchronizer, RuntimeProjectionSynchronizer)
-        assert context.mcp.runtime_projection_health.ready
+        app = await build_starlette_app(context)
+        async with app.router.lifespan_context(app):
+            assert context.mcp.runtime_projection_health.ready
+            assert not context.mcp.runtime_projection_health.failed
     finally:
         await context.persistence_runtime.shutdown()
 
@@ -86,12 +89,12 @@ async def test_no_api_bootstrap_preserves_explicit_host_owned_initial_configurat
     config = replace(await _default_public_app_config(), source_stores=ConnectorRuntimeSourceStores(connector_configuration_store=source_configuration, connector_publishing_store=source_publishing))
     context = await create_runtime_context(config)
     try:
-        await build_starlette_app(context)
-        await _initialize_runtime_projection(context)
-        observed = await context.target_stores.connector_configuration_store.get_current_configuration('test')
-        assert observed == configuration
-        assert await context.target_stores.connector_publishing_store.is_published('test')
-        assert context.mcp.runtime_projection_health.ready
+        app = await build_starlette_app(context)
+        async with app.router.lifespan_context(app):
+            observed = await context.target_stores.connector_configuration_store.get_current_configuration('test')
+            assert observed == configuration
+            assert await context.target_stores.connector_publishing_store.is_published('test')
+            assert context.mcp.runtime_projection_health.ready
     finally:
         await context.persistence_runtime.shutdown()
         await source_persistence.shutdown()
@@ -204,13 +207,21 @@ async def test_published_configured_test_connector_exposes_prompt_and_resource_c
     assert 'test://responses/{topic}' in {template.uri_template for template in templates}
     assert resources[0].text == 'Local Test response for greetings: Hello from test connector'
 
+async def _wait_for_projection_checkpoint(health: RuntimeProjectionHealth, sequence: int) -> None:
+    async with asyncio.timeout(5):
+        while health.last_applied_sequence < sequence:
+            assert not health.failed
+            await asyncio.sleep(0.01)
+    assert health.ready
+
+
 def _write_availability_file(tmp_path: Path, connectors: list[dict[str, object]]) -> Path:
     path = tmp_path / 'connectors.json'
     path.write_text(json.dumps({'connectors': connectors}), encoding='utf-8')
     return path
 
 async def _default_public_app_config(connector_tool_runtime_state_store: InMemoryConnectorToolRuntimeStateStore | None=None) -> PublicAppConfig:
-    settings = MCPAppSettings()
+    settings = MCPAppSettings(mcp=MCPSettings(metrics_enabled=False))
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
     await persistence_runtime.readiness.ensure_ready()
     return PublicAppConfig(settings=settings, connector_runtime=await create_default_mcp_connector_runtime(settings, persistence_runtime), source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=HttpConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime, connector_tool_runtime_state_store=connector_tool_runtime_state_store)

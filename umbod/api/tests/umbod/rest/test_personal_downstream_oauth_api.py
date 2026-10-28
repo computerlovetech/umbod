@@ -10,6 +10,7 @@ from tests.umbod.core.downstream_mcp_connectors.adapters.test_oauth_service impo
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
 from umbod.core.connectors.downstream_mcp.oauth.ports import OAuthConnection
 from umbod.core.connectors.downstream_mcp.oauth.service import OAuthService
+from tests.umbod.core.downstream_mcp_connectors.adapters.oauth_fakes import MemoryDiscovery, ScriptedSessionFactory
 from umbod.core.connectors.downstream_mcp.stores import (
     CONNECTOR_DEFINITION_TABLE,
     ConnectorDefinitionStore,
@@ -29,7 +30,7 @@ class PersonalOAuthHost(MemoryHost):
 @pytest.mark.parametrize("operation", ["details", "discover", "begin", "cancel", "refresh", "logout", "forget"])
 async def test_shared_oauth_service_rejects_personal_ownership_before_mutation(operation: str) -> None:
     host = PersonalOAuthHost()
-    service = OAuthService(host)
+    service = OAuthService(host, ScriptedSessionFactory(""), MemoryDiscovery())
     authorization_before = host.saved.export()
     with pytest.raises(ValueError, match="Personal OAuth"):
         if operation == "begin":
@@ -47,7 +48,7 @@ async def test_shared_oauth_service_rejects_personal_ownership_before_mutation(o
 
 @pytest.mark.asyncio
 async def test_shared_oauth_callback_does_not_complete_personal_attempt() -> None:
-    service = OAuthService(PersonalOAuthHost())
+    service = OAuthService(PersonalOAuthHost(), ScriptedSessionFactory(""), MemoryDiscovery())
     callback = asyncio.get_running_loop().create_future()
     service.callbacks["fixture"] = callback
     service.expected_states["fixture"] = "expected"
@@ -72,7 +73,7 @@ def test_admin_oauth_api_rejects_persisted_personal_definition(
         connector_id="fixture", display_name="Fixture", endpoint_url="https://alpha.example/mcp",
         authorization_mode="personal",
     ))))
-    service = OAuthService(MemoryHost())
+    service = OAuthService(MemoryHost(), ScriptedSessionFactory(""), MemoryDiscovery())
     app = FastAPI()
     app.include_router(router, prefix="/api/admin")
     app.dependency_overrides[get_definition_store] = lambda: definitions

@@ -52,7 +52,7 @@ def load_app_config_without_env_file() -> AppConfig:
 
 
 def redact_app_config(config: AppConfig) -> dict:
-    data = config.model_dump()
+    data = config.model_dump(mode="json")
     for section, field in _SECRET_FIELDS:
         value = data.get(section, {}).get(field)
         if isinstance(value, str) and value:

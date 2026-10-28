@@ -436,6 +436,16 @@ _CATALOG: tuple[ConfigurationCatalogEntry, ...] = (
         "string",
     ),
     ConfigurationCatalogEntry(
+        "filesystem",
+        "Filesystem",
+        "filesystem",
+        "upload_max_bytes",
+        "UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES",
+        "Maximum upload size",
+        "Maximum filesystem file upload size in bytes.",
+        "integer",
+    ),
+    ConfigurationCatalogEntry(
         "openapi",
         "OpenAPI connectors",
         "openapi_connectors",
@@ -593,7 +603,7 @@ def inspect_app_config(config: AppConfig) -> InstanceConfiguration:
 
 
 def safe_app_config_dump(config: AppConfig) -> dict[str, dict[str, ConfigurationValue]]:
-    result: dict[str, dict[str, ConfigurationValue]] = config.model_dump()
+    result: dict[str, dict[str, ConfigurationValue]] = config.model_dump(mode="json")
     for section, field in _SECRET_FIELDS:
         result[section].pop(field, None)
     return result

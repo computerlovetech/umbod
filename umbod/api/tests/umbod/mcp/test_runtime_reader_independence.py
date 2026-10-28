@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastmcp.server.http import StarletteWithLifespan
 
 from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages, InMemoryEventStreamFactory
 from umbod.core.activation import ActivationStatus, ActivationStore
@@ -34,14 +35,17 @@ def runtime_context(source: str, transport: str, api_url: str) -> SimpleNamespac
     return SimpleNamespace(
         api_base_url=api_url or None,
         source_strategy=runtime_source(source),
-        settings=SimpleNamespace(mcp=SimpleNamespace(messaging_transport=transport)),
-        persistence_runtime=SimpleNamespace(database=object()),
+        settings=SimpleNamespace(endpoints=SimpleNamespace(mcp_base_url="http://test"), mcp=SimpleNamespace(messaging_transport=transport, metrics_enabled=False, metrics_port=0)),
+        persistence_runtime=SimpleNamespace(database=object(), readiness=SimpleNamespace(ensure_ready=AsyncMock()), shutdown=AsyncMock()),
+        http_app=StarletteWithLifespan(),
+        metrics_recorder=Mock(),
         group_permission_runtime_state=InMemoryGroupConnectorToolPermissions(group_claim_fields=("groups",)),
         connector_tool_runtime_state_store=InMemoryConnectorToolRuntimeStateStore(),
         connector_runtime=SimpleNamespace(connector_tool_mappings=(SimpleNamespace(connector_id="connector", operation_name="read"),)),
         mcp=SimpleNamespace(
             runtime_projection_health=RuntimeProjectionHealth(),
             downstream_mcp_discovery_coordinator=Mock(spec=DownstreamDiscoveryCoordinator),
+            downstream_mcp_discovery_runtime=Mock(),
             connector_tool_registry=registry,
             connector_prompt_registry=SimpleNamespace(reconcile_all=AsyncMock()),
             connector_resource_registry=SimpleNamespace(reconcile_all=AsyncMock()),
@@ -79,23 +83,26 @@ async def test_event_transport_does_not_select_runtime_data_readers(monkeypatch:
     monkeypatch.setattr(public_app, "DatabaseGroupPermissionReader", database_reader_factory)
     monkeypatch.setattr(public_app, "HttpGroupPermissionReader", http_reader_factory)
 
-    synchronizer = public_app._create_runtime_projection_synchronizer(context)
-    await synchronizer.bootstrap()
-
-    adapter_factory.assert_called_once_with(transport, "http://data-service", context.persistence_runtime.database)
-    assert context.connector_tool_runtime_state_store.get_runtime_state(key).status == "enabled"
-    if source == "http":
-        native_sync.sync_all.assert_awaited_once()
-        tool_reader_factory.assert_called_once_with("http://data-service")
-        http_permissions.list_all_group_permissions.assert_awaited_once()
-        database_reader_factory.assert_not_called()
-        context.mcp.capability_activation_store.get_status.assert_not_called()
-    else:
-        native_sync.sync_all.assert_not_awaited()
-        tool_reader_factory.assert_not_called()
-        database_permissions.list_all_group_permissions.assert_awaited_once()
-        http_reader_factory.assert_not_called()
-        context.mcp.capability_activation_store.get_status.assert_awaited_once()
+    app = await public_app.build_starlette_app(context)
+    async with app.router.lifespan_context(app):
+        adapter_factory.assert_called_once_with(transport, "http://data-service", context.persistence_runtime.database)
+        assert context.mcp.runtime_projection_health.ready
+        assert context.connector_tool_runtime_state_store.get_runtime_state(key).status == "enabled"
+        if source == "http":
+            native_sync.sync_all.assert_awaited_once()
+            tool_reader_factory.assert_called_once_with("http://data-service")
+            http_permissions.list_all_group_permissions.assert_awaited_once()
+            database_reader_factory.assert_not_called()
+            context.mcp.capability_activation_store.get_status.assert_not_called()
+        else:
+            if source == "local":
+                native_sync.sync_all.assert_awaited_once()
+            else:
+                native_sync.sync_all.assert_not_awaited()
+            tool_reader_factory.assert_not_called()
+            database_permissions.list_all_group_permissions.assert_awaited_once()
+            http_reader_factory.assert_not_called()
+            context.mcp.capability_activation_store.get_status.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -111,8 +118,7 @@ async def test_non_http_event_adapter_does_not_require_an_api_url(monkeypatch: p
     monkeypatch.setattr(public_app, "McpMessagingAdapterFactory", adapter_factory)
     monkeypatch.setattr(public_app, "reconcile_openapi_discovery", AsyncMock())
 
-    synchronizer = public_app._create_runtime_projection_synchronizer(context)
-    await synchronizer.bootstrap()
-
-    adapter_factory.assert_called_once_with("independent-adapter", "", context.persistence_runtime.database)
-    assert context.mcp.runtime_projection_health.ready
+    app = await public_app.build_starlette_app(context)
+    async with app.router.lifespan_context(app):
+        adapter_factory.assert_called_once_with("independent-adapter", "", context.persistence_runtime.database)
+        assert context.mcp.runtime_projection_health.ready

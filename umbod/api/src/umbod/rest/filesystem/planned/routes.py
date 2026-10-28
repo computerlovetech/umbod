@@ -3,7 +3,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Header
 
-from .deps import not_implemented, require_filesystem_identity
+from ..deps import require_filesystem_identity
+from .deps import not_implemented
 from .models import PatchNodeRequest, PlannedErrorResponse, PutAccessRequest
 
 PLANNED_RESPONSES = {
@@ -30,12 +31,6 @@ async def list_nodes(scope: Literal["owned", "shared"]) -> NoReturn:
 @router.get("/nodes/{node_id}/breadcrumbs", status_code=501, response_model=PlannedErrorResponse,
             summary="Planned: node breadcrumbs", openapi_extra=PLANNED_OPERATION)
 async def get_breadcrumbs(node_id: UUID) -> NoReturn:
-    not_implemented()
-
-
-@router.get("/nodes/{node_id}/content", status_code=501, response_model=PlannedErrorResponse,
-            summary="Planned: download content", openapi_extra=PLANNED_OPERATION)
-async def get_content(node_id: UUID) -> NoReturn:
     not_implemented()
 
 

@@ -54,6 +54,11 @@ class OperatorSettings(BaseSettings):
         validation_alias="UMBOD_INTERNAL_API_ORIGIN",
     )
 
+    filesystem_upload_max_bytes: int = Field(
+        default=defaults.FILESYSTEM_UPLOAD_MAX_BYTES, gt=0
+    )
+    filesystem_content_directory: Optional[str] = None
+
     data_dir: str = defaults.DATA_DIR
     connector_store: str = Field(
         default="inmemory",
@@ -237,6 +242,13 @@ class OperatorSettings(BaseSettings):
         default=defaults.ADMIN_SIMULATED_USER_NAME,
         validation_alias="UMBOD_ADMIN_AUTHENTICATION_SIMULATED_USER_NAME",
     )
+
+    @field_validator("filesystem_content_directory", mode="before")
+    @classmethod
+    def validate_filesystem_content_directory(cls, value: object) -> object:
+        if isinstance(value, str) and not value.strip():
+            raise ValueError("Filesystem content directory must not be blank")
+        return value
 
     @field_validator("oidc_required_scopes", mode="before")
     @classmethod

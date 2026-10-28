@@ -3,13 +3,17 @@ from typing import Annotated
 from fastapi import Depends
 
 from umbod.core.callers import CallerContext, CallerSnapshot, group_membership_from_values
-from umbod.core.filesystem import FilesystemCreation, Principal, PrincipalType
+from umbod.core.filesystem import ContentDriver, FilesystemCreation, Principal, PrincipalType
+from umbod.core.filesystem.content import ContentService, FilesystemContent
 from umbod.core.filesystem.authorization import (
     FilesystemIdentityResolver, LocalDevelopmentIdentityResolver, VerifiedIdentityResolver,
+    PermissionDenied, UnresolvedIdentity,
 )
 from umbod.core.filesystem.browsing import FilesystemBrowsing
 from umbod.core.persistence import Database
-from umbod.infrastructure import create_filesystem_browsing, create_filesystem_creation
+from umbod.infrastructure import (
+    create_filesystem_browsing, create_filesystem_creation, create_filesystem_transactions,
+)
 from umbod.rest.authentication.local import LOCAL_DEVELOPMENT_ISSUER, local_rest_identity_enabled
 from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import get_caller_context, get_verified_access_claims
@@ -51,11 +55,44 @@ def get_filesystem_identity_resolver(
     return VerifiedIdentityResolver()
 
 
+async def require_filesystem_identity(
+    caller: Annotated[CallerSnapshot, Depends(get_filesystem_caller)],
+    resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
+) -> None:
+    with filesystem_errors():
+        if isinstance(await resolver.resolve(caller), UnresolvedIdentity):
+            raise PermissionDenied()
+
+
 def get_filesystem_browsing(
     database: Annotated[Database, Depends(get_filesystem_database)],
     resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
 ) -> FilesystemBrowsing:
     return create_filesystem_browsing(database=database, resolver=resolver)
+
+
+def get_filesystem_upload_limit(
+    factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
+) -> int:
+    return factories.settings.filesystem.upload_max_bytes
+
+
+async def get_filesystem_content_driver(
+    factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
+) -> ContentDriver:
+    with filesystem_errors():
+        return factories.filesystem_content
+
+
+def get_filesystem_content(
+    database: Annotated[Database, Depends(get_filesystem_database)],
+    resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
+    content: Annotated[ContentDriver, Depends(get_filesystem_content_driver)],
+    max_bytes: Annotated[int, Depends(get_filesystem_upload_limit)],
+) -> FilesystemContent:
+    return ContentService(
+        resolver, create_filesystem_transactions(database=database), content, max_bytes,
+    )
 
 
 def get_filesystem_creation(

@@ -12,6 +12,7 @@ description: "MCP discovery and execution adapters for OpenAPI-generated capabil
 - [configuration.py](./configuration.py) — Adapter configuration.
 - [deps.py](./deps.py) — Caller and persistence dependencies.
 - [discovery_runtime.py](./discovery_runtime.py) — Application discovery projection.
+- [execution_service_factory.py](./execution_service_factory.py) — Operation-scoped execution service composition with borrowed resources.
 - [factories.py](./factories.py) — Adapter composition.
 - [inventory.py](./inventory.py) — Inventory observations.
 - [ports.py](./ports.py) — Composition contracts.

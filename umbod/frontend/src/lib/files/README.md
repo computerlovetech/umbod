@@ -1,18 +1,18 @@
 ---
 type: Software Module
 title: "User files"
-description: "User filesystem contracts and browsing state independent of administration."
+description: "User filesystem browsing, directory creation and authorized single-file uploads."
 ---
 
 # Files
 
 - [api.ts](./api.ts) — Filesystem port.
 - [domain/](./domain/) — Filesystem validation contracts.
-- [errors.ts](./errors.ts) — Safe read and creation failures.
+- [errors.ts](./errors.ts) — Safe read, creation and upload failures.
 - [files-api.test.ts](./files-api.test.ts) — Filesystem port and HTTP tests.
 - [fixtures.test-support.ts](./fixtures.test-support.ts) — Test-only node fixtures.
 - [infrastructure/](./infrastructure/) — Filesystem HTTP and in-memory adapters.
-- [state/](./state/) — URL selection and folder creation state.
+- [state/](./state/) — URL selection, page drops, upload eligibility and mutation state.
 
 # Context not available from the code
 

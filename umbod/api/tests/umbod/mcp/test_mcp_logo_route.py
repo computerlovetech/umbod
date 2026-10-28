@@ -1,10 +1,10 @@
 import json
+from importlib.resources import files
 from pathlib import Path
 
 import pytest
 from starlette.testclient import TestClient
 
-from umbod.mcp.public_app import _LOGO_FILE, _LOGO_ROUTE
 from umbod.mcp.settings import MCPAppSettings
 from tests.mcp_fixtures import create_test_mcp_http_app
 
@@ -24,11 +24,11 @@ def test_logo_route_serves_bundled_png_without_authentication() -> None:
     settings = MCPAppSettings(_env_file=None)
 
     with TestClient(create_test_mcp_http_app(settings)) as client:
-        response = client.get(_LOGO_ROUTE)
+        response = client.get("/assets/logo.png")
 
     assert response.status_code == 200
     assert response.headers["content-type"] == "image/png"
-    assert response.content == _LOGO_FILE.read_bytes()
+    assert response.content == files("umbod.mcp").joinpath("assets", "logo.png").read_bytes()
 
 
 @pytest.mark.parametrize("path", ["/assets/", "/metrics"])

@@ -1,10 +1,8 @@
-from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
 from pathlib import Path
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from umbod.rest.authentication.rest_middleware import RestAuthenticationMiddleware
-from umbod.rest.main import _create_lifespan, create_app
+from umbod.rest.main import create_app
 from umbod.rest.metrics import AdminRestMetricsMiddleware
 from umbod.rest.settings import APISettings
 from umbod.rest.users.jwks import DisabledSigningKeyResolver
@@ -35,13 +33,6 @@ class FailingMetricsServer(RecordingMetricsServer):
     async def start(self) -> None:
         self.start_count += 1
         raise RuntimeError("startup failed")
-
-
-def _admin_app(app: FastAPI) -> FastAPI:
-    for route in app.routes:
-        if getattr(route, "path", None) == "/api/admin":
-            return route.app
-    raise AssertionError("admin application is not mounted")
 
 
 def test_rest_app_composes_one_shared_metrics_recorder_and_server(
@@ -80,13 +71,19 @@ def test_rest_app_composes_one_shared_metrics_recorder_and_server(
     assert metrics_middleware.kwargs["recorder"] is recorders[0]
 
 
-def test_rest_metrics_server_starts_and_stops_once(tmp_path: Path) -> None:
+def test_rest_metrics_server_starts_and_stops_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     server = RecordingMetricsServer(object(), 8001)
     settings = APISettings(
         connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "api.sqlite3")}
     )
-    runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
-    app = FastAPI(lifespan=_create_lifespan(server, runtime, settings))
+
+    def create_server(recorder: object, port: int) -> RecordingMetricsServer:
+        return server
+
+    monkeypatch.setattr("umbod.rest.main.RestMetricsHttpServer", create_server)
+    app = create_app(settings=settings, connector_registrations=[])
     with TestClient(app) as client:
         assert isinstance(
             client.app_state["profile_signing_key_resolver"], DisabledSigningKeyResolver
@@ -96,21 +93,22 @@ def test_rest_metrics_server_starts_and_stops_once(tmp_path: Path) -> None:
     assert server.stop_count == 1
 
 
-@pytest.mark.asyncio
-async def test_rest_metrics_server_is_cleaned_up_when_startup_fails(
-    tmp_path: Path,
+def test_rest_metrics_server_is_cleaned_up_when_startup_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     server = FailingMetricsServer(object(), 8001)
     settings = APISettings(
         connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "api.sqlite3")}
     )
-    app = FastAPI()
+
+    def create_server(recorder: object, port: int) -> RecordingMetricsServer:
+        return server
+
+    monkeypatch.setattr("umbod.rest.main.RestMetricsHttpServer", create_server)
+    app = create_app(settings=settings, connector_registrations=[])
     with pytest.raises(RuntimeError, match="startup failed"):
-        runtime = ConfiguredPersistenceRuntimeProvider(
-            settings.connector_store
-        ).create()
-        async with _create_lifespan(server, runtime, settings)(app) as state:
-            assert "profile_signing_key_resolver" in state
+        with TestClient(app):
+            pytest.fail("Application startup unexpectedly succeeded")
     assert server.start_count == 1
     assert server.stop_count == 1
 

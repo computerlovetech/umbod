@@ -5,20 +5,31 @@ import secrets
 import time
 from urllib.parse import parse_qs, urlsplit
 
-from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_client import (
-    oauth_client,
-)
 from mcp.client.auth import AuthorizationCodeResult
 from mcp.shared.auth import OAuthClientInformationFull
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import SignInRequired
-from .discovery import discover, registration_mode
-from .ports import CallbackResult, OAuthConnection, OAuthHost
-from .provider import CLIENT_METADATA_URL, InteractiveConnectorOAuth, OAuthFailure
+from .discovery import registration_mode
+from .ports import (
+    AuthorizationBeginOptions,
+    AuthorizationSessionFactory,
+    CallbackResult,
+    OAuthConnection,
+    OAuthDiscovery,
+    OAuthHost,
+)
+from .provider import CLIENT_METADATA_URL, OAuthFailure
 
 
 class OAuthService:
-    def __init__(self, host: OAuthHost) -> None:
+    def __init__(
+        self,
+        host: OAuthHost,
+        sessions: AuthorizationSessionFactory,
+        discovery: OAuthDiscovery,
+    ) -> None:
         self.host = host
+        self.sessions = sessions
+        self.discovery = discovery
         self.callbacks: dict[str, asyncio.Future] = {}
         self.expected_states: dict[str, str] = {}
         self.tasks: dict[str, asyncio.Task] = {}
@@ -92,31 +103,33 @@ class OAuthService:
 
         self.callbacks[nonce] = callback
 
-        async def redirect_handler(url):
+        async def redirect_handler(url: str) -> None:
             self.record(key, "browser", False)
             self.expected_states[nonce] = parse_qs(urlsplit(url).query)["state"][0]
             if not redirect.done():
                 redirect.set_result(url)
 
-        async def callback_handler():
+        async def callback_handler() -> AuthorizationCodeResult:
             async with asyncio.timeout(300):
                 return await callback
 
-        auth = InteractiveConnectorOAuth(
+        session = self.sessions.begin(
             storage,
-            requested_scope=server.requested_scopes,
-            metadata_url=CLIENT_METADATA_URL if use_metadata else None,
-            force_authorization=True,
-            redirect_uri=redirect_uri,
-            redirect_handler=redirect_handler,
-            callback_handler=callback_handler,
+            AuthorizationBeginOptions(
+                endpoint=server.endpoint_url,
+                requested_scopes=server.requested_scopes,
+                metadata_mode="hosted_metadata" if use_metadata else "registration",
+                redirect_uri=redirect_uri,
+            ),
+            redirect_handler,
+            callback_handler,
         )
 
-        async def authorize():
+        async def authorize() -> None:
             try:
-                async with oauth_client(server.endpoint_url, auth) as client:
+                async with session:
                     self.record(key, "discovery", False)
-                    await client.list_tools()
+                    await session.discover_tools()
                 self.host.set_authorized(key, True)
                 await self.host.reconnect(key)
                 self.results[key] = "signed_in"
@@ -124,7 +137,7 @@ class OAuthService:
                 if not redirect.done():
                     redirect.set_result("")
             except Exception as exc:  # noqa: BLE001 - never expose upstream exception text
-                authorized = auth.token_received
+                authorized = session.token_received
                 if authorized:
                     self.host.set_authorized(key, True)
                 self.results[key] = "discovery_failed" if authorized else "failed"
@@ -171,7 +184,8 @@ class OAuthService:
     async def discover(self, key: str) -> dict:
         server = self._shared_connection(key)
         self.record(key, "metadata", False)
-        self.previews[key] = await discover(server.endpoint_url)
+        preview = await self.discovery.discover(server.endpoint_url)
+        self.previews[key] = preview.model_dump(mode="json")
         return {**await self.details(key), **self.previews[key]}
 
     async def details(self, key: str) -> dict:
@@ -305,17 +319,15 @@ class OAuthService:
         return result
 
     async def _refresh(self, key: str) -> dict:
-        server = self._shared_connection(key)
+        self._shared_connection(key)
         storage = self.host.storage(key)
         await storage.load()
         if storage.document.tokens is None or not storage.document.tokens.refresh_token:
             raise OAuthFailure(
                 "This provider did not issue a refresh token. Sign in with browser to renew access."
             )
-        async with oauth_client(
-            server.endpoint_url, InteractiveConnectorOAuth(storage, force_refresh=True)
-        ) as client:
-            await client.list_tools()
+        async with self.sessions.refresh(storage) as session:
+            await session.discover_tools()
         await self.host.reconnect(key)
         return {"status": "refreshed"}
 

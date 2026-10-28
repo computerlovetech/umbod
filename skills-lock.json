@@ -61,6 +61,11 @@
       "sourceType": "local",
       "computedHash": "e82e77727079249fba9966e272990cde465ab45a569974022f0a34136274c675"
     },
+    "improve-testability": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "9a18c3850da1d62c7f50ac9504aac2091498832908cb09e6f83354f4ac01f69f"
+    },
     "ports-adapters-io": {
       "source": "./skills",
       "sourceType": "local",

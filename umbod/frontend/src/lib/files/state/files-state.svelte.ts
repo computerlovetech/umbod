@@ -1,5 +1,5 @@
 import type { FilesApi } from '../api';
-import { nodeIdSchema, type NodeSummary } from '../domain/schemas';
+import { nodeIdSchema, type NodeSummary, type UploadPolicy } from '../domain/schemas';
 import { readFailure, type FilesPhase } from '../errors';
 
 export interface VisitedFolder {
@@ -16,6 +16,9 @@ export class FilesState {
   node = $state.raw<NodeSummary | undefined>(undefined);
   children = $state.raw<NodeSummary[]>([]);
   trail = $state.raw<VisitedFolder[]>([]);
+  uploadPolicy = $state.raw<UploadPolicy | undefined>(undefined);
+  uploadAvailability = $state<'hidden' | 'loading' | 'allowed' | 'denied' | 'sign-in' | 'error'>('hidden');
+  private policyGeneration = 0;
   private readonly visited = new Map<string, VisitedFolder[]>();
   private target: string | null = null;
   private rootId: string | undefined;
@@ -38,6 +41,8 @@ export class FilesState {
     this.children = [];
     this.trail = [];
     this.phase = 'loading';
+    this.uploadPolicy = undefined;
+    this.uploadAvailability = 'hidden';
     try {
       const node = target === null
         ? await this.api.filesystem.getRoot(signal)
@@ -51,6 +56,7 @@ export class FilesState {
       this.node = node;
       this.children = children;
       this.phase = 'ready';
+      if (node.kind === 'directory') void this.checkUploadAvailability();
     } catch (error) {
       if (this.disposed || generation !== this.generation) return;
       this.phase = readFailure(error);
@@ -59,8 +65,33 @@ export class FilesState {
 
   reload = async (): Promise<void> => this.load(this.target);
 
+  rejectUploadAccess = (parentId: string, phase: 'denied' | 'sign-in'): void => {
+    if (this.disposed || this.node?.id !== parentId) return;
+    ++this.policyGeneration;
+    this.uploadPolicy = undefined;
+    this.uploadAvailability = phase;
+  };
+
+  checkUploadAvailability = async (): Promise<void> => {
+    const target = this.creationTarget();
+    if (!target || this.disposed) return;
+    const policyGeneration = ++this.policyGeneration;
+    this.uploadAvailability = 'loading';
+    this.uploadPolicy = undefined;
+    try {
+      const policy = await this.api.filesystem.getUploadPolicy(target.parentId, this.controller?.signal);
+      if (this.disposed || target.generation !== this.generation || policyGeneration !== this.policyGeneration) return;
+      this.uploadPolicy = policy;
+      this.uploadAvailability = 'allowed';
+    } catch (error) {
+      if (this.disposed || target.generation !== this.generation || policyGeneration !== this.policyGeneration) return;
+      const failure = readFailure(error);
+      this.uploadAvailability = failure === 'sign-in' ? 'sign-in' : failure === 'denied' || failure === 'missing' ? 'denied' : 'error';
+    }
+  };
+
   acceptCreated = async (parentId: string, generation: number, node: NodeSummary): Promise<void> => {
-    if (this.disposed || node.parent_id !== parentId || node.kind !== 'directory') return;
+    if (this.disposed || node.parent_id !== parentId) return;
     if (generation === this.generation && this.phase === 'ready' && this.node?.id === parentId) {
       this.children = [...this.children.filter((child) => child.id !== node.id), node];
       return;

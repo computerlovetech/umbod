@@ -1,7 +1,7 @@
 ---
 type: Software Module
 title: "Filesystem REST"
-description: "Authenticated user filesystem browsing and empty node creation with a separate planned-contract boundary."
+description: "Authenticated filesystem browsing, directory creation, bounded uploads and attachment downloads."
 ---
 
 # Files
@@ -9,11 +9,14 @@ description: "Authenticated user filesystem browsing and empty node creation wit
 - [__init__.py](./__init__.py) — Package exports.
 - [deps.py](./deps.py) — Request-local caller and service composition.
 - [errors.py](./errors.py) — Safe domain error translation.
-- [models.py](./models.py) — Creation inputs and child envelopes.
+- [downloads.py](./downloads.py) — Attachment delivery and storage-neutral download response contract.
+- [multipart.py](./multipart.py) — Bounded multipart parsing and temporary-file cleanup.
+- [uploads.py](./uploads.py) — Multipart-only single-file upload contract and validation.
+- [models.py](./models.py) — Directory inputs, upload policy limits, upload metadata and child envelopes.
 - [planned/](./planned/README.md) — Unavailable design-only operations.
-- [routes.py](./routes.py) — Browsing and empty creation routes.
+- [routes.py](./routes.py) — Browsing, directory creation, upload eligibility, upload and download routes.
 
-# Context not available from the code
+# Related links
 
 - [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Filesystem storage and ownership boundary.
-- [Planned contracts](planned/README.md) — Only browsing and empty JSON file/directory creation are implemented here; multipart upload, content, rename/move, deletion and sharing remain unavailable.
+- [Planned contracts](planned/README.md) — Replacement, rename/move, deletion and sharing remain unavailable.

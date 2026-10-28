@@ -9,6 +9,7 @@
   import type { FilesApi } from '$lib/files/api';
   import { browserFilesApi } from '$lib/files/infrastructure/files-api';
   import { FilesState } from '$lib/files/state/files-state.svelte';
+  import { UploadState } from '$lib/files/state/upload-state.svelte';
   import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
   import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
   import FilesContent from './FilesContent.svelte';
@@ -34,11 +35,13 @@
   const api = createFilesApi();
   const state = new FilesState(api);
   const folder = new NewFolderState(api, state);
+  const upload = new UploadState(api, state);
   const access = createAccess();
 
   afterNavigate(({ to }) => {
     if (to?.url.pathname !== '/files') return;
     folder.navigate();
+    upload.navigate();
     void state.load(to.url.searchParams.get('node'));
   });
 
@@ -47,6 +50,7 @@
     return () => {
       state.dispose();
       folder.dispose();
+      upload.dispose();
       access.dispose();
     };
   });
@@ -54,5 +58,5 @@
 
 <svelte:head><title>Files · Umbod</title></svelte:head>
 <WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(access.adminAccess === 'allowed')} activeItem="files" accountIdentity={access.accountIdentity}>
-  <FilesContent {state} {folder} {signIn} />
+  <FilesContent {state} {folder} {upload} {signIn} />
 </WorkspaceShell>

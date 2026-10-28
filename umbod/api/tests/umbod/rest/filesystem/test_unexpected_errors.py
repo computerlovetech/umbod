@@ -7,10 +7,11 @@ from fastapi.testclient import TestClient
 
 from umbod.core.filesystem import FilesystemCreation
 from umbod.core.filesystem.browsing import FilesystemBrowsing
+from umbod.core.filesystem.content import FilesystemContent
 from umbod.rest.filesystem import deps
 
 from .conftest import FilesystemHttp
-from .test_http_contract import BASE, BODY
+from .test_http_contract import BASE, BODY, creation_payload
 from .test_ports_and_dependencies import OPERATIONS
 
 
@@ -34,7 +35,8 @@ def test_unexpected_service_and_response_errors_are_safe_and_no_store(
 ) -> None:
     browsing = create_autospec(FilesystemBrowsing, instance=True)
     creation = create_autospec(FilesystemCreation, instance=True)
-    service = creation if method == "POST" else browsing
+    content = create_autospec(FilesystemContent, instance=True)
+    service = content if operation == "upload" else creation if method == "POST" else browsing
     if failure == "service":
         getattr(service, operation).side_effect = RuntimeError("private storage/key credential")
     else:
@@ -46,9 +48,16 @@ def test_unexpected_service_and_response_errors_are_safe_and_no_store(
     def provide_creation() -> FilesystemCreation:
         return creation
 
+    def provide_content() -> FilesystemContent:
+        return content
+
+    filesystem_http.app.dependency_overrides[deps.get_filesystem_content] = provide_content
     filesystem_http.app.dependency_overrides[deps.get_filesystem_browsing] = provide_browsing
     filesystem_http.app.dependency_overrides[deps.get_filesystem_creation] = provide_creation
-    response = nonraising_client.request(method, BASE + path.format(id=uuid4()), json=BODY)
+    response = nonraising_client.request(
+        method, BASE + path.format(id=uuid4()),
+        **creation_payload("files" if path.endswith("/files") else "directories", BODY),
+    )
     assert response.status_code == 500
     assert response.headers["cache-control"] == "no-store"
     assert response.json() == {"detail": {"code": "internal_server_error", "message": "Request failed."}}
@@ -56,7 +65,8 @@ def test_unexpected_service_and_response_errors_are_safe_and_no_store(
 
 @pytest.mark.parametrize("factory,method,path", [
     ("create_filesystem_browsing", "GET", "/root"),
-    ("create_filesystem_creation", "POST", "/nodes/{id}/files"),
+    ("ContentService", "POST", "/nodes/{id}/files"),
+    ("create_filesystem_creation", "POST", "/nodes/{id}/directories"),
 ])
 def test_unexpected_service_factory_errors_are_safe_and_no_store(
     filesystem_http: FilesystemHttp, nonraising_client: TestClient,
@@ -64,7 +74,10 @@ def test_unexpected_service_factory_errors_are_safe_and_no_store(
 ) -> None:
     failing_factory = Mock(side_effect=RuntimeError("private factory credential"))
     monkeypatch.setattr(deps, factory, failing_factory)
-    response = nonraising_client.request(method, BASE + path.format(id=uuid4()), json=BODY)
+    response = nonraising_client.request(
+        method, BASE + path.format(id=uuid4()),
+        **creation_payload("files" if path.endswith("/files") else "directories", BODY),
+    )
     assert failing_factory.call_count == 1
     assert response.status_code == 500
     assert response.headers["cache-control"] == "no-store"
@@ -80,7 +93,10 @@ def test_unexpected_readiness_errors_are_safe_and_no_store(
         raise RuntimeError("private database credential")
 
     monkeypatch.setattr(filesystem_http.factories.persistence_runtime.readiness, "ensure_ready", failing_readiness)
-    response = nonraising_client.request(method, BASE + path.format(id=uuid4()), json=BODY)
+    response = nonraising_client.request(
+        method, BASE + path.format(id=uuid4()),
+        **creation_payload("files" if path.endswith("/files") else "directories", BODY),
+    )
     assert response.status_code == 500
     assert response.headers["cache-control"] == "no-store"
     assert response.json() == {"detail": {"code": "internal_server_error", "message": "Request failed."}}

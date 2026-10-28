@@ -1,9 +1,11 @@
+import asyncio
 import logging
 from typing import Any
 
 from fastmcp.server.auth.auth import AccessToken
 from fastmcp.server.middleware.middleware import MiddlewareContext
 from pytest import LogCaptureFixture, MonkeyPatch
+from starlette.requests import Request
 
 from umbod.mcp.auth import debug_middleware
 from umbod.mcp.auth.debug_middleware import MCPAuthDebugMiddleware
@@ -23,12 +25,16 @@ def test_auth_debug_middleware_logs_provider_token_claims(
         claims={"email": "alex@example.com", "groups": ["workspace-admins"]},
     )
     monkeypatch.setattr(debug_middleware, "get_access_token", lambda: token)
-    monkeypatch.setattr(debug_middleware, "_authorization_bearer_jwt", lambda: "request.jwt.value")
+    request = Request({
+        "type": "http",
+        "headers": [(b"authorization", b"Bearer request.jwt.value")],
+    })
+    monkeypatch.setattr(debug_middleware, "get_http_request", lambda: request)
     middleware = MCPAuthDebugMiddleware(auth=lambda _context: True, permission_group_claim="groups")
     context: MiddlewareContext[Any] = MiddlewareContext(message=object(), method="tools/list")
 
     with caplog.at_level(logging.WARNING, logger="umbod.mcp.auth.debug_middleware"):
-        result = __import__("asyncio").run(middleware.on_request(context, _call_next))
+        result = asyncio.run(middleware.on_request(context, _call_next))
 
     assert result == "ok"
     record = caplog.records[0]
@@ -42,5 +48,15 @@ def test_auth_debug_middleware_logs_provider_token_claims(
     assert record.permission_group_claim_value == ["workspace-admins"]
 
 
-def test_authorization_bearer_jwt_returns_none_without_http_context() -> None:
-    assert debug_middleware._authorization_bearer_jwt() is None
+def test_auth_debug_middleware_logs_no_bearer_without_http_context(
+    caplog: LogCaptureFixture, monkeypatch: MonkeyPatch
+) -> None:
+    monkeypatch.setattr(debug_middleware, "get_access_token", lambda: None)
+    middleware = MCPAuthDebugMiddleware(auth=lambda _context: True, permission_group_claim="groups")
+    context: MiddlewareContext[Any] = MiddlewareContext(message=object(), method="tools/list")
+
+    with caplog.at_level(logging.WARNING, logger="umbod.mcp.auth.debug_middleware"):
+        result = asyncio.run(middleware.on_request(context, _call_next))
+
+    assert result == "ok"
+    assert caplog.records[0].authorization_bearer_jwt is None

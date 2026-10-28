@@ -10,6 +10,7 @@ description: "Storage-independent filesystem operations with separate authorizat
 - [administration/](./administration/README.md) — Trusted root group policy editing.
 - [authorization/](./authorization/README.md) — Identity resolution and permission decisions.
 - [browsing/](./browsing/README.md) — Caller-aware summaries and child listing.
+- [content/](./content/README.md) — Authorized streaming uploads and downloads.
 - [creation/](./creation/README.md) — Authorized node creation.
 - [errors.py](./errors.py) — Namespace and storage failures.
 - [models.py](./models.py) — Nodes, metadata and access policy.

@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from starlette.testclient import TestClient
 
-from umbod.mcp.public_app import _HEALTH_ROUTE
 from umbod.mcp.settings import MCPAppSettings
 from tests.mcp_fixtures import create_test_mcp_http_app
 
@@ -33,7 +32,7 @@ def test_health_route_reports_ready_without_authentication(
     )
 
     with TestClient(create_test_mcp_http_app(settings)) as client:
-        response = client.get(_HEALTH_ROUTE)
+        response = client.get("/system/health")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}

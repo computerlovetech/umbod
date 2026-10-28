@@ -6,6 +6,15 @@ from unittest.mock import AsyncMock, create_autospec
 import pytest
 from fastmcp.server.auth import AccessToken
 
+from umbod.core.connectors.openapi.execution import (
+    AsyncStreamingHttpClient,
+    OpenApiCapabilityExecutionResult,
+    OpenApiExecutionResponse,
+    OpenApiOperationInput,
+)
+from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
+from umbod.core.invocation.tools.execution import ToolExecutionPipeline
+from umbod.core.permissions.ports import GroupPermissionReader
 from umbod.mcp.connectors.openapi import OpenApiCodeModeExecutionAdapter
 from umbod.mcp.connectors.openapi import deps
 from umbod.mcp.signals import McpToolExecutionPipelineFactory
@@ -47,14 +56,24 @@ async def test_retained_executor_captures_groups_before_awaits_and_isolates_over
         await asyncio.sleep(0)
         return SimpleNamespace(get_connector=AsyncMock(return_value=SimpleNamespace(display_name="API")))
 
-    async def execute(operation: object, groups: tuple[str, ...]) -> SimpleNamespace:
-        observed[operation.operation_id] = groups
-        return SimpleNamespace(model_dump=lambda mode: {})
+    class RecordingExecutionService:
+        async def execute(
+            self, operation: OpenApiOperationInput, groups: tuple[str, ...]
+        ) -> OpenApiCapabilityExecutionResult:
+            observed[operation.operation_id] = groups
+            await asyncio.sleep(0)
+            return OpenApiCapabilityExecutionResult(status="success", message="done")
 
-    async def execution_service(*args: object) -> SimpleNamespace:
-        return SimpleNamespace(execute=execute)
+    class RecordingExecutionServiceFactory:
+        async def create(
+            self,
+            store: OpenApiConnectorStore,
+            permission_reader: GroupPermissionReader,
+            client: AsyncStreamingHttpClient,
+            execution_pipeline: ToolExecutionPipeline[OpenApiExecutionResponse],
+        ) -> RecordingExecutionService:
+            return RecordingExecutionService()
 
-    monkeypatch.setattr(OpenApiCodeModeExecutionAdapter, "_execution_service", execution_service)
     server = SimpleNamespace(
         permission_group_claim="groups",
         openapi_connector_store_factory=SimpleNamespace(create=create_store),
@@ -63,7 +82,9 @@ async def test_retained_executor_captures_groups_before_awaits_and_isolates_over
         connector_invocation_policy=object(),
         metrics_recorder=object(),
     )
-    adapter = OpenApiCodeModeExecutionAdapter(server, create_autospec(McpToolExecutionPipelineFactory, instance=True))
+    adapter = OpenApiCodeModeExecutionAdapter(
+        server, create_autospec(McpToolExecutionPipelineFactory, instance=True), RecordingExecutionServiceFactory()
+    )
 
     async def invoke(caller: str) -> None:
         current.set(AccessToken(token=caller, client_id="client", scopes=[], claims={"groups": [caller]}))

@@ -7,8 +7,8 @@ description: "Operator settings, validation and conversion into runtime applicat
 # Files
 
 - [__init__.py](./__init__.py) — Package exports.
-- [app.py](./app.py) — Runtime configuration models.
-- [build.py](./build.py) — Operator-to-runtime assembly.
+- [app.py](./app.py) — Runtime models, including independent filesystem content selection and upload limits.
+- [build.py](./build.py) — Operator-to-runtime assembly and local filesystem content directory normalization.
 - [defaults.py](./defaults.py) — Configuration defaults.
 - [derive.py](./derive.py) — Configuration loading.
 - [inspection.py](./inspection.py) — Redacted inspection.
@@ -18,6 +18,6 @@ description: "Operator settings, validation and conversion into runtime applicat
 - [server_settings.py](./server_settings.py) — Server root-secret preflight.
 - [validate.py](./validate.py) — Cross-field validation.
 
-# Context not available from the code
+# Related documentation
 
-- [Operator configuration](../../../../docs/operations/configuration.md) — Deployment settings, provider issuer/audience requirements and personal identity policy; preserve the identity namespace across restarts to retain ownership.
+- [Operator configuration](../../../../docs/operations/configuration.md) — Deployment settings, filesystem storage, authentication and personal identity policy.
