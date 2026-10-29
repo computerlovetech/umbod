@@ -39,6 +39,8 @@ from umbod.core.connectors.downstream_mcp.stores.schema import (
     PersonalConnectionRecord,
     PersonalConnectionRecordKey,
 )
+from umbod.core.messaging.discovery_events import connector_discovery_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
 from umbod.core.persistence import (
     AllFields,
     AllOf,
@@ -139,6 +141,7 @@ class EncryptedPersonalConnectionStore:
                         ),
                     ),
                 )
+                await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", key.connector_id))
             return state
 
     async def set_enabled(
@@ -162,12 +165,14 @@ class EncryptedPersonalConnectionStore:
         async with self._database.session(
             mode=TransactionMode.SERIALIZED_WRITE
         ) as session:
-            await session.delete(
+            removed = await session.delete(
                 PERSONAL_CONNECTION_TABLE,
                 DeleteQuery(Equals(PERSONAL_CONNECTION_CONNECTOR_ID, connector_id)),
             )
-            await session.delete(PERSONAL_AUTHORIZATION_REJECTION_TABLE, DeleteQuery(Equals(PERSONAL_AUTHORIZATION_REJECTION_CONNECTOR_ID, connector_id)))
-            await session.delete(PERSONAL_REFRESH_TABLE, DeleteQuery(Equals(PERSONAL_REFRESH_CONNECTOR_ID, connector_id)))
+            removed += await session.delete(PERSONAL_AUTHORIZATION_REJECTION_TABLE, DeleteQuery(Equals(PERSONAL_AUTHORIZATION_REJECTION_CONNECTOR_ID, connector_id)))
+            removed += await session.delete(PERSONAL_REFRESH_TABLE, DeleteQuery(Equals(PERSONAL_REFRESH_CONNECTOR_ID, connector_id)))
+            if removed:
+                await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", connector_id))
 
 
 class DefinitionBoundPersonalConnectionStore(EncryptedPersonalConnectionStore):

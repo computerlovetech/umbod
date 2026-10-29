@@ -12,7 +12,7 @@ Shared discovery must not query persistent connector definitions or catalogs, de
 
 Readiness projections contain availability facts, not decrypted credentials or live clients. Runtime tools do not retain caller identity, bearer credentials, approval decisions or a caller-bound authorization evaluator.
 
-Each discovery operation captures a stable runtime snapshot and the current caller's membership at its public boundary. Caller filtering remains request-local. Group-grant evaluation must retain the existing current-grant semantics rather than freezing final allow/deny decisions in tool descriptors. Snapshot capture must not move caller capture after asynchronous loading.
+Each discovery operation captures a stable shared runtime snapshot and the current caller's membership at its public boundary. Personal discovery additionally uses the bounded owner-specific read described below. Caller filtering remains request-local. Group-grant evaluation must retain the existing current-grant semantics rather than freezing final allow/deny decisions in tool descriptors. Snapshot capture must not move caller capture after asynchronous loading.
 
 ### Startup and synchronization
 
@@ -34,11 +34,17 @@ Polling a durable event stream is a valid messaging transport. Periodic full-sta
 
 Discovery is not execution authority. Invocation, retained tools and approval continuations must resolve current caller authority and capability availability again at the existing execution boundary. An older discovery snapshot must not bypass revocation, owner disablement, credential changes, catalog revision checks or post-approval admission. Credential retrieval and downstream connections remain operation-scoped.
 
-Personal tool inventories are owner-specific, not entries in the shared public catalog. Their descriptors must remain isolated by canonical owner, connector and inventory revision, including concurrent requests. If private metadata is retained in memory, it uses explicit owner partitions and invalidation; it must never leak through shared lookup, metrics initialization or a previous caller's cached listing.
+Personal tool inventories are owner-specific, not entries in the shared public catalog. They are explicitly exempt from mandatory in-memory inventory loading and zero-persistence-I/O discovery. Every worker need not preload all owners or maintain a private inventory projection for inactive users.
+
+Personal discovery may load owner-specific descriptors and connection availability through bounded persistence reads. Capture one coherent, read-only owner-state snapshot per discovery operation and reuse the result while filtering or resolving its tools. Do not reserve the database writer slot, scan all persistent connector definitions, reload a complete owner inventory per tool, retrieve bearer credentials merely to list descriptors, or contact downstream services during listing. Shared connector metadata, namespace reservations, publication, activation and group-grant projections still come from the event-synchronized runtime. Preserve connector-specific permission policies and capture the caller before asynchronous owner-state loading.
+
+Personal descriptors must remain isolated by canonical owner, connector and inventory revision, including concurrent requests. If private metadata is retained beyond an operation, use explicit owner partitions, bounded retention and event-driven invalidation; it must never leak through shared lookup, metrics initialization or a previous caller's cached listing. Availability and inventory expiry must be checked against time even when no change event arrives. If owner state cannot be loaded safely, fail closed for the affected personal capabilities.
+
+The inventory exception does not exempt personal mutations from messaging. Connection enablement and disconnect, authorization replacement, refresh and rejection transitions, private inventory replacement and relevant configuration changes publish durable notifications atomically with their writes. Existing connector-wide notifications may conservatively invalidate affected owner partitions; they must not expose owner identifiers, credentials or private tool descriptors. Consumers reconcile shared projections and invalidate or reconcile any retained affected private metadata before advancing checkpoints. Messaging does not require materializing every owner's inventory on every worker.
 
 The shared namespace index reserves personal connector namespaces independently of owner availability, private inventory, publication and personal-execution feature flags. Preserve mangled-prefix matching, connector-scoped unprefixed reservations, ambiguous-prefix rejection and authoritative resolved-component type checks. Metadata cannot turn a shared component into an authorized personal tool.
 
-Bounded personal admission and authoritative execution checks may perform operation-scoped I/O where their security contracts require it. These are explicit authority boundaries, not permission to reload the shared catalog or scan all definitions per tool. This decision does not replace personal credential, ownership, revision or fingerprint policies, or promote the proposed ADR-002 credential model to Accepted.
+Bounded personal discovery reads and authoritative execution checks may perform operation-scoped I/O under their separate contracts. The discovery exception grants no execution authority and does not weaken current admission, post-approval checks or operation-scoped credential retrieval. These boundaries are not permission to reload the shared catalog or scan all definitions per tool. This decision does not replace personal credential, ownership, revision or fingerprint policies, or promote the proposed ADR-002 credential model to Accepted.
 
 ## Enforcement and acceptance
 
@@ -47,8 +53,10 @@ Changes to tool registration, discovery, namespace ownership, provider lookup, r
 Verification must cover public interfaces and include:
 
 - Shared tools/list and search succeed from the initialized runtime with persistent definition/catalog reads and downstream discovery disabled at the test boundary.
-- Increasing tools on one connector does not increase definition scans, credential reads or full-catalog reconstruction. Query-count assertions complement latency measurements; elapsed-time thresholds alone are insufficient.
-- Every discovery-affecting mutation updates all running runtime instances through messaging without reconnecting clients or relying on a new discovery request to trigger refresh.
+- Increasing tools on one shared connector does not increase definition scans, credential reads or full-catalog reconstruction. Query-count assertions complement latency measurements; elapsed-time thresholds alone are insufficient.
+- Personal discovery permits bounded owner-specific persistence reads, but no writer reservations, bearer credential retrieval, downstream discovery, global definition scans or repeated full-inventory loads per returned tool. Verify coherent reads, expiry and owner-state unavailability through public discovery interfaces.
+- Every discovery-affecting mutation publishes an atomic, sanitized event and updates affected shared runtime projections in all running instances through messaging without reconnecting clients or relying on a new discovery request to trigger refresh. Personal changes invalidate or reconcile any retained affected private metadata; workers are not required to load inventories for inactive owners.
+- Optional private inventory retention remains bounded as user count grows, and eviction cannot expose another owner's data or bypass expiry and invalidation.
 - Startup changes, replay, duplicate and obsolete events, failed reconciliation, checkpoint handling, deletion, restart and cancellation preserve the synchronization contract.
 - Root and scoped endpoints, flat, gateway and code-mode exposure preserve consistent identities and collision handling.
 - Concurrent callers and personal inventories remain isolated. Retained tools and approval continuations recheck authority after revocation and inventory changes.
@@ -64,4 +72,6 @@ Applicable backend, lint, shared Semgrep and Kind runtime checks remain required
 
 Durable mutation owners append events in their state transaction. Downstream probe admission additionally captures definition, credential, catalog state and durable generation before external I/O; successful and failed results compare that admission inside the applying transaction. Deleted identities retain generation tombstones so an older probe cannot recreate their state.
 
-Query-budget regressions prohibit steady-state shared definition, catalog, credential and publication reads during discovery. Native and downstream invocations recheck authority after approval, and OpenAPI execution remains authoritative. Module README indexes describe the current entrypoints and ownership.
+Personal inventory and availability readers remain in the downstream core store boundary; MCP discovery coordinates their bounded owner-specific reads with the shared runtime snapshot. These readers do not become a second shared catalog or require a new messaging transport. Persistence-backed personal discovery is permitted under the exception, but per-tool inventory rebuilding and discovery-time writer reservations are not legacy paths to preserve.
+
+Query-budget regressions prohibit steady-state shared definition, catalog, credential and publication reads during discovery. Separate personal query-budget and transaction regressions enforce the owner-specific read exception. Native and downstream invocations recheck authority after approval, and OpenAPI execution remains authoritative. Module README indexes describe the current entrypoints and ownership.

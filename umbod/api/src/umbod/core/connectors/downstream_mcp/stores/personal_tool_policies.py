@@ -3,6 +3,7 @@ from collections.abc import Callable
 from messaging.events import McpGroupPermissionChanged
 from umbod.core.activation.events import connector_capability_activation_changed_event
 from umbod.core.configuration.events import connector_configuration_changed_event
+from umbod.core.messaging.discovery_events import connector_discovery_changed_event
 from umbod.core.messaging.stores.event_stream import append_event_in_session
 from datetime import datetime
 from uuid import uuid4
@@ -127,5 +128,7 @@ class PersonalToolPolicyStoreService:
 
     async def delete_connector(self, connector_id: str) -> None:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
-            await session.delete(PERSONAL_TOOL_POLICY_TABLE, DeleteQuery(Equals(PERSONAL_TOOL_POLICY_CONNECTOR_ID, connector_id)))
-            await session.delete(PERSONAL_TOOL_OBSERVATION_TABLE, DeleteQuery(Equals(PERSONAL_TOOL_OBSERVATION_CONNECTOR_ID, connector_id)))
+            removed = await session.delete(PERSONAL_TOOL_POLICY_TABLE, DeleteQuery(Equals(PERSONAL_TOOL_POLICY_CONNECTOR_ID, connector_id)))
+            removed += await session.delete(PERSONAL_TOOL_OBSERVATION_TABLE, DeleteQuery(Equals(PERSONAL_TOOL_OBSERVATION_CONNECTOR_ID, connector_id)))
+            if removed:
+                await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", connector_id))

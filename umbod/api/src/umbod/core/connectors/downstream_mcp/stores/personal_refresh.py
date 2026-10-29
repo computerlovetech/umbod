@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 
 from umbod.core.configuration.persistence import TextCipher
+from umbod.core.messaging.discovery_events import connector_discovery_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
 from umbod.core.persistence import AllOf, Database, DatabaseSession, Equals, OneOf, TransactionMode, UpsertCommand
 from umbod.core.permissions.stores.schema import CONNECTOR_PERMISSION_TABLE, CONNECTOR_PERMISSION_CONNECTOR_ID, CONNECTOR_PERMISSION_GROUP_ID
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE, PUBLICATION_STATE_CONNECTOR_ID
@@ -75,6 +77,7 @@ class EncryptedPersonalRefreshStore:
                 if not isinstance(attempt, TerminalAttempt) and attempt.expires_at > now:
                     raise PersonalRefreshConflict()
             await save_refresh(session, self._cipher, claim)
+            await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", claim.key.connector_id))
             return claim
 
     async def _owned(self, session: DatabaseSession, command: PersonalRefreshCommand) -> PersonalRefreshClaim:
@@ -98,6 +101,7 @@ class EncryptedPersonalRefreshStore:
             await self._revalidate(session, claim, max(command.now, self._clock()))
             claim = claim.model_copy(update={"status": "exchanging"})
             await save_refresh(session, self._cipher, claim)
+            await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", claim.key.connector_id))
             return claim
 
     async def release(self, command: PersonalRefreshCommand) -> None:
@@ -105,6 +109,7 @@ class EncryptedPersonalRefreshStore:
             claim = await load_refresh(session, self._cipher, command.key)
             if claim is not None and claim.claim_id == command.claim_id and claim.status == "preparing":
                 await clear_refresh(session, command.key)
+                await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", command.key.connector_id))
 
     async def fail(self, command: FailPersonalRefresh) -> None:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
@@ -114,6 +119,7 @@ class EncryptedPersonalRefreshStore:
             connection = await load_personal_connection(session, self._cipher, command.key)
             if isinstance(connection, PersonalConnection) and isinstance(connection.authorization, Authorized) and authorization_fingerprint(connection.authorization) == claim.credential_fingerprint:
                 await save_refresh(session, self._cipher, claim.model_copy(update={"status": command.reason}))
+                await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", command.key.connector_id))
 
     async def complete(self, command: CompletePersonalRefresh) -> None:
         changed = False
@@ -133,6 +139,7 @@ class EncryptedPersonalRefreshStore:
                 connection = await load_personal_connection(session, self._cipher, command.key)
                 if isinstance(connection, PersonalConnection) and isinstance(connection.authorization, Authorized) and authorization_fingerprint(connection.authorization) == claim.credential_fingerprint:
                     await save_refresh(session, self._cipher, claim.model_copy(update={"status": "refresh_uncertain"}))
+                    await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", command.key.connector_id))
                 changed = True
             else:
                 connection = await load_personal_connection(session, self._cipher, command.key)
@@ -143,5 +150,6 @@ class EncryptedPersonalRefreshStore:
                 await session.upsert(PERSONAL_CONNECTION_TABLE, UpsertCommand(key=key, row=PersonalConnectionRecord(**key.model_dump(), document=self._cipher.encrypt(json.dumps(payload)))))
                 await clear_refresh(session, command.key)
                 await clear_rejection(session, command.key)
+                await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", command.key.connector_id))
         if changed:
             raise PersonalRefreshChanged()

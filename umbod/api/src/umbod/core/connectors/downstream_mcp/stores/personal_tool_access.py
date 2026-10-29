@@ -2,6 +2,8 @@ import json
 from uuid import uuid4
 
 from umbod.core.configuration.persistence import TextCipher
+from umbod.core.messaging.discovery_events import connector_discovery_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
 from umbod.core.persistence import AllOf, Database, DatabaseSession, Equals, TransactionMode, UpsertCommand
 
 from ..personal_connections.models import PersonalConnectionKey
@@ -80,6 +82,7 @@ class EncryptedPersonalToolAccessStore:
             observation = PersonalToolObservation(version=2, key=target.key, authorization_revision=target.authorization_revision, configuration_revision=target.configuration_revision, inventory_revision=str(uuid4()), tools=command.tools, expires_at=command.expires_at)
             key = PersonalToolObservationRecordKey(namespace=target.key.principal.namespace, subject=target.key.principal.subject, connector_id=target.key.connector_id)
             await session.upsert(PERSONAL_TOOL_OBSERVATION_TABLE, UpsertCommand(key=key, row=PersonalToolObservationRecord(**key.model_dump(), document=self._cipher.encrypt(observation.model_dump_json()))))
+            await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", target.key.connector_id))
 
     async def list_available(self, query: PersonalRuntimeAuthorizationQuery) -> tuple[PersonalToolRecord, ...]:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:

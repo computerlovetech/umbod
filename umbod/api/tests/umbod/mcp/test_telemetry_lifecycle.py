@@ -60,7 +60,7 @@ def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 async def create_application(enabled: bool, listeners: McpMetricsServerFactory) -> tuple[Starlette, RecordingPersistenceRuntime]:
-    settings = AppConfig(mcp={"auth_mode": "none", "metrics_enabled": enabled, "downstream_discovery_enabled": False})
+    settings = AppConfig(mcp={"auth_mode": "none", "metrics_enabled": enabled, "downstream_discovery_enabled": False, "messaging_transport": "sql"})
     config = await load_configured_public_app_config(settings)
     persistence = RecordingPersistenceRuntime(config.persistence_runtime)
     config = replace(config, persistence_runtime=persistence, telemetry=replace(config.telemetry, metrics_server_factory=listeners))

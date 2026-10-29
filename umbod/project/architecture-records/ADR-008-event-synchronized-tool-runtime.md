@@ -6,11 +6,15 @@
 
 ## Decision
 
-MCP tool discovery reads an application-scoped, in-memory runtime catalog maintained by startup loading and event-driven reconciliation. Persistent stores remain the durable source of truth; the runtime catalog is a derived read model, not a second source of configuration.
+Shared MCP tool discovery reads an application-scoped, in-memory runtime catalog maintained by startup loading and event-driven reconciliation. Persistent stores remain the durable source of truth; the runtime catalog is a derived read model, not a second source of configuration.
 
 This contract applies consistently to native, OpenAPI, and shared downstream MCP tools. Flat and connector-scoped discovery, gateway search, code-mode discovery, name ownership and collision checks consume the same logical catalog. Connector-specific adapters may differ, but connector kind and exposure mode must not select a separate database-backed discovery pipeline.
 
-The architecture requires one logical catalog per MCP application, not one process-global singleton or one mandatory implementation class. Each worker owns its own instance. Runtime state and synchronization dependencies are composed explicitly and injected through ports. Hosts use the same backend implementation, following ADR-004.
+Personal connector inventories are an explicit exception to the fully in-memory discovery contract. Owner-specific tool descriptors and connection availability may be read from persistence through a bounded, coherent, read-only snapshot per discovery operation. Personal discovery must not reserve the database writer slot or reload the owner's complete inventory for each returned tool. Shared connector metadata, namespace reservations and group-grant projections remain event-synchronized in memory; the exception must not introduce persistent shared-catalog discovery.
+
+Personal discovery-affecting mutations still publish durable change events atomically with their state changes. Events notify changes without carrying credentials, owner identifiers or private tool schemas. The exception does not require every MCP worker to preload or retain every owner's inventory. Any retained private metadata requires explicit owner isolation, bounded retention and event-driven invalidation. Discovery remains separate from authoritative execution admission and operation-scoped credential retrieval.
+
+The architecture requires one logical shared catalog per MCP application, not one process-global singleton or one mandatory implementation class. Each worker owns its own instance. Runtime state and synchronization dependencies are composed explicitly and injected through ports. Hosts use the same backend implementation, following ADR-004.
 
 The [supporting detail](supporting/tool-runtime.md) preserves the accepted constraints and verification requirements that accompany this decision.
 
@@ -20,15 +24,19 @@ Before this migration, Umbod registered native tools in an application-scoped ru
 
 A regression through the public MCP client demonstrated that a single shared connector with 40 tools caused 122 full-definition reads in one tools/list request. Catalog readiness also reconstructed a connector's capabilities for each tool. Request-local deduplication reduces this amplification but does not establish the intended runtime architecture.
 
+Personal inventories vary by owner and can scale with the number of users, connections and tool descriptors. Replicating every private inventory into every MCP worker would make memory consumption grow with both user population and worker count. The personal-inventory exception permits bounded persistence reads without weakening shared discovery, messaging or ownership boundaries.
+
 ADR-001 establishes the shared persistence runtime and neutral database boundary. It does not establish the tool discovery read model. This decision adds that boundary without changing persistence ownership, credential storage policy, or MCP authentication.
 
 ## Alternatives considered
 
-An alternatives evaluation was not recorded. The context describes the competing pressures, but does not establish which alternatives were seriously considered or their full trade-offs.
+The original alternatives evaluation was not recorded. The personal-inventory amendment rejects mandatory preloading of all private inventories into every worker because of memory growth and owner-lifecycle synchronization costs. A bounded, event-invalidated owner cache remains optional, not a prerequisite or a substitute for authoritative execution checks.
 
 ## Consequences
 
-Discovery cost depends on runtime filtering and result size rather than database round trips or downstream availability. Connector kinds follow one lifetime and synchronization contract, and namespace protection no longer introduces catalog queries into native tool listing.
+Shared discovery cost depends on runtime filtering and result size rather than database round trips or downstream availability. Shared connector kinds follow one lifetime and synchronization contract, and namespace protection no longer introduces catalog queries into native tool listing.
+
+Personal discovery may depend on persistence availability and bounded read latency, but does not require all private inventories to reside in memory. It must preserve coherent owner-specific reads without writer reservations or per-tool inventory reconstruction. This exception does not justify the existing read/write transaction ambiguity or claim that current personal discovery already meets these constraints.
 
 The application retains more metadata in memory and must own reliable startup, revision handling, reconciliation and recovery. Consistency is explicitly bounded by event delivery rather than implied by a cache. Security-sensitive execution remains fresh and separate from the discovery read model.
 

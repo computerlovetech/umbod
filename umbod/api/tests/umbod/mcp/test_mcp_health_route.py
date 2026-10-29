@@ -29,7 +29,7 @@ def UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH(
 def test_health_route_reports_ready_without_authentication(
     metrics_enabled: bool
 ) -> None:
-    settings = MCPAppSettings(mcp={"metrics_enabled": metrics_enabled}, _env_file=None)
+    settings = MCPAppSettings(mcp={"metrics_enabled": metrics_enabled, "messaging_transport": "sql"}, _env_file=None)
     original_settings = settings.model_dump()
     listeners = RecordingMetricsServerFactory()
 

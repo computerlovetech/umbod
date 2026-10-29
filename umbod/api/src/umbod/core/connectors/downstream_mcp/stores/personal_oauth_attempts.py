@@ -67,6 +67,8 @@ from umbod.core.permissions.stores.schema import (
     CONNECTOR_PERMISSION_GROUP_ID,
     CONNECTOR_PERMISSION_TABLE,
 )
+from umbod.core.messaging.discovery_events import connector_discovery_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
 from umbod.core.persistence import (
     AllFields,
     AllOf,
@@ -520,6 +522,7 @@ class EncryptedPersonalOAuthAttemptStore:
             await clear_refresh(session, attempt.key)
             terminal = _terminal(attempt, "completed")
             await self._save(session, terminal)
+            await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", attempt.key.connector_id))
             return _view(terminal)
 
     async def fail(self, command: FailPersonalOAuthAttempt) -> None:

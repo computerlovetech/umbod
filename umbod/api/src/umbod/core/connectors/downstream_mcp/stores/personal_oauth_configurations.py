@@ -23,6 +23,8 @@ from umbod.core.connectors.downstream_mcp.stores.schema import (
     PERSONAL_CONNECTION_CONNECTOR_ID, PERSONAL_CONNECTION_TABLE,
     PersonalConnectionRecord, PersonalConnectionRecordKey,
 )
+from umbod.core.messaging.discovery_events import connector_discovery_changed_event
+from umbod.core.messaging.stores.event_stream import append_event_in_session
 from umbod.core.persistence import AllFields, Database, DatabaseSession, DeleteQuery, Equals, Query, TransactionMode, Unordered, UpsertCommand
 
 
@@ -111,10 +113,12 @@ class EncryptedPersonalOAuthConfigurationStore:
 
     async def delete_connector(self, connector_id: str) -> None:
         async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
-            await session.delete(
+            removed = await session.delete(
                 PERSONAL_OAUTH_CONFIGURATION_TABLE,
                 DeleteQuery(Equals(PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID, connector_id)),
             )
+            if removed:
+                await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", connector_id))
 
     async def get(self, query: PersonalOAuthConfigurationQuery) -> PersonalOAuthConfiguration:
         async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
@@ -131,4 +135,6 @@ class EncryptedPersonalOAuthConfigurationStore:
                 return current
             await session.delete(PERSONAL_OAUTH_ATTEMPT_TABLE, DeleteQuery(Equals(PERSONAL_OAUTH_ATTEMPT_CONNECTOR_ID, command.connector_id)))
             await _invalidate_connections(session, self._cipher, command.connector_id)
-            return await install_personal_oauth_configuration(session, self._cipher, command.connector_id, command.settings)
+            configuration = await install_personal_oauth_configuration(session, self._cipher, command.connector_id, command.settings)
+            await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", command.connector_id))
+            return configuration
