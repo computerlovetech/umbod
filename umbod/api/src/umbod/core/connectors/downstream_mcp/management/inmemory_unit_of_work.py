@@ -340,7 +340,9 @@ class InMemoryDownstreamConnectorUnitOfWork:
             )
             if hasattr(target, "__dict__")
         )
-        states = deepcopy(tuple(target.__dict__ for target in targets))
+        databases = {id(database): database for target in targets if (database := getattr(target, "_database", None)) is not None and hasattr(database, "__dict__")}
+        targets = (*targets, *databases.values())
+        states = deepcopy(tuple(target.__dict__ for target in targets), memo=databases.copy())
         try:
             return await mutation()
         except BaseException:

@@ -17,8 +17,8 @@ from ..personal_connections.health_models import (
     UnsupportedAuthorization,
 )
 from ..personal_connections.models import Authorized, PersonalConnection
-from .personal_authorization_rejections import matching_rejection
-from .personal_connections import load_personal_connection
+from .personal_authorization_rejection_records import matching_rejection
+from .personal_connection_records import load_personal_connection
 from .personal_oauth_configurations import load_personal_oauth_configuration
 from .ports import CONNECTOR_DEFINITION_ADAPTER
 from .queries import query_all

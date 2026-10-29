@@ -9,11 +9,9 @@ from umbod.core.capabilities.tools.names import mangle_public_tool_name
 from umbod.core.capabilities.catalog import CapabilityCatalog, InMemoryCapabilityCatalog
 from umbod.core.connectors.downstream_mcp.catalog.capability_catalog import DownstreamCapabilityRecord
 from umbod.core.connectors.downstream_mcp.models import ConnectorDefinitionModel, uses_personal_oauth
-from umbod.core.connectors.downstream_mcp.personal_connections import (
-    CanonicalPrincipal, PersonalConnectionKey, PersonalConnectorInventory,
-)
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery
-from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolAccessStore
+from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal
+from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolDiscoveryQuery
+from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolDiscoveryReader
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, CredentialFound, EncryptedCredentialStore
 from umbod.core.user_catalogue import CatalogueConnector, CatalogueToolCapability
 
@@ -56,24 +54,24 @@ class SharedDownstreamReadiness:
 
 class PersonalCatalogueSource:
     def __init__(
-        self, inventory: PersonalConnectorInventory, access: PersonalToolAccessStore,
-        principal: CanonicalPrincipal, groups: tuple[str, ...], runtime_enabled: bool,
+        self, definitions: tuple[ConnectorDefinitionModel, ...], reader: PersonalToolDiscoveryReader,
+        principal: CanonicalPrincipal, runtime_enabled: bool,
         clock: Callable[[], datetime],
     ) -> None:
-        self._inventory = inventory
-        self._access = access
+        self._definitions = definitions
+        self._reader = reader
         self._principal = principal
-        self._groups = groups
         self._runtime_enabled = runtime_enabled
         self._clock = clock
 
     async def list_connectors(self) -> tuple[CatalogueConnector, ...]:
         connectors: list[CatalogueConnector] = []
-        for selection in (await self._inventory.list()).connectors:
-            tools = await self._access.list_available(PersonalRuntimeAuthorizationQuery(
-                key=PersonalConnectionKey(principal=self._principal, connector_id=selection.connector_id),
-                group_ids=self._groups, now=self._clock(),
-            )) if self._runtime_enabled else ()
+        records = await self._reader.read(PersonalToolDiscoveryQuery(principal=self._principal, definitions=self._definitions, now=self._clock())) if self._runtime_enabled else ()
+        by_connector = {definition.connector_id: [] for definition in self._definitions}
+        for record in records:
+            by_connector[record.definition.connector_id].append(record)
+        for selection in self._definitions:
+            tools = by_connector[selection.connector_id]
             connectors.append(CatalogueConnector(
                 connector_id=selection.connector_id, kind="downstream_mcp",
                 display_name=selection.display_name,

@@ -1,5 +1,6 @@
 from collections.abc import Awaitable, Callable, Mapping, Sequence
 from datetime import datetime
+from typing import Any
 
 import mcp.types as mt
 from fastmcp.exceptions import ToolError
@@ -17,8 +18,8 @@ from umbod.core.callers import AuthenticationProvenance
 from umbod.core.connectors.downstream_mcp.personal_connections.caller import PersonalCaller, PersonalCallerProvider, UnavailablePersonalCaller
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolResult
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_tools import InvokePersonalTool, PersonalToolRecord, PersonalToolRuntimeService
-from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolAccessStore, PersonalToolDefinitionReader
+from umbod.core.connectors.downstream_mcp.personal_tools import InvokePersonalTool, PersonalToolRuntimeService
+from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolAccessStore
 from umbod.core.connectors.downstream_mcp.personal_connections.identity_models import ResolvedPersonalIdentity
 from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
 from umbod.core.connectors.downstream_mcp.personal_connections.principal import canonical_principal
@@ -58,28 +59,31 @@ class McpPersonalToolRuntime:
     def __init__(
         self,
         callers: PersonalCallerProvider,
-        definitions: PersonalToolDefinitionReader,
         access: PersonalToolAccessStore,
         transport: PersonalMcpTransport,
         clock: Callable[[], datetime],
     ) -> None:
         self._callers = callers
-        self._definitions = definitions
         self._access = access
         self._transport = transport
         self._clock = clock
 
     async def _operation(self) -> PersonalToolRuntimeService:
         caller = await self._callers.get_caller()
-        return PersonalToolRuntimeService(caller, self._definitions, self._access, self._transport, self._clock)
-
-    async def list_tools(self) -> tuple[PersonalToolRecord, ...]:
-        operation = await self._operation()
-        return await operation.list_tools()
+        return PersonalToolRuntimeService(caller, self._access, self._transport, self._clock)
 
     async def execute(self, command: InvokePersonalTool) -> PersonalToolResult:
         operation = await self._operation()
         return await operation.execute(command)
+
+
+class PersonalDiscoveryMiddleware(Middleware):
+    def __init__(self, claims: PersonalToolNamespace) -> None:
+        self._claims = claims
+
+    async def on_message(self, context: MiddlewareContext[Any], call_next: CallNext[Any, Any]) -> Any:
+        async with self._claims.discovery_operation():
+            return await call_next(context)
 
 
 class PersonalToolReservationMiddleware(Middleware):
@@ -93,6 +97,10 @@ class PersonalToolReservationMiddleware(Middleware):
         return not reserved
 
     async def on_list_tools(self, context: MiddlewareContext[mt.ListToolsRequest], call_next: CallNext[mt.ListToolsRequest, Sequence[Tool]]) -> Sequence[Tool]:
+        async with self._claims.discovery_operation():
+            return await self._list_tools(context, call_next)
+
+    async def _list_tools(self, context: MiddlewareContext[mt.ListToolsRequest], call_next: CallNext[mt.ListToolsRequest, Sequence[Tool]]) -> Sequence[Tool]:
         tools = await call_next(context)
         namespace = await self._claims.capture_personal_tool_namespace()
         authorized: list[Tool] = []
@@ -104,12 +112,16 @@ class PersonalToolReservationMiddleware(Middleware):
                 if runtime is None:
                     continue
                 resolved = await runtime.fastmcp.get_tool(tool.name, version=_requested_version({"fastmcp": {"version": tool.version}}))
-                if resolved is None or not await self._allows(resolved, namespace):
+                if not isinstance(resolved, AuthorizedPersonalTool) or not isinstance(tool, AuthorizedPersonalTool) or not tool.same_discovery_identity(resolved) or not await self._allows(resolved, namespace):
                     continue
             authorized.append(tool)
         return authorized
 
     async def on_call_tool(self, context: MiddlewareContext[mt.CallToolRequestParams], call_next: CallNext[mt.CallToolRequestParams, ToolResult]) -> ToolResult:
+        async with self._claims.discovery_operation():
+            return await self._call_tool(context, call_next)
+
+    async def _call_tool(self, context: MiddlewareContext[mt.CallToolRequestParams], call_next: CallNext[mt.CallToolRequestParams, ToolResult]) -> ToolResult:
         namespace = await self._claims.capture_personal_tool_namespace()
         if not namespace.is_personal_tool_name(context.message.name):
             return await call_next(context)

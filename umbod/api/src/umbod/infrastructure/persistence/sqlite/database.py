@@ -7,7 +7,7 @@ from typing import cast
 
 from pydantic import BaseModel
 
-from umbod.core.persistence.ports import DatabaseSession, TransactionMode
+from umbod.core.persistence.ports import DatabaseSession, ReadSession, TransactionMode
 from umbod.core.persistence.query import (
     AllFields,
     DeleteQuery,
@@ -27,7 +27,7 @@ from umbod.infrastructure.persistence.sqlite.compiler import SQLiteCompiler
 from umbod.infrastructure.persistence.sqlite.value_mapping import SQLiteValueMapper
 
 
-class _SQLiteDatabaseSession:
+class _SQLiteReadSession:
     def __init__(self, connection: aiosqlite.Connection) -> None:
         self._connection = connection
         self._mapper = SQLiteValueMapper()
@@ -71,6 +71,8 @@ class _SQLiteDatabaseSession:
                 raise PersistenceDecodingError(table.name, field.name, error) from error
         return _decode_result(table, canonical, query.projection)
 
+
+class _SQLiteDatabaseSession(_SQLiteReadSession):
     async def insert(self, table: Table[RowT, KeyT], command: InsertCommand[RowT]) -> bool:
         compiled = self._compiler.insert(table, command)
         try:
@@ -147,6 +149,19 @@ class SQLiteDatabase:
             raise
         finally:
             await connection.close()
+
+    @asynccontextmanager
+    async def read_session(self) -> AsyncIterator[ReadSession]:
+        connection = await self._connect()
+        try:
+            await connection.execute("PRAGMA query_only=ON")
+            await connection.execute("BEGIN")
+            yield _SQLiteReadSession(connection)
+        finally:
+            try:
+                await connection.rollback()
+            finally:
+                await connection.close()
 
     @asynccontextmanager
     async def session(self, *, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:

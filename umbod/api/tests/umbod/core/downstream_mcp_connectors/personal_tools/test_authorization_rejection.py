@@ -1,3 +1,5 @@
+from tests.umbod.core.downstream_mcp_connectors.personal_discovery_support import read_available
+
 import pytest
 
 from tests.umbod.core.downstream_mcp_connectors.test_personal_authorization_health import health_query
@@ -28,12 +30,12 @@ async def test_execution_records_only_specific_admitted_rejections(runtime_case:
     execution = await execution_case(runtime_case)
     error = PersonalAuthorizationRejected("Personal MCP unavailable") if specific else PersonalRuntimeUnavailable("Personal MCP unavailable")
     transport = FaultPersonalMcpTransport(error)
-    runtime = PersonalToolRuntimeService(execution.caller, runtime_case.bundle.definitions, runtime_case.bundle.personal_tool_access, transport, lambda: runtime_case.query.now)
+    runtime = PersonalToolRuntimeService(execution.caller, runtime_case.bundle.personal_tool_access, transport, lambda: runtime_case.query.now)
     with pytest.raises(PersonalRuntimeUnavailable):
         await runtime.execute(execution.command)
     health = await runtime_case.bundle.personal_authorization_health.get(health_query(runtime_case))
     assert health.state == ("reconnect_required" if specific else "authorized")
-    assert len(await runtime.list_tools()) == (0 if specific else 1)
+    assert len(await read_available(runtime_case.bundle, runtime_case.query)) == (0 if specific else 1)
     if specific:
         with pytest.raises(PersonalRuntimeUnavailable):
             await runtime.execute(execution.command)

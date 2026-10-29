@@ -6,7 +6,7 @@ from typing import cast
 
 from pydantic import BaseModel
 
-from umbod.core.persistence.ports import DatabaseSession, TransactionMode
+from umbod.core.persistence.ports import DatabaseSession, ReadSession, TransactionMode
 from umbod.core.persistence.query import (
     AllOf,
     AnyOf,
@@ -35,14 +35,9 @@ StoredRow = dict[str, object]
 StoredTable = MutableMapping[tuple[object, ...], StoredRow]
 
 
-class _InMemoryDatabaseSession:
-    def __init__(
-        self,
-        tables: MutableMapping[object, StoredTable],
-        generated_integer_keys: MutableMapping[tuple[object, str], int],
-    ) -> None:
+class _InMemoryReadSession:
+    def __init__(self, tables: MutableMapping[object, StoredTable]) -> None:
         self._tables = tables
-        self._generated_integer_keys = generated_integer_keys
 
     async def find_one(
         self, table: Table[RowT, KeyT], query: Query[RowT, ResultT]
@@ -66,6 +61,16 @@ class _InMemoryDatabaseSession:
         return tuple(
             cast(ResultT, _decode_result(table, deepcopy(row), query.projection)) for row in rows
         )
+
+
+class _InMemoryDatabaseSession(_InMemoryReadSession):
+    def __init__(
+        self,
+        tables: MutableMapping[object, StoredTable],
+        generated_integer_keys: MutableMapping[tuple[object, str], int],
+    ) -> None:
+        super().__init__(tables)
+        self._generated_integer_keys = generated_integer_keys
 
     async def insert(self, table: Table[RowT, KeyT], command: InsertCommand[RowT]) -> bool:
         encoded = _encode_model(table, command.row, table.row_codec.fields)
@@ -123,6 +128,12 @@ class InMemoryDatabase:
         async with self._transaction_lock:
             for table in tables:
                 self._tables.setdefault(table.identity, {})
+
+    @asynccontextmanager
+    async def read_session(self) -> AsyncIterator[ReadSession]:
+        async with self._transaction_lock:
+            snapshot = deepcopy(self._tables)
+        yield _InMemoryReadSession(snapshot)
 
     @asynccontextmanager
     async def session(self, *, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:

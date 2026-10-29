@@ -1,4 +1,6 @@
 import asyncio
+
+from tests.umbod.core.downstream_mcp_connectors.personal_discovery_support import read_available
 import json
 from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
@@ -88,8 +90,8 @@ def test_verified_discovery_is_private_and_does_not_approve_or_execute(discovery
     for subject in ("alice", "bob"):
         response = api.client.post(api.url + "/tools/discovery", headers=api.headers(subject), json={})
         assert response.status_code == 204
-    assert len(asyncio.run(stores.personal_tool_access.list_available(query(api, "alice")))) == 1
-    assert asyncio.run(stores.personal_tool_access.list_available(query(api, "bob"))) == ()
+    assert len(asyncio.run(read_available(stores, query(api, "alice")))) == 1
+    assert asyncio.run(read_available(stores, query(api, "bob"))) == ()
     catalogue = asyncio.run(stores.catalogs.get(ConnectorIdQuery(connector_id=api.connector_id)))
     assert not catalogue.found
     assert "private-alice" not in api.client.get(policy_url, headers=api.admin_headers).text
@@ -101,5 +103,5 @@ def test_verified_discovery_is_private_and_does_not_approve_or_execute(discovery
         assert next(item for item in selections if item["connector_id"] == api.connector_id)["runtime_available"] is available
     assert len(transport.list_requests) == list_count
     api.client.put("/api/admin/mcp-permissions/groups/team/permissions", headers=api.admin_headers, json={"connectors": [{"connector_id": api.connector_id, "permission_status": "disabled"}]}).raise_for_status()
-    assert asyncio.run(stores.personal_tool_access.list_available(query(api, "alice"))) == ()
+    assert len(asyncio.run(read_available(stores, query(api, "alice")))) == 1
     assert api.client.get(api.url, headers=api.headers("alice")).status_code == 404

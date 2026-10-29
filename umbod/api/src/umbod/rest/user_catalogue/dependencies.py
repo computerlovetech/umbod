@@ -10,14 +10,14 @@ from umbod.core.capabilities import (
     ConnectorStoreCapabilityPublication,
 )
 from umbod.core.capabilities.catalog import InMemoryCapabilityCatalog
-from umbod.core.capabilities.descriptions import ConnectorCapabilityDescriptionOverrideStore
+from umbod.core.capabilities.descriptions import ConnectorCapabilityDescriptionOverrideStore, ConnectorCapabilityDescriptionKey, OverriddenCapabilityDescription
 from umbod.core.capabilities.tools.names import mangle_public_tool_name
 from umbod.core.connectors.downstream_mcp.catalog import StoreBackedDownstreamCapabilityCatalog
 from umbod.core.connectors.downstream_mcp.catalog.definitions import InMemoryConnectorDefinitionReader
 from umbod.core.connectors.downstream_mcp.management import utc_clock
-from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
+from umbod.core.connectors.downstream_mcp.models import ConnectorDefinitionModel, uses_personal_oauth
 from umbod.core.connectors.downstream_mcp.personal_connections import (
-    PersonalCaller, PersonalConnectionService, PersonalConnectorInventoryService, ResolvedPersonalIdentity,
+    ResolvedPersonalIdentity,
 )
 from umbod.core.connectors.downstream_mcp.user_catalogue import (
     PersonalCatalogueSource, PersonalNamespace, SharedDownstreamCatalogue, SharedDownstreamReadiness,
@@ -133,14 +133,21 @@ async def get_user_catalogue(
     if settings.personal_connections.enabled:
         resolution = captured.personal_identity
         if isinstance(resolution, ResolvedPersonalIdentity):
-            personal_caller = PersonalCaller(caller=captured.caller, principal=resolution.principal, groups=groups)
             stores = await supplier.create()
-            inventory = PersonalConnectorInventoryService(
-                definitions, publishing, state.permissions, groups,
-                PersonalConnectionService(personal_caller, stores.personal_connections), descriptions,
-            )
+            granted_connectors: set[str] = set()
+            for group_id in groups.group_ids:
+                granted_connectors.update((await state.permissions.list_group_permissions(group_id)).connector_ids)
+            selected_definitions = tuple([
+                definition for definition in sorted(definition_list.definitions, key=lambda item: item.connector_id)
+                if uses_personal_oauth(definition) and definition.connector_id in granted_connectors
+                and await publishing.is_published(definition.connector_id)
+            ])
+            described_definitions: list[ConnectorDefinitionModel] = []
+            for definition in selected_definitions:
+                override = await descriptions.get(ConnectorCapabilityDescriptionKey(kind="downstream_mcp", connector_id=definition.connector_id))
+                described_definitions.append(definition.model_copy(update={"capability_description": override.description}) if isinstance(override, OverriddenCapabilityDescription) else definition)
             personal_source = PersonalCatalogueSource(
-                inventory, stores.personal_tool_access, personal_caller.principal, groups.group_ids,
+                tuple(described_definitions), stores.personal_tool_discovery, resolution.principal,
                 settings.personal_connections.oauth_enabled, utc_clock,
             )
             personal_connectors = await personal_source.list_connectors()

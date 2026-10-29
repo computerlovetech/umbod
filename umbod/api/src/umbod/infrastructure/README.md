@@ -9,7 +9,7 @@ description: "Concrete storage adapters and composition boundaries for persisten
 - [__init__.py](./__init__.py) — Package exports.
 - [filesystem/](./filesystem/README.md) — Filesystem composition and content storage.
 - [key_value/](./key_value/README.md) — Key-value driver composition.
-- [persistence/](./persistence/) — Database drivers and schema readiness.
+- [persistence/](./persistence/README.md) — Database drivers, schema readiness and explicit personal-discovery preparation.
 
 # Context not available from the code
 

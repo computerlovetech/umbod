@@ -1,3 +1,5 @@
+from umbod.mcp.connectors.downstream_mcp.personal_discovery import PersonalDiscoveryOperations
+from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryStores, create_downstream_discovery_runtime
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
 from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
@@ -58,7 +60,11 @@ async def provider_for(execution: ExecutionCase, policy: ConnectorInvocationPoli
     signals = invocation_signals(metrics_recorder or InMemoryMcpMetricsRecorder(), log)
     discovery_runtime = create_downstream_discovery_runtime(DownstreamDiscoveryStores(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, descriptions=SystemConnectorCapabilityDescriptionOverrideStore()))
     await discovery_runtime.reconcile()
-    return ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=RejectingDownstreamFactory(), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope="", signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, policy), personal_runtime=execution.runtime)
+    permissions = InMemoryGroupConnectorToolPermissions(group_claim_fields=("groups",))
+    for group in execution.case.query.group_ids:
+        permissions.grant_connector(group, "personal")
+    personal_discovery = PersonalDiscoveryOperations(discovery_runtime, execution.contexts, stores.personal_tool_discovery, permissions, lambda: execution.case.query.now, UnrestrictedDownstreamToolPermissionPolicy())
+    return ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_discovery=personal_discovery, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=RejectingDownstreamFactory(), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope="", signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, policy), personal_runtime=execution.runtime)
 
 
 @pytest.mark.asyncio

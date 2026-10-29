@@ -24,7 +24,7 @@ class TransactionMode(str, Enum):
     SERIALIZED_WRITE = "serialized_write"
 
 
-class DatabaseSession(Protocol):
+class ReadSession(Protocol):
     async def find_one(
         self, table: Table[RowT, KeyT], query: Query[RowT, ResultT]
     ) -> ResultT | None: ...
@@ -33,6 +33,8 @@ class DatabaseSession(Protocol):
         self, table: Table[RowT, KeyT], query: Query[RowT, ResultT]
     ) -> Sequence[ResultT]: ...
 
+
+class DatabaseSession(ReadSession, Protocol):
     async def insert(self, table: Table[RowT, KeyT], command: InsertCommand[RowT]) -> bool: ...
 
     async def insert_generated_integer_key(
@@ -51,4 +53,6 @@ class DatabaseSchema(Protocol):
 
 
 class Database(DatabaseSchema, Protocol):
+    def read_session(self) -> AbstractAsyncContextManager[ReadSession]: ...
+
     def session(self, *, mode: TransactionMode) -> AbstractAsyncContextManager[DatabaseSession]: ...

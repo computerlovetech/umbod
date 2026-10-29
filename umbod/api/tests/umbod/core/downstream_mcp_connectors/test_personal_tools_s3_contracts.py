@@ -1,3 +1,5 @@
+from tests.umbod.core.downstream_mcp_connectors.personal_discovery_support import read_available
+
 from datetime import timedelta
 
 import asyncio
@@ -66,7 +68,7 @@ async def test_unchanged_policy_retains_revision_activation_and_grants(runtime_c
     result = await runtime_case.bundle.personal_tool_policies.replace(ReplacePersonalToolPolicy(connector_id="personal", expected_revision=policy.revision, tools=(tool,), native_identities=()))
     assert result.policy == policy
     assert result.changed_tools == result.revoked_grants == ()
-    records = await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query)
+    records = await read_available(runtime_case.bundle, runtime_case.query)
     assert len(records) == 1
     assert "owner-token" not in records[0].model_dump_json()
 
@@ -78,7 +80,7 @@ async def test_metadata_schema_change_preserves_tool_grants_activation_and_priva
     for name in ("read", "write"):
         await enable_tool(runtime_case, name)
     await save_matches(runtime_case, policy)
-    private_inventory = await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query)
+    private_inventory = await read_available(runtime_case.bundle, runtime_case.query)
     grants_query = Query(filter=NoFilter(), projection=AllFields(), ordering=Unordered())
     async with runtime_case.database.session(mode=TransactionMode.READ_WRITE) as session:
         previous_grants = await session.find_many(CAPABILITY_PERMISSION_TABLE, grants_query)
@@ -86,7 +88,7 @@ async def test_metadata_schema_change_preserves_tool_grants_activation_and_priva
     result = await runtime_case.bundle.personal_tool_policies.replace(ReplacePersonalToolPolicy(connector_id="personal", expected_revision=policy.revision, tools=(changed, second), native_identities=()))
     assert result.changed_tools == ("read",)
     assert result.revoked_grants == ()
-    assert await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query) == private_inventory
+    assert await read_available(runtime_case.bundle, runtime_case.query) == private_inventory
     async with runtime_case.database.session(mode=TransactionMode.READ_WRITE) as session:
         assert await session.find_many(CAPABILITY_PERMISSION_TABLE, grants_query) == previous_grants
     for name in ("read", "write"):
@@ -122,7 +124,7 @@ async def test_policy_fault_rolls_back_metadata_and_projection_changes(runtime_c
     with pytest.raises(RuntimeError, match="injected"):
         await store.replace(ReplacePersonalToolPolicy(connector_id="personal", expected_revision=policy.revision, tools=(), native_identities=()))
     assert await runtime_case.bundle.personal_tool_policies.get(ConnectorIdQuery(connector_id="personal")) == policy
-    assert len(await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query)) == 1
+    assert len(await read_available(runtime_case.bundle, runtime_case.query)) == 1
     catalog = await runtime_case.bundle.catalogs.get(ConnectorIdQuery(connector_id="personal"))
     assert catalog.snapshot.tools == policy.tools
 
@@ -151,7 +153,8 @@ async def assert_stale_observation_save_rejects_revocation(runtime_case: Runtime
         await install_authorization(runtime_case, authorize_personal_grant(runtime_case.grant.model_copy(update={"access_token": SecretStr("rotated")})))
     with pytest.raises(PersonalRuntimeUnavailable):
         await runtime_case.bundle.personal_tool_access.save_observation(command)
-    assert await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query) == ()
+    records = await read_available(runtime_case.bundle, runtime_case.query)
+    assert len(records) == (1 if revocation in ("unpublish", "connector_grant") else 0)
 
 
 @pytest.mark.asyncio
@@ -167,15 +170,15 @@ async def test_stale_observation_save_rejects_authorization_changes(runtime_case
 
 
 @pytest.mark.asyncio
-async def test_connector_grant_alone_authorizes_complete_private_inventory(runtime_case: RuntimeCase) -> None:
+async def test_owner_inventory_reader_defers_connector_grant_filtering_to_mcp(runtime_case: RuntimeCase) -> None:
     policy = await replace_policy(runtime_case, (approved_tool("read"),))
     await save_matches(runtime_case, policy)
-    assert len(await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query)) == 1
+    assert len(await read_available(runtime_case.bundle, runtime_case.query)) == 1
     await enable_tool(runtime_case, "read")
-    assert len(await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query)) == 1
+    assert len(await read_available(runtime_case.bundle, runtime_case.query)) == 1
     async with runtime_case.database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
         await session.delete(CONNECTOR_PERMISSION_TABLE, DeleteQuery(NoFilter()))
-    assert await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query) == ()
+    assert len(await read_available(runtime_case.bundle, runtime_case.query)) == 1
 
 
 @pytest.mark.asyncio
@@ -184,7 +187,7 @@ async def test_admission_rejects_foreign_identity_and_stale_fingerprint(runtime_
     await enable_tool(runtime_case, "read")
     await save_matches(runtime_case, policy)
     identity = CapabilityIdentity(connector_kind="downstream_mcp", connector_id="personal", capability_kind="tool", capability_key="read")
-    command = AdmitPersonalTool(query=runtime_case.query, identity=identity, inventory_revision=(await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query))[0].inventory_revision, fingerprint=contract_fingerprint(policy.tools[0]))
+    command = AdmitPersonalTool(query=runtime_case.query, identity=identity, inventory_revision=(await read_available(runtime_case.bundle, runtime_case.query))[0].inventory_revision, fingerprint=contract_fingerprint(policy.tools[0]))
     assert (await runtime_case.bundle.personal_tool_access.admit(command)).tool == policy.tools[0]
     for invalid in (command.model_copy(update={"fingerprint": "0" * 64}), command.model_copy(update={"identity": identity.model_copy(update={"capability_kind": "prompt"})}), command.model_copy(update={"identity": identity.model_copy(update={"connector_id": "foreign"})})):
         with pytest.raises(PersonalRuntimeUnavailable):
@@ -209,7 +212,7 @@ async def test_discovery_keeps_private_metadata_out_of_global_catalogue(runtime_
     catalog = await runtime_case.bundle.catalogs.get(ConnectorIdQuery(connector_id="personal"))
     assert not catalog.found
     assert "unapproved" not in result.model_dump_json()
-    assert tuple(record.tool for record in await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query)) == (private, approved_tool("unapproved"))
+    assert tuple(record.tool for record in await read_available(runtime_case.bundle, runtime_case.query)) == (private, approved_tool("unapproved"))
 
 
 @pytest.mark.asyncio
@@ -254,15 +257,15 @@ async def test_two_principals_keep_distinct_inventories_and_reject_cipher_transp
     other_query = runtime_case.query.model_copy(update={"key": other_key})
     for query, tool in ((runtime_case.query, first), (other_query, second)):
         await PersonalToolDiscoveryService(runtime_case.store, runtime_case.bundle.personal_tool_access, InventoryTransport((tool,)), lambda: runtime_case.query.now).discover(query)
-    assert tuple(record.tool.identity.downstream_name for record in await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query)) == ("read",)
-    assert tuple(record.tool for record in await runtime_case.bundle.personal_tool_access.list_available(other_query)) == (second,)
+    assert tuple(record.tool.identity.downstream_name for record in await read_available(runtime_case.bundle, runtime_case.query)) == ("read",)
+    assert tuple(record.tool for record in await read_available(runtime_case.bundle, other_query)) == (second,)
     assert not (await runtime_case.bundle.catalogs.get(ConnectorIdQuery(connector_id="personal"))).found
     async with runtime_case.database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
         rows = await session.find_many(PERSONAL_TOOL_OBSERVATION_TABLE, Query(filter=NoFilter(), projection=AllFields(), ordering=Unordered()))
         first_row = next(row for row in rows if row.subject == "owner")
         other_row = next(row for row in rows if row.subject == "other")
         await session.upsert(PERSONAL_TOOL_OBSERVATION_TABLE, UpsertCommand(key=PersonalToolObservationRecordKey(namespace=other_row.namespace, subject=other_row.subject, connector_id=other_row.connector_id), row=other_row.model_copy(update={"document": first_row.document})))
-    assert await runtime_case.bundle.personal_tool_access.list_available(other_query) == ()
+    assert await read_available(runtime_case.bundle, other_query) == ()
 
 
 @pytest.mark.asyncio
@@ -273,7 +276,7 @@ async def test_live_schema_difference_becomes_private_inventory_after_explicit_d
     changed = tool.model_copy(update={"input_schema": {}})
     result = await PersonalToolDiscoveryService(runtime_case.store, runtime_case.bundle.personal_tool_access, InventoryTransport((changed,)), lambda: runtime_case.query.now).discover(runtime_case.query)
     assert result.tool_count == 1
-    assert (await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query))[0].tool == changed
+    assert (await read_available(runtime_case.bundle, runtime_case.query))[0].tool == changed
 
 
 @pytest.mark.asyncio
@@ -301,7 +304,7 @@ async def test_noop_restores_only_missing_projection_without_reenabling_tool(run
     result = await runtime_case.bundle.personal_tool_policies.replace(ReplacePersonalToolPolicy(connector_id="personal", expected_revision=policy.revision, tools=policy.tools, native_identities=()))
     assert result.policy == policy
     assert result.changed_tools == result.revoked_grants == ()
-    assert await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query) == ()
+    assert await read_available(runtime_case.bundle, runtime_case.query) == ()
     assert (await runtime_case.bundle.catalogs.get(ConnectorIdQuery(connector_id="personal"))).snapshot.tools == policy.tools
 
 
@@ -329,7 +332,7 @@ async def test_aggregate_delete_fault_restores_policy_and_owner_observation(runt
     with pytest.raises(RuntimeError, match="injected"):
         await unit_of_work.delete(DeleteDownstreamConnectorAggregate(connector_id="personal"))
     assert await runtime_case.bundle.personal_tool_policies.get(ConnectorIdQuery(connector_id="personal")) == policy
-    assert len(await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query)) == 1
+    assert len(await read_available(runtime_case.bundle, runtime_case.query)) == 1
 
 
 @pytest.mark.asyncio
@@ -342,7 +345,7 @@ async def test_observations_survive_worker_recreation(runtime_case: RuntimeCase,
     path = tmp_path / "runtime.sqlite3"
     database = (await prepared_sqlite_runtime(path)).database if path.exists() else runtime_case.database
     recreated = await create_downstream_mcp_stores("runtime-secret", database)
-    assert len(await recreated.personal_tool_access.list_available(runtime_case.query)) == 1
+    assert len(await read_available(recreated, runtime_case.query)) == 1
 
 
 @pytest.mark.asyncio
@@ -412,4 +415,4 @@ async def test_detached_inmemory_unit_of_work_snapshots_personal_tool_stores(run
     with pytest.raises(RuntimeError, match="injected"):
         await unit_of_work.delete(DeleteDownstreamConnectorAggregate(connector_id="personal"))
     assert await bundle.personal_tool_policies.get(ConnectorIdQuery(connector_id="personal")) == policy
-    assert len(await bundle.personal_tool_access.list_available(runtime_case.query)) == 1
+    assert len(await read_available(bundle, runtime_case.query)) == 1

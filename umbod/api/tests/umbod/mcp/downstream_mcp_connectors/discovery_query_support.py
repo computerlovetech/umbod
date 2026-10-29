@@ -1,3 +1,4 @@
+from tests.umbod.mcp.downstream_mcp_connectors.discovery_operation_support import empty_personal_discovery
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryRuntime, DownstreamDiscoveryStores, create_downstream_discovery_runtime
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -55,7 +56,7 @@ async def discovery_query_case(tool_count: int) -> DiscoveryQueryCase:
     signals = invocation_signals(InMemoryMcpMetricsRecorder())
     discovery_runtime = create_downstream_discovery_runtime(DownstreamDiscoveryStores(definitions=counted_definitions, credentials=counted_credentials, catalogs=counted_catalogs, publishing=counted_publishing, activations=activations, descriptions=SystemConnectorCapabilityDescriptionOverrideStore()))
     await discovery_runtime.reconcile()
-    provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, definitions=counted_definitions, credentials=counted_credentials, catalogs=counted_catalogs, publishing=counted_publishing, activations=activations, client_factory=clients, permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope="", signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()), personal_runtime=DisabledPersonalToolRuntime())
+    provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_discovery=empty_personal_discovery(discovery_runtime), definitions=counted_definitions, credentials=counted_credentials, catalogs=counted_catalogs, publishing=counted_publishing, activations=activations, client_factory=clients, permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope="", signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()), personal_runtime=DisabledPersonalToolRuntime())
     for store in (counted_definitions, counted_catalogs, counted_credentials, counted_publishing):
         store.reset_mock()
     return DiscoveryQueryCase(provider, counted_definitions, counted_catalogs, counted_credentials, counted_publishing, clients, discovery_runtime)

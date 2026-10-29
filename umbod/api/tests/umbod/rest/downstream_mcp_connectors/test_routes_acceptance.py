@@ -26,7 +26,7 @@ def _probe(results: Sequence[DownstreamConnectorValidationResult], canonical_end
     return ScriptedDownstreamMcpProbe(tuple((ProbeFailed(code=result.code) if isinstance(result, DownstreamConnectorValidationFailed) else ProbeCapabilities(capabilities=DiscoveredCapabilities(tools=()), endpoint_url=canonical_endpoint_url) for result in results)))
 
 def _client(path: Path, admin: bool=True, validation_results: Sequence[DownstreamConnectorValidationResult]=(DownstreamConnectorValidationSucceeded(),) * 20, canonical_endpoint_url: str='https://example.test/mcp') -> TestClient:
-    settings = APISettings(connector_store={'type': 'sqlite', 'sqlite_path': str(path)}, admin_authentication={'mode': 'simulation', 'simulated_admin': admin})
+    settings = APISettings(connector_store={'type': 'sqlite', 'sqlite_path': str(path)}, admin_authentication={'mode': 'simulation', 'simulated_admin': admin}, rest={'metrics_enabled': False})
     app = create_app(settings=settings, connector_registrations=[])
     probe = _probe(validation_results, canonical_endpoint_url)
 

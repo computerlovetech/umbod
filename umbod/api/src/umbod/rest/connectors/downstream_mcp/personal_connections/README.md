@@ -16,7 +16,7 @@ description: "Owner-scoped downstream MCP selection, authorization and discovery
 - [refresh_dependencies.py](./refresh_dependencies.py) — Refresh service composition.
 - [refresh_routes.py](./refresh_routes.py) — Owner authorization refresh.
 - [routes.py](./routes.py) — Catalogue, enablement and disconnect.
-- [runtime.py](./runtime.py) — Owner-private runtime composition.
+- [discovery.py](./discovery.py) — Credential-free availability snapshots for already-authorized owner selections.
 - [schemas.py](./schemas.py) — Secret-free user projections.
 - [tools.py](./tools.py) — Owner-private tool discovery.
 

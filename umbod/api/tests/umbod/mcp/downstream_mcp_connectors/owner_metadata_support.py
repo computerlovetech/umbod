@@ -8,6 +8,7 @@ from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
 from umbod.mcp.logging import create_default_mcp_audit_recorder
 
 from fastmcp import FastMCP
+from fastmcp.server.middleware import AuthMiddleware
 from pydantic import SecretStr
 
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, install_authorization
@@ -21,7 +22,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.authorization_mod
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolInventory
 from umbod.core.connectors.downstream_mcp.personal_tools.service import PersonalToolDiscoveryService
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
-from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalCallerProvider, McpPersonalToolRuntime, PersonalToolReservationMiddleware
+from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalCallerProvider, McpPersonalToolRuntime, PersonalDiscoveryMiddleware, PersonalToolReservationMiddleware, personal_tool_permission_check
 from umbod.mcp.connectors.native.tools import RuntimeConnectorToolRegistry, register_connector_tools
 from umbod.mcp.logging import create_default_mcp_tool_invocation_log_sink
 
@@ -47,9 +48,10 @@ async def metadata_server(case: RuntimeCase, exposure: str) -> FastMCP:
     await _discover(execution, await _install_bob(case), "integer")
     settings = _settings(namespace="trusted")
     settings = settings.model_copy(update={"mcp": settings.mcp.model_copy(update={"permission_group_claim": "groups"})})
-    runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), case.bundle.definitions, case.bundle.personal_tool_access, execution.transport, lambda: case.query.now)
-    provider = await provider_for(replace(execution, runtime=runtime), PermitAllConnectorInvocationPolicy(), InvocationLog())
-    public = FastMCP("owner-metadata", middleware=[PersonalToolReservationMiddleware(provider)])
+    runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), case.bundle.personal_tool_access, execution.transport, lambda: case.query.now)
+    provider = await provider_for(replace(execution, runtime=runtime, contexts=McpPersonalCallerProvider(settings)), PermitAllConnectorInvocationPolicy(), InvocationLog())
+    public = FastMCP("owner-metadata", middleware=[PersonalDiscoveryMiddleware(provider), AuthMiddleware(auth=personal_tool_permission_check(lambda context: True)), PersonalToolReservationMiddleware(provider)])
+    public.downstream_mcp_tool_provider = provider
     if exposure == "flat":
         public.add_provider(provider)
         return public

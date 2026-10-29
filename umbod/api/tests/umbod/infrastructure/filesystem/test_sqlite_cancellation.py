@@ -12,6 +12,7 @@ from umbod.core.filesystem import NamespaceDriver, Node, NodeKind, NodeMetadata
 from umbod.core.persistence import (
     Database,
     DatabaseSession,
+    ReadSession,
     PersistenceRuntime,
     Table,
     TransactionMode,
@@ -78,6 +79,11 @@ class PausingCommitDatabase:
 
     async def ensure_schema(self, tables: Sequence[Table[BaseModel, BaseModel]]) -> None:
         await self._database.ensure_schema(tables)
+
+    @asynccontextmanager
+    async def read_session(self) -> AsyncIterator[ReadSession]:
+        async with self._database.read_session() as session:
+            yield session
 
     @asynccontextmanager
     async def session(self, *, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:

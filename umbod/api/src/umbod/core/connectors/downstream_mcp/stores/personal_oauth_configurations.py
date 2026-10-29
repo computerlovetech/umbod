@@ -1,4 +1,6 @@
 import json
+
+from .personal_discovery_schema import PERSONAL_DISCOVERY_TABLE, PERSONAL_DISCOVERY_CONNECTOR_ID
 from uuid import uuid4
 
 from pydantic import SecretStr
@@ -84,11 +86,13 @@ async def install_personal_oauth_configuration(
     return configuration
 
 
-async def _invalidate_connections(session: DatabaseSession, cipher: TextCipher, connector_id: str) -> None:
+async def _invalidate_connections(session: DatabaseSession, cipher: TextCipher, connector_id: str, rotate_unauthorized: bool) -> int:
+    await session.delete(PERSONAL_DISCOVERY_TABLE, DeleteQuery(Equals(PERSONAL_DISCOVERY_CONNECTOR_ID, connector_id)))
     rows = await session.find_many(
         PERSONAL_CONNECTION_TABLE,
         Query(filter=Equals(PERSONAL_CONNECTION_CONNECTOR_ID, connector_id), projection=AllFields(), ordering=Unordered()),
     )
+    invalidated = 0
     for row in rows:
         try:
             current = PersonalConnection.model_validate_json(cipher.decrypt(row.document))
@@ -96,6 +100,9 @@ async def _invalidate_connections(session: DatabaseSession, cipher: TextCipher, 
                 raise ValueError("Invalid binding")
         except Exception:
             raise PersonalOAuthConfigurationUnavailable("Personal OAuth configuration unavailable") from None
+        if isinstance(current.authorization, Unauthorized) and not rotate_unauthorized:
+            continue
+        invalidated += 1
         replacement = PersonalConnection(key=current.key, enabled=current.enabled, authorization=Unauthorized(), revision=uuid4().hex)
         await session.upsert(
             PERSONAL_CONNECTION_TABLE,
@@ -104,6 +111,7 @@ async def _invalidate_connections(session: DatabaseSession, cipher: TextCipher, 
                 row=PersonalConnectionRecord(namespace=row.namespace, subject=row.subject, connector_id=connector_id, document=cipher.encrypt(replacement.model_dump_json())),
             ),
         )
+    return invalidated
 
 
 class EncryptedPersonalOAuthConfigurationStore:
@@ -117,7 +125,8 @@ class EncryptedPersonalOAuthConfigurationStore:
                 PERSONAL_OAUTH_CONFIGURATION_TABLE,
                 DeleteQuery(Equals(PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID, connector_id)),
             )
-            if removed:
+            invalidated = await _invalidate_connections(session, self._cipher, connector_id, rotate_unauthorized=bool(removed))
+            if removed or invalidated:
                 await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", connector_id))
 
     async def get(self, query: PersonalOAuthConfigurationQuery) -> PersonalOAuthConfiguration:
@@ -134,7 +143,7 @@ class EncryptedPersonalOAuthConfigurationStore:
             ):
                 return current
             await session.delete(PERSONAL_OAUTH_ATTEMPT_TABLE, DeleteQuery(Equals(PERSONAL_OAUTH_ATTEMPT_CONNECTOR_ID, command.connector_id)))
-            await _invalidate_connections(session, self._cipher, command.connector_id)
+            await _invalidate_connections(session, self._cipher, command.connector_id, rotate_unauthorized=True)
             configuration = await install_personal_oauth_configuration(session, self._cipher, command.connector_id, command.settings)
             await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", command.connector_id))
             return configuration

@@ -12,6 +12,9 @@ from starlette.middleware import Middleware
 from starlette.routing import BaseRoute
 from umbod.core.connectors.native.registry import ConnectorRegistration
 from umbod.core.persistence import PersistenceRuntime
+from umbod.core.configuration.persistence import AuthenticatedTextCipher
+from umbod.core.connectors.downstream_mcp.adapters.settings import downstream_mcp_infrastructure_settings_from_app_config
+from umbod.infrastructure import PersonalDiscoveryPreparation
 from umbod.rest.authentication import (
     AdminAuthenticationDebugMiddleware,
     AdminAuthenticationMiddleware,
@@ -298,6 +301,9 @@ def _create_configured_lifespan(
         )
         try:
             await persistence_runtime.readiness.ensure_ready()
+            if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled:
+                downstream_settings = downstream_mcp_infrastructure_settings_from_app_config(settings)
+                await PersonalDiscoveryPreparation(persistence_runtime.database, AuthenticatedTextCipher(downstream_settings.credential_secret)).prepare()
             try:
                 if metrics_enabled:
                     await metrics_server.start()

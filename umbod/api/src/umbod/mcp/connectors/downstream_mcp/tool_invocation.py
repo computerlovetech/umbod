@@ -1,3 +1,4 @@
+from umbod.mcp.connectors.downstream_mcp.personal_discovery import PersonalDiscoveryOperations
 from functools import partial
 from collections.abc import Awaitable, Callable
 
@@ -163,9 +164,11 @@ def _safe_downstream_failure() -> ToolResult:
 
 
 class AuthorizedPersonalTool(AuthorizedDownstreamTool):
-    def __init__(self, *, identity: McpToolIdentity, record: PersonalToolRecord, runtime: PersonalToolRuntime, public_name: str, execution_pipeline: ToolExecutionPipeline[ToolResult], options: dict[str, Any]) -> None:
+    def __init__(self, *, identity: McpToolIdentity, record: PersonalToolRecord, runtime: PersonalToolRuntime, discovery: PersonalDiscoveryOperations, scope: str, public_name: str, execution_pipeline: ToolExecutionPipeline[ToolResult], options: dict[str, Any]) -> None:
         super().__init__(identity=identity, options=options, public_name=public_name, execution_pipeline=execution_pipeline)
         self._runtime = runtime
+        self._discovery = discovery
+        self._scope = scope
         self._command = InvokePersonalTool(identity=CapabilityIdentity(connector_kind="downstream_mcp", connector_id=record.definition.connector_id, capability_kind="tool", capability_key=record.tool.identity.downstream_name), inventory_revision=record.inventory_revision, fingerprint=record.fingerprint, arguments={})
 
     def _validate_arguments(self, arguments: dict[str, Any]) -> None:
@@ -181,8 +184,11 @@ class AuthorizedPersonalTool(AuthorizedDownstreamTool):
             invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="runtime", reason="runtime_failure"))
         raise RuntimeError("Personal tool unavailable")
 
+    def same_discovery_identity(self, other: "AuthorizedPersonalTool") -> bool:
+        return self._command == other._command
+
     async def is_authorized(self) -> bool:
-        return any(record.definition.connector_id == self._command.identity.connector_id and record.tool.identity.downstream_name == self._command.identity.capability_key and record.inventory_revision == self._command.inventory_revision and record.fingerprint == self._command.fingerprint for record in await self._runtime.list_tools())
+        return await self._discovery.is_authorized(self._command, self._scope)
 
     async def _invoke_downstream(self, arguments: dict[str, Any]) -> ToolResult:
         try:

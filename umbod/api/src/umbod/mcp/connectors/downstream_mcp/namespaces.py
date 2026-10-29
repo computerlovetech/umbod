@@ -1,5 +1,6 @@
 from collections.abc import Sequence
 from typing import Protocol
+from contextlib import AbstractAsyncContextManager
 
 from fastmcp.exceptions import ToolError
 
@@ -12,6 +13,8 @@ class PersonalToolNameMatcher(Protocol):
 
 
 class PersonalToolNamespace(Protocol):
+    def discovery_operation(self) -> AbstractAsyncContextManager[object]: ...
+
     async def capture_personal_tool_namespace(self) -> PersonalToolNameMatcher: ...
 
     async def is_personal_tool_name(self, name: str) -> bool: ...

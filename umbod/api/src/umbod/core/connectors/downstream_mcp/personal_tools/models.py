@@ -6,10 +6,16 @@ from pydantic import AwareDatetime, Field, model_validator
 from umbod.core.capabilities.domain import CapabilityIdentity
 from umbod.core.capabilities.tools.names import PublicToolIdentity
 
-from ..models import ConnectorDefinition, DiscoveredTool, DomainModel, ValidatedJsonObject
-from ..personal_connections.models import PersonalConnectionKey
+from ..models import ConnectorDefinition, ConnectorDefinitionModel, DiscoveredTool, DomainModel, ValidatedJsonObject
+from ..personal_connections.models import CanonicalPrincipal, PersonalConnectionKey
 from ..personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalRuntimeTarget
 from .contract_validation import PersonalToolPolicyInvalid, validate_contract_schema
+
+
+class PersonalToolDiscoveryQuery(DomainModel):
+    principal: CanonicalPrincipal
+    definitions: tuple[ConnectorDefinitionModel, ...]
+    now: AwareDatetime
 
 
 class InvokePersonalTool(DomainModel):

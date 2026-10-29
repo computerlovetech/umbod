@@ -1,3 +1,4 @@
+from tests.umbod.mcp.downstream_mcp_connectors.discovery_operation_support import empty_personal_discovery
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryStores, create_downstream_discovery_runtime
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
 from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
@@ -151,7 +152,7 @@ async def create_ownership(invocation_policy: ConnectorInvocationPolicy) -> Owne
     signals = invocation_signals(InMemoryMcpMetricsRecorder())
     discovery_runtime = create_downstream_discovery_runtime(DownstreamDiscoveryStores(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, descriptions=SystemConnectorCapabilityDescriptionOverrideStore()))
     await discovery_runtime.reconcile()
-    provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_runtime=DisabledPersonalToolRuntime(),
+    provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_discovery=empty_personal_discovery(discovery_runtime), personal_runtime=DisabledPersonalToolRuntime(),
         definitions=stores.definitions, credentials=stores.credentials,
         catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations,
         client_factory=factory, permission_policy=permissions,

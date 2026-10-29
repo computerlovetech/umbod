@@ -6,7 +6,7 @@ from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizat
 from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable, RejectPersonalAuthorization
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalRuntimeAuthorizationQuery, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolInventory, PersonalToolResult
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
-from umbod.core.connectors.downstream_mcp.personal_tools import AdmitPersonalTool, PersonalInventoryRevision, PersonalToolAccessStore, PersonalToolAdmission, PersonalToolRecord, PersonalToolRuntimeService, SavePersonalToolObservation
+from umbod.core.connectors.downstream_mcp.personal_tools import AdmitPersonalTool, PersonalInventoryRevision, PersonalToolAccessStore, PersonalToolAdmission, PersonalToolRuntimeService, SavePersonalToolObservation
 
 from .runtime_support import execution_case, runtime_for_caller
 from umbod.core.connectors.downstream_mcp.personal_connections import UnavailablePersonalCaller
@@ -43,9 +43,6 @@ class FaultingPersonalToolAccessStore:
 
     async def reject_authorization(self, command: RejectPersonalAuthorization) -> None:
         await self._reject_authorization(command)
-
-    async def list_available(self, query: PersonalRuntimeAuthorizationQuery) -> tuple[PersonalToolRecord, ...]:
-        return await self._delegate.list_available(query)
 
     async def save_observation(self, command: SavePersonalToolObservation) -> None:
         await self._delegate.save_observation(command)
@@ -98,7 +95,6 @@ async def test_rejection_health_persistence_failure_keeps_its_distinct_exception
 
     runtime = PersonalToolRuntimeService(
         execution.caller,
-        runtime_case.bundle.definitions,
         FaultingPersonalToolAccessStore(runtime_case.bundle.personal_tool_access, unavailable),
         FaultingPersonalMcpTransport(execution.transport, rejected),
         lambda: runtime_case.query.now,
@@ -131,7 +127,6 @@ async def test_runtime_preserves_original_safe_exception_evidence(runtime_case: 
 
     runtime = PersonalToolRuntimeService(
         execution.caller,
-        runtime_case.bundle.definitions,
         runtime_case.bundle.personal_tool_access,
         FaultingPersonalMcpTransport(execution.transport, fail),
         lambda: runtime_case.query.now,

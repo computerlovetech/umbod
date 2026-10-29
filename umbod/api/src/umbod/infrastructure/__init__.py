@@ -1,4 +1,5 @@
 from umbod.infrastructure.key_value import create_inmemory_key_value_driver, create_request_cache
+from umbod.infrastructure.persistence.personal_discovery import PersonalDiscoveryPreparation
 from umbod.infrastructure.persistence.runtime import (
     AppPersistenceRuntime,
     ConfiguredPersistenceRuntimeProvider,
@@ -24,6 +25,7 @@ __all__ = [
     "create_request_cache",
     "AppPersistenceRuntime",
     "ConfiguredPersistenceRuntimeProvider",
+    "PersonalDiscoveryPreparation",
     "ContentConfig",
     "InMemoryContentConfig",
     "LocalContentConfig",

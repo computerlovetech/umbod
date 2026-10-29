@@ -8,11 +8,11 @@ description: "Application-owned downstream discovery snapshots and explicit reco
 
 - [__init__.py](./__init__.py) — Package exports.
 - [catalog.py](./catalog.py) — In-memory discovery projection.
-- [definitions.py](./definitions.py) — Personal namespace definition projection.
+- [Personal discovery](../personal_discovery.py) — Owner-specific operation snapshots composed with the shared runtime.
 - [loader.py](./loader.py) — Background snapshot loading.
 - [models.py](./models.py) — Discovery snapshots and errors.
 - [ports.py](./ports.py) — Loader and runtime contracts.
 
-# Context not available from the code
+# Architecture
 
 - [ADR-008](../../../../../../../project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Required event-synchronized discovery architecture; projections are not invocation authority and cross-worker updates are not instantaneous.

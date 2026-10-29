@@ -1,3 +1,5 @@
+from .personal_discovery_projection import update_personal_discovery
+
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationUnavailable
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import load_personal_oauth_configuration
 
@@ -5,7 +7,7 @@ from uuid import uuid4
 
 from .personal_refresh_records import clear_refresh, matching_refresh
 
-from .personal_authorization_rejections import clear_rejection
+from .personal_authorization_rejection_records import clear_rejection
 
 import hashlib
 import hmac
@@ -522,6 +524,7 @@ class EncryptedPersonalOAuthAttemptStore:
             await clear_refresh(session, attempt.key)
             terminal = _terminal(attempt, "completed")
             await self._save(session, terminal)
+            await update_personal_discovery(session, self._cipher, attempt.key)
             await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", attempt.key.connector_id))
             return _view(terminal)
 

@@ -3,12 +3,13 @@ from typing import Protocol
 from umbod.core.connectors.downstream_mcp.personal_connections.health_models import RejectPersonalAuthorization
 
 from ..personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalToolResult
-from ..stores.ports import ConnectorDefinitionList, ConnectorIdQuery
+from ..stores.ports import ConnectorIdQuery
 from .models import (
     AdmitPersonalTool,
     InvokePersonalTool,
     PersonalInventoryRevision,
     PersonalToolAdmission,
+    PersonalToolDiscoveryQuery,
     PersonalToolPolicy,
     PersonalToolPolicyReplacement,
     PersonalToolRecord,
@@ -18,13 +19,11 @@ from .models import (
 )
 
 
-class PersonalToolDefinitionReader(Protocol):
-    async def list(self) -> ConnectorDefinitionList: ...
+class PersonalToolDiscoveryReader(Protocol):
+    async def read(self, query: PersonalToolDiscoveryQuery) -> tuple[PersonalToolRecord, ...]: ...
 
 
 class PersonalToolRuntime(Protocol):
-    async def list_tools(self) -> tuple[PersonalToolRecord, ...]: ...
-
     async def execute(self, command: InvokePersonalTool) -> PersonalToolResult: ...
 
 
@@ -40,8 +39,6 @@ class PersonalToolAccessStore(Protocol):
     async def read_inventory_revision(self, query: PersonalRuntimeAuthorizationQuery) -> PersonalInventoryRevision: ...
 
     async def reject_authorization(self, command: RejectPersonalAuthorization) -> None: ...
-
-    async def list_available(self, query: PersonalRuntimeAuthorizationQuery) -> tuple[PersonalToolRecord, ...]: ...
 
     async def save_observation(self, command: SavePersonalToolObservation) -> None: ...
 

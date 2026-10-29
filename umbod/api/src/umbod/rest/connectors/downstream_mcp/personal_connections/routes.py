@@ -9,8 +9,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections import (
     SetPersonalConnectorEnablement,
 )
 
-from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolRuntime
-from .runtime import get_personal_tool_runtime
+from .discovery import PersonalConnectorDiscovery, get_personal_connector_discovery
 from .dependencies import get_personal_connector_inventory
 from .schemas import (
     PersonalConnectorListResponse,
@@ -22,7 +21,7 @@ from .schemas import (
 
 router = APIRouter(prefix="/connectors/mcp", tags=["personal-mcp-connections"])
 Inventory = Annotated[PersonalConnectorInventory, Depends(get_personal_connector_inventory)]
-Runtime = Annotated[PersonalToolRuntime, Depends(get_personal_tool_runtime)]
+Discovery = Annotated[PersonalConnectorDiscovery, Depends(get_personal_connector_discovery)]
 
 
 def unavailable_connector() -> HTTPException:
@@ -30,26 +29,26 @@ def unavailable_connector() -> HTTPException:
 
 
 @router.get("", response_model=PersonalConnectorListResponse)
-async def list_personal_connectors(inventory: Inventory, runtime: Runtime) -> PersonalConnectorListResponse:
+async def list_personal_connectors(inventory: Inventory, discovery: Discovery) -> PersonalConnectorListResponse:
     selections = await inventory.list()
-    available = frozenset(record.definition.connector_id for record in await runtime.list_tools())
+    available = await discovery.available(tuple(selection.connector_id for selection in selections.connectors))
     return PersonalConnectorListResponse(connectors=tuple(
         present_personal_connector(selection, available) for selection in selections.connectors
     ))
 
 
 @router.get("/{connector_id}", response_model=PersonalConnectorResponse)
-async def get_personal_connector(connector_id: str, inventory: Inventory, runtime: Runtime) -> PersonalConnectorResponse:
+async def get_personal_connector(connector_id: str, inventory: Inventory, discovery: Discovery) -> PersonalConnectorResponse:
     try:
         selection = await inventory.get(PersonalConnectorQuery(connector_id=connector_id))
     except PersonalConnectorUnavailable:
         raise unavailable_connector() from None
-    return present_personal_connector(selection, frozenset(record.definition.connector_id for record in await runtime.list_tools()))
+    return present_personal_connector(selection, await discovery.available((selection.connector_id,)))
 
 
 @router.put("/{connector_id}/enablement", response_model=PersonalConnectorResponse)
 async def set_personal_connector_enablement(
-    connector_id: str, body: PersonalEnablementRequest, inventory: Inventory, runtime: Runtime,
+    connector_id: str, body: PersonalEnablementRequest, inventory: Inventory, discovery: Discovery,
 ) -> PersonalConnectorResponse:
     try:
         selection = await inventory.set_enabled(SetPersonalConnectorEnablement(
@@ -57,7 +56,7 @@ async def set_personal_connector_enablement(
         ))
     except PersonalConnectorUnavailable:
         raise unavailable_connector() from None
-    return present_personal_connector(selection, frozenset(record.definition.connector_id for record in await runtime.list_tools()))
+    return present_personal_connector(selection, await discovery.available((selection.connector_id,)))
 
 
 @router.delete("/{connector_id}/authorization", status_code=status.HTTP_204_NO_CONTENT)

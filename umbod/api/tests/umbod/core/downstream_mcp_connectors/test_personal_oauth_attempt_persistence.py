@@ -76,6 +76,7 @@ from umbod.core.persistence import (
     AllFields,
     Database,
     DatabaseSession,
+    ReadSession,
     Table,
     DeleteQuery,
     Equals,
@@ -634,6 +635,11 @@ class LockObservedDatabase:
         self, tables: Sequence[Table[BaseModel, BaseModel]]
     ) -> None:
         await self._database.ensure_schema(tables)
+
+    @asynccontextmanager
+    async def read_session(self) -> AsyncIterator[ReadSession]:
+        async with self._database.read_session() as session:
+            yield session
 
     @asynccontextmanager
     async def session(self, *, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:

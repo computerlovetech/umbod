@@ -1,3 +1,4 @@
+from tests.umbod.mcp.downstream_mcp_connectors.discovery_operation_support import personal_discovery_with_policy
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryStores, create_downstream_discovery_runtime
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import McpSignals, SignalToolExecutionPipelineFactory
@@ -109,7 +110,7 @@ async def _provider_with_dependencies(
     signals = options.signals or invocation_signals(metrics_recorder)
     discovery_runtime = create_downstream_discovery_runtime(DownstreamDiscoveryStores(definitions=definitions, credentials=credentials, catalogs=catalogs, publishing=publishing, activations=activations, descriptions=SystemConnectorCapabilityDescriptionOverrideStore()))
     await discovery_runtime.reconcile()
-    return (ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_runtime=personal_runtime, definitions=definitions, credentials=credentials, catalogs=catalogs, publishing=publishing, activations=activations, client_factory=factory, permission_policy=permission_policy, connector_scope='', signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, invocation_policy)), factory, publishing, activations, catalogs)
+    return (ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_discovery=personal_discovery_with_policy(discovery_runtime, permission_policy), personal_runtime=personal_runtime, definitions=definitions, credentials=credentials, catalogs=catalogs, publishing=publishing, activations=activations, client_factory=factory, permission_policy=permission_policy, connector_scope='', signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, invocation_policy)), factory, publishing, activations, catalogs)
 
 def _downstream(calls: list[str] | None=None, *, is_error: bool=False) -> FastMCP:
     server = FastMCP('downstream')
@@ -528,7 +529,6 @@ async def test_shared_inventory_seeds_shared_routes_without_traffic_or_private_l
     metrics = InMemoryMcpMetricsRecorder()
     recorder = Mock(spec=McpMetricsRecorder, wraps=metrics)
     personal = Mock(spec=PersonalToolRuntime)
-    personal.list_tools.side_effect = AssertionError('Private inventory must not be enumerated')
     provider, factory, _, _, _ = await _provider({'weather': _downstream()}, metrics_recorder=recorder, personal_runtime=personal)
     await provider.native_capability_projection()
     await provider.native_capability_projection()
@@ -537,7 +537,7 @@ async def test_shared_inventory_seeds_shared_routes_without_traffic_or_private_l
     assert {sample.labels['connector_name'] for sample in samples} == {'weather'}
     assert all(sample.value == 0 for sample in samples)
     assert factory.created == []
-    personal.list_tools.assert_not_called()
+    personal.execute.assert_not_called()
     recorder.record_completed_invocation.assert_not_called()
 
 @pytest.mark.asyncio
@@ -578,7 +578,6 @@ async def test_materialized_shared_tool_initializes_current_public_identity(conn
 async def test_shared_inventory_skips_persisted_personal_oauth_catalog() -> None:
     metrics = InMemoryMcpMetricsRecorder()
     personal = Mock(spec=PersonalToolRuntime)
-    personal.list_tools.side_effect = AssertionError('Private inventory must not be enumerated')
     database = create_inmemory_runtime().database
     definitions = ConnectorDefinitionStoreService(database, CONNECTOR_DEFINITION_TABLE)
     provider, factory, _, _, _ = await _provider_with_dependencies(
@@ -593,4 +592,4 @@ async def test_shared_inventory_skips_persisted_personal_oauth_catalog() -> None
     await provider.native_capability_projection()
     assert metrics.metric_samples() == ()
     assert factory.created == []
-    personal.list_tools.assert_not_called()
+    personal.execute.assert_not_called()

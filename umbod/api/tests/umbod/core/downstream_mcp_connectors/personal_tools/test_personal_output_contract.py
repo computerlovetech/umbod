@@ -1,3 +1,5 @@
+from tests.umbod.core.downstream_mcp_connectors.personal_discovery_support import read_available
+
 import pytest
 from pydantic import ValidationError
 
@@ -24,7 +26,7 @@ async def test_approved_output_schema_requires_valid_structured_content(runtime_
     await save_matches(runtime_case, policy)
     execution.transport.inventories[runtime_case.query.key] = PersonalToolInventory(tools=(tool,))
     execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result=payload)
-    command = execution.command.model_copy(update={"inventory_revision": (await execution.runtime.list_tools())[0].inventory_revision, "fingerprint": contract_fingerprint(tool)})
+    command = execution.command.model_copy(update={"inventory_revision": (await read_available(runtime_case.bundle, runtime_case.query))[0].inventory_revision, "fingerprint": contract_fingerprint(tool)})
     with pytest.raises(PersonalRuntimeUnavailable, match="^Personal tool unavailable$"):
         await execution.runtime.execute(command)
     assert len(execution.transport.calls) == 1
@@ -54,7 +56,7 @@ async def test_approved_local_output_references_validate_offline(runtime_case: R
     await save_matches(runtime_case, policy)
     execution.transport.inventories[runtime_case.query.key] = PersonalToolInventory(tools=(tool,))
     execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result={"content": [], "structuredContent": {"value": "valid"}})
-    command = execution.command.model_copy(update={"inventory_revision": (await execution.runtime.list_tools())[0].inventory_revision, "fingerprint": contract_fingerprint(tool)})
+    command = execution.command.model_copy(update={"inventory_revision": (await read_available(runtime_case.bundle, runtime_case.query))[0].inventory_revision, "fingerprint": contract_fingerprint(tool)})
     assert (await execution.runtime.execute(command)).result["structuredContent"] == {"value": "valid"}
 
 
@@ -75,7 +77,7 @@ class DisconnectingTransport:
 @pytest.mark.asyncio
 async def test_operation_admitted_before_invalidation_can_finish_but_next_call_cannot(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
-    runtime = PersonalToolRuntimeService(execution.caller, runtime_case.bundle.definitions, runtime_case.bundle.personal_tool_access, DisconnectingTransport(execution.transport, runtime_case.bundle.personal_connections), lambda: runtime_case.query.now)
+    runtime = PersonalToolRuntimeService(execution.caller, runtime_case.bundle.personal_tool_access, DisconnectingTransport(execution.transport, runtime_case.bundle.personal_connections), lambda: runtime_case.query.now)
     assert (await runtime.execute(execution.command)).result["structuredContent"] == {"owner": "owner"}
     with pytest.raises(PersonalRuntimeUnavailable):
         await runtime.execute(execution.command)

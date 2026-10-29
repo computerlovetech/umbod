@@ -1,3 +1,5 @@
+from tests.umbod.core.downstream_mcp_connectors.personal_discovery_support import read_available
+
 from tests.umbod.core.downstream_mcp_connectors.personal_caller_support import captured_personal_caller
 from datetime import timedelta
 
@@ -22,7 +24,7 @@ __all__ = ["runtime_case"]
 @pytest.mark.asyncio
 async def test_execution_uses_current_owner_without_list_or_result_cache(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
-    assert len(await execution.runtime.list_tools()) == 1
+    assert len(await read_available(runtime_case.bundle, runtime_case.query)) == 1
     assert execution.transport.list_requests == []
     first = await execution.runtime.execute(execution.command)
     execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result={"content": [], "structuredContent": {"owner": "fresh"}})
@@ -47,7 +49,7 @@ async def test_same_connector_and_arguments_use_two_owners_tokens_and_data(runti
     execution.transport.inventories[key] = execution.transport.inventories[runtime_case.query.key]
     execution.transport.results[(key, "read")] = PersonalToolResult(result={"content": [], "structuredContent": {"owner": "second"}})
     second_runtime = runtime_for_caller(execution, captured_personal_caller(key.principal, ("team",)))
-    second = await second_runtime.execute(execution.command.model_copy(update={"inventory_revision": (await second_runtime.list_tools())[0].inventory_revision}))
+    second = await second_runtime.execute(execution.command.model_copy(update={"inventory_revision": (await read_available(runtime_case.bundle, query))[0].inventory_revision}))
     assert first.result["structuredContent"] == {"owner": "owner"}
     assert second.result["structuredContent"] == {"owner": "second"}
     assert [call.target.access_token.get_secret_value() for call in execution.transport.calls] == ["owner-token", "second-token"]
@@ -59,7 +61,7 @@ async def test_missing_context_and_disabled_runtime_never_fall_back(runtime_case
     execution = await execution_case(runtime_case)
     unavailable_runtime = runtime_for_caller(execution, UnavailablePersonalCaller(kind="unavailable"))
     for runtime in (unavailable_runtime, DisabledPersonalToolRuntime()):
-        assert await runtime.list_tools() == ()
+
         with pytest.raises(PersonalRuntimeUnavailable, match="^Personal tool unavailable$"):
             await runtime.execute(execution.command)
     assert execution.transport.calls == []
@@ -139,7 +141,7 @@ async def test_explicit_rediscovery_invalidates_held_handle_without_per_tool_adm
     with pytest.raises(PersonalRuntimeUnavailable):
         await execution.runtime.execute(execution.command)
     assert execution.transport.calls == []
-    current = (await execution.runtime.list_tools())[0]
+    current = (await read_available(runtime_case.bundle, runtime_case.query))[0]
     command = execution.command.model_copy(update={"inventory_revision": current.inventory_revision})
     assert (await execution.runtime.execute(command)).result["structuredContent"] == {"owner": "owner"}
     assert len(execution.transport.calls) == 1
@@ -149,8 +151,8 @@ async def test_explicit_rediscovery_invalidates_held_handle_without_per_tool_adm
 async def test_recreated_worker_uses_persisted_authority(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
     stores = await create_downstream_mcp_stores("runtime-secret", runtime_case.database)
-    runtime = PersonalToolRuntimeService(execution.caller, stores.definitions, stores.personal_tool_access, execution.transport, lambda: runtime_case.query.now)
-    assert len(await runtime.list_tools()) == 1
+    runtime = PersonalToolRuntimeService(execution.caller, stores.personal_tool_access, execution.transport, lambda: runtime_case.query.now)
+    assert len(await read_available(runtime_case.bundle, runtime_case.query)) == 1
     assert (await runtime.execute(execution.command)).result["structuredContent"] == {"owner": "owner"}
 
 

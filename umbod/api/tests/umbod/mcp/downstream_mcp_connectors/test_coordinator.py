@@ -1,3 +1,4 @@
+from tests.umbod.mcp.downstream_mcp_connectors.discovery_operation_support import empty_personal_discovery
 from umbod.core.messaging.stores.event_stream import DatabaseEventStream
 from umbod.core.capabilities.tools.names import PublicToolIdentity
 from umbod.core.connectors.downstream_mcp.management import DownstreamConnectorUnitOfWorkService, no_downstream_connector_mutation_fault, utc_clock
@@ -328,7 +329,7 @@ async def test_catalog_reconciliation_notifies_connected_session_and_updates_exp
 
     discovery_runtime = create_downstream_discovery_runtime(RuntimeDiscoveryStores(definitions=fixture.definitions, credentials=fixture.credentials, catalogs=fixture.catalogs, publishing=fixture.publishing, activations=fixture.activations, descriptions=SystemConnectorCapabilityDescriptionOverrideStore()))
     await discovery_runtime.reconcile()
-    provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_runtime=DisabledPersonalToolRuntime(), definitions=fixture.definitions, credentials=fixture.credentials, catalogs=fixture.catalogs, publishing=fixture.publishing, activations=fixture.activations, client_factory=InMemoryClientFactory(downstream), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()))
+    provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_discovery=empty_personal_discovery(discovery_runtime), personal_runtime=DisabledPersonalToolRuntime(), definitions=fixture.definitions, credentials=fixture.credentials, catalogs=fixture.catalogs, publishing=fixture.publishing, activations=fixture.activations, client_factory=InMemoryClientFactory(downstream), permission_policy=UnrestrictedDownstreamToolPermissionPolicy(), connector_scope='', signals=signals, execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()))
     public.add_provider(provider)
     coordinator = fixture.build_coordinator(provider, notifier, 2, 10)
     fixture.discovery.results['weather'].append(_success('weather', 'alerts'))

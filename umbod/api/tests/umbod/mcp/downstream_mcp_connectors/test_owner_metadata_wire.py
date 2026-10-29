@@ -1,4 +1,6 @@
 import asyncio
+from datetime import timedelta
+from umbod.core.connectors.downstream_mcp.personal_connections.models import SetPersonalConnectionEnabled
 from typing import Any
 
 import pytest
@@ -72,3 +74,24 @@ async def test_concurrent_wire_metadata_is_owner_local_and_anonymous_has_no_inve
             assert "Personal:" not in search["description"]
         assert "Private owner description" not in str(observation)
         assert "Private bob description" not in str(observation)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("exposure", ("flat", "gateway", "codemode"))
+@pytest.mark.parametrize("change", ("disable", "expiry"))
+async def test_later_public_discovery_rechecks_owner_availability(runtime_case: RuntimeCase, exposure: str, change: str) -> None:
+    public = await metadata_server(runtime_case, exposure)
+    _assert_owner(await _observe(public, "owner", exposure), "owner", exposure)
+    if change == "disable":
+        await runtime_case.bundle.personal_connections.set_enabled(SetPersonalConnectionEnabled(key=runtime_case.query.key, enabled=False))
+    else:
+        async with public.downstream_mcp_tool_provider.discovery_operation() as operation:
+            operation.owner.clock = lambda: runtime_case.query.now + timedelta(days=1)
+    observation = await _observe(public, "owner", exposure)
+    if exposure == "flat":
+        assert observation["tools"] == []
+    else:
+        assert observation["search"]["matches"] == []
+    assert "Private owner description" not in str(observation)
+    if change == "disable":
+        _assert_owner(await _observe(public, "bob", exposure), "bob", exposure)

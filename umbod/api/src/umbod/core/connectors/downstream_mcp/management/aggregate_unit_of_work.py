@@ -7,6 +7,8 @@ from umbod.core.messaging.discovery_events import connector_discovery_changed_ev
 from umbod.core.messaging.stores.event_stream import append_event_in_session
 from collections.abc import Awaitable, Callable
 
+from ..stores.personal_discovery_schema import PERSONAL_DISCOVERY_TABLE, PERSONAL_DISCOVERY_CONNECTOR_ID
+
 from ..stores.personal_refresh_schema import PERSONAL_REFRESH_TABLE, PERSONAL_REFRESH_CONNECTOR_ID
 from ..stores.personal_authorization_health_schema import PERSONAL_AUTHORIZATION_REJECTION_TABLE, PERSONAL_AUTHORIZATION_REJECTION_CONNECTOR_ID
 from dataclasses import dataclass
@@ -470,6 +472,7 @@ async def _delete(
         ("personal_tool_observations", PERSONAL_TOOL_OBSERVATION_TABLE, PERSONAL_TOOL_OBSERVATION_CONNECTOR_ID),
         ("personal_refresh", PERSONAL_REFRESH_TABLE, PERSONAL_REFRESH_CONNECTOR_ID),
         ("personal_authorization_rejections", PERSONAL_AUTHORIZATION_REJECTION_TABLE, PERSONAL_AUTHORIZATION_REJECTION_CONNECTOR_ID),
+        ("personal_discovery", PERSONAL_DISCOVERY_TABLE, PERSONAL_DISCOVERY_CONNECTOR_ID),
         ("personal_connections", PERSONAL_CONNECTION_TABLE, PERSONAL_CONNECTION_CONNECTOR_ID),
         ("personal_oauth_attempts", PERSONAL_OAUTH_ATTEMPT_TABLE, PERSONAL_OAUTH_ATTEMPT_CONNECTOR_ID),
         ("personal_oauth_configuration", PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID),

@@ -49,12 +49,14 @@ class GroupConnectorToolPermissionState:
 
 
 class RuntimeGroupPermissions(Protocol):
+    explicitly_granted_connector_ids: Callable[[GroupMembership], set[str]]
     allowed_connector_ids: Callable[[GroupMembership], set[str]]
     allowed_tools: Callable[[GroupMembership], set[ConnectorToolPermission]]
     allowed_capabilities: Callable[[GroupMembership], set[ConnectorCapabilityPermission]]
 
 
 class InMemoryGroupConnectorToolPermissions:
+    explicitly_granted_connector_ids: Callable[[GroupMembership], set[str]]
     grant_connector: Callable[[str, str], None]
     grant_tool: Callable[[str, str, str], None]
     grant_capability: Callable[[str, str, CapabilityKind, str], None]
@@ -78,6 +80,7 @@ class InMemoryGroupConnectorToolPermissions:
         self.grant_connector = partial(_grant_connector, state)
         self.grant_tool = partial(_grant_tool, state)
         self.grant_capability = partial(_grant_capability, state)
+        self.explicitly_granted_connector_ids = partial(_explicitly_granted_connector_ids, state)
         self.allowed_connector_ids = partial(_allowed_connector_ids, state)
         self.allowed_tools = partial(_allowed_tools, state)
         self.allowed_capabilities = partial(_allowed_capabilities, state)
@@ -134,6 +137,10 @@ def _replace_group_permissions(
             for permission in permissions
         }
     state.capability_grants_by_group.update(normalized)
+
+
+def _explicitly_granted_connector_ids(state: GroupConnectorToolPermissionState, membership: GroupMembership) -> set[str]:
+    return {connector_id for group in membership.group_ids for connector_id in state.connector_grants_by_group.get(group, set())}
 
 
 def _allowed_connector_ids(

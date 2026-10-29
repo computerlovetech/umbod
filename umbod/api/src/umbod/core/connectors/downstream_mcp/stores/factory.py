@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 
+from ..personal_tools.ports import PersonalToolDiscoveryReader
+from .personal_tool_discovery import PersonalToolDiscoveryStore
+
 from ..personal_connections.refresh_ports import PersonalRefreshStore
 from .personal_refresh import EncryptedPersonalRefreshStore
 
@@ -68,6 +71,7 @@ class DownstreamMcpStores:
     unit_of_work: DownstreamConnectorUnitOfWork
     personal_tool_policies: PersonalToolPolicyStore
     personal_tool_access: PersonalToolAccessStore
+    personal_tool_discovery: PersonalToolDiscoveryReader
     personal_runtime_authorizations: PersonalRuntimeAuthorizationStore
     personal_authorization_health: PersonalAuthorizationHealthStore
     personal_refresh: PersonalRefreshStore
@@ -85,6 +89,7 @@ async def create_downstream_mcp_stores(
         personal_authorization_health=EncryptedPersonalAuthorizationHealthStore(database, AuthenticatedTextCipher(credential_secret)),
         personal_tool_policies=PersonalToolPolicyStoreService(database, utc_clock, no_downstream_connector_mutation_fault),
         personal_tool_access=EncryptedPersonalToolAccessStore(database, AuthenticatedTextCipher(credential_secret)),
+        personal_tool_discovery=PersonalToolDiscoveryStore(database, AuthenticatedTextCipher(credential_secret)),
         personal_runtime_authorizations=EncryptedPersonalRuntimeAuthorizationStore(database, AuthenticatedTextCipher(credential_secret)),
         personal_oauth_configurations=EncryptedPersonalOAuthConfigurationStore(database, AuthenticatedTextCipher(credential_secret)),
         personal_oauth_attempts=EncryptedPersonalOAuthAttemptStore(

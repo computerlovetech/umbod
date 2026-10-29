@@ -7,6 +7,7 @@ from .models import (
     PersonalInventoryRevision,
     PersonalToolAdmission,
     PersonalToolDiscoveryResult,
+    PersonalToolDiscoveryQuery,
     PersonalToolGrantRevocation,
     PersonalToolObservation,
     PersonalToolPolicy,
@@ -18,13 +19,14 @@ from .models import (
     SavePersonalToolObservation,
     UnconfiguredPersonalToolPolicy,
 )
-from .ports import PersonalToolRuntime, PersonalToolAccessStore, PersonalToolPolicyStore
+from .ports import PersonalToolDiscoveryReader, PersonalToolRuntime, PersonalToolAccessStore, PersonalToolPolicyStore
 from .runtime import DisabledPersonalToolRuntime, PersonalToolRuntimeService
 from .service import PersonalToolDiscoveryService
 
 __all__ = [
     "MissingInventoryRevision", "PresentInventoryRevision", "PersonalInventoryRevision",
     "DisabledPersonalToolRuntime", "PersonalToolRuntimeService",
+    "PersonalToolDiscoveryQuery", "PersonalToolDiscoveryReader",
     "PersonalToolRuntime", "InvokePersonalTool",
     "AdmitPersonalTool", "PersonalToolAdmission", "PersonalToolDiscoveryResult",
     "PersonalToolDiscoveryService", "PersonalToolGrantRevocation",

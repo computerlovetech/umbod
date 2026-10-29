@@ -84,14 +84,6 @@ class EncryptedPersonalToolAccessStore:
             await session.upsert(PERSONAL_TOOL_OBSERVATION_TABLE, UpsertCommand(key=key, row=PersonalToolObservationRecord(**key.model_dump(), document=self._cipher.encrypt(observation.model_dump_json()))))
             await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", target.key.connector_id))
 
-    async def list_available(self, query: PersonalRuntimeAuthorizationQuery) -> tuple[PersonalToolRecord, ...]:
-        async with self._database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
-            try:
-                target = await load_personal_runtime_target(session, self._cipher, query)
-                return await self._available(session, query, target)
-            except Exception:
-                return ()
-
     async def _available(self, session: DatabaseSession, query: PersonalRuntimeAuthorizationQuery, target: PersonalRuntimeTarget) -> tuple[PersonalToolRecord, ...]:
         observation = await self._observation(session, query)
         if observation is None:

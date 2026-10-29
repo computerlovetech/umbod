@@ -23,8 +23,8 @@ description: "Shared and personal downstream MCP connector coordination."
 - [publishing/](./publishing/) — Namespace publication.
 - [runtime/](./runtime/) — Shared runtime resolution.
 - [security.py](./security.py) — Connector security policy.
-- [stores/](./stores/) — Connector persistence and atomic, sanitized connector-wide notifications for personal discovery-affecting writes.
-- [personal_refresh.py](./stores/personal_refresh.py) — Refresh transition events include committed uncertainty; private discovery projection conversion remains separate.
+- [stores/](./stores/README.md) — Persistence, credential-free owner discovery and atomic discovery notifications.
+- [personal_refresh.py](./stores/personal_refresh.py) — Refresh transitions atomically update owner availability and connector-wide events, including committed uncertainty.
 - [user_catalogue.py](./user_catalogue.py) — User-facing catalogue projections.
 
 # Related links

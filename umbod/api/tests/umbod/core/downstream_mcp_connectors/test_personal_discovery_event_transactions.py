@@ -17,6 +17,7 @@ from umbod.core.connectors.downstream_mcp.stores.personal_authorization_health_s
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configuration_schema import PERSONAL_OAUTH_CONFIGURATION_TABLE
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_schema import PERSONAL_OAUTH_ATTEMPT_TABLE
 from umbod.core.connectors.downstream_mcp.stores.personal_refresh_schema import PERSONAL_REFRESH_TABLE
+from umbod.core.connectors.downstream_mcp.stores.personal_discovery_schema import PERSONAL_DISCOVERY_TABLE
 from umbod.core.connectors.downstream_mcp.stores.personal_tools_schema import PERSONAL_TOOL_OBSERVATION_TABLE, PERSONAL_TOOL_POLICY_TABLE
 from umbod.core.connectors.downstream_mcp.stores.schema import PERSONAL_CONNECTION_TABLE
 from umbod.core.messaging.stores.event_stream import DatabaseEventStream
@@ -33,7 +34,7 @@ async def events(database: Database) -> list[StreamEvent]:
 
 
 async def snapshot(database: Database) -> tuple[object, ...]:
-    tables = (PERSONAL_CONNECTION_TABLE, PERSONAL_AUTHORIZATION_REJECTION_TABLE, PERSONAL_REFRESH_TABLE, PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_ATTEMPT_TABLE, PERSONAL_TOOL_OBSERVATION_TABLE, PERSONAL_TOOL_POLICY_TABLE)
+    tables = (PERSONAL_DISCOVERY_TABLE, PERSONAL_CONNECTION_TABLE, PERSONAL_AUTHORIZATION_REJECTION_TABLE, PERSONAL_REFRESH_TABLE, PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_ATTEMPT_TABLE, PERSONAL_TOOL_OBSERVATION_TABLE, PERSONAL_TOOL_POLICY_TABLE)
     async with database.session(mode=TransactionMode.READ_WRITE) as session:
         return tuple([tuple(await session.find_many(table, Query(filter=NoFilter(), projection=AllFields(), ordering=Unordered()))) for table in tables])
 

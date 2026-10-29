@@ -1,5 +1,7 @@
 from tests.umbod.core.downstream_mcp_connectors.personal_caller_support import captured_personal_caller
 from dataclasses import dataclass
+from umbod.core.connectors.downstream_mcp.personal_tools.models import PersonalToolDiscoveryQuery
+from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery
 
 from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, UnavailablePersonalCaller
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalToolRuntime
@@ -38,7 +40,8 @@ async def execution_case(case: RuntimeCase) -> ExecutionCase:
     transport.inventories[case.query.key] = PersonalToolInventory(tools=(tool,))
     transport.results[(case.query.key, "read")] = PersonalToolResult(result={"content": [], "structuredContent": {"owner": "owner"}})
     await PersonalToolDiscoveryService(case.store, case.bundle.personal_tool_access, transport, lambda: case.query.now).discover(case.query)
-    runtime: PersonalToolRuntime = McpPersonalToolRuntime(contexts, case.bundle.definitions, case.bundle.personal_tool_access, transport, lambda: case.query.now)
-    record = (await runtime.list_tools())[0]
+    runtime: PersonalToolRuntime = McpPersonalToolRuntime(contexts, case.bundle.personal_tool_access, transport, lambda: case.query.now)
+    definition = await case.bundle.definitions.get(ConnectorIdQuery(connector_id="personal"))
+    record = (await case.bundle.personal_tool_discovery.read(PersonalToolDiscoveryQuery(principal=case.query.key.principal, definitions=(definition.definition,), now=case.query.now)))[0]
     command = InvokePersonalTool(identity=CapabilityIdentity(connector_kind="downstream_mcp", connector_id="personal", capability_kind="tool", capability_key="read"), inventory_revision=record.inventory_revision, fingerprint=record.fingerprint, arguments={"value": "same"})
     return ExecutionCase(case, contexts, runtime, transport, command)

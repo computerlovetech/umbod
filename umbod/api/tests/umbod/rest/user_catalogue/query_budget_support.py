@@ -14,6 +14,7 @@ from umbod.core.persistence import (
     PersistenceReadiness,
     PersistenceRuntime,
     Query,
+    ReadSession,
     Table,
     TransactionMode,
     UpsertCommand,
@@ -38,8 +39,8 @@ class QueryCounts:
         self.schema_calls = 0
 
 
-class CountingSession:
-    def __init__(self, session: DatabaseSession, counts: QueryCounts) -> None:
+class CountingReadSession:
+    def __init__(self, session: ReadSession, counts: QueryCounts) -> None:
         self.session = session
         self.counts = counts
 
@@ -54,6 +55,12 @@ class CountingSession:
     ) -> Sequence[ResultT]:
         self.counts.reads[table.name] += 1
         return await self.session.find_many(table, query)
+
+
+class CountingSession(CountingReadSession):
+    def __init__(self, session: DatabaseSession, counts: QueryCounts) -> None:
+        super().__init__(session, counts)
+        self.session: DatabaseSession = session
 
     async def insert(self, table: Table[RowT, KeyT], command: InsertCommand[RowT]) -> bool:
         self.counts.writes[table.name] += 1
@@ -84,6 +91,12 @@ class CountingDatabase:
     async def ensure_schema(self, tables: Sequence[Table[BaseModel, BaseModel]]) -> None:
         self.counts.schema_calls += 1
         await self.database.ensure_schema(tables)
+
+    @asynccontextmanager
+    async def read_session(self) -> AsyncIterator[ReadSession]:
+        self.counts.sessions += 1
+        async with self.database.read_session() as session:
+            yield CountingReadSession(session, self.counts)
 
     @asynccontextmanager
     async def session(self, *, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:

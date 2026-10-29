@@ -9,6 +9,7 @@ from umbod.core.persistence.ports import (
     Database,
     DatabaseSchema,
     DatabaseSession,
+    ReadSession,
     TransactionMode,
 )
 from umbod.core.persistence.runtime import (
@@ -91,6 +92,7 @@ __all__ = [
     "ReadPlan",
     "ReadPlanOperations",
     "ReadResults",
+    "ReadSession",
     "RowCodec",
     "Table",
     "TableIdentity",

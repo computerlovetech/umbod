@@ -100,6 +100,7 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
     assert set(infrastructure.__all__) == {
         'AppPersistenceRuntime',
         'ConfiguredPersistenceRuntimeProvider',
+        'PersonalDiscoveryPreparation',
         'create_inmemory_key_value_driver',
         'create_request_cache',
         'ContentConfig',

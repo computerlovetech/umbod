@@ -1,4 +1,9 @@
+from .personal_discovery_projection import update_personal_discovery
+from . import personal_connection_records
+
 import json
+
+from .personal_discovery_schema import PERSONAL_DISCOVERY_TABLE, PERSONAL_DISCOVERY_CONNECTOR_ID
 
 from .personal_refresh_records import clear_refresh
 from .personal_refresh_schema import PERSONAL_REFRESH_TABLE, PERSONAL_REFRESH_CONNECTOR_ID
@@ -19,7 +24,6 @@ from umbod.core.connectors.downstream_mcp.personal_connections.inventory_models 
 from umbod.core.connectors.downstream_mcp.stores.ports import CONNECTOR_DEFINITION_ADAPTER
 from umbod.core.connectors.downstream_mcp.personal_connections.models import (
     Authorized,
-    MissingPersonalConnection,
     PersonalConnection,
     PersonalConnectionKey,
     PersonalConnectionState,
@@ -33,8 +37,6 @@ from umbod.core.connectors.downstream_mcp.stores.schema import (
     CONNECTOR_DEFINITION_CONNECTOR_ID,
     CONNECTOR_DEFINITION_TABLE,
     PERSONAL_CONNECTION_CONNECTOR_ID,
-    PERSONAL_CONNECTION_NAMESPACE,
-    PERSONAL_CONNECTION_SUBJECT,
     PERSONAL_CONNECTION_TABLE,
     PersonalConnectionRecord,
     PersonalConnectionRecordKey,
@@ -55,33 +57,6 @@ from umbod.core.persistence import (
 )
 
 
-async def load_personal_connection(
-    session: DatabaseSession, cipher: TextCipher, key: PersonalConnectionKey
-) -> PersonalConnectionState:
-    row = await session.find_one(
-        PERSONAL_CONNECTION_TABLE,
-        Query(
-            filter=AllOf(
-                (
-                    Equals(PERSONAL_CONNECTION_NAMESPACE, key.principal.namespace),
-                    Equals(PERSONAL_CONNECTION_SUBJECT, key.principal.subject),
-                    Equals(PERSONAL_CONNECTION_CONNECTOR_ID, key.connector_id),
-                )
-            ),
-            projection=AllFields(),
-            ordering=Unordered(),
-        ),
-    )
-    if row is None:
-        return MissingPersonalConnection(key=key)
-    state = PersonalConnection.model_validate_json(cipher.decrypt(row.document))
-    expected = (key.principal.namespace, key.principal.subject, key.connector_id)
-    stored = (row.namespace, row.subject, row.connector_id)
-    if stored != expected or state.key != key:
-        raise ValueError("Personal connection ownership mismatch")
-    return state
-
-
 class EncryptedPersonalConnectionStore:
     def __init__(self, database: Database, cipher: TextCipher) -> None:
         self._database = database
@@ -90,7 +65,7 @@ class EncryptedPersonalConnectionStore:
     async def _get(
         self, session: DatabaseSession, key: PersonalConnectionKey
     ) -> PersonalConnectionState:
-        return await load_personal_connection(session, self._cipher, key)
+        return await personal_connection_records.load_personal_connection(session, self._cipher, key)
 
     async def get(self, key: PersonalConnectionKey) -> PersonalConnectionState:
         async with self._database.session(mode=TransactionMode.READ_WRITE) as session:
@@ -141,6 +116,7 @@ class EncryptedPersonalConnectionStore:
                         ),
                     ),
                 )
+                await update_personal_discovery(session, self._cipher, key)
                 await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", key.connector_id))
             return state
 
@@ -171,6 +147,7 @@ class EncryptedPersonalConnectionStore:
             )
             removed += await session.delete(PERSONAL_AUTHORIZATION_REJECTION_TABLE, DeleteQuery(Equals(PERSONAL_AUTHORIZATION_REJECTION_CONNECTOR_ID, connector_id)))
             removed += await session.delete(PERSONAL_REFRESH_TABLE, DeleteQuery(Equals(PERSONAL_REFRESH_CONNECTOR_ID, connector_id)))
+            await session.delete(PERSONAL_DISCOVERY_TABLE, DeleteQuery(Equals(PERSONAL_DISCOVERY_CONNECTOR_ID, connector_id)))
             if removed:
                 await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", connector_id))
 

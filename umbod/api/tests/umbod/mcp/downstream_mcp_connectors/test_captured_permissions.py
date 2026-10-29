@@ -1,5 +1,8 @@
+from tests.umbod.mcp.downstream_mcp_connectors.discovery_operation_support import personal_discovery_with_policy
 import asyncio
 from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
+from umbod.mcp.connectors.downstream_mcp.personal_discovery import PersonalDiscoveryOperation
 from contextvars import ContextVar
 from datetime import UTC, datetime
 from types import SimpleNamespace
@@ -33,7 +36,7 @@ from umbod.core.permissions import ConnectorCapabilityPermission, InMemoryGroupC
 from umbod.mcp.connectors.downstream_mcp import GroupDownstreamToolPermissionPolicy, UnrestrictedDownstreamToolPermissionPolicy
 from umbod.mcp.connectors.downstream_mcp import permissions as permission_boundary
 from umbod.mcp.auth.local_test_auth import SingleTestUserOAuthProvider
-from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalToolRecord, PersonalToolRuntime
+from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoverySnapshot
 
 
@@ -46,14 +49,17 @@ async def persistence_runtime() -> AsyncIterator[PersistenceRuntime]:
         await runtime.shutdown()
 
 
-class MutatingPersonalRuntime(DisabledPersonalToolRuntime):
-    def __init__(self, mutate: Callable[[], None]) -> None:
-        self.mutate = mutate
+class MutatingPersonalDiscovery:
+    def __init__(self, runtime: DownstreamDiscoveryRuntime, mutate: Callable[[], None], permissions: InMemoryGroupConnectorToolPermissions) -> None:
+        self._operations = personal_discovery_with_policy(runtime, GroupDownstreamToolPermissionPolicy(permissions))
+        self._mutate = mutate
 
-    async def list_tools(self) -> tuple[PersonalToolRecord, ...]:
-        await asyncio.sleep(0)
-        self.mutate()
-        return ()
+    @asynccontextmanager
+    async def operation(self, scope: str) -> AsyncIterator[PersonalDiscoveryOperation]:
+        async with self._operations.operation(scope) as operation:
+            await asyncio.sleep(0)
+            self._mutate()
+            yield operation
 
 
 class MutatingDefinitionStore(ConnectorDefinitionStoreService):
@@ -94,7 +100,7 @@ async def _provider(
     servers: dict[str, FastMCP],
     permissions: InMemoryGroupConnectorToolPermissions,
     *,
-    personal_runtime: PersonalToolRuntime,
+    personal_discovery_mutation: Callable[[], None],
     invocation_policy: ConnectorInvocationPolicy,
     definition_mutation: Callable[[], None],
     discovery_mutation: Callable[[], None],
@@ -123,8 +129,9 @@ async def _provider(
     await discovery.reconcile()
     factory = InMemoryServerClientFactory(servers)
     signals = invocation_signals(InMemoryMcpMetricsRecorder())
+    discovery = MutatingDiscoveryRuntime(discovery, discovery_mutation)
     provider = ConnectorAwareDownstreamMcpToolProvider(
-        discovery_runtime=MutatingDiscoveryRuntime(discovery, discovery_mutation), personal_runtime=personal_runtime,
+        discovery_runtime=discovery, personal_discovery=MutatingPersonalDiscovery(discovery, personal_discovery_mutation, permissions), personal_runtime=DisabledPersonalToolRuntime(),
         definitions=MutatingDefinitionStore(database, definition_mutation), credentials=credentials,
         catalogs=catalogs, publishing=publishing, activations=activations,
         client_factory=factory, permission_policy=GroupDownstreamToolPermissionPolicy(permissions),
@@ -223,7 +230,7 @@ async def test_listing_io_cannot_switch_captured_caller(
 
     provider, factory = await _provider(
         persistence_runtime, {"weather": _downstream(), "calendar": _downstream()}, _permissions(),
-        personal_runtime=MutatingPersonalRuntime(switch_caller),
+        personal_discovery_mutation=switch_caller,
         invocation_policy=PermitAllConnectorInvocationPolicy(),
         definition_mutation=lambda: None, discovery_mutation=lambda: None,
     )
@@ -249,7 +256,7 @@ async def test_native_listing_snapshot_capture_cannot_switch_captured_caller(
 
     provider, factory = await _provider(
         persistence_runtime, {"weather": _downstream(), "calendar": _downstream()}, _permissions(),
-        personal_runtime=DisabledPersonalToolRuntime(),
+        personal_discovery_mutation=lambda: None,
         invocation_policy=PermitAllConnectorInvocationPolicy(),
         definition_mutation=lambda: None, discovery_mutation=switch_caller,
     )
@@ -277,7 +284,7 @@ async def test_resource_access_io_cannot_switch_captured_caller(
 
     provider, factory = await _provider(
         persistence_runtime, {"weather": _downstream()}, _permissions(),
-        personal_runtime=DisabledPersonalToolRuntime(),
+        personal_discovery_mutation=lambda: None,
         invocation_policy=PermitAllConnectorInvocationPolicy(),
         definition_mutation=switch_caller, discovery_mutation=lambda: None,
     )
@@ -315,7 +322,7 @@ async def test_template_creation_recaptures_caller_after_initial_access_io(
 
     provider, factory = await _provider(
         persistence_runtime, {"weather": _downstream()}, _permissions(),
-        personal_runtime=DisabledPersonalToolRuntime(),
+        personal_discovery_mutation=lambda: None,
         invocation_policy=PermitAllConnectorInvocationPolicy(),
         definition_mutation=switch_caller, discovery_mutation=lambda: None,
     )
@@ -343,7 +350,7 @@ async def test_listing_capture_does_not_freeze_grants_during_io(
 
     provider, factory = await _provider(
         persistence_runtime, {"weather": _downstream()}, permissions,
-        personal_runtime=MutatingPersonalRuntime(revoke),
+        personal_discovery_mutation=revoke,
         invocation_policy=PermitAllConnectorInvocationPolicy(),
         definition_mutation=lambda: None, discovery_mutation=lambda: None,
     )
@@ -404,7 +411,7 @@ async def test_held_tool_recaptures_changed_caller_after_approval(
 
     provider, factory = await _provider(
         persistence_runtime, {"weather": _downstream()}, _permissions(),
-        personal_runtime=DisabledPersonalToolRuntime(),
+        personal_discovery_mutation=lambda: None,
         invocation_policy=SwitchingInvocationPolicy(switch_caller),
         definition_mutation=lambda: None, discovery_mutation=lambda: None,
     )
@@ -431,7 +438,7 @@ async def test_held_template_cached_resource_recaptures_changed_caller(
     monkeypatch.setattr(permission_boundary, "get_access_token", lambda: token)
     provider, factory = await _provider(
         persistence_runtime, {"weather": _downstream()}, _permissions(),
-        personal_runtime=DisabledPersonalToolRuntime(),
+        personal_discovery_mutation=lambda: None,
         invocation_policy=PermitAllConnectorInvocationPolicy(),
         definition_mutation=lambda: None, discovery_mutation=lambda: None,
     )

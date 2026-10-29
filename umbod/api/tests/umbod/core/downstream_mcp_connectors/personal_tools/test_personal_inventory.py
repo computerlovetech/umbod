@@ -1,3 +1,5 @@
+from tests.umbod.core.downstream_mcp_connectors.personal_discovery_support import read_available
+
 import asyncio
 import json
 from dataclasses import FrozenInstanceError
@@ -39,13 +41,13 @@ async def replace_document(case: RuntimeCase, document: str) -> None:
 async def test_new_tools_require_explicit_rediscovery_without_admin_tool_policy(runtime_case: RuntimeCase) -> None:
     access = runtime_case.bundle.personal_tool_access
     assert await access.read_inventory_revision(runtime_case.query) == MissingInventoryRevision(kind="missing")
-    assert await access.list_available(runtime_case.query) == ()
+    assert await read_available(runtime_case.bundle, runtime_case.query) == ()
     first = approved_tool("read")
     await discovery(runtime_case, (first,)).discover(runtime_case.query)
-    before = await access.list_available(runtime_case.query)
+    before = await read_available(runtime_case.bundle, runtime_case.query)
     assert tuple(record.tool for record in before) == (first,)
     result = await discovery(runtime_case, (first, approved_tool("future"))).discover(runtime_case.query)
-    after = await access.list_available(runtime_case.query)
+    after = await read_available(runtime_case.bundle, runtime_case.query)
     assert result.tool_count == 2
     assert tuple(record.tool.identity.downstream_name for record in after) == ("read", "future")
     assert after[0].inventory_revision != before[0].inventory_revision
@@ -55,11 +57,10 @@ async def test_new_tools_require_explicit_rediscovery_without_admin_tool_policy(
 @pytest.mark.asyncio
 async def test_admin_policy_replacement_cannot_invalidate_private_inventory(runtime_case: RuntimeCase) -> None:
     await discovery(runtime_case, (approved_tool("read"),)).discover(runtime_case.query)
-    access = runtime_case.bundle.personal_tool_access
-    before = await access.list_available(runtime_case.query)
+    before = await read_available(runtime_case.bundle, runtime_case.query)
     await replace_policy(runtime_case, (approved_tool("unrelated"),))
     await replace_policy(runtime_case, ())
-    assert await access.list_available(runtime_case.query) == before
+    assert await read_available(runtime_case.bundle, runtime_case.query) == before
 
 
 class BlockingInventory:
@@ -84,11 +85,11 @@ async def test_overlapping_discoveries_cannot_overwrite_completed_inventory(runt
     pending = asyncio.create_task(service.discover(runtime_case.query))
     await blocked.started.wait()
     await discovery(runtime_case, (approved_tool("newer"),)).discover(runtime_case.query)
-    winner = await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query)
+    winner = await read_available(runtime_case.bundle, runtime_case.query)
     blocked.release.set()
     with pytest.raises(PersonalRuntimeUnavailable):
         await pending
-    assert await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query) == winner
+    assert await read_available(runtime_case.bundle, runtime_case.query) == winner
     assert winner[0].tool.identity.downstream_name == "newer"
 
 
@@ -96,7 +97,7 @@ async def test_overlapping_discoveries_cannot_overwrite_completed_inventory(runt
 @pytest.mark.parametrize("failure", ("cancelled", "invalid_schema"))
 async def test_failed_discovery_preserves_previous_inventory(runtime_case: RuntimeCase, failure: str) -> None:
     await discovery(runtime_case, (approved_tool("initial"),)).discover(runtime_case.query)
-    before = await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query)
+    before = await read_available(runtime_case.bundle, runtime_case.query)
     blocked = BlockingInventory((approved_tool("replacement"),))
     service = PersonalToolDiscoveryService(runtime_case.store, runtime_case.bundle.personal_tool_access, blocked, lambda: runtime_case.query.now)
     pending = asyncio.create_task(service.discover(runtime_case.query))
@@ -110,7 +111,7 @@ async def test_failed_discovery_preserves_previous_inventory(runtime_case: Runti
         blocked.release.set()
         with pytest.raises(PersonalRuntimeUnavailable):
             await pending
-    assert await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query) == before
+    assert await read_available(runtime_case.bundle, runtime_case.query) == before
 
 
 @pytest.mark.asyncio
@@ -152,10 +153,10 @@ async def test_legacy_match_cache_requires_explicit_discovery_without_reconstruc
     legacy.update({"contract_revision": "legacy", "matches": [{"name": "read", "fingerprint": "0" * 64}]})
     await replace_document(runtime_case, cipher.encrypt(json.dumps(legacy)))
     access = runtime_case.bundle.personal_tool_access
-    assert await access.list_available(runtime_case.query) == ()
+    assert await read_available(runtime_case.bundle, runtime_case.query) == ()
     assert await access.read_inventory_revision(runtime_case.query) == MissingInventoryRevision(kind="missing")
     await discovery(runtime_case, (approved_tool("new"),)).discover(runtime_case.query)
-    assert (await access.list_available(runtime_case.query))[0].tool.identity.downstream_name == "new"
+    assert (await read_available(runtime_case.bundle, runtime_case.query))[0].tool.identity.downstream_name == "new"
 
 
 @pytest.mark.asyncio
@@ -174,7 +175,7 @@ async def test_invalid_encrypted_inventory_fails_closed(runtime_case: RuntimeCas
     else:
         document = "tampered"
     await replace_document(runtime_case, document)
-    assert await runtime_case.bundle.personal_tool_access.list_available(runtime_case.query) == ()
+    assert await read_available(runtime_case.bundle, runtime_case.query) == ()
     with pytest.raises(PersonalRuntimeUnavailable):
         await runtime_case.bundle.personal_tool_access.read_inventory_revision(runtime_case.query)
 

@@ -1,9 +1,11 @@
+from umbod.mcp.connectors.downstream_mcp.personal_discovery import PersonalDiscoveryOperation, PersonalDiscoveryOperations
 from umbod.mcp.connectors.downstream_mcp.ports import DownstreamClientFactory
 from umbod.mcp.connectors.downstream_mcp.namespaces import PersonalToolNamespaceSnapshot
 from umbod.mcp.connectors.downstream_mcp.resource_access import AccessCheckedTemplate
 
 import logging
 from collections.abc import Iterable, Mapping, Sequence
+from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
 from contextvars import ContextVar, Token
 from functools import partial
@@ -202,7 +204,7 @@ def _availability(dependencies: _AvailabilityDependencies) -> CapabilityAvailabi
 
 class DownstreamMcpToolRuntimeProvider(Provider):
 
-    def __init__(self, *, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, publishing: ConnectorPublishingStore, activations: ActivationStore, client_factory: DownstreamClientFactory, permission_policy: DownstreamToolPermissionPolicySource, connector_scope: str, signals: McpSignals, execution_pipelines: McpToolExecutionPipelineFactory, personal_runtime: PersonalToolRuntime, discovery_runtime: DownstreamDiscoveryRuntime) -> None:
+    def __init__(self, *, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, publishing: ConnectorPublishingStore, activations: ActivationStore, client_factory: DownstreamClientFactory, permission_policy: DownstreamToolPermissionPolicySource, connector_scope: str, signals: McpSignals, execution_pipelines: McpToolExecutionPipelineFactory, personal_runtime: PersonalToolRuntime, personal_discovery: PersonalDiscoveryOperations, discovery_runtime: DownstreamDiscoveryRuntime) -> None:
         self._stores = ConnectorStoreService(definitions, credentials, catalogs, publishing, activations)
         self._capabilities = StoreBackedDownstreamCapabilityCatalog(definitions, catalogs)
         self._permission_policy = permission_policy
@@ -211,6 +213,7 @@ class DownstreamMcpToolRuntimeProvider(Provider):
         self._signals = signals
         self._execution_pipelines = execution_pipelines
         self._personal_runtime = personal_runtime
+        self._personal_discovery = personal_discovery
         self._discovery_runtime = discovery_runtime
         super().__init__()
 
@@ -244,6 +247,9 @@ class DownstreamMcpToolRuntimeProvider(Provider):
             raise ToolError("Downstream capability is not available") from error
         return self._downstream_client_factory.create(shared.command)
 
+    def discovery_operation(self) -> AbstractAsyncContextManager[PersonalDiscoveryOperation]:
+        return self._personal_discovery.operation(self._active_scope())
+
     def _active_scope(self) -> str:
         return self._connector_scope or _REQUEST_CONNECTOR_SCOPE.get()
 
@@ -260,7 +266,7 @@ class DownstreamMcpToolRuntimeProvider(Provider):
         catalog = record.tool
         public_name = self._public_tool_name(definition.connector_id, definition.tool_name_prefix, catalog.identity.downstream_name)
         options = tool_descriptor_options(catalog)
-        return AuthorizedPersonalTool(identity=self._invocation_identity(definition.connector_id, definition.display_name, catalog, public_name), record=record, runtime=self._personal_runtime, public_name=public_name, execution_pipeline=self._execution_pipelines.create(definition.display_name, downstream_result_is_error), options=options)
+        return AuthorizedPersonalTool(identity=self._invocation_identity(definition.connector_id, definition.display_name, catalog, public_name), record=record, runtime=self._personal_runtime, discovery=self._personal_discovery, scope=self._active_scope(), public_name=public_name, execution_pipeline=self._execution_pipelines.create(definition.display_name, downstream_result_is_error), options=options)
 
     @staticmethod
     def _invocation_identity(connector_id: str, connector_name: str, catalog_tool: DiscoveredTool, public_name: str) -> McpToolIdentity:
@@ -286,21 +292,24 @@ class DownstreamMcpToolRuntimeProvider(Provider):
         return records
 
     async def configured_tool_name_claims(self) -> tuple[str, ...]:
-        return tuple(self._public_tool_name(record.definition.connector_id, record.definition.tool_name_prefix, record.capability.identity.capability_key) for record in self._configured_tool_records(self._discovery_runtime.capture()))
+        async with self.discovery_operation() as operation:
+            return tuple(self._public_tool_name(record.definition.connector_id, record.definition.tool_name_prefix, record.capability.identity.capability_key) for record in self._configured_tool_records(operation.snapshot))
 
     async def capture_personal_tool_namespace(self) -> PersonalToolNamespaceSnapshot:
-        namespaces = self._discovery_runtime.capture().namespaces
-        return namespaces.get(self._active_scope(), PersonalToolNamespaceSnapshot((), self._active_scope()))
+        async with self.discovery_operation() as operation:
+            namespaces = operation.snapshot.namespaces
+            return namespaces.get(self._active_scope(), PersonalToolNamespaceSnapshot((), self._active_scope()))
 
     async def is_personal_tool_name(self, name: str) -> bool:
         namespace = await self.capture_personal_tool_namespace()
         return namespace.is_personal_tool_name(name)
 
     async def owns_tool(self, tool_name: str) -> bool:
-        self._configured_tool_records(self._discovery_runtime.capture())
-        if await self.is_personal_tool_name(tool_name):
-            return True
-        return any((candidate.tool_name == tool_name for candidate in await self.eligible_search_candidates()))
+        async with self.discovery_operation() as operation:
+            self._configured_tool_records(operation.snapshot)
+            if await self.is_personal_tool_name(tool_name):
+                return True
+            return any((candidate.tool_name == tool_name for candidate in await self.eligible_search_candidates()))
 
 def _public_identity(record: DownstreamCapabilityRecord) -> PublicToolIdentity:
     identity = record.capability.identity
@@ -323,57 +332,59 @@ def _search_candidate(record: DownstreamCapabilityRecord, capability_description
 class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
 
     async def _list_tools(self) -> Sequence[Tool]:
-        policy = self._permission_policy.capture()
-        snapshot = self._discovery_runtime.capture()
-        self._configured_tool_records(snapshot)
-        tools: list[Tool] = []
-        identities: list[PublicToolIdentity] = []
-        active_scope = self._active_scope()
-        namespace = snapshot.namespaces.get(active_scope, snapshot.namespaces[""])
-        personal_records = await self._personal_runtime.list_tools()
-        for record in snapshot.available_records:
-            identity = record.capability.identity
-            if identity.capability_kind != "tool" or record.source_tool is None:
-                continue
-            if active_scope and identity.connector_id != active_scope:
-                continue
-            if not policy.allows_capability(identity.connector_id, identity.capability_kind, identity.capability_key):
-                continue
-            identities.append(_public_identity(record))
-            definition = record.definition
-            tools.append(self._materialize_tool(definition.connector_id, definition.tool_name_prefix, record.source_tool, definition.display_name))
-        for record in personal_records:
-            definition = record.definition
-            if active_scope and definition.connector_id != active_scope:
-                continue
-            identities.append(PublicToolIdentity(connector_id=definition.connector_id, tool_name_prefix=definition.tool_name_prefix, operation_name=record.tool.identity.downstream_name))
-            namespace.is_personal_tool_name(self._public_tool_name(definition.connector_id, definition.tool_name_prefix, record.tool.identity.downstream_name))
-            tools.append(self._materialize_personal_tool(record))
-        _validate_public_identities(identities)
-        if len({tool.name for tool in tools}) != len(tools):
-            raise ToolError("public_tool_name_conflict")
-        return tools
+        async with self.discovery_operation() as operation:
+            policy = operation.permission_policy
+            snapshot = operation.snapshot
+            self._configured_tool_records(snapshot)
+            tools: list[Tool] = []
+            identities: list[PublicToolIdentity] = []
+            active_scope = self._active_scope()
+            namespace = snapshot.namespaces.get(active_scope, snapshot.namespaces[""])
+            personal_records = await operation.records()
+            for record in snapshot.available_records:
+                identity = record.capability.identity
+                if identity.capability_kind != "tool" or record.source_tool is None:
+                    continue
+                if active_scope and identity.connector_id != active_scope:
+                    continue
+                if not policy.allows_capability(identity.connector_id, identity.capability_kind, identity.capability_key):
+                    continue
+                identities.append(_public_identity(record))
+                definition = record.definition
+                tools.append(self._materialize_tool(definition.connector_id, definition.tool_name_prefix, record.source_tool, definition.display_name))
+            for record in personal_records:
+                definition = record.definition
+                if active_scope and definition.connector_id != active_scope:
+                    continue
+                identities.append(PublicToolIdentity(connector_id=definition.connector_id, tool_name_prefix=definition.tool_name_prefix, operation_name=record.tool.identity.downstream_name))
+                namespace.is_personal_tool_name(self._public_tool_name(definition.connector_id, definition.tool_name_prefix, record.tool.identity.downstream_name))
+                tools.append(self._materialize_personal_tool(record))
+            _validate_public_identities(identities)
+            if len({tool.name for tool in tools}) != len(tools):
+                raise ToolError("public_tool_name_conflict")
+            return tools
 
     async def eligible_search_candidates(self) -> list[ConnectorToolSearchCandidate]:
-        policy = self._permission_policy.capture()
-        snapshot = self._discovery_runtime.capture()
-        self._configured_tool_records(snapshot)
-        active_scope = self._active_scope()
-        namespace = snapshot.namespaces.get(active_scope, snapshot.namespaces[""])
-        personal_records = await self._personal_runtime.list_tools()
-        records = tuple(record for record in snapshot.available_records if record.capability.identity.capability_kind == "tool" and (not active_scope or record.definition.connector_id == active_scope) and policy.allows_capability(record.definition.connector_id, "tool", record.capability.identity.capability_key))
-        identities = [_public_identity(record) for record in records]
-        _validate_public_identities(identities)
-        candidates = [_search_candidate(record, snapshot.descriptions[record.definition.connector_id]).model_copy(update={"tool_name": self._public_tool_name(record.definition.connector_id, record.definition.tool_name_prefix, record.capability.identity.capability_key)}) for record in records]
-        for record in personal_records:
-            definition = record.definition
-            if active_scope and definition.connector_id != active_scope:
-                continue
-            identities.append(PublicToolIdentity(connector_id=definition.connector_id, tool_name_prefix=definition.tool_name_prefix, operation_name=record.tool.identity.downstream_name))
-            namespace.is_personal_tool_name(self._public_tool_name(definition.connector_id, definition.tool_name_prefix, record.tool.identity.downstream_name))
-            candidates.append(ConnectorToolSearchCandidate(tool_name=self._public_tool_name(definition.connector_id, definition.tool_name_prefix, record.tool.identity.downstream_name), description=record.tool.description, connector_id=definition.connector_id, connector_display_name=definition.display_name, connector_capability_description=definition.capability_description, operation_name=record.tool.identity.downstream_name, input_schema=deepcopy(record.tool.input_schema), search_hints=(record.tool.title,)))
-        _validate_public_identities(identities)
-        return candidates
+        async with self.discovery_operation() as operation:
+            policy = operation.permission_policy
+            snapshot = operation.snapshot
+            self._configured_tool_records(snapshot)
+            active_scope = self._active_scope()
+            namespace = snapshot.namespaces.get(active_scope, snapshot.namespaces[""])
+            personal_records = await operation.records()
+            records = tuple(record for record in snapshot.available_records if record.capability.identity.capability_kind == "tool" and (not active_scope or record.definition.connector_id == active_scope) and policy.allows_capability(record.definition.connector_id, "tool", record.capability.identity.capability_key))
+            identities = [_public_identity(record) for record in records]
+            _validate_public_identities(identities)
+            candidates = [_search_candidate(record, snapshot.descriptions[record.definition.connector_id]).model_copy(update={"tool_name": self._public_tool_name(record.definition.connector_id, record.definition.tool_name_prefix, record.capability.identity.capability_key)}) for record in records]
+            for record in personal_records:
+                definition = record.definition
+                if active_scope and definition.connector_id != active_scope:
+                    continue
+                identities.append(PublicToolIdentity(connector_id=definition.connector_id, tool_name_prefix=definition.tool_name_prefix, operation_name=record.tool.identity.downstream_name))
+                namespace.is_personal_tool_name(self._public_tool_name(definition.connector_id, definition.tool_name_prefix, record.tool.identity.downstream_name))
+                candidates.append(ConnectorToolSearchCandidate(tool_name=self._public_tool_name(definition.connector_id, definition.tool_name_prefix, record.tool.identity.downstream_name), description=record.tool.description, connector_id=definition.connector_id, connector_display_name=definition.display_name, connector_capability_description=definition.capability_description, operation_name=record.tool.identity.downstream_name, input_schema=deepcopy(record.tool.input_schema), search_hints=(record.tool.title,)))
+            _validate_public_identities(identities)
+            return candidates
 
     async def execute_tool(self, tool_name: str, arguments: Mapping[str, Any]) -> ToolResult:
         tools = await self._list_tools()
@@ -428,55 +439,58 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
         return AccessCheckedTemplate(backend, partial(self._ensure_capability_access, identity))
 
     async def _list_resources(self) -> Sequence[Resource]:
-        policy = self._permission_policy.capture()
-        snapshot = self._discovery_runtime.capture()
-        available = frozenset(record.capability.identity for record in snapshot.available_records)
-        index = DownstreamCapabilityIndex(await self._eligible_catalogs(snapshot))
-        resources: list[Resource] = []
-        for entry in index.resources:
-            identity = CapabilityIdentity(
-                connector_kind="downstream_mcp",
-                connector_id=entry.connector_id,
-                capability_kind="resource",
-                capability_key=entry.capability.uri,
-            )
-            if identity in available and policy.allows_capability(identity.connector_id, identity.capability_kind, identity.capability_key):
-                resources.append(self._materialize_resource(entry.connector_id, entry.capability))
-        return resources
+        async with self.discovery_operation() as operation:
+            policy = operation.permission_policy
+            snapshot = operation.snapshot
+            available = frozenset(record.capability.identity for record in snapshot.available_records)
+            index = DownstreamCapabilityIndex(await self._eligible_catalogs(snapshot))
+            resources: list[Resource] = []
+            for entry in index.resources:
+                identity = CapabilityIdentity(
+                    connector_kind="downstream_mcp",
+                    connector_id=entry.connector_id,
+                    capability_kind="resource",
+                    capability_key=entry.capability.uri,
+                )
+                if identity in available and policy.allows_capability(identity.connector_id, identity.capability_kind, identity.capability_key):
+                    resources.append(self._materialize_resource(entry.connector_id, entry.capability))
+            return resources
 
     async def _list_resource_templates(self) -> Sequence[ResourceTemplate]:
-        policy = self._permission_policy.capture()
-        snapshot = self._discovery_runtime.capture()
-        available = frozenset(record.capability.identity for record in snapshot.available_records)
-        index = DownstreamCapabilityIndex(await self._eligible_catalogs(snapshot))
-        templates: list[ResourceTemplate] = []
-        for entry in index.resource_templates:
-            identity = CapabilityIdentity(
-                connector_kind="downstream_mcp",
-                connector_id=entry.connector_id,
-                capability_kind="resource_template",
-                capability_key=entry.capability.uri_template,
-            )
-            if identity in available and policy.allows_capability(identity.connector_id, identity.capability_kind, identity.capability_key):
-                templates.append(self._materialize_template(entry.connector_id, entry.capability))
-        return templates
+        async with self.discovery_operation() as operation:
+            policy = operation.permission_policy
+            snapshot = operation.snapshot
+            available = frozenset(record.capability.identity for record in snapshot.available_records)
+            index = DownstreamCapabilityIndex(await self._eligible_catalogs(snapshot))
+            templates: list[ResourceTemplate] = []
+            for entry in index.resource_templates:
+                identity = CapabilityIdentity(
+                    connector_kind="downstream_mcp",
+                    connector_id=entry.connector_id,
+                    capability_kind="resource_template",
+                    capability_key=entry.capability.uri_template,
+                )
+                if identity in available and policy.allows_capability(identity.connector_id, identity.capability_kind, identity.capability_key):
+                    templates.append(self._materialize_template(entry.connector_id, entry.capability))
+            return templates
 
     async def _list_prompts(self) -> Sequence[Prompt]:
-        policy = self._permission_policy.capture()
-        snapshot = self._discovery_runtime.capture()
-        available = frozenset(record.capability.identity for record in snapshot.available_records)
-        index = DownstreamCapabilityIndex(await self._eligible_catalogs(snapshot))
-        prompts: list[Prompt] = []
-        for entry in index.prompts:
-            identity = CapabilityIdentity(
-                connector_kind="downstream_mcp",
-                connector_id=entry.connector_id,
-                capability_kind="prompt",
-                capability_key=entry.capability.name,
-            )
-            if identity in available and policy.allows_capability(identity.connector_id, identity.capability_kind, identity.capability_key):
-                prompts.append(self._materialize_prompt(entry.connector_id, entry.capability))
-        return prompts
+        async with self.discovery_operation() as operation:
+            policy = operation.permission_policy
+            snapshot = operation.snapshot
+            available = frozenset(record.capability.identity for record in snapshot.available_records)
+            index = DownstreamCapabilityIndex(await self._eligible_catalogs(snapshot))
+            prompts: list[Prompt] = []
+            for entry in index.prompts:
+                identity = CapabilityIdentity(
+                    connector_kind="downstream_mcp",
+                    connector_id=entry.connector_id,
+                    capability_kind="prompt",
+                    capability_key=entry.capability.name,
+                )
+                if identity in available and policy.allows_capability(identity.connector_id, identity.capability_kind, identity.capability_key):
+                    prompts.append(self._materialize_prompt(entry.connector_id, entry.capability))
+            return prompts
 
     async def native_capability_projection(self) -> tuple[tuple[object, ...], tuple[object, ...]]:
         await self.reconcile_runtime()

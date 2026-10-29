@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
 from tests.umbod.rest.user_catalogue.query_budget_support import (
     CountingDatabase,
+    CountingReadSession,
     CountingSession,
     QueryCounts,
 )
@@ -45,7 +46,7 @@ from umbod.core.connectors.openapi.stores.schema import (
     CurrentCatalogHeaderRecord,
 )
 from umbod.core.groups.stores.schema import GROUP_TABLE, PermissionGroupRecord
-from umbod.core.persistence import Database, DatabaseSession, InsertCommand, Query, Table, TransactionMode
+from umbod.core.persistence import Database, DatabaseSession, InsertCommand, Query, ReadSession, Table, TransactionMode
 from umbod.core.persistence.query import AllOf, AnyOf, Equals, Fields, OneOf
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE, PublicationStateRecord
 from umbod.proxies import Model
@@ -72,8 +73,8 @@ class OverviewQueryCounts(QueryCounts):
         self.observations.clear()
 
 
-class OverviewCountingSession(CountingSession):
-    def __init__(self, session: DatabaseSession, counts: OverviewQueryCounts) -> None:
+class OverviewCountingReadSession(CountingReadSession):
+    def __init__(self, session: ReadSession, counts: OverviewQueryCounts) -> None:
         super().__init__(session, counts)
         self.overview_counts = counts
 
@@ -108,6 +109,10 @@ class OverviewCountingSession(CountingSession):
         return rows
 
 
+class OverviewCountingSession(OverviewCountingReadSession, CountingSession):
+    pass
+
+
 def activation_query_scopes(predicate: object) -> dict[str, tuple[str, ...]]:
     assert isinstance(predicate, AllOf)
     assert len(predicate.predicates) == 3
@@ -132,6 +137,12 @@ class OverviewCountingDatabase(CountingDatabase):
     def __init__(self, database: Database, counts: OverviewQueryCounts) -> None:
         super().__init__(database, counts)
         self.overview_counts = counts
+
+    @asynccontextmanager
+    async def read_session(self) -> AsyncIterator[ReadSession]:
+        self.counts.sessions += 1
+        async with self.database.read_session() as session:
+            yield OverviewCountingReadSession(session, self.overview_counts)
 
     @asynccontextmanager
     async def session(self, *, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:
