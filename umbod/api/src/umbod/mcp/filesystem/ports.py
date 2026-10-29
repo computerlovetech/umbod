@@ -4,6 +4,7 @@ from typing import Protocol
 from umbod.core.callers import CallerSnapshot
 from umbod.core.filesystem.browsing import FilesystemBrowsing
 from umbod.core.filesystem.creation import FilesystemCreation
+from umbod.core.filesystem.uploads import UploadService
 
 
 class FilesystemGroupClaimFields(Protocol):
@@ -18,3 +19,5 @@ class FilesystemServiceFactory(Protocol):
     def browsing(self) -> FilesystemBrowsing: ...
 
     def creation(self) -> FilesystemCreation: ...
+
+    def uploads(self) -> UploadService: ...

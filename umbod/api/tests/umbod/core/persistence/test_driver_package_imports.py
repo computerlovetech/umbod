@@ -114,6 +114,7 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
         'create_filesystem_browsing',
         'create_filesystem_transactions',
         'create_filesystem_creation',
+        'create_filesystem_uploads',
         'create_root_provisioning',
         'create_root_group_policy_management',
     }

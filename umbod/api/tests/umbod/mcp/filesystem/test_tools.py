@@ -18,23 +18,23 @@ async def root_id(client: Client) -> str:
 
 
 @pytest.mark.asyncio
-async def test_five_observed_tools_publish_safe_schemas(filesystem_mcp: FilesystemMcp) -> None:
+async def test_observed_tools_publish_safe_schemas(filesystem_mcp: FilesystemMcp) -> None:
     tools = await filesystem_mcp.server.list_tools()
-    assert len(tools) == 5
+    assert len(tools) == 7
     assert all(isinstance(tool, ObservedFunctionTool) for tool in tools)
     async with Client(filesystem_mcp.server) as client:
         descriptors = {tool.name: tool for tool in await client.list_tools()}
     assert set(descriptors) == {
-        "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
-        "create_filesystem_file", "create_filesystem_directory",
+        "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
+        "create_filesystem_file", "create_filesystem_directory", "filesystem_upload",
     }
     schema = descriptors[CREATE].input_schema
     assert set(schema["properties"]) == {"parent_id", "name", "metadata"}
     assert set(schema["required"]) == {"parent_id", "name", "metadata"}
     assert schema["properties"]["parent_id"]["format"] == "uuid"
     for name, tool in descriptors.items():
-        assert tool.annotations.read_only_hint == (not name.startswith("create_"))
-        assert tool.annotations.idempotent_hint == (not name.startswith("create_"))
+        assert tool.annotations.read_only_hint == (not name.startswith("create_") and name != "filesystem_upload")
+        assert tool.annotations.idempotent_hint == (not name.startswith("create_") and name != "filesystem_upload")
     assert "content" not in descriptors[CREATE].output_schema["properties"]
     assert "owner" not in descriptors[CREATE].output_schema["properties"]
 

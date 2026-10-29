@@ -112,7 +112,7 @@ for attempt in $(seq 1 30); do
 done
 
 python3 "${script_directory}/bootstrap.py"
-(cd "${app_directory}/api" && uv run --locked pytest live_runtime_tests --ignore=live_runtime_tests/test_running_personal_mcp_execution.py --ignore=live_runtime_tests/test_running_filesystem.py)
+(cd "${app_directory}/api" && uv run --locked pytest live_runtime_tests --ignore=live_runtime_tests/test_running_personal_mcp_execution.py --ignore=live_runtime_tests/test_running_filesystem.py --ignore=live_runtime_tests/test_running_filesystem_uploads.py)
 kubectl --context "${kube_context}" logs deployment/umbod-core --container api \
     | python3 "${script_directory}/check_telemetry_logs.py"
 kubectl --context "${kube_context}" logs deployment/umbod-core --container mcp \
@@ -161,7 +161,7 @@ opener.addheaders = [("Authorization", "Bearer " + os.environ["UMBOD_TEST_BEARER
 install_opener(opener)
 runpy.run_path(os.environ["UMBOD_TEST_BOOTSTRAP_PATH"], run_name="__main__")
 ')
-(cd "${app_directory}/api" && uv run --locked pytest --tb=line live_runtime_tests/test_running_personal_mcp_execution.py live_runtime_tests/test_running_filesystem.py)
+(cd "${app_directory}/api" && uv run --locked pytest --tb=short live_runtime_tests/test_running_personal_mcp_execution.py live_runtime_tests/test_running_filesystem.py live_runtime_tests/test_running_filesystem_uploads.py)
 for container_name in api api-b mcp mcp-b; do
     kubectl --context "${kube_context}" logs deployment/umbod-core --container "${container_name}" \
         | python3 "${script_directory}/check_secret_logs.py"

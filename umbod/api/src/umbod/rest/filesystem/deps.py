@@ -1,4 +1,3 @@
-from datetime import timedelta
 from typing import Annotated
 
 from fastapi import Depends
@@ -15,6 +14,7 @@ from umbod.core.filesystem.browsing import FilesystemBrowsing
 from umbod.core.persistence import Database
 from umbod.infrastructure import (
     create_filesystem_browsing, create_filesystem_creation, create_filesystem_transactions,
+    create_filesystem_uploads,
 )
 from umbod.rest.authentication.local import LOCAL_DEVELOPMENT_ISSUER, local_rest_identity_enabled
 from umbod.rest.authentication.authorization import JwtClaims
@@ -23,7 +23,6 @@ from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 
 from umbod.core.filesystem.uploads import SystemUploadClock, UploadClock, UploadService
-from umbod.core.filesystem.stores.uploads import DatabaseUploadTransactions
 
 from .errors import filesystem_errors
 
@@ -111,7 +110,9 @@ def get_filesystem_uploads(
     max_bytes: Annotated[int, Depends(get_filesystem_upload_limit)],
     clock: Annotated[UploadClock, Depends(get_filesystem_upload_clock)],
 ) -> UploadService:
-    return UploadService(resolver, DatabaseUploadTransactions(database), content, max_bytes, clock, timedelta(hours=1))
+    return create_filesystem_uploads(
+        database=database, resolver=resolver, content=content, max_upload_bytes=max_bytes, clock=clock,
+    )
 
 
 def get_filesystem_deletion(

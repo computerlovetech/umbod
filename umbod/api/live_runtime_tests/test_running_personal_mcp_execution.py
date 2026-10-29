@@ -152,6 +152,14 @@ async def find_tool(client: Client[Any], suffix: str) -> str:
     raise AssertionError("Discovered personal tool did not become available")
 
 
+async def wait_until_tool_hidden(client: Client[Any], name: str) -> None:
+    for _ in range(40):
+        if not any(tool.name == name for tool in await client.list_tools()):
+            return
+        await asyncio.sleep(0.25)
+    raise AssertionError("Revoked personal tool remained visible")
+
+
 async def denied(client: Client[Any], name: str, fixture: httpx.Client) -> None:
     before = checked(fixture.get("/control"))["calls"]
     result = await client.call_tool(name, {"message": "same-arguments"}, raise_on_error=False)
@@ -388,10 +396,19 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
             grant(alice, connector_id, "disabled", connector=True)
             await denied(a, name, fixture)
             await denied(b, name, fixture)
+            await wait_until_tool_hidden(b, name)
             grant(alice, connector_id, "enabled", connector=True)
+            assert await find_tool(a, "echo_owner") == name
+            assert await find_tool(b, "echo_owner") == name
+            await owner_result(a, name, "alice")
+            await owner_result(b, name, "bob")
+            bob_before_disable = checked(bob.get(f"/api/me/connectors/mcp/{connector_id}"))
+            assert bob_before_disable["enabled"] is True
+            assert bob_before_disable["runtime_available"] is True
             checked(alice.put(f"/api/me/connectors/mcp/{connector_id}/enablement", json={"enabled": False}))
             await denied(a, name, fixture)
             await owner_result(b, name, "bob")
+            assert checked(bob.get(f"/api/me/connectors/mcp/{connector_id}")) == bob_before_disable
             checked(alice.put(f"/api/me/connectors/mcp/{connector_id}/enablement", json={"enabled": True}))
             checked(alice.delete(f"/api/me/connectors/mcp/{connector_id}/authorization"), 204)
             assert checked(alice.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is False

@@ -27,7 +27,7 @@ from umbod.core.administrator.connector_configuration import AdministratorConnec
 from umbod.core.administrator.connector_configuration.reader import CatalogAdministratorConnectorConfigurationReader
 from umbod.mcp.administrator.catalog import AdministratorConfigurationCatalog
 from umbod.core.administrator.connector_configuration.mutation import CatalogAdministratorConfigurationMutation
-from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
+from umbod.infrastructure import ContentConfig, ConfiguredPersistenceRuntimeProvider, create_content_driver
 
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -36,6 +36,7 @@ from functools import partial
 from pathlib import Path
 from typing import Literal
 from fastmcp import FastMCP
+from pydantic import TypeAdapter
 from fastmcp.server.middleware import AuthMiddleware, Middleware
 from mcp.server.request_state import RequestStateSecurity
 from starlette.applications import Starlette
@@ -208,6 +209,9 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
             settings.admin_authentication.membership_claim,
             settings.admin_authentication.required_membership,
         )
+    filesystem_content = create_content_driver(
+        TypeAdapter(ContentConfig).validate_python(settings.filesystem.content.model_dump())
+    )
     register_filesystem_tools(
         McpObservedToolRegistrar(mcp, publisher),
         CurrentFilesystemCallerCapture(
@@ -216,7 +220,9 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
             if group_permission_runtime_state is not None
             else StaticFilesystemGroupClaimFields(settings.mcp.permission_group_claim),
         ),
-        DatabaseFilesystemServiceFactory(persistence_runtime.database),
+        DatabaseFilesystemServiceFactory(
+            persistence_runtime.database, filesystem_content, settings.filesystem.upload_max_bytes,
+        ),
     )
     await initialize_openapi_discovery(mcp)
     await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, signals, mcp.execution_pipelines, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes)

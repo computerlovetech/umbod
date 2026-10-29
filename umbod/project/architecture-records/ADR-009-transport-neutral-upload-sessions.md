@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-29
-- **Scope:** Filesystem upload lifecycle, REST contract, and web client
+- **Scope:** Filesystem upload lifecycle, REST and MCP contracts, and web client
 
 ## Decision
 
@@ -34,9 +34,21 @@ The client validates transfer descriptions at the network boundary. Same-origin 
 
 The client must reject unsupported transfer types rather than interpreting them as single uploads. Future multipart transfers require a separate transfer variant, explicit supported-client behavior, part receipts, retry semantics, and cancellation; no placeholder multipart implementation is added now.
 
+## MCP-native uploads
+
+The MCP extension exposes a one-shot filesystem upload tool that accepts explicitly tagged UTF-8 text or canonical padded base64 content. It composes the existing core session creation, byte transfer, and completion operations under one captured caller identity. It returns the published node, not session ownership, storage references, HTTP instructions, or file bytes. Existing creation and browsing tools remain available.
+
+The MCP-specific maximum is 1,048,576 decoded bytes per file, further restricted by any lower configured filesystem upload limit. Input schemas bound encoded string length, and the adapter validates encoding and actual decoded byte length before creating an upload session or writing content. UTF-8 limits count encoded bytes, not characters. Empty files are supported. This cap bounds file content, not the entire JSON-RPC envelope or metadata.
+
+MCP clients are not required to execute arbitrary authenticated HTTP transfers. The initial native tool therefore submits content through ordinary tool arguments without depending on a separate REST credential or an MCP Apps UI. Chunking, resumable MCP sessions, external HTTP transfer instructions, and interactive upload applications remain separate future decisions.
+
+Upload services and database transaction adapters are created per operation through shared infrastructure composition. Each application retains its configured content driver. Persistent deployments must point REST and MCP workers at the same database and local content storage; separate in-memory drivers do not share file bytes across applications or processes.
+
+The one-shot tool is not declared idempotent. An interrupted invocation can leave an incomplete session or unreferenced content under the existing lifecycle guarantees; a lost success response does not justify an automatic retry or imply cleanup.
+
 ## Scope and consequences
 
-The first implementation replaces REST form-data uploads and updates the existing web upload workflow for local and in-memory storage. Downloads are unchanged. S3, other external receiving services, multipart, resumable transfers, and MCP upload tools are deferred.
+The first implementation replaces REST form-data uploads and updates the existing web upload workflow for local and in-memory storage. The bounded MCP-native extension reuses that lifecycle without changing REST contracts. Downloads are unchanged. S3, other external receiving services, multipart, and resumable transfers are deferred.
 
 All application rules remain in core filesystem services, neutral stores remain over the shared database, concrete byte I/O stays in filesystem infrastructure, and REST remains an adapter. Request services retain the existing dependency lifetime boundaries.
 

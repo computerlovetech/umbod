@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import assert_never
 
 from umbod.core.filesystem import (
@@ -15,6 +16,8 @@ from umbod.core.filesystem.authorization import AuthorizationService, Filesystem
 from umbod.core.filesystem.browsing import BrowsingService, FilesystemBrowsing
 from umbod.core.filesystem.stores import DatabaseAccessControl, DatabaseNamespace, DatabaseFilesystemTransactions
 from umbod.core.persistence import Database
+from umbod.core.filesystem.uploads import UploadClock, UploadService
+from umbod.core.filesystem.stores.uploads import DatabaseUploadTransactions
 
 from umbod.core.filesystem.administration import RootGroupPolicyManagement, RootGroupPolicyService
 from umbod.core.filesystem.stores.administration import DatabaseRootPolicyTransactions
@@ -51,6 +54,16 @@ def create_filesystem_creation(
     *, database: Database, resolver: FilesystemIdentityResolver
 ) -> FilesystemCreation:
     return CreationService(resolver, create_filesystem_transactions(database=database))
+
+
+def create_filesystem_uploads(
+    *, database: Database, resolver: FilesystemIdentityResolver, content: ContentDriver,
+    max_upload_bytes: int, clock: UploadClock,
+) -> UploadService:
+    return UploadService(
+        resolver, DatabaseUploadTransactions(database), content, max_upload_bytes, clock,
+        timedelta(hours=1),
+    )
 
 
 def create_root_group_policy_management(*, database: Database, issuer: str) -> RootGroupPolicyManagement:

@@ -110,7 +110,7 @@ async def test_gateway_mode_exposes_gateway_tools_instead_of_connector_tools() -
     async with Client(mcp) as client:
         tools = await client.list_tools()
     tools_by_name = {tool.name: tool for tool in tools}
-    assert set(tools_by_name) == {'search_tools', 'execute_tool'} | {"get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory"}
+    assert set(tools_by_name) == {'search_tools', 'execute_tool'} | {"filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload"}
     assert 'search_tools' in tools_by_name
     assert 'execute_tool' in tools_by_name
     assert 'slack_list_readable_channels' not in tools_by_name

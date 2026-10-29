@@ -182,6 +182,31 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             assert child_response.status_code == 200
             assert {node["id"] for node in child_response.json()["nodes"]} == {alice_file["id"], uploaded["id"]}
             assert child_response.headers["cache-control"] == "no-store"
+            browse_target = {"type": "path", "path": "/" + name}
+            listed = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
+                "operation": "ls", "target": browse_target,
+            }))["result"]
+            assert listed["node"] == alice_directory
+            assert {node["id"] for node in listed["entries"]} == {alice_file["id"], uploaded["id"]}
+            assert listed["breadcrumbs"]["complete"] is True
+            limited = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
+                "operation": "ls", "target": browse_target, "max_entries": 1,
+            }))["result"]
+            assert len(limited["entries"]) == 1
+            assert limited["truncated"] is True
+            inspected = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
+                "operation": "stat", "target": {"type": "path", "path": "/" + name + "/draft"},
+            }))["result"]
+            assert inspected["node"] == alice_file
+            tree = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
+                "operation": "tree", "target": browse_target, "depth": 2,
+            }))["result"]
+            assert {entry["node"]["id"] for entry in tree["entries"]} == {alice_file["id"], uploaded["id"]}
+            private_tree = await bob_mcp.call_tool("filesystem_browse", {
+                "operation": "tree", "target": browse_target,
+            }, raise_on_error=False)
+            assert private_tree.is_error
+            assert "filesystem_permission_denied" in private_tree.content[0].text
             hidden_parent = await bob_mcp.call_tool("list_filesystem_children", {"parent_id": alice_directory["id"]}, raise_on_error=False)
             assert hidden_parent.is_error
             assert "filesystem_permission_denied" in hidden_parent.content[0].text
@@ -243,6 +268,11 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             )
             checked_breadcrumbs(bob.get(FILESYSTEM + "/nodes/" + bob_file["id"] + "/breadcrumbs"), [bob_file], False)
             assert tool_payload(await bob_mcp.call_tool("get_filesystem_node", {"node_id": bob_file["id"]})) == bob_file
+            partial = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
+                "operation": "ls", "target": {"type": "node", "node_id": alice_directory["id"]},
+            }))["result"]
+            assert partial["breadcrumbs"]["complete"] is False
+            assert {node["id"] for node in partial["entries"]} == {alice_file["id"]}
             stale = alice.put(policy_url, json={"expected_revision": current_policy["revision"], "groups": [group]})
             assert stale.status_code == 409
             assert stale.json()["detail"]["code"] == "filesystem_policy_stale"

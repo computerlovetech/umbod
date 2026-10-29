@@ -30,19 +30,27 @@ class ObservedToolOptions(TypedDict, total=False):
 
 
 class ObservedFunctionTool(Tool):
-    _delegate: FunctionTool = PrivateAttr()
+    _delegate: Tool = PrivateAttr()
     _publisher: McpInvocationPublisher = PrivateAttr()
     _result_is_error: Callable[[ToolResult], bool] = PrivateAttr()
+    _operation_names: frozenset[str] = PrivateAttr()
 
-    def __init__(self, delegate: FunctionTool, publisher: McpInvocationPublisher, result_is_error: Callable[[ToolResult], bool]) -> None:
+    def __init__(
+        self, delegate: Tool, publisher: McpInvocationPublisher,
+        result_is_error: Callable[[ToolResult], bool],
+        operation_names: frozenset[str],
+    ) -> None:
         super().__init__(**{field: getattr(delegate, field) for field in Tool.model_fields})
         self._delegate = delegate
         self._publisher = publisher
         self._result_is_error = result_is_error
+        self._operation_names = operation_names
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
+        operation = arguments.get("operation")
+        operation_name = operation if isinstance(operation, str) and operation in self._operation_names else None
         try:
-            lifecycle = self._publisher.start(McpToolIdentity(tool_name=self.name, connector_id=None, operation_name=None))
+            lifecycle = self._publisher.start(McpToolIdentity(tool_name=self.name, connector_id=None, operation_name=operation_name))
         except Exception as error:
             self._publisher.report_failure("invocation.start", error)
             lifecycle = None
@@ -99,7 +107,17 @@ class McpObservedToolRegistrar:
             fn, name=name, description=description, auth=auth,
             tags=options.get("tags", set()), meta=options.get("meta", {}),
         )
-        tool = ObservedFunctionTool(delegate, self._publisher, options.get("result_is_error", tool_result_is_error))
+        return self.register_tool(
+            delegate, result_is_error=options.get("result_is_error", tool_result_is_error),
+            operation_names=frozenset(),
+        )
+
+    def register_tool(
+        self, delegate: Tool, *,
+        result_is_error: Callable[[ToolResult], bool],
+        operation_names: frozenset[str],
+    ) -> ObservedFunctionTool:
+        tool = ObservedFunctionTool(delegate, self._publisher, result_is_error, operation_names)
         self._mcp.add_tool(tool)
-        self._publisher.tool_registered(McpToolIdentity(tool_name=name, connector_id=None, operation_name=None))
+        self._publisher.tool_registered(McpToolIdentity(tool_name=delegate.name, connector_id=None, operation_name=None))
         return tool

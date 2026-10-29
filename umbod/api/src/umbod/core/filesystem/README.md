@@ -9,7 +9,7 @@ description: "Storage-independent filesystem operations with separate authorizat
 - [__init__.py](./__init__.py) — Public module exports.
 - [administration/](./administration/README.md) — Trusted root group policy editing.
 - [authorization/](./authorization/README.md) — Identity resolution and permission decisions.
-- [browsing/](./browsing/README.md) — Caller-aware summaries, child listing and transaction-consistent visible breadcrumbs.
+- [browsing/](./browsing/README.md) — Caller-aware summaries, bounded exploration and transaction-consistent visible breadcrumbs.
 - [content/](./content/README.md) — Authorized streaming uploads and downloads.
 - [creation/](./creation/README.md) — Authorized node creation.
 - [deletion/](./deletion/README.md) — Authorized permanent single-file removal without byte deletion.

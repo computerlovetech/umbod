@@ -9,6 +9,10 @@ from fastmcp.exceptions import ToolError
 from umbod.core.filesystem.authorization.errors import PermissionDenied
 from umbod.core.filesystem.browsing import FilesystemBrowsing
 from umbod.core.filesystem.creation import FilesystemCreation
+from umbod.core.filesystem.content.errors import UploadTooLarge
+from umbod.core.filesystem.uploads.errors import (
+    UploadConflict, UploadExpired, UploadLengthMismatch, UploadMediaTypeMismatch,
+)
 from umbod.core.filesystem.errors import InvalidName, MissingNode, NameCollision, StorageFailure, WrongNodeKind
 from umbod.mcp.filesystem import register_filesystem_tools
 from umbod.mcp.filesystem.errors import filesystem_operation
@@ -25,6 +29,11 @@ class SpecializedStorageFailure(StorageFailure):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("error_type,expected", [
+    (UploadTooLarge, "filesystem_upload_too_large: Filesystem upload too large"),
+    (UploadConflict, "filesystem_upload_conflict: Filesystem upload conflict"),
+    (UploadExpired, "filesystem_upload_expired: Filesystem upload expired"),
+    (UploadLengthMismatch, "filesystem_upload_length_mismatch: Invalid upload length"),
+    (UploadMediaTypeMismatch, "filesystem_upload_media_type_mismatch: Invalid upload content type"),
     (PermissionDenied, "filesystem_permission_denied: Filesystem access denied"),
     (MissingNode, "filesystem_permission_denied: Filesystem access denied"),
     (InvalidName, "filesystem_invalid_name: Invalid filesystem name"),

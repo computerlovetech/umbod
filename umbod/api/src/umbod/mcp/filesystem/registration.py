@@ -4,11 +4,14 @@ from mcp.types import ToolAnnotations
 
 from umbod.core.filesystem.browsing import NodeSummary
 from umbod.mcp.tools import McpObservedToolRegistrar
+from umbod.mcp.tools.registration import tool_result_is_error
 
 from .authorization import root_filesystem_tool_access
+from .browsing import FilesystemBrowseTool
 from .errors import filesystem_operation
 from .models import FilesystemChildren, FilesystemNodeMetadata
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
+from .upload import FilesystemUploadTool
 
 
 def register_filesystem_tools(
@@ -16,6 +19,16 @@ def register_filesystem_tools(
     callers: FilesystemCallerCapture,
     services: FilesystemServiceFactory,
 ) -> None:
+    registrar.register_tool(
+        FilesystemBrowseTool(callers, services), result_is_error=tool_result_is_error,
+        operation_names=frozenset({"ls", "tree", "stat"}),
+    )
+
+    registrar.register_tool(
+        FilesystemUploadTool(callers, services), result_is_error=tool_result_is_error,
+        operation_names=frozenset(),
+    )
+
     async def get_filesystem_root() -> NodeSummary:
         with filesystem_operation():
             snapshot = callers.capture()

@@ -65,7 +65,7 @@ def test_unexpected_service_and_response_errors_are_safe_and_no_store(
 
 @pytest.mark.parametrize("factory,method,path", [
     ("create_filesystem_browsing", "GET", "/root"),
-    ("UploadService", "POST", "/nodes/{id}/uploads"),
+    ("create_filesystem_uploads", "POST", "/nodes/{id}/uploads"),
     ("create_filesystem_creation", "POST", "/nodes/{id}/directories"),
 ])
 def test_unexpected_service_factory_errors_are_safe_and_no_store(
