@@ -13,7 +13,7 @@ description: "MCP application composition, capability exposure, authentication a
 - [auth/](./auth/) — Authentication and caller capture.
 - [authorization.py](./authorization.py) — FastMCP permission bridge.
 - [connectors/](./connectors/) — Connector-kind delivery adapters.
-- [context.py](./context.py) — Runtime context.
+- [context.py](./context.py) — Application configuration and runtime dependencies.
 - [filesystem/](./filesystem/README.md) — Filesystem browsing and empty creation.
 - [listeners/](./listeners/README.md) — Invocation observation adapters.
 - [live_permission_updates.py](./live_permission_updates.py) — Permission synchronization.
@@ -28,6 +28,7 @@ description: "MCP application composition, capability exposure, authentication a
 - [runtime_options.py](./runtime_options.py) — Runtime composition options.
 - [settings.py](./settings.py) — MCP settings.
 - [signals/](./signals/README.md) — Neutral execution events.
+- [telemetry/](./telemetry/README.md) — Required application telemetry and listener composition.
 - [tools/](./tools/) — Observed internal tool registration.
 
 # Architecture

@@ -12,7 +12,6 @@ from umbod.core.capabilities import (
 from umbod.core.capabilities.catalog import InMemoryCapabilityCatalog
 from umbod.core.capabilities.descriptions import ConnectorCapabilityDescriptionOverrideStore
 from umbod.core.capabilities.tools.names import mangle_public_tool_name
-from umbod.core.connectors.downstream_mcp.adapters.settings import downstream_mcp_infrastructure_settings_from_app_config
 from umbod.core.connectors.downstream_mcp.catalog import StoreBackedDownstreamCapabilityCatalog
 from umbod.core.connectors.downstream_mcp.catalog.definitions import InMemoryConnectorDefinitionReader
 from umbod.core.connectors.downstream_mcp.management import utc_clock
@@ -35,19 +34,26 @@ from umbod.core.user_catalogue.read_state import plan_catalogue_state
 from umbod.core.user_catalogue.readiness import RequestConnectorReadiness
 from umbod.core.user_catalogue.shared import IndexedCapabilityPermissions, SharedCatalogueSource
 from umbod.rest.connectors.dependencies import get_connector_capability_description_override_store
-from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
 from umbod.rest.connectors.native.dependencies import get_connector_current_configuration_store, get_connector_registry
 from umbod.rest.connectors.openapi.dependencies import get_openapi_connector_store
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 
 from .caller import CatalogueCaller, get_catalogue_caller
+from .ports import PersonalCatalogueStoreSupplier
 from .projection import CapabilityNameKey, CollisionSafeSource, duplicate_names, gateway_tools_unavailable
+
+
+def get_personal_catalogue_store_supplier(
+    factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
+) -> PersonalCatalogueStoreSupplier:
+    return factories.personal_catalogue_stores
 
 
 async def get_user_catalogue(
     factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
     captured: Annotated[CatalogueCaller, Depends(get_catalogue_caller)],
+    supplier: Annotated[PersonalCatalogueStoreSupplier, Depends(get_personal_catalogue_store_supplier)],
     registry: Annotated[ConnectorRegistry, Depends(get_connector_registry)],
     configurations: Annotated[ConnectorCurrentConfigurationStore, Depends(get_connector_current_configuration_store)],
     openapi: Annotated[OpenApiConnectorStore, Depends(get_openapi_connector_store)],
@@ -128,9 +134,7 @@ async def get_user_catalogue(
         resolution = captured.personal_identity
         if isinstance(resolution, ResolvedPersonalIdentity):
             personal_caller = PersonalCaller(caller=captured.caller, principal=resolution.principal, groups=groups)
-            stores = await get_downstream_stores(
-                downstream_mcp_infrastructure_settings_from_app_config(settings), factories,
-            )
+            stores = await supplier.create()
             inventory = PersonalConnectorInventoryService(
                 definitions, publishing, state.permissions, groups,
                 PersonalConnectionService(personal_caller, stores.personal_connections), descriptions,

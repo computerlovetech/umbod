@@ -3,14 +3,14 @@ import gzip
 import httpx2
 import pytest
 
-from umbod.core.connectors.downstream_mcp.oauth.discovery import discover, public_https
+from umbod.core.connectors.downstream_mcp.oauth.discovery import discover
 
 
 @pytest.mark.asyncio
-async def test_discovery_follows_standard_metadata_without_credentials():
-    seen = []
+async def test_discovery_follows_standard_metadata_without_credentials() -> None:
+    seen: list[str] = []
 
-    def handle(request):
+    def handle(request: httpx2.Request) -> httpx2.Response:
         assert "authorization" not in request.headers
         seen.append(str(request.url))
         if str(request.url) == "https://tools.example/mcp":
@@ -50,6 +50,7 @@ async def test_discovery_follows_standard_metadata_without_credentials():
     assert all("canonical.example" not in url for url in seen)
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "url",
     [
@@ -58,14 +59,22 @@ async def test_discovery_follows_standard_metadata_without_credentials():
         "https://example.com/mcp?token=secret",
     ],
 )
-def test_discovery_rejects_credential_bearing_or_insecure_urls(url):
-    with pytest.raises(ValueError):
-        public_https(url)
+async def test_discovery_rejects_credential_bearing_or_insecure_urls(url: str) -> None:
+    requests: list[httpx2.Request] = []
+
+    def handle(request: httpx2.Request) -> httpx2.Response:
+        requests.append(request)
+        return httpx2.Response(404)
+
+    async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle)) as client:
+        with pytest.raises(ValueError):
+            await discover(url, client)
+        assert requests == []
 
 
 @pytest.mark.asyncio
-async def test_discovery_rejects_wrong_issuer():
-    def handle(request):
+async def test_discovery_rejects_wrong_issuer() -> None:
+    def handle(request: httpx2.Request) -> httpx2.Response:
         if "oauth-authorization-server" in str(request.url):
             return httpx2.Response(
                 200,
@@ -84,8 +93,8 @@ async def test_discovery_rejects_wrong_issuer():
 
 
 @pytest.mark.asyncio
-async def test_resource_origin_can_cover_endpoint_path():
-    def handle(request):
+async def test_resource_origin_can_cover_endpoint_path() -> None:
+    def handle(request: httpx2.Request) -> httpx2.Response:
         if "oauth-protected-resource" in str(request.url):
             return httpx2.Response(
                 200,
@@ -102,8 +111,8 @@ async def test_resource_origin_can_cover_endpoint_path():
 
 
 @pytest.mark.asyncio
-async def test_discovery_rejects_insecure_token_endpoint():
-    def handle(request):
+async def test_discovery_rejects_insecure_token_endpoint() -> None:
+    def handle(request: httpx2.Request) -> httpx2.Response:
         if "oauth-authorization-server" in str(request.url):
             return httpx2.Response(
                 200,

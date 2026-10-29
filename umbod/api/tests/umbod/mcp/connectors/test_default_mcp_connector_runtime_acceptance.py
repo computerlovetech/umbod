@@ -1,3 +1,4 @@
+from umbod.mcp.telemetry.composition import create_configured_mcp_telemetry
 import asyncio
 from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
 
@@ -229,7 +230,7 @@ async def _default_public_app_config(connector_tool_runtime_state_store: InMemor
     settings = MCPAppSettings(mcp=MCPSettings(metrics_enabled=False))
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
     await persistence_runtime.readiness.ensure_ready()
-    return PublicAppConfig(settings=settings, connector_runtime=await create_default_mcp_connector_runtime(settings, persistence_runtime), source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=HttpConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime, connector_tool_runtime_state_store=connector_tool_runtime_state_store)
+    return PublicAppConfig(settings=settings, telemetry=create_configured_mcp_telemetry(settings), connector_runtime=await create_default_mcp_connector_runtime(settings, persistence_runtime), source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=HttpConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime, connector_tool_runtime_state_store=connector_tool_runtime_state_store)
 
 async def _configure_connector(mcp: FastMCP, connector_id: str, published: bool) -> None:
     configurations: dict[str, dict[str, str]] = {

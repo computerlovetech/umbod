@@ -9,7 +9,8 @@ from pydantic import ValidationError
 
 from umbod.core.callers import CallerSnapshot
 from umbod.core.filesystem import MissingNode, NamespaceDriver, Node, Permission, StorageFailure
-from umbod.core.filesystem.authorization import FilesystemAuthorization, PermissionDenied
+from umbod.core.filesystem.authorization import FilesystemAuthorization, FilesystemIdentityResolver, PermissionDenied
+from umbod.core.filesystem.transactions import FilesystemTransactions
 from umbod.core.filesystem.browsing import BrowsingService, FilesystemBrowsing, NodeSummary
 from umbod.core.filesystem.namespace import initial_root
 from tests.support.filesystem.authorization import caller
@@ -32,7 +33,9 @@ def browsing_mocks() -> BrowsingMocks:
     namespace.get_node.return_value = root
     namespace.list_children.return_value = []
     browsing: FilesystemBrowsing = BrowsingService(
-        cast(NamespaceDriver, namespace), cast(FilesystemAuthorization, authorization)
+        cast(NamespaceDriver, namespace), cast(FilesystemAuthorization, authorization),
+        create_autospec(FilesystemIdentityResolver, instance=True, spec_set=True),
+        create_autospec(FilesystemTransactions, instance=True, spec_set=True),
     )
     return BrowsingMocks(browsing, namespace, authorization, root)
 

@@ -1,5 +1,5 @@
 import pytest
-from fastmcp import Client
+from fastmcp import Client, FastMCP
 
 from umbod.mcp.settings import MCPAppSettings, MCPSettings
 from tests.umbod.mcp.connectors.test_mcp_connector_prompts_resources_acceptance import (
@@ -13,6 +13,7 @@ from tests.umbod.mcp.connectors.test_mcp_connector_prompts_resources_acceptance 
 )
 from tests.umbod.mcp.connectors.tools.test_connector_tool_exposure_mode_acceptance import (
     ConnectorToolExposureMcpBuilder,
+    InMemoryConnectorPublishingStore,
 )
 from tests.mcp_fixtures import build_test_mcp
 
@@ -48,16 +49,35 @@ async def test_gateway_mode_leaves_connector_prompts_and_resources_independently
     assert resource[0].text == "Article a-123"
 
 
+async def _build_exposure_mcp(
+    settings: MCPAppSettings, builder: ConnectorToolExposureMcpBuilder
+) -> FastMCP:
+    configuration_store = await builder._configured_connector_store()
+    publishing_store = InMemoryConnectorPublishingStore()
+    await publishing_store.publish_connector("slack")
+    return await build_test_mcp(
+        settings,
+        None,
+        connector_registrations=[builder._connector_registration()],
+        connector_configuration_store=configuration_store,
+        connector_publishing_store=publishing_store,
+        connector_tool_mappings=[builder._tool_mapping()],
+        group_permission_runtime_state=builder._permissions,
+    )
+
+
 @pytest.mark.asyncio
 async def test_connector_tool_exposure_mode_changes_only_after_server_restart() -> None:
-    running_mcp = await ConnectorToolExposureMcpBuilder().build()
+    builder = ConnectorToolExposureMcpBuilder()
+    settings = builder._settings()
+    running_mcp = await _build_exposure_mcp(settings, builder)
 
     async with Client(running_mcp) as client:
         before_configuration_change = {tool.name for tool in await client.list_tools()}
-        setattr(running_mcp, "configured_connector_tool_exposure_mode", "gateway")
+        settings.mcp.connector_tool_exposure_mode = "gateway"
         after_configuration_change = {tool.name for tool in await client.list_tools()}
 
-    restarted_mcp = await ConnectorToolExposureMcpBuilder().in_gateway_mode().build()
+    restarted_mcp = await _build_exposure_mcp(settings, builder)
     async with Client(restarted_mcp) as client:
         after_restart = {tool.name for tool in await client.list_tools()}
 

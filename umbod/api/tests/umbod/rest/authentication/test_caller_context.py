@@ -117,12 +117,14 @@ def _user_client(verifier: JwtVerifier) -> TestClient:
 def test_user_http_context_provenance_uses_actual_verifier(
     verifier: JwtVerifier, expected: AuthenticationProvenance, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(verifier, "verify", Mock(return_value=JwtClaims(claims={
-        "sub": "u", "iss": "issuer", "authentication": "upstream_verified"
-    })))
+    token = '{"signature":"trusted","claims":{"sub":"u","iss":"issuer","authentication":"upstream_verified"}}'
+    if not isinstance(verifier, SemanticJwtVerifier):
+        monkeypatch.setattr(verifier, "verify", Mock(return_value=JwtClaims(claims={
+            "sub": "u", "iss": "issuer", "authentication": "upstream_verified"
+        })))
 
     with _user_client(verifier) as client:
-        response = client.get("/api/me/probe", headers={"Authorization": "Bearer token"})
+        response = client.get("/api/me/probe", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 200
     assert response.json()["authentication"] == expected.value

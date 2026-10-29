@@ -1,23 +1,33 @@
+import os
+from pathlib import Path
 from typing import Any
 
-from pytest import MonkeyPatch
+from pytest import MonkeyPatch, fixture
 
 from umbod.cli.mcp import ServeCommand
-from umbod.config import AppConfig, McpConfig
+
+
+@fixture(autouse=True)
+def isolated_operator_environment(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    for name in tuple(os.environ):
+        if name.upper().startswith("UMBOD_"):
+            monkeypatch.delenv(name)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("UMBOD_ROOT_SECRET", "mcp-cli-test-root-secret")
+    monkeypatch.setenv("UMBOD_PROFILE", "local")
+    monkeypatch.setenv("UMBOD_AUTH", "dev")
 
 
 def _run(
     monkeypatch: MonkeyPatch, configured_port: int, cli_port: int | None = None
 ) -> dict[str, Any]:
     invocation: dict[str, Any] = {}
-    monkeypatch.setattr(
-        "umbod.cli.mcp.load_server_app_config",
-        lambda env_file: AppConfig(mcp=McpConfig(port=configured_port)),
-    )
-    monkeypatch.setattr(
-        "umbod.cli.mcp.uvicorn.run",
-        lambda *args, **kwargs: invocation.update({"args": args, **kwargs}),
-    )
+    monkeypatch.setenv("UMBOD_MCP_PORT", str(configured_port))
+
+    def record_server_invocation(*args: object, **kwargs: object) -> None:
+        invocation.update({"args": args, **kwargs})
+
+    monkeypatch.setattr("umbod.cli.mcp.uvicorn.run", record_server_invocation)
 
     ServeCommand()(host="0.0.0.0", port=cli_port, reload=False)
     return invocation

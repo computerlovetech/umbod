@@ -1,7 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import cast
-from unittest.mock import AsyncMock, Mock
 
 import httpcore
 import pytest
@@ -28,8 +27,16 @@ class ChunkStream:
         pass
 
 
+class FailingStream:
+    def __aiter__(self) -> AsyncIterator[bytes]:
+        raise httpcore.ReadError("disconnected")
+
+    async def aclose(self) -> None:
+        pass
+
+
 class FakePool:
-    def __init__(self, responses: list[httpcore.Response]) -> None:
+    def __init__(self, responses: list[httpcore.Response | Exception]) -> None:
         self.responses = iter(responses)
         self.requests: list[tuple[str, str, dict[str, str]]] = []
 
@@ -37,6 +44,8 @@ class FakePool:
     async def stream(self, method: str, url: str, headers: dict[str, str], extensions: dict[str, object]) -> AsyncIterator[httpcore.Response]:
         self.requests.append((method, url, headers))
         response = next(self.responses)
+        if isinstance(response, Exception):
+            raise response
         try:
             yield response
         finally:
@@ -135,16 +144,12 @@ async def test_redirect_without_location_is_unavailable() -> None:
 @pytest.mark.parametrize("error", [httpcore.ConnectError("offline"), httpcore.ReadTimeout("slow"), httpcore.RemoteProtocolError("bad"), OSError("dns"), ValueError("private address"), TimeoutError("deadline")])
 @pytest.mark.asyncio
 async def test_transport_errors_are_unavailable(error: Exception) -> None:
-    pool = Mock(spec=httpcore.AsyncConnectionPool)
-    pool.stream.return_value.__aenter__ = AsyncMock(side_effect=error)
-    pool.stream.return_value.__aexit__ = AsyncMock(return_value=False)
+    pool = FakePool([error])
     assert isinstance(await client(pool, 64, 0).fetch(FaviconHttpRequest(url=URL)), FaviconHttpUnavailable)
 
 
 @pytest.mark.asyncio
 async def test_streaming_failure_is_unavailable() -> None:
-    stream = Mock()
-    stream.__aiter__ = Mock(side_effect=httpcore.ReadError("disconnected"))
-    stream.aclose = AsyncMock()
+    stream = FailingStream()
     pool = FakePool([httpcore.Response(200, content=stream)])
     assert isinstance(await client(pool, 64, 0).fetch(FaviconHttpRequest(url=URL)), FaviconHttpUnavailable)

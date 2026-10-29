@@ -1,4 +1,4 @@
-from umbod.mcp.logging import McpToolInvocationLogSink
+from umbod.mcp.telemetry import McpTelemetryDependencies
 
 from dataclasses import dataclass
 
@@ -20,7 +20,6 @@ from umbod.mcp.runtime_options import (
     ConnectorStorePair,
     LocalConnectorRuntimeStateSourceStrategy,
 )
-from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
 from umbod.mcp.settings import MCPAppSettings
 
 
@@ -33,10 +32,10 @@ class PublicAppConfig:
     stateless_http: bool
     api_base_url: str | None
     persistence_runtime: PersistenceRuntime
+    telemetry: McpTelemetryDependencies
     auth_provider: MCPAuthProvider | None = None
     connector_tool_runtime_state_store: InMemoryConnectorToolRuntimeStateStore | None = None
     group_permission_runtime_state: InMemoryGroupConnectorToolPermissions | None = None
-    invocation_log_sink: McpToolInvocationLogSink | None = None
 
 
 @dataclass(frozen=True)
@@ -53,7 +52,7 @@ class ConnectorRuntimeStateSynchronizerOptions:
 class PublicAppRuntimeContext:
     mcp: FastMCP
     http_app: Starlette
-    metrics_recorder: PrometheusMcpMetricsRecorder
+    telemetry: McpTelemetryDependencies
     settings: MCPAppSettings
     connector_runtime: ConnectorRuntime
     connector_tool_runtime_state_store: InMemoryConnectorToolRuntimeStateStore

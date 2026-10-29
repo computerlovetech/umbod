@@ -9,6 +9,7 @@ description: Backend behavior, adapter and architecture tests with shared runtim
 - [__init__.py](./__init__.py)
 - [conftest.py](./conftest.py) — Shared isolation and connector fixtures.
 - [mcp_fixtures.py](./mcp_fixtures.py) — MCP application fixtures.
+- [mcp_telemetry_fixtures.py](./mcp_telemetry_fixtures.py) — Typed recording telemetry and listener test adapters.
 - [persistence_runtime.py](./persistence_runtime.py) — Persistence runtime fixtures.
 - [test_persistence_fixtures.py](./test_persistence_fixtures.py) — Fixture isolation checks.
 - [test_semgrep_test_practices.py](./test_semgrep_test_practices.py) — Shared Semgrep advisory-rule regression cases.

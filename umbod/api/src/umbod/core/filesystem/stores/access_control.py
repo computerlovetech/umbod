@@ -62,10 +62,18 @@ class DatabaseAccessControl:
         async with storage_session(self._database, TransactionMode.SERIALIZED_WRITE) as session:
             return await SessionAccessControl(session).remove_grant(node_id, principal)
 
+    async def clear_node(self, node_id: NodeId) -> None:
+        async with storage_session(self._database, TransactionMode.SERIALIZED_WRITE) as session:
+            await SessionAccessControl(session).clear_node(node_id)
+
 
 class SessionAccessControl:
     def __init__(self, session: DatabaseSession) -> None:
         self._session = session
+
+    async def clear_node(self, node_id: NodeId) -> None:
+        await self._session.delete(GRANT_TABLE, DeleteQuery(filter=Equals(GRANT_NODE, str(node_id))))
+        await self._session.delete(OWNER_TABLE, DeleteQuery(filter=Equals(OWNER_NODE, str(node_id))))
 
     async def get_owner(self, node_id: NodeId) -> Ownership:
         record = await self._session.find_one(

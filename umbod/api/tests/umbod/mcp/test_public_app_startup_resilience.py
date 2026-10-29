@@ -9,6 +9,8 @@ from fastmcp.server.http import StarletteWithLifespan
 from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages
 from messaging.models import StreamEvent
 from umbod.mcp import public_app
+from umbod.mcp.settings import MCPAppSettings
+from umbod.mcp.telemetry.composition import create_configured_mcp_telemetry
 from umbod.mcp.connectors.downstream_mcp.capability_notifications import CapabilityListChangeNotifier
 from umbod.mcp.messaging import McpMessagingAdapterFactory
 from umbod.mcp.runtime_options import StoreBackedConnectorRuntimeStateSourceStrategy
@@ -23,7 +25,7 @@ def context(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         settings=SimpleNamespace(endpoints=SimpleNamespace(mcp_base_url='http://test'), mcp=SimpleNamespace(messaging_transport='sql', metrics_port=0, metrics_enabled=False)),
         persistence_runtime=SimpleNamespace(database=object(), readiness=SimpleNamespace(ensure_ready=AsyncMock()), shutdown=AsyncMock()),
         http_app=StarletteWithLifespan(),
-        metrics_recorder=Mock(),
+        telemetry=create_configured_mcp_telemetry(MCPAppSettings()),
         connector_runtime=SimpleNamespace(connector_tool_mappings=()),
         group_permission_runtime_state=None,
         mcp=SimpleNamespace(

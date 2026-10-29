@@ -2,7 +2,7 @@ import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
 import type { FilesApi } from '../api';
 import { fileUploadSchema } from '../domain/schemas';
-import { uploadFailure } from '../errors';
+import { uploadCause, uploadFailure } from '../errors';
 import type { FilesState } from './files-state.svelte';
 
 export function formatFileSize(bytes: number): string {
@@ -17,6 +17,7 @@ export class UploadState {
   name = $state('');
   error = $state('');
   status = $state('');
+  retryable = $state(false);
   pending = $state(false);
   uncertain = $state(false);
   signInRequired = $state(false);
@@ -50,12 +51,8 @@ export class UploadState {
     if (this.beginDrop()) this.rejectSelection(message);
   };
 
-  get maxBytes(): number {
-    return this.files.uploadPolicy?.max_bytes ?? 0;
-  }
-
   get canSubmit(): boolean {
-    return this.available && !this.pending && !this.uncertain && !this.error && !this.signInRequired && !!this.file && this.file.size <= this.maxBytes && fileUploadSchema.safeParse({ file: this.file, name: this.name }).success;
+    return this.available && !this.pending && !this.uncertain && (!this.error || this.retryable) && !this.signInRequired && !!this.file && fileUploadSchema.safeParse({ file: this.file, name: this.name }).success;
   }
 
   navigate = (): void => {
@@ -63,6 +60,7 @@ export class UploadState {
     this.file = undefined;
     this.name = '';
     this.error = '';
+    this.retryable = false;
     this.status = '';
     this.pending = false;
     this.uncertain = false;
@@ -81,6 +79,7 @@ export class UploadState {
       this.name = pending.name;
     }
     this.uncertain = this.blockedParents.has(target.parentId);
+    this.retryable = false;
     this.error = this.uncertain ? 'An earlier upload could not be confirmed. Reload this folder before trying again.' : '';
     this.status = '';
     this.open = true;
@@ -93,10 +92,6 @@ export class UploadState {
       return;
     }
     const file = files[0];
-    if (file.size > this.maxBytes) {
-      this.rejectSelection(`Choose a file no larger than ${formatFileSize(this.maxBytes)}. This file contains ${file.size.toLocaleString()} bytes.`);
-      return;
-    }
     const parsed = fileUploadSchema.safeParse({ file, name: file.name });
     if (!parsed.success) {
       this.rejectSelection('Choose a file with a name without path separators.');
@@ -105,12 +100,14 @@ export class UploadState {
     this.file = file;
     this.name = file.name;
     this.error = '';
+    this.retryable = false;
     this.status = `${file.name} selected, ${formatFileSize(file.size)}. Ready to upload.`;
   };
 
   rejectSelection = (message: string): void => {
     if (this.pending || this.uncertain) return;
     this.error = message;
+    this.retryable = false;
     this.status = '';
   };
 
@@ -118,6 +115,7 @@ export class UploadState {
     if (this.pending || this.uncertain) return;
     this.name = name;
     this.error = '';
+    this.retryable = false;
   };
 
   remove = (): void => {
@@ -125,6 +123,7 @@ export class UploadState {
     this.file = undefined;
     this.name = '';
     this.error = '';
+    this.retryable = false;
     this.status = 'File removed. Choose another file.';
   };
 
@@ -134,6 +133,7 @@ export class UploadState {
     this.file = undefined;
     this.name = '';
     this.error = '';
+    this.retryable = false;
     this.status = '';
   };
 
@@ -152,6 +152,7 @@ export class UploadState {
     this.pendingParents.set(target.parentId, input);
     this.pending = true;
     this.error = '';
+    this.retryable = false;
     this.status = '';
     try {
       const node = await this.api.filesystem.uploadFile(target.parentId, input);
@@ -167,11 +168,12 @@ export class UploadState {
       if (failure.uncertain) this.blockedParents.add(target.parentId);
       if (this.disposed || this.parentId !== target.parentId) return;
       this.error = failure.message;
+      this.retryable = failure.retryable === true;
       this.uncertain = failure.uncertain;
-      this.signInRequired = error instanceof AuthenticationRequiredError;
+      const cause = uploadCause(error);
+      this.signInRequired = cause instanceof AuthenticationRequiredError;
       if (this.signInRequired) this.files.rejectUploadAccess(target.parentId, 'sign-in');
-      else if (error instanceof HttpError && error.status === 403) this.files.rejectUploadAccess(target.parentId, 'denied');
-      else if (error instanceof HttpError && error.status === 413) void this.files.checkUploadAvailability();
+      else if (cause instanceof HttpError && cause.status === 403) this.files.rejectUploadAccess(target.parentId, 'denied');
     } finally {
       this.pendingParents.delete(target.parentId);
       if (!this.disposed && this.parentId === target.parentId) this.pending = false;

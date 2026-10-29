@@ -1,9 +1,7 @@
-from collections.abc import AsyncIterator
 from typing import NoReturn
 from uuid import uuid4
 
 import pytest
-from starlette.requests import Request
 
 from umbod.rest.authentication.deps import get_caller_context
 from umbod.rest.filesystem.deps import get_filesystem_database
@@ -15,10 +13,8 @@ REVISION = {"If-Match": '"1"'}
 OPERATIONS = [
     ("GET", "/nodes?scope=owned", {}),
     ("GET", "/nodes?scope=shared", {}),
-    ("GET", "/nodes/{id}/breadcrumbs", {}),
     ("PUT", "/nodes/{id}/content", {}),
     ("PATCH", "/nodes/{id}", {"name": "renamed"}),
-    ("DELETE", "/nodes/{id}", {}),
     ("GET", "/nodes/{id}/access", {}),
     ("PUT", "/nodes/{id}/access", {"grants": []}),
 ]
@@ -38,7 +34,7 @@ def test_planned_operations_do_not_lookup_or_mutate(
 ) -> None:
     client = filesystem_http.client
     root_id = client.get(f"{BASE}/root").json()["id"]
-    child = client.post(f"{BASE}/nodes/{root_id}/files", **creation_payload("files", BODY)).json()
+    child = client.post(f"{BASE}/nodes/{root_id}/directories", **creation_payload("directories", BODY)).json()
     before = client.get(f"{BASE}/nodes/{root_id}/children").json()
     filesystem_http.app.dependency_overrides[get_filesystem_database] = forbid_database
     for identifier in (root_id, child["id"], str(uuid4())):
@@ -128,52 +124,6 @@ def test_planned_requests_validate_contract(
     assert isinstance(response.json()["detail"], list)
 
 
-def test_multipart_denied_before_reading_body(
-    filesystem_http: FilesystemHttp, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def forbid_read(self: Request) -> NoReturn:
-        pytest.fail("Upload body was read.")
-
-    async def forbid_stream(self: Request) -> AsyncIterator[bytes]:
-        pytest.fail("Upload stream was consumed.")
-        yield b""
-
-    monkeypatch.setattr(Request, "body", forbid_read)
-    monkeypatch.setattr(Request, "form", forbid_read)
-    monkeypatch.setattr(Request, "stream", forbid_stream)
-    response = filesystem_http.client.post(
-        f"{BASE}/nodes/{uuid4()}/files", content=b"not even valid multipart",
-        headers={"Content-Type": "multipart/form-data; boundary=ignored"},
-    )
-    assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "filesystem_permission_denied"
-    assert response.headers["cache-control"] == "no-store"
-    del filesystem_http.app.dependency_overrides[get_caller_context]
-    denied = filesystem_http.client.post(
-        f"{BASE}/nodes/{uuid4()}/files", content=b"ignored",
-        headers={"Content-Type": "multipart/form-data; boundary=ignored"},
-    )
-    assert denied.status_code == 403
-
-
-@pytest.mark.parametrize("content_type,content", [
-    ("text/plain", b"{}"),
-    ("application/json", b"invalid json"),
-    ("application/json", b'{"name":"child","metadata":{},"owner":"mallory"}'),
-])
-def test_file_creation_non_multipart_is_rejected_without_mutation(
-    filesystem_http: FilesystemHttp, content_type: str, content: bytes,
-) -> None:
-    client = filesystem_http.client
-    root_id = client.get(f"{BASE}/root").json()["id"]
-    response = client.post(
-        f"{BASE}/nodes/{root_id}/files", content=content, headers={"Content-Type": content_type},
-    )
-    assert response.status_code == 415
-    assert response.json()["detail"]["code"] == "filesystem_upload_media_type"
-    assert client.get(f"{BASE}/nodes/{root_id}/children").json() == {"nodes": []}
-
-
 def test_openapi_distinguishes_planned_routes_from_upload_and_download(filesystem_http: FilesystemHttp) -> None:
     schema = filesystem_http.client.get("/api/me/openapi.json").json()
     paths = schema["paths"]
@@ -184,10 +134,8 @@ def test_openapi_distinguishes_planned_routes_from_upload_and_download(filesyste
         assert "200" not in operation["responses"]
         if method in ("PUT", "PATCH", "DELETE"):
             assert any(p["name"] == "If-Match" and p["required"] for p in operation["parameters"])
-    upload = paths["/filesystem/nodes/{parent_id}/files"]["post"]
-    assert set(upload["requestBody"]["content"]) == {"multipart/form-data"}
-    assert upload.get("x-umbod-multipart-status", "implemented") == "implemented"
-    assert upload["requestBody"]["content"]["multipart/form-data"]["schema"]["required"] == ["file"]
+    upload = paths["/filesystem/nodes/{parent_id}/uploads"]["post"]
+    assert set(upload["requestBody"]["content"]) == {"application/json"}
     assert "201" in upload["responses"] and "501" not in upload["responses"]
     download = paths["/filesystem/nodes/{node_id}/content"]["get"]
     assert "200" in download["responses"]

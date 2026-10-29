@@ -4,7 +4,6 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
-from unittest.mock import AsyncMock, Mock
 
 import httpx2
 import jwt
@@ -17,10 +16,12 @@ from starlette.applications import Starlette
 
 from umbod.config import AppConfig, McpConfig
 from umbod.mcp import public_app
-from umbod.mcp.logging import McpAuditEvent, McpAuditRecorder
+from umbod.mcp.logging import McpAuditRecorder
+from umbod.mcp.telemetry import McpTelemetryDependencies
+from tests.mcp_telemetry_fixtures import RecordingApplicationMetricsRecorder, RecordingAuditSink, RecordingMetricsServerFactory
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
-from umbod.mcp.metrics import CompletedToolInvocation, InvocationOutcome, InvocationScope, PrometheusMcpMetricsRecorder
+from umbod.mcp.metrics import CompletedToolInvocation, InvocationOutcome, InvocationScope
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
 
@@ -65,26 +66,6 @@ class AdminConnectorConfigurationJourney:
         async with self.app.router.lifespan_context(self.app):
             async with Client(self.transport()) as client:
                 yield client
-
-
-class RecordingAuditSink:
-    def __init__(self) -> None:
-        self.events: list[McpAuditEvent] = []
-
-    def record_mcp_activity(self, event: McpAuditEvent) -> None:
-        self.events.append(event)
-
-
-class CapturingPrometheusMetricsRecorder(PrometheusMcpMetricsRecorder):
-    latest: "CapturingPrometheusMetricsRecorder"
-
-    def __init__(self) -> None:
-        super().__init__()
-        self.invocations: list[CompletedToolInvocation] = []
-        CapturingPrometheusMetricsRecorder.latest = self
-
-    def record_completed_invocation(self, invocation: CompletedToolInvocation) -> None:
-        self.invocations.append(invocation)
 
 
 class AdminConnectorConfigurationDsl:
@@ -179,9 +160,12 @@ async def create_journey(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     principal: AdministratorPrincipal,
+    *telemetry_bundles: McpTelemetryDependencies,
     include_memberships: bool = True,
     mcp_administrator_enabled: bool = True,
 ) -> AdminConnectorConfigurationJourney:
+    if len(telemetry_bundles) > 1:
+        raise TypeError("At most one telemetry bundle may be supplied")
     availability_path = tmp_path / f"availability-{principal.email}.json"
     availability_path.write_text('{"connectors": []}', encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability_path))
@@ -287,6 +271,8 @@ async def create_journey(
     )
     assert duplicate_activation.status_code == 200
     config = await public_app.load_configured_public_app_config(app_settings)
+    if telemetry_bundles:
+        config = replace(config, telemetry=telemetry_bundles[0])
     context = replace(await public_app.create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings)), api_base_url=None)
     return AdminConnectorConfigurationJourney(
         await public_app.build_starlette_app(context),
@@ -343,20 +329,17 @@ async def test_administrator_read_records_one_internal_log_audit_and_metric(
 ) -> None:
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
-    monkeypatch.setattr(public_app, "create_default_mcp_tool_invocation_log_sink", lambda: invocation_sink)
-    monkeypatch.setattr(public_app, "create_default_mcp_audit_recorder", lambda server_name: McpAuditRecorder(audit_sink, server_name))
-    monkeypatch.setattr(public_app, "PrometheusMcpMetricsRecorder", CapturingPrometheusMetricsRecorder)
-    metrics_server = Mock(start=AsyncMock(), stop=AsyncMock())
-    monkeypatch.setattr(public_app, "McpMetricsHttpServer", Mock(return_value=metrics_server))
+    metrics = RecordingApplicationMetricsRecorder()
+    listeners = RecordingMetricsServerFactory()
+    telemetry = McpTelemetryDependencies(invocation_sink, McpAuditRecorder(audit_sink, "test"), metrics, listeners)
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
+        await create_journey(tmp_path, monkeypatch, administrator(), telemetry)
     )
 
     result = await configuration.read()
 
     assert result.is_error is False
-    metrics_server.start.assert_not_awaited()
-    metrics_server.stop.assert_not_awaited()
+    assert listeners.servers == []
     records = invocation_sink.invocation_records()
     assert len(records) == 1
     assert records[0].attributes["mcp.tool.name"] == READ_TOOL
@@ -367,14 +350,14 @@ async def test_administrator_read_records_one_internal_log_audit_and_metric(
     assert len(invocation_events) == 1
     assert invocation_events[0].target.tool_name == READ_TOOL
     assert invocation_events[0].target.attributes == {}
-    invocations = CapturingPrometheusMetricsRecorder.latest.invocations
+    invocations = metrics.invocations
     assert invocations == [
         CompletedToolInvocation(
             scope=InvocationScope.REQUEST,
             connector_name="internal",
             tool_name=READ_TOOL,
             outcome=InvocationOutcome.SUCCESS,
-            duration_seconds=invocations[0].duration_seconds,
+            duration_seconds=max(records[0].attributes["mcp.invocation.duration_ms"] / 1000, 1e-12),
         )
     ]
 
@@ -908,7 +891,7 @@ async def test_unauthorized_caller_cannot_discover_administration_tools(
             tmp_path,
             monkeypatch,
             principal,
-            include_memberships,
+            include_memberships=include_memberships,
         )
     )
     assert {READ_TOOL, UPSERT_TOOL}.isdisjoint(await configuration.available_tools())

@@ -1,12 +1,15 @@
 import { publicConfigurationProvider, type PublicConfigurationProvider } from './public-configuration';
 import { z } from 'zod';
 
-export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'OPTIONS';
 
 export type TransportRequestBody =
   | { kind: 'absent' }
   | { kind: 'json'; value: unknown; schema: z.ZodType<unknown> }
+  | { kind: 'raw'; value: File; schema: z.ZodType<File>; headers: Record<string, string> }
   | { kind: 'multipart'; form: FormData; metadata: unknown; metadataSchema: z.ZodType<unknown> };
+
+const conditionalHeadersSchema = z.strictObject({ 'If-Match': z.string().regex(/^"[1-9][0-9]*"$/) });
 
 export interface TransportRequest<TOut> {
   method: HttpMethod;
@@ -16,6 +19,10 @@ export interface TransportRequest<TOut> {
   body?: unknown;
   inputSchema?: z.ZodType<unknown>;
   signal?: AbortSignal;
+  redirect?: 'error';
+  responseBody?: 'headers';
+  conditionalHeaders?: z.infer<typeof conditionalHeadersSchema>;
+  apiEndpoint?: { method: HttpMethod; path: string };
 }
 
 export interface Transport {
@@ -58,6 +65,7 @@ export interface BrowserTransportConfig {
   fetch?: typeof globalThis.fetch;
   configuration?: PublicConfigurationProvider;
   bearerToken?: () => string | undefined;
+  origin?: () => string;
 }
 
 export class AuthenticationRequiredError extends Error {
@@ -75,10 +83,11 @@ class HttpTransport implements Transport {
   async request<TOut>(opts: TransportRequest<TOut>): Promise<TOut> {
     const init = this.buildRequestInit(opts);
     const configuration = await (this.config.configuration ?? publicConfigurationProvider).get();
+    const url = this.requestUrl(opts, configuration.apiBaseUrl);
     const request = this.config.fetch ?? globalThis.fetch;
     let response: Response;
     try {
-      response = await request(`${configuration.apiBaseUrl.replace(/\/$/, '')}${opts.path}`, { ...init, signal: opts.signal, credentials: 'same-origin' });
+      response = await request(url, { ...init, signal: opts.signal, credentials: 'same-origin', redirect: opts.apiEndpoint ? 'error' : opts.redirect });
     } catch (error) {
       if (opts.signal?.aborted) throw error;
       throw new NetworkError(error);
@@ -97,7 +106,7 @@ class HttpTransport implements Transport {
       return undefined as TOut;
     }
 
-    const payload = await response.json();
+    const payload = opts.responseBody === 'headers' ? { allow: response.headers.get('Allow') } : await response.json();
     const parsed = opts.outputSchema.safeParse(payload);
     if (!parsed.success) {
       throw new SchemaValidationError('inbound', parsed.error.issues);
@@ -106,10 +115,24 @@ class HttpTransport implements Transport {
     return parsed.data;
   }
 
+  private requestUrl(opts: TransportRequest<unknown>, base: string): string {
+    if (opts.apiEndpoint === undefined) return `${base.replace(/\/$/, '')}${opts.path}`;
+    const relativeBase = base.startsWith('/');
+    const api = relativeBase ? new URL(base, this.config.origin?.() ?? window.location.origin) : new URL(base);
+    const expected = `${api.pathname.replace(/\/$/, '')}${opts.apiEndpoint.path}`;
+    const url = new URL(opts.path, api.origin);
+    if (opts.method !== opts.apiEndpoint.method || url.origin !== api.origin || url.pathname !== expected || url.username || url.password || url.search || url.hash) throw new Error('Unsafe API endpoint');
+    return relativeBase ? url.pathname : url.href;
+  }
+
   private buildRequestInit(opts: TransportRequest<unknown>): RequestInit {
     const requestBody = opts.requestBody ?? this.legacyRequestBody(opts) ?? { kind: 'absent' };
     if (requestBody.kind === 'absent') {
-      return { method: opts.method, ...this.authRequestHeaders() };
+      return { method: opts.method, headers: { ...this.authRequestHeaders().headers, ...(opts.conditionalHeaders ? this.parseOutbound(conditionalHeadersSchema, opts.conditionalHeaders) : {}) } };
+    }
+    if (requestBody.kind === 'raw') {
+      const body = this.parseOutbound(requestBody.schema, requestBody.value);
+      return { method: opts.method, headers: { ...this.authRequestHeaders().headers, ...requestBody.headers }, body };
     }
     if (requestBody.kind === 'multipart') {
       this.parseOutbound(requestBody.metadataSchema, requestBody.metadata);
@@ -129,7 +152,7 @@ class HttpTransport implements Transport {
     return { kind: 'json', value: opts.body, schema: opts.inputSchema };
   }
 
-  private parseOutbound(schema: z.ZodType<unknown>, value: unknown): unknown {
+  private parseOutbound<T>(schema: z.ZodType<T>, value: unknown): T {
     const parsed = schema.safeParse(value);
     if (!parsed.success) throw new SchemaValidationError('outbound', parsed.error.issues);
     return parsed.data;

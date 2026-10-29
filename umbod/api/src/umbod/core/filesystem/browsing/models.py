@@ -6,6 +6,21 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..models import NodeId, NodeKind, NodeMetadata, RootParent
 
 
+class BreadcrumbItem(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    id: NodeId
+    name: str
+    kind: NodeKind
+
+
+class Breadcrumbs(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    items: list[BreadcrumbItem] = Field(min_length=1)
+    complete: bool
+
+
 class NodeSummary(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 

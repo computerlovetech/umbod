@@ -50,7 +50,7 @@
 <form id={id + '-form'} aria-label="Upload file" aria-busy={state.pending} onsubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}>
   <div class="form-heading">
     <div><h2 id={id + '-title'}>Upload a file</h2><p id={id + '-destination'} class="destination">To <strong>{destination}</strong></p></div>
-    <span class="limit">One file · {formatFileSize(state.maxBytes)} maximum</span>
+    <span class="limit">One file at a time</span>
   </div>
   <fieldset disabled={state.pending || state.uncertain}>
     <legend class="visually-hidden">Choose a file to upload</legend>

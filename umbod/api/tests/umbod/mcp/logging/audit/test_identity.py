@@ -14,7 +14,7 @@ from umbod.mcp.logging.audit.identity import McpAuditIdentityAdapter
 
 
 class _FakeSession:
-    _fastmcp_state_prefix = "session-1"
+    pass
 
 
 @dataclass(frozen=True)
@@ -139,8 +139,12 @@ def test_identity_from_request_handles_missing_fastmcp_request_context(
 
     async def exercise() -> None:
         async with Context(fastmcp=mcp, session=_FakeSession()) as context:
+            assert context.request_context is None
             identity = adapter.identity_from_request(context)
+            session_id = context.session_id
+            assert isinstance(session_id, str)
+            assert session_id
             assert identity.client.request_id is None
-            assert identity.client.session_id == "session-1"
+            assert identity.client.session_id == session_id
 
     asyncio.run(exercise())

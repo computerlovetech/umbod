@@ -12,7 +12,7 @@ description: "FastAPI delivery for administration, authenticated users, system e
 - [capability_descriptions/](./capability_descriptions/) — Description overrides.
 - [connectors/](./connectors/) — Connector administration and personal delivery.
 - [dependencies.py](./dependencies.py) — Shared dependency providers.
-- [factories.py](./factories.py) — Adapter composition.
+- [factories.py](./factories.py) — Adapter composition and lazy personal catalogue store wiring.
 - [filesystem/](./filesystem/README.md) — User filesystem browsing, creation, uploads and downloads.
 - [filesystem_administration/](./filesystem_administration/README.md) — Root-access administration.
 - [groups/](./groups/README.md) — Group catalogue administration.

@@ -1,3 +1,4 @@
+from umbod.mcp.telemetry.composition import create_configured_mcp_telemetry
 from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
 from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
 import asyncio
@@ -51,6 +52,6 @@ def create_test_mcp_http_app(settings: MCPAppSettings, auth_provider: MCPAuthPro
     async def _build() -> Starlette:
         persistence_runtime = ConfiguredPersistenceRuntimeProvider(resolved_settings.connector_store).create()
         await persistence_runtime.readiness.ensure_ready()
-        config = PublicAppConfig(settings=resolved_settings, connector_runtime=await create_default_mcp_connector_runtime(resolved_settings, persistence_runtime), auth_provider=auth_provider, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=HttpConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime)
+        config = PublicAppConfig(settings=resolved_settings, telemetry=create_configured_mcp_telemetry(resolved_settings), connector_runtime=await create_default_mcp_connector_runtime(resolved_settings, persistence_runtime), auth_provider=auth_provider, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=HttpConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime)
         return await build_starlette_app(await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings)))
     return asyncio.run(_build())

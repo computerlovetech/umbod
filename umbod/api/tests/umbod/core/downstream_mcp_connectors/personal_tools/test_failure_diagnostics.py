@@ -1,8 +1,12 @@
+from collections.abc import Awaitable, Callable
+
 import pytest
 
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, runtime_case
 from umbod.core.connectors.downstream_mcp.personal_connections.health_models import PersonalAuthorizationHealthUnavailable, RejectPersonalAuthorization
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalRuntimeAuthorizationQuery, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolInventory, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
+from umbod.core.connectors.downstream_mcp.personal_tools import AdmitPersonalTool, PersonalInventoryRevision, PersonalToolAccessStore, PersonalToolAdmission, PersonalToolRecord, PersonalToolRuntimeService, SavePersonalToolObservation
 
 from .runtime_support import execution_case, runtime_for_caller
 from umbod.core.connectors.downstream_mcp.personal_connections import UnavailablePersonalCaller
@@ -15,6 +19,39 @@ from umbod.core.invocation.failure_evidence import (
 )
 
 __all__ = ["runtime_case"]
+
+
+class FaultingPersonalMcpTransport:
+    def __init__(self, delegate: PersonalMcpTransport, call_tool: Callable[[PersonalToolCall], Awaitable[PersonalToolResult]]) -> None:
+        self._delegate = delegate
+        self._call_tool = call_tool
+
+    async def list_tools(self, target: PersonalRuntimeTarget) -> PersonalToolInventory:
+        return await self._delegate.list_tools(target)
+
+    async def call_tool(self, command: PersonalToolCall) -> PersonalToolResult:
+        return await self._call_tool(command)
+
+
+class FaultingPersonalToolAccessStore:
+    def __init__(self, delegate: PersonalToolAccessStore, reject_authorization: Callable[[RejectPersonalAuthorization], Awaitable[None]]) -> None:
+        self._delegate = delegate
+        self._reject_authorization = reject_authorization
+
+    async def read_inventory_revision(self, query: PersonalRuntimeAuthorizationQuery) -> PersonalInventoryRevision:
+        return await self._delegate.read_inventory_revision(query)
+
+    async def reject_authorization(self, command: RejectPersonalAuthorization) -> None:
+        await self._reject_authorization(command)
+
+    async def list_available(self, query: PersonalRuntimeAuthorizationQuery) -> tuple[PersonalToolRecord, ...]:
+        return await self._delegate.list_available(query)
+
+    async def save_observation(self, command: SavePersonalToolObservation) -> None:
+        await self._delegate.save_observation(command)
+
+    async def admit(self, command: AdmitPersonalTool) -> PersonalToolAdmission:
+        return await self._delegate.admit(command)
 
 
 @pytest.mark.asyncio
@@ -42,7 +79,7 @@ async def test_runtime_preserves_safe_diagnostics_before_redaction(runtime_case:
 
 
 @pytest.mark.asyncio
-async def test_rejection_health_persistence_failure_keeps_its_distinct_exception(runtime_case: RuntimeCase, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_rejection_health_persistence_failure_keeps_its_distinct_exception(runtime_case: RuntimeCase) -> None:
     execution = await execution_case(runtime_case)
 
     async def rejected(command: PersonalToolCall) -> PersonalToolResult:
@@ -59,11 +96,16 @@ async def test_rejection_health_persistence_failure_keeps_its_distinct_exception
         assert evidence.exception_type == "PersonalAuthorizationRejected"
         raise PersonalAuthorizationHealthUnavailable("sensitive-persistence-token")
 
-    monkeypatch.setattr(execution.transport, "call_tool", rejected)
-    monkeypatch.setattr(runtime_case.bundle.personal_tool_access, "reject_authorization", unavailable)
+    runtime = PersonalToolRuntimeService(
+        execution.caller,
+        runtime_case.bundle.definitions,
+        FaultingPersonalToolAccessStore(runtime_case.bundle.personal_tool_access, unavailable),
+        FaultingPersonalMcpTransport(execution.transport, rejected),
+        lambda: runtime_case.query.now,
+    )
     with invocation_failure_scope():
         with pytest.raises(PersonalAuthorizationHealthUnavailable, match="sensitive-persistence-token"):
-            await execution.runtime.execute(execution.command)
+            await runtime.execute(execution.command)
         evidence = current_invocation_failure()
         assert isinstance(evidence, InvocationExceptionEvidence)
         assert evidence.origin == InvocationFailureOrigin.INTERNAL
@@ -75,7 +117,7 @@ async def test_rejection_health_persistence_failure_keeps_its_distinct_exception
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("lower_boundary", [False, True])
-async def test_runtime_preserves_original_safe_exception_evidence(runtime_case: RuntimeCase, monkeypatch: pytest.MonkeyPatch, lower_boundary: bool) -> None:
+async def test_runtime_preserves_original_safe_exception_evidence(runtime_case: RuntimeCase, lower_boundary: bool) -> None:
     execution = await execution_case(runtime_case)
 
     async def fail(command: PersonalToolCall) -> PersonalToolResult:
@@ -87,10 +129,16 @@ async def test_runtime_preserves_original_safe_exception_evidence(runtime_case: 
                 raise PersonalRuntimeUnavailable("Personal MCP unavailable") from None
             raise RuntimeError("sensitive-wrapper-token") from error
 
-    monkeypatch.setattr(execution.transport, "call_tool", fail)
+    runtime = PersonalToolRuntimeService(
+        execution.caller,
+        runtime_case.bundle.definitions,
+        runtime_case.bundle.personal_tool_access,
+        FaultingPersonalMcpTransport(execution.transport, fail),
+        lambda: runtime_case.query.now,
+    )
     with invocation_failure_scope():
         with pytest.raises(PersonalRuntimeUnavailable):
-            await execution.runtime.execute(execution.command)
+            await runtime.execute(execution.command)
         evidence = current_invocation_failure()
         assert isinstance(evidence, InvocationExceptionEvidence)
         assert evidence.origin == (InvocationFailureOrigin.MCP if lower_boundary else InvocationFailureOrigin.INTERNAL)

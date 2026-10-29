@@ -6,7 +6,7 @@ description: API, MCP, CLI, and shared application services.
 
 # Files
 
-- [REST](umbod/rest/README.md) — HTTP endpoints.
+- [REST](umbod/rest/README.md) — HTTP endpoints, including authenticated filesystem browsing and breadcrumbs.
 - [MCP](umbod/mcp/README.md) — Tool server.
 - [CLI](umbod/cli/README.md) — Commands.
 - [Core](umbod/core/README.md) — Application logic.

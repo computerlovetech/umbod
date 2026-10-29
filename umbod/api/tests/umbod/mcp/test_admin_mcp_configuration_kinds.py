@@ -1,8 +1,12 @@
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Literal
+from typing import Iterator, Literal
 
 import pytest
 from fastmcp import Client, FastMCP
+from fastmcp.server.auth import AccessToken
+from mcp.server.auth.middleware.auth_context import auth_context_var
+from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 
 from messaging.models import MessagingEvent, StreamEvent
 from tests.persistence_runtime import (
@@ -19,7 +23,6 @@ from umbod.core.activation.stores.service import CapabilityActivationStoreServic
 from umbod.core.administrator.connector_configuration import (
     AdministratorConnectorConfiguration,
     AdministratorConnectorConfigurationService,
-    AdministratorPrincipal,
     ConnectorReference,
 )
 from umbod.core.administrator.connector_configuration.catalog import (
@@ -49,8 +52,22 @@ from umbod.mcp.administrator.tools import AdministratorConnectorConfigurationToo
 ConnectorKind = Literal["native", "openapi", "downstream_mcp"]
 
 
-def principal(membership_claim: str) -> AdministratorPrincipal:
-    return AdministratorPrincipal(memberships=("umbod-administrators",))
+@contextmanager
+def authenticated_administrator() -> Iterator[None]:
+    marker = auth_context_var.set(
+        AuthenticatedUser(
+            AccessToken(
+                token="test-admin-token",
+                client_id="test-admin-client",
+                scopes=[],
+                claims={"groups": ["umbod-administrators"]},
+            )
+        )
+    )
+    try:
+        yield
+    finally:
+        auth_context_var.reset(marker)
 
 
 @pytest.mark.asyncio
@@ -110,9 +127,6 @@ async def test_mcp_configuration_roundtrip_conflict_and_isolation(
             ),
         )
     )
-    monkeypatch.setattr(
-        "umbod.mcp.administrator.tools.current_administrator_principal", principal
-    )
     tools = AdministratorConnectorConfigurationTools(configuration, "groups")
     server = FastMCP("configuration-test")
     server.tool(tools.read_connector_configuration)
@@ -156,195 +170,196 @@ async def test_mcp_configuration_roundtrip_conflict_and_isolation(
             ],
         },
     ]
-    async with Client(server) as client:
-        result = await client.call_tool(
-            "upsert_connector_configuration",
-            {**target, "desired_state": {"operations": operations}},
-        )
-        state = result.structured_content
-        events = await event_stream.list_after(0, 100)
-        assert [event.event.event_type for event in events] == [
-            "connector.invocation_policy.changed",
-            "connector.capability_activation.changed",
-            "connector.capability_description_override.changed",
-            "mcp.group_permission.changed",
-            "mcp.group_permission.changed",
-        ]
-        assert events[0].event.metadata == {
-            "connector_kind": kind, "connector_id": "inventory",
-            "operation_name": "listItems", "mode": "ask", "revision": "1",
-        }
-        assert events[1].event.metadata == {
-            "connector_kind": kind, "connector_id": "inventory",
-            "capability_kind": "prompt", "capability_key": "summary",
-        }
-        assert events[2].event.metadata == {
-            "connector_kind": kind, "connector_id": "inventory",
-            "action": "set", "revision": "1",
-        }
-        assert events[3].event.metadata == {
-            "group_id": "engineering", "action": "grant",
-            "target_kind": "connector", "connector_id": "inventory",
-        }
-        assert events[4].event.metadata == {
-            "group_id": "engineering", "action": "grant",
-            "target_kind": "prompt", "connector_id": "inventory",
-            "capability_kind": "prompt", "capability_key": "summary",
-        }
-        assert state["connector"] == target
-        assert state["capabilities"][0]["activation_status"] == "disabled"
-        assert state["capabilities"][0]["invocation_policy"] == {
-            "mode": "ask",
-            "revision": 1,
-        }
-        assert all(
-            capability["invocation_policy"] is None
-            for capability in state["capabilities"][1:]
-        )
-        assert state["group_permissions"][0]["capabilities"][1]["status"] == "enabled"
-        assert (
-            await client.call_tool("read_connector_configuration", target)
-        ).structured_content == state
-        other = await client.call_tool(
-            "read_connector_configuration", {**target, "connector_id": "other"}
-        )
-        assert other.structured_content["capability_description"] == {
-            "state": "system",
-            "revision": 0,
-        }
-        assert (
-            other.structured_content["capabilities"][0]["invocation_policy"]["revision"]
-            == 0
-        )
-        conflict_operations = [
-            {
-                "operation": "set_capability_activation",
-                "capability_kind": "tool",
-                "capability_key": "listItems",
-                "activation_status": "enabled",
-            },
-            operations[1],
-        ]
-        conflict = await client.call_tool(
-            "upsert_connector_configuration",
-            {**target, "desired_state": {"operations": conflict_operations}},
-            raise_on_error=False,
-        )
-        assert conflict.is_error
-        assert await event_stream.list_after(0, 100) == events
-        assert (
-            await client.call_tool("read_connector_configuration", target)
-        ).structured_content == state
-        operations[1]["expected_revision"] = 1
-        operations[2]["expected_revision"] = 1
-        repeated = await client.call_tool(
-            "upsert_connector_configuration",
-            {**target, "desired_state": {"operations": operations}},
-        )
-        assert repeated.structured_content == state
-        assert await event_stream.list_after(0, 100) == events
-        reverse_operations = [
-            {
-                "operation": "set_capability_invocation_policy",
-                "capability_kind": "tool", "capability_key": "listItems",
-                "mode": "direct", "expected_revision": 1,
-            },
-            {
-                "operation": "set_capability_activation",
-                "capability_kind": "prompt", "capability_key": "summary",
-                "activation_status": "disabled",
-            },
-            {
-                "operation": "use_system_capability_description",
-                "expected_revision": 1,
-            },
-            {
-                "operation": "update_group_permissions",
-                "group_id": "engineering", "connector_status": "disabled",
-                "capabilities": [{
-                    "capability_kind": "prompt", "capability_key": "summary",
-                    "status": "disabled",
-                }],
-            },
-        ]
-
-        async def append_then_fail(
-            session: DatabaseSession, event: MessagingEvent
-        ) -> StreamEvent:
-            saved = await append_event_in_session(session, event)
-            if event.event_type == "mcp.group_permission.changed":
-                raise RuntimeError("Event persistence failed")
-            return saved
-
-        with monkeypatch.context() as rollback_patch:
-            rollback_patch.setattr(
-                "umbod.core.administrator.connector_configuration.mutation.append_event_in_session",
-                append_then_fail,
-            )
-            failed = await client.call_tool(
+    with authenticated_administrator():
+        async with Client(server) as client:
+            result = await client.call_tool(
                 "upsert_connector_configuration",
-                {**target, "desired_state": {"operations": reverse_operations}},
+                {**target, "desired_state": {"operations": operations}},
+            )
+            state = result.structured_content
+            events = await event_stream.list_after(0, 100)
+            assert [event.event.event_type for event in events] == [
+                "connector.invocation_policy.changed",
+                "connector.capability_activation.changed",
+                "connector.capability_description_override.changed",
+                "mcp.group_permission.changed",
+                "mcp.group_permission.changed",
+            ]
+            assert events[0].event.metadata == {
+                "connector_kind": kind, "connector_id": "inventory",
+                "operation_name": "listItems", "mode": "ask", "revision": "1",
+            }
+            assert events[1].event.metadata == {
+                "connector_kind": kind, "connector_id": "inventory",
+                "capability_kind": "prompt", "capability_key": "summary",
+            }
+            assert events[2].event.metadata == {
+                "connector_kind": kind, "connector_id": "inventory",
+                "action": "set", "revision": "1",
+            }
+            assert events[3].event.metadata == {
+                "group_id": "engineering", "action": "grant",
+                "target_kind": "connector", "connector_id": "inventory",
+            }
+            assert events[4].event.metadata == {
+                "group_id": "engineering", "action": "grant",
+                "target_kind": "prompt", "connector_id": "inventory",
+                "capability_kind": "prompt", "capability_key": "summary",
+            }
+            assert state["connector"] == target
+            assert state["capabilities"][0]["activation_status"] == "disabled"
+            assert state["capabilities"][0]["invocation_policy"] == {
+                "mode": "ask",
+                "revision": 1,
+            }
+            assert all(
+                capability["invocation_policy"] is None
+                for capability in state["capabilities"][1:]
+            )
+            assert state["group_permissions"][0]["capabilities"][1]["status"] == "enabled"
+            assert (
+                await client.call_tool("read_connector_configuration", target)
+            ).structured_content == state
+            other = await client.call_tool(
+                "read_connector_configuration", {**target, "connector_id": "other"}
+            )
+            assert other.structured_content["capability_description"] == {
+                "state": "system",
+                "revision": 0,
+            }
+            assert (
+                other.structured_content["capabilities"][0]["invocation_policy"]["revision"]
+                == 0
+            )
+            conflict_operations = [
+                {
+                    "operation": "set_capability_activation",
+                    "capability_kind": "tool",
+                    "capability_key": "listItems",
+                    "activation_status": "enabled",
+                },
+                operations[1],
+            ]
+            conflict = await client.call_tool(
+                "upsert_connector_configuration",
+                {**target, "desired_state": {"operations": conflict_operations}},
                 raise_on_error=False,
             )
-            assert failed.is_error
-        assert await event_stream.list_after(0, 100) == events
-        assert (
-            await client.call_tool("read_connector_configuration", target)
-        ).structured_content == state
-        wrong_kind = await client.call_tool(
-            "upsert_connector_configuration",
-            {
-                **target,
-                "desired_state": {
-                    "operations": [
-                        {
-                            "operation": "set_capability_invocation_policy",
-                            "capability_kind": "prompt",
-                            "capability_key": "summary",
-                            "mode": "ask",
-                            "expected_revision": 0,
-                        }
-                    ]
+            assert conflict.is_error
+            assert await event_stream.list_after(0, 100) == events
+            assert (
+                await client.call_tool("read_connector_configuration", target)
+            ).structured_content == state
+            operations[1]["expected_revision"] = 1
+            operations[2]["expected_revision"] = 1
+            repeated = await client.call_tool(
+                "upsert_connector_configuration",
+                {**target, "desired_state": {"operations": operations}},
+            )
+            assert repeated.structured_content == state
+            assert await event_stream.list_after(0, 100) == events
+            reverse_operations = [
+                {
+                    "operation": "set_capability_invocation_policy",
+                    "capability_kind": "tool", "capability_key": "listItems",
+                    "mode": "direct", "expected_revision": 1,
                 },
-            },
-            raise_on_error=False,
-        )
-        assert wrong_kind.is_error
-        wrong_key = await client.call_tool(
-            "upsert_connector_configuration",
-            {
-                **target,
-                "desired_state": {
-                    "operations": [
-                        {
-                            "operation": "set_capability_activation",
-                            "capability_kind": "resource",
-                            "capability_key": "summary",
-                            "activation_status": "enabled",
-                        }
-                    ]
+                {
+                    "operation": "set_capability_activation",
+                    "capability_kind": "prompt", "capability_key": "summary",
+                    "activation_status": "disabled",
                 },
-            },
-            raise_on_error=False,
-        )
-        assert wrong_key.is_error
-        assert await event_stream.list_after(0, 100) == events
-        assert (
-            await client.call_tool("read_connector_configuration", target)
-        ).structured_content == state
-        await client.call_tool(
-            "upsert_connector_configuration",
-            {**target, "desired_state": {"operations": reverse_operations}},
-        )
-        reversed_events = await event_stream.list_after(events[-1].sequence, 100)
-        assert [event.event.event_type for event in reversed_events] == [
-            event.event.event_type for event in events
-        ]
-        assert reversed_events[0].event.metadata["mode"] == "direct"
-        assert reversed_events[0].event.metadata["revision"] == "2"
-        assert reversed_events[2].event.metadata["action"] == "clear"
-        assert reversed_events[2].event.metadata["revision"] == "2"
-        assert all(
-            event.event.metadata["action"] == "revoke"
-            for event in reversed_events[3:]
-        )
+                {
+                    "operation": "use_system_capability_description",
+                    "expected_revision": 1,
+                },
+                {
+                    "operation": "update_group_permissions",
+                    "group_id": "engineering", "connector_status": "disabled",
+                    "capabilities": [{
+                        "capability_kind": "prompt", "capability_key": "summary",
+                        "status": "disabled",
+                    }],
+                },
+            ]
+
+            async def append_then_fail(
+                session: DatabaseSession, event: MessagingEvent
+            ) -> StreamEvent:
+                saved = await append_event_in_session(session, event)
+                if event.event_type == "mcp.group_permission.changed":
+                    raise RuntimeError("Event persistence failed")
+                return saved
+
+            with monkeypatch.context() as rollback_patch:
+                rollback_patch.setattr(
+                    "umbod.core.administrator.connector_configuration.mutation.append_event_in_session",
+                    append_then_fail,
+                )
+                failed = await client.call_tool(
+                    "upsert_connector_configuration",
+                    {**target, "desired_state": {"operations": reverse_operations}},
+                    raise_on_error=False,
+                )
+                assert failed.is_error
+            assert await event_stream.list_after(0, 100) == events
+            assert (
+                await client.call_tool("read_connector_configuration", target)
+            ).structured_content == state
+            wrong_kind = await client.call_tool(
+                "upsert_connector_configuration",
+                {
+                    **target,
+                    "desired_state": {
+                        "operations": [
+                            {
+                                "operation": "set_capability_invocation_policy",
+                                "capability_kind": "prompt",
+                                "capability_key": "summary",
+                                "mode": "ask",
+                                "expected_revision": 0,
+                            }
+                        ]
+                    },
+                },
+                raise_on_error=False,
+            )
+            assert wrong_kind.is_error
+            wrong_key = await client.call_tool(
+                "upsert_connector_configuration",
+                {
+                    **target,
+                    "desired_state": {
+                        "operations": [
+                            {
+                                "operation": "set_capability_activation",
+                                "capability_kind": "resource",
+                                "capability_key": "summary",
+                                "activation_status": "enabled",
+                            }
+                        ]
+                    },
+                },
+                raise_on_error=False,
+            )
+            assert wrong_key.is_error
+            assert await event_stream.list_after(0, 100) == events
+            assert (
+                await client.call_tool("read_connector_configuration", target)
+            ).structured_content == state
+            await client.call_tool(
+                "upsert_connector_configuration",
+                {**target, "desired_state": {"operations": reverse_operations}},
+            )
+            reversed_events = await event_stream.list_after(events[-1].sequence, 100)
+            assert [event.event.event_type for event in reversed_events] == [
+                event.event.event_type for event in events
+            ]
+            assert reversed_events[0].event.metadata["mode"] == "direct"
+            assert reversed_events[0].event.metadata["revision"] == "2"
+            assert reversed_events[2].event.metadata["action"] == "clear"
+            assert reversed_events[2].event.metadata["revision"] == "2"
+            assert all(
+                event.event.metadata["action"] == "revoke"
+                for event in reversed_events[3:]
+            )

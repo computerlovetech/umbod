@@ -4,10 +4,12 @@ from typing import Protocol
 from umbod.core.callers import CallerSnapshot
 
 from ..models import NodeId
-from .models import NodeSummary
+from .models import Breadcrumbs, NodeSummary
 
 
 class FilesystemBrowsing(Protocol):
+    async def get_breadcrumbs(self, caller: CallerSnapshot, node_id: NodeId) -> Breadcrumbs: ...
+
     async def get_root(self, caller: CallerSnapshot) -> NodeSummary: ...
 
     async def get_node(self, caller: CallerSnapshot, node_id: NodeId) -> NodeSummary: ...

@@ -113,7 +113,7 @@ async def test_concurrent_background_http_failures_keep_invocation_scopes_isolat
 
         async def fail_concurrent_http_connect(*arguments: object, **options: object) -> httpcore2.AsyncNetworkStream:
             ready.set()
-            await other_ready.wait()
+            await asyncio.wait_for(other_ready.wait(), timeout=5.0)
             raise error
 
         monkeypatch.setattr(network, "connect_tcp", fail_concurrent_http_connect)
@@ -127,10 +127,10 @@ async def test_concurrent_background_http_failures_keep_invocation_scopes_isolat
             return evidence
 
     with invocation_failure_scope():
-        first, second = await asyncio.gather(
-            invoke(RuntimeError("first-sensitive-token"), first_ready, second_ready),
-            invoke(LookupError("second-sensitive-token"), second_ready, first_ready),
-        )
+        async with asyncio.TaskGroup() as tasks:
+            first_task = tasks.create_task(invoke(RuntimeError("first-sensitive-token"), first_ready, second_ready))
+            second_task = tasks.create_task(invoke(LookupError("second-sensitive-token"), second_ready, first_ready))
+        first, second = first_task.result(), second_task.result()
         assert current_invocation_failure() is None
     assert first.exception_type == "RuntimeError"
     assert second.exception_type == "LookupError"

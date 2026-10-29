@@ -1,10 +1,13 @@
+from collections.abc import Iterator
+from typing import cast
+
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from umbod.core.connectors.downstream_mcp.adapters.settings import DownstreamMcpInfrastructureSettings
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
-from umbod.rest.factories import ConnectorApiDependencyFactories
-from umbod.rest.user_catalogue import dependencies
+from umbod.rest.user_catalogue.dependencies import get_personal_catalogue_store_supplier
+from umbod.rest.user_catalogue.ports import PersonalCatalogueStoreSupplier
 
 from test_simplified_openapi_connector_target import (
     _create_connector, _document, _import, _set_activation, _set_publication,
@@ -12,15 +15,29 @@ from test_simplified_openapi_connector_target import (
 )
 
 
-def test_personal_disabled_local_catalogue_uses_explicit_current_capability_grants(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    async def forbidden_personal_stores(
-        settings: DownstreamMcpInfrastructureSettings, factories: ConnectorApiDependencyFactories,
-    ) -> DownstreamMcpStores:
+class ForbiddenPersonalCatalogueStoreSupplier:
+    async def create(self) -> DownstreamMcpStores:
         raise AssertionError("Personal dependencies must remain unresolved")
 
-    monkeypatch.setattr(dependencies, "get_downstream_stores", forbidden_personal_stores)
+
+@pytest.fixture
+def forbidden_personal_stores(client: TestClient) -> Iterator[None]:
+    root = cast(FastAPI, client.app)
+    app = next(route.app for route in root.routes if getattr(route, "path", "") == "/api/me")
+
+    def supplier() -> PersonalCatalogueStoreSupplier:
+        return ForbiddenPersonalCatalogueStoreSupplier()
+
+    app.dependency_overrides[get_personal_catalogue_store_supplier] = supplier
+    try:
+        yield
+    finally:
+        del app.dependency_overrides[get_personal_catalogue_store_supplier]
+
+
+def test_personal_disabled_local_catalogue_uses_explicit_current_capability_grants(
+    client: TestClient, forbidden_personal_stores: None,
+) -> None:
     connector_id = _create_connector(client)
     _import(client, connector_id, _document(
         ("listItems", "get", "/items", "Display title", "Public description"),

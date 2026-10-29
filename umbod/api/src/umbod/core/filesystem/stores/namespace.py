@@ -6,6 +6,7 @@ from umbod.core.persistence import (
     AllOf,
     Database,
     DatabaseSession,
+    DeleteQuery,
     Equals,
     InsertCommand,
     Query,
@@ -13,7 +14,7 @@ from umbod.core.persistence import (
     Unordered,
     UpsertCommand,
 )
-from ..errors import MissingNode, NameCollision
+from ..errors import MissingNode, NameCollision, RevisionConflict, WrongNodeKind
 from ..models import ContentRef, Node, NodeId, NodeKind, NodeMetadata, RootParent
 from ..namespace import (
     ROOT_ID,
@@ -94,10 +95,22 @@ class DatabaseNamespace:
                 node_id, content=content, expected_revision=expected_revision
             )
 
+    async def delete_node(self, node_id: NodeId, *, expected_revision: int) -> None:
+        async with storage_session(self._database, TransactionMode.SERIALIZED_WRITE) as session:
+            await SessionNamespace(session).delete_node(node_id, expected_revision=expected_revision)
+
 
 class SessionNamespace:
     def __init__(self, session: DatabaseSession) -> None:
         self._session = session
+
+    async def delete_node(self, node_id: NodeId, *, expected_revision: int) -> None:
+        node = await self.get_node(node_id)
+        if node.kind != NodeKind.FILE:
+            raise WrongNodeKind(str(node_id))
+        if node.revision != expected_revision:
+            raise RevisionConflict(str(node_id))
+        await self._session.delete(NODE_TABLE, DeleteQuery(filter=Equals(NODE_ID, str(node_id))))
 
     async def initialize_root(self) -> None:
         record = await self._session.find_one(

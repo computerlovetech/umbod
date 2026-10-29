@@ -1,3 +1,4 @@
+from umbod.mcp.telemetry.composition import create_configured_mcp_telemetry
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.publishing.factories import create_connector_publishing_store
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
@@ -19,7 +20,9 @@ from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.mcp.settings import MCPAppSettings, MCPSettings
 from fastmcp import Client, FastMCP
 from fastmcp.tools import ToolResult
-from tests.mcp_fixtures import build_test_mcp
+from umbod.mcp.auth import MCPAuthProviderFactory
+from umbod.mcp.public_app import build_mcp_with_openapi_adapters
+from umbod.mcp.runtime_adapters import create_configured_openapi_runtime_adapters
 CONNECTOR_ID = '09ee32b6-a502-4493-977f-baaec560596f'
 OPERATION_NAME = 'list_vikunja_tasks'
 PROXY_TOOL_NAME = f'Vikunja_{OPERATION_NAME}'
@@ -68,18 +71,18 @@ async def _persist_downstream_state(database_path: str, input_schema: dict[str, 
     await activation_store.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=CONNECTOR_ID, capability_kind="resource", capability_key="data://vikunja/fixed"), ActivationStatus.ENABLED)
     await activation_store.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=CONNECTOR_ID, capability_kind="resource_template", capability_key="data://vikunja/{task_id}"), ActivationStatus.ENABLED)
 
-async def _build_public_mcp(tmp_path: Path, exposure_mode: str, monkeypatch: pytest.MonkeyPatch, input_schema: dict[str, Any] | None=None) -> tuple[FastMCP, DownstreamInvocationRecorder]:
+async def _build_public_mcp(tmp_path: Path, exposure_mode: str, input_schema: dict[str, Any] | None=None) -> tuple[FastMCP, DownstreamInvocationRecorder]:
     database_path = str(tmp_path / f'{exposure_mode}.sqlite3')
     await _persist_downstream_state(database_path, input_schema)
     recorder = DownstreamInvocationRecorder()
-    monkeypatch.setattr('umbod.core.connectors.downstream_mcp.adapters.fastmcp.client.FastMCPDownstreamClientFactory.create', recorder.create)
     settings = MCPAppSettings(mcp=MCPSettings(connector_tool_exposure_mode=exposure_mode, downstream_discovery_enabled=False, _env_file=None), connector_store=ConnectorStoreConfig(type='sqlite', sqlite_path=database_path), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
     connector_runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
-    return (await build_test_mcp(settings, connector_runtime=connector_runtime), recorder)
+    persistence_runtime = await prepared_sqlite_runtime(database_path)
+    return (await build_mcp_with_openapi_adapters(settings, MCPAuthProviderFactory().create(settings), connector_runtime, (None, None), create_configured_openapi_runtime_adapters(settings), persistence_runtime, telemetry=create_configured_mcp_telemetry(settings), downstream_client_factory=recorder), recorder)
 
 @pytest.mark.asyncio
-async def test_flat_exposes_and_invokes_persisted_downstream_proxy_directly(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    (mcp, recorder) = await _build_public_mcp(tmp_path, 'flat', monkeypatch)
+async def test_flat_exposes_and_invokes_persisted_downstream_proxy_directly(tmp_path: Path) -> None:
+    (mcp, recorder) = await _build_public_mcp(tmp_path, 'flat')
     async with Client(mcp) as client:
         names = [tool.name for tool in await client.list_tools()]
         assert recorder.created_connector_ids == []
@@ -93,8 +96,8 @@ async def test_flat_exposes_and_invokes_persisted_downstream_proxy_directly(tmp_
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('exposure_mode', ['flat', 'gateway', 'codemode'])
-async def test_all_exposure_modes_expose_native_capabilities_without_leaking_gateway_tools(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, exposure_mode: str) -> None:
-    (mcp, _) = await _build_public_mcp(tmp_path, exposure_mode, monkeypatch)
+async def test_all_exposure_modes_expose_native_capabilities_without_leaking_gateway_tools(tmp_path: Path, exposure_mode: str) -> None:
+    (mcp, _) = await _build_public_mcp(tmp_path, exposure_mode)
     async with Client(mcp) as client:
         tool_names = [tool.name for tool in await client.list_tools()]
         prompts = await client.list_prompts()
@@ -112,9 +115,9 @@ async def test_all_exposure_modes_expose_native_capabilities_without_leaking_gat
     assert (PROXY_TOOL_NAME in tool_names) is (exposure_mode == 'flat')
 
 @pytest.mark.asyncio
-async def test_flat_preserves_referenced_object_field_descriptions_for_mcp_clients(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_flat_preserves_referenced_object_field_descriptions_for_mcp_clients(tmp_path: Path) -> None:
     input_schema = {'type': 'object', 'properties': {'draft': {'$ref': '#/$defs/UpdateVikunjaTaskDraft'}}, 'required': ['draft'], '$defs': {'UpdateVikunjaTaskDraft': {'type': 'object', 'properties': {'task_id': {'type': 'integer', 'description': 'Numeric Vikunja task ID to update.'}, 'title': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'description': 'New nonempty task title. Omit to leave unchanged.'}}, 'required': ['task_id']}}}
-    (mcp, _) = await _build_public_mcp(tmp_path, 'flat', monkeypatch, input_schema)
+    (mcp, _) = await _build_public_mcp(tmp_path, 'flat', input_schema)
     async with Client(mcp) as client:
         tools = await client.list_tools()
     proxy_tool = next((tool for tool in tools if tool.name == PROXY_TOOL_NAME))
@@ -124,8 +127,8 @@ async def test_flat_preserves_referenced_object_field_descriptions_for_mcp_clien
     assert draft_schema['properties']['title']['description'] == 'New nonempty task title. Omit to leave unchanged.'
 
 @pytest.mark.asyncio
-async def test_gateway_discovers_and_executes_persisted_downstream_proxy(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    (mcp, recorder) = await _build_public_mcp(tmp_path, 'gateway', monkeypatch)
+async def test_gateway_discovers_and_executes_persisted_downstream_proxy(tmp_path: Path) -> None:
+    (mcp, recorder) = await _build_public_mcp(tmp_path, 'gateway')
     async with Client(mcp) as client:
         names = [tool.name for tool in await client.list_tools()]
         search = await client.call_tool('search_tools', {'query': 'Vikunja tasks', 'connector_ids': ['unknown', CONNECTOR_ID]})
@@ -141,8 +144,8 @@ async def test_gateway_discovers_and_executes_persisted_downstream_proxy(tmp_pat
     assert recorder.arguments == [{'project_id': 7}]
 
 @pytest.mark.asyncio
-async def test_codemode_discovers_and_executes_persisted_downstream_proxy_from_code(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    (mcp, recorder) = await _build_public_mcp(tmp_path, 'codemode', monkeypatch)
+async def test_codemode_discovers_and_executes_persisted_downstream_proxy_from_code(tmp_path: Path) -> None:
+    (mcp, recorder) = await _build_public_mcp(tmp_path, 'codemode')
     async with Client(mcp) as client:
         names = [tool.name for tool in await client.list_tools()]
         search = await client.call_tool('search_tools', {'query': 'Vikunja tasks'})

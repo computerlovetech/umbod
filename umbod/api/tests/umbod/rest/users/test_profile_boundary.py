@@ -1,5 +1,7 @@
 import json
+import urllib.request
 from collections.abc import Iterator
+from io import BytesIO
 from pathlib import Path
 from time import time
 
@@ -7,12 +9,12 @@ import jwt
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi.testclient import TestClient
-from jwt import PyJWK, PyJWKClient
 
 from umbod.config import AppConfig
 from umbod.rest.main import create_app
 
 ISSUER = "https://identity.example.test/"
+KEY_ID = "profile-boundary-signing-key"
 
 
 @pytest.fixture
@@ -29,18 +31,17 @@ def client(
     monkeypatch.setenv(
         "UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability)
     )
-    key = PyJWK(
-        json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(signing_key.public_key()))
-    )
+    key = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(signing_key.public_key()))
+    key["kid"] = KEY_ID
+    jwks = json.dumps({"keys": [key]}).encode("utf-8")
 
-    def trusted_key(_client: PyJWKClient, token: str) -> PyJWK:
-        return key
+    def open_jwks(
+        request: urllib.request.Request, timeout: float, context: object
+    ) -> BytesIO:
+        assert request.full_url == ISSUER + "jwks"
+        return BytesIO(jwks)
 
-    def trusted_keys(_client: PyJWKClient, refresh: bool) -> list[PyJWK]:
-        return [key]
-
-    monkeypatch.setattr(PyJWKClient, "get_signing_key_from_jwt", trusted_key)
-    monkeypatch.setattr(PyJWKClient, "get_signing_keys", trusted_keys)
+    monkeypatch.setattr(urllib.request, "urlopen", open_jwks)
     config = AppConfig(
         rest={"metrics_enabled": False},
         admin_authentication={
@@ -72,6 +73,7 @@ def token(key: rsa.RSAPrivateKey, audience: str, changes: dict[str, object]) -> 
         },
         key,
         algorithm="RS256",
+        headers={"kid": KEY_ID},
     )
 
 
@@ -257,7 +259,7 @@ def test_profile_required_claims_cannot_be_omitted(
         headers={
             "X-Access": access(signing_key),
             "X-Auth-Request-ID-Token": jwt.encode(
-                claims, signing_key, algorithm="RS256"
+                claims, signing_key, algorithm="RS256", headers={"kid": KEY_ID}
             ),
         },
     )

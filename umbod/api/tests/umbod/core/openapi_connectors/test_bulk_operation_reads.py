@@ -182,23 +182,30 @@ async def test_list_operations_does_not_fall_back_to_stale_catalog(
 async def test_public_catalogue_uses_constant_reads_and_one_operation_session(
     store: OpenApiConnectorStore,
     database: Database,
-    monkeypatch: pytest.MonkeyPatch,
     operation_count: int,
 ) -> None:
     replacement = _replacement(tuple(f"operation{index:02}" for index in range(operation_count)))
     await store.replace_current_catalog(replacement)
-    original_session = database.session
     sessions: list[Mock] = []
 
     @asynccontextmanager
-    async def recording_session(mode: TransactionMode) -> AsyncIterator[DatabaseSession]:
-        async with original_session(mode=mode) as session:
+    async def recording_session(*, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:
+        async with database.session(mode=mode) as session:
             recorded = Mock(spec=DatabaseSession, wraps=session)
             sessions.append(recorded)
             yield recorded
 
-    monkeypatch.setattr(database, "session", recording_session)
-    catalog: CapabilityCatalog = StoreBackedOpenApiCapabilityCatalog(store)
+    recording_database = Mock(spec=Database, wraps=database)
+    recording_database.session.side_effect = recording_session
+    recording_store = OpenApiConnectorStoreService(
+        recording_database,
+        CONNECTOR_TABLE,
+        CURRENT_CATALOG_HEADER_TABLE,
+        CATALOG_SOURCE_TABLE,
+        CATALOG_OPERATION_TABLE,
+        CAPABILITY_ACTIVATION_STATE_TABLE,
+    )
+    catalog: CapabilityCatalog = StoreBackedOpenApiCapabilityCatalog(recording_store)
     capabilities = await catalog.list_capabilities()
     assert len(capabilities) == operation_count
     assert len(sessions) == 2

@@ -28,12 +28,6 @@ async def list_nodes(scope: Literal["owned", "shared"]) -> NoReturn:
     not_implemented()
 
 
-@router.get("/nodes/{node_id}/breadcrumbs", status_code=501, response_model=PlannedErrorResponse,
-            summary="Planned: node breadcrumbs", openapi_extra=PLANNED_OPERATION)
-async def get_breadcrumbs(node_id: UUID) -> NoReturn:
-    not_implemented()
-
-
 @router.put("/nodes/{node_id}/content", status_code=501, response_model=PlannedErrorResponse,
             summary="Planned: replace content", openapi_extra={
                 **PLANNED_OPERATION,
@@ -48,12 +42,6 @@ async def put_content(node_id: UUID, if_match: Revision) -> NoReturn:
 @router.patch("/nodes/{node_id}", status_code=501, response_model=PlannedErrorResponse,
               summary="Planned: rename or move node", openapi_extra=PLANNED_OPERATION)
 async def patch_node(node_id: UUID, body: PatchNodeRequest, if_match: Revision) -> NoReturn:
-    not_implemented()
-
-
-@router.delete("/nodes/{node_id}", status_code=501, response_model=PlannedErrorResponse,
-               summary="Planned: delete node", openapi_extra=PLANNED_OPERATION)
-async def delete_node(node_id: UUID, if_match: Revision) -> NoReturn:
     not_implemented()
 
 

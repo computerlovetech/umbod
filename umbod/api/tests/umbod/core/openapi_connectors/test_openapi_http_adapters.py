@@ -1,7 +1,7 @@
 import ssl
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from typing import AsyncIterator
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import httpx
 import pytest
@@ -387,19 +387,16 @@ async def test_outbound_transport_returns_only_allowlisted_normalized_response_h
     assert response.headers == expected_headers
 
 
-def test_outbound_http_client_factory_configures_hardened_client() -> None:
+@pytest.mark.asyncio
+async def test_outbound_http_client_factory_configures_hardened_client() -> None:
     factory = OutboundHttpClientFactory(1.0, 2.0, 3.0, 4.0)
-    with patch(
-        "umbod.core.connectors.openapi.execution.http_adapters.httpx.AsyncClient"
-    ) as client_type:
-        factory.create()
-    arguments = client_type.call_args.kwargs
-    assert arguments == {
-        "trust_env": False,
-        "follow_redirects": False,
-        "timeout": arguments["timeout"],
-    }
-    assert arguments["timeout"] == httpx.Timeout(connect=1.0, read=2.0, write=3.0, pool=4.0)
+    client = factory.create()
+    try:
+        assert client.trust_env is False
+        assert client.follow_redirects is False
+        assert client.timeout == httpx.Timeout(connect=1.0, read=2.0, write=3.0, pool=4.0)
+    finally:
+        await client.aclose()
 
 
 @pytest.mark.parametrize(

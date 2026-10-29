@@ -1,3 +1,4 @@
+from umbod.mcp.telemetry.composition import create_configured_mcp_telemetry
 from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
 import asyncio
 from datetime import UTC, datetime
@@ -37,7 +38,7 @@ async def test_http_without_api_url_consumes_durable_permission_description_and_
     await stores.activations.set_status(ref, ActivationStatus.ENABLED)
     permissions = InMemoryGroupConnectorToolPermissions(group_claim_fields=('groups',))
     runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=None, connector_publishing_store=None, connector_tool_mappings=[])
-    config = PublicAppConfig(settings=settings, connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=True, api_base_url=None, persistence_runtime=persistence, group_permission_runtime_state=permissions)
+    config = PublicAppConfig(settings=settings, telemetry=create_configured_mcp_telemetry(settings), connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=True, api_base_url=None, persistence_runtime=persistence, group_permission_runtime_state=permissions)
     context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     app = await build_starlette_app(context)
     health = context.mcp.runtime_projection_health

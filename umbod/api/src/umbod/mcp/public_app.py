@@ -80,9 +80,9 @@ from umbod.mcp.connectors.native.tools import (
     install_tool_list_changed_notifier,
     register_connector_tools,
 )
-from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
-from umbod.mcp.metrics.http_server import McpMetricsHttpServer
-from umbod.mcp.logging import McpAuditIdentityAdapter, McpToolInvocationLogSink, create_default_mcp_audit_recorder, create_default_mcp_tool_invocation_log_sink
+from umbod.mcp.telemetry import McpTelemetryDependencies
+from umbod.mcp.telemetry.composition import create_configured_mcp_telemetry
+from umbod.mcp.logging import McpAuditIdentityAdapter
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import McpInvocationPublisher, McpSignals, McpToolExecutionPipelineFactory, SignalToolExecutionPipelineFactory
 from umbod.mcp.connectors.downstream_mcp.inventory import shared_tool_inventory
@@ -122,16 +122,14 @@ OPENAPI_CODEMODE_DISCOVERY_EXPOSURE_MODES: frozenset[OpenApiCodemodeDiscoveryExp
 
 async def build_mcp(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, persistence_runtime: PersistenceRuntime, *runtime_state: RuntimeStateArgument) -> FastMCP:
     downstream_client_factory = await create_configured_downstream_client_factory(settings, persistence_runtime.database)
-    return await build_mcp_with_openapi_adapters(settings, auth_provider, runtime, runtime_state, create_configured_openapi_runtime_adapters(settings), persistence_runtime, downstream_client_factory=downstream_client_factory)
+    return await build_mcp_with_openapi_adapters(settings, auth_provider, runtime, runtime_state, create_configured_openapi_runtime_adapters(settings), persistence_runtime, telemetry=create_configured_mcp_telemetry(settings), downstream_client_factory=downstream_client_factory)
 
-async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, runtime_state: tuple[RuntimeStateArgument, ...], openapi_adapters: OpenApiRuntimeAdapters, persistence_runtime: PersistenceRuntime, *invocation_log_sinks: McpToolInvocationLogSink, downstream_client_factory: DownstreamClientFactory) -> FastMCP:
+async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, runtime_state: tuple[RuntimeStateArgument, ...], openapi_adapters: OpenApiRuntimeAdapters, persistence_runtime: PersistenceRuntime, *, telemetry: McpTelemetryDependencies, downstream_client_factory: DownstreamClientFactory) -> FastMCP:
     (requested_tool_state, group_permission_runtime_state) = _resolve_runtime_state(runtime_state)
     connector_tool_runtime_state_store = requested_tool_state if requested_tool_state is not None else _default_connector_tool_runtime_state_store(runtime)
-    audit_recorder = create_default_mcp_audit_recorder(settings.runtime.app_name)
-    metrics_recorder = PrometheusMcpMetricsRecorder()
-    if len(invocation_log_sinks) > 1:
-        raise TypeError("At most one invocation log sink may be supplied")
-    invocation_log_sink = invocation_log_sinks[0] if invocation_log_sinks else create_default_mcp_tool_invocation_log_sink()
+    audit_recorder = telemetry.audit_recorder
+    metrics_recorder = telemetry.metrics_recorder
+    invocation_log_sink = telemetry.invocation_log_sink
     signals = create_mcp_signals(invocation_log_sink, metrics_recorder, audit_recorder)
     publisher = McpInvocationPublisher(signals)
     middleware: list[Middleware] = [McpProtocolMetricsMiddleware(metrics_recorder, clock=time.monotonic), McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
@@ -308,7 +306,7 @@ async def load_configured_public_app_config(settings: AppConfig) -> PublicAppCon
             configured_source_strategy = StoreBackedConnectorRuntimeStateSourceStrategy()
         else:
             raise TypeError('unsupported connector store configuration')
-        return PublicAppConfig(settings=settings, connector_runtime=await DefaultConnectorRuntimeFactory(load_connector_plugins, partial(create_encrypted_connector_configuration_store, persistence_runtime.database), ConfiguredConnectorPublishingStoreFactory(persistence_runtime.database)).create(settings), source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=configured_source_strategy, stateless_http=settings.mcp.stateless_http, api_base_url=private_api_base_url or api_base_url or None, persistence_runtime=persistence_runtime)
+        return PublicAppConfig(settings=settings, connector_runtime=await DefaultConnectorRuntimeFactory(load_connector_plugins, partial(create_encrypted_connector_configuration_store, persistence_runtime.database), ConfiguredConnectorPublishingStoreFactory(persistence_runtime.database)).create(settings), source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=configured_source_strategy, stateless_http=settings.mcp.stateless_http, api_base_url=private_api_base_url or api_base_url or None, persistence_runtime=persistence_runtime, telemetry=create_configured_mcp_telemetry(settings))
     except BaseException:
         await persistence_runtime.shutdown()
         raise
@@ -322,11 +320,8 @@ async def create_runtime_context(config: PublicAppConfig, *, downstream_client_f
         group_permission_runtime_state = InMemoryGroupConnectorToolPermissions(group_claim_fields=(config.settings.mcp.permission_group_claim,))
     auth_provider = config.auth_provider if config.auth_provider is not None else MCPAuthProviderFactory().create(config.settings)
     persistence_runtime = config.persistence_runtime
-    mcp = await build_mcp_with_openapi_adapters(config.settings, auth_provider, config.connector_runtime, (connector_tool_runtime_state_store, group_permission_runtime_state), openapi_adapters, persistence_runtime, config.invocation_log_sink or create_default_mcp_tool_invocation_log_sink(), downstream_client_factory=downstream_client_factory)
-    metrics_recorder = mcp.metrics_recorder
-    if not isinstance(metrics_recorder, PrometheusMcpMetricsRecorder):
-        raise TypeError('MCP metrics recorder must be PrometheusMcpMetricsRecorder')
-    return PublicAppRuntimeContext(mcp=mcp, http_app=mcp.http_app(path=_MCP_HTTP_PATH, stateless_http=config.stateless_http), metrics_recorder=metrics_recorder, settings=config.settings, connector_runtime=config.connector_runtime, connector_tool_runtime_state_store=connector_tool_runtime_state_store, group_permission_runtime_state=group_permission_runtime_state, target_stores=ConnectorStorePair(connector_configuration_store=config.connector_runtime.connector_configuration_store, connector_publishing_store=config.connector_runtime.connector_publishing_store), source_strategy=source_strategy, api_base_url=config.api_base_url, persistence_runtime=persistence_runtime)
+    mcp = await build_mcp_with_openapi_adapters(config.settings, auth_provider, config.connector_runtime, (connector_tool_runtime_state_store, group_permission_runtime_state), openapi_adapters, persistence_runtime, telemetry=config.telemetry, downstream_client_factory=downstream_client_factory)
+    return PublicAppRuntimeContext(mcp=mcp, http_app=mcp.http_app(path=_MCP_HTTP_PATH, stateless_http=config.stateless_http), telemetry=config.telemetry, settings=config.settings, connector_runtime=config.connector_runtime, connector_tool_runtime_state_store=connector_tool_runtime_state_store, group_permission_runtime_state=group_permission_runtime_state, target_stores=ConnectorStorePair(connector_configuration_store=config.connector_runtime.connector_configuration_store, connector_publishing_store=config.connector_runtime.connector_publishing_store), source_strategy=source_strategy, api_base_url=config.api_base_url, persistence_runtime=persistence_runtime)
 
 async def health_response(_request: Request) -> JSONResponse:
     return JSONResponse({'status': 'ok'})
@@ -446,8 +441,8 @@ def _create_public_http_lifespan(context: PublicAppRuntimeContext) -> object:
             synchronizer = await _initialize_runtime_projection(context)
             async with AsyncExitStack() as stack:
                 await stack.enter_async_context(context.http_app.lifespan(context.http_app))
-                metrics_server = McpMetricsHttpServer(context.metrics_recorder, context.settings.mcp.metrics_port, '0.0.0.0')
                 if context.settings.mcp.metrics_enabled:
+                    metrics_server = context.telemetry.metrics_server_factory.create()
                     await metrics_server.start()
                     stack.push_async_callback(metrics_server.stop)
                 downstream_coordinator: DownstreamDiscoveryCoordinator | None = getattr(context.mcp, 'downstream_mcp_discovery_coordinator', None)

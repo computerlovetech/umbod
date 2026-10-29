@@ -3,10 +3,18 @@ import { z } from 'zod';
 import { browserTransport, AuthenticationRequiredError, HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
 import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
 import type { FilesApi } from './api';
-import { childrenSchema, createFolderSchema, fileNameSchema, fileUploadSchema, nodeSummarySchema, uploadPolicySchema, type FileUpload } from './domain/schemas';
+import { childrenSchema, createFolderSchema, fileNameSchema, fileUploadSchema, nodeSummarySchema, type FileUpload } from './domain/schemas';
 import { FilesApi as HttpFilesApi } from './infrastructure/files-api';
 import { InMemoryFilesApi } from './infrastructure/in-memory-api';
 import { fileId, filesystemFixture, filesystemNode, folderId, rootId } from './fixtures.test-support';
+
+function session(): import('./domain/schemas').UploadSession {
+  return {
+    id: fileId, expires_at: '2026-12-01T00:00:00Z', status: 'pending',
+    transfer: { type: 'single', method: 'PUT', url: '/api/me/filesystem/uploads/' + fileId + '/content', headers: { 'Content-Type': 'text/plain' }, authorization: { type: 'same_origin' } },
+    complete_url: '/api/me/filesystem/uploads/' + fileId + '/complete'
+  };
+}
 
 const input = { name: 'New folder', metadata: { content_type: {}, attributes: {} } };
 const configuration = new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' });
@@ -27,9 +35,9 @@ describe('filesystem port', () => {
 });
 
 describe('filesystem upload port', () => {
-  test('exposes policy and creates a file with an explicit name and inferred metadata', async (): Promise<void> => {
+  test('checks eligibility and creates a file with an explicit name and inferred metadata', async (): Promise<void> => {
     const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture);
-    expect(await api.filesystem.getUploadPolicy(rootId)).toEqual({ max_bytes: 10485760 });
+    await expect(api.filesystem.checkUploadEligibility(rootId)).resolves.toBeUndefined();
     const created = await api.filesystem.uploadFile(rootId, {
       file: new File(['hello'], 'original.txt', { type: 'text/plain' }), name: 'Renamed.txt'
     });
@@ -42,12 +50,12 @@ describe('filesystem upload port', () => {
   });
 
   test('allows zero bytes and the size limit, rejecting larger files without creating nodes', async (): Promise<void> => {
-    const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture, { max_bytes: 2 });
-    expect(await api.filesystem.getUploadPolicy(rootId)).toEqual({ max_bytes: 2 });
+    const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture, 2);
+    await expect(api.filesystem.checkUploadEligibility(rootId)).resolves.toBeUndefined();
     const empty = await api.filesystem.uploadFile(rootId, { file: new File([], 'empty'), name: 'empty' });
     expect(empty.metadata.content_type).toBe('application/octet-stream');
     await api.filesystem.uploadFile(rootId, { file: new File(['ab'], 'limit'), name: 'limit' });
-    await expect(api.filesystem.uploadFile(rootId, { file: new File(['abc'], 'large'), name: 'large' })).rejects.toMatchObject({ status: 413 });
+    await expect(api.filesystem.uploadFile(rootId, { file: new File(['abc'], 'large'), name: 'large' })).rejects.toMatchObject({ cause: { status: 413 } });
     expect((await api.filesystem.listChildren(rootId)).map((node) => node.name)).toEqual(['Projects', 'empty', 'limit']);
   });
 
@@ -55,18 +63,17 @@ describe('filesystem upload port', () => {
     const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture);
     const upload = { file: new File([], 'original'), name: 'Projects' };
     const missingId = '00000000-0000-4000-8000-000000000099';
-    await expect(api.filesystem.getUploadPolicy(missingId)).rejects.toMatchObject({ status: 404 });
-    await expect(api.filesystem.getUploadPolicy(fileId)).rejects.toMatchObject({ status: 409 });
-    await expect(api.filesystem.uploadFile(missingId, upload)).rejects.toMatchObject({ status: 404 });
-    await expect(api.filesystem.uploadFile(fileId, upload)).rejects.toMatchObject({ status: 409 });
-    await expect(api.filesystem.uploadFile(rootId, upload)).rejects.toMatchObject({ status: 409 });
-    await expect(api.filesystem.uploadFile(folderId, { ...upload, name: 'Notes.txt' })).rejects.toMatchObject({ status: 409 });
+    await expect(api.filesystem.checkUploadEligibility(missingId)).rejects.toMatchObject({ status: 404 });
+    await expect(api.filesystem.checkUploadEligibility(fileId)).rejects.toMatchObject({ status: 403 });
+    await expect(api.filesystem.uploadFile(missingId, upload)).rejects.toMatchObject({ cause: { status: 404 } });
+    await expect(api.filesystem.uploadFile(fileId, upload)).rejects.toMatchObject({ cause: { status: 403 } });
+    await expect(api.filesystem.uploadFile(rootId, upload)).rejects.toMatchObject({ cause: { status: 409 } });
+    await expect(api.filesystem.uploadFile(folderId, { ...upload, name: 'Notes.txt' })).rejects.toMatchObject({ cause: { status: 409 } });
     await expect(api.filesystem.uploadFile(rootId, { ...upload, name: '..' })).rejects.toBeInstanceOf(z.ZodError);
   });
 
-  test('validates seed nodes and configured policy', (): void => {
+  test('validates seed nodes', (): void => {
     expect(() => new InMemoryFilesApi(rootId, [{ ...filesystemFixture[0], revision: 0 }])).toThrow(z.ZodError);
-    expect(() => new InMemoryFilesApi(rootId, filesystemFixture, { max_bytes: 0 })).toThrow(z.ZodError);
   });
 });
 
@@ -87,16 +94,6 @@ describe('filesystem schemas', () => {
 
   test.each(['', ' ', '.', '..', 'a/b', 'a\\b'])('rejects invalid folder name %j', (name): void => {
     expect(createFolderSchema.safeParse({ ...input, name }).success).toBe(false);
-  });
-
-  test.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, Infinity, NaN, '10', null])('rejects invalid upload limit %j', (max_bytes): void => {
-    expect(uploadPolicySchema.safeParse({ max_bytes }).success).toBe(false);
-  });
-
-  test('accepts only a strict positive safe-integer policy', (): void => {
-    expect(uploadPolicySchema.parse({ max_bytes: Number.MAX_SAFE_INTEGER })).toEqual({ max_bytes: Number.MAX_SAFE_INTEGER });
-    expect(uploadPolicySchema.safeParse({ max_bytes: 10, extra: true }).success).toBe(false);
-    expect(uploadPolicySchema.safeParse({}).success).toBe(false);
   });
 
   test.each(['', ' ', '.', '..', 'a/b', 'a\\b', 'a\u0000b'])('rejects invalid upload name %j', (name): void => {
@@ -130,36 +127,38 @@ describe('filesystem schemas', () => {
 });
 
 describe('filesystem upload HTTP boundary', () => {
-  test('gets validated policy with the cancellation signal', async (): Promise<void> => {
-    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ max_bytes: 10 }));
-    const api: FilesApi = new HttpFilesApi(browserTransport({ fetch: request, configuration }));
+  test('checks eligibility with OPTIONS and standard Allow', async (): Promise<void> => {
+    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204, headers: { Allow: 'POST, OPTIONS' } }));
+    const api = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
     const signal = new AbortController().signal;
-    expect(await api.filesystem.getUploadPolicy(rootId, signal)).toEqual({ max_bytes: 10 });
-    expect(request).toHaveBeenCalledWith('/api/me/filesystem/nodes/' + rootId + '/upload-policy', expect.objectContaining({ method: 'GET', signal }));
+    await expect(api.filesystem.checkUploadEligibility(rootId, signal)).resolves.toBeUndefined();
+    expect(request).toHaveBeenCalledWith('/api/me/filesystem/nodes/' + rootId + '/uploads', expect.objectContaining({ method: 'OPTIONS', signal }));
   });
 
-  test('uploads only file and name with the original filename, auth and browser-owned content type', async (): Promise<void> => {
+  test('begins JSON, transfers raw bytes and completes without duplicating the API prefix', async (): Promise<void> => {
     const created = filesystemNode({ id: fileId, parent_id: rootId, name: 'Chosen.txt', kind: 'file' });
-    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json(created, { status: 201 }));
-    const api: FilesApi = new HttpFilesApi(browserTransport({ fetch: request, configuration, bearerToken: () => 'test-token' }));
+    const request = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(Response.json(session(), { status: 201 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(Response.json(created, { status: 201 }));
+    const api = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration, bearerToken: () => 'test-token' }), () => 'https://umbod.test');
     const file = new File(['hello'], 'Original.txt', { type: 'text/plain' });
     expect(await api.filesystem.uploadFile(rootId, { file, name: 'Chosen.txt' })).toEqual(created);
-    const [url, init] = request.mock.calls[0];
-    expect(url).toBe('/api/me/filesystem/nodes/' + rootId + '/files');
-    expect(init).toMatchObject({ method: 'POST', credentials: 'same-origin' });
-    const headers = new Headers(init?.headers);
-    expect(headers.get('content-type')).toBeNull();
-    expect(headers.get('authorization')).toBe('Bearer test-token');
-    expect(headers.get('X-Umbod-Web-Request')).toBe('1');
-    expect(init?.body).toBeInstanceOf(FormData);
-    const form = init?.body as FormData;
-    expect(Array.from(form.keys())).toEqual(['file', 'name']);
-    expect(form.get('name')).toBe('Chosen.txt');
-    const sent = form.get('file') as File;
-    expect(sent.name).toBe('Original.txt');
-    expect(sent.type).toBe('text/plain');
-    expect(sent.size).toBe(file.size);
-    expect(request).toHaveBeenCalledTimes(1);
+    expect(request.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
+      ['/api/me/filesystem/nodes/' + rootId + '/uploads', 'POST'],
+      [session().transfer.url, 'PUT'], [session().complete_url, 'POST']
+    ]);
+    expect(JSON.parse(String(request.mock.calls[0][1]?.body))).toEqual({
+      name: 'Chosen.txt', metadata: { content_type: 'text/plain', attributes: {} }, size_bytes: 5
+    });
+    const init = request.mock.calls[1][1];
+    expect(init?.body).toBe(file);
+    expect(await (init?.body as File).text()).toBe('hello');
+    expect(init).toMatchObject({ credentials: 'same-origin', redirect: 'error' });
+    expect(new Headers(init?.headers).get('Content-Type')).toBe('text/plain');
+    expect(new Headers(init?.headers).get('authorization')).toBe('Bearer test-token');
+    expect(new Headers(init?.headers).get('X-Umbod-Web-Request')).toBe('1');
+    expect(request.mock.calls[2][1]?.body).toBeUndefined();
   });
 
   test.each([
@@ -167,36 +166,29 @@ describe('filesystem upload HTTP boundary', () => {
     { file: new File([], 'original'), name: '..' },
     { file: new File([], 'original') },
     { file: new File([], 'original'), name: 'valid', metadata: {} }
-  ])('rejects the entire upload before form construction and network access', async (upload): Promise<void> => {
+  ])('rejects the entire upload before network access', async (upload): Promise<void> => {
     const request = vi.fn<typeof fetch>();
-    const api: FilesApi = new HttpFilesApi(browserTransport({ fetch: request, configuration }));
-    const formConstructor = vi.fn();
-    vi.stubGlobal('FormData', formConstructor);
-    try {
-      await expect(api.filesystem.uploadFile(rootId, upload as FileUpload)).rejects.toMatchObject({ direction: 'outbound' });
-      expect(formConstructor).not.toHaveBeenCalled();
-      expect(request).not.toHaveBeenCalled();
-    } finally {
-      vi.unstubAllGlobals();
-    }
+    const api: FilesApi = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
+    await expect(api.filesystem.uploadFile(rootId, upload as FileUpload)).rejects.toMatchObject({ direction: 'outbound' });
+    expect(request).not.toHaveBeenCalled();
   });
 
-  test('validates both policy and upload responses', async (): Promise<void> => {
+  test('validates eligibility headers and session responses', async (): Promise<void> => {
     const request = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(Response.json({ max_bytes: 0 }))
+      .mockResolvedValueOnce(new Response(null, { status: 204, headers: { Allow: 'OPTIONS' } }))
       .mockResolvedValueOnce(Response.json({ invalid: true }));
-    const api: FilesApi = new HttpFilesApi(browserTransport({ fetch: request, configuration }));
-    await expect(api.filesystem.getUploadPolicy(rootId)).rejects.toMatchObject({ direction: 'inbound' });
-    await expect(api.filesystem.uploadFile(rootId, { file: new File([], 'original'), name: 'chosen' })).rejects.toMatchObject({ direction: 'inbound' });
+    const api = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
+    await expect(api.filesystem.checkUploadEligibility(rootId)).rejects.toMatchObject({ direction: 'inbound' });
+    await expect(api.filesystem.uploadFile(rootId, { file: new File([], 'original'), name: 'chosen' })).rejects.toMatchObject({ phase: 'begin', cause: { direction: 'inbound' } });
     expect(request).toHaveBeenCalledTimes(2);
   });
 
   test.each([401, 403, 404, 409, 413, 500])('preserves upload HTTP %s without replay', async (status): Promise<void> => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ detail: 'rejected' }, { status }));
-    const api: FilesApi = new HttpFilesApi(browserTransport({ fetch: request, configuration }));
+    const api: FilesApi = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
     const result = api.filesystem.uploadFile(rootId, { file: new File([], 'original'), name: 'chosen' });
-    if (status === 401) await expect(result).rejects.toBeInstanceOf(AuthenticationRequiredError);
-    else await expect(result).rejects.toMatchObject({ status });
+    if (status === 401) await expect(result).rejects.toMatchObject({ phase: 'begin', cause: expect.any(AuthenticationRequiredError) });
+    else await expect(result).rejects.toMatchObject({ phase: 'begin', cause: { status } });
     expect(request).toHaveBeenCalledTimes(1);
   });
 });
@@ -208,7 +200,7 @@ describe('filesystem HTTP boundary', () => {
       .mockResolvedValueOnce(Response.json(filesystemFixture[1]))
       .mockResolvedValueOnce(Response.json({ nodes: [filesystemFixture[1]] }))
       .mockResolvedValueOnce(Response.json(filesystemNode({ id: fileId, parent_id: rootId, name: input.name }), { status: 201 }));
-    const api: FilesApi = new HttpFilesApi(browserTransport({ fetch: request, configuration }));
+    const api: FilesApi = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
     await api.filesystem.getRoot();
     await api.filesystem.getNode(folderId);
     await api.filesystem.listChildren(rootId);
@@ -224,7 +216,7 @@ describe('filesystem HTTP boundary', () => {
 
   test('rejects outbound data before a network call and malformed inbound nodes', async (): Promise<void> => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ invalid: true }));
-    const api: FilesApi = new HttpFilesApi(browserTransport({ fetch: request, configuration }));
+    const api: FilesApi = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
     await expect(api.filesystem.createFolder(rootId, { ...input, name: '' })).rejects.toMatchObject({ direction: 'outbound' });
     expect(request).not.toHaveBeenCalled();
     await expect(api.filesystem.getRoot()).rejects.toBeInstanceOf(SchemaValidationError);
@@ -234,14 +226,14 @@ describe('filesystem HTTP boundary', () => {
 
   test.each([403, 404, 409, 500])('preserves HTTP %s without replay', async (status): Promise<void> => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ detail: 'private' }, { status }));
-    const api: FilesApi = new HttpFilesApi(browserTransport({ fetch: request, configuration }));
+    const api: FilesApi = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
     await expect(api.filesystem.createFolder(rootId, input)).rejects.toBeInstanceOf(HttpError);
     expect(request).toHaveBeenCalledTimes(1);
   });
 
   test('keeps rejected authentication explicit', async (): Promise<void> => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 401 }));
-    const api: FilesApi = new HttpFilesApi(browserTransport({ fetch: request, configuration }));
+    const api: FilesApi = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
     await expect(api.filesystem.getRoot()).rejects.toBeInstanceOf(AuthenticationRequiredError);
     expect(request).toHaveBeenCalledTimes(1);
   });

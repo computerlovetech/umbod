@@ -9,7 +9,7 @@ from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSn
 from umbod.core.filesystem import FilesystemCreation, InvalidName, NameCollision, NodeMetadata, StorageFailure, WrongNodeKind
 from umbod.core.filesystem.authorization import PermissionDenied
 from umbod.core.filesystem.browsing import FilesystemBrowsing
-from umbod.core.filesystem.content import FilesystemContent
+from umbod.core.filesystem.uploads import UploadService
 from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import get_caller_context, get_verified_access_claims
 from umbod.rest.filesystem import deps
@@ -21,7 +21,8 @@ OPERATIONS = [
     ("GET", "/root", "get_root"),
     ("GET", "/nodes/{id}", "get_node"),
     ("GET", "/nodes/{id}/children", "list_children"),
-    ("POST", "/nodes/{id}/files", "upload"),
+    ("GET", "/nodes/{id}/breadcrumbs", "get_breadcrumbs"),
+    ("POST", "/nodes/{id}/uploads", "begin"),
     ("POST", "/nodes/{id}/directories", "create_directory"),
 ]
 
@@ -40,8 +41,8 @@ def test_port_delegation_and_fixed_error_translation(
 ) -> None:
     browsing = create_autospec(FilesystemBrowsing, instance=True)
     creation = create_autospec(FilesystemCreation, instance=True)
-    content = create_autospec(FilesystemContent, instance=True)
-    service = content if operation == "upload" else creation if method == "POST" else browsing
+    content = create_autospec(UploadService, instance=True)
+    service = content if operation == "begin" else creation if method == "POST" else browsing
     getattr(service, operation).side_effect = error("secret storage/key owner credential")
 
     def provide_browsing() -> FilesystemBrowsing:
@@ -50,16 +51,16 @@ def test_port_delegation_and_fixed_error_translation(
     def provide_creation() -> FilesystemCreation:
         return creation
 
-    def provide_content() -> FilesystemContent:
+    def provide_content() -> UploadService:
         return content
 
-    filesystem_http.app.dependency_overrides[deps.get_filesystem_content] = provide_content
+    filesystem_http.app.dependency_overrides[deps.get_filesystem_uploads] = provide_content
     filesystem_http.app.dependency_overrides[deps.get_filesystem_browsing] = provide_browsing
     filesystem_http.app.dependency_overrides[deps.get_filesystem_creation] = provide_creation
     identifier = uuid4()
     response = filesystem_http.client.request(
         method, BASE + path.format(id=identifier),
-        **creation_payload("files" if operation == "upload" else "directories", BODY),
+        **creation_payload("uploads" if operation == "begin" else "directories", BODY),
     )
     assert response.status_code == status
     assert response.json() == {"detail": {"code": code, "message": message}}
@@ -72,9 +73,8 @@ def test_port_delegation_and_fixed_error_translation(
         assert arguments[1] == identifier and isinstance(arguments[1], UUID)
     if method == "POST":
         assert arguments[2:4] == ("child", NodeMetadata.model_validate(BODY["metadata"]))
-    if operation == "upload":
-        content.authorize_upload.assert_awaited_once_with(arguments[0], identifier)
-        assert len(arguments) == 5
+    if operation == "begin":
+        assert arguments[4] == 0
 
 
 def test_capture_reuses_accepted_state_once_and_never_promotes_provenance(filesystem_http: FilesystemHttp) -> None:

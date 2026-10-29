@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
+import { UploadPhaseError } from '../errors';
 import type { FilesApi } from '../api';
 import type { NodeSummary } from '../domain/schemas';
 import { deferred, filesystemFixture, filesystemNode, folderId, rootId } from '../fixtures.test-support';
@@ -8,7 +9,7 @@ import { FilesState } from './files-state.svelte';
 import { UploadState } from './upload-state.svelte';
 
 function fixture(): { api: FilesApi; files: FilesState; upload: UploadState } {
-  const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture, { max_bytes: 8 });
+  const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture);
   const files = new FilesState(api);
   return { api, files, upload: new UploadState(api, files) };
 }
@@ -24,10 +25,10 @@ function selectedFile(name: string = 'Draft.txt', size: number = 4): File {
 }
 
 describe('upload selection and validation', () => {
-  test('requires loaded policy and a directory before opening or submitting', async (): Promise<void> => {
+  test('requires loaded eligibility and a directory before opening or submitting', async (): Promise<void> => {
     const { api, files, upload } = fixture();
-    const policy = deferred<{ max_bytes: number }>();
-    vi.spyOn(api.filesystem, 'getUploadPolicy').mockReturnValueOnce(policy.promise);
+    const eligibility = deferred<void>();
+    vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(eligibility.promise);
     const write = vi.spyOn(api.filesystem, 'uploadFile');
     upload.show();
     expect(upload.open).toBe(false);
@@ -36,11 +37,10 @@ describe('upload selection and validation', () => {
     expect(upload.available).toBe(false);
     expect(upload.open).toBe(false);
     expect(upload.canSubmit).toBe(false);
-    policy.resolve({ max_bytes: 8 });
+    eligibility.resolve(undefined);
     await vi.waitFor(() => expect(upload.available).toBe(true));
     upload.show();
     upload.select([selectedFile()]);
-    expect(upload.maxBytes).toBe(8);
     expect(upload.canSubmit).toBe(true);
     upload.navigate();
     await files.load(filesystemFixture[2].id);
@@ -51,7 +51,7 @@ describe('upload selection and validation', () => {
     expect(write).not.toHaveBeenCalled();
   });
 
-  test.each([0, 8])('shared picker/drop selection accepts %s bytes including the policy boundary', async (size): Promise<void> => {
+  test.each([0, 8, 9000])('shared picker/drop selection accepts %s bytes without a client size limit', async (size): Promise<void> => {
     const { api, files, upload } = fixture();
     await openUpload(files, upload);
     const file = selectedFile('Empty or full.txt', size);
@@ -65,7 +65,7 @@ describe('upload selection and validation', () => {
     expect(write).toHaveBeenCalledWith(rootId, { file, name: file.name });
   });
 
-  test('multiple, oversize and invalid-name selections preserve the previous safe file and name', async (): Promise<void> => {
+  test('multiple and invalid-name selections preserve the previous safe file and name', async (): Promise<void> => {
     const { files, upload } = fixture();
     await openUpload(files, upload);
     const file = selectedFile();
@@ -73,10 +73,6 @@ describe('upload selection and validation', () => {
     upload.changeName('Keep.txt');
     upload.select([selectedFile('One.txt'), selectedFile('Two.txt')]);
     expect(upload.error).toMatch(/one file/i);
-    expect(upload.file).toBe(file);
-    expect(upload.name).toBe('Keep.txt');
-    upload.select([selectedFile('Large.txt', 9)]);
-    expect(upload.error).toMatch(/no larger than/);
     expect(upload.file).toBe(file);
     expect(upload.name).toBe('Keep.txt');
     upload.select([selectedFile('bad/name')]);
@@ -152,25 +148,15 @@ describe('confirmed and rejected uploads', () => {
     const { api, files, upload } = fixture();
     const write = vi.spyOn(api.filesystem, 'uploadFile').mockRejectedValueOnce(new HttpError(413, 'Too large', {}));
     await openUpload(files, upload);
-    const policy = deferred<{ max_bytes: number }>();
-    const check = vi.spyOn(api.filesystem, 'getUploadPolicy').mockReturnValueOnce(policy.promise);
     const file = selectedFile();
     upload.select([file]);
     upload.changeName('Keep renamed.txt');
     await upload.submit();
     expect(upload.error).toMatch(/smaller file/);
     expect(upload.name).toBe('Keep renamed.txt');
-    expect(files.uploadAvailability).toBe('loading');
-    expect(upload.canSubmit).toBe(false);
-    expect(check).toHaveBeenCalledWith(rootId, expect.any(AbortSignal));
-    policy.resolve({ max_bytes: 2 });
-    await vi.waitFor(() => expect(files.uploadAvailability).toBe('allowed'));
-    expect(upload.maxBytes).toBe(2);
-    upload.changeName('Still too large.txt');
-    expect(upload.canSubmit).toBe(false);
-    await upload.submit();
     expect(upload.file).toBe(file);
     expect(upload.uncertain).toBe(false);
+    expect(files.uploadAvailability).toBe('allowed');
     expect(write).toHaveBeenCalledTimes(1);
     upload.select([selectedFile('Smaller.txt', 1)]);
     await upload.submit();
@@ -199,7 +185,6 @@ describe('confirmed and rejected uploads', () => {
     expect(write).toHaveBeenCalledTimes(1);
     expect(upload.signInRequired).toBe(error instanceof AuthenticationRequiredError);
     expect(files.uploadAvailability).toBe(error instanceof AuthenticationRequiredError ? 'sign-in' : 'denied');
-    expect(files.uploadPolicy).toBeUndefined();
     expect(upload.available).toBe(false);
     expect(upload.canSubmit).toBe(false);
     upload.changeName('Renamed after denial.txt');
@@ -255,13 +240,94 @@ describe('confirmed and rejected uploads', () => {
     response.reject(error);
     await pending;
     expect(files.uploadAvailability).toBe('allowed');
-    expect(files.uploadPolicy).toEqual({ max_bytes: 8 });
     expect(upload.available).toBe(true);
     expect(upload.canSubmit).toBe(true);
     expect(upload.signInRequired).toBe(false);
     expect(upload.file).toBe(file);
     expect(upload.name).toBe(file.name);
     expect(upload.error).toBe('');
+  });
+});
+
+describe('phase-aware upload recovery', () => {
+  test.each(['begin', 'transfer'] as const)('%s failure retains selection and permits immediate retry without reload', async (phase): Promise<void> => {
+    const { api, files, upload } = fixture();
+    const write = vi.spyOn(api.filesystem, 'uploadFile');
+    vi.spyOn(api.filesystem, phase === 'begin' ? 'beginUpload' : 'transferUpload').mockRejectedValueOnce(new NetworkError('lost response'));
+    const complete = vi.spyOn(api.filesystem, 'completeUpload');
+    await openUpload(files, upload);
+    const reload = vi.spyOn(files, 'reload');
+    const file = selectedFile();
+    upload.select([file]);
+    await upload.submit();
+    expect(upload.file).toBe(file);
+    expect(upload.uncertain).toBe(false);
+    expect(upload.canSubmit).toBe(true);
+    expect(upload.error).not.toMatch(/reload|confirm/i);
+    expect(complete).not.toHaveBeenCalled();
+    await upload.submit();
+    expect(complete).toHaveBeenCalledTimes(1);
+    expect(write).toHaveBeenCalledTimes(2);
+    expect(reload).not.toHaveBeenCalled();
+    expect(upload.open).toBe(false);
+  });
+
+  test('lost completion response remains uncertain and blocks retries', async (): Promise<void> => {
+    const { api, files, upload } = fixture();
+    const write = vi.spyOn(api.filesystem, 'uploadFile');
+    vi.spyOn(api.filesystem, 'completeUpload').mockRejectedValueOnce(new NetworkError('lost completion'));
+    await openUpload(files, upload);
+    upload.select([selectedFile()]);
+    await upload.submit();
+    expect(upload.uncertain).toBe(true);
+    expect(upload.canSubmit).toBe(false);
+    expect(upload.error).toMatch(/confirm.*reload/i);
+    await upload.submit();
+    expect(write).toHaveBeenCalledTimes(1);
+  });
+
+  test.each(['begin', 'transfer', 'complete'] as const)('expired %s session is recoverable without folder reload', async (phase): Promise<void> => {
+    const { api, files, upload } = fixture();
+    vi.spyOn(api.filesystem, 'uploadFile').mockRejectedValueOnce(new UploadPhaseError(phase, new HttpError(410, 'Gone', { detail: { code: 'filesystem_upload_expired' } })));
+    await openUpload(files, upload);
+    upload.select([selectedFile()]);
+    await upload.submit();
+    expect(upload.error).toMatch(/expired/);
+    expect(upload.uncertain).toBe(false);
+    expect(upload.canSubmit).toBe(true);
+    await upload.submit();
+    expect(upload.open).toBe(false);
+  });
+
+  test.each([
+    { code: 'filesystem_upload_conflict', message: /session.*ready/i, retryable: true },
+    { code: 'filesystem_wrong_node_kind', message: /folder.*destination/i, retryable: false },
+    { code: 'unknown_conflict', message: /session.*ready/i, retryable: true }
+  ])('409 $code is not a filename collision', async ({ code, message, retryable }): Promise<void> => {
+    const { api, files, upload } = fixture();
+    vi.spyOn(api.filesystem, 'uploadFile').mockRejectedValueOnce(new UploadPhaseError('begin', new HttpError(409, 'Conflict', { detail: { code } })));
+    await openUpload(files, upload);
+    upload.select([selectedFile()]);
+    await upload.submit();
+    expect(upload.error).toMatch(message);
+    expect(upload.error).not.toMatch(/already exists/);
+    expect(upload.uncertain).toBe(false);
+    expect(upload.canSubmit).toBe(retryable);
+  });
+
+  test.each([
+    { cause: new AuthenticationRequiredError(), availability: 'sign-in' },
+    { cause: new HttpError(403, 'Forbidden', {}), availability: 'denied' }
+  ])('wrapped authentication failure preserves $availability state', async ({ cause, availability }): Promise<void> => {
+    const { api, files, upload } = fixture();
+    vi.spyOn(api.filesystem, 'uploadFile').mockRejectedValueOnce(new UploadPhaseError('transfer', cause));
+    await openUpload(files, upload);
+    upload.select([selectedFile()]);
+    await upload.submit();
+    expect(files.uploadAvailability).toBe(availability);
+    expect(upload.signInRequired).toBe(cause instanceof AuthenticationRequiredError);
+    expect(upload.canSubmit).toBe(false);
+    expect(upload.uncertain).toBe(false);
   });
 });
 

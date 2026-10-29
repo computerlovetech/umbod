@@ -33,6 +33,8 @@ def create_filesystem_browsing(
     namespace = create_namespace_driver(database=database)
     return BrowsingService(
         namespace=namespace,
+        resolver=resolver,
+        transactions=create_filesystem_transactions(database=database),
         authorization=AuthorizationService(
             resolver=resolver,
             namespace=namespace,

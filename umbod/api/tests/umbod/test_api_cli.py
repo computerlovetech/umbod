@@ -1,23 +1,34 @@
+import os
+from pathlib import Path
 from typing import Any
 
+import pytest
 from pytest import MonkeyPatch
 
 from umbod.cli.api import ServeCommand
-from umbod.config import AppConfig, RestConfig
+
+
+@pytest.fixture(autouse=True)
+def isolated_server_environment(monkeypatch: MonkeyPatch, tmp_path: Path) -> None:
+    for name in tuple(os.environ):
+        if name.upper().startswith("UMBOD_"):
+            monkeypatch.delenv(name)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("UMBOD_ROOT_SECRET", "testvalidsecret")
+    monkeypatch.setenv("UMBOD_PROFILE", "local")
+    monkeypatch.setenv("UMBOD_AUTH", "dev")
 
 
 def _run(
     monkeypatch: MonkeyPatch, configured_port: int, cli_port: int | None = None
 ) -> dict[str, Any]:
     invocation: dict[str, Any] = {}
-    monkeypatch.setattr(
-        "umbod.cli.api.load_server_app_config",
-        lambda env_file: AppConfig(rest=RestConfig(port=configured_port)),
-    )
-    monkeypatch.setattr(
-        "umbod.cli.api.uvicorn.run",
-        lambda *args, **kwargs: invocation.update(kwargs),
-    )
+    monkeypatch.setenv("UMBOD_REST_PORT", str(configured_port))
+
+    def record_invocation(*args: object, **kwargs: object) -> None:
+        invocation.update(kwargs)
+
+    monkeypatch.setattr("umbod.cli.api.uvicorn.run", record_invocation)
 
     ServeCommand()(host="0.0.0.0", port=cli_port, reload=False)
     return invocation

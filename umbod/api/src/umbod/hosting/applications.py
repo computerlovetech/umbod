@@ -57,7 +57,7 @@ async def create_mcp_app(
         if group_permission_runtime_state is not None:
             config = replace(config, group_permission_runtime_state=group_permission_runtime_state)
         if invocation_log_sink is not None:
-            config = replace(config, invocation_log_sink=invocation_log_sink)
+            config = replace(config, telemetry=replace(config.telemetry, invocation_log_sink=invocation_log_sink))
         downstream_client_factory = await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database)
         openapi_adapters = create_configured_openapi_runtime_adapters(config.settings)
         return await build_starlette_app(await create_runtime_context(config, downstream_client_factory=downstream_client_factory, openapi_adapters=openapi_adapters))

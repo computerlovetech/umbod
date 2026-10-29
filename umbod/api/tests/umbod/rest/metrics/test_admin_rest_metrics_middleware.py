@@ -128,22 +128,38 @@ def test_metrics_failure_preserves_response(caplog: pytest.LogCaptureFixture) ->
 
 
 def test_metrics_model_validation_failure_preserves_response(
-    monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
 ) -> None:
-    def reject_request(**values: object) -> CompletedRestRequest:
-        raise ValueError("invalid metrics model")
+    from pydantic import ValidationError
 
-    monkeypatch.setattr(
-        "umbod.rest.metrics.middleware.CompletedRestRequest",
-        reject_request,
-    )
+    router = APIRouter()
+
+    @router.get("/items/{item_id}#metrics")
+    async def read_item(item_id: str) -> dict[str, str]:
+        return {"item_id": item_id}
+
+    app = FastAPI()
+    app.include_router(router)
+    recorder = InMemoryRestMetricsRecorder()
+    app.add_middleware(AdminRestMetricsMiddleware, recorder=recorder, routes=router.routes, mount_path="")
+
     with caplog.at_level("ERROR"):
-        response = TestClient(create_test_app(InMemoryRestMetricsRecorder())).get("/items/alpha")
+        response = TestClient(app).get("/items/alpha%23metrics")
 
     assert response.status_code == 200
     assert response.json() == {"item_id": "alpha"}
     assert "REST metrics recording failed" in caplog.text
+    assert recorder.metric_samples() == ()
+    failure_records = [
+        record
+        for record in caplog.records
+        if record.levelname == "ERROR" and record.getMessage() == "REST metrics recording failed"
+    ]
+    assert len(failure_records) == 1
+    assert failure_records[0].exc_info is not None
+    error = failure_records[0].exc_info[1]
+    assert isinstance(error, ValidationError)
+    assert error.errors()[0]["loc"] == ("normalized_route",)
 
 
 def test_metrics_failure_preserves_route_exception(caplog: pytest.LogCaptureFixture) -> None:

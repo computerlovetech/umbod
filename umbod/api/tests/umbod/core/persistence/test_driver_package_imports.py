@@ -410,10 +410,40 @@ def test_database_messaging_stores_live_in_core() -> None:
 def test_sqlite_readiness_uses_current_schema_preparation_and_schema_inventory() -> None:
     api_root = Path(__file__).parents[4]
     persistence_root = api_root / 'src' / 'umbod' / 'infrastructure' / 'persistence'
-    runtime_source = _read_source(persistence_root / 'runtime.py')
+    runtime_tree = _parse_source(persistence_root / 'runtime.py')
     schema_source = _read_source(persistence_root / 'schema_preparation.py')
     sqlite_schema_source = _read_source(persistence_root / 'sqlite' / 'schema_preparation.py')
-    assert 'SQLiteCurrentSchemaPreparation(self._database).execute()' in runtime_source
+    readiness, = [
+        node for node in runtime_tree.body
+        if isinstance(node, ast.ClassDef) and node.name == 'SQLitePersistenceReadiness'
+    ]
+    constructor, = [
+        node for node in readiness.body
+        if isinstance(node, ast.FunctionDef) and node.name == '__init__'
+    ]
+    receiver = constructor.args.args[0].arg
+    database_parameter, = [
+        parameter for parameter in constructor.args.args[1:]
+        if isinstance(parameter.annotation, ast.Name) and parameter.annotation.id == 'SQLiteDatabase'
+    ]
+    database_attribute, = [
+        target.attr
+        for statement in constructor.body
+        if isinstance(statement, ast.Assign)
+        and isinstance(statement.value, ast.Name)
+        and statement.value.id == database_parameter.arg
+        for target in statement.targets
+        if isinstance(target, ast.Attribute)
+        and isinstance(target.value, ast.Name)
+        and target.value.id == receiver
+    ]
+    assert any(
+        ast.dump(statement) == ast.dump(ast.parse(
+            f'await SQLiteCurrentSchemaPreparation({method.args.args[0].arg}.{database_attribute}).execute()'
+        ).body[0])
+        for method in readiness.body if isinstance(method, ast.AsyncFunctionDef)
+        for statement in method.body
+    )
     assert 'APPLICATION_PERSISTENCE_TABLES' in schema_source
     assert 'LEGACY_CATALOG_TABLE' not in schema_source
     assert 'APPLICATION_PERSISTENCE_TABLES' in sqlite_schema_source

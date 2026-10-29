@@ -2,29 +2,85 @@ import asyncio
 from unittest.mock import AsyncMock
 
 import pytest
-from fastmcp import Client
+from fastmcp import Client, FastMCP
 
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from umbod.core.capabilities.descriptions import (
+    ConnectorCapabilityDescriptionOverrideStore,
+    SystemConnectorCapabilityDescriptionOverrideStore,
+)
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
-from umbod.mcp.connectors.native.tools.runtime.registry import RuntimeConnectorToolRegistry
+from umbod.core.configuration import (
+    ConnectorCurrentConfigurationStore,
+    InMemoryConnectorCurrentConfigurationStore,
+)
+from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
+from umbod.core.invocation.policy import PermitAllConnectorInvocationPolicy
+from umbod.core.publishing import ConnectorPublishingStore
+from umbod.core.signals import InMemorySignalFailureHandler
+from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore
+from umbod.mcp.connectors.native.tools.deployment_modes import ConnectorToolExposureMode
 from umbod.mcp.connectors.native.tools.infrastructure.authorization import UnrestrictedConnectorTools
+from umbod.mcp.connectors.native.tools.registration import register_connector_tools
+from umbod.mcp.connectors.native.tools.runtime.registry import RuntimeConnectorToolRegistry
+from umbod.mcp.signals import McpSignals
+from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
 from tests.umbod.mcp.connectors.tools.test_connector_tool_exposure_mode_acceptance import (
     ConnectorToolExposureMcpBuilder,
     InMemoryConnectorPublishingStore,
 )
 
 
+async def _build_mcp(
+    configuration: ConnectorCurrentConfigurationStore,
+    publication: ConnectorPublishingStore,
+    descriptions: ConnectorCapabilityDescriptionOverrideStore,
+    exposure_mode: ConnectorToolExposureMode,
+) -> FastMCP:
+    builder = ConnectorToolExposureMcpBuilder()
+    await configuration.save_current_configuration("slack", builder._configuration())
+    await publication.publish_connector("slack")
+    signals = McpSignals(InMemorySignalFailureHandler())
+    runtime_states = InMemoryConnectorToolRuntimeStateStore()
+    runtime_states.save_runtime_state(ConnectorToolRuntimeState(
+        key=ConnectorToolRef("slack", "list_readable_channels"), status="enabled",
+    ))
+    mcp = FastMCP()
+    await register_connector_tools(
+        mcp,
+        connector_registrations=[builder._connector_registration()],
+        connector_configuration_store=configuration,
+        connector_publishing_store=publication,
+        connector_tool_mappings=[builder._tool_mapping()],
+        capability_description_overrides=descriptions,
+        connector_tool_runtime_state_store=runtime_states,
+        signals=signals,
+        execution_pipelines=SignalToolExecutionPipelineFactory(
+            signals, PermitAllConnectorInvocationPolicy(),
+        ),
+        connector_tool_exposure_mode=exposure_mode,
+    )
+    return mcp
+
+
+async def _cancel_tasks(*tasks: asyncio.Task[None]) -> None:
+    for task in tasks:
+        if not task.done():
+            task.cancel()
+    await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), timeout=5)
+
+
 @pytest.mark.asyncio
-async def test_initialized_native_list_and_search_do_not_read_configuration_or_descriptions(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    mcp = await ConnectorToolExposureMcpBuilder().in_gateway_mode().build()
-    for store, method in (
-        (InMemoryConnectorCurrentConfigurationStore, "get_current_configuration"),
-        (InMemoryConnectorPublishingStore, "is_published"),
-        (mcp.capability_description_overrides, "get_many"),
+async def test_initialized_native_list_and_search_do_not_read_configuration_or_descriptions() -> None:
+    configuration = AsyncMock(wraps=InMemoryConnectorCurrentConfigurationStore())
+    publication = AsyncMock(wraps=InMemoryConnectorPublishingStore())
+    descriptions = AsyncMock(wraps=SystemConnectorCapabilityDescriptionOverrideStore())
+    mcp = await _build_mcp(configuration, publication, descriptions, "gateway")
+    for reader in (
+        configuration.get_current_configuration,
+        publication.is_published,
+        descriptions.get_many,
     ):
-        monkeypatch.setattr(store, method, AsyncMock(side_effect=AssertionError("discovery I/O")))
+        reader.side_effect = AssertionError("discovery I/O")
     async with Client(mcp) as client:
         tools = await client.list_tools()
         result = await client.call_tool("search_tools", {"query": "readable channels"})
@@ -36,18 +92,19 @@ async def test_initialized_native_list_and_search_do_not_read_configuration_or_d
 
 
 @pytest.mark.asyncio
-async def test_native_reconcile_removes_unavailable_candidates_without_request_hydration(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    mcp = await ConnectorToolExposureMcpBuilder().in_gateway_mode().build()
+async def test_native_reconcile_removes_unavailable_candidates_without_request_hydration() -> None:
+    publication = AsyncMock(wraps=InMemoryConnectorPublishingStore())
+    mcp = await _build_mcp(
+        InMemoryConnectorCurrentConfigurationStore(), publication,
+        SystemConnectorCapabilityDescriptionOverrideStore(), "gateway",
+    )
     registry = mcp.connector_tool_registry
     scope = UnrestrictedConnectorTools()
     assert len(await registry.eligible_search_candidates(scope)) == 1
-    published = AsyncMock(return_value=False)
-    monkeypatch.setattr(InMemoryConnectorPublishingStore, "is_published", published)
+    publication.is_published.return_value = False
     assert len(await registry.eligible_search_candidates(scope)) == 1
     await registry.reconcile_connector("slack")
-    published.side_effect = AssertionError("request hydration")
+    publication.is_published.side_effect = AssertionError("request hydration")
     assert await registry.eligible_search_candidates(scope) == []
 
 
@@ -65,9 +122,13 @@ async def _reconcile(registry: RuntimeConnectorToolRegistry, command: str) -> No
 @pytest.mark.asyncio
 @pytest.mark.parametrize("command", ["all", "connector", "runtime", "refresh"])
 async def test_native_reconciliation_serializes_mapping_and_search_publication(
-    monkeypatch: pytest.MonkeyPatch, command: str,
+    command: str,
 ) -> None:
-    mcp = await ConnectorToolExposureMcpBuilder().build()
+    published = AsyncMock(wraps=InMemoryConnectorPublishingStore())
+    mcp = await _build_mcp(
+        InMemoryConnectorCurrentConfigurationStore(), published,
+        SystemConnectorCapabilityDescriptionOverrideStore(), "flat",
+    )
     registry = mcp.connector_tool_registry
     started = asyncio.Event()
     release = asyncio.Event()
@@ -79,23 +140,28 @@ async def test_native_reconciliation_serializes_mapping_and_search_publication(
         calls += 1
         if calls == 1:
             started.set()
-            await release.wait()
+            await asyncio.wait_for(release.wait(), timeout=5)
             return True
         return False
 
-    monkeypatch.setattr(InMemoryConnectorPublishingStore, "is_published", AsyncMock(side_effect=publication))
+    published.is_published.side_effect = publication
     first = asyncio.create_task(_reconcile(registry, command))
-    await started.wait()
+    tasks = [first]
+    try:
+        await asyncio.wait_for(started.wait(), timeout=5)
 
-    async def reconcile_again() -> None:
-        queued.set()
-        await registry.reconcile_connector("slack")
+        async def reconcile_again() -> None:
+            queued.set()
+            await registry.reconcile_connector("slack")
 
-    second = asyncio.create_task(reconcile_again())
-    await queued.wait()
-    assert calls == 1
-    release.set()
-    await asyncio.gather(first, second)
+        second = asyncio.create_task(reconcile_again())
+        tasks.append(second)
+        await asyncio.wait_for(queued.wait(), timeout=5)
+        assert calls == 1
+        release.set()
+        await asyncio.wait_for(asyncio.gather(first, second), timeout=5)
+    finally:
+        await _cancel_tasks(*tasks)
     assert await registry.eligible_search_candidates(UnrestrictedConnectorTools()) == []
     async with Client(mcp) as client:
         assert "slack_list_readable_channels" not in {tool.name for tool in await client.list_tools()}
@@ -105,17 +171,21 @@ async def test_native_reconciliation_serializes_mapping_and_search_publication(
 @pytest.mark.parametrize("command", ["all", "connector", "runtime", "refresh"])
 @pytest.mark.parametrize("failure_source", ["publication", "descriptions"])
 async def test_native_read_failure_hides_flat_exposure_and_search_until_retry(
-    monkeypatch: pytest.MonkeyPatch, command: str, failure_source: str,
+    command: str, failure_source: str,
 ) -> None:
-    mcp = await ConnectorToolExposureMcpBuilder().build()
+    publication = AsyncMock(wraps=InMemoryConnectorPublishingStore())
+    descriptions = AsyncMock(wraps=SystemConnectorCapabilityDescriptionOverrideStore())
+    mcp = await _build_mcp(
+        InMemoryConnectorCurrentConfigurationStore(), publication, descriptions, "flat",
+    )
     registry = mcp.connector_tool_registry
-    reader = AsyncMock(side_effect=RuntimeError("read failed"))
     if failure_source == "publication":
-        monkeypatch.setattr(InMemoryConnectorPublishingStore, "is_published", reader)
+        reader = publication.is_published
         reader.return_value = True
     else:
-        monkeypatch.setattr(mcp.capability_description_overrides, "get_many", reader)
+        reader = descriptions.get_many
         reader.return_value = (object(),)
+    reader.side_effect = RuntimeError("read failed")
     with pytest.raises(RuntimeError, match="read failed"):
         await _reconcile(registry, command)
     assert await registry.eligible_search_candidates(UnrestrictedConnectorTools()) == []
@@ -128,31 +198,35 @@ async def test_native_read_failure_hides_flat_exposure_and_search_until_retry(
 
 
 @pytest.mark.asyncio
-async def test_cancelled_native_reconcile_preserves_flat_exposure_and_allows_retry(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    mcp = await ConnectorToolExposureMcpBuilder().build()
+async def test_cancelled_native_reconcile_preserves_flat_exposure_and_allows_retry() -> None:
+    published = AsyncMock(wraps=InMemoryConnectorPublishingStore())
+    mcp = await _build_mcp(
+        InMemoryConnectorCurrentConfigurationStore(), published,
+        SystemConnectorCapabilityDescriptionOverrideStore(), "flat",
+    )
     registry = mcp.connector_tool_registry
     started = asyncio.Event()
     release = asyncio.Event()
 
     async def publication(connector_id: str) -> bool:
         started.set()
-        await release.wait()
+        await asyncio.wait_for(release.wait(), timeout=5)
         return False
 
-    published = AsyncMock(side_effect=publication)
-    monkeypatch.setattr(InMemoryConnectorPublishingStore, "is_published", published)
+    published.is_published.side_effect = publication
     task = asyncio.create_task(registry.reconcile_all())
-    await started.wait()
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await task
+    try:
+        await asyncio.wait_for(started.wait(), timeout=5)
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, timeout=5)
+    finally:
+        await _cancel_tasks(task)
     assert len(await registry.eligible_search_candidates(UnrestrictedConnectorTools())) == 1
     async with Client(mcp) as client:
         assert "slack_list_readable_channels" in {tool.name for tool in await client.list_tools()}
-        published.side_effect = None
-        published.return_value = False
+        published.is_published.side_effect = None
+        published.is_published.return_value = False
         await registry.reconcile_all()
         assert "slack_list_readable_channels" not in {tool.name for tool in await client.list_tools()}
     assert await registry.eligible_search_candidates(UnrestrictedConnectorTools()) == []

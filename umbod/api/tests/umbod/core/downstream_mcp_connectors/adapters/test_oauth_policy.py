@@ -6,6 +6,7 @@ from umbod.core.connectors.downstream_mcp.adapters.fastmcp.connection import (
     FastMCPDownstreamConnectionFactory,
 )
 from umbod.core.connectors.downstream_mcp.adapters.composition import (
+    DownstreamMcpConnections,
     create_downstream_mcp_connections,
 )
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import ConnectorOAuth
@@ -28,7 +29,7 @@ from umbod.core.connectors.downstream_mcp.probe import (
 from umbod.rest.connectors.downstream_mcp.errors import present_downstream_mcp_error
 
 
-def connections(enabled: bool = False):
+def connections(enabled: bool = False) -> DownstreamMcpConnections:
     config = build_app_config(
         OperatorSettings(_env_file=None, mcp_downstream_oauth_enabled=enabled)
     )
@@ -84,7 +85,9 @@ async def test_disabled_blocks_probe_runtime_and_background_discovery() -> None:
         ),
     ],
 )
-def test_disabled_still_constructs_non_oauth_clients(configuration) -> None:
+def test_disabled_still_constructs_non_oauth_clients(
+    configuration: NoAuthConnectionConfiguration | StaticBearerConnectionConfiguration,
+) -> None:
     strategy = FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False).create(configuration)
     client = strategy.create_client()
     assert client.transport.auth is None
@@ -100,7 +103,7 @@ def test_enabled_wires_oauth_into_validation_and_runtime() -> None:
         connector_id="one",
         authorization=authorization,
     )
-    strategy = bundle.client_factory.connection_factory.create(configuration)
+    strategy = bundle.connection.connection_factory.create(configuration)
     assert isinstance(strategy.create_client().transport.auth, ConnectorOAuth)
     runtime = bundle.client_factory.create(
         DiscoverDownstreamTools(

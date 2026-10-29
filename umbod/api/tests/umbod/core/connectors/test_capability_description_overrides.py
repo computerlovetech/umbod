@@ -14,14 +14,16 @@ from tests.persistence_runtime import create_inmemory_runtime, prepared_inmemory
 import asyncio
 import sqlite3
 from pathlib import Path
-from types import SimpleNamespace
 from typing import cast
 import pytest
 import pytest_asyncio
 from pydantic import ValidationError
 from umbod.core.capabilities.descriptions import CapabilityDescriptionOverrideResolver, CapabilityDescriptionTargetNotFoundError, ClearCapabilityDescriptionOverride, ConnectorCapabilityDescriptionKey, ConnectorKindMismatchError, ConnectorCapabilityDescriptionOverrideStore, OverrideRevisionConflictError, OverriddenCapabilityDescription, SetCapabilityDescriptionOverride, SystemCapabilityDescription
 from umbod.core.connectors.downstream_mcp.models import NoAuthConnectorDefinition
-from umbod.core.connectors.downstream_mcp.stores import ConnectorDefinitionFound
+from umbod.core.connectors.downstream_mcp.stores import ConnectorDefinitionFound, ConnectorDefinitionStore, ConnectorIdQuery
+from umbod.core.connectors.native.registry import ConnectorRegistry, InMemoryConnectorRegistry
+from umbod.core.connectors.openapi.management.models import OpenApiConnector
+from umbod.proxies import Model
 
 @pytest_asyncio.fixture(params=['inmemory', 'sqlite'])
 async def store(request: pytest.FixtureRequest, tmp_path: Path) -> ConnectorCapabilityDescriptionOverrideStore:
@@ -38,11 +40,11 @@ def _connector_key(kind: str, connector_id: str) -> ConnectorCapabilityDescripti
     return ConnectorCapabilityDescriptionKey(kind=kind, connector_id=connector_id)
 
 @pytest.mark.asyncio
-async def test_missing_override_is_system_revision_zero(store: object) -> None:
+async def test_missing_override_is_system_revision_zero(store: ConnectorCapabilityDescriptionOverrideStore) -> None:
     assert await store.get(_key()) == SystemCapabilityDescription(key=_key(), revision=0)
 
 @pytest.mark.asyncio
-async def test_set_replace_clear_and_set_after_clear(store: object) -> None:
+async def test_set_replace_clear_and_set_after_clear(store: ConnectorCapabilityDescriptionOverrideStore) -> None:
     first = await store.set(SetCapabilityDescriptionOverride(key=_key(), description=' first ', expected_revision=0))
     assert first == OverriddenCapabilityDescription(key=_key(), description='first', revision=1)
     second = await store.set(SetCapabilityDescriptionOverride(key=_key(), description='second', expected_revision=1))
@@ -53,7 +55,7 @@ async def test_set_replace_clear_and_set_after_clear(store: object) -> None:
     assert third.revision == 4
 
 @pytest.mark.asyncio
-async def test_stale_set_and_clear_are_rejected(store: object) -> None:
+async def test_stale_set_and_clear_are_rejected(store: ConnectorCapabilityDescriptionOverrideStore) -> None:
     await store.set(SetCapabilityDescriptionOverride(key=_key(), description='first', expected_revision=0))
     with pytest.raises(OverrideRevisionConflictError):
         await store.set(SetCapabilityDescriptionOverride(key=_key(), description='stale', expected_revision=0))
@@ -61,13 +63,13 @@ async def test_stale_set_and_clear_are_rejected(store: object) -> None:
         await store.clear(ClearCapabilityDescriptionOverride(key=_key(), expected_revision=0))
 
 @pytest.mark.asyncio
-async def test_connector_kind_mismatch_is_rejected(store: object) -> None:
+async def test_connector_kind_mismatch_is_rejected(store: ConnectorCapabilityDescriptionOverrideStore) -> None:
     await store.set(SetCapabilityDescriptionOverride(key=_key(), description='first', expected_revision=0))
     with pytest.raises(ConnectorKindMismatchError):
         await store.get(_key('openapi'))
 
 @pytest.mark.asyncio
-async def test_batch_lookup_preserves_missing_and_persisted_states(store: object) -> None:
+async def test_batch_lookup_preserves_missing_and_persisted_states(store: ConnectorCapabilityDescriptionOverrideStore) -> None:
     await store.set(SetCapabilityDescriptionOverride(key=_key(), description='first', expected_revision=0))
     missing = _connector_key('openapi', 'other')
     assert await store.get_many((_key(), missing)) == (OverriddenCapabilityDescription(key=_key(), description='first', revision=1), SystemCapabilityDescription(key=missing, revision=0))
@@ -112,36 +114,53 @@ class _BaseReader:
     async def read(self, key: ConnectorCapabilityDescriptionKey) -> str:
         return 'system description'
 
-class _NativeRegistry:
-
-    def get_connector_definition(self, connector_id: str, filters: object) -> object:
-        if connector_id != 'native-id':
-            return None
-        return SimpleNamespace(metadata=SimpleNamespace(capability_description='native base'))
+def _native_registry() -> ConnectorRegistry:
+    return InMemoryConnectorRegistry(
+        registrations=[{
+            'id': 'native-id',
+            'display_name': 'Native',
+            'description': 'Native connector',
+            'capability_description': 'native base',
+            'extension': {'source': 'built-in'},
+            'configuration_schema': Model,
+        }],
+        available_connector_ids=['native-id'],
+    )
 
 class _DownstreamStore:
 
-    async def get(self, query: object) -> ConnectorDefinitionFound:
+    async def get(self, query: ConnectorIdQuery) -> ConnectorDefinitionFound:
         definition = NoAuthConnectorDefinition(connector_id='downstream-id', display_name='Downstream', capability_description='downstream base', endpoint_url='https://example.com/mcp', public_path='/mcp/proxies/downstream-id')
         return ConnectorDefinitionFound(definition=definition)
 
 class _OpenApiReader:
 
-    async def get_connector(self, connector_id: str) -> object:
+    async def get_connector(self, connector_id: str) -> OpenApiConnector:
         if connector_id != 'openapi-id':
             raise KeyError(connector_id)
-        return SimpleNamespace(capability_description='openapi base')
+        return OpenApiConnector(
+            connector_id='openapi-id',
+            display_name='OpenAPI',
+            tool_name_prefix='openapi',
+            capability_description='openapi base',
+            created_at='2026-01-01T00:00:00Z',
+            updated_at='2026-01-01T00:00:00Z',
+            icon_url='',
+        )
+
+    async def list_connectors(self) -> tuple[OpenApiConnector, ...]:
+        return (await self.get_connector('openapi-id'),)
 
 @pytest.mark.asyncio
 async def test_composite_base_reader_reads_all_connector_kinds() -> None:
-    reader = CompositeConnectorCapabilityBaseDescriptionReader(cast(object, _NativeRegistry()), cast(object, _DownstreamStore()), cast(object, _OpenApiReader()))
+    reader = CompositeConnectorCapabilityBaseDescriptionReader(_native_registry(), cast(ConnectorDefinitionStore, _DownstreamStore()), _OpenApiReader())
     assert await reader.read(_connector_key('native', 'native-id')) == 'native base'
     assert await reader.read(_connector_key('downstream_mcp', 'downstream-id')) == 'downstream base'
     assert await reader.read(_connector_key('openapi', 'openapi-id')) == 'openapi base'
 
 @pytest.mark.asyncio
 async def test_composite_base_reader_rejects_missing_target() -> None:
-    reader = CompositeConnectorCapabilityBaseDescriptionReader(cast(object, _NativeRegistry()), cast(object, _DownstreamStore()), cast(object, _OpenApiReader()))
+    reader = CompositeConnectorCapabilityBaseDescriptionReader(_native_registry(), cast(ConnectorDefinitionStore, _DownstreamStore()), _OpenApiReader())
     with pytest.raises(CapabilityDescriptionTargetNotFoundError):
         await reader.read(_connector_key('native', 'missing'))
 

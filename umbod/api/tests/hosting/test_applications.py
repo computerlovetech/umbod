@@ -1,4 +1,6 @@
 import asyncio
+from umbod.mcp.telemetry import McpTelemetryDependencies
+from umbod.mcp.telemetry.composition import create_configured_mcp_telemetry
 from dataclasses import dataclass
 from pathlib import Path
 from types import SimpleNamespace
@@ -102,7 +104,7 @@ class ConfigDouble:
     persistence_runtime: Any
     auth_provider: Any
     group_permission_runtime_state: Any
-    invocation_log_sink: Any
+    telemetry: McpTelemetryDependencies
 
 
 @pytest.mark.asyncio
@@ -110,7 +112,7 @@ class ConfigDouble:
 async def test_mcp_overrides_preserve_configured_defaults(
     settings: AppConfig, monkeypatch: pytest.MonkeyPatch, override: bool
 ) -> None:
-    configured = ConfigDouble(settings, AsyncMock(), object(), object(), object())
+    configured = ConfigDouble(settings, AsyncMock(), object(), object(), create_configured_mcp_telemetry(settings))
     load = AsyncMock(return_value=configured)
     context = AsyncMock(return_value=object())
     build = AsyncMock(return_value=object())
@@ -129,7 +131,10 @@ async def test_mcp_overrides_preserve_configured_defaults(
     selected = context.await_args.args[0]
     assert selected.auth_provider is (auth if override else configured.auth_provider)
     assert selected.group_permission_runtime_state is (permissions if override else configured.group_permission_runtime_state)
-    assert selected.invocation_log_sink is (sink if override else configured.invocation_log_sink)
+    assert selected.telemetry.invocation_log_sink is (sink if override else configured.telemetry.invocation_log_sink)
+    assert selected.telemetry.audit_recorder is configured.telemetry.audit_recorder
+    assert selected.telemetry.metrics_recorder is configured.telemetry.metrics_recorder
+    assert selected.telemetry.metrics_server_factory is configured.telemetry.metrics_server_factory
     assert result is build.return_value
     downstream.assert_awaited_once_with(settings, configured.persistence_runtime.database)
     openapi.assert_called_once_with(settings)
@@ -145,7 +150,7 @@ async def test_mcp_construction_failure_closes_persistence(
     settings: AppConfig, monkeypatch: pytest.MonkeyPatch, stage: str, failure: type[BaseException]
 ) -> None:
     persistence = AsyncMock()
-    config = ConfigDouble(settings, persistence, None, None, None)
+    config = ConfigDouble(settings, persistence, None, None, create_configured_mcp_telemetry(settings))
     monkeypatch.setattr(applications, "create_configured_downstream_client_factory", AsyncMock(side_effect=failure() if stage == "downstream" else None))
     monkeypatch.setattr(applications, "create_configured_openapi_runtime_adapters", Mock(side_effect=failure() if stage == "openapi" else None))
     monkeypatch.setattr(applications, "load_configured_public_app_config", AsyncMock(return_value=config))

@@ -1,11 +1,18 @@
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import pytest
 import typer
 
+from umbod_sdk.connectors import Connector
+from umbod_sdk.connectors.api.definition import ConnectorDefinition
+from umbod_sdk.connectors.proxies import Model
+
 from umbod.cli import connectors
+
+
+class ConnectorConfiguration(Model):
+    label: str
 
 
 class FakeDistribution:
@@ -19,8 +26,30 @@ class FakePlugin:
         self.connector_id = connector_id
         self.registration_calls = 0
 
-    def definition(self) -> SimpleNamespace:
-        return SimpleNamespace(id=self.connector_id)
+    def definition(self) -> ConnectorDefinition:
+        connector = Connector(
+            id=self.connector_id,
+            name="Validation Connector",
+            description="Connector for structural deployment validation.",
+            capability_description=(
+                "Validate connector metadata without executing connector operations."
+            ),
+            configuration=ConnectorConfiguration,
+        )
+
+        @connector.configuration_check
+        def check_configuration(configuration: ConnectorConfiguration) -> bool:
+            raise AssertionError(
+                "configuration checks/tools must not run during structural validation"
+            )
+
+        @connector.tool(description="Validate connector metadata without executing operations.")
+        def validate_metadata(configuration: ConnectorConfiguration) -> str:
+            raise AssertionError(
+                "configuration checks/tools must not run during structural validation"
+            )
+
+        return connector.definition()
 
     def registration(self) -> dict[str, Any]:
         self.registration_calls += 1
@@ -45,7 +74,6 @@ def _configure_metadata(
     entry_point_values = [FakeEntryPoint(distribution, plugin) for plugin in plugins]
     monkeypatch.setattr(connectors, "entry_points", lambda **kwargs: entry_point_values)
     monkeypatch.setattr(connectors, "version", lambda name: "0.1.0")
-    monkeypatch.setattr(connectors, "validate_connector", lambda definition: None)
 
 
 def test_validate_accepts_compatible_structurally_valid_plugins_without_registration(

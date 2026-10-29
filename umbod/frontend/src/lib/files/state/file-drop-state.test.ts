@@ -230,7 +230,7 @@ describe('drop eligibility and rejection', () => {
   });
 
   test('zero-byte drop and chooser selection use the same public UploadState pipeline', async (): Promise<void> => {
-    const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture, { max_bytes: 8 });
+    const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture);
     const files = new FilesState(api);
     const upload = new UploadState(api, files);
     await files.load(null);

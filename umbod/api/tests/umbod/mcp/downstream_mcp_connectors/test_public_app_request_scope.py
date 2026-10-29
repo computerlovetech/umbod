@@ -1,3 +1,4 @@
+from umbod.mcp.telemetry.composition import create_configured_mcp_telemetry
 from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.publishing.factories import create_connector_publishing_store
@@ -91,7 +92,7 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_p
     runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
     await persistence_runtime.readiness.ensure_ready()
-    config = PublicAppConfig(settings=settings, connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=True, api_base_url=None, persistence_runtime=persistence_runtime)
+    config = PublicAppConfig(settings=settings, telemetry=create_configured_mcp_telemetry(settings), connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=True, api_base_url=None, persistence_runtime=persistence_runtime)
     context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     browsing = Mock(spec=FilesystemBrowsing)
     browsing.get_root = AsyncMock(return_value=NodeSummary(
@@ -218,7 +219,7 @@ async def downstream_approval_harness(tmp_path: Path) -> AsyncIterator[Downstrea
     recorder = ExecutionRecorder()
     downstream = FastMCP('approval-downstream')
     downstream.tool(name='search_tools')(recorder.search_tools)
-    config = PublicAppConfig(settings=settings, connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime)
+    config = PublicAppConfig(settings=settings, telemetry=create_configured_mcp_telemetry(settings), connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime)
     context = await create_runtime_context(config, downstream_client_factory=InMemoryServerClientFactory(downstream), openapi_adapters=create_configured_openapi_runtime_adapters(settings))
     harness = DownstreamApprovalHarness(context, mutation_adapter, ask_result.policies[0].revision, recorder)
     for group in ('test', settings.mcp.test_user_group):
@@ -269,7 +270,7 @@ async def test_separate_runtime_contexts_keep_injected_execution_factories_isola
             downstream = FastMCP('isolated-downstream')
             downstream.tool(name='search_tools')(recorder.search_tools)
             adapters = create_configured_openapi_runtime_adapters(settings)
-            config = PublicAppConfig(settings=settings, connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence)
+            config = PublicAppConfig(settings=settings, telemetry=create_configured_mcp_telemetry(settings), connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence)
             context = await create_runtime_context(config, downstream_client_factory=InMemoryServerClientFactory(downstream), openapi_adapters=adapters)
             contexts.append(context)
             assert context.mcp.openapi_outbound_http_client_factory is adapters.outbound_http_client_factory

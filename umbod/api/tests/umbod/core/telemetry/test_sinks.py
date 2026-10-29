@@ -12,7 +12,6 @@ from umbod.core.telemetry import (
     TelemetryUnavailable,
 )
 from umbod.core.telemetry.adapters import InMemoryTelemetrySink, StdoutTelemetrySink
-from umbod.logging import StructuredLogRecord
 
 
 @pytest.fixture
@@ -93,20 +92,29 @@ def test_stdout_filtered_info_is_unavailable(
 
 
 def test_stdout_observable_emitter_failure_is_safe(
-    monkeypatch: pytest.MonkeyPatch, structured_output: io.StringIO
+    structured_output: io.StringIO,
 ) -> None:
-    def fail(record: StructuredLogRecord) -> None:
-        raise RuntimeError("private payload")
+    records: list[logging.LogRecord] = []
 
-    monkeypatch.setattr(
-        "umbod.core.telemetry.adapters.stdout.emit_structured_record", fail
-    )
-    sink: TelemetrySink = StdoutTelemetrySink()
-    with pytest.raises(TelemetryUnavailable) as error:
-        sink.export(
-            TelemetryExport(
-                signal=TelemetrySignal.LOGS, payload={"private": "data"}, item_count=1
+    class FailingFilter(logging.Filter):
+        def filter(self, record: logging.LogRecord) -> bool:
+            records.append(record)
+            raise RuntimeError("private payload")
+
+    failing_filter = FailingFilter()
+    logger = logging.getLogger("umbod.structured")
+    logger.addFilter(failing_filter)
+    try:
+        sink: TelemetrySink = StdoutTelemetrySink()
+        with pytest.raises(TelemetryUnavailable) as error:
+            sink.export(
+                TelemetryExport(
+                    signal=TelemetrySignal.LOGS, payload={"private": "data"}, item_count=1
+                )
             )
-        )
-    assert "private" not in str(error.value)
-    assert structured_output.getvalue() == ""
+        assert "private" not in str(error.value)
+        assert structured_output.getvalue() == ""
+        assert len(records) == 1
+        assert records[0].getMessage() == "Telemetry export received"
+    finally:
+        logger.removeFilter(failing_filter)

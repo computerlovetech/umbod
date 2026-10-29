@@ -1,3 +1,4 @@
+from datetime import timedelta
 from typing import Annotated
 
 from fastapi import Depends
@@ -5,6 +6,7 @@ from fastapi import Depends
 from umbod.core.callers import CallerContext, CallerSnapshot, group_membership_from_values
 from umbod.core.filesystem import ContentDriver, FilesystemCreation, Principal, PrincipalType
 from umbod.core.filesystem.content import ContentService, FilesystemContent
+from umbod.core.filesystem.deletion import DeletionService, FilesystemDeletion
 from umbod.core.filesystem.authorization import (
     FilesystemIdentityResolver, LocalDevelopmentIdentityResolver, VerifiedIdentityResolver,
     PermissionDenied, UnresolvedIdentity,
@@ -19,6 +21,9 @@ from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import get_caller_context, get_verified_access_claims
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
+
+from umbod.core.filesystem.uploads import SystemUploadClock, UploadClock, UploadService
+from umbod.core.filesystem.stores.uploads import DatabaseUploadTransactions
 
 from .errors import filesystem_errors
 
@@ -93,6 +98,27 @@ def get_filesystem_content(
     return ContentService(
         resolver, create_filesystem_transactions(database=database), content, max_bytes,
     )
+
+
+def get_filesystem_upload_clock() -> UploadClock:
+    return SystemUploadClock()
+
+
+def get_filesystem_uploads(
+    database: Annotated[Database, Depends(get_filesystem_database)],
+    resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
+    content: Annotated[ContentDriver, Depends(get_filesystem_content_driver)],
+    max_bytes: Annotated[int, Depends(get_filesystem_upload_limit)],
+    clock: Annotated[UploadClock, Depends(get_filesystem_upload_clock)],
+) -> UploadService:
+    return UploadService(resolver, DatabaseUploadTransactions(database), content, max_bytes, clock, timedelta(hours=1))
+
+
+def get_filesystem_deletion(
+    database: Annotated[Database, Depends(get_filesystem_database)],
+    resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
+) -> FilesystemDeletion:
+    return DeletionService(resolver, create_filesystem_transactions(database=database))
 
 
 def get_filesystem_creation(

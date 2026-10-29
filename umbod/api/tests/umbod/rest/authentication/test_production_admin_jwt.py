@@ -1,5 +1,7 @@
 import json
+import urllib.request
 from collections.abc import Iterator
+from io import BytesIO
 from pathlib import Path
 from time import time
 
@@ -8,7 +10,6 @@ import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import Request
 from fastapi.testclient import TestClient
-from jwt import PyJWK, PyJWKClient
 
 from umbod.rest.authentication.deps import get_caller_context
 from umbod.rest.main import create_app
@@ -25,12 +26,17 @@ def client(signing_key: rsa.RSAPrivateKey, tmp_path: Path, monkeypatch: pytest.M
     availability = tmp_path / "availability.json"
     availability.write_text(json.dumps({"connectors": []}), encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability))
-    public_key = PyJWK(json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(signing_key.public_key())))
+    public_key = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(signing_key.public_key()))
+    public_key["kid"] = "trusted-key"
+    jwks = json.dumps({"keys": [public_key]}).encode("utf-8")
 
-    def trusted_key(_client: PyJWKClient, token: str) -> PyJWK:
-        return public_key
+    def open_jwks(request: urllib.request.Request, *, timeout: float, context: object) -> BytesIO:
+        assert request.get_full_url() == settings.admin_authentication.jwks_url
+        assert timeout == 30
+        assert context is None
+        return BytesIO(jwks)
 
-    monkeypatch.setattr(PyJWKClient, "get_signing_key_from_jwt", trusted_key)
+    monkeypatch.setattr(urllib.request, "urlopen", open_jwks)
     settings = APISettings(
         runtime={"profile": "production", "auth": "auth0"},
         rest={"metrics_enabled": False},
@@ -48,7 +54,7 @@ def client(signing_key: rsa.RSAPrivateKey, tmp_path: Path, monkeypatch: pytest.M
 
 
 def _token(signing_key: rsa.RSAPrivateKey, issuer: str, audience: str) -> str:
-    return jwt.encode({"iss": issuer, "aud": audience, "sub": "admin-123", "email": "admin@example.com", "groups": ["umbod-admins"], "exp": int(time()) + 600}, signing_key, algorithm="RS256")
+    return jwt.encode({"iss": issuer, "aud": audience, "sub": "admin-123", "email": "admin@example.com", "groups": ["umbod-admins"], "exp": int(time()) + 600}, signing_key, algorithm="RS256", headers={"kid": "trusted-key"})
 
 
 @pytest.mark.parametrize("issuer,audience,status", [
@@ -85,7 +91,7 @@ def test_verified_production_profile_without_email(
     claims = jwt.decode(_token(signing_key, "https://identity.example.com/", "umbod-api"), options={"verify_signature": False})
     claims.pop("email")
     claims.update(profile)
-    token = jwt.encode(claims, signing_key, algorithm="RS256")
+    token = jwt.encode(claims, signing_key, algorithm="RS256", headers={"kid": "trusted-key"})
     response = client.get("/api/admin/users", headers={header: "Bearer " + token})
     assert response.status_code == 200
     assert response.json() == {"id": "admin-123", "email": None, "name": "unknown", "picture": None}
@@ -102,7 +108,7 @@ def test_invalid_production_token_without_email_remains_unauthorized(
     client: TestClient, signing_key: rsa.RSAPrivateKey, changes: dict[str, object]
 ) -> None:
     claims = {"iss": "https://identity.example.com/", "aud": "umbod-api", "sub": "admin-123", "groups": ["umbod-admins"], "exp": int(time()) + 600, **changes}
-    response = client.get("/api/admin/users", headers={"Authorization": "Bearer " + jwt.encode(claims, signing_key, algorithm="RS256")})
+    response = client.get("/api/admin/users", headers={"Authorization": "Bearer " + jwt.encode(claims, signing_key, algorithm="RS256", headers={"kid": "trusted-key"})})
     assert response.status_code == 401
 
 
@@ -110,7 +116,7 @@ def test_production_missing_subject_without_email_is_unauthorized(
     client: TestClient, signing_key: rsa.RSAPrivateKey
 ) -> None:
     claims = {"iss": "https://identity.example.com/", "aud": "umbod-api", "groups": ["umbod-admins"], "exp": int(time()) + 600}
-    response = client.get("/api/admin/users", headers={"Authorization": "Bearer " + jwt.encode(claims, signing_key, algorithm="RS256")})
+    response = client.get("/api/admin/users", headers={"Authorization": "Bearer " + jwt.encode(claims, signing_key, algorithm="RS256", headers={"kid": "trusted-key"})})
     assert response.status_code == 401
 
 
@@ -128,13 +134,13 @@ def test_current_user_openapi_requires_nullable_email(client: TestClient, signin
 def test_wrong_signature_without_email_is_unauthorized(client: TestClient) -> None:
     attacker_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     claims = {"iss": "https://identity.example.com/", "aud": "umbod-api", "sub": "admin-123", "groups": ["umbod-admins"], "exp": int(time()) + 600}
-    response = client.get("/api/admin/users", headers={"Authorization": "Bearer " + jwt.encode(claims, attacker_key, algorithm="RS256")})
+    response = client.get("/api/admin/users", headers={"Authorization": "Bearer " + jwt.encode(claims, attacker_key, algorithm="RS256", headers={"kid": "trusted-key"})})
     assert response.status_code == 401
 
 
 def test_non_admin_without_email_remains_forbidden(client: TestClient, signing_key: rsa.RSAPrivateKey) -> None:
     claims = {"iss": "https://identity.example.com/", "aud": "umbod-api", "sub": "admin-123", "groups": ["members"], "exp": int(time()) + 600}
-    response = client.get("/api/admin/users", headers={"Authorization": "Bearer " + jwt.encode(claims, signing_key, algorithm="RS256")})
+    response = client.get("/api/admin/users", headers={"Authorization": "Bearer " + jwt.encode(claims, signing_key, algorithm="RS256", headers={"kid": "trusted-key"})})
     assert response.status_code == 403
 
 

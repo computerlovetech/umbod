@@ -10,7 +10,7 @@ import { UploadState } from '$lib/files/state/upload-state.svelte';
 import FileUploadForm from './FileUploadForm.svelte';
 
 async function fixture(): Promise<{ api: FilesApi; files: FilesState; upload: UploadState }> {
-  const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture, { max_bytes: 2048 });
+  const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture);
   const files = new FilesState(api);
   const upload = new UploadState(api, files);
   await files.load(null);
@@ -55,7 +55,7 @@ describe('upload form server-rendered accessibility', () => {
     expect(document.querySelector('h2')?.textContent).toBe('Upload a file');
     expect(document.querySelector('.destination')?.textContent).toBe('To Projects');
     expect(document.querySelector('.limit')?.textContent).toContain('One file');
-    expect(document.querySelector('.limit')?.textContent).toContain('2 KiB maximum');
+    expect(document.body.textContent).not.toContain('maximum');
     const pickers = document.querySelectorAll('input[type="file"]');
     expect(pickers).toHaveLength(1);
     const picker = pickers[0];

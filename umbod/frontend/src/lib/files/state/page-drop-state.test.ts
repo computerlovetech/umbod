@@ -8,7 +8,7 @@ import { FilesState } from './files-state.svelte';
 import { UploadState } from './upload-state.svelte';
 
 function fixture(): { api: FilesApi; files: FilesState; upload: UploadState } {
-  const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture, { max_bytes: 8 });
+  const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture);
   const files = new FilesState(api);
   return { api, files, upload: new UploadState(api, files) };
 }
@@ -23,7 +23,7 @@ function file(name: string = 'Dropped.txt', size: number = 4): File {
 }
 
 describe('page drop auto-upload', () => {
-  test.each([0, 4, 8])('uploads a %s-byte file immediately with its original name and updates the listing', async (size): Promise<void> => {
+  test.each([0, 4, 8, 9000])('uploads a %s-byte file immediately with its original name and updates the listing', async (size): Promise<void> => {
     const { api, files, upload } = fixture();
     const write = vi.spyOn(api.filesystem, 'uploadFile');
     await ready(files);
@@ -40,7 +40,6 @@ describe('page drop auto-upload', () => {
   });
 
   test.each([
-    { selection: [file('Large.txt', 9)], message: /no larger than 8 bytes/ },
     { selection: [file('One.txt'), file('Two.txt')], message: /one file at a time/i },
     { selection: [], message: /choose one file/i },
     { selection: [file('bad/name')], message: /path separators/ }
@@ -108,10 +107,10 @@ describe('page drop auto-upload', () => {
 });
 
 describe('page drop eligibility', () => {
-  test('unknown policy blocks drops until the authorized directory policy is ready', async (): Promise<void> => {
+  test('unknown eligibility blocks drops until the authorized directory eligibility is ready', async (): Promise<void> => {
     const { api, files, upload } = fixture();
-    const policy = deferred<{ max_bytes: number }>();
-    vi.spyOn(api.filesystem, 'getUploadPolicy').mockReturnValueOnce(policy.promise);
+    const eligibility = deferred<void>();
+    vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(eligibility.promise);
     const write = vi.spyOn(api.filesystem, 'uploadFile');
     expect(upload.canDrop).toBe(false);
     await upload.drop([file()]);
@@ -120,17 +119,17 @@ describe('page drop eligibility', () => {
     expect(files.uploadAvailability).toBe('loading');
     expect(upload.canDrop).toBe(false);
     await upload.drop([file()]);
-    upload.rejectDrop('Ignored before policy');
+    upload.rejectDrop('Ignored before eligibility');
     expect(upload.open).toBe(false);
     expect(upload.error).toBe('');
     expect(write).not.toHaveBeenCalled();
-    policy.resolve({ max_bytes: 8 });
+    eligibility.resolve(undefined);
     await vi.waitFor(() => expect(upload.canDrop).toBe(true));
   });
 
-  test.each([new HttpError(403, 'Forbidden', {}), new AuthenticationRequiredError(), new NetworkError('Policy unavailable')])('denied or failed policy ignores drops and rejections: %s', async (error): Promise<void> => {
+  test.each([new HttpError(403, 'Forbidden', {}), new AuthenticationRequiredError(), new NetworkError('Eligibility unavailable')])('denied or failed eligibility ignores drops and rejections: %s', async (error): Promise<void> => {
     const { api, files, upload } = fixture();
-    vi.spyOn(api.filesystem, 'getUploadPolicy').mockRejectedValueOnce(error);
+    vi.spyOn(api.filesystem, 'checkUploadEligibility').mockRejectedValueOnce(error);
     const write = vi.spyOn(api.filesystem, 'uploadFile');
     await files.load(null);
     await vi.waitFor(() => expect(files.uploadAvailability).not.toBe('loading'));

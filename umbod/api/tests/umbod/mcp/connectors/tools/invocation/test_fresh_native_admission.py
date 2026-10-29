@@ -1,9 +1,12 @@
-from collections.abc import Awaitable, Callable
-from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from collections.abc import Awaitable, Callable, Iterator
+from contextlib import contextmanager
+from typing import Optional
 
 import pytest
-from fastmcp import Client, FastMCP
+from fastmcp import Client, Context, FastMCP
+from fastmcp.server.auth import AccessToken as FastMCPAccessToken
+from mcp.server.auth.middleware.auth_context import auth_context_var
+from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from pydantic import SecretStr
 
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
@@ -13,10 +16,42 @@ from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntim
 from umbod.core.invocation import ConnectorInvocation, DirectInvocationDecision
 from umbod.core.permissions import ConnectorToolPermission, InMemoryGroupConnectorToolPermissions
 from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore, register_connector_tools
-from umbod.mcp.connectors.native.tools.infrastructure import dependencies
 from umbod.mcp.signals.channels import McpSignals
 from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
+from umbod.proxies import Model
 from tests.support.connector_plugins import SlackAdminConfiguration
+
+
+@contextmanager
+def authenticated_groups(groups: list[str]) -> Iterator[None]:
+    access_token = FastMCPAccessToken(
+        token="test-token", client_id="test-client", scopes=[], claims={"groups": groups},
+    )
+    token = auth_context_var.set(AuthenticatedUser(access_token))
+    try:
+        yield
+    finally:
+        auth_context_var.reset(token)
+
+
+class FaultInjectingConfigurationStore:
+    def __init__(self, store: InMemoryConnectorCurrentConfigurationStore, readable: bool) -> None:
+        self._store = store
+        self._readable = readable
+
+    def fail_reads(self) -> None:
+        self._readable = False
+
+    async def get_current_configuration(self, connector_id: str) -> Optional[Model]:
+        if not self._readable:
+            raise RuntimeError("private-read-failure")
+        return await self._store.get_current_configuration(connector_id)
+
+    async def save_current_configuration(self, connector_id: str, configuration: Model) -> None:
+        await self._store.save_current_configuration(connector_id, configuration)
+
+    async def delete_current_configuration(self, connector_id: str) -> None:
+        await self._store.delete_current_configuration(connector_id)
 
 
 class MutablePublication:
@@ -47,10 +82,12 @@ class MutatingApprovalPolicy:
 @pytest.mark.parametrize("mode", ["flat", "gateway", "codemode", "retained"])
 @pytest.mark.parametrize("change", ["unpublished", "disabled", "unconfigured", "revoked", "membership", "read_failure", "unchanged"])
 async def test_native_rechecks_admission_after_approval_before_any_connector_io(
-    monkeypatch: pytest.MonkeyPatch, mode: str, change: str,
+    mode: str, change: str,
 ) -> None:
     server = FastMCP("fresh-native-admission")
-    configurations = InMemoryConnectorCurrentConfigurationStore()
+    configurations = FaultInjectingConfigurationStore(
+        InMemoryConnectorCurrentConfigurationStore(), readable=True,
+    )
     await configurations.save_current_configuration("slack", SlackAdminConfiguration(
         workspace_name="Workspace", bot_token=SecretStr("token"), default_channel_id="channels",
     ))
@@ -65,8 +102,6 @@ async def test_native_rechecks_admission_after_approval_before_any_connector_io(
     )
     server.group_connector_tool_permissions = permissions
     groups = ["engineering"]
-    monkeypatch.setattr(dependencies, "get_access_token", lambda: SimpleNamespace(claims={"groups": groups}))
-    monkeypatch.setattr(dependencies, "get_server", lambda: server)
     invocations: list[bool] = []
 
     def operation() -> dict[str, bool]:
@@ -83,9 +118,7 @@ async def test_native_rechecks_admission_after_approval_before_any_connector_io(
         elif change == "revoked":
             permissions.replace_group_permissions({"engineering": ()}, {"engineering": ()})
         elif change == "read_failure":
-            monkeypatch.setattr(configurations, "get_current_configuration", AsyncMock(
-                side_effect=RuntimeError("private-read-failure"),
-            ))
+            configurations.fail_reads()
         elif change == "membership":
             groups[:] = ["guests"]
 
@@ -108,27 +141,29 @@ async def test_native_rechecks_admission_after_approval_before_any_connector_io(
         connector_tool_exposure_mode="flat" if mode == "retained" else mode,
     )
     denied = change != "unchanged"
-    if mode == "retained":
-        tool = await server.get_tool("slack_list_channels")
-        result = await tool.run({})
-        assert bool(getattr(result, "is_error", False)) is denied
-    else:
-        async with Client(server) as client:
-            if mode == "flat":
-                result = await client.call_tool("slack_list_channels", {}, raise_on_error=False)
-            elif mode == "gateway":
-                result = await client.call_tool("execute_tool", {
-                    "tool_name": "slack_list_channels", "arguments": {},
-                }, raise_on_error=False)
-            else:
-                result = await client.call_tool("execute_code", {
-                    "code": "slack_list_channels()",
-                }, raise_on_error=False)
-                outcome = "failure" if denied else "success"
-                assert result.structured_content["outcome"] == outcome
-                assert result.structured_content["nested_calls"][0]["outcome"] == outcome
-            if mode != "codemode":
-                assert result.is_error is denied
+    with authenticated_groups(groups):
+        if mode == "retained":
+            tool = await server.get_tool("slack_list_channels")
+            async with Context(fastmcp=server):
+                result = await tool.run({})
+            assert bool(getattr(result, "is_error", False)) is denied
+        else:
+            async with Client(server) as client:
+                if mode == "flat":
+                    result = await client.call_tool("slack_list_channels", {}, raise_on_error=False)
+                elif mode == "gateway":
+                    result = await client.call_tool("execute_tool", {
+                        "tool_name": "slack_list_channels", "arguments": {},
+                    }, raise_on_error=False)
+                else:
+                    result = await client.call_tool("execute_code", {
+                        "code": "slack_list_channels()",
+                    }, raise_on_error=False)
+                    outcome = "failure" if denied else "success"
+                    assert result.structured_content["outcome"] == outcome
+                    assert result.structured_content["nested_calls"][0]["outcome"] == outcome
+                if mode != "codemode":
+                    assert result.is_error is denied
     assert policy.calls == 1
     assert invocations == ([] if denied else [True])
     assert "private-read-failure" not in str(result)

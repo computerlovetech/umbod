@@ -44,6 +44,7 @@ from umbod.core.permissions.stores.schema import (
 from umbod.core.groups.stores.schema import GROUP_TABLE
 from .group_reconciliation import reconcile_group_catalogue
 from umbod.core.filesystem.stores.schema import NODE_TABLE, OWNER_TABLE, GRANT_TABLE
+from umbod.core.filesystem.stores.uploads import UPLOAD_TABLE
 from umbod.core.persistence import Database, Table
 from umbod.core.messaging import CHECKPOINT_TABLE, EVENT_TABLE
 
@@ -51,6 +52,7 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
     NODE_TABLE,
     OWNER_TABLE,
     GRANT_TABLE,
+    UPLOAD_TABLE,
     CONNECTOR_CONFIGURATION_TABLE,
     PUBLICATION_STATE_TABLE,
     CAPABILITY_ACTIVATION_STATE_TABLE,

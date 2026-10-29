@@ -1,7 +1,9 @@
+import { Window } from 'happy-dom';
 import { render } from 'svelte/server';
 import { describe, expect, test, vi } from 'vitest';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { FilesApi } from '$lib/files/api';
+import type { NodeSummary } from '$lib/files/domain/schemas';
 import { deferred, fileId, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
 import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api';
 import { FilesState, filesHref } from '$lib/files/state/files-state.svelte';
@@ -66,7 +68,7 @@ describe('Files user composition', () => {
     await vi.waitFor(() => expect(upload.available).toBe(true));
     const body = content(state, folder, upload);
     expect(body).toContain('Files</h1>');
-    expect(body).toContain('aria-label="Visited folders"');
+    expect(body).not.toContain('aria-label="File path"');
     expect(body).toContain('New folder');
     expect(body).toContain('Projects');
     expect(body).toContain('aria-label="Folder"');
@@ -76,7 +78,34 @@ describe('Files user composition', () => {
     expect(body).not.toMatch(/Download|Share|Search|Next page|Create file|New file/);
   });
 
-  test('deep file details show metadata and an explicit parent link, with no ancestor names or writes', async (): Promise<void> => {
+  test.each([null, folderId])('item rows retain one native navigation link and separate deletion controls in %s', async (selection: string | null): Promise<void> => {
+    const { state, folder, upload } = fixture();
+    await state.load(selection);
+    for (const item of state.children.filter((item) => item.kind === 'file')) {
+      await vi.waitFor(() => expect(state.rowDeletion.controllers.get(item.id)?.available).toBe(true));
+    }
+    const document = new Window().document;
+    document.body.innerHTML = content(state, folder, upload);
+    const rows = Array.from(document.querySelectorAll('tbody .item-row'));
+    expect(rows).toHaveLength(state.children.length);
+    for (const [index, row] of rows.entries()) {
+      const item = state.children[index];
+      const links = row.querySelectorAll('a');
+      expect(links).toHaveLength(1);
+      expect(links[0].getAttribute('href')).toBe(filesHref(item.id));
+      expect(links[0].classList.contains('item-name')).toBe(true);
+      expect(row.hasAttribute('tabindex')).toBe(false);
+      expect(row.hasAttribute('role')).toBe(false);
+      expect(row.hasAttribute('aria-selected')).toBe(false);
+      if (item.kind === 'file') {
+        const deletion = row.querySelector('button.row-delete');
+        expect(deletion?.getAttribute('aria-label')).toBe(`Delete “${item.name}”`);
+        expect(deletion?.closest('a')).toBeNull();
+      }
+    }
+  });
+
+  test('deep file details share the authoritative navigation and parent link without duplicate headings', async (): Promise<void> => {
     const { state, folder, upload } = fixture();
     await state.load(fileId);
     const body = content(state, folder, upload);
@@ -84,10 +113,59 @@ describe('Files user composition', () => {
     expect(body).toContain('Notes.txt');
     expect(body).toContain('text/plain');
     expect(body).toContain('Planning');
-    expect(body).toContain('Open parent folder');
-    expect(body).not.toContain('Projects');
+    expect(body).toContain('aria-label="Parent folder"');
+    expect(body).not.toContain(' Up ');
+    expect(body).toContain('Projects');
+    expect(body).toContain('Notes.txt</h1>');
+    expect(body).not.toContain('<h2>Notes.txt');
+    expect(body).not.toContain('Open parent folder');
     expect(body).not.toContain('New folder');
     expect(body).not.toMatch(/Upload|Download|Share|Search/);
+  });
+
+  test('a stalled listing retains the authorized folder heading and independent navigation without enabling mutations', async (): Promise<void> => {
+    const { api, state, folder, upload } = fixture();
+    const listing = deferred<NodeSummary[]>();
+    vi.spyOn(api.filesystem, 'listChildren').mockReturnValueOnce(listing.promise);
+    const uploadEligibility = vi.spyOn(api.filesystem, 'checkUploadEligibility');
+    const loading = state.load(folderId);
+    await vi.waitFor(() => expect(state.navigation.phase).toBe('ready'));
+    const document = new Window().document;
+    document.body.innerHTML = content(state, folder, upload);
+    expect(document.querySelector('#files-heading')?.textContent).toBe('Projects');
+    expect(document.querySelector('.mobile-path a')?.getAttribute('href')).toBe('/files');
+    expect(document.querySelector('nav[aria-label="File path"] [aria-current="page"]')?.textContent).toBe('Projects');
+    expect(document.body.textContent).toContain('Loading files');
+    expect(state.phase).toBe('loading');
+    expect(state.creationTarget()).toBeUndefined();
+    expect(uploadEligibility).not.toHaveBeenCalled();
+    expect(document.querySelector('#upload-file-button, #new-folder-button, .row-delete')).toBeNull();
+    listing.resolve([filesystemFixture[2]]);
+    await loading;
+    expect(state.phase).toBe('ready');
+  });
+
+  test.each([
+    [new Error('private listing diagnostic'), "Couldn't load files"],
+    [new HttpError(403, 'private listing diagnostic', {}), "You don't have access"]
+  ])('a failed listing retains the authorized heading and path without granting ready actions', async (error, message): Promise<void> => {
+    const { api, state, folder, upload } = fixture();
+    vi.spyOn(api.filesystem, 'listChildren').mockRejectedValueOnce(error);
+    const uploadEligibility = vi.spyOn(api.filesystem, 'checkUploadEligibility');
+    await state.load(folderId);
+    await vi.waitFor(() => expect(state.navigation.phase).toBe('ready'));
+    const document = new Window().document;
+    document.body.innerHTML = content(state, folder, upload);
+    expect(document.querySelector('#files-heading')?.textContent).toBe('Projects');
+    expect(document.querySelector('.mobile-path a')?.getAttribute('href')).toBe('/files');
+    expect(document.querySelector('nav[aria-label="File path"] [aria-current="page"]')?.textContent).toBe('Projects');
+    expect(document.body.textContent).toContain(message);
+    expect(document.body.textContent).not.toContain('private listing diagnostic');
+    expect(document.body.textContent).not.toContain('This folder is empty');
+    expect(state.phase).not.toBe('ready');
+    expect(state.creationTarget()).toBeUndefined();
+    expect(uploadEligibility).not.toHaveBeenCalled();
+    expect(document.querySelector('#upload-file-button, #new-folder-button, .row-delete')).toBeNull();
   });
 
   test('renders empty, loading, denied and failed states distinctly', async (): Promise<void> => {

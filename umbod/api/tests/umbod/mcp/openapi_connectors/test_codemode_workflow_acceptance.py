@@ -1,3 +1,4 @@
+from umbod.mcp.telemetry.composition import create_configured_mcp_telemetry
 from umbod.mcp.connectors.openapi.discovery_runtime import reconcile_openapi_discovery
 from umbod.core.activation import CAPABILITY_ACTIVATION_STATE_TABLE
 from umbod.core.connectors.openapi.stores import CATALOG_OPERATION_TABLE, CATALOG_SOURCE_TABLE, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, OpenApiConnectorStoreService
@@ -84,7 +85,7 @@ async def _build(settings: AppConfig, factory: RecordingOutboundHttpClientFactor
     await persistence_runtime.readiness.ensure_ready()
     default_runtime = await create_default_mcp_connector_runtime(settings, persistence_runtime)
     runtime = ConnectorRuntime(connector_registrations=({'id': 'acceptance', 'display_name': 'Acceptance', 'description': 'Acceptance boundary'},), connector_configuration_store=default_runtime.connector_configuration_store, connector_publishing_store=default_runtime.connector_publishing_store, connector_tool_mappings=(ConcreteConnectorToolMapping('acceptance', 'unused', 'Unused', _unused_connector_operation, {}),))
-    return await build_mcp_with_openapi_adapters(settings, MCPAuthProviderFactory().create(settings), runtime, (), OpenApiRuntimeAdapters(factory), persistence_runtime, downstream_client_factory=await create_configured_downstream_client_factory(settings, persistence_runtime.database))
+    return await build_mcp_with_openapi_adapters(settings, MCPAuthProviderFactory().create(settings), runtime, (), OpenApiRuntimeAdapters(factory), persistence_runtime, telemetry=create_configured_mcp_telemetry(settings), downstream_client_factory=await create_configured_downstream_client_factory(settings, persistence_runtime.database))
 
 async def _build_default(settings: AppConfig) -> FastMCP:
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()

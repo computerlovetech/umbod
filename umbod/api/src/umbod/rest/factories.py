@@ -17,7 +17,7 @@ from umbod.core.permissions.factories import create_group_permission_store
 from collections.abc import Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager
 from functools import cached_property
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 from umbod_sdk.connectors.discovery import load_connector_plugins
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -79,6 +79,10 @@ from umbod.core.connectors.downstream_mcp.adapters.settings import (
 from umbod.rest.settings import APISettings
 from umbod.core.filesystem import ContentDriver
 from umbod.infrastructure import InMemoryContentConfig, LocalContentConfig, create_content_driver
+
+
+if TYPE_CHECKING:
+    from umbod.rest.user_catalogue.ports import PersonalCatalogueStoreSupplier
 
 
 class ConnectorRegistryFactory(Protocol):
@@ -147,6 +151,7 @@ class RootApiAppFactory:
             allow_credentials=False,
             allow_methods=["*"],
             allow_headers=["*"],
+            expose_headers=["Allow", "ETag"],
         )
 
 
@@ -218,6 +223,7 @@ class ConnectorApiDependencyFactories:
         downstream_mcp_credential_store: DownstreamMcpCredentialStoreFactory,
         downstream_mcp_catalog_store: DownstreamMcpCatalogStoreFactory,
         downstream_mcp_health_store: DownstreamMcpHealthStoreFactory,
+        personal_catalogue_stores: "PersonalCatalogueStoreSupplier",
         openapi_json_import_max_bytes: int,
         settings: APISettings,
         persistence_runtime: PersistenceRuntime,
@@ -242,6 +248,7 @@ class ConnectorApiDependencyFactories:
         self.downstream_mcp_credential_store = downstream_mcp_credential_store
         self.downstream_mcp_catalog_store = downstream_mcp_catalog_store
         self.downstream_mcp_health_store = downstream_mcp_health_store
+        self.personal_catalogue_stores = personal_catalogue_stores
         self.openapi_json_import_max_bytes = openapi_json_import_max_bytes
 
     @cached_property
@@ -261,6 +268,8 @@ class ConnectorApiDependencyFactories:
         persistence_runtime: PersistenceRuntime,
         *connector_registrations: Sequence[ConnectorRegistration] | None,
     ) -> "ConnectorApiDependencyFactories":
+        from umbod.rest.user_catalogue.store_supplier import ConfiguredPersonalCatalogueStoreSupplier
+
         connector_registry = ConfiguredConnectorRegistryFactory(
             *connector_registrations
         )
@@ -295,6 +304,9 @@ class ConnectorApiDependencyFactories:
             ),
             downstream_mcp_health_store=ConfiguredDownstreamMcpHealthStoreFactory(
                 persistence_runtime.database
+            ),
+            personal_catalogue_stores=ConfiguredPersonalCatalogueStoreSupplier(
+                settings, persistence_runtime
             ),
             openapi_json_import_max_bytes=settings.openapi_connectors.json_import_max_bytes,
             settings=settings,

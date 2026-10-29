@@ -14,7 +14,7 @@ function fixture(): { api: FilesApi; files: FilesState; form: NewFolderState } {
   return { api, files, form: new NewFolderState(api, files) };
 }
 
-describe('files reads and visited navigation', () => {
+describe('files reads and authoritative navigation', () => {
   test('root is independent of denied or pending administration lookup', async (): Promise<void> => {
     const { files } = fixture();
     const access = new WorkspaceAccessState({ currentUser: async () => { throw new HttpError(403, 'Forbidden', {}); } });
@@ -29,7 +29,7 @@ describe('files reads and visited navigation', () => {
     pending.dispose();
   });
 
-  test('deep file links read neither children nor ancestors and only expose the selected metadata', async (): Promise<void> => {
+  test('deep file links retrieve the authoritative path without listing ancestors', async (): Promise<void> => {
     const { api, files } = fixture();
     const root = vi.spyOn(api.filesystem, 'getRoot');
     const getNode = vi.spyOn(api.filesystem, 'getNode');
@@ -37,22 +37,22 @@ describe('files reads and visited navigation', () => {
     await files.load(fileId);
     expect(files.node?.name).toBe('Notes.txt');
     expect(files.children).toEqual([]);
-    expect(files.trail).toEqual([]);
+    expect(files.navigation.path?.items.map((item) => item.id)).toEqual([rootId, folderId, fileId]);
     expect(root).not.toHaveBeenCalled();
     expect(getNode.mock.calls).toEqual([[fileId, expect.any(AbortSignal)]]);
     expect(children).not.toHaveBeenCalled();
   });
 
-  test('directory deep links list children without reading root or parent names', async (): Promise<void> => {
+  test('directory deep links list children and retrieve authoritative paths without a root read', async (): Promise<void> => {
     const { api, files } = fixture();
     const root = vi.spyOn(api.filesystem, 'getRoot');
     await files.load(folderId);
     expect(files.children.map((node) => node.id)).toEqual([fileId]);
-    expect(files.trail).toEqual([{ id: folderId, name: 'Projects' }]);
+    expect(files.navigation.path?.items.map((item) => item.id)).toEqual([rootId, folderId]);
     expect(root).not.toHaveBeenCalled();
   });
 
-  test('back and forward URL selections reload with visited paths, not ancestor access assumptions', async (): Promise<void> => {
+  test('back and forward URL selections reload authoritative paths and discard folder drafts', async (): Promise<void> => {
     const { files, form } = fixture();
     await files.load(null);
     form.show();
@@ -60,7 +60,7 @@ describe('files reads and visited navigation', () => {
     form.navigate();
     await files.load(folderId);
     await files.load(fileId);
-    expect(files.trail).toEqual([{ id: folderId, name: 'Projects' }]);
+    expect(files.navigation.path?.items.map((item) => item.id)).toEqual([rootId, folderId, fileId]);
     form.navigate();
     await files.load(folderId);
     expect(files.node?.id).toBe(folderId);
@@ -68,7 +68,7 @@ describe('files reads and visited navigation', () => {
     await files.load(fileId);
     expect(files.node?.id).toBe(fileId);
     await files.load(null);
-    expect(files.trail).toEqual([]);
+    expect(files.navigation.path?.items.map((item) => item.id)).toEqual([rootId]);
   });
 
   test.each([

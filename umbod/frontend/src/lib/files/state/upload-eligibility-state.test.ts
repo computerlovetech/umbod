@@ -1,38 +1,35 @@
 import { describe, expect, test, vi } from 'vitest';
 import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
 import type { FilesApi } from '../api';
-import type { NodeSummary, UploadPolicy } from '../domain/schemas';
+import type { NodeSummary } from '../domain/schemas';
 import { deferred, fileId, filesystemFixture, filesystemNode, folderId, rootId } from '../fixtures.test-support';
 import { InMemoryFilesApi } from '../infrastructure/in-memory-api';
 import { FilesState } from './files-state.svelte';
 import { UploadState } from './upload-state.svelte';
 
 function fixture(): { api: FilesApi; files: FilesState; upload: UploadState } {
-  const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture, { max_bytes: 32 });
+  const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture);
   const files = new FilesState(api);
   return { api, files, upload: new UploadState(api, files) };
 }
 
-describe('directory upload policy', () => {
-  test('directory browsing is ready while policy is pending and files never request a policy', async (): Promise<void> => {
+describe('directory upload eligibility', () => {
+  test('directory browsing is ready while eligibility is pending and files never request eligibility', async (): Promise<void> => {
     const { api, files, upload } = fixture();
-    const pending = deferred<UploadPolicy>();
-    const policy = vi.spyOn(api.filesystem, 'getUploadPolicy').mockReturnValueOnce(pending.promise);
+    const pending = deferred<void>();
+    const eligibility = vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(pending.promise);
     await files.load(null);
     expect(files.phase).toBe('ready');
     expect(files.children.map((node) => node.id)).toEqual([folderId]);
     expect(files.uploadAvailability).toBe('loading');
-    expect(files.uploadPolicy).toBeUndefined();
     expect(upload.available).toBe(false);
-    expect(policy).toHaveBeenCalledWith(rootId, expect.any(AbortSignal));
-    pending.resolve({ max_bytes: 32 });
+    expect(eligibility).toHaveBeenCalledWith(rootId, expect.any(AbortSignal));
+    pending.resolve(undefined);
     await vi.waitFor(() => expect(files.uploadAvailability).toBe('allowed'));
-    expect(files.uploadPolicy).toEqual({ max_bytes: 32 });
     await files.load(fileId);
     expect(files.phase).toBe('ready');
     expect(files.uploadAvailability).toBe('hidden');
-    expect(files.uploadPolicy).toBeUndefined();
-    expect(policy).toHaveBeenCalledTimes(1);
+    expect(eligibility).toHaveBeenCalledTimes(1);
   });
 
   test.each([
@@ -41,83 +38,76 @@ describe('directory upload policy', () => {
     [new AuthenticationRequiredError(), 'sign-in'],
     [new NetworkError('offline'), 'error'],
     [new HttpError(500, 'Failed', {}), 'error']
-  ])('policy failure %s hides upload without blocking browsing and explicit retry recovers', async (error, availability): Promise<void> => {
+  ])('eligibility failure %s hides upload without blocking browsing and explicit retry recovers', async (error, availability): Promise<void> => {
     const { api, files, upload } = fixture();
-    const policy = vi.spyOn(api.filesystem, 'getUploadPolicy').mockRejectedValueOnce(error);
+    const eligibility = vi.spyOn(api.filesystem, 'checkUploadEligibility').mockRejectedValueOnce(error);
     await files.load(null);
     await vi.waitFor(() => expect(files.uploadAvailability).toBe(availability));
     expect(files.phase).toBe('ready');
     expect(files.node?.id).toBe(rootId);
     expect(files.children.map((node) => node.id)).toEqual([folderId]);
-    expect(files.uploadPolicy).toBeUndefined();
     upload.show();
     expect(upload.open).toBe(false);
     expect(upload.available).toBe(false);
-    expect(policy).toHaveBeenCalledTimes(1);
+    expect(eligibility).toHaveBeenCalledTimes(1);
     await files.checkUploadAvailability();
     expect(files.uploadAvailability).toBe('allowed');
-    expect(files.uploadPolicy).toEqual({ max_bytes: 32 });
   });
 
-  test.each(['resolve', 'reject'])('stale policy %s cannot enable upload or replace another parent policy', async (outcome): Promise<void> => {
+  test.each(['resolve', 'reject'])('stale eligibility %s cannot enable upload or replace eligibility for another parent', async (outcome): Promise<void> => {
     const { api, files, upload } = fixture();
-    const old = deferred<UploadPolicy>();
-    const current = deferred<UploadPolicy>();
-    const policy = vi.spyOn(api.filesystem, 'getUploadPolicy').mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
+    const old = deferred<void>();
+    const current = deferred<void>();
+    const eligibility = vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
     await files.load(null);
-    const oldSignal = policy.mock.calls[0][1];
+    const oldSignal = eligibility.mock.calls[0][1];
     await files.load(folderId);
     expect(oldSignal?.aborted).toBe(true);
     expect(files.uploadAvailability).toBe('loading');
-    if (outcome === 'resolve') old.resolve({ max_bytes: 999 });
+    if (outcome === 'resolve') old.resolve(undefined);
     else old.reject(new HttpError(403, 'Forbidden', {}));
     await old.promise.catch(() => undefined);
     expect(files.node?.id).toBe(folderId);
     expect(files.uploadAvailability).toBe('loading');
-    expect(files.uploadPolicy).toBeUndefined();
     upload.show();
     expect(upload.open).toBe(false);
-    current.resolve({ max_bytes: 16 });
+    current.resolve(undefined);
     await vi.waitFor(() => expect(files.uploadAvailability).toBe('allowed'));
-    expect(files.uploadPolicy).toEqual({ max_bytes: 16 });
-    expect(upload.maxBytes).toBe(16);
   });
 
-  test('later policy check wins within the same directory', async (): Promise<void> => {
+  test('later eligibility check wins within the same directory', async (): Promise<void> => {
     const { api, files } = fixture();
-    const old = deferred<UploadPolicy>();
-    vi.spyOn(api.filesystem, 'getUploadPolicy').mockReturnValueOnce(old.promise).mockResolvedValueOnce({ max_bytes: 12 });
+    const old = deferred<void>();
+    vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(old.promise).mockResolvedValueOnce(undefined);
     await files.load(null);
     await files.checkUploadAvailability();
-    old.resolve({ max_bytes: 999 });
+    old.resolve(undefined);
     await old.promise;
-    expect(files.uploadPolicy).toEqual({ max_bytes: 12 });
     expect(files.uploadAvailability).toBe('allowed');
   });
 
-  test.each(['resolve', 'reject'])('disposal aborts and ignores late policy %s', async (outcome): Promise<void> => {
+  test.each(['resolve', 'reject'])('disposal aborts and ignores late eligibility %s', async (outcome): Promise<void> => {
     const { api, files } = fixture();
-    const pending = deferred<UploadPolicy>();
-    const policy = vi.spyOn(api.filesystem, 'getUploadPolicy').mockReturnValueOnce(pending.promise);
+    const pending = deferred<void>();
+    const eligibility = vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(pending.promise);
     await files.load(null);
-    const signal = policy.mock.calls[0][1];
+    const signal = eligibility.mock.calls[0][1];
     files.dispose();
-    if (outcome === 'resolve') pending.resolve({ max_bytes: 999 });
+    if (outcome === 'resolve') pending.resolve(undefined);
     else pending.reject(new NetworkError('late'));
     await pending.promise.catch(() => undefined);
     expect(signal?.aborted).toBe(true);
-    expect(files.uploadPolicy).toBeUndefined();
     expect(files.uploadAvailability).not.toBe('allowed');
     await files.checkUploadAvailability();
-    expect(policy).toHaveBeenCalledTimes(1);
+    expect(eligibility).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('write rejection invalidates upload policy', () => {
+describe('write rejection invalidates upload eligibility', () => {
   test.each([
     { error: new AuthenticationRequiredError(), availability: 'sign-in' },
     { error: new HttpError(403, 'Forbidden', {}), availability: 'denied' }
-  ])('$availability upload rejection invalidates an outstanding successful policy response', async ({ error, availability }): Promise<void> => {
+  ])('$availability upload rejection invalidates an outstanding successful eligibility response', async ({ error, availability }): Promise<void> => {
     const { api, files, upload } = fixture();
     await files.load(null);
     await vi.waitFor(() => expect(upload.available).toBe(true));
@@ -127,46 +117,41 @@ describe('write rejection invalidates upload policy', () => {
     const response = deferred<NodeSummary>();
     vi.spyOn(api.filesystem, 'uploadFile').mockReturnValueOnce(response.promise);
     const pending = upload.submit();
-    const policy = deferred<UploadPolicy>();
-    vi.spyOn(api.filesystem, 'getUploadPolicy').mockReturnValueOnce(policy.promise);
+    const eligibility = deferred<void>();
+    vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(eligibility.promise);
     const checking = files.checkUploadAvailability();
     response.reject(error);
     await pending;
     expect(files.uploadAvailability).toBe(availability);
-    expect(files.uploadPolicy).toBeUndefined();
     expect(files.phase).toBe('ready');
     expect(files.children.map((node) => node.id)).toEqual([folderId]);
     expect(upload.file).toBe(file);
     expect(upload.name).toBe(file.name);
     expect(upload.available).toBe(false);
-    policy.resolve({ max_bytes: 999 });
+    eligibility.resolve(undefined);
     await checking;
     expect(files.uploadAvailability).toBe(availability);
-    expect(files.uploadPolicy).toBeUndefined();
     expect(upload.available).toBe(false);
     upload.changeName('Renamed.txt');
     expect(upload.canSubmit).toBe(false);
     await files.checkUploadAvailability();
     expect(files.uploadAvailability).toBe('allowed');
-    expect(files.uploadPolicy).toEqual({ max_bytes: 32 });
   });
 
-  test.each(['denied', 'sign-in'] as const)('rejectUploadAccess for another parent cannot invalidate the current allowed or pending policy: %s', async (availability): Promise<void> => {
+  test.each(['denied', 'sign-in'] as const)('rejectUploadAccess for another parent cannot invalidate the current allowed or pending eligibility: %s', async (availability): Promise<void> => {
     const { api, files, upload } = fixture();
     await files.load(folderId);
     await vi.waitFor(() => expect(upload.available).toBe(true));
     files.rejectUploadAccess(rootId, availability);
     expect(files.uploadAvailability).toBe('allowed');
-    expect(files.uploadPolicy).toEqual({ max_bytes: 32 });
-    const policy = deferred<UploadPolicy>();
-    vi.spyOn(api.filesystem, 'getUploadPolicy').mockReturnValueOnce(policy.promise);
+    const eligibility = deferred<void>();
+    vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(eligibility.promise);
     const checking = files.checkUploadAvailability();
     files.rejectUploadAccess(rootId, availability);
     expect(files.uploadAvailability).toBe('loading');
-    policy.resolve({ max_bytes: 16 });
+    eligibility.resolve(undefined);
     await checking;
     expect(files.uploadAvailability).toBe('allowed');
-    expect(files.uploadPolicy).toEqual({ max_bytes: 16 });
   });
 });
 

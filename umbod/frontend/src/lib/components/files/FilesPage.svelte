@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { afterNavigate } from '$app/navigation';
+  import { afterNavigate, goto } from '$app/navigation';
   import { onMount } from 'svelte';
   import { adminApi } from '$lib/admin/infrastructure/admin-api';
   import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
@@ -8,7 +8,7 @@
   import { workspaceNavigation, workspacePresentation } from '$lib/workspace/navigation';
   import type { FilesApi } from '$lib/files/api';
   import { browserFilesApi } from '$lib/files/infrastructure/files-api';
-  import { FilesState } from '$lib/files/state/files-state.svelte';
+  import { FilesState, filesHref } from '$lib/files/state/files-state.svelte';
   import { UploadState } from '$lib/files/state/upload-state.svelte';
   import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
   import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
@@ -33,13 +33,13 @@
   }
 
   const api = createFilesApi();
-  const state = new FilesState(api);
+  const state = new FilesState(api, async (id: string): Promise<void> => { await goto(filesHref(id)); });
   const folder = new NewFolderState(api, state);
   const upload = new UploadState(api, state);
   const access = createAccess();
 
   afterNavigate(({ to }) => {
-    if (to?.url.pathname !== '/files') return;
+    if (to?.url.pathname !== '/files') { state.deletion.reset(); state.rowDeletion.reset(); return; }
     folder.navigate();
     upload.navigate();
     void state.load(to.url.searchParams.get('node'));

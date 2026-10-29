@@ -20,7 +20,7 @@ from umbod.core.filesystem import (
 from umbod.core.filesystem.authorization import PermissionDenied, ResolvedIdentity
 from umbod.core.filesystem.browsing import BrowsingService, FilesystemBrowsing, NodeSummary
 from umbod.core.persistence import PersistenceRuntime
-from umbod.infrastructure import create_access_control_driver, create_namespace_driver
+from umbod.infrastructure import create_access_control_driver, create_namespace_driver, create_filesystem_transactions
 from tests.support.filesystem.authorization import (
     AuthorizationContext,
     caller,
@@ -45,7 +45,10 @@ def browsing_context(filesystem_runtime: PersistenceRuntime) -> BrowsingContext:
         context.resolver.identities[caller(name)] = ResolvedIdentity(
             user=principal(name, PrincipalType.USER, "provider"), groups=[]
         )
-    browsing: FilesystemBrowsing = BrowsingService(context.namespace, context.authorization)
+    browsing: FilesystemBrowsing = BrowsingService(
+        context.namespace, context.authorization, context.resolver,
+        create_filesystem_transactions(database=filesystem_runtime.database),
+    )
     return BrowsingContext(browsing, context)
 
 

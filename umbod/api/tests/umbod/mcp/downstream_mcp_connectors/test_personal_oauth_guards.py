@@ -1,6 +1,7 @@
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryStores, create_downstream_discovery_runtime
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
 from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -34,7 +35,13 @@ from umbod.core.connectors.downstream_mcp.stores import (
     SaveCredential,
     create_downstream_mcp_stores,
 )
-from umbod.core.invocation import ConnectorInvocation, PermitAllConnectorInvocationPolicy
+from umbod.core.invocation import (
+    ConnectorInvocation,
+    ConnectorInvocationDecision,
+    ConnectorInvocationPolicy,
+    DirectInvocationDecision,
+    PermitAllConnectorInvocationPolicy,
+)
 from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime
 from umbod.mcp.connectors.downstream_mcp import (
     ConnectorAwareDownstreamMcpToolProvider,
@@ -70,6 +77,17 @@ class MutablePermissionPolicy:
         return (connector_id, capability_kind, capability_key) not in self.denied
 
 
+class MutatingInvocationPolicy:
+    def __init__(self, callback: Callable[[], Awaitable[None]]) -> None:
+        self._callback = callback
+        self.calls: list[ConnectorInvocation] = []
+
+    async def evaluate(self, invocation: ConnectorInvocation) -> ConnectorInvocationDecision:
+        self.calls.append(invocation)
+        await self._callback()
+        return DirectInvocationDecision()
+
+
 class RejectingDiscovery:
     def __init__(self) -> None:
         self.calls: list[DiscoverDownstreamTools] = []
@@ -98,8 +116,7 @@ class OwnershipFixture:
         ))
 
 
-@pytest_asyncio.fixture
-async def ownership() -> OwnershipFixture:
+async def create_ownership(invocation_policy: ConnectorInvocationPolicy) -> OwnershipFixture:
     stores = await create_downstream_mcp_stores("test-secret", create_inmemory_runtime().database)
     await stores.definitions.save(SaveConnectorDefinition(definition=OAuthConnectorDefinition(
         connector_id="alpha", display_name="Alpha", tool_name_prefix="alpha", endpoint_url="https://alpha.example/mcp"
@@ -140,9 +157,14 @@ async def ownership() -> OwnershipFixture:
         client_factory=factory, permission_policy=permissions,
         connector_scope="",
         signals=signals,
-        execution_pipelines=SignalToolExecutionPipelineFactory(signals, PermitAllConnectorInvocationPolicy()),
+        execution_pipelines=SignalToolExecutionPipelineFactory(signals, invocation_policy),
     )
     return OwnershipFixture(stores, provider, factory, permissions)
+
+
+@pytest_asyncio.fixture
+async def ownership() -> OwnershipFixture:
+    return await create_ownership(PermitAllConnectorInvocationPolicy())
 
 
 @pytest.mark.asyncio
@@ -327,15 +349,13 @@ async def test_template_cached_read_rechecks_full_admission(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("stage", ["publication", "activation", "permission", "catalogue"])
 async def test_approval_time_revocation_prevents_held_tool_network_access(
-    ownership: OwnershipFixture, stage: str, monkeypatch: pytest.MonkeyPatch,
+    stage: str,
 ) -> None:
-    evaluated: list[ConnectorInvocation] = []
-
-    async def approve_then_revoke(policy: PermitAllConnectorInvocationPolicy, invocation: ConnectorInvocation) -> None:
-        evaluated.append(invocation)
+    async def approve_then_revoke() -> None:
         await revoke_capability(ownership, stage, "tool", "lookup")
 
-    monkeypatch.setattr(PermitAllConnectorInvocationPolicy, "evaluate", approve_then_revoke)
+    policy = MutatingInvocationPolicy(approve_then_revoke)
+    ownership = await create_ownership(policy)
     tool = await ownership.provider.get_tool("alpha_lookup")
     assert tool is not None
     public = FastMCP("public")
@@ -347,7 +367,7 @@ async def test_approval_time_revocation_prevents_held_tool_network_access(
     async with Client(public) as client:
         result = await client.call_tool_mcp("invoke_held", {})
     assert result.is_error
-    assert len(evaluated) == 1
+    assert len(policy.calls) == 1
     assert ownership.factory.created == []
 
 
