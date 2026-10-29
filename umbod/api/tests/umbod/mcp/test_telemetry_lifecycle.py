@@ -63,7 +63,7 @@ async def create_application(enabled: bool, listeners: McpMetricsServerFactory) 
     settings = AppConfig(mcp={"auth_mode": "none", "metrics_enabled": enabled, "downstream_discovery_enabled": False, "messaging_transport": "sql"})
     config = await load_configured_public_app_config(settings)
     persistence = RecordingPersistenceRuntime(config.persistence_runtime)
-    config = replace(config, persistence_runtime=persistence, telemetry=replace(config.telemetry, metrics_server_factory=listeners))
+    config = replace(config, api_base_url=None, persistence_runtime=persistence, telemetry=replace(config.telemetry, metrics_server_factory=listeners))
     context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     return await build_starlette_app(context), persistence
 

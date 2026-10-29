@@ -35,7 +35,7 @@ def test_health_route_reports_ready_without_authentication(
 
     async def create_app() -> Starlette:
         config = await load_configured_public_app_config(AppConfig.model_validate(settings.model_dump()))
-        config = replace(config, telemetry=replace(config.telemetry, metrics_server_factory=listeners))
+        config = replace(config, api_base_url=None, telemetry=replace(config.telemetry, metrics_server_factory=listeners))
         context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
         return await build_starlette_app(context)
 
