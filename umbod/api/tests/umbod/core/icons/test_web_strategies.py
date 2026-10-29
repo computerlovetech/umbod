@@ -1,6 +1,6 @@
 import pytest
 
-from umbod.core.icons.adapters.in_memory_http import InMemoryFaviconHttpClient
+from tests.support.icons import InMemoryFaviconHttpClient
 from umbod.core.icons.http_models import FaviconHttpResponse
 from umbod.core.icons.models import FaviconDiscoveryRequest, FaviconFound, FaviconNotFound
 from umbod.core.icons.ports import FaviconDiscoveryStrategy

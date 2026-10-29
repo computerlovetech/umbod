@@ -10,7 +10,7 @@ from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 from pydantic import SecretStr
 
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.runtime.tools import ConcreteConnectorToolMapping
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
 from umbod.core.invocation import ConnectorInvocation, DirectInvocationDecision

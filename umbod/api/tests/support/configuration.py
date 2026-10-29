@@ -1,3 +1,4 @@
+from umbod.core.configuration.exceptions import ConnectorConfigurationSecretUnavailableError
 from umbod.proxies import Model
 
 
@@ -13,3 +14,8 @@ class InMemoryConnectorCurrentConfigurationStore:
 
     async def delete_current_configuration(self, connector_id: str) -> None:
         self._configurations.pop(connector_id, None)
+
+
+class UnavailableConnectorConfigurationSecret:
+    def get_secret(self) -> str:
+        raise ConnectorConfigurationSecretUnavailableError()

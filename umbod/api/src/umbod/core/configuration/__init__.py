@@ -26,12 +26,8 @@ from umbod.core.configuration.persistence import (
     EncryptedConnectorConfigurationQueryProtocol,
     EncryptedConnectorConfigurationStoreProtocol,
     EnvironmentConnectorConfigurationSecret,
-    UnavailableConnectorConfigurationSecret,
 )
 from umbod.core.configuration.ports import ConnectorCurrentConfigurationStore
-from umbod.core.configuration.runtime_store import (
-    InMemoryConnectorCurrentConfigurationStore,
-)
 
 __all__ = [
     "ConnectorConfigurationDecryptionError",
@@ -51,8 +47,6 @@ __all__ = [
     "EncryptedConnectorConfiguration",
     "EncryptedConnectorConfigurationStoreProtocol",
     "EnvironmentConnectorConfigurationSecret",
-    "InMemoryConnectorCurrentConfigurationStore",
-    "UnavailableConnectorConfigurationSecret",
     "UnknownConnectorConfigurationError",
     "configuration_fields_from_schema",
     "masked_configuration_dump",

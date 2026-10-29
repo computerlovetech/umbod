@@ -8,11 +8,10 @@ from messaging.in_memory import (
     InMemoryEventCheckpointStore,
     InMemoryEventCheckpointStoreFactory,
     InMemoryEventCheckpointStoreMessages,
-    InMemoryEventStream,
-    InMemoryEventStreamFactory,
 )
 from messaging.models import MessagingEvent
 from messaging.ports import EventCheckpointStore, EventStream
+from tests.support.messaging import InMemoryEventStream, InMemoryEventStreamFactory
 
 
 @pytest.fixture

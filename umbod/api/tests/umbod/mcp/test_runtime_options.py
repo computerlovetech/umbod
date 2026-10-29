@@ -2,7 +2,7 @@ from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
 from tests.persistence_runtime import create_inmemory_runtime
 import pytest
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, HttpConnectorRuntimeStateSourceStrategy, LocalConnectorRuntimeStateSourceStrategy, StoreBackedConnectorRuntimeStateSourceStrategy, resolve_connector_runtime_state_source_strategy
 
 def test_runtime_state_source_without_stores_uses_http() -> None:

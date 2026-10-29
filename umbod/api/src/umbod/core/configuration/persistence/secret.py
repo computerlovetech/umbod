@@ -27,13 +27,7 @@ class EnvironmentConnectorConfigurationSecret:
         return self._value
 
 
-class UnavailableConnectorConfigurationSecret:
-    def get_secret(self) -> str:
-        raise ConnectorConfigurationSecretUnavailableError()
-
-
 __all__ = [
     "ConnectorConfigurationSecretProtocol",
     "EnvironmentConnectorConfigurationSecret",
-    "UnavailableConnectorConfigurationSecret",
 ]

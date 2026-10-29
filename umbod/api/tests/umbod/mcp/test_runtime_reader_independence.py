@@ -4,7 +4,8 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from fastmcp.server.http import StarletteWithLifespan
 
-from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages, InMemoryEventStreamFactory
+from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages
+from tests.support.messaging import InMemoryEventStreamFactory
 from umbod.core.activation import ActivationStatus, ActivationStore
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState

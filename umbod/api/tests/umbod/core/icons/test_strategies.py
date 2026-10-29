@@ -7,8 +7,8 @@ from umbod.core.icons import (
     FaviconDiscoveryStrategy,
     FaviconFound,
     FaviconNotFound,
-    InMemoryFaviconDiscoveryStrategy,
 )
+from tests.support.icons import InMemoryFaviconDiscoveryStrategy
 
 
 @pytest.mark.asyncio

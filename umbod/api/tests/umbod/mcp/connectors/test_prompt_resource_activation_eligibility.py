@@ -2,7 +2,8 @@ from dataclasses import dataclass
 
 import pytest
 
-from umbod.core.activation import ActivationStatus, CapabilityRef, InMemoryActivationStore
+from umbod.core.activation import ActivationStatus, CapabilityRef
+from tests.support.activation import InMemoryActivationStore
 from umbod.mcp.connectors.native.prompts.eligibility import (
     ConnectorPromptEligibilityContext,
     is_connector_prompt_eligible,

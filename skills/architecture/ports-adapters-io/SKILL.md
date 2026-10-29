@@ -39,9 +39,11 @@ Follow this order every time. Do not skip steps.
 
 ### 3. First adapter is always in-memory
 
-- Ship an **in-memory** implementation of the port before (or alongside) the real network / file / DB adapter.
+- Implement an **in-memory** adapter of the port before (or alongside) the real network / file / DB adapter.
 - It must satisfy the same interface and use the same Pydantic/Zod types so callers cannot tell which adapter they use.
-- Use it for fast tests, local development, and proving the port shape before wrestling infrastructure.
+- If the in-memory adapter is only for testing and is not used as a swappable runtime implementation, place it in the test suite, next to its consumers or in shared test support. Do not ship it in production source or re-export it from production packages.
+- Keep an in-memory adapter in production source only when application composition actually selects it as a runtime implementation, including a supported local-development runtime. Being injectable or protocol-compatible alone is not a runtime use.
+- Use test-only adapters for fast tests and proving the port shape; use runtime adapters only where application wiring requires them.
 
 ### 4. Tests target the port, not implementation details
 
@@ -53,7 +55,8 @@ Follow this order every time. Do not skip steps.
 
 - [ ] Port defined from domain vocabulary; core imports only the port, not concrete drivers.
 - [ ] Inputs/outputs at the boundary use Pydantic (Python) or Zod (TypeScript); invalid data fails at the edge.
-- [ ] In-memory adapter implemented and used from tests or app wiring.
+- [ ] In-memory adapter implemented; test-only adapters live in the test suite, while production adapters have an actual runtime consumer.
+- [ ] Production source and package exports do not depend on test-only adapters.
 - [ ] Primary tests run through the port using the in-memory adapter; no coupling to transport specifics in those tests.
 
 ## Minimal examples
@@ -121,4 +124,5 @@ export class InMemoryUserStore implements UserStore {
 - Starting with a concrete `requests.get`, `open()`, or `cursor.execute` and “extracting an interface later”.
 - Untyped `dict` / `Any` / `unknown` crossing the boundary without Pydantic/Zod.
 - Skipping the in-memory adapter and testing only against live I/O (slow, flaky, unclear domain failures).
+- Shipping a test-only in-memory adapter in production source merely because every port should have an in-memory implementation.
 - Unit tests that break when the storage path or SQL dialect changes but the observable behavior did not.

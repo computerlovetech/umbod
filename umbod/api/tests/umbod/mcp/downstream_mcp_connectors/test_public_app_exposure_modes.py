@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 import pytest
 from umbod.config import ConnectorStoreConfig
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.runtime import ConnectorRuntime
 from umbod.core.activation import ActivationStatus
 from umbod.core.connectors.downstream_mcp.models import DiscoveredPrompt, DiscoveredResource, DiscoveredResourceTemplate, DiscoveredToolWithOutputSchema, NoAuthConnectorDefinition, NoAuthCredentialState, PromptArgument, ToolCatalogSnapshot, ToolIdentity

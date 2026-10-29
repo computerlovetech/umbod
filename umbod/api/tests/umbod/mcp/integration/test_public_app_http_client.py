@@ -20,7 +20,7 @@ from mcp.shared.exceptions import MCPError
 from pydantic import ConfigDict, Field, SecretStr
 from starlette.applications import Starlette
 from umbod.config import ConnectorStoreConfig
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.deployment.availability import DeploymentConnectorAvailability
 from umbod.core.connectors.native.runtime import assemble_connector_runtime
 from umbod.core.activation import (

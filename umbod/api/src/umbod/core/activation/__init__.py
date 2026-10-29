@@ -20,7 +20,6 @@ __all__ = [
     "CapabilityRef",
     "CapabilitySourceActivationCatalog",
     "InMemoryActivationNotifier",
-    "InMemoryActivationStore",
     "KeySetActivationCatalog",
     "create_capability_activation_store",
 ]
@@ -44,7 +43,6 @@ _EXPORTS: dict[str, str] = {
     "CapabilityRef": ".domain",
     "CapabilitySourceActivationCatalog": ".catalog",
     "InMemoryActivationNotifier": ".service",
-    "InMemoryActivationStore": ".service",
     "KeySetActivationCatalog": ".catalog",
     "create_capability_activation_store": ".factories",
 }

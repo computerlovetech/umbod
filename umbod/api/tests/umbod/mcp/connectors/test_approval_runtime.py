@@ -14,7 +14,7 @@ from fastmcp.server.elicitation import (
 )
 from mcp.types import CallToolRequest, CallToolRequestParams, ElicitResult
 
-from umbod.core.invocation import InMemoryApprovalNonceStore
+from tests.support.approval_nonces import InMemoryApprovalNonceStore
 from umbod.core.invocation import (
     AskInvocationDecision,
     ConnectorInvocation,

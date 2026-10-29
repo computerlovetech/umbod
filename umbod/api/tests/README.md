@@ -21,7 +21,7 @@ description: Backend behavior, adapter and architecture tests with shared runtim
 - [mcp](./umbod/mcp/) — MCP behavior and contract tests.
 - [messaging](./messaging/) — Shared messaging tests.
 - [rest](./umbod/rest/) — REST behavior and contract tests.
-- [support](./support/) — Acceptance drivers and test support.
+- [support](./support/README.md) — Test-only adapters and acceptance drivers.
 - [umbod](./umbod/) — Application module tests.
 
 # Verification

@@ -6,7 +6,8 @@ from umbod.core.messaging import (
     DatabaseEventCheckpointStore,
     DatabaseEventStream,
 )
-from messaging.in_memory import InMemoryEventCheckpointStore, InMemoryEventCheckpointStoreMessages, InMemoryEventStream
+from messaging.in_memory import InMemoryEventCheckpointStore, InMemoryEventCheckpointStoreMessages
+from tests.support.messaging import InMemoryEventStream
 from messaging.ports import EventCheckpointStore, EventStream
 
 def _in_memory_stream(_database_path: Path) -> InMemoryEventStream:

@@ -9,7 +9,8 @@ from fastmcp.server.http import StarletteWithLifespan
 from starlette.responses import JSONResponse
 from starlette.types import Receive, Scope, Send
 
-from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages, InMemoryEventStreamFactory
+from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages
+from tests.support.messaging import InMemoryEventStreamFactory
 from messaging.models import MessagingEvent, StreamEvent
 from messaging.ports import EventCheckpointStore, EventStream
 from umbod.core.connectors.downstream_mcp.models import NoAuthConnectorDefinition

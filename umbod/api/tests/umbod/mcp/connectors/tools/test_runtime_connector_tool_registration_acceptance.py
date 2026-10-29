@@ -10,7 +10,7 @@ import re
 import asyncio
 from typing import Any, cast
 import mcp.types
-from umbod.core.signals import InMemorySignalFailureHandler
+from tests.support.signals import InMemorySignalFailureHandler
 from umbod.mcp.signals import McpSignals, McpToolIdentity, ToolInventoryObserved
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
@@ -26,7 +26,7 @@ from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateS
 from umbod.mcp.logging import McpAuditRecorder, StdoutMcpAuditEventSink, StructuredMcpAuditFormatter, create_default_mcp_tool_invocation_log_sink
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import StdoutMcpToolInvocationLogSink
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState

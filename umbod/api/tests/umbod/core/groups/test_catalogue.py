@@ -14,7 +14,7 @@ from umbod.core.groups import (
     GroupManagementService,
     RegisterGroup,
 )
-from umbod.core.groups.in_memory import InMemoryGroupCatalogue
+from tests.support.groups import InMemoryGroupCatalogue
 from umbod.core.groups.stores.composition import (
     create_group_management,
     shared_group_usage,
@@ -100,7 +100,7 @@ async def test_catalogue_transaction_rolls_back(catalogue: GroupCatalogue) -> No
     assert await catalogue.list_groups() == ()
 
 
-def group_principal(group_id: str, issuer: str = "issuer") -> Principal:
+def group_principal(group_id: str, issuer: str) -> Principal:
     return Principal(type=PrincipalType.GROUP, issuer=issuer, id=group_id)
 
 
@@ -113,7 +113,7 @@ async def test_all_node_empty_or_recursive_grants_block_deletion(
     policies = DatabaseAccessControl(database)
     grant = AccessGrant(
         node_id=uuid4(),
-        principal=group_principal("shared"),
+        principal=group_principal("shared", "issuer"),
         permissions=set(),
         recursive=recursive,
     )
@@ -189,7 +189,7 @@ async def test_grant_registration_rolls_back_with_transaction(
 ) -> None:
     grant = AccessGrant(
         node_id=uuid4(),
-        principal=group_principal("rollback"),
+        principal=group_principal("rollback", "issuer"),
         permissions=set(),
         recursive=False,
     )
@@ -246,7 +246,7 @@ async def test_grant_first_serializes_delete_and_rejects_it(database: Database) 
     management = create_group_management(database)
     grant = AccessGrant(
         node_id=uuid4(),
-        principal=group_principal("racing"),
+        principal=group_principal("racing", "issuer"),
         permissions=set(),
         recursive=False,
     )
@@ -276,7 +276,7 @@ async def test_delete_first_serializes_grant_and_later_grant_registers_again(
     await management.register_group(RegisterGroup(group_id="racing"))
     grant = AccessGrant(
         node_id=uuid4(),
-        principal=group_principal("racing"),
+        principal=group_principal("racing", "issuer"),
         permissions=set(),
         recursive=False,
     )

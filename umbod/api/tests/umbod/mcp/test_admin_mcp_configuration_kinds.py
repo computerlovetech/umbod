@@ -25,9 +25,7 @@ from umbod.core.administrator.connector_configuration import (
     AdministratorConnectorConfigurationService,
     ConnectorReference,
 )
-from umbod.core.administrator.connector_configuration.catalog import (
-    InMemoryConnectorConfigurationCatalog,
-)
+from tests.support.administrator_configuration import InMemoryConnectorConfigurationCatalog
 from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.capabilities.descriptions.stores.schema import (
     CAPABILITY_DESCRIPTION_OVERRIDE_TABLE,

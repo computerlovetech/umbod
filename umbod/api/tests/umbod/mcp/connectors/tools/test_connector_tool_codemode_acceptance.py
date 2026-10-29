@@ -9,7 +9,7 @@ from umbod.mcp.logging import create_default_mcp_audit_recorder
 import pytest
 from fastmcp import FastMCP
 
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.mcp.connectors.native.tools import register_connector_tools
 from umbod.mcp.logging import create_default_mcp_tool_invocation_log_sink

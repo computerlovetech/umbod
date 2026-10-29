@@ -11,7 +11,7 @@ from umbod.core.connectors.native.runtime import (
     connector_prompt_mappings,
     connector_resource_mappings,
 )
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 
 
 @dataclass(frozen=True)

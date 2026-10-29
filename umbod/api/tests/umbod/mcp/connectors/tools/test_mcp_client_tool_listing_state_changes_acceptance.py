@@ -9,7 +9,7 @@ from fastmcp import Client, FastMCP
 from pydantic import ConfigDict, SecretStr
 from umbod.proxies import Model
 from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore, RuntimeConnectorToolRegistry
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
 from tests.support.connector_plugins import SlackAdminConfiguration

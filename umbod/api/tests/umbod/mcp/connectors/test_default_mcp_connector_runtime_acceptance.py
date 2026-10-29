@@ -21,7 +21,7 @@ from fastmcp import Client, FastMCP
 from fastmcp.exceptions import ToolError
 from umbod.mcp.connectors.native import create_default_mcp_connector_runtime, create_default_mcp_connector_runtime_from_environment
 from umbod.mcp.settings import MCPAppSettings, MCPSettings
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
 from tests.support import connector_plugins as test_admin_configuration

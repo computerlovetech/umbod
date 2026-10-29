@@ -8,7 +8,7 @@ description: "Shared event contracts and transport abstractions for communicatio
 
 - [__init__.py](./__init__.py) — Package exports.
 - [events.py](./events.py) — Event definitions.
-- [in_memory.py](./in_memory.py) — Local transport.
+- [in_memory.py](./in_memory.py) — Runtime-local event checkpoints.
 - [models.py](./models.py) — Envelopes and cursors.
 - [no_op.py](./no_op.py) — Disabled transport.
 - [ports.py](./ports.py) — Publishing and subscription contracts.

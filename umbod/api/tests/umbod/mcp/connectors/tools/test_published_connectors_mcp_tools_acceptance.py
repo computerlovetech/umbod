@@ -6,7 +6,7 @@ import pytest
 from fastmcp import Client
 from pydantic import ConfigDict, SecretStr
 from umbod.proxies import Model
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from tests.support.connector_plugins import SlackAdminConfiguration
 from tests.mcp_fixtures import build_test_mcp
 

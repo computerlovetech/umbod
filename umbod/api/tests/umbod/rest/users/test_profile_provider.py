@@ -1,8 +1,9 @@
 import pytest
 
+from tests.support.user_profiles import InMemoryUserProfileProvider
+
 from umbod.rest.authentication import JwtClaims, JwtVerifier
 from umbod.rest.users import (
-    InMemoryUserProfileProvider,
     UserProfile,
     UserProfileInput,
     UserProfileProvider,

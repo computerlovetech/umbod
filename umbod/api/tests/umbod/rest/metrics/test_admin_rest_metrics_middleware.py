@@ -9,9 +9,9 @@ from umbod.rest.authentication import AdminAuthenticationMiddleware
 from umbod.rest.metrics import (
     AdminRestMetricsMiddleware,
     CompletedRestRequest,
-    InMemoryRestMetricsRecorder,
     RestMetricsRecorder,
 )
+from tests.support.rest_metrics import InMemoryRestMetricsRecorder
 
 
 class RejectingAuthenticationStrategy:

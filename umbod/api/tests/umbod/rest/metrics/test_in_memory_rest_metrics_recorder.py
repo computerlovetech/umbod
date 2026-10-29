@@ -1,9 +1,9 @@
 from umbod.rest.metrics import (
     CompletedRestRequest,
-    InMemoryRestMetricsRecorder,
     RestMetricSample,
     RestMetricsRecorder,
 )
+from tests.support.rest_metrics import InMemoryRestMetricsRecorder
 
 
 REQUEST_COUNT_METRIC = "umbod_rest_requests_total"

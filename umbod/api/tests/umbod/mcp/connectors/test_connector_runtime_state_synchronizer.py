@@ -4,7 +4,7 @@ from tests.persistence_runtime import create_inmemory_runtime
 import pytest
 from pydantic import ConfigDict, SecretStr
 from umbod.proxies import Model
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.registry import InMemoryConnectorRegistry
 from tests.support.connector_plugins import TestConnectorPlugin as test_connector
 from umbod.mcp.connectors.native import (

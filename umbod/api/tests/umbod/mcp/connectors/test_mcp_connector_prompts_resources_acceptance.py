@@ -9,7 +9,7 @@ from fastmcp import Client, FastMCP
 from pydantic import ConfigDict, Field, SecretStr
 from umbod.core.activation import ActivationStatus, CapabilityRef
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.runtime import ConnectorRuntime
 from umbod.proxies import Model
 from tests.mcp_fixtures import build_test_mcp

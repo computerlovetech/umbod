@@ -91,7 +91,6 @@ async def _sqlite(path: Path, fault: Callable[[str], None]) -> AggregateHarness:
 @pytest.mark.asyncio
 async def test_atomic_create_persists_complete_aggregate(tmp_path: Path, factory: Callable[[Path, Callable[[str], None]], Awaitable[AggregateHarness]]) -> None:
     database_path = tmp_path / 'aggregate.sqlite3'
-    await prepared_sqlite_runtime(database_path)
     harness = await factory(database_path, lambda phase: None)
     await harness.unit_of_work.create(_command())
     query = ConnectorIdQuery(connector_id='alpha')
@@ -111,7 +110,6 @@ async def test_create_failure_at_each_phase_rolls_back_all_state(tmp_path: Path,
         if phase == failed_phase:
             raise RuntimeError(f'injected {phase} failure')
     database_path = tmp_path / f'{failed_phase}.sqlite3'
-    await prepared_sqlite_runtime(database_path)
     harness = await factory(database_path, fail)
     with pytest.raises(RuntimeError, match=f'injected {failed_phase} failure'):
         await harness.unit_of_work.create(_command())
@@ -136,7 +134,6 @@ async def test_connector_deletion_personal_cleanup_is_atomic(
             raise RuntimeError("delete failed")
 
     path = tmp_path / "delete.sqlite3"
-    await prepared_sqlite_runtime(path)
     harness = await factory(path, fault)
     await harness.unit_of_work.create(_command())
     keys = tuple(PersonalConnectionKey(principal=CanonicalPrincipal(namespace="trusted", subject=owner), connector_id="alpha") for owner in ("one", "two"))
@@ -162,7 +159,6 @@ def _published_prefix_command(connector_id: str, tool_name_prefix: str) -> Creat
 @pytest.mark.asyncio
 async def test_sqlite_concurrent_prefix_updates_commit_only_one_conflicting_claim(tmp_path: Path) -> None:
     database_path = tmp_path / 'concurrent-prefix.sqlite3'
-    await prepared_sqlite_runtime(database_path)
     first = await _sqlite(database_path, lambda phase: None)
     second = await _sqlite(database_path, lambda phase: None)
     alpha = _published_prefix_command('alpha', 'Alpha')
@@ -188,7 +184,6 @@ async def test_reconnect_preserves_tool_choices(
     interruption: str,
 ) -> None:
     path = tmp_path / "reconnect.sqlite3"
-    await prepared_sqlite_runtime(path)
     harness = await factory(path, lambda phase: None)
     command = _published_prefix_command("alpha", "Alpha")
     await harness.unit_of_work.create(command)
@@ -236,7 +231,6 @@ async def test_unpublished_create_and_delete_publish_discovery_events(
     personal: bool,
 ) -> None:
     path = tmp_path / "discovery-events.sqlite3"
-    await prepared_sqlite_runtime(path)
     harness = await factory(path, lambda phase: None)
     command = _command()
     if personal:
@@ -267,7 +261,6 @@ async def test_delete_event_failure_restores_unpublished_definition(
             raise RuntimeError("event append failed")
 
     path = tmp_path / "delete-event-failure.sqlite3"
-    await prepared_sqlite_runtime(path)
     harness = await factory(path, fault)
     await harness.unit_of_work.create(_command())
     deleting = True
@@ -284,7 +277,6 @@ async def test_stale_discovery_does_not_restore_deleted_connector(
     factory: Callable[[Path, Callable[[str], None]], Awaitable[AggregateHarness]],
 ) -> None:
     path = tmp_path / "stale-discovery.sqlite3"
-    await prepared_sqlite_runtime(path)
     harness = await factory(path, lambda phase: None)
     command = _command()
     await harness.unit_of_work.create(command)
@@ -311,7 +303,6 @@ async def test_catalog_generation_rejects_a_later_commit_even_when_content_is_id
     from umbod.core.connectors.downstream_mcp.errors import ObsoleteDownstreamCatalogError
 
     path = tmp_path / "obsolete.sqlite3"
-    await prepared_sqlite_runtime(path)
     harness = await factory(path, lambda phase: None)
     command = _command()
     await harness.unit_of_work.create(command)

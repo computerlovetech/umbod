@@ -31,7 +31,7 @@ from fastmcp.server.auth.auth import AccessToken
 from mcp.server.auth.middleware.auth_context import AuthenticatedUser, auth_context_var
 from mcp.types import InputRequiredResult
 from umbod.config import ConnectorStoreConfig
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.runtime import ConnectorRuntime
 from umbod.core.invocation.tools.configuration_mutation import ConnectorToolConfigurationMutation, ConnectorToolInvocationPolicyChange
 from umbod.core.activation import ActivationStatus

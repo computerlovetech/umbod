@@ -8,7 +8,8 @@ from umbod.core.invocation import (
     ConnectorKind,
 )
 from umbod.core.invocation.tools.configuration import ActivationEventPublicationPolicy, AlwaysPublishActivationEvents, NoConnectorToolConfigurationEventStream, SetConnectorToolActivation, SetConnectorToolConfiguration, SetConnectorToolConfigurationCommand, SetConnectorToolInvocationPolicy, SuppressActivationEvents
-from umbod.core.invocation.tools.configuration_mutation import ConnectorToolConfigurationMutation, ConnectorToolConfigurationMutationResult, InMemoryConnectorToolConfigurationMutationAdapter
+from umbod.core.invocation.tools.configuration_mutation import ConnectorToolConfigurationMutation, ConnectorToolConfigurationMutationResult
+from tests.support.tool_configuration import InMemoryConnectorToolConfigurationMutationAdapter
 
 
 class RecordingPublicationPolicy:

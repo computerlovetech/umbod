@@ -21,11 +21,3 @@ class UserProfileInput(BaseModel):
 
 class UserProfileProvider(Protocol):
     def get_profile(self, profile_input: UserProfileInput) -> UserProfile: ...
-
-
-class InMemoryUserProfileProvider:
-    def __init__(self, profile: UserProfile) -> None:
-        self.profile = profile
-
-    def get_profile(self, profile_input: UserProfileInput) -> UserProfile:
-        return self.profile

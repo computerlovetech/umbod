@@ -10,9 +10,9 @@ from umbod.core.icons import (
     FaviconDiscoveryTimedOut,
     FaviconFound,
     FaviconNotFound,
-    InMemoryFaviconDiscoveryStrategy,
     StrategyFaviconDiscovery,
 )
+from tests.support.icons import InMemoryFaviconDiscoveryStrategy
 
 
 class FunctionStrategy:

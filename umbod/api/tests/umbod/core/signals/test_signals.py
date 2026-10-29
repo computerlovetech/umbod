@@ -5,13 +5,13 @@ from typing import Protocol
 import pytest
 
 from umbod.core.signals import (
-    InMemorySignalFailureHandler,
     Signal,
     SignalFailureHandler,
     SignalPublisher,
     SignalReceiver,
     SignalReceiverFailure,
 )
+from tests.support.signals import InMemorySignalFailureHandler
 
 
 @dataclass(frozen=True)

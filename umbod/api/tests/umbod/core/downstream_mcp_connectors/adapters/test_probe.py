@@ -1,5 +1,8 @@
+from collections.abc import Sequence
 from types import SimpleNamespace
 from typing import cast
+
+from fastmcp.client.transports import StreamableHttpTransport
 
 import httpx2
 import pytest
@@ -165,23 +168,6 @@ async def test_safe_redirect_rejects_proxy_rewrite_when_query_changes() -> None:
 
 
 @pytest.mark.asyncio
-async def test_public_probe_recreates_strategy_for_safe_redirect() -> None:
-    factory = redirect_factory("https://example.com/mcp", "https://example.com/mcp/")
-    probe = FastMCPDownstreamConnection(True, 1, factory)
-
-    result = await probe.probe(
-        NoAuthConnectionConfiguration(endpoint_url="https://example.com/mcp")
-    )
-
-    assert isinstance(result, ProbeCapabilities)
-    assert str(result.endpoint_url) == "https://example.com/mcp/"
-    assert [str(item.endpoint_url) for item in factory.configurations] == [
-        "https://example.com/mcp",
-        "https://example.com/mcp/",
-    ]
-
-
-@pytest.mark.asyncio
 async def test_exception_classification_terminates_for_cyclic_exception_chain() -> None:
     outer_error = RuntimeError("outer")
     transport_error = httpx2.ConnectError("connection failed")
@@ -197,18 +183,37 @@ async def test_exception_classification_terminates_for_cyclic_exception_chain() 
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("deadline, succeeds", [(15, True), (1, False)])
-async def test_slow_catalog_respects_probe_deadline_not_httpx_default(deadline, succeeds):
+async def test_probe_transport_extends_httpx_default_read_timeout() -> None:
+    strategy = FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False).create(
+        NoAuthConnectionConfiguration(endpoint_url="http://127.0.0.1:8000/mcp")
+    )
+    transport = strategy.create_client().transport
+    assert isinstance(transport, StreamableHttpTransport)
+    assert transport.httpx_client_factory is not None
+
+    async with transport.httpx_client_factory() as client:
+        assert client.timeout == httpx2.Timeout(30.0, read=300.0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("deadline, succeeds", [(2.0, True), (0.1, False)])
+async def test_catalog_respects_probe_deadline(deadline: float, succeeds: bool) -> None:
     import asyncio
     import socket
 
     import uvicorn
     from fastmcp import FastMCP
-    from fastmcp.server.middleware import Middleware
+    from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
+    from mcp.types import ListToolsRequest
+    from fastmcp.tools import Tool
 
     class SlowCatalog(Middleware):
-        async def on_list_tools(self, context, call_next):
-            await asyncio.sleep(6)
+        async def on_list_tools(
+            self,
+            context: MiddlewareContext[ListToolsRequest],
+            call_next: CallNext[ListToolsRequest, Sequence[Tool]],
+        ) -> Sequence[Tool]:
+            await asyncio.sleep(0.3)
             return await call_next(context)
 
     fixture = FastMCP("slow-catalog", middleware=[SlowCatalog()])

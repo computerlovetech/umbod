@@ -2,8 +2,8 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from asyncio import Lock
 
-from .models import Group
-from .ports import GroupCatalogueSession, GroupUsage
+from umbod.core.groups.models import Group
+from umbod.core.groups.ports import GroupCatalogueSession, GroupUsage
 
 
 class InMemoryGroupCatalogue:

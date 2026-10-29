@@ -11,12 +11,12 @@ from umbod.core.capabilities.descriptions import (
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.configuration import (
     ConnectorCurrentConfigurationStore,
-    InMemoryConnectorCurrentConfigurationStore,
 )
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
 from umbod.core.invocation.policy import PermitAllConnectorInvocationPolicy
 from umbod.core.publishing import ConnectorPublishingStore
-from umbod.core.signals import InMemorySignalFailureHandler
+from tests.support.signals import InMemorySignalFailureHandler
 from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore
 from umbod.mcp.connectors.native.tools.deployment_modes import ConnectorToolExposureMode
 from umbod.mcp.connectors.native.tools.infrastructure.authorization import UnrestrictedConnectorTools

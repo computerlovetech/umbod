@@ -16,7 +16,7 @@ from tests.umbod.core.downstream_mcp_connectors.test_personal_tools_s3_contracts
 from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import ExecutionCase, execution_case
 from tests.umbod.mcp.downstream_mcp_connectors.test_personal_execution_pipeline import InvocationLog, provider_for
 from tests.umbod.mcp.test_personal_caller import _settings
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalConnectionKey, SetPersonalConnectionEnabled
 from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import authorize_personal_grant
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolInventory

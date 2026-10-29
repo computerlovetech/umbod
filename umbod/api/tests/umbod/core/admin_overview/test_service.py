@@ -1,7 +1,7 @@
 import pytest
 
 from umbod.core.admin_overview import AdminOverviewService, OverviewReader
-from umbod.core.admin_overview.in_memory import InMemoryOverviewReader
+from tests.support.admin_overview import InMemoryOverviewReader
 from umbod.core.admin_overview.models import (
     AttentionCounts,
     Available,

@@ -1,4 +1,4 @@
-from .models import SignalReceiverFailure
+from umbod.core.signals.models import SignalReceiverFailure
 
 
 class InMemorySignalFailureHandler:

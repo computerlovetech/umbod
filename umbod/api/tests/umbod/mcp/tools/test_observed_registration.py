@@ -27,7 +27,7 @@ from umbod.mcp.signals import (
 )
 from umbod.mcp.metrics import CompletedToolInvocation, InvocationOutcome, InvocationScope
 from umbod.mcp.tools import McpObservedToolRegistrar
-from umbod.core.signals import InMemorySignalFailureHandler
+from tests.support.signals import InMemorySignalFailureHandler
 from umbod.mcp.listeners.invocation_metrics import InvocationMetricsReceiver
 from umbod.mcp.metrics import McpMetricsRecorder, ToolInvocationMetricIdentity
 from umbod.mcp.signals import McpInvocationPublisher, McpSignals

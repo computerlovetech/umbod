@@ -21,7 +21,7 @@ from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import e
 from tests.umbod.mcp.downstream_mcp_connectors.test_personal_execution_pipeline import InvocationLog, provider_for
 from umbod.config import AppConfig
 from umbod.core.activation import ActivationStatus, CapabilityRef
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.downstream_mcp.models import DiscoveredToolWithoutOutputSchema, NoAuthConnectorDefinition, NoAuthCredentialState, ToolCatalogSnapshot, ToolIdentity
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores, ReplaceToolCatalog, SaveConnectorDefinition, SaveCredential, create_downstream_mcp_stores
 from umbod.core.connectors.native.registry import ConnectorRegistration

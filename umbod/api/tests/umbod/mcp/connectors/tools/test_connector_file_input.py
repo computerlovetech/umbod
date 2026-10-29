@@ -15,7 +15,7 @@ from fastmcp import FastMCP
 from fastmcp.tools import ToolResult
 from pydantic import ValidationError
 
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.runtime.tools import ConcreteConnectorToolMapping
 from umbod.core.invocation import ConnectorInvocation, ConnectorInvocationPolicy, DirectInvocationDecision
 from umbod.mcp.connectors.native.tools import register_connector_tools

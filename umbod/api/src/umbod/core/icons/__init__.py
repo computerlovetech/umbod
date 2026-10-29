@@ -1,6 +1,5 @@
 from .http_models import FaviconHttpPolicy, FaviconHttpRequest, FaviconHttpResponse, FaviconHttpResult, FaviconHttpUnavailable
 from .http_ports import FaviconHttpClient
-from .in_memory import InMemoryFaviconDiscoveryStrategy
 from .models import (
     Favicon,
     FaviconDiscoveryRequest,
@@ -31,7 +30,6 @@ __all__ = [
     "FaviconHttpResult",
     "FaviconHttpUnavailable",
     "HtmlIconStrategy",
-    "InMemoryFaviconDiscoveryStrategy",
     "OriginFaviconStrategy",
     "StrategyFaviconDiscovery",
 ]

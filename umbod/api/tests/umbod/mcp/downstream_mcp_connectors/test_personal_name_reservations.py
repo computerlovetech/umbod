@@ -12,7 +12,7 @@ from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizat
 from tests.umbod.mcp.connectors.tools.test_connector_tool_gateway_runtime_acceptance import ConnectorToolMapping, _configuration
 from tests.umbod.mcp.downstream_mcp_connectors.test_personal_execution_pipeline import InvocationLog, RejectingOpenApiExecutor, provider_for
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.connectors.downstream_mcp.stores.personal_tools_schema import PERSONAL_TOOL_OBSERVATION_TABLE

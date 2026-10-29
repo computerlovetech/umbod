@@ -3,7 +3,7 @@ from fastmcp import Client
 
 from tests.mcp_fixtures import build_test_mcp
 from tests.persistence_runtime import create_inmemory_runtime
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.runtime import ConnectorRuntime
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService

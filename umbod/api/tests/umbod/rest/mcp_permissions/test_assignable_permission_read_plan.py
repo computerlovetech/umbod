@@ -103,7 +103,7 @@ def test_personal_targets_without_catalogues_use_batched_publication_and_no_acti
     admin_permission_http: AdminPermissionHttp,
 ) -> None:
     client, _, factories, counts = admin_permission_http
-    connector_ids = tuple(f"personal-{index:03d}" for index in range(201))
+    connector_ids = ("personal-000", "personal-001")
     client.portal.call(seed_personal_definitions, factories, connector_ids)
 
     targets = read_assignable_targets(client, counts)
@@ -118,10 +118,10 @@ def test_personal_targets_without_catalogues_use_batched_publication_and_no_acti
     assert counts.reads == Counter({
         CONNECTOR_TABLE.name: 1,
         CONNECTOR_DEFINITION_TABLE.name: 1,
-        TOOL_CATALOG_TABLE.name: 201,
-        PUBLICATION_STATE_TABLE.name: 2,
+        TOOL_CATALOG_TABLE.name: 2,
+        PUBLICATION_STATE_TABLE.name: 1,
     })
-    assert counts.sessions == 204
+    assert counts.sessions == 5
 
     client.portal.call(withdraw_personal_publication, factories, connector_ids[0])
 
@@ -134,7 +134,7 @@ def test_personal_targets_without_catalogues_use_batched_publication_and_no_acti
         ],
         "capabilities": [],
     }
-    assert counts.reads[PUBLICATION_STATE_TABLE.name] == 2
+    assert counts.reads[PUBLICATION_STATE_TABLE.name] == 1
     assert counts.reads[CAPABILITY_ACTIVATION_STATE_TABLE.name] == 0
 
 

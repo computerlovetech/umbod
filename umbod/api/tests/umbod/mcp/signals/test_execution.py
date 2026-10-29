@@ -5,7 +5,7 @@ import pytest
 from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.invocation.failure_evidence import InvocationFailureOrigin
 from umbod.core.invocation.tools.execution import ToolExecutionFailed, ToolExecutionInterceptor, ToolExecutionRequest, ToolExecutionSucceeded
-from umbod.core.signals import InMemorySignalFailureHandler
+from tests.support.signals import InMemorySignalFailureHandler
 from umbod.mcp.signals import McpSignals, McpToolInvocationCompleted, McpToolInvocationFailed
 from umbod.mcp.signals.execution import ConnectorInvocationSignalInterceptor
 

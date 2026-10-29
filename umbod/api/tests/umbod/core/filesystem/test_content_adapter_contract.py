@@ -1,9 +1,11 @@
 import asyncio
 from collections.abc import AsyncIterator
+from pathlib import Path
 
 import pytest
 
 from umbod.core.filesystem import (
+    ContentDriver,
     Node,
     NodeKind,
     NodeMetadata,
@@ -14,12 +16,32 @@ from umbod.core.filesystem import (
     WrongNodeKind,
 )
 
+from umbod.infrastructure import (
+    InMemoryContentConfig,
+    LocalContentConfig,
+    create_content_driver,
+)
+
 from tests.support.filesystem.adapters import AdapterFactory, AdapterPair
 
 
+@pytest.fixture(params=["inmemory", "local"])
+def content(request: pytest.FixtureRequest, tmp_path: Path) -> ContentDriver:
+    if request.param == "inmemory":
+        return create_content_driver(InMemoryContentConfig(type="inmemory"))
+    return create_content_driver(
+        LocalContentConfig(type="local", directory=tmp_path / "content")
+    )
+
+
+async def chunked_stream(data: bytes, chunk_size: int) -> AsyncIterator[bytes]:
+    for offset in range(0, len(data), chunk_size):
+        yield data[offset:offset + chunk_size]
+
+
 async def stream(data: bytes) -> AsyncIterator[bytes]:
-    for offset in range(0, len(data), 113):
-        yield data[offset:offset + 113]
+    async for chunk in chunked_stream(data, 113):
+        yield chunk
 
 
 async def collect(chunks: AsyncIterator[bytes]) -> bytes:
@@ -35,29 +57,35 @@ async def create_file(adapters: AdapterPair) -> Node:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("data", [b"", bytes(range(256)) * 4096])
-async def test_complete_content_is_readable_with_exact_size(adapters: AdapterPair, data: bytes) -> None:
-    reference = await adapters.content.put(stream(data))
+@pytest.mark.parametrize(
+    "data,chunk_size",
+    [(b"", 113), (bytes(range(256)) * 4, 113), (bytes(range(256)) * 4096, 65521)],
+    ids=["empty", "tiny-chunks", "1MiB"],
+)
+async def test_complete_content_is_readable_with_exact_size(
+    content: ContentDriver, data: bytes, chunk_size: int
+) -> None:
+    reference = await content.put(chunked_stream(data, chunk_size))
 
     assert reference.size == len(data)
-    assert await collect(adapters.content.get(reference.key)) == data
+    assert await collect(content.get(reference.key)) == data
 
 
 @pytest.mark.asyncio
-async def test_content_objects_are_independent_and_immutable(adapters: AdapterPair) -> None:
-    first = await adapters.content.put(stream(b"first"))
-    second = await adapters.content.put(stream(b"second"))
+async def test_content_objects_are_independent_and_immutable(content: ContentDriver) -> None:
+    first = await content.put(stream(b"first"))
+    second = await content.put(stream(b"second"))
 
     assert first.key != second.key
-    assert await collect(adapters.content.get(first.key)) == b"first"
-    assert await collect(adapters.content.get(second.key)) == b"second"
+    assert await collect(content.get(first.key)) == b"first"
+    assert await collect(content.get(second.key)) == b"second"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("key", ["../escape", "/absolute", "", "not-a-key", "a" * 32])
-async def test_invalid_or_missing_content_keys_fail_safely(adapters: AdapterPair, key: str) -> None:
+async def test_invalid_or_missing_content_keys_fail_safely(content: ContentDriver, key: str) -> None:
     with pytest.raises(StorageFailure):
-        await collect(adapters.content.get(key))
+        await collect(content.get(key))
 
 
 @pytest.mark.asyncio

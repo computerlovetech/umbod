@@ -11,7 +11,7 @@ from fastmcp import Client, FastMCP
 from fastmcp.client.messages import MessageHandler
 from pydantic import ConfigDict, SecretStr
 from umbod.proxies import Model
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
 from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore, RuntimeConnectorToolRegistry

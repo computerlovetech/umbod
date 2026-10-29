@@ -17,7 +17,6 @@ from umbod.core.configuration.persistence.registry import (
 from umbod.core.configuration.persistence.secret import (
     ConnectorConfigurationSecretProtocol,
     EnvironmentConnectorConfigurationSecret,
-    UnavailableConnectorConfigurationSecret,
 )
 from umbod.core.configuration.persistence.service import (
     ConnectorConfigurationService,
@@ -36,7 +35,6 @@ __all__ = [
     "EncryptedConnectorConfigurationQueryProtocol",
     "EncryptedConnectorConfigurationStoreProtocol",
     "EnvironmentConnectorConfigurationSecret",
-    "UnavailableConnectorConfigurationSecret",
     "TextCipher",
     "_configuration_plain_json",
     "_decrypt",

@@ -12,7 +12,7 @@ from tests.umbod.mcp.connectors.tools.test_connector_tool_exposure_mode_acceptan
     ConnectorToolMapping,
     InMemoryConnectorPublishingStore,
 )
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.mcp.connectors.native.tools import register_connector_tools
 from umbod.mcp.logging import (

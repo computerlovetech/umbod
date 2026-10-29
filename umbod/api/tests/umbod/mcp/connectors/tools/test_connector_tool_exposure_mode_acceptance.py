@@ -6,7 +6,7 @@ import jwt
 import pytest
 from fastmcp import Client, FastMCP
 from pydantic import SecretStr
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.mcp.settings import MCPAppSettings, MCPSettings
 from tests.support.connector_plugins import SlackAdminConfiguration

@@ -3,7 +3,8 @@ from typing import Any
 
 import pytest
 
-from umbod.core.activation import ActivationStatus, CapabilityRef, InMemoryActivationStore
+from umbod.core.activation import ActivationStatus, CapabilityRef
+from tests.support.activation import InMemoryActivationStore
 from umbod.mcp.connectors.native.resources.registry import RuntimeConnectorResourceRegistry
 from umbod.proxies import Model
 

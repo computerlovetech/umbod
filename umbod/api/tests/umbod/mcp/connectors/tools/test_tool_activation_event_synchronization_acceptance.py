@@ -10,7 +10,7 @@ from umbod.core.capabilities.tools.refs import ConnectorToolRef
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
 from umbod.core.activation.events import connector_capability_activation_changed_event
 from messaging.ports import EventStream
-from messaging.in_memory import (
+from tests.support.messaging import (
     InMemoryEventStreamFactory,
 )
 

@@ -11,7 +11,7 @@ from jsonschema.exceptions import SchemaError
 from pydantic import ConfigDict, Field, SecretStr
 from umbod_sdk.connectors.proxies import Model
 from tests.mcp_fixtures import build_test_mcp
-from umbod.core.configuration import InMemoryConnectorCurrentConfigurationStore
+from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.deployment.availability import DeploymentConnectorAvailability
 from umbod.core.connectors.native.runtime import assemble_connector_runtime, connector_tool_mappings
 from umbod_sdk.connectors.discovery import load_connector_plugins

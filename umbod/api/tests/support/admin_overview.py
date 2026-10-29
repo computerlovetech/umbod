@@ -1,4 +1,4 @@
-from .models import OverviewSnapshot
+from umbod.core.admin_overview.models import OverviewSnapshot
 
 
 class InMemoryOverviewReader:
