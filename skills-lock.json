@@ -69,7 +69,7 @@
     "ports-adapters-io": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "99d609ebecdcccdc218adef9a56c16a7c9f5f1d323a7a87a5cd4088859c6c6f7"
+      "computedHash": "ad8090fdd247c151d316de5e87cb4dbe77525662f06c30a0ce22bf7c32f564a9"
     },
     "python-domain-model-none-design": {
       "source": "./skills",
