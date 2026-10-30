@@ -4,7 +4,25 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   plugins: [sveltekit()],
   test: {
-    include: ['src/**/*.{test,spec}.{js,ts}'],
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['src/**/*.{test,spec}.{js,ts}'],
+          exclude: ['src/**/*.dom.test.ts']
+        }
+      },
+      {
+        extends: true,
+        resolve: { conditions: ['browser'] },
+        test: {
+          name: 'dom',
+          environment: 'happy-dom',
+          include: ['src/**/*.dom.test.ts']
+        }
+      }
+    ],
     coverage: {
       provider: 'v8',
       include: ['src/**/*.{js,ts,svelte}'],

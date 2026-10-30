@@ -38,7 +38,11 @@ The client must reject unsupported transfer types rather than interpreting them 
 
 The MCP extension exposes a one-shot filesystem upload tool that accepts explicitly tagged UTF-8 text or canonical padded base64 content. It composes the existing core session creation, byte transfer, and completion operations under one captured caller identity. It returns the published node, not session ownership, storage references, HTTP instructions, or file bytes. Existing creation and browsing tools remain available.
 
-The MCP-specific maximum is 1,048,576 decoded bytes per file, further restricted by any lower configured filesystem upload limit. Input schemas bound encoded string length, and the adapter validates encoding and actual decoded byte length before creating an upload session or writing content. UTF-8 limits count encoded bytes, not characters. Empty files are supported. This cap bounds file content, not the entire JSON-RPC envelope or metadata.
+The MCP-specific maximum is 10,485,760 decoded bytes (10 MiB) per file, further restricted by any lower configured filesystem upload limit. Input schemas bound encoded string length, and the adapter validates encoding and actual decoded byte length before creating an upload session or writing content. UTF-8 limits count encoded bytes, not characters. Empty files are supported. This cap bounds file content, not the entire JSON-RPC envelope or metadata.
+
+The MCP HTTP request-body limit is 64 MiB, allowing a 10 MiB file's base64 representation or worst-case JSON-escaped UTF-8 text plus envelope overhead. This is a separate bounded transport limit; the decoded file limit and lower configured upload limits still apply. External clients and reverse proxies may impose smaller limits.
+
+The current FastMCP builder does not expose the SDK request-body limit. A per-application startup compatibility adapter configures the SDK's existing body guard while retaining FastMCP's routing, authentication, host/origin protection, and session lifecycle. Unexpected endpoint or limiter composition fails startup. Replace this adapter with public builder configuration when FastMCP exposes that option.
 
 MCP clients are not required to execute arbitrary authenticated HTTP transfers. The initial native tool therefore submits content through ordinary tool arguments without depending on a separate REST credential or an MCP Apps UI. Chunking, resumable MCP sessions, external HTTP transfer instructions, and interactive upload applications remain separate future decisions.
 

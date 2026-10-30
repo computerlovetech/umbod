@@ -9,8 +9,8 @@ from umbod.core.filesystem.content.errors import UploadTooLarge
 
 from .models import FilesystemNodeMetadata
 
-MAX_UPLOAD_BYTES = 1_048_576
-MAX_BASE64_CHARACTERS = 1_398_104
+MAX_UPLOAD_BYTES = 10_485_760
+MAX_BASE64_CHARACTERS = 4 * ((MAX_UPLOAD_BYTES + 2) // 3)
 
 
 class Utf8Content(BaseModel):
@@ -19,7 +19,7 @@ class Utf8Content(BaseModel):
     encoding: Literal["utf-8"]
     text: str = Field(
         max_length=MAX_UPLOAD_BYTES,
-        description="At most 1048576 characters and 1048576 UTF-8 bytes; lower server limits apply.",
+        description="At most 10485760 characters and 10485760 UTF-8 bytes; lower server limits apply.",
     )
 
     @field_validator("text", mode="before")
@@ -39,7 +39,7 @@ class Base64Content(BaseModel):
     encoding: Literal["base64"]
     data: str = Field(
         max_length=MAX_BASE64_CHARACTERS,
-        description="At most 1398104 characters of canonical padded base64, decoding to at most 1048576 bytes.",
+        description="At most 13981016 characters of canonical padded base64, decoding to at most 10485760 bytes.",
     )
 
     @field_validator("data", mode="before")

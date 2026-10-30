@@ -24,6 +24,7 @@ description: "MCP application composition, capability exposure, authentication a
 - [metrics/](./metrics/README.md) — Invocation and protocol metrics.
 - [middleware/](./middleware/README.md) — Protocol middleware.
 - [proxies.py](./proxies.py) — Deferred runtime bindings.
+- [http_transport.py](./http_transport.py) — Startup-scoped compatibility adapter for bounded HTTP bodies, preserving FastMCP authentication and sessions.
 - [public_app.py](./public_app.py) — Application assembly and lifespan.
 - [runtime_adapters.py](./runtime_adapters.py) — Explicit production construction for injected invocation adapters.
 - [runtime_options.py](./runtime_options.py) — Runtime composition options.

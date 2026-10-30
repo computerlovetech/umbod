@@ -11,7 +11,6 @@
   import ConnectorDetailItem from '$lib/components/admin/connectors/ConnectorDetailItem.svelte';
   import CopyableValue from '$lib/components/admin/connectors/CopyableValue.svelte';
   import ConnectorDetailSummary from '$lib/components/admin/connectors/ConnectorDetailSummary.svelte';
-  import ConnectorPublicationMenuAction from '$lib/components/admin/connectors/ConnectorPublicationMenuAction.svelte';
   import ConnectorSidebarList from '$lib/components/admin/connectors/ConnectorSidebarList.svelte';
   import PublicationConfirmationModal from '$lib/components/admin/connectors/PublicationConfirmationModal.svelte';
   import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
@@ -46,11 +45,6 @@
     prompts: promptCatalog?.prompts.length ?? 0,
     resources: resourceCatalog?.resources.length ?? 0
   });
-
-  function requestPublicationConfirmation(event: MouseEvent, connectorName: string, actionLabel: 'Publish' | 'Unpublish'): void {
-    if (!(event.currentTarget instanceof HTMLButtonElement) || !event.currentTarget.form) return;
-    state.requestPublicationConfirmation(event.currentTarget.form, connectorName, actionLabel);
-  }
 
   function isRecord(value: unknown): value is Record<string, unknown> {
     return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -89,24 +83,17 @@
 {/if}
 <PublicationConfirmationModal
   open={Boolean(state.operations.pending)}
-  title={state.operations.pending ? `${state.operations.pending.action} ${state.operations.pending.name}?` : ''}
-  message={state.operations.pending?.action === 'publish' ? 'Publication and current Group connector access trust all provider-exposed tools, including future tools after explicit rediscovery. Only explicitly permitted groups can select this server. Publication does not provide OAuth authorization, owner enablement or discovery.' : state.operations.pending?.action === 'delete' ? 'This permanently removes the server and saved local authorizations and policy. Existing connector and tool grants must be removed explicitly in Group permissions first; deletion never removes grants automatically. Remote tokens are not revoked.' : 'After catalogue reload, withdrawal prevents new selection. It does not revoke remote tokens or disconnect owners.'}
-  confirmLabel={state.operations.pending?.action === 'delete' ? 'Delete server' : 'Confirm'}
+  title={state.operations.pending ? `${state.operations.pending.action === 'publish' ? 'Publish' : state.operations.pending.action === 'unpublish' ? 'Unpublish' : 'Delete'} ${state.operations.pending.name}?` : ''}
+  message={state.operations.pending && state.operations.pending.action !== 'delete' && connectors.find((connector) => connector.connector_id === state.operations.pending?.id)?.authorization_mode === 'shared' ? `Please confirm that you want to ${state.operations.pending.action} the MCP proxy connector ${state.operations.pending.name}.` : state.operations.pending?.action === 'publish' ? 'Publication and current Group connector access trust all provider-exposed tools, including future tools after explicit rediscovery. Only explicitly permitted groups can select this server. Publication does not provide OAuth authorization, owner enablement or discovery.' : state.operations.pending?.action === 'delete' ? 'This permanently removes the server and saved local authorizations and policy. Existing connector and tool grants must be removed explicitly in Group permissions first; deletion never removes grants automatically. Remote tokens are not revoked.' : 'After catalogue reload, withdrawal prevents new selection. It does not revoke remote tokens or disconnect owners.'}
+  confirmLabel={state.operations.pending?.action === 'delete' ? 'Delete server' : state.operations.pending?.action === 'unpublish' ? 'Unpublish' : 'Publish'}
   onconfirm={state.operations.confirm}
   oncancel={state.operations.cancel}
-/>
-<PublicationConfirmationModal
-  open={Boolean(state.pendingPublication)}
-  title={state.pendingPublication ? `${state.pendingPublication.actionLabel} ${state.pendingPublication.connectorName}?` : ''}
-  message={state.pendingPublication ? `Please confirm that you want to ${state.pendingPublication.actionLabel.toLowerCase()} the MCP proxy connector ${state.pendingPublication.connectorName}.` : ''}
-  confirmLabel={state.pendingPublication?.actionLabel ?? 'Confirm'}
-  onconfirm={state.confirmPublication}
-  oncancel={state.cancelPublication}
 />
 {#if confirmation && selected}
   <div class="backdrop" role="presentation"><div class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"><h2 id="confirm-title">Delete connector?</h2><p>This permanently removes the connector and its discovered catalog.</p><form method="POST" data-operation={state.modal} use:browserSubmit={mutationSubmit('delete', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id} /><footer><Button variant="secondary" onclick={state.close}>Cancel</Button><Button type="submit" variant="danger" disabled={state.submitting}>{state.submitting ? 'Working…' : 'Confirm'}</Button></footer></form></div></div>
 {/if}
 {#if form?.message && (form.status === 'stale' || form.status === 'conflict' || form.status === 'authentication' || form.status === 'invalid')}<p class="feedback" role="alert">{form.message}</p>{/if}
+{#if state.operations.busy}<p role="status" class="feedback">Updating MCP connector…</p>{/if}
 {#if state.operations.message}<p role="alert" class="feedback">{state.operations.message} <a href="/admin/group-permissions/connectors">Group permissions</a></p>{/if}
 {#if state.operations.blocked}<Button onclick={state.operations.reload}>Reload servers</Button>{/if}
 {#if connectors.length && selected && !state.operations.blocked}
@@ -117,7 +104,7 @@
     <span class="connector-meta">{item.connector.authorization_mode === 'personal' ? 'Personal authorization' : 'Shared authorization'} · {item.connector.authorization_mode === 'shared' ? `${item.connector.health.status} · ` : ''}{item.connector.publication_status}</span>
    {/snippet}
    {#snippet actions(item)}
-    {#if item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}{#if selected.authorization_mode === 'shared'}<button role="menuitem" type="button" onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem">Refresh discovery</button></form>{/if}{#if selected.authorization_mode === 'personal'}<button role="menuitem" disabled={state.operations.locked} onclick={() => state.operations.request(selected.publication_status === 'published' ? 'unpublish' : 'publish', selected.connector_id, selected.display_name)}>{selected.publication_status === 'published' ? 'Unpublish' : 'Publish'}</button><button role="menuitem" disabled={state.operations.locked} onclick={() => state.operations.request('delete', selected.connector_id, selected.display_name)}>Delete</button>{:else}<ConnectorPublicationMenuAction connectorId={selected.connector_id} connectorName={selected.display_name} action={selected.publication_status === 'published' ? 'unpublish' : 'publish'} role="menuitem" onrequest={requestPublicationConfirmation} /><button role="menuitem" class="danger-text" type="button" onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/if}{/snippet}</AdminSidebarActionMenu>{/if}
+    {#if item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}{#if selected.authorization_mode === 'shared'}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem" disabled={state.operations.locked}>Refresh discovery</button></form>{/if}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={() => state.requestPublication(selected)}>{selected.publication_status === 'published' ? 'Unpublish' : 'Publish'}</button>{#if selected.authorization_mode === 'personal'}<button role="menuitem" disabled={state.operations.locked} onclick={() => state.operations.request('delete', selected.connector_id, selected.display_name)}>Delete</button>{:else}<button role="menuitem" class="danger-text" type="button" disabled={state.operations.locked} onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/if}{/snippet}</AdminSidebarActionMenu>{/if}
    {/snippet}
   </ConnectorSidebarList>
  {/snippet}

@@ -8,9 +8,11 @@ from umbod.mcp.tools.registration import tool_result_is_error
 
 from .authorization import root_filesystem_tool_access
 from .browsing import FilesystemBrowseTool
+from .deletion import FilesystemDeleteFileTool
 from .errors import filesystem_operation
 from .models import FilesystemChildren, FilesystemNodeMetadata
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
+from .read import FilesystemReadFileTool
 from .upload import FilesystemUploadTool
 
 
@@ -26,6 +28,16 @@ def register_filesystem_tools(
 
     registrar.register_tool(
         FilesystemUploadTool(callers, services), result_is_error=tool_result_is_error,
+        operation_names=frozenset(),
+    )
+
+    registrar.register_tool(
+        FilesystemDeleteFileTool(callers, services), result_is_error=tool_result_is_error,
+        operation_names=frozenset(),
+    )
+
+    registrar.register_tool(
+        FilesystemReadFileTool(callers, services), result_is_error=tool_result_is_error,
         operation_names=frozenset(),
     )
 

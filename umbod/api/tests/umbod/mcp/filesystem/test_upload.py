@@ -13,7 +13,7 @@ from umbod.core.callers import (
 from .conftest import FilesystemMcp, caller_snapshot
 from .test_tools import METADATA, root_id
 
-CAP = 1_048_576
+CAP = 10_485_760
 
 
 async def upload(client: Client, parent: str, content: dict[str, Any]) -> CallToolResult:
@@ -56,7 +56,7 @@ async def test_upload_publishes_readable_private_content(
     {"encoding": "utf-8", "text": "é" * (CAP // 2 + 1)},
     {"encoding": "base64", "data": base64.b64encode(b"x" * (CAP + 1)).decode()},
     {"encoding": "base64", "data": base64.b64encode(b"x" * (CAP + 2)).decode()},
-    {"encoding": "base64", "data": "A" * 1_398_108},
+    {"encoding": "base64", "data": "A" * 13_981_020},
 ])
 async def test_oversize_is_rejected_before_storage(
     filesystem_mcp: FilesystemMcp, content: dict[str, Any],
@@ -174,8 +174,8 @@ async def test_upload_schema_advertises_bounds_and_mutation(filesystem_mcp: File
     assert set(descriptor.input_schema["required"]) == {"parent_id", "name", "metadata", "content"}
     variants = descriptor.input_schema["properties"]["content"]["oneOf"]
     assert variants[0]["properties"]["text"]["maxLength"] == CAP
-    assert variants[1]["properties"]["data"]["maxLength"] == 1_398_104
-    assert "1048576" in descriptor.description
+    assert variants[1]["properties"]["data"]["maxLength"] == 13_981_016
+    assert "10485760" in descriptor.description
     assert descriptor.annotations.read_only_hint is False
     assert descriptor.annotations.destructive_hint is False
     assert descriptor.annotations.idempotent_hint is False

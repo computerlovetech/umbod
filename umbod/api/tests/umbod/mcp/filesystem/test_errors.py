@@ -9,11 +9,13 @@ from fastmcp.exceptions import ToolError
 from umbod.core.filesystem.authorization.errors import PermissionDenied
 from umbod.core.filesystem.browsing import FilesystemBrowsing
 from umbod.core.filesystem.creation import FilesystemCreation
+from umbod.core.filesystem.content import FilesystemContent
+from umbod.core.filesystem.deletion import FilesystemDeletion
 from umbod.core.filesystem.content.errors import UploadTooLarge
 from umbod.core.filesystem.uploads.errors import (
     UploadConflict, UploadExpired, UploadLengthMismatch, UploadMediaTypeMismatch,
 )
-from umbod.core.filesystem.errors import InvalidName, MissingNode, NameCollision, StorageFailure, WrongNodeKind
+from umbod.core.filesystem.errors import InvalidName, MissingNode, NameCollision, RevisionConflict, StorageFailure, WrongNodeKind
 from umbod.mcp.filesystem import register_filesystem_tools
 from umbod.mcp.filesystem.errors import filesystem_operation
 from umbod.mcp.filesystem.ports import FilesystemCallerCapture, FilesystemServiceFactory
@@ -38,6 +40,7 @@ class SpecializedStorageFailure(StorageFailure):
     (MissingNode, "filesystem_permission_denied: Filesystem access denied"),
     (InvalidName, "filesystem_invalid_name: Invalid filesystem name"),
     (NameCollision, "filesystem_name_collision: Filesystem name already exists"),
+    (RevisionConflict, "filesystem_revision_conflict: Filesystem revision conflict"),
     (WrongNodeKind, "filesystem_wrong_node_kind: Invalid filesystem node kind"),
     (StorageFailure, "filesystem_storage_failure: Filesystem storage unavailable"),
     (SpecializedStorageFailure, "filesystem_storage_failure: Filesystem storage unavailable"),
@@ -62,6 +65,12 @@ async def test_expected_domain_failures_do_not_leak_details(
 
 
 TOOL_OPERATIONS = [
+    ("filesystem_read_file", "open_download", {
+        "node_id": "00000000-0000-0000-0000-000000000001", "encoding": "utf-8", "max_bytes": 1_048_576,
+    }),
+    ("filesystem_delete_file", "delete_file", {
+        "node_id": "00000000-0000-0000-0000-000000000001", "expected_revision": 1,
+    }),
     ("get_filesystem_root", "get_root", {}),
     ("get_filesystem_node", "get_node", {"node_id": "00000000-0000-0000-0000-000000000001"}),
     ("list_filesystem_children", "list_children", {"parent_id": "00000000-0000-0000-0000-000000000001"}),
@@ -88,10 +97,21 @@ async def test_unmasked_tools_sanitize_all_operation_stages(
     error = error_type("SECRET backend /private/path")
     callers = Mock(spec=FilesystemCallerCapture)
     callers.capture.return_value = filesystem_mcp.callers.capture()
-    service = Mock(spec=FilesystemCreation if tool.startswith("create_") else FilesystemBrowsing)
+    service_type = {
+        "open_download": FilesystemContent,
+        "delete_file": FilesystemDeletion,
+        "create_file": FilesystemCreation,
+        "create_directory": FilesystemCreation,
+    }.get(operation, FilesystemBrowsing)
+    service = Mock(spec=service_type)
     setattr(service, operation, AsyncMock(side_effect=error))
     factory = Mock(spec=FilesystemServiceFactory)
-    factory_method = factory.creation if tool.startswith("create_") else factory.browsing
+    factory_method = {
+        "open_download": factory.content,
+        "delete_file": factory.deletion,
+        "create_file": factory.creation,
+        "create_directory": factory.creation,
+    }.get(operation, factory.browsing)
     factory_method.return_value = service
     if stage == "capture":
         callers.capture.side_effect = error

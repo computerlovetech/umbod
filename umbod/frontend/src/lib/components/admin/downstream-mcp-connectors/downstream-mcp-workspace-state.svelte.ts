@@ -4,7 +4,7 @@ import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
 import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
 import { browserTransport } from '$lib/admin/infrastructure/transport';
 import { mapResourceCatalog, type PromptCatalog, type ResourceCatalog } from '$lib/admin/capability-catalogs';
-import { type DownstreamMcpConnector, type DownstreamMcpToolList } from '$lib/admin/downstream-mcp-connectors';
+import { type DownstreamMcpConnector, type DownstreamMcpConnectorSummary, type DownstreamMcpToolList } from '$lib/admin/downstream-mcp-connectors';
 import { type InvocationPolicyTool } from '$lib/admin/invocation-policy';
 import { SelectionDetailController } from '$lib/components/admin/shared/selection-detail-controller.svelte';
 import { InMemorySelectionUrlAdapter, type SelectionUrlPort } from '$lib/components/admin/shared/selection-url-port';
@@ -26,12 +26,6 @@ export type DownstreamMcpWorkspaceBundle = {
 };
 
 export type DownstreamMcpModal = 'choose' | 'personal' | 'create' | 'configure' | 'delete' | null;
-export type DownstreamMcpPublicationActionLabel = 'Publish' | 'Unpublish';
-export type DownstreamMcpPendingPublication = {
-  form: HTMLFormElement;
-  connectorName: string;
-  actionLabel: DownstreamMcpPublicationActionLabel;
-};
 
 export interface DownstreamMcpCreateValues {
   displayName: string;
@@ -50,7 +44,6 @@ import { DownstreamMcpMutationState } from './downstream-mcp-mutation-state.svel
 import { suggestedConnectorId, suggestedToolNamePrefix } from '../shared/connector-name-suggestions';
 
 export class DownstreamMcpWorkspaceState {
-  readonly operations = new DownstreamMcpMutationState();
   modal = $state<DownstreamMcpModal>(null);
   authMode = $state<'none' | 'static_bearer'>('none');
   headerType = $state<'bearer' | 'basic' | 'custom'>('bearer');
@@ -64,7 +57,6 @@ export class DownstreamMcpWorkspaceState {
   publicPathEdited = $state(false);
   toolNamePrefixEdited = $state(false);
   capabilityDescriptionConnectorId = $state<string | null>(null);
-  pendingPublication = $state<DownstreamMcpPendingPublication | null>(null);
   private readonly selection: SelectionDetailController<{ connector_id: string }, DownstreamMcpWorkspaceBundle>;
 
   get bundle(): DownstreamMcpWorkspaceBundle | null { return this.operations.authenticationLost || this.operations.blocked ? null : this.selection.detail; }
@@ -72,7 +64,7 @@ export class DownstreamMcpWorkspaceState {
   get detailFailed(): boolean { return this.selection.failed; }
   get selectedConnectorId(): string | null { return this.selection.selectedId; }
 
-  constructor(failedMode?: string, values?: DownstreamMcpCreateValues, initialBundle?: DownstreamMcpWorkspaceBundle, bundleLoader: DownstreamBundleLoader = loadDownstreamBundle, initialConnectorId?: string, initialDetailFailed?: boolean, connectors: { connector_id: string }[] = initialBundle ? [initialBundle.connector] : [], selectionUrl: SelectionUrlPort = new InMemorySelectionUrlAdapter()) {
+  constructor(failedMode?: string, values?: DownstreamMcpCreateValues, initialBundle?: DownstreamMcpWorkspaceBundle, bundleLoader: DownstreamBundleLoader = loadDownstreamBundle, initialConnectorId?: string, initialDetailFailed?: boolean, connectors: { connector_id: string }[] = initialBundle ? [initialBundle.connector] : [], selectionUrl: SelectionUrlPort = new InMemorySelectionUrlAdapter(), readonly operations: DownstreamMcpMutationState = new DownstreamMcpMutationState()) {
     this.selection = new SelectionDetailController({
       items: connectors,
       itemId: (connector) => connector.connector_id,
@@ -92,7 +84,7 @@ export class DownstreamMcpWorkspaceState {
         this.capabilityDescriptionConnectorId = null;
         this.menuOpen = false;
         this.modal = null;
-        this.pendingPublication = null;
+        this.operations.cancel();
       }
     });
     if (failedMode !== 'create' || !values) return;
@@ -149,21 +141,9 @@ export class DownstreamMcpWorkspaceState {
     this.returnFocus?.focus();
   };
 
-  requestPublicationConfirmation = (form: HTMLFormElement, connectorName: string, actionLabel: DownstreamMcpPublicationActionLabel): void => {
+  requestPublication = (connector: DownstreamMcpConnectorSummary): void => {
     if (this.operations.locked) return;
-    this.pendingPublication = { form, connectorName, actionLabel };
-  };
-
-  cancelPublication = (): void => {
-    this.pendingPublication = null;
-    this.menuOpen = false;
-  };
-
-  confirmPublication = (): void => {
-    if (this.operations.locked) return;
-    const form = this.pendingPublication?.form;
-    form?.requestSubmit();
-    this.pendingPublication = null;
+    this.operations.request(connector.publication_status === 'published' ? 'unpublish' : 'publish', connector.connector_id, connector.display_name);
     this.menuOpen = false;
   };
 

@@ -284,31 +284,25 @@ describe('DownstreamMcpWorkspaceState', () => {
     expect(state.capabilityDescriptionConnectorId).toBeNull();
   });
 
-  test('requests, cancels, and confirms publication through the stored form', () => {
+  test.each(['published', 'unpublished'] as const)('requests confirmation for a %s connector without retaining a menu form', (publication_status): void => {
     const state = new DownstreamMcpWorkspaceState();
     state.setMenuOpen(true);
-    let submissions = 0;
-    const form = { requestSubmit: () => {
-      expect(state.menuOpen).toBe(true);
-      submissions += 1;
-    } } as unknown as HTMLFormElement;
 
-    state.requestPublicationConfirmation(form, 'Payments', 'Publish');
-    expect(state.menuOpen).toBe(true);
-    expect(state.pendingPublication?.connectorName).toBe('Payments');
-    expect(state.pendingPublication?.actionLabel).toBe('Publish');
+    state.requestPublication({ ...createBundle('payments').connector, publication_status });
 
-    state.cancelPublication();
-    expect(state.pendingPublication).toBeNull();
     expect(state.menuOpen).toBe(false);
-    expect(submissions).toBe(0);
+    expect(state.operations.pending).toEqual({ action: publication_status === 'published' ? 'unpublish' : 'publish', id: 'payments', name: 'payments' });
+    state.operations.cancel();
+    expect(state.operations.pending).toBeNull();
+  });
 
-    state.setMenuOpen(true);
-    state.requestPublicationConfirmation(form, 'Payments', 'Unpublish');
-    state.confirmPublication();
-    expect(state.pendingPublication).toBeNull();
-    expect(state.menuOpen).toBe(false);
-    expect(submissions).toBe(1);
+  test('changing selection cancels pending publication', (): void => {
+    const state = new DownstreamMcpWorkspaceState(undefined, undefined, createBundle('a'), undefined, undefined, undefined, sharedRows);
+    state.requestPublication(createBundle('a').connector);
+
+    state.selectConnector('b');
+
+    expect(state.operations.pending).toBeNull();
   });
 
   test('creates a stable public path slug suggestion', () => {

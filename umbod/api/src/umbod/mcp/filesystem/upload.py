@@ -28,7 +28,7 @@ class FilesystemUploadTool(Tool):
             name="filesystem_upload",
             description=(
                 "Create a private file with UTF-8 text or canonical padded base64 content. "
-                "Maximum 1048576 decoded bytes (1 MiB); lower server limits apply. "
+                "Maximum 10485760 decoded bytes (10 MiB); lower server limits apply. "
                 "One-shot upload, without chunking or resumability. Retrying is not idempotent. "
                 "Returns file metadata only, never uploaded content."
             ),

@@ -94,10 +94,10 @@ async def filesystem_mcp() -> AsyncIterator[FilesystemMcp]:
     ))
     metrics = InMemoryMcpMetricsRecorder()
     content = RecordingContent(create_content_driver(InMemoryContentConfig(type="inmemory")))
-    services = DatabaseFilesystemServiceFactory(runtime.database, content, 2_097_152)
+    services = DatabaseFilesystemServiceFactory(runtime.database, content, 20_971_520)
     files = ContentService(
         VerifiedIdentityResolver(), create_filesystem_transactions(database=runtime.database),
-        content, 2_097_152,
+        content, 20_971_520,
     )
     register_filesystem_tools(
         McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), metrics, Mock()))),

@@ -1,5 +1,6 @@
 import { adminApi } from '$lib/admin/infrastructure/admin-api';
 import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
+import { presentDownstreamMcpActionError } from '$lib/admin/downstream-mcp-errors';
 import type { DownstreamMcpConnectorsRoute } from '$lib/admin/downstream-mcp-connectors-api';
 
 export type CommonMcpAction = 'publish' | 'unpublish' | 'delete';
@@ -43,10 +44,12 @@ export class DownstreamMcpMutationState {
     } catch (error) {
       if (this.disposed) return;
       if (error instanceof AuthenticationRequiredError || error instanceof HttpError && [401, 403].includes(error.status)) this.loseAccess();
-      else if (error instanceof HttpError && error.status === 409) {
+      else if (error instanceof HttpError && error.status === 409 && action === 'delete') {
         this.message = 'Remove connector and tool grants in Group permissions before deleting this server. Deletion was not retried.';
       } else if (error instanceof HttpError && error.status >= 400 && error.status < 500 || error instanceof SchemaValidationError && error.direction === 'outbound') {
-        this.message = 'The change was rejected. Reload authoritative state before trying again.';
+        this.message = error instanceof HttpError
+          ? `${presentDownstreamMcpActionError(error, action === 'publish' ? 'Publication' : action === 'unpublish' ? 'Unpublication' : 'Deletion').data.message} Reload authoritative state before trying again.`
+          : 'The change was rejected. Reload authoritative state before trying again.';
         this.blocked = true;
       } else {
         this.blocked = true;

@@ -36,13 +36,14 @@ describe('downstream MCP connector administration', () => {
   });
 
   test('offers publication and per-tool activation controls with pending and error feedback', () => {
-    expect(controls).toContain("'unpublish' : 'publish'");
-    expect(controls).toContain("import ConnectorPublicationMenuAction");
+    expect(controls).toContain("'Unpublish' : 'Publish'");
+    expect(controls).not.toContain('ConnectorPublicationMenuAction');
     expect(controls).toContain("import PublicationConfirmationModal");
-    expect(controls).toContain('<ConnectorPublicationMenuAction');
+    expect(controls).toContain('state.requestPublication(selected)');
     expect(controls).toContain('<PublicationConfirmationModal');
-    expect(controls).toContain('the MCP proxy connector');
-    expect(controls).toContain('confirmLabel={state.pendingPublication?.actionLabel');
+    expect(controls).toContain('onconfirm={state.operations.confirm}');
+    expect(controls).not.toContain('state.pendingPublication');
+    expect(controls).toContain('Updating MCP connector');
     expect(controls).toContain('DownstreamMcpToolCatalog');
     expect(toolCatalog).toContain('DownstreamMcpToolActivationToggle');
     expect(toolCatalog).toContain('searchLabel="Search tools"');

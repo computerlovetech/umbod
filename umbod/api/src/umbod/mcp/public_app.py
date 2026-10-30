@@ -54,6 +54,7 @@ from umbod.core.capabilities.tools.names import PublicToolIdentity
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
 from umbod_sdk.connectors.discovery import load_connector_plugins
 from umbod.mcp.agent_instructions import register_agent_instructions
+from umbod.mcp.http_transport import MAX_MCP_REQUEST_BODY_BYTES, create_mcp_http_app
 from umbod.mcp.administrator import register_administrator_connector_configuration_tools
 from umbod.mcp.auth import MCPAuthProviderFactory
 from umbod.mcp.auth.consent_screen import install_umbod_consent_screen
@@ -335,7 +336,7 @@ async def create_runtime_context(config: PublicAppConfig, *, downstream_client_f
     auth_provider = config.auth_provider if config.auth_provider is not None else MCPAuthProviderFactory().create(config.settings)
     persistence_runtime = config.persistence_runtime
     mcp = await build_mcp_with_openapi_adapters(config.settings, auth_provider, config.connector_runtime, (connector_tool_runtime_state_store, group_permission_runtime_state), openapi_adapters, persistence_runtime, telemetry=config.telemetry, downstream_client_factory=downstream_client_factory)
-    return PublicAppRuntimeContext(mcp=mcp, http_app=mcp.http_app(path=_MCP_HTTP_PATH, stateless_http=config.stateless_http), telemetry=config.telemetry, settings=config.settings, connector_runtime=config.connector_runtime, connector_tool_runtime_state_store=connector_tool_runtime_state_store, group_permission_runtime_state=group_permission_runtime_state, target_stores=ConnectorStorePair(connector_configuration_store=config.connector_runtime.connector_configuration_store, connector_publishing_store=config.connector_runtime.connector_publishing_store), source_strategy=source_strategy, api_base_url=config.api_base_url, persistence_runtime=persistence_runtime)
+    return PublicAppRuntimeContext(mcp=mcp, http_app=create_mcp_http_app(mcp, path=_MCP_HTTP_PATH, stateless_http=config.stateless_http, max_request_body_bytes=MAX_MCP_REQUEST_BODY_BYTES), telemetry=config.telemetry, settings=config.settings, connector_runtime=config.connector_runtime, connector_tool_runtime_state_store=connector_tool_runtime_state_store, group_permission_runtime_state=group_permission_runtime_state, target_stores=ConnectorStorePair(connector_configuration_store=config.connector_runtime.connector_configuration_store, connector_publishing_store=config.connector_runtime.connector_publishing_store), source_strategy=source_strategy, api_base_url=config.api_base_url, persistence_runtime=persistence_runtime)
 
 async def health_response(_request: Request) -> JSONResponse:
     return JSONResponse({'status': 'ok'})

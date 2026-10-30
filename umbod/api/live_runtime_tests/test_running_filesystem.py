@@ -1,3 +1,4 @@
+import base64
 import json
 import os
 import ssl
@@ -6,6 +7,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from fastmcp import Client
 from fastmcp.client.client import CallToolResult
 
 from conftest import RuntimeEndpoints
@@ -43,6 +45,82 @@ def checked_breadcrumbs(
         "items": [{field: node[field] for field in ("id", "name", "kind")} for node in nodes],
         "complete": complete,
     }
+
+
+async def check_mcp_file_deletion(
+    alice: httpx.Client, alice_second: httpx.Client,
+    alice_mcp: Client[Any], bob_mcp: Client[Any], parent_id: str,
+) -> None:
+    parent_path = FILESYSTEM + "/nodes/" + parent_id
+    children_before = alice.get(parent_path + "/children").json()["nodes"]
+    data = b"delete through MCP"
+    started = alice.post(parent_path + "/uploads", json={
+        "name": "mcp-delete-" + uuid4().hex,
+        "metadata": {"content_type": "text/plain", "attributes": {}},
+        "size_bytes": len(data),
+    })
+    assert started.status_code == 201, started.text
+    upload = started.json()
+    transferred = alice_second.put(
+        upload["transfer"]["url"], content=data, headers=upload["transfer"]["headers"],
+    )
+    assert transferred.status_code == 204, transferred.text
+    node = checked_summary(alice_second.post(upload["complete_url"]), 201)
+    node_path = FILESYSTEM + "/nodes/" + node["id"]
+    read_arguments = {"node_id": node["id"], "encoding": "utf-8", "max_bytes": len(data)}
+    assert tool_payload(await alice_mcp.call_tool("filesystem_read_file", read_arguments)) == {
+        "node_id": node["id"], "revision": node["revision"], "size_bytes": len(data),
+        "content": {"encoding": "utf-8", "text": data.decode("utf-8")},
+    }
+    denied_read = await bob_mcp.call_tool("filesystem_read_file", read_arguments, raise_on_error=False)
+    missing_read = await bob_mcp.call_tool("filesystem_read_file", {
+        "node_id": str(uuid4()), "encoding": "utf-8", "max_bytes": len(data),
+    }, raise_on_error=False)
+    assert denied_read.is_error and missing_read.is_error
+    assert denied_read.content[0].text == missing_read.content[0].text
+    assert "filesystem_permission_denied" in denied_read.content[0].text
+    read_directory = await alice_mcp.call_tool("filesystem_read_file", {
+        "node_id": parent_id, "encoding": "utf-8", "max_bytes": 1_048_576,
+    }, raise_on_error=False)
+    assert read_directory.is_error
+    assert "filesystem_wrong_node_kind" in read_directory.content[0].text
+    arguments = {"node_id": node["id"], "expected_revision": node["revision"]}
+    descriptor = next(tool for tool in await alice_mcp.list_tools() if tool.name == "filesystem_delete_file")
+    assert descriptor.annotations is not None
+    assert descriptor.annotations.destructiveHint is True
+    assert descriptor.annotations.readOnlyHint is False
+    denied = await bob_mcp.call_tool("filesystem_delete_file", arguments, raise_on_error=False)
+    missing = await bob_mcp.call_tool("filesystem_delete_file", {
+        "node_id": str(uuid4()), "expected_revision": node["revision"],
+    }, raise_on_error=False)
+    assert denied.is_error and missing.is_error
+    assert denied.content[0].text == missing.content[0].text
+    assert "filesystem_permission_denied" in denied.content[0].text
+    stale = await alice_mcp.call_tool("filesystem_delete_file", {
+        "node_id": node["id"], "expected_revision": node["revision"] + 1,
+    }, raise_on_error=False)
+    assert stale.is_error
+    assert "filesystem_revision_conflict" in stale.content[0].text
+    assert alice.get(node_path + "/content").content == data
+    directory = await alice_mcp.call_tool("filesystem_delete_file", {
+        "node_id": parent_id, "expected_revision": 1,
+    }, raise_on_error=False)
+    assert directory.is_error
+    assert "filesystem_wrong_node_kind" in directory.content[0].text
+    assert tool_payload(await alice_mcp.call_tool("filesystem_delete_file", arguments)) == {
+        "node_id": node["id"], "deleted": True,
+    }
+    assert alice.get(node_path).status_code == 403
+    assert alice_second.get(node_path).status_code == 403
+    assert alice.get(node_path + "/content").status_code == 403
+    assert alice_second.post(upload["complete_url"]).status_code == 403
+    deleted_read = await alice_mcp.call_tool("filesystem_read_file", read_arguments, raise_on_error=False)
+    assert deleted_read.is_error
+    assert "filesystem_permission_denied" in deleted_read.content[0].text
+    assert alice.get(parent_path + "/children").json()["nodes"] == children_before
+    repeated = await alice_mcp.call_tool("filesystem_delete_file", arguments, raise_on_error=False)
+    assert repeated.is_error
+    assert "filesystem_permission_denied" in repeated.content[0].text
 
 
 @pytest.mark.asyncio
@@ -213,6 +291,16 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             missing = bob.get(FILESYSTEM + "/nodes/" + str(uuid4()))
             assert missing.status_code == forbidden.status_code
             assert missing.json() == forbidden.json()
+            read_arguments = {"node_id": uploaded["id"], "encoding": "base64", "max_bytes": len(uploaded_bytes)}
+            assert tool_payload(await alice_mcp.call_tool("filesystem_read_file", read_arguments)) == {
+                "node_id": uploaded["id"], "revision": uploaded["revision"], "size_bytes": len(uploaded_bytes),
+                "content": {"encoding": "base64", "data": base64.b64encode(uploaded_bytes).decode("ascii")},
+            }
+            invalid_text = await alice_mcp.call_tool("filesystem_read_file", {
+                **read_arguments, "encoding": "utf-8",
+            }, raise_on_error=False)
+            assert invalid_text.is_error
+            assert "filesystem_read_invalid_encoding" in invalid_text.content[0].text
             uploaded_path = FILESYSTEM + "/nodes/" + uploaded["id"]
             delete_headers = {"If-Match": '"' + str(uploaded["revision"]) + '"'}
             current_file = alice_second.get(uploaded_path)
@@ -250,6 +338,7 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             deleted_mcp = await alice_mcp.call_tool("get_filesystem_node", {"node_id": uploaded["id"]}, raise_on_error=False)
             assert deleted_mcp.is_error
             assert "filesystem_permission_denied" in deleted_mcp.content[0].text
+            await check_mcp_file_deletion(alice, alice_second, alice_mcp, bob_mcp, alice_directory["id"])
             current_policy = alice.get(policy_url).json()
             revoked = alice.put(policy_url, json={"expected_revision": current_policy["revision"], "groups": []})
             assert revoked.status_code == 200, revoked.text
@@ -268,6 +357,12 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             )
             checked_breadcrumbs(bob.get(FILESYSTEM + "/nodes/" + bob_file["id"] + "/breadcrumbs"), [bob_file], False)
             assert tool_payload(await bob_mcp.call_tool("get_filesystem_node", {"node_id": bob_file["id"]})) == bob_file
+            assert tool_payload(await bob_mcp.call_tool("filesystem_read_file", {
+                "node_id": bob_file["id"], "encoding": "utf-8", "max_bytes": 0,
+            })) == {
+                "node_id": bob_file["id"], "revision": bob_file["revision"], "size_bytes": 0,
+                "content": {"encoding": "utf-8", "text": ""},
+            }
             partial = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
                 "operation": "ls", "target": {"type": "node", "node_id": alice_directory["id"]},
             }))["result"]

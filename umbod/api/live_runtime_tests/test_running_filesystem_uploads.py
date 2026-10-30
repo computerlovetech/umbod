@@ -64,36 +64,58 @@ async def native_upload_runtime(runtime_endpoints: RuntimeEndpoints) -> AsyncIte
             assert restored.status_code == 200, restored.text
 
 
+PNG_BYTES = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
+)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("content,expected", [
     ({"encoding": "utf-8", "text": "résumé 東京\n"}, "résumé 東京\n".encode("utf-8")),
     ({"encoding": "base64", "data": base64.b64encode(b"\x00\xff\x80\r\n").decode("ascii")}, b"\x00\xff\x80\r\n"),
     ({"encoding": "base64", "data": ""}, b""),
-    ({"encoding": "base64", "data": base64.b64encode(b"x" * 1_048_576).decode("ascii")}, b"x" * 1_048_576),
-], ids=["unicode-text", "binary", "empty", "maximum-size"])
+    ({"encoding": "base64", "data": base64.b64encode(PNG_BYTES).decode("ascii")}, PNG_BYTES),
+    ({"encoding": "base64", "data": base64.b64encode(b"x" * 10_485_760).decode("ascii")}, b"x" * 10_485_760),
+], ids=["unicode-text", "binary", "empty", "png-image", "maximum-size"])
 async def test_native_upload_is_readable_through_rest_and_private_across_workers(
     native_upload_runtime: NativeUploadRuntime, content: dict[str, str], expected: bytes,
 ) -> None:
     runtime = native_upload_runtime
+    content_type = "image/png" if expected == PNG_BYTES else "application/octet-stream"
     node = tool_payload(await runtime.client.call_tool("filesystem_upload", {
-        "parent_id": runtime.directory_id, "name": "artifact.bin",
-        "metadata": {"content_type": "application/octet-stream", "attributes": {}},
+        "parent_id": runtime.directory_id, "name": "artifact.png" if content_type == "image/png" else "artifact.bin",
+        "metadata": {"content_type": content_type, "attributes": {}},
         "content": content,
     }))
     assert node["parent_id"] == runtime.directory_id
+    assert node["metadata"]["content_type"] == content_type
     path = FILESYSTEM + "/nodes/" + node["id"]
     assert checked_summary(runtime.api.get(path), 200) == node
     response = runtime.api.get(path + "/content")
     assert response.status_code == 200
+    assert response.headers["content-type"].split(";")[0] == content_type
     assert response.content == expected
+    if len(expected) <= 1_048_576:
+        assert tool_payload(await runtime.client.call_tool("filesystem_read_file", {
+            "node_id": node["id"], "encoding": "base64", "max_bytes": len(expected),
+        })) == {
+            "node_id": node["id"], "revision": node["revision"], "size_bytes": len(expected),
+            "content": {"encoding": "base64", "data": base64.b64encode(expected).decode("ascii")},
+        }
+    if expected:
+        limited = await runtime.client.call_tool("filesystem_read_file", {
+            "node_id": node["id"], "encoding": "base64", "max_bytes": min(len(expected) - 1, 1_048_576),
+        }, raise_on_error=False)
+        assert limited.is_error
+        assert "filesystem_read_too_large" in limited.content[0].text
     assert runtime.other_api.get(path).status_code == 403
     assert runtime.other_api.get(path + "/content").status_code == 403
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("content", [
-    {"encoding": "utf-8", "text": "é" * 524_289},
-    {"encoding": "base64", "data": base64.b64encode(b"x" * 1_048_577).decode("ascii")},
+    {"encoding": "utf-8", "text": "é" * 5_242_881},
+    {"encoding": "base64", "data": base64.b64encode(b"x" * 10_485_761).decode("ascii")},
 ], ids=["utf8-byte-limit", "base64-decoded-limit"])
 async def test_native_oversize_upload_does_not_publish_a_file(
     native_upload_runtime: NativeUploadRuntime, content: dict[str, str],
@@ -110,6 +132,33 @@ async def test_native_oversize_upload_does_not_publish_a_file(
         "parent_id": runtime.directory_id,
     }))
     assert children["nodes"] == []
+
+
+@pytest.mark.asyncio
+async def test_read_rejects_oversize_rest_file_without_changing_rest_downloads(
+    native_upload_runtime: NativeUploadRuntime,
+) -> None:
+    runtime = native_upload_runtime
+    data = b"x" * 1_048_577
+    begun = runtime.api.post(FILESYSTEM + "/nodes/" + runtime.directory_id + "/uploads", json={
+        "name": "larger-rest-file.bin", "size_bytes": len(data),
+        "metadata": {"content_type": "application/octet-stream", "attributes": {}},
+    })
+    assert begun.status_code == 201, begun.text
+    session = begun.json()
+    transferred = runtime.api.put(
+        session["transfer"]["url"], content=data, headers=session["transfer"]["headers"],
+    )
+    assert transferred.status_code == 204, transferred.text
+    node = checked_summary(runtime.api.post(session["complete_url"]), 201)
+    result = await runtime.client.call_tool("filesystem_read_file", {
+        "node_id": node["id"], "encoding": "base64", "max_bytes": 1_048_576,
+    }, raise_on_error=False)
+    assert result.is_error
+    assert "filesystem_read_too_large" in result.content[0].text
+    downloaded = runtime.api.get(FILESYSTEM + "/nodes/" + node["id"] + "/content")
+    assert downloaded.status_code == 200
+    assert downloaded.content == data
 
 
 @pytest.mark.asyncio
