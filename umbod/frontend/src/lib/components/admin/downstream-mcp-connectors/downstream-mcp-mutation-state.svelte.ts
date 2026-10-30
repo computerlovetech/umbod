@@ -1,3 +1,5 @@
+import { SvelteMap } from 'svelte/reactivity';
+import type { DownstreamMcpConnectorSummary } from '$lib/admin/downstream-mcp-connectors';
 import { adminApi } from '$lib/admin/infrastructure/admin-api';
 import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
 import { presentDownstreamMcpActionError } from '$lib/admin/downstream-mcp-errors';
@@ -6,6 +8,7 @@ import type { DownstreamMcpConnectorsRoute } from '$lib/admin/downstream-mcp-con
 export type CommonMcpAction = 'publish' | 'unpublish' | 'delete';
 export class DownstreamMcpMutationState {
   pending = $state<{ action: CommonMcpAction; id: string; name: string } | null>(null);
+  readonly publicationStatuses = new SvelteMap<string, DownstreamMcpConnectorSummary['publication_status']>();
   busy = $state(false);
   formLocked = $state(false);
   registrationLocked = $state(false);
@@ -34,11 +37,16 @@ export class DownstreamMcpMutationState {
     this.busy = true;
     this.message = '';
     try {
-      await this.api[action](id);
+      if (action !== 'delete') {
+        const publication = await this.api[action](id);
+        if (!this.disposed && !this.authenticationLost) this.publicationStatuses.set(publication.connector_id, publication.publication_status);
+        return;
+      }
+      await this.api.delete(id);
       if (this.disposed || this.authenticationLost) return;
       const records = await this.api.list();
       if (this.disposed || this.authenticationLost) return;
-      const selected = action === 'delete' ? records.connectors[0]?.connector_id : id;
+      const selected = records.connectors[0]?.connector_id;
       this.blocked = true;
       this.navigate(selected);
     } catch (error) {

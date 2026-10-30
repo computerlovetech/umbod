@@ -25,7 +25,7 @@
   import { DownstreamMcpWorkspaceState, type DownstreamMcpCreateValues } from './downstream-mcp-workspace-state.svelte';
   import PersonalServerPolicyPanel from '../personal-mcp-servers/PersonalServerPolicyPanel.svelte';
   import { useToast } from '$lib/components/feedback';
-  let { connectors, selected: detailSelected, catalog, promptCatalog, resourceCatalog, invocationPolicies = [], form, state }: { connectors: DownstreamMcpConnectorSummary[]; selected?: DownstreamMcpConnector; catalog?: DownstreamMcpToolList; promptCatalog?: PromptCatalogData; resourceCatalog?: ResourceCatalogData; invocationPolicies?: InvocationPolicyTool[]; form?: { message?: string; status?: string; mode?: string; values?: DownstreamMcpCreateValues }; state: DownstreamMcpWorkspaceState } = $props();
+  let { connectors, selected: loadedDetail, catalog, promptCatalog, resourceCatalog, invocationPolicies = [], form, state }: { connectors: DownstreamMcpConnectorSummary[]; selected?: DownstreamMcpConnector; catalog?: DownstreamMcpToolList; promptCatalog?: PromptCatalogData; resourceCatalog?: ResourceCatalogData; invocationPolicies?: InvocationPolicyTool[]; form?: { message?: string; status?: string; mode?: string; values?: DownstreamMcpCreateValues }; state: DownstreamMcpWorkspaceState } = $props();
   type SidebarConnector = {
     id: string;
     name: string;
@@ -35,9 +35,11 @@
 
   const confirmation = $derived(state.modal === 'delete');
   const toast = useToast();
-  const selected = $derived(connectors.find((connector) => connector.connector_id === state.selectedConnectorId) ?? connectors[0]);
+  const currentConnectors = $derived(connectors.map((connector) => ({ ...connector, publication_status: state.operations.publicationStatuses.get(connector.connector_id) ?? connector.publication_status })));
+  const detailSelected = $derived(loadedDetail ? { ...loadedDetail, publication_status: state.operations.publicationStatuses.get(loadedDetail.connector_id) ?? loadedDetail.publication_status } : undefined);
+  const selected = $derived(currentConnectors.find((connector) => connector.connector_id === state.selectedConnectorId) ?? currentConnectors[0]);
   const selectedDetailReady = $derived(detailSelected?.connector_id === selected?.connector_id && !state.detailLoading && !state.detailFailed);
-  const sidebarConnectors = $derived(connectors.map((connector): SidebarConnector => ({ id: connector.connector_id, name: connector.display_name, iconDataUrl: connector.icon_url || undefined, connector })));
+  const sidebarConnectors = $derived(currentConnectors.map((connector): SidebarConnector => ({ id: connector.connector_id, name: connector.display_name, iconDataUrl: connector.icon_url || undefined, connector })));
   const sharedMcpUri = $derived(detailSelected ? `${new URL(detailSelected.public_url).origin}/mcp` : '');
   const selectedCapability = $derived(parseConnectorCapability(page.url.searchParams.get('capability')));
   const capabilityCounts = $derived({

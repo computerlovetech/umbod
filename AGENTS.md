@@ -19,6 +19,7 @@ Architecture decision records live in [`umbod/project/architecture-records/`](um
 - [ADR-007: Actor-Specific Composition of Shared UI Components](umbod/project/architecture-records/ADR-007-actor-specific-ui-composition.md) — Read for shared components and actor-owned views.
 - [ADR-008: Event-Synchronized In-Memory Tool Runtime](umbod/project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Read before tool registration, discovery, routing, synchronization, or invocation changes.
 - [ADR-009: Transport-Neutral File Upload Sessions](umbod/project/architecture-records/ADR-009-transport-neutral-upload-sessions.md) — Read for upload sessions, transfer instructions, or file publication.
+- [ADR-011: State Ownership and Rendering Boundaries](umbod/project/architecture-records/ADR-011-state-ownership-and-rendering-boundaries.md) — Read before changing UI state, derived values, component event handling, or state lifetimes.
 
 ## Where to start by task
 

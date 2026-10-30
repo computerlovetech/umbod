@@ -4,7 +4,6 @@ import { summaryFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-su
 import { describe, expect, test, vi } from 'vitest';
 import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
 import { DownstreamMcpWorkspaceState, type DownstreamMcpWorkspaceBundle } from './downstream-mcp-workspace-state.svelte';
-import { suggestedConnectorId } from '../shared/connector-name-suggestions';
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void;
@@ -38,8 +37,15 @@ describe('common MCP mutations through the generic administration port', () => {
     await state.confirm();
     expect(api[action]).toHaveBeenCalledTimes(1);
     expect(api[action]).toHaveBeenCalledWith('personal');
-    expect(navigate).toHaveBeenCalledWith(action === 'delete' ? 'remaining' : 'personal');
-    expect(state.locked).toBe(true);
+    if (action === 'delete') {
+      expect(navigate).toHaveBeenCalledWith('remaining');
+      expect(state.locked).toBe(true);
+    } else {
+      expect(navigate).not.toHaveBeenCalled();
+      expect(api.list).not.toHaveBeenCalled();
+      expect(state.publicationStatuses.get('personal')).toBe(action === 'publish' ? 'published' : 'unpublished');
+      expect(state.locked).toBe(false);
+    }
   });
   test.each([new NetworkError(new Error('secret-sentinel')), new SchemaValidationError('inbound', []), new HttpError(503, '', {})])('uncertain mutation never replays or reintroduces stale inventory before explicit reload', async (error) => {
     const { api, state, navigate } = operations();
@@ -83,6 +89,22 @@ describe('common MCP mutations through the generic administration port', () => {
     state.request('publish', 'personal', 'Personal');
     await state.confirm();
     expect(api.publish).not.toHaveBeenCalled();
+  });
+  test.each(['authentication', 'disposal'] as const)('%s fences late publication status updates', async (reason): Promise<void> => {
+    const { api, state, navigate } = operations();
+    const pending = deferred<{ connector_id: string; publication_status: 'published' }>();
+    api.publish.mockReturnValueOnce(pending.promise);
+    state.request('publish', 'personal', 'Personal');
+    const operation = state.confirm();
+    if (reason === 'authentication') state.loseAccess();
+    else state.dispose();
+
+    pending.resolve({ connector_id: 'personal', publication_status: 'published' });
+    await operation;
+
+    expect(state.publicationStatuses.size).toBe(0);
+    expect(api.list).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
   });
   test('authentication rejection prevents reload or mutation replay', async () => {
     const { api, state, navigate } = operations();
@@ -218,9 +240,11 @@ describe('DownstreamMcpWorkspaceState', () => {
     expect(state2.bundle?.catalog?.tools[0]?.name).toBe('newer');
   });
 
-  test('reconciles submitted connector tools after selection changes', () => {
-    const state = new DownstreamMcpWorkspaceState(undefined, undefined, createBundle('a'));
+  test('reconciles submitted connector tools after selection changes', (): void => {
+    const loader = vi.fn(async (id: string): Promise<DownstreamMcpWorkspaceBundle> => createBundle(id));
+    const state = new DownstreamMcpWorkspaceState(undefined, undefined, createBundle('a'), loader, undefined, undefined, sharedRows);
     state.selectConnector('b');
+    expect(state.selectedConnectorId).toBe('b');
     state.reconcileTools('a', [{ name: 'a-tool', title: 'a-tool', description: '', input_schema: {}, output_schema: null, activation_status: 'enabled' }]);
     state.selectConnector('a');
     expect(state.bundle?.catalog?.tools[0]?.activation_status).toBe('enabled');
@@ -305,8 +329,11 @@ describe('DownstreamMcpWorkspaceState', () => {
     expect(state.operations.pending).toBeNull();
   });
 
-  test('creates a stable public path slug suggestion', () => {
-    expect(suggestedConnectorId('  Payments API / EU ')).toBe('payments-api-eu');
+  test('creates a stable public path slug suggestion', (): void => {
+    const state = new DownstreamMcpWorkspaceState();
+    state.open('create', { focus(): void {} } as unknown as HTMLElement);
+    state.updateDisplayName({ currentTarget: { value: '  Payments API / EU ' } } as unknown as Event);
+    expect(state.createPublicPath).toBe('payments-api-eu');
   });
 
   test('restores a failed create submission in the open modal', () => {

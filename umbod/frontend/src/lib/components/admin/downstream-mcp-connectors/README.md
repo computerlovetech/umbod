@@ -10,8 +10,9 @@ description: Shared and personal MCP workspaces, confirmation-owned mutations, a
 - [DownstreamMcpWorkspace.svelte](./DownstreamMcpWorkspace.svelte) — Connector selection, action menus, confirmation, and operation feedback.
 - [downstream-mcp-workspace-state.svelte.ts](./downstream-mcp-workspace-state.svelte.ts) — Selection and setup state; publication requests retain connector identity, not menu forms.
 - [downstream-mcp-workspace-state.test.ts](./downstream-mcp-workspace-state.test.ts) — Selection, mutation gates, and confirmation state tests.
-- [downstream-mcp-mutation-state.svelte.ts](./downstream-mcp-mutation-state.svelte.ts) — Confirmed API mutations, loading, safe failures, and authoritative reloads.
-- [downstream-mcp-publication.dom.test.ts](./downstream-mcp-publication.dom.test.ts) — Mounted-workspace publication, withdrawal, cancellation, duplicate submission, and failure regressions.
+- [downstream-mcp-mutation-state.svelte.ts](./downstream-mcp-mutation-state.svelte.ts) — Confirmed API mutations, in-place publication receipts, loading, safe failures, and deletion reloads.
+- [downstream-mcp-publication.dom.test.ts](./downstream-mcp-publication.dom.test.ts) — Mounted UI publication, retained filters, cancellation, competing-action locks, errors, and fixture-owned disposal.
+- [MCP controls acceptance tests](../../../acceptance/admin-downstream-mcp-connector-controls.test.ts) — Runtime actor/form presentation and validated-adapter behavior; retained catalogue and page lifecycle wiring checks.
 - [DownstreamMcpSetupModal.svelte](./DownstreamMcpSetupModal.svelte) — Shared connector creation and configuration.
 - [DownstreamMcpToolCatalog.svelte](./DownstreamMcpToolCatalog.svelte) — Discovered tool catalogue and batch controls.
 - [DownstreamMcpToolActivationToggle.svelte](./DownstreamMcpToolActivationToggle.svelte) — Tool activation control.
