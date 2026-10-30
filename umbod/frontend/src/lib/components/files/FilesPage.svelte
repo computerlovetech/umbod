@@ -39,7 +39,7 @@
   const access = createAccess();
 
   afterNavigate(({ to }) => {
-    if (to?.url.pathname !== '/files') { state.deletion.reset(); state.rowDeletion.reset(); return; }
+    if (to?.url.pathname !== '/files') { state.deletion.reset(); state.rowDeletion.reset(); state.sharing.reset(); return; }
     folder.navigate();
     upload.navigate();
     void state.load(to.url.searchParams.get('node'));

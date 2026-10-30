@@ -10,6 +10,7 @@
   import ResourceCatalog from '$lib/components/admin/capability-catalogs/ResourceCatalog.svelte';
   import { ConnectorDetailsBrowserRoute, type ConnectorDetailBundle } from '$lib/admin/connector-details-browser-api';
   import CapabilityDescriptionOverrideModal from '$lib/components/admin/capability-descriptions/CapabilityDescriptionOverrideModal.svelte';
+  import ConnectorListEmptyState from './ConnectorListEmptyState.svelte';
   import ConnectorCapabilities from '$lib/components/admin/connectors/ConnectorCapabilities.svelte';
   import ConnectorConfigurationForm from '$lib/components/admin/connectors/ConnectorConfigurationForm.svelte';
   import ConnectorDetailItem from '$lib/components/admin/connectors/ConnectorDetailItem.svelte';
@@ -457,7 +458,7 @@
     {/snippet}
   </AdminSplitWorkspace>
 {:else}
-  <p class="empty-note">No connectors are available yet.</p>
+  <ConnectorListEmptyState message="No connectors are available yet." />
 {/if}
 
 <style>

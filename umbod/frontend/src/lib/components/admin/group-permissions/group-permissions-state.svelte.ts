@@ -1,6 +1,7 @@
-import { capabilityKindSections, capabilityPermissionId, permissionSetDifference, type CapabilityKind } from '$lib/admin/group-permissions';
+import { capabilityKindSections, capabilityPermissionId, permissionSetDifference, type CapabilityKind, type GroupPermissionSummary } from '$lib/admin/group-permissions';
 import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
 import { BrowserGroupPermissionsLoader, type GroupPermissionsLoader } from './group-permissions-loader';
+import { BrowserGroupPermissionsSaver, type GroupPermissionsSaver } from './group-permissions-saver';
 
 export type GroupPermissionCapabilityRef = {
   connectorId: string;
@@ -40,7 +41,7 @@ export type ConnectorPermissionTarget = {
 };
 
 export type GroupPermissionsInitialData = {
-  groups: Array<{ groupId: string }>;
+  groups: GroupPermissionSummary[];
   preloadedGroup: GroupPermissionSet | null;
   assignableTargets: ConnectorPermissionTarget[];
   exactMatchGuidance: string;
@@ -112,27 +113,6 @@ const normalizePermissionSet = (permissionSet: GroupPermissionSet): GroupPermiss
       return capabilityPermissionId(first).localeCompare(capabilityPermissionId(second));
     })
   };
-};
-
-export const addGroupToState = (pageData: Record<string, unknown>, groupId: string): Record<string, unknown> => {
-  if (groupId.trim() === '') {
-    return { ...pageData, validationMessage: 'Group value is required' };
-  }
-
-  const groups = groupsFromState(pageData);
-  const existingGroup = groups.find((group) => group.groupId === groupId);
-  const nextGroups = existingGroup === undefined ? [...groups, emptyPermissionSet(groupId)] : groups;
-  const stagedNewGroupIds = Array.isArray(pageData.stagedNewGroupIds) ? (pageData.stagedNewGroupIds as string[]) : [];
-
-  return withStagedPermissionSet(
-    {
-      ...pageData,
-      groups: nextGroups,
-      stagedNewGroupIds: existingGroup === undefined && !stagedNewGroupIds.includes(groupId) ? [...stagedNewGroupIds, groupId] : stagedNewGroupIds,
-      validationMessage: null
-    },
-    existingGroup ?? emptyPermissionSet(groupId)
-  );
 };
 
 export const grantPermissionInState = (
@@ -208,12 +188,6 @@ export const stagedPermissionSetFromState = (pageData: Record<string, unknown>, 
 };
 
 export const persistedPermissionSetFromState = (pageData: Record<string, unknown>, groupId: string): GroupPermissionSet | null => {
-  const stagedNewGroupIds = Array.isArray(pageData.stagedNewGroupIds) ? (pageData.stagedNewGroupIds as string[]) : [];
-
-  if (stagedNewGroupIds.includes(groupId)) {
-    return null;
-  }
-
   const permissionSet = groupsFromState(pageData).find((group) => group.groupId === groupId);
   if (permissionSet === undefined || !Array.isArray(permissionSet.connectorIds) || !Array.isArray(permissionSet.capabilities)) {
     return null;
@@ -268,18 +242,20 @@ export const resolveUnsavedChangesInState = (pageData: Record<string, unknown>, 
 
 export class GroupPermissionsState {
   pageData = $state.raw<Record<string, unknown>>({});
-  groupInput = $state('');
   saveMessage = $state<string | null>(null);
   expandedConnectorId = $state<string | null>(null);
   selectedOperationId = $state<string | null>(null);
-  openGroupMenuId = $state<string | null>(null);
   connectors = $state.raw<ConnectorPermissionTarget[]>([]);
   editorStatus = $state<'unselected' | 'loading' | 'ready' | 'failed'>('unselected');
   editorError = $state<string | null>(null);
   readonly exactMatchGuidance: string;
-  readonly initialTarget: { connectorId: string; operationId: string } | null;
+  private readonly constructorTarget: { connectorId: string; operationId: string } | null;
+  private appliedTarget: string | undefined;
+  private savingInProgress = $state(false);
   readonly originHref: string | null;
   deepLinkedTargetAvailable = $state(true);
+  private catalogue = $state.raw<GroupPermissionSummary[]>([]);
+  private disposed = false;
   private serverData: GroupPermissionsInitialData;
   private readonly loader: GroupPermissionsLoader;
   private readonly groupCache = new Map<string, GroupPermissionSet>();
@@ -287,7 +263,15 @@ export class GroupPermissionsState {
   private requestGeneration = 0;
   private abortController: AbortController | null = null;
 
-  constructor(data: GroupPermissionsInitialData, saveMessage: string | null, selectedGroupId: string | null, loader: GroupPermissionsLoader = new BrowserGroupPermissionsLoader()) {
+  constructor(
+    data: GroupPermissionsInitialData,
+    saveMessage: string | null,
+    selectedGroupId: string | null,
+    loader: GroupPermissionsLoader = new BrowserGroupPermissionsLoader(),
+    private readonly saver: GroupPermissionsSaver = new BrowserGroupPermissionsSaver(),
+    private readonly routeTarget?: () => { connectorId: string; operationId: string } | null
+  ) {
+    this.catalogue = data.groups;
     const requestedGroup = data.groups.some((group) => group.groupId === selectedGroupId) ? selectedGroupId : null;
     const selectedGroup = requestedGroup ?? data.preloadedGroup?.groupId ?? null;
     if (data.preloadedGroup !== null) this.groupCache.set(data.preloadedGroup.groupId, clonePermissionSet(data.preloadedGroup));
@@ -296,14 +280,13 @@ export class GroupPermissionsState {
       ...data,
       groups: data.groups.map((group) => this.groupCache.get(group.groupId) ?? emptyPermissionSet(group.groupId)),
       currentGroupId: selectedGroup,
-      stagedPermissions: {},
-      stagedNewGroupIds: []
+      stagedPermissions: {}
     };
     this.serverData = data;
     this.loader = loader;
     this.connectors = data.preloadedGroup === null ? [] : data.assignableTargets;
     this.exactMatchGuidance = data.exactMatchGuidance;
-    this.initialTarget = data.initialTarget;
+    this.constructorTarget = data.initialTarget;
     this.originHref = data.originHref;
     this.applyInitialTarget(this.connectors);
     this.editorStatus = selectedGroup === null ? 'unselected' : selectedGroup === data.preloadedGroup?.groupId ? 'ready' : 'loading';
@@ -311,9 +294,45 @@ export class GroupPermissionsState {
     if (selectedGroup !== null && selectedGroup !== data.preloadedGroup?.groupId) void this.loadSelection(selectedGroup);
   }
 
-  selectedGroupId = $derived(typeof this.pageData.currentGroupId === 'string' ? this.pageData.currentGroupId : null);
-  groups = $derived(groupsFromState(this.pageData));
-  validationMessage = $derived(typeof this.pageData.validationMessage === 'string' ? this.pageData.validationMessage : null);
+  synchronizeCatalogue = (groups: GroupPermissionSummary[]): void => {
+    if (this.disposed || groups === this.catalogue) return;
+    const ids = new Set(groups.map((group) => group.groupId));
+    for (const id of this.groupCache.keys()) if (!ids.has(id)) this.groupCache.delete(id);
+    const selected = this.selectedGroupId;
+    const retainedSelection = selected !== null && ids.has(selected) ? selected : null;
+    const pending = typeof this.pageData.pendingGroupId === 'string' && ids.has(this.pageData.pendingGroupId) ? this.pageData.pendingGroupId : null;
+    this.catalogue = groups;
+    this.pageData = {
+      ...this.pageData,
+      groups: groups.map((group) => groupsFromState(this.pageData).find((permissionSet) => permissionSet.groupId === group.groupId) ?? emptyPermissionSet(group.groupId)),
+      stagedPermissions: Object.fromEntries(Object.entries(stagedFromState(this.pageData)).filter(([id]) => ids.has(id))),
+      currentGroupId: retainedSelection,
+      pendingGroupId: pending,
+      unsavedChangesWarning: pending === null ? null : this.pageData.unsavedChangesWarning
+    };
+    if (selected !== retainedSelection) {
+      ++this.requestGeneration;
+      this.abortController?.abort();
+      this.connectors = [];
+      this.editorStatus = 'unselected';
+      this.editorError = null;
+      this.expandedConnectorId = null;
+      this.selectedOperationId = null;
+    }
+  };
+
+  dispose = (): void => {
+    this.disposed = true;
+    ++this.requestGeneration;
+    this.abortController?.abort();
+  };
+
+  get groupSummaries(): readonly Readonly<GroupPermissionSummary>[] { return this.catalogue; }
+
+  groupMetadata = (groupId: string): GroupPermissionSummary | undefined => this.catalogue.find((group) => group.groupId === groupId);
+
+  selectedGroupId = $derived(typeof this.pageData.currentGroupId === 'string' && this.groupMetadata(this.pageData.currentGroupId) ? this.pageData.currentGroupId : null);
+  groups = $derived(this.catalogue.map((group) => groupsFromState(this.pageData).find((permissionSet) => permissionSet.groupId === group.groupId) ?? emptyPermissionSet(group.groupId)));
   unsavedChangesWarning = $derived(typeof this.pageData.unsavedChangesWarning === 'string' ? this.pageData.unsavedChangesWarning : null);
   selectedPermissionSet = $derived.by(() => {
     if (this.selectedGroupId === null) {
@@ -352,6 +371,7 @@ export class GroupPermissionsState {
   });
 
   synchronizeServerData = (data: GroupPermissionsInitialData, saveMessage: string | null, selectedGroupId: string | null): void => {
+    this.synchronizeCatalogue(data.groups);
     const currentGroupIds = new Set(data.groups.map((group) => group.groupId));
     for (const cachedGroupId of this.groupCache.keys()) {
       if (!currentGroupIds.has(cachedGroupId)) this.groupCache.delete(cachedGroupId);
@@ -382,35 +402,37 @@ export class GroupPermissionsState {
       ...data,
       groups: data.groups.map((group) => this.groupCache.get(group.groupId) ?? emptyPermissionSet(group.groupId)),
       currentGroupId: selectedGroup,
-      stagedPermissions: {},
-      stagedNewGroupIds: []
+      stagedPermissions: {}
     };
-    this.groupInput = '';
     this.saveMessage = saveMessage;
     if (selectedGroup !== null) void this.loadSelection(selectedGroup);
   };
 
-  updateGroupInput = (value: string): void => {
-    this.groupInput = value;
-  };
+  get initialTarget(): { connectorId: string; operationId: string } | null {
+    return this.routeTarget === undefined ? this.constructorTarget : this.routeTarget();
+  }
 
-  addGroup = (): void => {
-    this.pageData = addGroupToState(this.pageData, this.groupInput);
-    if (this.validationMessage === null) {
-      this.groupInput = '';
-    }
-  };
+  get saving(): boolean { return this.savingInProgress; }
 
-  acceptRegisteredGroup = (groupId: string): void => {
-    if (!this.groups.some((group) => group.groupId === groupId)) {
-      const group = emptyPermissionSet(groupId);
-      this.groupCache.set(groupId, group);
-      this.pageData = { ...this.pageData, groups: [...this.groups, group] };
+  get canSave(): boolean {
+    return !this.disposed && !this.saving && this.editorStatus === 'ready' && this.hasUnsavedChanges;
+  }
+
+  ensureSelection = (groupId: string): void => {
+    if (this.disposed) return;
+    if (this.selectedGroupId === groupId && (this.editorStatus === 'ready' || this.editorStatus === 'loading')) {
+      if (this.editorStatus === 'ready') this.applyInitialTarget(this.connectors);
+      return;
     }
     this.selectGroup(groupId);
   };
 
   selectGroup = (groupId: string): void => {
+    if (this.disposed || this.saving || !this.groupMetadata(groupId)) return;
+    if (this.selectedGroupId === groupId && (this.editorStatus === 'ready' || this.editorStatus === 'loading')) {
+      this.refreshRouteTarget();
+      return;
+    }
     if (this.selectedGroupId !== null && this.selectedGroupId !== groupId && this.hasUnsavedChanges) {
       this.pageData = stageGroupSelectionWithUnsavedChanges(this.pageData, groupId);
       return;
@@ -418,7 +440,7 @@ export class GroupPermissionsState {
 
     this.expandedConnectorId = null;
     this.selectedOperationId = null;
-    this.openGroupMenuId = null;
+    this.appliedTarget = undefined;
     this.pageData = { ...this.pageData, currentGroupId: groupId };
     void this.loadSelection(groupId);
   };
@@ -428,6 +450,7 @@ export class GroupPermissionsState {
   };
 
   private loadSelection = async (groupId: string): Promise<void> => {
+    if (this.disposed || !this.groupMetadata(groupId)) return;
     const generation = ++this.requestGeneration;
     this.abortController?.abort();
     this.abortController = new AbortController();
@@ -438,7 +461,7 @@ export class GroupPermissionsState {
       const detailPromise = this.groupCache.has(groupId)
         ? Promise.resolve(this.groupCache.get(groupId) as GroupPermissionSet)
         : this.loader.loadGroup(groupId, this.abortController.signal).then((detail) => {
-            this.groupCache.set(groupId, detail);
+            if (!this.disposed && generation === this.requestGeneration && this.groupMetadata(groupId)) this.groupCache.set(groupId, detail);
             return detail;
           });
       const targetsPromise = this.targetsCache !== null
@@ -468,8 +491,16 @@ export class GroupPermissionsState {
     }
   };
 
+  refreshRouteTarget = (): void => {
+    if (!this.disposed && this.appliedTarget !== JSON.stringify(this.initialTarget)) this.applyInitialTarget(this.connectors);
+  };
+
   private applyInitialTarget = (targets: ConnectorPermissionTarget[]): void => {
-    if (this.initialTarget === null) {
+    const target = this.initialTarget;
+    const targetKey = JSON.stringify(target);
+    if (target === null) {
+      if (this.appliedTarget === targetKey) return;
+      this.appliedTarget = targetKey;
       this.deepLinkedTargetAvailable = true;
       this.expandedConnectorId = null;
       this.selectedOperationId = null;
@@ -477,39 +508,67 @@ export class GroupPermissionsState {
     }
     const available = targets.some(
       (connector) =>
-        connector.id === this.initialTarget?.connectorId &&
+        connector.id === target.connectorId &&
         connector.capabilities.some(
-          (capability) => capability.kind === 'tool' && capability.key === this.initialTarget?.operationId
+          (capability) => capability.kind === 'tool' && capability.key === target.operationId
         )
     );
+    if (this.appliedTarget === targetKey && this.deepLinkedTargetAvailable === available) return;
+    this.appliedTarget = targetKey;
     this.deepLinkedTargetAvailable = available;
-    this.expandedConnectorId = available ? this.initialTarget.connectorId : null;
-    this.selectedOperationId = available ? this.initialTarget.operationId : null;
+    this.expandedConnectorId = available ? target.connectorId : null;
+    this.selectedOperationId = available ? target.operationId : null;
   };
 
-  setGroupMenuOpen = (groupId: string, open: boolean): void => {
-    this.openGroupMenuId = open ? groupId : null;
+  discardSelectedDraft = (): void => {
+    if (this.disposed || this.saving || this.selectedGroupId === null) return;
+    const stagedPermissions = { ...stagedFromState(this.pageData) };
+    delete stagedPermissions[this.selectedGroupId];
+    this.pageData = { ...this.pageData, stagedPermissions, pendingGroupId: null, unsavedChangesWarning: null };
   };
 
-  closeGroupMenu = (): void => {
-    this.openGroupMenuId = null;
+  save = async (): Promise<boolean> => {
+    const groupId = this.selectedGroupId;
+    if (!this.canSave || groupId === null || this.selectedPermissionSet === null) return false;
+    const persisted = persistedPermissionSetFromState(this.pageData, groupId) ?? emptyPermissionSet(groupId);
+    const changes = permissionSetDifference(persisted, this.selectedPermissionSet);
+    this.savingInProgress = true;
+    this.saveMessage = null;
+    try {
+      const canonical = await this.saver.save(groupId, changes);
+      if (this.disposed || !this.groupMetadata(groupId)) return false;
+      this.groupCache.set(groupId, clonePermissionSet(canonical));
+      const stagedPermissions = { ...stagedFromState(this.pageData) };
+      delete stagedPermissions[groupId];
+      this.pageData = {
+        ...this.pageData,
+        groups: groupsFromState(this.pageData).map((group) => group.groupId === groupId ? clonePermissionSet(canonical) : group),
+        stagedPermissions
+      };
+      return true;
+    } catch {
+      if (!this.disposed) this.saveMessage = 'Permissions could not be saved. Try again.';
+      return false;
+    } finally {
+      if (!this.disposed) this.savingInProgress = false;
+    }
   };
 
   resolveUnsavedChanges = (decision: UnsavedChangesDecision): void => {
+    if (this.disposed || this.saving) return;
     const result = resolveUnsavedChangesInState(this.pageData, decision);
     this.pageData = { ...result.pageData, currentGroupId: result.selectedGroupId };
     if (decision === 'discard' && result.selectedGroupId !== null) void this.loadSelection(result.selectedGroupId);
   };
 
   markGroupSaved = (groupId: string): void => {
+    if (this.disposed || !this.groupMetadata(groupId)) return;
     const stagedPermissions = { ...stagedFromState(this.pageData) };
-    const stagedNewGroupIds = Array.isArray(this.pageData.stagedNewGroupIds) ? (this.pageData.stagedNewGroupIds as string[]) : [];
     delete stagedPermissions[groupId];
     this.pageData = {
       ...this.pageData,
       currentGroupId: groupId,
-      stagedPermissions,
-      stagedNewGroupIds: stagedNewGroupIds.filter((stagedGroupId) => stagedGroupId !== groupId)
+      stagedPermissions
     };
     this.groupCache.delete(groupId);
     void this.loadSelection(groupId);
@@ -529,7 +588,7 @@ export class GroupPermissionsState {
   };
 
   setConnectorPermission = (connectorId: string, checked: boolean): void => {
-    if (this.selectedGroupId === null) {
+    if (this.disposed || this.saving || this.editorStatus !== 'ready' || this.selectedGroupId === null) {
       return;
     }
 
@@ -565,7 +624,7 @@ export class GroupPermissionsState {
   };
 
   setCapabilityPermission = (capability: GroupPermissionCapabilityRef, checked: boolean): void => {
-    if (this.selectedGroupId === null) {
+    if (this.disposed || this.saving || this.editorStatus !== 'ready' || this.selectedGroupId === null) {
       return;
     }
 

@@ -11,4 +11,4 @@ description: "Database driver composition, schema readiness and explicit legacy 
 - [personal_discovery.py](./personal_discovery.py) — Bootstrap-only missing owner projections with per-owner conditional transactions.
 - [group_reconciliation.py](./group_reconciliation.py) — Persisted group catalogue reconciliation.
 - [inmemory/](./inmemory/) — In-memory database adapter.
-- [sqlite/](./sqlite/) — SQLite database adapter and schema upgrades.
+- [sqlite/](./sqlite/) — SQLite database adapter and transactional legacy group metadata upgrades.

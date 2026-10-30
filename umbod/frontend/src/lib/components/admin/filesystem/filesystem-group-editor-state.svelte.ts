@@ -3,8 +3,9 @@ import type { FilesystemAccessState, FilesystemGroup } from './filesystem-access
 
 export class FilesystemGroupEditorState {
   selectedId = $state<string | null>(null);
-  constructor(private readonly access: () => FilesystemAccessState) {}
+  constructor(private readonly access: () => FilesystemAccessState, private readonly selection?: () => string | null) {}
   get selected(): FilesystemGroup | null {
+    if (this.selection) return this.access().groupEntries.find((group) => group.id === this.selection!()) ?? null;
     return this.access().groupEntries.find((group) => group.id === this.selectedId) ?? this.access().groupEntries[0] ?? null;
   }
   get permissions(): Permission[] { return this.selected?.permissions ?? []; }

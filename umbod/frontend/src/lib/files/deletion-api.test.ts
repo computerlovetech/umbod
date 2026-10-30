@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { AuthenticationRequiredError, browserTransport, HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
 import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
 import { FilesApi } from './infrastructure/files-api';
-import { InMemoryFilesApi } from './infrastructure/in-memory-api';
+import { InMemoryFilesApi } from './infrastructure/in-memory-api.test-support';
 import { fileId, filesystemFixture, folderId, rootId } from './fixtures.test-support';
 
 const configuration = new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' });

@@ -22,6 +22,21 @@ def test_local_dev_recipe_uses_simulation_and_single_test_user(monkeypatch: Monk
     assert config.mcp.metrics_port == 8012
 
 
+def test_local_dev_preserves_explicit_directory_issuer_without_enabling_oidc(
+    monkeypatch: MonkeyPatch,
+) -> None:
+    config = _config(
+        monkeypatch,
+        UMBOD_AUTH="dev",
+        UMBOD_OIDC_ISSUER_URL="http://localhost:18010/dev-issuer",
+    )
+
+    assert config.oidc.issuer_url == "http://localhost:18010/dev-issuer"
+    assert config.oidc.config_url == ""
+    assert config.admin_authentication.mode == "simulation"
+    assert config.mcp.auth_mode == "single_test_user"
+
+
 def test_local_none_recipe_disables_admin_and_mcp_auth(monkeypatch: MonkeyPatch) -> None:
     config = _config(monkeypatch, UMBOD_AUTH="none")
 

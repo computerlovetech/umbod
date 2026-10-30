@@ -33,7 +33,6 @@
     <a class="admin-back-link" href="/admin/connectors">← Connectors</a>
 
     {#if data.status === 'ready'}
-      <p class="admin-eyebrow">Connector configuration</p>
       <h1 class="admin-title">{data.connector.name}</h1>
       <ConnectorConfigurationForm connector={data.connector} fields={data.fields} {form} operation="saveConfigurationAndReturn" />
     {:else}

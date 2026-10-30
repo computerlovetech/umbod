@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Header
 
 from ..deps import require_filesystem_identity
 from .deps import not_implemented
-from .models import PatchNodeRequest, PlannedErrorResponse, PutAccessRequest
+from .models import PatchNodeRequest, PlannedErrorResponse
 
 PLANNED_RESPONSES = {
     501: {
@@ -42,16 +42,4 @@ async def put_content(node_id: UUID, if_match: Revision) -> NoReturn:
 @router.patch("/nodes/{node_id}", status_code=501, response_model=PlannedErrorResponse,
               summary="Planned: rename or move node", openapi_extra=PLANNED_OPERATION)
 async def patch_node(node_id: UUID, body: PatchNodeRequest, if_match: Revision) -> NoReturn:
-    not_implemented()
-
-
-@router.get("/nodes/{node_id}/access", status_code=501, response_model=PlannedErrorResponse,
-            summary="Planned: inspect node access", openapi_extra=PLANNED_OPERATION)
-async def get_access(node_id: UUID) -> NoReturn:
-    not_implemented()
-
-
-@router.put("/nodes/{node_id}/access", status_code=501, response_model=PlannedErrorResponse,
-            summary="Planned: replace direct access grants", openapi_extra=PLANNED_OPERATION)
-async def put_access(node_id: UUID, body: PutAccessRequest, if_match: Revision) -> NoReturn:
     not_implemented()

@@ -2,7 +2,7 @@ import { Window } from 'happy-dom';
 import { describe, expect, test, vi } from 'vitest';
 import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
 import { deferred, fileId, filesystemFixture, filesystemNode, folderId, rootId } from '../fixtures.test-support';
-import { InMemoryFilesApi } from '../infrastructure/in-memory-api';
+import { InMemoryFilesApi } from '../infrastructure/in-memory-api.test-support';
 import { UploadState } from './upload-state.svelte';
 import { FilesState } from './files-state.svelte';
 import type { DeletionState } from './deletion-state.svelte';

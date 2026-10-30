@@ -1,8 +1,10 @@
 <script lang="ts">
-  import FilesystemAccessPage from '$lib/components/admin/filesystem/FilesystemAccessPage.svelte';
-  import type { PageData } from './$types';
-  let { data }: { data: PageData } = $props();
+  import FilesystemAccessEditor from '$lib/components/admin/filesystem/FilesystemAccessEditor.svelte';
+  import { getGroupPermissionsWorkspace } from '$lib/components/admin/group-permissions/group-permissions-context';
+
+  const workspace = getGroupPermissionsWorkspace();
 </script>
 
 <svelte:head><title>Filesystem · Group permissions</title></svelte:head>
-<FilesystemAccessPage accountIdentity={data.accountIdentity ?? { kind: 'hidden' }} />
+
+<FilesystemAccessEditor state={workspace.filesystem} editor={workspace.filesystemEditor} />

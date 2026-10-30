@@ -19,6 +19,7 @@ from .errors import filesystem_errors
 from .models import ChildrenResponse, CreateNodeRequest
 from .planned.routes import router as planned_router
 from .uploads import router as uploads_router
+from .sharing import router as sharing_router
 
 router = APIRouter(prefix="/filesystem", tags=["filesystem"])
 
@@ -71,6 +72,7 @@ async def create_directory(
         return await creation.create_directory(caller, parent_id, body.name, body.metadata.to_core_metadata())
 
 
+router.include_router(sharing_router)
 router.include_router(deletion_router)
 router.include_router(planned_router)
 router.include_router(uploads_router)

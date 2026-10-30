@@ -2,6 +2,7 @@ from typing import Annotated
 
 from fastapi import Depends
 
+from umbod.config.identity_policy import filesystem_managed_issuer
 from umbod.core.callers import CallerContext, CallerSnapshot, group_membership_from_values
 from umbod.core.filesystem import ContentDriver, FilesystemCreation, Principal, PrincipalType
 from umbod.core.filesystem.content import ContentService, FilesystemContent
@@ -11,10 +12,11 @@ from umbod.core.filesystem.authorization import (
     PermissionDenied, UnresolvedIdentity,
 )
 from umbod.core.filesystem.browsing import FilesystemBrowsing
+from umbod.core.filesystem.sharing import FilesystemSharing
 from umbod.core.persistence import Database
 from umbod.infrastructure import (
     create_filesystem_browsing, create_filesystem_creation, create_filesystem_transactions,
-    create_filesystem_uploads,
+    create_filesystem_uploads, create_filesystem_sharing,
 )
 from umbod.rest.authentication.local import LOCAL_DEVELOPMENT_ISSUER, local_rest_identity_enabled
 from umbod.rest.authentication.authorization import JwtClaims
@@ -73,6 +75,17 @@ def get_filesystem_browsing(
     resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
 ) -> FilesystemBrowsing:
     return create_filesystem_browsing(database=database, resolver=resolver)
+
+
+def get_filesystem_sharing(
+    database: Annotated[Database, Depends(get_filesystem_database)],
+    resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
+    factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
+) -> FilesystemSharing:
+    config = factories.settings
+    issuer = filesystem_managed_issuer(config)
+    with filesystem_errors():
+        return create_filesystem_sharing(database=database, resolver=resolver, issuer=issuer)
 
 
 def get_filesystem_upload_limit(

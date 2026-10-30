@@ -3,7 +3,7 @@ import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationE
 import type { FilesApi } from '../api';
 import type { NodeSummary } from '../domain/schemas';
 import { deferred, filesystemFixture, folderId, rootId } from '../fixtures.test-support';
-import { InMemoryFilesApi } from '../infrastructure/in-memory-api';
+import { InMemoryFilesApi } from '../infrastructure/in-memory-api.test-support';
 import { FilesState } from './files-state.svelte';
 import { UploadState } from './upload-state.svelte';
 

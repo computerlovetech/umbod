@@ -8,6 +8,7 @@
   type AdminShellActiveItem =
     | 'overview'
     | 'connectors'
+    | 'groups'
     | 'groupPermissions'
     | 'instanceConfiguration';
 
@@ -16,11 +17,12 @@
     accountIdentity: HeaderAccountIdentityState;
     contentWidth?: 'default' | 'wide';
     contentLoading?: boolean;
+    navigationScope?: string;
     children: Snippet;
     logout?: LogoutNavigation;
   };
 
-  let { activeItem, accountIdentity, contentWidth = 'default', contentLoading = false, children, logout = logoutNavigation }: AdminShellProps = $props();
+  let { activeItem, accountIdentity, contentWidth = 'default', contentLoading = false, navigationScope, children, logout = logoutNavigation }: AdminShellProps = $props();
 
   const navigationItems = workspaceNavigation(true);
 </script>
@@ -32,6 +34,7 @@
   {accountIdentity}
   {contentWidth}
   {contentLoading}
+  {navigationScope}
   {logout}
 >
   {@render children()}

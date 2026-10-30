@@ -3,7 +3,7 @@ import { browserTransport, SchemaValidationError } from '$lib/admin/infrastructu
 import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
 import { beginUploadSchema, rawUploadSchema, uploadSessionSchema, type UploadSession } from './domain/schemas';
 import { FilesApi } from './infrastructure/files-api';
-import { InMemoryFilesApi } from './infrastructure/in-memory-api';
+import { InMemoryFilesApi } from './infrastructure/in-memory-api.test-support';
 import { HttpUploadTransfer } from './infrastructure/upload-transfer';
 import { fileId, filesystemFixture, filesystemNode, rootId } from './fixtures.test-support';
 

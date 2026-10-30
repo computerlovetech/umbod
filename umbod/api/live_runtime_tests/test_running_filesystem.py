@@ -229,8 +229,12 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
         })
         assert private_upload.status_code == 403
         async with mcp_client(second_mcp, alice_token) as alice_mcp, mcp_client(runtime_endpoints.mcp_url, bob_token) as bob_mcp:
-            assert tool_payload(await alice_mcp.call_tool("get_filesystem_root", {})) == root
-            assert tool_payload(await alice_mcp.call_tool("get_filesystem_node", {"node_id": alice_directory["id"]})) == alice_directory
+            assert tool_payload(await alice_mcp.call_tool("get_filesystem_root", {})) == {
+                **root, "sharing": {"can_share": False},
+            }
+            assert tool_payload(await alice_mcp.call_tool("get_filesystem_node", {"node_id": alice_directory["id"]})) == {
+                **alice_directory, "sharing": {"can_share": True, "grants": []},
+            }
             denied = await bob_mcp.call_tool("get_filesystem_node", {"node_id": alice_directory["id"]}, raise_on_error=False)
             assert denied.is_error
             assert "filesystem_permission_denied" in denied.content[0].text
@@ -264,8 +268,13 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             listed = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
                 "operation": "ls", "target": browse_target,
             }))["result"]
-            assert listed["node"] == alice_directory
+            assert listed["node"] == {**alice_directory, "sharing": {"can_share": True, "grants": []}}
             assert {node["id"] for node in listed["entries"]} == {alice_file["id"], uploaded["id"]}
+            assert all(node["sharing"] == {"can_share": True, "grants": []} for node in listed["entries"])
+            legacy_children = tool_payload(await alice_mcp.call_tool("list_filesystem_children", {"parent_id": alice_directory["id"]}))
+            assert {node["id"]: node for node in legacy_children["nodes"]} == {
+                node["id"]: node for node in listed["entries"]
+            }
             assert listed["breadcrumbs"]["complete"] is True
             limited = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
                 "operation": "ls", "target": browse_target, "max_entries": 1,
@@ -275,11 +284,13 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             inspected = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
                 "operation": "stat", "target": {"type": "path", "path": "/" + name + "/draft"},
             }))["result"]
-            assert inspected["node"] == alice_file
+            assert inspected["node"] == {**alice_file, "sharing": {"can_share": True, "grants": []}}
             tree = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
                 "operation": "tree", "target": browse_target, "depth": 2,
             }))["result"]
             assert {entry["node"]["id"] for entry in tree["entries"]} == {alice_file["id"], uploaded["id"]}
+            assert tree["node"]["sharing"] == {"can_share": True, "grants": []}
+            assert all(entry["node"]["sharing"] == {"can_share": True, "grants": []} for entry in tree["entries"])
             private_tree = await bob_mcp.call_tool("filesystem_browse", {
                 "operation": "tree", "target": browse_target,
             }, raise_on_error=False)
@@ -356,7 +367,9 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
                 [alice_directory, alice_file], False,
             )
             checked_breadcrumbs(bob.get(FILESYSTEM + "/nodes/" + bob_file["id"] + "/breadcrumbs"), [bob_file], False)
-            assert tool_payload(await bob_mcp.call_tool("get_filesystem_node", {"node_id": bob_file["id"]})) == bob_file
+            assert tool_payload(await bob_mcp.call_tool("get_filesystem_node", {"node_id": bob_file["id"]})) == {
+                **bob_file, "sharing": {"can_share": True, "grants": []},
+            }
             assert tool_payload(await bob_mcp.call_tool("filesystem_read_file", {
                 "node_id": bob_file["id"], "encoding": "utf-8", "max_bytes": 0,
             })) == {
@@ -379,8 +392,6 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
     ("GET", "/nodes?scope=shared", {}),
     ("PUT", "/nodes/{id}/content", {}),
     ("PATCH", "/nodes/{id}", {"name": "renamed"}),
-    ("GET", "/nodes/{id}/access", {}),
-    ("PUT", "/nodes/{id}/access", {"grants": []}),
 ])
 def test_planned_filesystem_endpoints_return_explicit_unimplemented_responses(
     runtime_endpoints: RuntimeEndpoints, method: str, suffix: str, body: dict[str, Any],

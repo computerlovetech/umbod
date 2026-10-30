@@ -1,7 +1,7 @@
 ---
 type: Software Module
 title: "Shared group catalogue"
-description: "Ports and adapters for registering exact group claim values independently of grants."
+description: "Exact group identities, central labels, descriptions and revision-aware catalogue adapters."
 ---
 
 # Files

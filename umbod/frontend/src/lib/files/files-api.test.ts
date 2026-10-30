@@ -5,7 +5,7 @@ import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/p
 import type { FilesApi } from './api';
 import { childrenSchema, createFolderSchema, fileNameSchema, fileUploadSchema, nodeSummarySchema, type FileUpload } from './domain/schemas';
 import { FilesApi as HttpFilesApi } from './infrastructure/files-api';
-import { InMemoryFilesApi } from './infrastructure/in-memory-api';
+import { InMemoryFilesApi } from './infrastructure/in-memory-api.test-support';
 import { fileId, filesystemFixture, filesystemNode, folderId, rootId } from './fixtures.test-support';
 
 function session(): import('./domain/schemas').UploadSession {

@@ -5,6 +5,7 @@
   import Button from '$lib/components/admin/shared/Button.svelte';
   import AdminShell from '$lib/components/admin/AdminShell.svelte';
   import ConnectorCatalogModal from '$lib/components/admin/connectors/ConnectorCatalogModal.svelte';
+  import ConnectorListEmptyState from '$lib/components/admin/connectors/ConnectorListEmptyState.svelte';
   import ConnectorList from '$lib/components/admin/connectors/ConnectorList.svelte';
   import ConnectorPageHeader from '$lib/components/admin/connectors/ConnectorPageHeader.svelte';
   import { ConnectorCatalogState } from '$lib/components/admin/connectors/connector-catalog-state.svelte';
@@ -79,7 +80,7 @@
         />
       {/key}
     {:else if data.status === 'empty'}
-      <p class="admin-message">{data.message}</p>
+      <ConnectorListEmptyState message={data.message} />
     {:else}
       <div class="admin-message admin-message-error failure-state">
         <p>{data.message}</p>

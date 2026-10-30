@@ -78,8 +78,14 @@ class OidcIdTokenUserProfileProvider:
         self.fallback = fallback
 
     def get_profile(self, profile_input: UserProfileInput) -> UserProfile:
-        if not profile_input.header_present:
+        claims = self.resolve_claims(profile_input)
+        if claims is profile_input.access_claims:
             return self.fallback.get_profile(profile_input)
+        return self.mapper.map(claims)
+
+    def resolve_claims(self, profile_input: UserProfileInput) -> JwtClaims:
+        if not profile_input.header_present:
+            return profile_input.access_claims
         try:
             claims = self.verifier.verify(profile_input.token)
             subject = claims.claims.get("sub")
@@ -101,5 +107,5 @@ class OidcIdTokenUserProfileProvider:
             logger.warning(
                 "User profile enrichment rejected", extra={"reason_category": reason}
             )
-            return self.fallback.get_profile(profile_input)
-        return self.mapper.map(claims)
+            return profile_input.access_claims
+        return claims

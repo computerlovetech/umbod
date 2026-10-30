@@ -116,6 +116,9 @@ class SessionAccessControl:
     async def add_grant(self, grant: AccessGrant) -> None:
         if grant.principal.type == PrincipalType.GROUP:
             await register_group_in_session(self._session, grant.principal.id)
+        await self.upsert_registered_grant(grant)
+
+    async def upsert_registered_grant(self, grant: AccessGrant) -> None:
         key = grant_key(grant.node_id, grant.principal)
         await self._session.upsert(
             GRANT_TABLE,

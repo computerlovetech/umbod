@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { FilesApi } from '../api';
 import { filesystemFixture, rootId } from '../fixtures.test-support';
-import { InMemoryFilesApi } from '../infrastructure/in-memory-api';
+import { InMemoryFilesApi } from '../infrastructure/in-memory-api.test-support';
 import { FileDropState } from './file-drop-state.svelte';
 import { FilesState } from './files-state.svelte';
 import { UploadState } from './upload-state.svelte';

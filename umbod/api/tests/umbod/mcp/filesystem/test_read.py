@@ -256,7 +256,7 @@ async def test_each_read_captures_once_opens_once_and_creates_fresh_service(file
 async def test_read_cap_is_independent_of_configured_upload_limit(filesystem_mcp: FilesystemMcp) -> None:
     async with Client(filesystem_mcp.server) as client:
         published = await upload(client, await root_id(client), {"encoding": "utf-8", "text": "readable"})
-    factory = DatabaseFilesystemServiceFactory(filesystem_mcp.database, filesystem_mcp.content, 0)
+    factory = DatabaseFilesystemServiceFactory(filesystem_mcp.database, filesystem_mcp.content, 0, "https://issuer")
     first = factory.content()
     assert first is not factory.content()
     result = await FilesystemReadFileTool(filesystem_mcp.callers, factory).run({

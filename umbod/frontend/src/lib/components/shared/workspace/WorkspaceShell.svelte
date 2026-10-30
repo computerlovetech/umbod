@@ -18,6 +18,7 @@
     navigationLabel?: string;
     contentWidth?: 'default' | 'wide';
     contentLoading?: boolean;
+    navigationScope?: string;
     children: Snippet;
     logout?: LogoutNavigation;
   };
@@ -26,14 +27,15 @@
     workspaceLabel, homeHref, navigationItems, activeItem,
     accountIdentity = { kind: 'hidden' }, accountFallback = 'Account',
     sidebarLabel = workspaceLabel + ' sidebar', navigationLabel = workspaceLabel + ' navigation',
-    contentWidth = 'default', contentLoading = false, children, logout = logoutNavigation
+    contentWidth = 'default', contentLoading = false, navigationScope, children, logout = logoutNavigation
   }: Props = $props();
 
   const state = new WorkspaceShellState(() => ({
     activeItem,
     navigationItems,
     destinationPath: navigating.to?.url.pathname ?? null,
-    originPath: navigating.from?.url.pathname ?? null
+    originPath: navigating.from?.url.pathname ?? null,
+    navigationScope
   }));
 </script>
 

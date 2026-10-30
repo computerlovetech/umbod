@@ -11,6 +11,7 @@ describe('instance settings view', () => {
       { variable: 'UMBOD_PUBLIC_MCP_ORIGIN', label: 'MCP origin', description: 'Server address explanation', type: 'string', value: 'https://mcp.example.com' }
     ] }] } } } });
     expect(body).toContain('Instance settings');
+    expect(body).not.toContain('admin-eyebrow');
     expect(body).toContain('Read-only · Deployment managed');
     expect(body).toContain('Essentials');
     expect(body).toContain('Team instance');

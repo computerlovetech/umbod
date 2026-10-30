@@ -6,6 +6,7 @@ from ..models import (
     PrincipalType, RootParent,
 )
 from ..namespace import ROOT_ID
+from ..group_policy import canonical_grants, editable_grant
 from .errors import PolicyConflict, PolicyRevisionConflict, PolicyUnavailable
 from .models import (
     GroupPolicy, RootGroupPolicyView, RootPolicyState,
@@ -40,30 +41,8 @@ def revision(state: RootPolicyState, issuer: str) -> str:
     payload["managed_issuer"] = issuer
     if policy_status(state) != RootPolicyStatus.READY:
         payload["has_children"] = state.has_children
-    payload["grants"] = sorted(
-        [
-            {
-                **grant.model_dump(mode="json", exclude={"permissions"}),
-                "permissions": sorted(grant.permissions),
-            }
-            for grant in state.grants
-        ],
-        key=lambda grant: (
-            grant["principal"]["type"], grant["principal"]["issuer"],
-            grant["principal"]["id"],
-        ),
-    )
+    payload["grants"] = canonical_grants(state.grants)
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-
-
-def editable_grant(grant: AccessGrant, issuer: str) -> bool:
-    return (
-        grant.principal.type == PrincipalType.GROUP
-        and grant.principal.issuer == issuer
-        and bool(grant.principal.id.strip())
-        and bool(grant.permissions)
-        and not grant.recursive
-    )
 
 
 def policy_view(state: RootPolicyState, issuer: str) -> RootGroupPolicyView:

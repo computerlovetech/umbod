@@ -53,6 +53,7 @@ async def test_browse_discovery_declares_operations_without_constructing_service
 ) -> None:
     factory = Mock(side_effect=AssertionError("Discovery must not access services"))
     monkeypatch.setattr(filesystem_mcp.services, "browsing", factory)
+    monkeypatch.setattr(filesystem_mcp.services, "sharing", factory)
     async with Client(filesystem_mcp.server) as client:
         descriptor = next(tool for tool in await client.list_tools() if tool.name == TOOL)
     assert descriptor.input_schema["type"] == "object"

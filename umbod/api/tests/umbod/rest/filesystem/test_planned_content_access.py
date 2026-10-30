@@ -25,7 +25,7 @@ def test_patch_design_accepts_move_with_optional_rename(
 
 
 @pytest.mark.parametrize("principal_type", ["user", "group"])
-def test_access_design_accepts_direct_user_or_group_grants(
+def test_access_rejects_obsolete_user_or_group_grants(
     filesystem_http: FilesystemHttp, principal_type: str,
 ) -> None:
     response = filesystem_http.client.put(
@@ -34,8 +34,7 @@ def test_access_design_accepts_direct_user_or_group_grants(
             "permissions": ["discover", "read"],
         }]},
     )
-    assert response.status_code == 501
-    assert response.json() == {"detail": DETAIL}
+    assert response.status_code == 422
 
 
 @pytest.mark.parametrize("field,value", [("recursive", True), ("inherited", True), ("owner", "mallory")])

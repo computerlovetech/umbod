@@ -5,7 +5,7 @@ import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { FilesApi } from '$lib/files/api';
 import type { NodeSummary } from '$lib/files/domain/schemas';
 import { deferred, fileId, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
-import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api';
+import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
 import { FilesState, filesHref } from '$lib/files/state/files-state.svelte';
 import { UploadState } from '$lib/files/state/upload-state.svelte';
 import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
@@ -16,6 +16,8 @@ import NewFolderForm from './NewFolderForm.svelte';
 
 const navigation = vi.hoisted(() => ({ callback: undefined as ((event: { to: { url: URL } | null }) => void) | undefined }));
 vi.mock('$app/navigation', () => ({
+  invalidateAll: vi.fn(),
+  goto: vi.fn(),
   afterNavigate: (callback: (event: { to: { url: URL } | null }) => void): void => { navigation.callback = callback; }
 }));
 

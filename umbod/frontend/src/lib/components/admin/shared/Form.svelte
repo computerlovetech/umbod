@@ -4,6 +4,7 @@
   import type { Snippet } from 'svelte';
 
   let {
+    'aria-label': ariaLabel,
     method = 'POST',
     operation,
     enctype,
@@ -12,6 +13,7 @@
     fields,
     actions
   }: {
+    'aria-label'?: string;
     method?: 'GET' | 'POST';
     operation?: string;
     enctype?: 'application/x-www-form-urlencoded' | 'multipart/form-data' | 'text/plain';
@@ -33,7 +35,7 @@
   {/if}
 {/snippet}
 
-<form {method} data-operation={operation} {enctype} {onsubmit} use:browserSubmit={submit}>
+<form aria-label={ariaLabel} {method} data-operation={operation} {enctype} {onsubmit} use:browserSubmit={submit}>
   {@render content()}
 </form>
 

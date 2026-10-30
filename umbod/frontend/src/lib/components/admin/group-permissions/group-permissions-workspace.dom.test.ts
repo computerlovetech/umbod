@@ -1,0 +1,125 @@
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { flushSync, mount, tick, unmount } from 'svelte';
+import { SvelteMap } from 'svelte/reactivity';
+import type { GroupPermissionSet } from '$lib/admin/group-permissions';
+import type { GroupPermissionsTab } from './group-permissions-route-state.svelte';
+import WorkspaceTestHarness from './WorkspaceTestHarness.test-support.svelte';
+import { createWorkspace } from './workspace.test-support';
+
+vi.mock('$app/state', () => ({ navigating: { to: null, from: null } }));
+let component: ReturnType<typeof mount> | undefined;
+
+afterEach(async (): Promise<void> => {
+  if (component) await unmount(component);
+  component = undefined;
+  document.body.replaceChildren();
+});
+
+const settle = async (): Promise<void> => { await tick(); await tick(); await tick(); };
+
+describe('persistent group permissions composition', () => {
+  it('replaces only active detail content and retains chrome, selection and both drafts', async (): Promise<void> => {
+    const fixture = createWorkspace();
+    const { state } = fixture;
+    const inputs = new SvelteMap<string, GroupPermissionsTab>([['tab', 'connectors']]);
+    state.activate('connectors');
+    await vi.waitFor(() => expect(state.connectors?.editorStatus).toBe('ready'));
+    component = mount(WorkspaceTestHarness, { target: document.body, props: { state, get tab(): GroupPermissionsTab { return inputs.get('tab')!; } } });
+    flushSync();
+    const selectors = ['.workspace-shell', '[aria-label="Workspace navigation"]', '.page-header', '.permission-tabs', '.admin-split-workspace', 'aside[aria-label="Groups"]', '.groups', '.group-header'];
+    const nodes = selectors.map((selector) => document.querySelector(selector));
+    const firstCheckbox = document.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+    firstCheckbox.click();
+    await settle();
+    expect(state.connectors?.hasUnsavedChanges).toBe(true);
+    state.activate('filesystem');
+    inputs.set('tab', 'filesystem');
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Browse root'));
+    expect(firstCheckbox.isConnected).toBe(false);
+    const read = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find((input) => input.closest('label')?.textContent?.trim() === 'Read')!;
+    read.click();
+    await settle();
+    state.activate('connectors');
+    inputs.set('tab', 'connectors');
+    await settle();
+    expect(document.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
+    expect(read.isConnected).toBe(false);
+    expect(state.filesystem.dirty).toBe(true);
+    selectors.forEach((selector, index) => expect(document.querySelector(selector)).toBe(nodes[index]));
+    const readers = [...document.querySelectorAll<HTMLButtonElement>('aside[aria-label="Groups"] button')].find((button) => button.textContent?.includes('Readers'))!;
+    readers.click();
+    await settle();
+    expect(document.body.textContent).toContain('unsaved connector changes');
+    const discard = [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Discard changes')!;
+    discard.click();
+    await settle();
+    expect(document.querySelector('.group-header h2')?.textContent).toBe('Readers');
+    expect(state.selectedGroupId).toBe('b');
+    state.activate('filesystem');
+    inputs.set('tab', 'filesystem');
+    await settle();
+    expect(state.filesystemEditor.selected?.group_id).toBe('b');
+    expect(fixture.list).not.toHaveBeenCalled();
+    expect(fixture.root).toHaveBeenCalledTimes(1);
+    expect(fixture.targets).toHaveBeenCalledTimes(1);
+    state.dispose();
+  });
+
+  it('offers explicit confirmed recovery after a filesystem save failure without remounting the workspace', async (): Promise<void> => {
+    const { state, filesystem } = createWorkspace();
+    vi.spyOn(filesystem, 'replaceRootAccess').mockRejectedValueOnce(new Error('Temporary failure'));
+    state.activate('filesystem');
+    await vi.waitFor(() => expect(state.filesystem.saved).not.toBeNull());
+    component = mount(WorkspaceTestHarness, { target: document.body, props: { state, tab: 'filesystem' } });
+    flushSync();
+    const shell = document.querySelector('.workspace-shell');
+    const read = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find((input) => input.closest('label')?.textContent?.trim() === 'Read')!;
+    read.click();
+    await settle();
+    document.querySelector<HTMLButtonElement>('button[aria-label="Save permissions"]')!.click();
+    await settle();
+    expect(state.filesystem.blocked).toBe(true);
+    const recovery = [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Reload policy')!;
+    recovery.click();
+    await settle();
+    expect(state.filesystem.confirmation).toBe('reload');
+    expect(state.filesystem.dirty).toBe(true);
+    const discard = [...document.querySelectorAll<HTMLButtonElement>('dialog button')].find((button) => button.textContent === 'Discard and reload')!;
+    discard.click();
+    await settle();
+    expect(state.filesystem.blocked).toBe(false);
+    expect(state.filesystem.dirty).toBe(false);
+    expect(document.querySelector('.workspace-shell')).toBe(shell);
+    expect(state.selectedGroupId).toBe('a');
+    state.dispose();
+  });
+
+  it('reconciles a save after its form unmounts on a tab change', async (): Promise<void> => {
+    let complete!: (value: GroupPermissionSet) => void;
+    const save = vi.fn((): Promise<GroupPermissionSet> => new Promise((resolve) => { complete = resolve; }));
+    const { state } = createWorkspace({ save });
+    const inputs = new SvelteMap<string, GroupPermissionsTab>([['tab', 'connectors']]);
+    state.activate('connectors');
+    await vi.waitFor(() => expect(state.connectors?.editorStatus).toBe('ready'));
+    component = mount(WorkspaceTestHarness, { target: document.body, props: { state, get tab(): GroupPermissionsTab { return inputs.get('tab')!; } } });
+    flushSync();
+    document.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click();
+    await settle();
+    document.querySelector<HTMLButtonElement>('button[aria-label="Save permissions"]')!.click();
+    await settle();
+    expect(save).toHaveBeenCalledTimes(1);
+    state.activate('filesystem');
+    inputs.set('tab', 'filesystem');
+    await settle();
+    complete({ groupId: 'a', connectorIds: ['reports'], capabilities: [] });
+    await settle();
+    state.activate('connectors');
+    inputs.set('tab', 'connectors');
+    await settle();
+    expect(state.connectors?.saving).toBe(false);
+    expect(state.connectors?.hasUnsavedChanges).toBe(false);
+    expect(document.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>('button[aria-label="Save permissions"]')?.disabled).toBe(true);
+    state.dispose();
+  });
+});

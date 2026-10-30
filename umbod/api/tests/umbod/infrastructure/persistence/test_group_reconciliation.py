@@ -7,6 +7,7 @@ import pytest_asyncio
 
 from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
 from umbod.core.persistence import Database, InsertCommand, TransactionMode
+from umbod.core.groups import UpdateGroupMetadata
 from umbod.core.groups.stores.composition import create_group_management
 from umbod.core.filesystem.models import (
     AccessGrant,
@@ -21,6 +22,7 @@ from umbod.core.filesystem.stores.schema import (
     GrantRecord,
     OwnershipRecord,
 )
+from umbod.core.permissions.domain import SaveGroupPermissionsRequest
 from umbod.core.permissions.factories import create_group_permission_store
 from umbod.core.permissions.stores.schema import (
     CAPABILITY_PERMISSION_TABLE,
@@ -48,7 +50,7 @@ async def database(
         await runtime.shutdown()
 
 
-def group_principal(group_id: str, issuer: str = "issuer") -> Principal:
+def group_principal(group_id: str, issuer: str) -> Principal:
     return Principal(type=PrincipalType.GROUP, issuer=issuer, id=group_id)
 
 
@@ -112,3 +114,13 @@ async def test_reconciliation_preserves_legacy_identities_and_all_policy_rows(
     store = await create_group_permission_store(database)
     assert (await store.list_group_permissions("")).connector_ids == ("legacy",)
     assert len((await store.list_group_permissions(" Mixed ")).capabilities) == 1
+    management = create_group_management(database)
+    updated = await management.update_group_metadata(" Mixed ", UpdateGroupMetadata(label="Edited", description="Preserved", expected_revision=1))
+    await reconcile_group_catalogue(database)
+    assert updated in await management.list_groups()
+    await store.save_group_permissions(
+        SaveGroupPermissionsRequest(
+            group_id=" Mixed ", connector_ids=("legacy",), capabilities=()
+        )
+    )
+    assert updated in await management.list_groups()

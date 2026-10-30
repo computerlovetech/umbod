@@ -4,7 +4,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { AuthenticationRequiredError, NetworkError } from '$lib/admin/infrastructure/transport';
 import type { FilesApi } from '$lib/files/api';
 import { deferred, filesystemFixture, rootId } from '$lib/files/fixtures.test-support';
-import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api';
+import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
 import { FilesState } from '$lib/files/state/files-state.svelte';
 import { UploadState } from '$lib/files/state/upload-state.svelte';
 import FileUploadForm from './FileUploadForm.svelte';

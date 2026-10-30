@@ -85,6 +85,20 @@ describe('workspace shell public interface', () => {
     expect(body).toContain('aria-current="page">Group permissions');
   });
 
+  test.each([
+    ['/admin/group-permissions/connectors', '/admin/group-permissions/filesystem', false],
+    ['/admin/group-permissions/filesystem', '/admin/group-permissions/connectors', false],
+    ['/admin/group-permissions/connectors', '/admin/groups', true],
+    ['/admin/groups', '/admin/group-permissions/filesystem', true],
+    ['/admin/group-permissions-other', '/admin/group-permissions/filesystem', true]
+  ] as const)('scoped navigation from %s to %s marks shell pending: %s', (originPath, destinationPath, pending): void => {
+    const state = new WorkspaceShellState(() => ({
+      activeItem: 'groupPermissions', navigationItems, originPath, destinationPath,
+      navigationScope: '/admin/group-permissions'
+    }));
+    expect(state.navigationPending).toBe(pending);
+  });
+
   test('explicit logout blocks duplicate submissions', async () => {
     const state = new WorkspaceShellState(() => ({
       activeItem: 'dashboard', navigationItems, destinationPath: null, originPath: null

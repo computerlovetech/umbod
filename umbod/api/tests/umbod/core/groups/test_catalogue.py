@@ -13,6 +13,10 @@ from umbod.core.groups import (
     GroupInUse,
     GroupManagementService,
     RegisterGroup,
+    RegisterGroupMetadata,
+    UpdateGroupMetadata,
+    GroupNotFound,
+    GroupRevisionConflict,
 )
 from tests.support.groups import InMemoryGroupCatalogue
 from umbod.core.groups.stores.composition import (
@@ -311,6 +315,46 @@ async def test_non_group_grants_do_not_register_groups(
     )
     await DatabaseAccessControl(database).add_grant(grant)
     assert await create_group_management(database).list_groups() == ()
+
+
+@pytest.mark.asyncio
+async def test_metadata_updates_preserve_identity_and_duplicate_registration(catalogue: GroupCatalogue) -> None:
+    management = GroupManagementService(catalogue)
+    await management.register_group_metadata(RegisterGroupMetadata(group_id="provider/team", label=" Team ", description="Original"))
+    assert (await management.list_groups())[0].label == "Team"
+    updated = await management.update_group_metadata("provider/team", UpdateGroupMetadata(label=" Edited ", description="Updated", expected_revision=1))
+    assert updated.group_id == "provider/team"
+    assert updated.label == "Edited"
+    assert updated.revision == 2
+    await management.register_group(RegisterGroup(group_id="provider/team"))
+    await management.register_group_metadata(RegisterGroupMetadata(group_id="provider/team", label="Replacement", description="Ignored"))
+    assert await management.list_groups() == (updated,)
+    with pytest.raises(GroupRevisionConflict):
+        await management.update_group_metadata("provider/team", UpdateGroupMetadata(label="Stale", description="", expected_revision=1))
+    assert await management.list_groups() == (updated,)
+
+
+@pytest.mark.asyncio
+async def test_unknown_metadata_update_does_not_register_group(catalogue: GroupCatalogue) -> None:
+    management = GroupManagementService(catalogue)
+    with pytest.raises(GroupNotFound):
+        await management.update_group_metadata("absent", UpdateGroupMetadata(label="Team", description="", expected_revision=1))
+    assert await management.list_groups() == ()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_metadata_updates_have_one_winner(database: Database) -> None:
+    from asyncio import gather
+
+    management = create_group_management(database)
+    await management.register_group(RegisterGroup(group_id="team"))
+    results = await gather(
+        management.update_group_metadata("team", UpdateGroupMetadata(label="First", description="", expected_revision=1)),
+        management.update_group_metadata("team", UpdateGroupMetadata(label="Second", description="", expected_revision=1)),
+        return_exceptions=True,
+    )
+    assert sum(isinstance(result, GroupRevisionConflict) for result in results) == 1
+    assert (await management.list_groups())[0].revision == 2
 
 
 def test_legacy_table_reexport_is_the_same_object() -> None:

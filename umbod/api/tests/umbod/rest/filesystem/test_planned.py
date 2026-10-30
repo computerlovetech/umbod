@@ -15,8 +15,6 @@ OPERATIONS = [
     ("GET", "/nodes?scope=shared", {}),
     ("PUT", "/nodes/{id}/content", {}),
     ("PATCH", "/nodes/{id}", {"name": "renamed"}),
-    ("GET", "/nodes/{id}/access", {}),
-    ("PUT", "/nodes/{id}/access", {"grants": []}),
 ]
 DETAIL = {
     "code": "filesystem_not_implemented",
@@ -91,11 +89,9 @@ def test_planned_mutations_keep_cookie_csrf(
     ("GET", "/nodes?scope=all", {}, {}),
     ("GET", "/nodes/not-a-uuid/breadcrumbs", {}, {}),
     ("GET", "/nodes/not-a-uuid/content", {}, {}),
-    ("GET", "/nodes/not-a-uuid/access", {}, {}),
     ("PUT", "/nodes/not-a-uuid/content", {}, REVISION),
     ("PATCH", "/nodes/not-a-uuid", {"name": "new"}, REVISION),
     ("DELETE", "/nodes/not-a-uuid", {}, REVISION),
-    ("PUT", "/nodes/not-a-uuid/access", {"grants": []}, REVISION),
     ("PATCH", "/nodes/{id}", {}, REVISION),
     ("PATCH", "/nodes/{id}", {"name": None}, REVISION),
     ("PATCH", "/nodes/{id}", {"name": 12}, REVISION),
@@ -104,14 +100,9 @@ def test_planned_mutations_keep_cookie_csrf(
     ("PATCH", "/nodes/{id}", {"parent_id": "not-a-uuid"}, REVISION),
     ("PATCH", "/nodes/{id}", {"owner": "mallory"}, REVISION),
     ("PATCH", "/nodes/{id}", {"grants": []}, REVISION),
-    ("PUT", "/nodes/{id}/access", {"owner": "mallory", "grants": []}, REVISION),
-    ("PUT", "/nodes/{id}/access", {"grants": [{"principal": {
-        "type": "system", "issuer": "umbod:system", "id": "root",
-    }, "permissions": ["write"]}]}, REVISION),
     ("PATCH", "/nodes/{id}", {"name": "new"}, {}),
     ("DELETE", "/nodes/{id}", {}, {"If-Match": "*"}),
     ("PUT", "/nodes/{id}/content", {}, {}),
-    ("PUT", "/nodes/{id}/access", {"grants": []}, {}),
 ])
 def test_planned_requests_validate_contract(
     filesystem_http: FilesystemHttp, method: str, path: str,
@@ -134,6 +125,16 @@ def test_openapi_distinguishes_planned_routes_from_upload_and_download(filesyste
         assert "200" not in operation["responses"]
         if method in ("PUT", "PATCH", "DELETE"):
             assert any(p["name"] == "If-Match" and p["required"] for p in operation["parameters"])
+    planned = [
+        operation for path, methods in paths.items() if path.startswith("/filesystem")
+        for operation in methods.values() if operation.get("x-umbod-status") == "planned"
+    ]
+    assert len(planned) == 3
+    for method in ("get", "put"):
+        access = paths["/filesystem/nodes/{node_id}/access"][method]
+        assert "x-umbod-status" not in access
+        assert "200" in access["responses"]
+        assert "501" not in access["responses"]
     upload = paths["/filesystem/nodes/{parent_id}/uploads"]["post"]
     assert set(upload["requestBody"]["content"]) == {"application/json"}
     assert "201" in upload["responses"] and "501" not in upload["responses"]

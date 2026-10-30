@@ -8,6 +8,7 @@ export interface WorkspaceNavigationContext {
   navigationItems: readonly WorkspaceNavigationItem[];
   destinationPath: string | null;
   originPath: string | null;
+  navigationScope?: string;
 }
 
 export class WorkspaceShellState {
@@ -17,6 +18,9 @@ export class WorkspaceShellState {
 
   get navigationPending(): boolean {
     const context = this.context();
+    const scope = context.navigationScope;
+    const withinScope = (path: string | null): boolean => !!scope && path !== null && (path === scope || path.startsWith(`${scope}/`));
+    if (withinScope(context.originPath) && withinScope(context.destinationPath)) return false;
     return context.destinationPath !== null && context.destinationPath !== context.originPath;
   }
 

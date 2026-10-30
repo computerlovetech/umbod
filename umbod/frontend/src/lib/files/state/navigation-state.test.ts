@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
 import type { Breadcrumbs, NodeSummary } from '../domain/schemas';
 import { deferred, fileId, filesystemFixture, filesystemNode, folderId, rootId } from '../fixtures.test-support';
-import { InMemoryFilesApi } from '../infrastructure/in-memory-api';
+import { InMemoryFilesApi } from '../infrastructure/in-memory-api.test-support';
 import { FilesState } from './files-state.svelte';
 
 const siblingId = '00000000-0000-4000-8000-000000000004';

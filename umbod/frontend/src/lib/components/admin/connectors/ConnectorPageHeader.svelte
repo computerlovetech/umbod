@@ -14,7 +14,6 @@
 
 <div class="connector-page-header">
   <div>
-    <p class="admin-eyebrow">Umbod / Connectors</p>
     <h1 class="admin-title" id={headingId} tabindex="-1">{title}</h1>
     <p class="admin-lede">{lede}</p>
   </div>
@@ -31,7 +30,6 @@
 
   .connector-page-header :global(.admin-shared-button) {
     flex-shrink: 0;
-    margin-top: 26px;
   }
 
   .plus {

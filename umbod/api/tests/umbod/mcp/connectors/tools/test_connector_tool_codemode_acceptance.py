@@ -25,7 +25,7 @@ async def test_codemode_exposes_conventional_and_openapi_discovery_without_opena
 
     tool_names = await agent.list_tool_names()
 
-    assert tool_names == {"search_tools", "execute_code"} | {"filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_delete_file", "filesystem_read_file"}
+    assert tool_names == {"search_tools", "execute_code"} | {"filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_delete_file", "filesystem_read_file", "filesystem_list_sharing_groups", "filesystem_share"}
     assert "execute_openapi_capability" not in tool_names
 
 

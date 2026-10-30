@@ -36,6 +36,17 @@ describe('admin connector shared presentation', () => {
     expect(pageHeader).toContain('<Button');
   });
 
+  test('all connector list empty branches compose the shared presenter', () => {
+    for (const component of [connectorPage, connectorList, openApiConnectorList, downstreamMcpWorkspace]) {
+      expect(component).toContain('import ConnectorListEmptyState');
+      expect(component).toContain('<ConnectorListEmptyState message=');
+    }
+    expect(connectorPage).toContain('<ConnectorListEmptyState message={data.message} />');
+    expect(openApiConnectorList).toContain('<ConnectorListEmptyState message={data.message} />');
+    expect(openApiConnectorList).not.toContain('.empty-note');
+    expect(downstreamMcpWorkspace).not.toContain('class="empty"');
+  });
+
   test('keeps connector workspaces keyed without effect synchronization', () => {
     expect(connectorPage).toContain('{#key data}');
     expect(openApiPage).toContain('{#key data}');

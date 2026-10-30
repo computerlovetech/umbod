@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 
 from umbod.core.persistence import Database, DatabaseSession, TransactionMode
 from ..authorization.errors import PermissionDenied
+from ..sharing.errors import InvalidSharingPolicy, SharingPolicyUnavailable
 from ..content.errors import UploadTooLarge
 from ..uploads.errors import UploadSessionError
 from ..administration.errors import PolicyConflict, PolicyRevisionConflict
@@ -27,6 +28,8 @@ async def storage_session(
             yield session
     except (
         PermissionDenied,
+        InvalidSharingPolicy,
+        SharingPolicyUnavailable,
         UploadTooLarge,
         UploadSessionError,
         PolicyConflict,

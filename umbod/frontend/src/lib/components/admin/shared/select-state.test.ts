@@ -9,19 +9,20 @@ const options: SelectOption[] = [
 
 describe('SelectState', () => {
   test('opens at the selected option and closes after selection', () => {
-    const state = new SelectState(options, 'first');
+    let value = 'first';
+    const state = new SelectState(() => options, () => value);
 
     state.open();
     expect(state.isOpen).toBe(true);
     expect(state.activeValue).toBe('first');
 
-    expect(state.select('last')).toBe('last');
+    value = state.select('last') ?? value;
     expect(state.selectedValue).toBe('last');
     expect(state.isOpen).toBe(false);
   });
 
   test('traverses enabled options and wraps in both directions', () => {
-    const state = new SelectState(options, 'first');
+    const state = new SelectState(() => options, () => 'first');
 
     state.open();
     state.moveNext();
@@ -33,7 +34,7 @@ describe('SelectState', () => {
   });
 
   test('moves to boundaries and rejects disabled selection', () => {
-    const state = new SelectState(options, 'first');
+    const state = new SelectState(() => options, () => 'first');
 
     state.open();
     state.moveLast();
@@ -43,6 +44,24 @@ describe('SelectState', () => {
     expect(state.select('disabled')).toBeUndefined();
     expect(state.selectedValue).toBe('first');
   });
+});
+
+test('reads current controlled options and value and rejects removed choices', () => {
+  let currentOptions = options;
+  let value = 'first';
+  const state = new SelectState(() => currentOptions, () => value);
+  state.open();
+  state.moveLast();
+  currentOptions = [{ value: 'new result', label: 'New result' }];
+  value = 'new result';
+  expect(state.selectedOption?.label).toBe('New result');
+  expect(state.activeValue).toBe('new result');
+  expect(state.select('last')).toBeUndefined();
+  state.moveNext();
+  expect(state.activeValue).toBe('new result');
+  currentOptions = [];
+  expect(state.activeValue).toBeUndefined();
+  expect(state.selectedOption).toBeUndefined();
 });
 
 describe('calculateSelectOverlayGeometry', () => {

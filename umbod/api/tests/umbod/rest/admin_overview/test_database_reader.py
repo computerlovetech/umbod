@@ -259,7 +259,7 @@ async def seed_inventory(database: Database, tool_count: int) -> None:
                 capability_key=key, status="enabled", updated_at="now",
             ))
         for group_id in ("readers", "writers", "", "   "):
-            await insert(session, GROUP_TABLE, PermissionGroupRecord(group_id=group_id))
+            await insert(session, GROUP_TABLE, PermissionGroupRecord(group_id=group_id, label=group_id, description="", revision=1))
 
 
 @pytest.mark.parametrize("tool_count", [1, 40, 100])

@@ -13,6 +13,6 @@ description: "Administration presentation and draft state for root filesystem gr
 - [filesystem-components.test.ts](./filesystem-components.test.ts) — Accessible editor tests.
 - [filesystem-group-editor-state.svelte.ts](./filesystem-group-editor-state.svelte.ts) — Selected-group inline permission drafts and blocked assignment guidance.
 - [filesystem-group-editor-state.test.ts](./filesystem-group-editor-state.test.ts) — Group and grant draft tests.
-- [FilesystemAccessEditor.svelte](./FilesystemAccessEditor.svelte) — Policy workspace presentation.
-- [FilesystemAccessPage.svelte](./FilesystemAccessPage.svelte) — Page composition and loading.
+- [FilesystemAccessEditor.svelte](./FilesystemAccessEditor.svelte) — Root policy detail consuming layout-owned editor state.
+- [Group permissions workspace](../group-permissions/README.md) — Persistent shell, catalogue, selection and tab state.
 - [FilesystemConfirmationDialog.svelte](./FilesystemConfirmationDialog.svelte) — Policy confirmation presentation.

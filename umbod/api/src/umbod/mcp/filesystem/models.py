@@ -1,10 +1,35 @@
-from typing import Literal
+from typing import Annotated, Literal, Union
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from umbod.core.filesystem.browsing import NodeSummary
 from umbod.core.filesystem.models import NodeMetadata
+from umbod.core.filesystem.sharing import SharingGrantSummary
+
+
+class AuthorizedSharingMetadata(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    can_share: Literal[True]
+    grants: tuple[SharingGrantSummary, ...]
+
+
+class RestrictedSharingMetadata(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    can_share: Literal[False]
+
+
+SharingMetadata = Annotated[
+    Union[AuthorizedSharingMetadata, RestrictedSharingMetadata], Field(discriminator="can_share"),
+]
+
+
+class FilesystemNodeSummary(NodeSummary):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    sharing: SharingMetadata
 
 
 class FilesystemNodeMetadata(NodeMetadata):
@@ -31,4 +56,4 @@ class FileDeletionResult(BaseModel):
 class FilesystemChildren(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    nodes: list[NodeSummary]
+    nodes: list[FilesystemNodeSummary]

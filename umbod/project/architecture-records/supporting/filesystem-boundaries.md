@@ -34,6 +34,10 @@ The root-access management API accepts only expected_revision and groups; each g
 
 Inspection projects valid nonrecursive groups for that issuer only. Saves replace only that editable scope, including when groups is empty. Foreign-issuer, user/system, recursive, and malformed grants remain unchanged. Nonblank current-issuer group IDs with preserved recursive or malformed grants are blocked from assignment and excluded from editable projection. Revisions cover the original root policy state and all grants plus the exact managed issuer, so authority changes invalidate stale saves. Existing serialized transaction ports provide atomic conflict checks and reconciliation without a persistence migration. This scoped contract does not assert a new architecture decision.
 
+## Direct-node group sharing
+
+[ADR-013](../ADR-013-direct-node-group-sharing.md) defines authorized group-only inspection and replacement, registered-recipient validation, protected grant preservation, and opaque access-policy preconditions. It extends the application boundary without changing direct-node authorization, content revisions, or raw store compatibility.
+
 ## Enforcement
 
 - Keep the exact infrastructure source-package allowlist: persistence and filesystem, plus the root package.

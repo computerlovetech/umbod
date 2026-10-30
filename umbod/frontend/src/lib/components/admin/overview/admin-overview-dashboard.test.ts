@@ -13,6 +13,8 @@ describe('admin overview dashboard SSR', () => {
   test('renders four primary cards and linked family breakdown with genuine zero counts', async () => {
     const body = render(AdminOverviewDashboard, { props: { overview: await emptyOverview() } }).body;
     expect(body).toContain('Configured connectors');
+    expect(body).not.toContain('admin-eyebrow');
+    expect(body).toMatch(/<h1[^>]*>Overview<\/h1>/);
     expect(body).toContain('Enabled / known tools');
     expect(body).toContain('Published connectors');
     expect(body).toContain('Registered permission groups');

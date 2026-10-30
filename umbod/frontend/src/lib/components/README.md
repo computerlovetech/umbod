@@ -7,9 +7,12 @@ description: "Reusable and actor-owned Svelte presentation and interaction modul
 # Files
 
 - [admin/](./admin/) — Administration views and controls.
+- [Connector list empty state](./admin/connectors/ConnectorListEmptyState.svelte) — Consistent empty-list presentation for catalog, OpenAPI, and MCP tabs.
+- [Group management](./admin/groups/README.md) — Central administrator group catalogue forms.
 - [dashboard](./dashboard/README.md) — User catalogue workspace.
 - [feedback/](./feedback/) — Toast presentation and state.
 - [files](./files/README.md) — User filesystem workspace.
+- [Identity observation](./identity-directory/README.md) — Root-mounted browser observation lifecycle.
 - [header/](./header/) — Header and account presentation.
 - [personal-connections](./personal-connections/README.md) — Owner-scoped connection controls.
 - [shared](./shared/README.md) — Actor-independent presentation.

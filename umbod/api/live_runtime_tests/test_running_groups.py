@@ -7,6 +7,10 @@ import pytest
 from conftest import RuntimeEndpoints
 
 
+def registered_group(group_id: str) -> dict[str, object]:
+    return {"group_id": group_id, "label": group_id, "description": "", "revision": 1}
+
+
 @pytest.mark.parametrize("group_id", [".", ".."])
 def test_shared_group_dot_segment_ids_use_body_and_query_operations(
     runtime_endpoints: RuntimeEndpoints, group_id: str,
@@ -42,8 +46,8 @@ def test_shared_catalogue_preserves_exact_group_ids_with_slashes(
         try:
             catalogue = client.get("/api/admin/groups")
             assert catalogue.status_code == 200, catalogue.text
-            assert {"group_id": group_id} in catalogue.json()["groups"]
-            assert {"group_id": group_id.strip()} not in catalogue.json()["groups"]
+            assert registered_group(group_id) in catalogue.json()["groups"]
+            assert group_id.strip() not in [group["group_id"] for group in catalogue.json()["groups"]]
         finally:
             removed = client.delete(path)
             assert removed.status_code == 204, removed.text
@@ -60,7 +64,7 @@ def test_shared_group_registration_rejects_untrusted_cookie_mutation(
         assert rejected.status_code == 403, rejected.text
         catalogue = client.get("/api/admin/groups")
         assert catalogue.status_code == 200, catalogue.text
-        assert {"group_id": group_id} not in catalogue.json()["groups"]
+        assert group_id not in [group["group_id"] for group in catalogue.json()["groups"]]
 
 
 def test_legacy_group_registration_uses_shared_catalogue_with_independent_connector_usage(
@@ -81,7 +85,7 @@ def test_legacy_group_registration_uses_shared_catalogue_with_independent_connec
         try:
             catalogue = client.get(groups_path)
             assert catalogue.status_code == 200, catalogue.text
-            assert {"group_id": group_id} in catalogue.json()["groups"]
+            assert registered_group(group_id) in catalogue.json()["groups"]
             assigned = client.put(connector_group_path + "/permissions", json={
                 "connectors": [{"connector_id": connector_id, "permission_status": "enabled"}],
             })
@@ -118,7 +122,7 @@ def test_shared_group_registration_and_independent_filesystem_usage(
             assert duplicate.status_code == 204, duplicate.text
             catalogue = client.get(groups_path)
             assert catalogue.status_code == 200, catalogue.text
-            assert catalogue.json()["groups"].count({"group_id": group_id}) == 1
+            assert catalogue.json()["groups"].count(registered_group(group_id)) == 1
             connector_groups = client.get("/api/admin/mcp-permissions/groups")
             assert connector_groups.status_code == 200, connector_groups.text
             assert {"group_id": group_id} in connector_groups.json()["groups"]
@@ -166,7 +170,7 @@ def test_shared_group_registration_and_independent_filesystem_usage(
             assert restored.status_code == 200, restored.text
             assert removed.status_code == 204, removed.text
             assert retained.status_code == 200, retained.text
-            assert {"group_id": group_id} in retained.json()["groups"]
+            assert registered_group(group_id) in retained.json()["groups"]
         remaining = client.get(groups_path)
         assert remaining.status_code == 200, remaining.text
-        assert {"group_id": group_id} not in remaining.json()["groups"]
+        assert group_id not in [group["group_id"] for group in remaining.json()["groups"]]

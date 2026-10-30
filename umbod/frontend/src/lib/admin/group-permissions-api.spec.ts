@@ -88,14 +88,14 @@ describe('loadGroupPermissions', () => {
   test('loads summaries before preloading the first group and targets', async () => {
     const fetch = vi.fn(async (input: RequestInfo | URL) => {
       const path = String(input);
-      if (path.endsWith('/groups')) return jsonResponse({ groups: [{ group_id: 'g1' }, { group_id: 'g2' }] });
+      if (path.endsWith('/groups')) return jsonResponse({ groups: [{ group_id: 'g1', label: 'g1', description: '', revision: 1 }, { group_id: 'g2', label: 'g2', description: '', revision: 1 }] });
       if (path.endsWith('/group-permissions?group_id=g1')) return jsonResponse({ group_id: 'g1', connector_ids: [], capabilities: [] });
       return jsonResponse({ connectors: [], capabilities: [] });
     });
 
     const data = await loadGroupPermissions(apiFromFetch(fetch));
 
-    expect(data.groups).toEqual([{ groupId: 'g1' }, { groupId: 'g2' }]);
+    expect(data.groups).toEqual([{ groupId: 'g1', label: 'g1', description: '', revision: 1 }, { groupId: 'g2', label: 'g2', description: '', revision: 1 }]);
     expect(data.preloadedGroup).toEqual({ groupId: 'g1', connectorIds: [], capabilities: [] });
     expect(fetch).toHaveBeenCalledTimes(3);
     expect(String(fetch.mock.calls[0]?.[0])).toMatch(/\/groups$/);
@@ -104,12 +104,12 @@ describe('loadGroupPermissions', () => {
   test('keeps blank legacy catalogue identities out of connector selection', async (): Promise<void> => {
     const fetch = vi.fn(async (input: RequestInfo | URL): Promise<Response> => {
       const path = String(input);
-      if (path.endsWith('/groups')) return jsonResponse({ groups: [{ group_id: '' }, { group_id: ' ' }, { group_id: 'valid' }] });
+      if (path.endsWith('/groups')) return jsonResponse({ groups: [{ group_id: '', label: 'Legacy group', description: '', revision: 1 }, { group_id: ' ', label: 'Legacy group', description: '', revision: 1 }, { group_id: 'valid', label: 'valid', description: '', revision: 1 }] });
       if (path.endsWith('?group_id=valid')) return jsonResponse({ group_id: 'valid', connector_ids: [], capabilities: [] });
       return jsonResponse({ connectors: [], capabilities: [] });
     });
     const data = await loadGroupPermissions(apiFromFetch(fetch));
-    expect(data.groups).toEqual([{ groupId: 'valid' }]);
+    expect(data.groups).toEqual([{ groupId: 'valid', label: 'valid', description: '', revision: 1 }]);
     expect(data.preloadedGroup?.groupId).toBe('valid');
     expect(fetch).toHaveBeenCalledTimes(3);
   });

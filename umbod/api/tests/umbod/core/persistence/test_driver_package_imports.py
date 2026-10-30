@@ -117,6 +117,7 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
         'create_filesystem_uploads',
         'create_root_provisioning',
         'create_root_group_policy_management',
+        'create_filesystem_sharing',
     }
     forbidden = {
         'InMemoryDatabase',

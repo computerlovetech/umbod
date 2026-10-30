@@ -1,7 +1,7 @@
 from contextlib import AbstractAsyncContextManager
 from typing import Protocol
 
-from .models import Group
+from .models import Group, RegisterGroupMetadata, UpdateGroupMetadata
 
 
 class GroupUsage(Protocol):
@@ -10,6 +10,10 @@ class GroupUsage(Protocol):
 
 class GroupCatalogueSession(GroupUsage, Protocol):
     async def register(self, group_id: str) -> None: ...
+
+    async def register_metadata(self, request: RegisterGroupMetadata) -> None: ...
+
+    async def update_metadata(self, group_id: str, request: UpdateGroupMetadata) -> Group: ...
 
     async def delete(self, group_id: str) -> None: ...
 

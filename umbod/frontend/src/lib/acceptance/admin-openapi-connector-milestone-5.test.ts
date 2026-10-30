@@ -24,9 +24,10 @@ describe('OpenAPI connector administration milestone 5', () => {
     });
 
     expect(body).toMatch(/<label[^>]*>\s*<span>Search tools<\/span>\s*<input[^>]*type="search"/);
-    expect(body).toMatch(/<label[^>]*>HTTP method<\/label>\s*<button[^>]*role="combobox"[^>]*aria-haspopup="listbox"[^>]*aria-expanded="false"/);
-    expect(body).toMatch(/<label[^>]*>Activation status<\/label>\s*<button[^>]*role="combobox"/);
-    expect(body).toMatch(/<label[^>]*>Tools per page<\/label>\s*<button[^>]*role="combobox"[^>]*value="20"/);
+    const controls = body.replace(/<!--[\s\S]*?-->/g, '');
+    expect(controls).toMatch(/<label[^>]*>HTTP method<\/label>\s*<button[^>]*role="combobox"[^>]*aria-haspopup="listbox"[^>]*aria-expanded="false"/);
+    expect(controls).toMatch(/<label[^>]*>Activation status<\/label>\s*<button[^>]*role="combobox"/);
+    expect(controls).toMatch(/<label[^>]*>Tools per page<\/label>\s*<button[^>]*role="combobox"[^>]*value="20"/);
     expect(body).not.toContain('<select name="methodFilter"');
     expect(body).not.toContain('<select name="statusFilter"');
     expect(body).toContain('Showing 45 of 45 tools');

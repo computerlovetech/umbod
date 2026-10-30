@@ -20,21 +20,6 @@ class PatchNodeRequest(PlannedRequest):
         return self
 
 
-class AccessPrincipal(PlannedRequest):
-    type: Literal["user", "group"]
-    issuer: str = Field(min_length=1)
-    id: str = Field(min_length=1)
-
-
-class AccessGrantRequest(PlannedRequest):
-    principal: AccessPrincipal
-    permissions: list[Literal["discover", "read", "write", "delete", "share"]]
-
-
-class PutAccessRequest(PlannedRequest):
-    grants: list[AccessGrantRequest]
-
-
 class PlannedErrorDetail(BaseModel):
     code: Literal["filesystem_not_implemented"]
     message: str

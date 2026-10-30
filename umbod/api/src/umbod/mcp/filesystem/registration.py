@@ -10,9 +10,11 @@ from .authorization import root_filesystem_tool_access
 from .browsing import FilesystemBrowseTool
 from .deletion import FilesystemDeleteFileTool
 from .errors import filesystem_operation
-from .models import FilesystemChildren, FilesystemNodeMetadata
+from .models import FilesystemChildren, FilesystemNodeMetadata, FilesystemNodeSummary
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
 from .read import FilesystemReadFileTool
+from .sharing import enrich_nodes
+from .sharing_tools import FilesystemListSharingGroupsTool, FilesystemShareTool
 from .upload import FilesystemUploadTool
 
 
@@ -41,21 +43,26 @@ def register_filesystem_tools(
         operation_names=frozenset(),
     )
 
-    async def get_filesystem_root() -> NodeSummary:
-        with filesystem_operation():
-            snapshot = callers.capture()
-            return await services.browsing().get_root(snapshot)
+    for tool in (FilesystemListSharingGroupsTool(callers, services), FilesystemShareTool(callers, services)):
+        registrar.register_tool(tool, result_is_error=tool_result_is_error, operation_names=frozenset())
 
-    async def get_filesystem_node(node_id: UUID) -> NodeSummary:
+    async def get_filesystem_root() -> FilesystemNodeSummary:
         with filesystem_operation():
             snapshot = callers.capture()
-            return await services.browsing().get_node(snapshot, node_id)
+            node = await services.browsing().get_root(snapshot)
+            return (await enrich_nodes(services.sharing(), snapshot, [node]))[0]
+
+    async def get_filesystem_node(node_id: UUID) -> FilesystemNodeSummary:
+        with filesystem_operation():
+            snapshot = callers.capture()
+            node = await services.browsing().get_node(snapshot, node_id)
+            return (await enrich_nodes(services.sharing(), snapshot, [node]))[0]
 
     async def list_filesystem_children(parent_id: UUID) -> FilesystemChildren:
         with filesystem_operation():
             snapshot = callers.capture()
             nodes = await services.browsing().list_children(snapshot, parent_id)
-            return FilesystemChildren(nodes=list(nodes))
+            return FilesystemChildren(nodes=await enrich_nodes(services.sharing(), snapshot, nodes))
 
     async def create_filesystem_file(
         parent_id: UUID, name: str, metadata: FilesystemNodeMetadata
@@ -79,7 +86,10 @@ def register_filesystem_tools(
         (create_filesystem_directory, "Create an empty private filesystem directory.", False),
     ):
         tool = registrar.register(
-            function, name=function.__name__, description=description, auth=root_filesystem_tool_access
+            function, name=function.__name__, description=(
+                description + " Includes manageable direct sharing, not a full effective-access audit."
+                if readonly else description
+            ), auth=root_filesystem_tool_access
         )
         tool.annotations = ToolAnnotations(
             readOnlyHint=readonly,

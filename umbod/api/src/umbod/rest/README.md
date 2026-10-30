@@ -16,6 +16,7 @@ description: "FastAPI delivery for administration, authenticated users, system e
 - [filesystem/](./filesystem/README.md) — User filesystem browsing, creation, uploads and downloads.
 - [filesystem_administration/](./filesystem_administration/README.md) — Root-access administration.
 - [groups/](./groups/README.md) — Group catalogue administration.
+- [identity_directory/](./identity_directory/README.md) — Verified observation capture and administrative searches.
 - [instance_configuration/](./instance_configuration/) — Client-visible instance settings.
 - [main.py](./main.py) — Application assembly and mounts.
 - [mcp_permissions/](./mcp_permissions/README.md) — Group-to-capability permissions.

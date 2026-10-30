@@ -3,7 +3,7 @@ import { AuthenticationRequiredError, browserTransport, SchemaValidationError } 
 import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
 import { breadcrumbsSchema, type Breadcrumbs } from './domain/schemas';
 import { fileId, filesystemFixture, filesystemNode, folderId, rootId } from './fixtures.test-support';
-import { InMemoryFilesApi } from './infrastructure/in-memory-api';
+import { InMemoryFilesApi } from './infrastructure/in-memory-api.test-support';
 import { FilesApi } from './infrastructure/files-api';
 
 const complete: Breadcrumbs = { items: filesystemFixture.map(({ id, name, kind }) => ({ id, name, kind })), complete: true };

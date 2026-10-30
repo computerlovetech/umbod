@@ -1,0 +1,188 @@
+import { describe, expect, it, vi } from 'vitest';
+import { InMemoryGroupCatalogue } from '$lib/admin/groups/in-memory';
+import type { CatalogueGroup } from '$lib/admin/groups/domain/schemas';
+import { HttpError } from '$lib/admin/infrastructure/transport';
+import { InMemoryIdentityDirectory } from '$lib/identity-directory/in-memory.test-support';
+import { GroupsState } from './groups-state.svelte';
+
+const group: CatalogueGroup = { group_id: ' exact /../ provider ', label: 'Operators', description: 'Manage reports', revision: 1 };
+
+describe('central group management', () => {
+  it('creates exact immutable IDs with trimmed labels and filters all metadata', async (): Promise<void> => {
+    const api = new InMemoryGroupCatalogue();
+    const state = new GroupsState(api, [], new InMemoryIdentityDirectory());
+    state.create();
+    state.setGroupId(group.group_id);
+    state.setLabel('  Operators  ');
+    state.setDescription(group.description);
+    await state.save();
+    expect(await api.list()).toEqual([group]);
+    expect(state.groups).toEqual([group]);
+    expect(state.formOpen).toBe(false);
+    for (const query of ['operators', 'REPORTS', '/../']) {
+      state.setQuery(query);
+      expect(state.filteredGroups).toEqual([group]);
+    }
+    state.setQuery('missing');
+    expect(state.filteredGroups).toEqual([]);
+  });
+  it('validates and detects duplicates before dispatch and preserves the draft', async (): Promise<void> => {
+    const api = new InMemoryGroupCatalogue([group]);
+    const create = vi.spyOn(api, 'create');
+    const state = new GroupsState(api, [group], new InMemoryIdentityDirectory());
+    state.create();
+    state.setGroupId(group.group_id);
+    state.setLabel(' ');
+    await state.save();
+    expect(create).not.toHaveBeenCalled();
+    state.setLabel('Valid');
+    await state.save();
+    expect(create).not.toHaveBeenCalled();
+    expect(state.error).toContain('already exists');
+    expect(state.label).toBe('Valid');
+    state.setGroupId('different');
+    state.setDescription('x'.repeat(2001));
+    await state.save();
+    expect(create).not.toHaveBeenCalled();
+  });
+  it('preserves a creation draft when a concurrent idempotent registration has different metadata', async (): Promise<void> => {
+    const api = new InMemoryGroupCatalogue();
+    const state = new GroupsState(api, [], new InMemoryIdentityDirectory());
+    state.create();
+    state.setGroupId(group.group_id);
+    state.setLabel('My draft');
+    state.setDescription('My draft description');
+    await api.create({ group_id: group.group_id, label: group.label, description: group.description });
+    await state.save();
+    expect(state.groups).toEqual([group]);
+    expect(state.formOpen).toBe(true);
+    expect(state.label).toBe('My draft');
+    expect(state.description).toBe('My draft description');
+    expect(state.error).toContain('now exists with different metadata');
+    expect(state.message).toBe('');
+    expect(await api.list()).toEqual([group]);
+  });
+  it('reconciles a same-metadata concurrent idempotent registration', async (): Promise<void> => {
+    const api = new InMemoryGroupCatalogue();
+    const state = new GroupsState(api, [], new InMemoryIdentityDirectory());
+    state.create();
+    state.setGroupId(group.group_id);
+    state.setLabel(group.label);
+    state.setDescription(group.description);
+    await api.create({ group_id: group.group_id, label: group.label, description: group.description });
+    await state.save();
+    expect(state.groups).toEqual([group]);
+    expect(state.formOpen).toBe(false);
+    expect(state.message).toContain('Group saved');
+  });
+  it('updates authoritative metadata in place without losing filters or changing the ID', async (): Promise<void> => {
+    const api = new InMemoryGroupCatalogue([group]);
+    const state = new GroupsState(api, [group], new InMemoryIdentityDirectory());
+    state.setQuery('Reports');
+    state.edit(group);
+    state.setGroupId('changed');
+    state.setLabel(' Reporting ');
+    await state.save();
+    expect(state.groups).toEqual([{ ...group, label: 'Reporting', revision: 2 }]);
+    expect(state.query).toBe('Reports');
+    expect(state.groupId).toBe(group.group_id);
+  });
+  it('preserves conflicting drafts and reloads the revision explicitly before retry', async (): Promise<void> => {
+    const api = new InMemoryGroupCatalogue([group]);
+    const state = new GroupsState(api, [group], new InMemoryIdentityDirectory());
+    state.edit(group);
+    state.setLabel('My draft');
+    state.setDescription('My description');
+    await api.update({ group_id: group.group_id, label: group.label, description: group.description, expected_revision: 1 });
+    await state.save();
+    expect(state.conflict).toBe(true);
+    expect(state.canSave).toBe(false);
+    expect(state.label).toBe('My draft');
+    await state.reloadRevision();
+    expect(state.label).toBe('My draft');
+    expect(state.description).toBe('My description');
+    expect(state.conflict).toBe(false);
+    await state.save();
+    expect(state.groups[0]).toEqual({ ...group, label: 'My draft', description: 'My description', revision: 3 });
+  });
+  it.each([404, 500])('preserves the draft on save failure %s', async (status): Promise<void> => {
+    const api = new InMemoryGroupCatalogue([group]);
+    vi.spyOn(api, 'update').mockRejectedValue(new HttpError(status, '', null));
+    const state = new GroupsState(api, [group], new InMemoryIdentityDirectory());
+    state.edit(group);
+    state.setLabel('Draft');
+    await state.save();
+    expect(state.formOpen).toBe(true);
+    expect(state.label).toBe('Draft');
+    expect(state.pending).toBe(false);
+    expect(state.error).not.toBe('');
+    expect(state.groups).toEqual([group]);
+  });
+  it('prevents duplicate saves and fences disposed responses', async (): Promise<void> => {
+    const api = new InMemoryGroupCatalogue([group]);
+    let complete!: (result: CatalogueGroup) => void;
+    const update = vi.spyOn(api, 'update').mockImplementation(() => new Promise((resolve) => { complete = resolve; }));
+    const state = new GroupsState(api, [group], new InMemoryIdentityDirectory());
+    state.edit(group);
+    state.setLabel('Draft');
+    const saving = state.save();
+    await state.save();
+    state.edit({ ...group, group_id: 'other' });
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(state.pending).toBe(true);
+    expect(state.groupId).toBe(group.group_id);
+    state.dispose();
+    complete({ ...group, label: 'Late response', revision: 2 });
+    await saving;
+    expect(state.groups).toEqual([group]);
+    expect(state.label).toBe('Draft');
+  });
+  it('rejects mismatched authoritative identities without reconciling another group', async (): Promise<void> => {
+    const api = new InMemoryGroupCatalogue([group]);
+    vi.spyOn(api, 'update').mockResolvedValue({ ...group, group_id: 'different', label: 'Wrong identity', revision: 2 });
+    const state = new GroupsState(api, [group], new InMemoryIdentityDirectory());
+    state.edit(group);
+    state.setLabel('Draft');
+    await state.save();
+    expect(state.groups).toEqual([group]);
+    expect(state.label).toBe('Draft');
+    expect(state.formOpen).toBe(true);
+    expect(state.error).not.toBe('');
+    state.dispose();
+    expect(state.canSave).toBe(false);
+  });
+  it('keeps in-use groups and reports conflicts without mutation', async (): Promise<void> => {
+    const api = new InMemoryGroupCatalogue([group]);
+    vi.spyOn(api, 'delete').mockRejectedValue(new HttpError(409, '', null));
+    const state = new GroupsState(api, [group], new InMemoryIdentityDirectory());
+    state.requestDelete(group.group_id);
+    await state.delete();
+    expect(state.error).toContain('in use');
+    expect(state.groups).toEqual([group]);
+    expect(state.pending).toBe(false);
+    expect(state.deleting).toBe(group.group_id);
+  });
+  it('deletes in place only after confirmation and allows cancelling', async (): Promise<void> => {
+    const api = new InMemoryGroupCatalogue([group]);
+    const state = new GroupsState(api, [group], new InMemoryIdentityDirectory());
+    state.requestDelete(group.group_id);
+    state.cancel();
+    await state.delete();
+    expect(await api.list()).toEqual([group]);
+    state.requestDelete(group.group_id);
+    await state.delete();
+    expect(state.groups).toEqual([]);
+    expect(await api.list()).toEqual([]);
+  });
+  it('hides protected controls and catalogue when authorization is lost', async (): Promise<void> => {
+    const api = new InMemoryGroupCatalogue([group]);
+    vi.spyOn(api, 'update').mockRejectedValue(new HttpError(403, '', null));
+    const state = new GroupsState(api, [group], new InMemoryIdentityDirectory());
+    state.edit(group);
+    await state.save();
+    expect(state.denied).toBe(true);
+    expect(state.formOpen).toBe(false);
+    expect(state.groups).toEqual([]);
+    expect(state.canSave).toBe(false);
+  });
+});

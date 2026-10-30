@@ -1,3 +1,4 @@
+import { InMemoryNodeSharing } from './in-memory-sharing.test-support';
 import type { FilesApi, FilesystemApi } from '../api';
 import { breadcrumbsSchema, type Breadcrumbs, type BreadcrumbItem, fileRevisionSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, beginUploadSchema, uploadSessionSchema, rawUploadSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
 import { UploadPhaseError } from '../errors';
@@ -169,6 +170,7 @@ export class InMemoryFilesystem implements FilesystemApi {
 }
 
 export class InMemoryFilesApi implements FilesApi {
+  readonly sharing = new InMemoryNodeSharing();
   readonly filesystem: InMemoryFilesystem;
 
   constructor(rootId: string, nodes: NodeSummary[], uploadLimitBytes?: number, canDelete?: (node: NodeSummary) => boolean, canRead?: (node: NodeSummary) => boolean) {

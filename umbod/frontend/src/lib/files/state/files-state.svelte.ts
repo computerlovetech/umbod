@@ -1,3 +1,4 @@
+import { SharingEligibilityState } from './sharing-eligibility-state.svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { FilesNavigationState } from './navigation-state.svelte';
 import { RowDeletionState } from './row-deletion-state.svelte';
@@ -27,8 +28,10 @@ export class FilesState {
   readonly navigation: FilesNavigationState;
   readonly deletion: DeletionState;
   readonly rowDeletion: RowDeletionState;
+  readonly sharing: SharingEligibilityState;
 
   constructor(private readonly api: FilesApi, openParent?: (id: string) => Promise<void>) {
+    this.sharing = new SharingEligibilityState(api.sharing);
     this.navigation = new FilesNavigationState(api.filesystem);
     const deletionOperations = new SvelteMap<string, symbol>();
     this.deletion = new DeletionState(api, openParent ?? ((id) => this.load(id)), this.reload, this.acceptDeleted, true, deletionOperations);
@@ -39,6 +42,7 @@ export class FilesState {
     if (this.disposed) return;
     this.deletion.reset();
     this.rowDeletion.reset();
+    this.sharing.reset();
     const generation = ++this.generation;
     this.controller?.abort();
     this.controller = new AbortController();
@@ -56,11 +60,13 @@ export class FilesState {
       if (this.disposed || generation !== this.generation) return;
       if (target === null) this.rootId = node.id;
       this.node = node;
+      this.sharing.selectCurrent(node);
       void this.navigation.select(node);
       const children = node.kind === 'directory' ? await this.api.filesystem.listChildren(node.id, signal) : [];
       if (this.disposed || generation !== this.generation) return;
       this.children = children.filter((child) => !this.confirmedDeletedIds.has(child.id));
       this.phase = 'ready';
+      this.sharing.select(this.children);
       if (node.kind === 'directory') {
         void this.checkUploadAvailability();
         void this.rowDeletion.select(this.children);
@@ -75,6 +81,7 @@ export class FilesState {
   private acceptDeleted = (node: NodeSummary): void => {
     if (this.disposed) return;
     this.confirmedDeletedIds.add(node.id);
+    this.sharing.remove(node.id);
     this.children = this.children.filter((child) => child.id !== node.id);
     this.mutationNotice = `“${node.name}” was deleted from the workspace.`;
   };
@@ -115,6 +122,7 @@ export class FilesState {
     if (generation === this.generation && this.phase === 'ready' && this.node?.id === parentId) {
       this.children = [...this.children.filter((child) => child.id !== node.id), node];
       this.rowDeletion.select([node]);
+      this.sharing.select([node]);
       return;
     }
     const selectedId = this.target === null ? this.rootId : this.target;
@@ -132,6 +140,7 @@ export class FilesState {
     this.navigation.dispose();
     this.deletion.dispose();
     this.rowDeletion.dispose();
+    this.sharing.dispose();
     ++this.generation;
     this.controller?.abort();
   };

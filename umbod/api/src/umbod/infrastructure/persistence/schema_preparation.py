@@ -44,6 +44,7 @@ from umbod.core.permissions.stores.schema import (
     CONNECTOR_PERMISSION_TABLE,
 )
 from umbod.core.groups.stores.schema import GROUP_TABLE
+from umbod.core.identity_directory.schema import DIRECTORY_TABLES
 from .group_reconciliation import reconcile_group_catalogue
 from umbod.core.filesystem.stores.schema import NODE_TABLE, OWNER_TABLE, GRANT_TABLE
 from umbod.core.filesystem.stores.uploads import UPLOAD_TABLE
@@ -61,6 +62,7 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
     CONNECTOR_INVOCATION_POLICY_TABLE,
     APPROVAL_NONCE_TABLE,
     GROUP_TABLE,
+    *DIRECTORY_TABLES,
     CONNECTOR_PERMISSION_TABLE,
     CAPABILITY_PERMISSION_TABLE,
     CAPABILITY_DESCRIPTION_OVERRIDE_TABLE,

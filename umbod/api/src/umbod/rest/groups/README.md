@@ -8,4 +8,4 @@ description: "REST delivery for shared group catalogue registration and usage-ch
 
 - [__init__.py](./__init__.py) — Package exports.
 - [deps.py](./deps.py) — Request-local catalogue composition.
-- [routes.py](./routes.py) — Exact-ID group administration.
+- [routes.py](./routes.py) — Metadata listing, legacy registration, revision-checked path/body updates, and exact-ID deletion.

@@ -19,6 +19,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [groups](./groups/README.md) — Group catalogue.
 - [icons](./icons/README.md) — Favicon discovery.
 - [identity](./identity/) — Connector identity.
+- [identity_directory](./identity_directory/README.md) — Observed identities and membership values.
 - [invocation](./invocation/) — Invocation policy and approval.
 - [key_value](./key_value/README.md) — Key-value storage contracts.
 - [messaging](./messaging/) — Events and stream contracts.

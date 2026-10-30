@@ -40,31 +40,46 @@ export function calculateSelectOverlayGeometry(trigger: Pick<DOMRect, 'left' | '
 }
 
 export class SelectState {
-  isOpen = $state(false);
-  activeValue = $state<string | undefined>(undefined);
-  selectedValue = $state('');
-  overlayGeometry = $state<SelectOverlayGeometry | undefined>(undefined);
-  readonly options: SelectOption[];
+  private opened = $state(false);
+  private cursor = $state<string | undefined>(undefined);
+  private geometry = $state<SelectOverlayGeometry | undefined>(undefined);
 
-  constructor(options: SelectOption[], value: string) {
-    this.options = options;
-    this.selectedValue = value;
+  constructor(private readonly currentOptions: () => readonly SelectOption[], private readonly currentValue: () => string) {}
+
+  get options(): readonly Readonly<SelectOption>[] {
+    return this.currentOptions();
   }
 
-  get selectedOption(): SelectOption | undefined {
+  get selectedValue(): string {
+    return this.currentValue();
+  }
+
+  get isOpen(): boolean {
+    return this.opened;
+  }
+
+  get activeValue(): string | undefined {
+    return this.enabledOptions.find((option) => option.value === this.cursor)?.value ?? this.enabledOptions[0]?.value;
+  }
+
+  get overlayGeometry(): Readonly<SelectOverlayGeometry> | undefined {
+    return this.geometry;
+  }
+
+  get selectedOption(): Readonly<SelectOption> | undefined {
     return this.options.find((option) => option.value === this.selectedValue);
   }
 
   open = (): void => {
-    this.isOpen = true;
+    this.opened = true;
     const selected = this.options.find((option) => option.value === this.selectedValue && !option.disabled);
-    this.activeValue = selected?.value ?? this.enabledOptions[0]?.value;
+    this.cursor = selected?.value ?? this.enabledOptions[0]?.value;
   };
 
   close = (): void => {
-    this.isOpen = false;
-    this.activeValue = undefined;
-    this.overlayGeometry = undefined;
+    this.opened = false;
+    this.cursor = undefined;
+    this.geometry = undefined;
   };
 
   toggle = (): void => {
@@ -73,13 +88,12 @@ export class SelectState {
   };
 
   setOverlayGeometry = (geometry: SelectOverlayGeometry): void => {
-    this.overlayGeometry = geometry;
+    this.geometry = geometry;
   };
 
   select = (value: string): string | undefined => {
     const option = this.options.find((candidate) => candidate.value === value);
     if (!option || option.disabled) return undefined;
-    this.selectedValue = option.value;
     this.close();
     return option.value;
   };
@@ -89,18 +103,18 @@ export class SelectState {
 
   setActive = (value: string): void => {
     const option = this.options.find((candidate) => candidate.value === value);
-    if (option && !option.disabled) this.activeValue = value;
+    if (option && !option.disabled) this.cursor = value;
   };
 
   moveFirst = (): void => {
-    this.activeValue = this.enabledOptions[0]?.value;
+    this.cursor = this.enabledOptions[0]?.value;
   };
 
   moveLast = (): void => {
-    this.activeValue = this.enabledOptions.at(-1)?.value;
+    this.cursor = this.enabledOptions.at(-1)?.value;
   };
 
-  private get enabledOptions(): SelectOption[] {
+  private get enabledOptions(): readonly Readonly<SelectOption>[] {
     return this.options.filter((option) => !option.disabled);
   }
 
@@ -109,6 +123,6 @@ export class SelectState {
     if (enabledOptions.length === 0) return;
     const currentIndex = enabledOptions.findIndex((option) => option.value === this.activeValue);
     const nextIndex = currentIndex < 0 ? (direction === 1 ? 0 : enabledOptions.length - 1) : (currentIndex + direction + enabledOptions.length) % enabledOptions.length;
-    this.activeValue = enabledOptions[nextIndex].value;
+    this.cursor = enabledOptions[nextIndex].value;
   }
 }

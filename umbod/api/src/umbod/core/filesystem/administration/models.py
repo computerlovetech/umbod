@@ -1,23 +1,10 @@
 from enum import StrEnum
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, model_validator
 
-from ..models import AccessGrant, Node, Ownership, Permission
-
-
-class GroupPolicy(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    group_id: str
-    permissions: frozenset[Permission] = Field(min_length=1)
-
-    @field_validator("group_id")
-    @classmethod
-    def nonblank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError("Policy keys must be nonblank")
-        return value
+from ..group_policy import GroupPolicy
+from ..models import AccessGrant, Node, Ownership
 
 
 class SaveRootGroupPolicy(BaseModel):

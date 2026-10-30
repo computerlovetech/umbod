@@ -14,6 +14,7 @@
     unsupported = false,
     readonly = false,
     autocomplete,
+    list,
     pattern,
     placeholder,
     inputPrefix,
@@ -33,6 +34,7 @@
     unsupported?: boolean;
     readonly?: boolean;
     autocomplete?: HTMLInputAttributes['autocomplete'];
+    list?: string;
     pattern?: string;
     placeholder?: string;
     inputPrefix?: string;
@@ -59,6 +61,7 @@
         {name}
         {type}
         {autocomplete}
+        {list}
         {pattern}
         {placeholder}
         {maxlength}

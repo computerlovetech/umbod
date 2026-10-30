@@ -29,6 +29,15 @@ describe('endpoint-driven MCP setup interface', () => {
     }
   });
 
+  test('full presentation starts with the page title without an eyebrow label', (): void => {
+    const { body } = render(McpSetupGuide, { props: { mcpEndpoint: 'https://umbod.test/mcp' } });
+
+    expect(body).toMatch(/<h1[^>]*>Connect Umbod<\/h1>/);
+    expect(body).not.toContain('admin-eyebrow');
+    expect(body).not.toContain('Agent harness setup');
+    expect(body).toContain('Your custom MCP endpoint');
+  });
+
   test('configuration reads the latest endpoint and escapes it as JSON', () => {
     let endpoint = 'https://umbod.test/mcp';
     const clipboard: ClipboardWriter = { writeText: vi.fn() };

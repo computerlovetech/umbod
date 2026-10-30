@@ -4,6 +4,8 @@ import random
 import secrets
 import time
 
+from umbod.config.identity_policy import filesystem_managed_issuer
+
 from umbod.core.connectors.downstream_mcp.adapters.composition import create_downstream_mcp_discovery, create_downstream_mcp_probe
 from umbod.mcp.connectors.downstream_mcp.ports import DownstreamClientFactory
 from umbod.mcp.runtime_adapters import OpenApiRuntimeAdapters, create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
@@ -223,6 +225,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
         ),
         DatabaseFilesystemServiceFactory(
             persistence_runtime.database, filesystem_content, settings.filesystem.upload_max_bytes,
+            filesystem_managed_issuer(settings),
         ),
     )
     await initialize_openapi_discovery(mcp)

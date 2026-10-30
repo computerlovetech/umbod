@@ -11,6 +11,7 @@ from umbod.core.filesystem.browsing import FilesystemBrowsing
 from umbod.core.filesystem.creation import FilesystemCreation
 from umbod.core.filesystem.content import FilesystemContent
 from umbod.core.filesystem.deletion import FilesystemDeletion
+from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
 from umbod.core.filesystem.content.errors import UploadTooLarge
 from umbod.core.filesystem.uploads.errors import (
     UploadConflict, UploadExpired, UploadLengthMismatch, UploadMediaTypeMismatch,
@@ -31,6 +32,8 @@ class SpecializedStorageFailure(StorageFailure):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("error_type,expected", [
+    (InvalidSharingPolicy, "filesystem_invalid_sharing_policy: Invalid filesystem sharing policy"),
+    (SharingPolicyUnavailable, "filesystem_policy_unavailable: Filesystem sharing configuration unavailable"),
     (UploadTooLarge, "filesystem_upload_too_large: Filesystem upload too large"),
     (UploadConflict, "filesystem_upload_conflict: Filesystem upload conflict"),
     (UploadExpired, "filesystem_upload_expired: Filesystem upload expired"),

@@ -8,7 +8,7 @@ description: "Filesystem composition and concrete content storage over the appli
 
 - [__init__.py](./__init__.py) — Package exports.
 - [config.py](./config.py) — Content storage configuration.
-- [factory.py](./factory.py) — Filesystem service and store composition, including shared upload lifecycle dependencies.
+- [factory.py](./factory.py) — Filesystem service and store composition, including uploads and direct-node group sharing.
 - [inmemory.py](./inmemory.py) — Application-retained content storage with immutable publication and concurrent async reads/writes.
 - [io.py](./io.py) — Cancellation-safe host I/O.
 - [local_content.py](./local_content.py) — Concurrent local content storage through immutable object publication.

@@ -7,6 +7,7 @@ from umbod.core.filesystem.creation import FilesystemCreation
 from umbod.core.filesystem.content import FilesystemContent
 from umbod.core.filesystem.deletion import FilesystemDeletion
 from umbod.core.filesystem.uploads import UploadService
+from umbod.core.filesystem.sharing import FilesystemSharing
 
 
 @runtime_checkable
@@ -23,6 +24,8 @@ class FilesystemCallerCapture(Protocol):
 
 
 class FilesystemServiceFactory(Protocol):
+    def sharing(self) -> FilesystemSharing: ...
+
     def browsing(self) -> FilesystemBrowsing: ...
 
     def creation(self) -> FilesystemCreation: ...

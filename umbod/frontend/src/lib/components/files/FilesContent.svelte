@@ -3,6 +3,8 @@
   import type { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
   import type { UploadState } from '$lib/files/state/upload-state.svelte';
   import { FileDropState } from '$lib/files/state/file-drop-state.svelte';
+  import NodeShareButton from './NodeShareButton.svelte';
+  import NodeSharingDialog from './NodeSharingDialog.svelte';
   import FilesNavigation from './FilesNavigation.svelte';
   import FileDeletionDialog from './FileDeletionDialog.svelte';
   import FileUploadForm from './FileUploadForm.svelte';
@@ -53,10 +55,13 @@
 
 <div class="heading">
   <h1 id="files-heading" class="admin-title" tabindex="-1" {@attach state.rowDeletion.attachFocus}>{state.node?.name || 'Files'}</h1>
-  {#if state.phase === 'ready' && state.node?.kind === 'directory'}
+  {#if state.node?.kind === 'directory'}
     <div class="toolbar">
+      <NodeShareButton node={state.node} sharing={state.sharing} />
+      {#if state.phase === 'ready'}
       {#if upload.available}<button id="upload-file-button" onclick={upload.show} disabled={upload.open}>Upload file</button>{/if}
       <button id="new-folder-button" onclick={folder.show} disabled={folder.open}>New folder</button>
+      {/if}
     </div>
   {/if}
 </div>
@@ -106,6 +111,7 @@
                 <td>{item.kind === 'directory' ? 'Folder' : 'File'}</td>
                 <td><time datetime={item.updated_at}>{updatedAt(item.updated_at)}</time></td>
                 <td class="row-actions">
+                  <NodeShareButton node={item} sharing={state.sharing} compact />
                   {#if item.kind === 'file' && deletion}
                     {#if deletion.available || deletion.pending}
                       <button type="button" class="row-delete" {@attach state.rowDeletion.attachButton(item.id)} aria-label={`Delete “${item.name}”`} title={deletion.pending ? 'Deleting…' : `Delete “${item.name}”`} aria-busy={deletion.pending} onclick={deletion.show} disabled={deletion.pending || !!deletion.confirmation}>
@@ -127,6 +133,7 @@
     {/if}
   {:else}
     <section aria-label="File details" class="details">
+      <NodeShareButton node={state.node} sharing={state.sharing} />
       {#if state.deletion.available}<button onclick={state.deletion.show} disabled={state.deletion.pending || !!state.deletion.confirmation}>Delete file</button>{/if}
       {#if state.deletion.confirmation}<FileDeletionDialog state={state.deletion} />{/if}
       {#if state.deletion.pending}<p role="status">Deleting file…</p>{/if}
@@ -144,6 +151,9 @@
     </section>
   {/if}
 {/if}
+
+{#if state.sharing.dialog.open}<NodeSharingDialog state={state.sharing.dialog} {signIn} />{/if}
+<p role="status" aria-atomic="true">{state.sharing.dialog.status}</p>
 
 <style>
   .page-file-drop { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; padding: 1rem; background: rgb(30 35 33 / 65%); pointer-events: none; }

@@ -169,7 +169,7 @@ def _build_mcp(operator: OperatorSettings, auth_recipe: str) -> McpConfig:
 
 def _build_oidc(operator: OperatorSettings, auth_recipe: str) -> OidcConfig:
     if auth_recipe not in _OIDC_AUTH_RECIPES:
-        return OidcConfig()
+        return OidcConfig(issuer_url=operator.oidc_issuer_url)
     return OidcConfig(
         provider=_PROVIDER_BY_RECIPE[auth_recipe],
         config_url=_derived_config_url(operator, auth_recipe),

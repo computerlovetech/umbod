@@ -11,6 +11,7 @@
   import PromptCatalog from '$lib/components/admin/capability-catalogs/PromptCatalog.svelte';
   import ResourceCatalog from '$lib/components/admin/capability-catalogs/ResourceCatalog.svelte';
   import CapabilityDescriptionOverrideModal from '$lib/components/admin/capability-descriptions/CapabilityDescriptionOverrideModal.svelte';
+  import ConnectorListEmptyState from '$lib/components/admin/connectors/ConnectorListEmptyState.svelte';
   import ConnectorCapabilities from '$lib/components/admin/connectors/ConnectorCapabilities.svelte';
   import ConnectorDetailItem from '$lib/components/admin/connectors/ConnectorDetailItem.svelte';
   import ConnectorDetailSummary from '$lib/components/admin/connectors/ConnectorDetailSummary.svelte';
@@ -203,7 +204,7 @@
     {/snippet}
   </AdminSplitWorkspace>
 {:else if data.status === 'empty'}
-  <p class="empty-note">{data.message}</p>
+  <ConnectorListEmptyState message={data.message} />
 {:else if data.status === 'failed'}
   <div class="admin-message admin-message-error failure" role="alert">
     <p>{data.message}</p>
@@ -216,7 +217,7 @@
     </Button>
   </div>
 {:else}
-  <p class="empty-note">No OpenAPI connectors are available yet.</p>
+  <ConnectorListEmptyState message="No OpenAPI connectors are available yet." />
 {/if}
 
 <style>
@@ -232,15 +233,6 @@
   }
 
   .panel-section { min-width: 0; }
-
-  .empty-note {
-    background: var(--admin-soft);
-    border: 1px solid var(--admin-border);
-    border-radius: 10px;
-    color: var(--admin-muted);
-    margin: 1.5rem 0 0;
-    padding: 1rem;
-  }
 
   .failure p {
     margin: 0 0 12px;

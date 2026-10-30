@@ -6,6 +6,7 @@ from fastapi import HTTPException
 from umbod.core.filesystem import InvalidName, NameCollision, StorageFailure, WrongNodeKind
 from umbod.core.filesystem.authorization import PermissionDenied
 from umbod.core.filesystem.errors import RevisionConflict
+from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
 from umbod.core.filesystem.content import UploadTooLarge
 from umbod.core.filesystem.uploads.errors import (
     UploadConflict, UploadExpired, UploadLengthMismatch, UploadMediaTypeMismatch,
@@ -20,6 +21,14 @@ def filesystem_errors() -> Iterator[None]:
         raise HTTPException(403, detail={
             "code": "filesystem_permission_denied",
             "message": "Filesystem access denied.",
+        }) from None
+    except InvalidSharingPolicy:
+        raise HTTPException(422, detail={
+            "code": "filesystem_sharing_invalid", "message": "Invalid filesystem sharing policy.",
+        }) from None
+    except SharingPolicyUnavailable:
+        raise HTTPException(503, detail={
+            "code": "filesystem_policy_unavailable", "message": "Filesystem policy is unavailable.",
         }) from None
     except UploadTooLarge:
         raise HTTPException(413, detail={

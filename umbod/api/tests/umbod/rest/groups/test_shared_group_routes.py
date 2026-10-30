@@ -13,6 +13,10 @@ from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
 
 
+def group_record(group_id: str) -> dict[str, object]:
+    return {"group_id": group_id, "label": group_id, "description": "", "revision": 1}
+
+
 @pytest.fixture(autouse=True)
 def connector_availability(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "availability.json"
@@ -45,10 +49,12 @@ def test_shared_registration_is_exact_idempotent_and_legacy_visible(
         assert response.status_code == 204
         assert response.content == b""
     expected = {
-        "groups": [{"group_id": " Team "}, {"group_id": "Team"}, {"group_id": "team"}]
+        "groups": [group_record(value) for value in (" Team ", "Team", "team")]
     }
     assert client.get("/api/admin/groups").json() == expected
-    assert client.get("/api/admin/mcp-permissions/groups").json() == expected
+    assert client.get("/api/admin/mcp-permissions/groups").json() == {
+        "groups": [{"group_id": value} for value in (" Team ", "Team", "team")]
+    }
     assert (
         client.get("/api/admin/mcp-permissions/groups/team").json()["connector_ids"]
         == []
@@ -62,7 +68,7 @@ def test_legacy_registration_and_deletion_use_shared_catalogue(
     assert response.status_code == 200
     assert response.json()["status"] == "applied"
     assert client.get("/api/admin/groups").json() == {
-        "groups": [{"group_id": "legacy"}]
+        "groups": [group_record("legacy")]
     }
     assert client.delete("/api/admin/mcp-permissions/groups/legacy").status_code == 200
     assert client.get("/api/admin/groups").json() == {"groups": []}
@@ -95,7 +101,7 @@ def test_body_deletion_and_query_permissions_preserve_exact_identifiers(
     assert update.status_code == 200
     assert update.json()["group_id"] == group_id
     assert client.get("/api/admin/groups").json() == {
-        "groups": [{"group_id": group_id}]
+        "groups": [group_record(group_id)]
     }
     assert (
         client.request(
@@ -120,7 +126,7 @@ async def test_observed_empty_identifier_supports_query_reads_and_body_deletion(
     )
     try:
         await policies.add_grant(grant)
-        assert client.get("/api/admin/groups").json() == {"groups": [{"group_id": ""}]}
+        assert client.get("/api/admin/groups").json() == {"groups": [group_record("")]}
         detail = client.get(
             "/api/admin/mcp-permissions/group-permissions", params={"group_id": ""}
         )
@@ -146,6 +152,44 @@ async def test_observed_empty_identifier_supports_query_reads_and_body_deletion(
         assert client.get("/api/admin/groups").json() == {"groups": []}
     finally:
         await runtime.shutdown()
+
+
+@pytest.mark.parametrize("body_route", [False, True])
+def test_metadata_roundtrip_conflict_and_missing(client: TestClient, body_route: bool) -> None:
+    group_id = "provider/a/../team" if body_route else "provider/team"
+    assert client.post("/api/admin/groups", json={"group_id": group_id, "label": "Team", "description": "Original"}).status_code == 204
+    payload = {"label": "Edited", "description": "Saved", "expected_revision": 1}
+    path = f"/api/admin/groups/{group_id}"
+    if body_route:
+        path = "/api/admin/groups"
+        payload["group_id"] = group_id
+    response = client.put(path, json=payload)
+    assert response.status_code == 200
+    expected = {"group_id": group_id, "label": "Edited", "description": "Saved", "revision": 2}
+    assert response.json() == expected
+    assert client.put(path, json=payload).status_code == 409
+    client.post("/api/admin/groups", json={"group_id": group_id})
+    assert expected in client.get("/api/admin/groups").json()["groups"]
+    assert client.put("/api/admin/groups/missing", json={"label": "Missing", "description": "", "expected_revision": 1}).status_code == 404
+
+
+@pytest.mark.parametrize("payload", [
+    {"label": ""}, {"label": "  "}, {"label": "x" * 201},
+    {"description": "x" * 2001}, {"expected_revision": 0},
+    {"expected_revision": True}, {"expected_revision": "1"},
+    {"group_id": "renamed"}, {"issuer": "authority"}, {"permissions": []},
+])
+def test_metadata_update_rejects_invalid_or_authority_fields(client: TestClient, payload: dict[str, object]) -> None:
+    request = {"label": "Team", "description": "", "expected_revision": 1, **payload}
+    assert client.put("/api/admin/groups/team", json=request).status_code == 422
+
+
+@pytest.mark.parametrize("payload", [
+    {"label": ""}, {"label": " "}, {"label": "x" * 201}, {"label": None},
+    {"description": "x" * 2001}, {"revision": 1}, {"permissions": []},
+])
+def test_registration_rejects_invalid_metadata(client: TestClient, payload: dict[str, object]) -> None:
+    assert client.post("/api/admin/groups", json={"group_id": "team", **payload}).status_code == 422
 
 
 def test_unknown_permission_reads_do_not_register_groups(client: TestClient) -> None:
@@ -201,7 +245,7 @@ def test_filesystem_reference_blocks_both_delete_routes(client: TestClient) -> N
     )
     assert response.status_code == 200
     assert client.get("/api/admin/groups").json() == {
-        "groups": [{"group_id": "filesystem-only"}]
+        "groups": [group_record("filesystem-only")]
     }
     assert (
         client.request(
@@ -245,6 +289,8 @@ def test_stale_root_save_does_not_register_rejected_group(client: TestClient) ->
     "method,path",
     [
         ("post", "/api/admin/groups"),
+        ("put", "/api/admin/groups/team"),
+        ("put", "/api/admin/groups"),
         ("delete", "/api/admin/groups/team"),
         ("delete", "/api/admin/groups"),
         ("put", "/api/admin/mcp-permissions/group-permissions?group_id=."),
@@ -285,6 +331,8 @@ def test_unauthenticated_group_routes_reject_requests(tmp_path: Path) -> None:
             == 401
         )
         assert client.delete("/api/admin/groups/team").status_code == 401
+        assert client.put("/api/admin/groups/team", json={}).status_code == 401
+        assert client.put("/api/admin/groups", json={}).status_code == 401
         assert (
             client.request(
                 "DELETE", "/api/admin/groups", json={"group_id": "."}

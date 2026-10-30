@@ -7,6 +7,7 @@
   import { emptyPromptCatalog, emptyResourceCatalog, type PromptCatalog as PromptCatalogData, type ResourceCatalog as ResourceCatalogData } from '$lib/admin/capability-catalogs';
   import type { InvocationPolicyTool } from '$lib/admin/invocation-policy';
   import CapabilityDescriptionOverrideModal from '$lib/components/admin/capability-descriptions/CapabilityDescriptionOverrideModal.svelte';
+  import ConnectorListEmptyState from '$lib/components/admin/connectors/ConnectorListEmptyState.svelte';
   import ConnectorCapabilities from '$lib/components/admin/connectors/ConnectorCapabilities.svelte';
   import ConnectorDetailItem from '$lib/components/admin/connectors/ConnectorDetailItem.svelte';
   import CopyableValue from '$lib/components/admin/connectors/CopyableValue.svelte';
@@ -157,7 +158,7 @@
  {/if}
  {/snippet}
 </AdminSplitWorkspace>
-{:else if !state.operations.blocked}<p class="empty">No MCP connectors yet.</p>{/if}
+{:else if !state.operations.blocked}<ConnectorListEmptyState message="No MCP connectors yet." />{/if}
 {:else}<p role="alert">Administration access was lost. Sign in again before reloading this page.</p>{/if}
 <style>
   button:not(:disabled){cursor:pointer}
@@ -172,7 +173,7 @@
   .confirm p { color: var(--admin-muted); font-size: 14px; line-height: 1.55; margin: 1rem 0 1.5rem; }
   .confirm footer { border-top: 1px solid var(--admin-border); display: flex; flex-wrap: wrap; gap: .7rem; justify-content: flex-end; padding-top: 1rem; }
   .danger-text[role='menuitem'] { color: var(--admin-danger-text); }
-  .feedback, .empty { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); color: var(--admin-muted); font-size: 14px; line-height: 1.55; padding: 1rem; }
+  .feedback { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); color: var(--admin-muted); font-size: 14px; line-height: 1.55; padding: 1rem; }
   .feedback[role='alert'] { background: var(--admin-danger-bg); border-color: var(--admin-danger-border); color: var(--admin-danger-text); }
   .feedback p { margin: 0 0 .75rem; }
 </style>

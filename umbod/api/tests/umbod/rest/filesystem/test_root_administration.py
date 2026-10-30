@@ -231,7 +231,7 @@ def test_openapi_root_policy_definitions_are_minimal(admin_client: TestClient) -
 def test_oidc_policy_missing_issuer_fails_closed(
     admin_settings: AppConfig, issuer: str, method: str, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(deps, "local_rest_identity_enabled", lambda config: False)
+    monkeypatch.setattr(deps, "filesystem_managed_issuer", lambda config: config.oidc.issuer_url)
     settings = admin_settings.model_copy(update={
         "oidc": admin_settings.oidc.model_copy(update={"issuer_url": issuer}),
     })

@@ -1,6 +1,7 @@
 import asyncio
 
 from umbod.infrastructure.persistence.schema_preparation import APPLICATION_PERSISTENCE_TABLES
+from umbod.infrastructure.persistence.group_reconciliation import reconcile_group_catalogue
 from umbod.infrastructure.persistence.sqlite.database import SQLiteDatabase
 
 
@@ -43,3 +44,20 @@ class SQLiteCurrentSchemaPreparation:
             async with self._database.schema_connection() as connection:
                 for statement in _CURRENT_SCHEMA_STATEMENTS:
                     await connection.execute(statement)
+                cursor = await connection.execute("PRAGMA table_info(mcp_permission_groups)")
+                columns = {row["name"] for row in await cursor.fetchall()}
+                await cursor.close()
+                if "label" not in columns:
+                    await connection.execute(
+                        "ALTER TABLE mcp_permission_groups ADD COLUMN label TEXT NOT NULL DEFAULT ''"
+                    )
+                    await connection.execute("UPDATE mcp_permission_groups SET label = group_id")
+                if "description" not in columns:
+                    await connection.execute(
+                        "ALTER TABLE mcp_permission_groups ADD COLUMN description TEXT NOT NULL DEFAULT ''"
+                    )
+                if "revision" not in columns:
+                    await connection.execute(
+                        "ALTER TABLE mcp_permission_groups ADD COLUMN revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0)"
+                    )
+            await reconcile_group_catalogue(self._database)

@@ -21,6 +21,8 @@ from umbod.core.filesystem.stores.uploads import DatabaseUploadTransactions
 
 from umbod.core.filesystem.administration import RootGroupPolicyManagement, RootGroupPolicyService
 from umbod.core.filesystem.stores.administration import DatabaseRootPolicyTransactions
+from umbod.core.filesystem.sharing import FilesystemSharing, SharingService
+from umbod.core.filesystem.stores.sharing import DatabaseSharingTransactions
 
 from .config import (
     ContentConfig,
@@ -68,6 +70,12 @@ def create_filesystem_uploads(
 
 def create_root_group_policy_management(*, database: Database, issuer: str) -> RootGroupPolicyManagement:
     return RootGroupPolicyService(DatabaseRootPolicyTransactions(database), issuer)
+
+
+def create_filesystem_sharing(
+    *, database: Database, resolver: FilesystemIdentityResolver, issuer: str,
+) -> FilesystemSharing:
+    return SharingService(resolver, DatabaseSharingTransactions(database), issuer)
 
 
 def create_root_provisioning(*, database: Database) -> RootProvisioning:

@@ -17,7 +17,6 @@
 </script>
 
 <header class="page-header">
-  <p class="admin-eyebrow">Administration</p>
   <h1 class="admin-title">Instance settings</h1>
   <p class="admin-lede">Review how your Umbod instance is configured. These settings are managed by your deployment team and cannot be changed here.</p>
   <span class="read-only">Read-only · Deployment managed</span>

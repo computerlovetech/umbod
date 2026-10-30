@@ -7,7 +7,28 @@ from umbod.core.filesystem.browsing.exploration import (
     DirectoryListing,
     DirectoryTree,
     NodeInspection,
+    TreeEntry,
 )
+
+from .models import FilesystemNodeSummary
+
+
+class FilesystemNodeInspection(NodeInspection):
+    node: FilesystemNodeSummary
+
+
+class FilesystemDirectoryListing(DirectoryListing):
+    node: FilesystemNodeSummary
+    entries: list[FilesystemNodeSummary]
+
+
+class FilesystemTreeEntry(TreeEntry):
+    node: FilesystemNodeSummary
+
+
+class FilesystemDirectoryTree(DirectoryTree):
+    node: FilesystemNodeSummary
+    entries: list[FilesystemTreeEntry]
 
 
 class BrowseCommand(BaseModel):
@@ -42,21 +63,21 @@ class DirectoryListingResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     operation: Literal["ls"]
-    result: DirectoryListing
+    result: FilesystemDirectoryListing
 
 
 class DirectoryTreeResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     operation: Literal["tree"]
-    result: DirectoryTree
+    result: FilesystemDirectoryTree
 
 
 class NodeInspectionResponse(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     operation: Literal["stat"]
-    result: NodeInspection
+    result: FilesystemNodeInspection
 
 
 FilesystemBrowseResponse = Annotated[

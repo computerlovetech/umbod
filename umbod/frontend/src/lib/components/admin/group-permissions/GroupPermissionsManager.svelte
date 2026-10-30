@@ -1,67 +1,13 @@
 <script lang="ts">
-  import { adminApi } from '$lib/admin/infrastructure/admin-api';
-  import GroupRegistrationDialog from './shared/GroupRegistrationDialog.svelte';
-  import { GroupRegistrationState } from './shared/group-registration-state.svelte';
-  import { browserSubmit } from '$lib/admin/operations/browser-submit';
-  import { untrack } from 'svelte';
-  import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
-  import GroupPermissionsTabs from './GroupPermissionsTabs.svelte';
-  import AdminSidebarActionMenu from '$lib/components/admin/shared/AdminSidebarActionMenu.svelte';
   import AdminToggle from '$lib/components/admin/shared/AdminToggle.svelte';
   import AdminSaveAction from '$lib/components/admin/shared/AdminSaveAction.svelte';
   import Button from '$lib/components/admin/shared/Button.svelte';
   import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
-  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
-  import { FormPendingState } from '$lib/components/admin/shared/form-pending-state.svelte';
-  import { useToast } from '$lib/components/feedback';
-  import { GroupPermissionsState, type ConnectorPermissionTarget, type GroupPermissionsInitialData } from './group-permissions-state.svelte';
+  import type { GroupPermissionsState, ConnectorPermissionTarget } from './group-permissions-state.svelte';
 
-  type GroupPermissionsForm = {
-    status?: 'saved' | 'registered' | 'deleted' | 'rejected' | 'failed';
-    groupId?: string;
-    message?: string;
-  };
+  let { state }: { state: GroupPermissionsState } = $props();
 
-  let { data, form }: { data: GroupPermissionsInitialData; form?: GroupPermissionsForm } = $props();
-
-  const state = new GroupPermissionsState(
-    untrack(() => data),
-    null,
-    untrack(() => (form?.status === 'registered' || form?.status === 'saved' ? (form.groupId ?? null) : null))
-  );
-  const pendingState = new FormPendingState();
-  const toast = useToast();
-  const registration = new GroupRegistrationState(
-    (groupId) => adminApi().groups.register(groupId),
-    (groupId) => {
-      state.acceptRegisteredGroup(groupId);
-      toast.success(`Registered group ${groupId}`);
-    }
-  );
-
-  $effect(() => {
-    const nextData = data;
-    const nextSelectedGroupId = form?.status === 'registered' || form?.status === 'saved' ? (form.groupId ?? null) : null;
-
-    untrack(() => state.synchronizeServerData(nextData, null, nextSelectedGroupId));
-  });
-
-  const inputChecked = (event: Event): boolean => {
-    return event.currentTarget instanceof HTMLInputElement ? event.currentTarget.checked : false;
-  };
-
-  const isRecord = (value: unknown): value is Record<string, unknown> => {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
-  };
-
-  const formFromActionResult = (result: unknown): GroupPermissionsForm | null => {
-    if (!isRecord(result) || !isRecord(result.data)) return null;
-    const { status, groupId, message } = result.data;
-    if (status !== 'saved' && status !== 'registered' && status !== 'deleted' && status !== 'rejected' && status !== 'failed') return null;
-    if (groupId !== undefined && typeof groupId !== 'string') return null;
-    if (message !== undefined && typeof message !== 'string') return null;
-    return { status, groupId, message };
-  };
+  const inputChecked = (event: Event): boolean => event.currentTarget instanceof HTMLInputElement && event.currentTarget.checked;
 
   const connectorBadgeLabel = (connector: ConnectorPermissionTarget): string => {
     if (!state.connectorIsGranted(connector.id)) {
@@ -91,40 +37,13 @@
       : 'group-permissions__tag-orange';
   };
 
-  const savePendingKey = (groupId: string | null): string => {
-    return `save-permissions:${groupId ?? ''}`;
-  };
-
-  const saveFeedback = (groupId: string | null): { message: string; tone: 'success' | 'warning' | 'error' | 'muted' | 'saving'; icon: string } => {
-    if (pendingState.isPending(savePendingKey(groupId))) {
-      return { message: 'Saving changes…', tone: 'saving', icon: '' };
-    }
-
-    if (state.hasUnsavedChanges) {
-      return { message: 'Unsaved changes', tone: 'warning', icon: '•' };
-    }
-
+  const saveFeedback = (): { message: string; tone: 'success' | 'warning' | 'error' | 'muted' | 'saving'; icon: string } => {
+    if (state.saving) return { message: 'Saving changes…', tone: 'saving', icon: '' };
+    if (state.saveMessage) return { message: state.saveMessage, tone: 'error', icon: '!' };
+    if (state.hasUnsavedChanges) return { message: 'Unsaved changes', tone: 'warning', icon: '•' };
     return { message: 'All changes saved', tone: 'muted', icon: '✓' };
   };
 </script>
-
-<section class="group-permissions" aria-labelledby="group-permissions-title">
-  <div class="group-permissions__header">
-    {#if state.originHref !== null}
-      <a class="group-permissions__back" href={state.originHref}>← Back to OpenAPI connector</a>
-    {/if}
-    <div class="group-permissions__heading">
-      <div>
-        <p class="admin-eyebrow">Umbod</p>
-        <h1 id="group-permissions-title" class="admin-title">Group permissions</h1>
-        <p class="admin-lede">Add groups and see what each group's agents can do — which connectors they can access and the operations allowed for each.</p>
-      </div>
-      <Button disabled={registration.pending} onclick={registration.show}><span class="group-permissions__plus" aria-hidden="true">+</span> Add Group</Button>
-    </div>
-  </div>
-
-  <GroupPermissionsTabs activeTab="connectors" />
-  <p class="group-permissions__description">Groups are shared with filesystem access. Register a group claim value, not IdP membership. Registration is saved independently and grants no access. Delete group removes the shared catalogue entry and is blocked while connector, capability or filesystem references remain.</p>
 
   {#if state.initialTarget !== null}
     {#if state.deepLinkedTargetAvailable}
@@ -134,55 +53,6 @@
     {/if}
   {/if}
 
-  <AdminSplitWorkspace
-    ariaLabel="Group permissions workspace"
-    sidebarLabel="Groups"
-    sidebarHeading="Groups"
-    count={state.groups.length}
-    detailLabel="Permission editor"
-  >
-    {#snippet sidebar()}
-      <ul class="group-permissions__groups">
-        {#each state.groups as group (group.groupId)}
-          <li class="group-permissions__group-item">
-            <div class:group-permissions__group-selected={state.selectedGroupId === group.groupId} class="group-permissions__group-row">
-              <button class="group-permissions__group-button" type="button" onclick={() => state.selectGroup(group.groupId)}>
-                <span class="group-permissions__avatar">{state.connectorInitials(group.groupId)}</span>
-                <span class="group-permissions__group-name">{group.groupId}</span>
-              </button>
-              <AdminSidebarActionMenu open={state.openGroupMenuId === group.groupId} label={`Open actions for ${group.groupId}`} onopenchange={(open) => state.setGroupMenuOpen(group.groupId, open)}>
-                {#snippet menu()}
-                  <form
-                    method="POST"
-                    data-operation="deletePermissionGroup"
-                    use:browserSubmit={({ onComplete }) => {
-                      const pendingKey = `delete-group:${group.groupId}`;
-                      onComplete(() => pendingState.stop(pendingKey));
-      pendingState.start(pendingKey);
-                      return async ({ update, result }) => {
-                        const actionForm = formFromActionResult(result);
-                        if (!actionForm) throw new Error('Invalid delete permission group result');
-                        if (actionForm.status === 'deleted') toast.success(`Deleted group ${actionForm.groupId ?? group.groupId}`);
-                        else toast.error(actionForm.message ?? 'Could not delete group');
-                        await update();
-                        state.closeGroupMenu();
-                        pendingState.stop(pendingKey);
-                      };
-                    }}
-                  >
-                    <input type="hidden" name="groupId" value={group.groupId} />
-                    <LoadingButton type="submit" label="Delete group" loadingLabel="Deleting..." loading={pendingState.isPending(`delete-group:${group.groupId}`)} variant="secondary" />
-                  </form>
-                {/snippet}
-              </AdminSidebarActionMenu>
-            </div>
-          </li>
-        {/each}
-      </ul>
-
-    {/snippet}
-
-    {#snippet detail()}
       {#if state.editorStatus === 'loading'}
         <DelayedSpinner active label="Loading group permissions" />
       {:else if state.editorStatus === 'failed'}
@@ -191,15 +61,7 @@
           <Button onclick={state.retrySelection}>Retry</Button>
         </div>
       {:else if state.editorStatus === 'ready' && state.selectedGroupId !== null && state.selectedPermissionSet !== null}
-        <div class="group-permissions__detail-head">
-          <span class="group-permissions__avatar group-permissions__avatar-large">{state.connectorInitials(state.selectedGroupId)}</span>
-          <div>
-            <h2>{state.selectedGroupId}</h2>
-            <p>Group permission set</p>
-          </div>
-        </div>
-
-        <p class="group-permissions__description">What agents in this group can do. Toggle a connector to grant or revoke access, then expand it to choose which capabilities the agents may use.</p>
+        <p class="permission-description">What agents in this group can do. Toggle a connector to grant or revoke access, then expand it to choose which capabilities the agents may use.</p>
 
         <div class="group-permissions__stats">
           <div class="group-permissions__stat-card">
@@ -220,7 +82,7 @@
           </div>
         {/if}
 
-        <div class="group-permissions__block">
+        <div class="permission-block">
           <h3>Connectors &amp; permissions</h3>
           <p>{state.exactMatchGuidance} Granting a connector does not grant its capabilities. Expand any connector to grant tools, prompts, and resources individually.</p>
 
@@ -235,7 +97,7 @@
                   </span>
                   <span class={`group-permissions__tag ${connectorBadgeClass(connector)}`}>{connectorBadgeLabel(connector)}</span>
                   <button class:group-permissions__button-dark={state.expandedConnectorId === connector.id} class="group-permissions__edit-button" type="button" aria-expanded={state.expandedConnectorId === connector.id} onclick={() => state.toggleConnectorExpansion(connector.id)}>{state.expandedConnectorId === connector.id ? 'Done' : 'Capabilities'}</button>
-                  <AdminToggle checked={state.connectorIsGranted(connector.id)} ariaLabel={`${connector.displayName} access`} onchange={(event) => state.setConnectorPermission(connector.id, inputChecked(event))} />
+                  <AdminToggle checked={state.connectorIsGranted(connector.id)} disabled={state.saving} ariaLabel={`${connector.displayName} access`} onchange={(event) => state.setConnectorPermission(connector.id, inputChecked(event))} />
                 </div>
 
                 {#if state.expandedConnectorId === connector.id}
@@ -252,7 +114,7 @@
                             </span>
                             <AdminToggle
                               checked={state.capabilityIsGranted({ connectorId: connector.id, kind: capability.kind, key: capability.key })}
-                              disabled={!state.connectorIsGranted(connector.id)}
+                              disabled={state.saving || !state.connectorIsGranted(connector.id)}
                               ariaLabel={`${capability.label} permission`}
                               onchange={(event) => state.setCapabilityPermission({ connectorId: connector.id, kind: capability.kind, key: capability.key }, inputChecked(event))}
                             />
@@ -268,178 +130,44 @@
         </div>
 
         {#if state.unavailableGrantedConnectorIds.length > 0}
-          <section class="group-permissions__block" aria-labelledby="unavailable-connector-grants-heading">
+          <section class="permission-block" aria-labelledby="unavailable-connector-grants-heading">
             <h3 id="unavailable-connector-grants-heading">Saved grants for unavailable connectors</h3>
             <p>These connectors may be unpublished or otherwise unavailable for assignment. Remove their saved connector and capability grants here. Changes apply only after Save permissions.</p>
             <ul class="group-permissions__unavailable-grants">
               {#each state.unavailableGrantedConnectorIds as connectorId (connectorId)}
                 <li>
                   <code>{connectorId}</code>
-                  <Button variant="secondary" aria-label={`Remove saved grants for ${connectorId}`} disabled={pendingState.isPending(savePendingKey(state.selectedGroupId))} onclick={() => state.removeUnavailableConnectorGrants(connectorId)}>Remove saved grants</Button>
+                  <Button variant="secondary" aria-label={`Remove saved grants for ${connectorId}`} disabled={state.saving} onclick={() => state.removeUnavailableConnectorGrants(connectorId)}>Remove saved grants</Button>
                 </li>
               {/each}
             </ul>
           </section>
         {/if}
 
-        {@const currentSaveFeedback = saveFeedback(state.selectedGroupId)}
-        <form
-          method="POST"
-          data-operation="saveGroupPermissions"
-          class="group-permissions__save"
-          use:browserSubmit={({ onComplete }) => {
-            const pendingKey = savePendingKey(state.selectedGroupId);
-            onComplete(() => pendingState.stop(pendingKey));
-      pendingState.start(pendingKey);
-
-            return async ({ update, result }) => {
-              const actionForm = formFromActionResult(result);
-
-              if (!actionForm) throw new Error('Invalid save permissions result');
-              if (actionForm.status === 'saved' && typeof actionForm.groupId === 'string') {
-                await update();
-                state.markGroupSaved(actionForm.groupId);
-                toast.success('Permissions saved');
-              } else if ((actionForm.status === 'rejected' || actionForm.status === 'failed') && state.selectedGroupId !== null) {
-                const message = actionForm.message ?? 'Could not save permissions';
-                state.markGroupSaveRejected(state.selectedGroupId, message);
-                toast.error(message);
-              }
-
-              pendingState.stop(pendingKey);
-            };
-          }}
-        >
-          <input type="hidden" name="groupId" value={state.selectedGroupId} />
-          <input type="hidden" name="permissionSet" value={state.selectedPermissionChangesJson} />
+        {@const currentSaveFeedback = saveFeedback()}
+        <form class="permission-save" onsubmit={(event) => { event.preventDefault(); void state.save(); }}>
           <AdminSaveAction
             label="Save permissions"
             loadingLabel="Saving permissions..."
-            loading={pendingState.isPending(savePendingKey(state.selectedGroupId))}
-            disabled={!state.hasUnsavedChanges}
+            loading={state.saving}
+            disabled={!state.canSave}
             message={currentSaveFeedback.message}
             tone={currentSaveFeedback.tone}
             icon={currentSaveFeedback.icon}
           />
         </form>
       {:else}
-        <p>Select or add a group to edit permissions.</p>
+        <p>Select a group to edit permissions.</p>
       {/if}
-    {/snippet}
-  </AdminSplitWorkspace>
-</section>
 
-{#if registration.open}<GroupRegistrationDialog {registration} />{/if}
+
 
 <style>
-  .group-permissions__header {
-    margin-bottom: 32px;
-  }
-
-  .group-permissions__heading {
-    align-items: flex-start;
-    display: flex;
-    gap: 24px;
-    justify-content: space-between;
-  }
-
-  .group-permissions__heading :global(.admin-shared-button) {
-    flex-shrink: 0;
-    margin-top: 26px;
-  }
-
-  .group-permissions__plus {
-    font-size: 18px;
-    font-weight: 400;
-    margin-right: 8px;
-  }
-
-  @media (max-width: 1000px) {
-    .group-permissions__heading { flex-wrap: wrap; gap: 16px; }
-    .group-permissions__heading :global(.admin-shared-button) { margin-top: 0; }
-  }
-
-  .group-permissions__back {
-    color: var(--admin-accent);
-    display: inline-block;
-    margin-bottom: 16px;
-  }
-
   .group-permissions__target-notice {
     background: var(--admin-accent-soft);
     border: 1px solid var(--admin-accent-border);
     border-radius: 8px;
     padding: 12px 16px;
-  }
-
-  .group-permissions__groups {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .group-permissions__group-item {
-    position: relative;
-  }
-
-  .group-permissions__group-row {
-    align-items: center;
-    border-top: 1px solid var(--admin-border);
-    display: flex;
-    position: relative;
-  }
-
-  .group-permissions__group-row:hover {
-    background: var(--admin-soft);
-  }
-
-  .group-permissions__group-button {
-    align-items: center;
-    background: transparent;
-    border: 0;
-    color: var(--admin-ink);
-    cursor: pointer;
-    display: flex;
-    flex: 1;
-    font: inherit;
-    gap: 11px;
-    min-width: 0;
-    padding: 11px 8px 11px 15px;
-    text-align: left;
-  }
-
-  .group-permissions__group-selected {
-    background: var(--admin-accent-soft);
-    box-shadow: inset 3px 0 0 var(--admin-accent);
-  }
-
-  .group-permissions__avatar {
-    align-items: center;
-    background: var(--admin-ink);
-    border-radius: 50%;
-    color: var(--admin-on-action);
-    display: inline-flex;
-    flex-shrink: 0;
-    font-size: 11px;
-    font-weight: 700;
-    height: 26px;
-    justify-content: center;
-    width: 26px;
-  }
-
-  .group-permissions__avatar-large {
-    font-size: 15px;
-    height: 38px;
-    width: 38px;
-  }
-
-  .group-permissions__group-name {
-    overflow-wrap: anywhere;
-    display: block;
-    flex: 1;
-    font-size: 13px;
-    font-weight: 600;
-    min-width: 0;
   }
 
   .group-permissions__edit-button {
@@ -461,39 +189,6 @@
     background: var(--admin-ink);
     border-color: var(--admin-ink);
     color: var(--admin-on-action);
-  }
-
-  .group-permissions__detail-head {
-    align-items: flex-start;
-    display: flex;
-    gap: 12px;
-    margin-bottom: 6px;
-  }
-
-  .group-permissions__detail-head > div {
-    min-width: 0;
-  }
-
-  .group-permissions__detail-head h2 {
-    font-size: 22px;
-    font-weight: 600;
-    letter-spacing: -0.03em;
-    overflow-wrap: anywhere;
-    margin: 0;
-  }
-
-  .group-permissions__detail-head p,
-  .group-permissions__description,
-  .group-permissions__block > p {
-    color: var(--admin-muted);
-    font-size: 13px;
-    line-height: 1.55;
-    margin: 0;
-  }
-
-  .group-permissions__description {
-    margin-bottom: 18px;
-    max-width: 640px;
   }
 
   .group-permissions__stats {
@@ -525,21 +220,6 @@
     color: var(--admin-muted);
     font-size: 11px;
     margin: 1px 0 0;
-  }
-
-  .group-permissions__block h3 {
-    color: var(--admin-muted);
-    font-size: 12px;
-    font-family: var(--admin-mono);
-    font-weight: 500;
-    letter-spacing: 0.5px;
-    margin: 0 0 4px;
-    text-transform: uppercase;
-  }
-
-  .group-permissions__block > p {
-    color: var(--admin-muted);
-    margin-bottom: 12px;
   }
 
   .group-permissions__connector {
@@ -712,12 +392,6 @@
   .group-permissions__unavailable-grants code {
     overflow-wrap: anywhere;
     min-width: 0;
-  }
-
-  .group-permissions__save {
-    display: flex;
-    justify-content: flex-end;
-    margin-top: 24px;
   }
 
   .group-permissions__error,

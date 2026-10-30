@@ -9,7 +9,7 @@ import {
 } from './group-permissions-state.svelte';
 
 const data = (groups: string[]): GroupPermissionsInitialData => ({
-  groups: groups.map((groupId) => ({ groupId })),
+  groups: groups.map((groupId) => ({ groupId, label: `Label ${groupId}`, description: 'Group description', revision: 1 })),
   preloadedGroup: null,
   assignableTargets: [],
   exactMatchGuidance: '',
@@ -68,31 +68,6 @@ const unavailableGrantData = (): GroupPermissionsInitialData => ({
     ]
   },
   assignableTargets: targets('available')
-});
-
-describe('registered groups', () => {
-  test('selects a registered group without granting permissions or duplicating it', async (): Promise<void> => {
-    const state = new GroupPermissionsState(unavailableGrantData(), null, null, new ControllableLoader());
-    state.acceptRegisteredGroup('new-team');
-    await ready(state);
-    expect(state.selectedGroupId).toBe('new-team');
-    expect(state.selectedPermissionSet).toEqual(detail('new-team'));
-    expect(state.hasUnsavedChanges).toBe(false);
-    state.acceptRegisteredGroup('new-team');
-    expect(state.groups.filter((group) => group.groupId === 'new-team')).toHaveLength(1);
-  });
-
-  test('preserves unsaved permissions and asks before switching to a registered group', (): void => {
-    const state = new GroupPermissionsState(unavailableGrantData(), null, null, new ControllableLoader());
-    state.removeUnavailableConnectorGrants('z-unavailable');
-    const draft = state.selectedPermissionSet;
-    state.acceptRegisteredGroup('new-team');
-    expect(state.groups.some((group) => group.groupId === 'new-team')).toBe(true);
-    expect(state.selectedGroupId).toBe('a');
-    expect(state.selectedPermissionSet).toEqual(draft);
-    expect(state.hasUnsavedChanges).toBe(true);
-    expect(state.unsavedChangesWarning).not.toBeNull();
-  });
 });
 
 describe('unavailable saved connector grants', () => {
@@ -180,6 +155,73 @@ describe('unavailable saved connector grants', () => {
 });
 
 describe('GroupPermissionsState public behavior', () => {
+  test('reconciles catalogue additions and removals without losing retained selection or drafts', async (): Promise<void> => {
+    const loader = new ControllableLoader();
+    loader.groups.set('a', detail('a'));
+    loader.groups.set('b', detail('b'));
+    const state = new GroupPermissionsState(data(['a', 'b']), null, null, loader);
+    state.selectGroup('a');
+    await ready(state);
+    state.setConnectorPermission('draft', true);
+    state.selectGroup('b');
+    const updated = [{ ...data(['a']).groups[0], label: 'Renamed', description: 'Updated' }, ...data(['c']).groups];
+    state.synchronizeCatalogue(updated);
+    expect(state.groups.map((group) => group.groupId)).toEqual(['a', 'c']);
+    expect(state.groupMetadata('a')?.label).toBe('Renamed');
+    expect(state.selectedGroupId).toBe('a');
+    expect(state.selectedPermissionSet?.connectorIds).toEqual(['draft']);
+    expect(state.hasUnsavedChanges).toBe(true);
+    expect(state.unsavedChangesWarning).toBeNull();
+    state.selectGroup('b');
+    expect(state.selectedGroupId).toBe('a');
+    state.synchronizeCatalogue(data(['c']).groups);
+    expect(state.selectedGroupId).toBeNull();
+    expect(state.selectedPermissionSet).toBeNull();
+    expect(state.editorStatus).toBe('unselected');
+    expect(state.hasUnsavedChanges).toBe(false);
+    state.markGroupSaved('a');
+    expect(state.selectedGroupId).toBeNull();
+  });
+
+  test('fences removed group responses and cannot reuse their old cache after re-addition', async (): Promise<void> => {
+    let complete!: (value: GroupPermissionSet) => void;
+    const loader: GroupPermissionsLoader = {
+      loadGroup: vi.fn().mockImplementationOnce(() => new Promise<GroupPermissionSet>((resolve) => { complete = resolve; })).mockResolvedValue(detail('a', ['fresh'])),
+      loadAssignableTargets: async (): Promise<ConnectorPermissionTarget[]> => targets('target')
+    };
+    const state = new GroupPermissionsState(data(['a']), null, null, loader);
+    state.selectGroup('a');
+    state.synchronizeCatalogue([]);
+    complete(detail('a', ['obsolete']));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(state.selectedGroupId).toBeNull();
+    expect(state.editorStatus).toBe('unselected');
+    expect(state.connectors).toEqual([]);
+    state.synchronizeCatalogue(data(['a']).groups);
+    state.selectGroup('a');
+    await ready(state);
+    expect(state.selectedPermissionSet?.connectorIds).toEqual(['fresh']);
+    expect(loader.loadGroup).toHaveBeenCalledTimes(2);
+  });
+
+  test('retains central metadata separately from permission detail caches', async (): Promise<void> => {
+    const initial = data(['a', 'b']);
+    const loader = new ControllableLoader();
+    loader.groups.set('a', detail('a'));
+    loader.groups.set('b', detail('b'));
+    const state = new GroupPermissionsState(initial, null, null, loader);
+    state.selectGroup('a');
+    await ready(state);
+    state.selectGroup('b');
+    await ready(state);
+    state.selectGroup('a');
+    await ready(state);
+    expect(state.groupMetadata('a')).toEqual(initial.groups[0]);
+    expect(state.groupMetadata('b')).toEqual(initial.groups[1]);
+    expect(state.selectedPermissionSet).toEqual(detail('a'));
+  });
+
   test('uses server-preloaded selection without hydration requests', () => {
     const loader = new ControllableLoader();
     const initialData = data(['a']);

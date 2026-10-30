@@ -11,7 +11,6 @@
 
 {#if !compact}
 <header>
-  <p class="admin-eyebrow">Agent harness setup</p>
   <h1 class="admin-title">Connect Umbod</h1>
   <p class="admin-lede">Give your AI tools access to the connectors and capabilities published by this Umbod instance.</p>
 </header>

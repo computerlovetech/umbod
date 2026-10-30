@@ -19,6 +19,9 @@ from unittest.mock import AsyncMock, Mock
 
 from umbod.core.filesystem.browsing import FilesystemBrowsing, NodeSummary
 from umbod.core.filesystem.models import NodeKind, NodeMetadata, RootParent
+from umbod.core.filesystem.sharing import (
+    FilesystemSharing, NodeSharingSummaries, RestrictedNodeSharingSummary,
+)
 from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory
 import httpx
 import pytest
@@ -102,6 +105,11 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_p
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
         updated_at=datetime(2026, 1, 1, tzinfo=UTC), revision=1,
     ))
+    sharing = Mock(spec=FilesystemSharing)
+    sharing.summarize_nodes = AsyncMock(return_value=NodeSharingSummaries(nodes=(
+        RestrictedNodeSharingSummary(node_id=browsing.get_root.return_value.id, can_share=False),
+    )))
+    monkeypatch.setattr(DatabaseFilesystemServiceFactory, 'sharing', Mock(return_value=sharing))
     service_factory = Mock(return_value=browsing)
     monkeypatch.setattr(DatabaseFilesystemServiceFactory, 'browsing', service_factory)
     app = await build_starlette_app(context)
@@ -121,10 +129,13 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_p
             service_factory.assert_called_once_with()
             forbidden_response = await _post(client, PUBLIC_PATH, _request(7, 'tools/call', {'name': 'get_filesystem_root', 'arguments': {}}))
     service_factory.assert_called_once_with()
+    sharing.summarize_nodes.assert_awaited_once_with(
+        browsing.get_root.call_args.args[0], (browsing.get_root.return_value.id,),
+    )
     assert 'error' in forbidden_response or forbidden_response['result'].get('isError') is True
     proxy_names = {tool['name'] for tool in proxy_response['result']['tools']}
     concurrent_proxy_names = {tool['name'] for tool in concurrent_proxy_response['result']['tools']}
-    expected_root_names = {f'scope_test_{name}' for name in DOWNSTREAM_TOOL_NAMES} | {"filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_delete_file", "filesystem_read_file"}
+    expected_root_names = {f'scope_test_{name}' for name in DOWNSTREAM_TOOL_NAMES} | {"filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_delete_file", "filesystem_read_file", "filesystem_list_sharing_groups", "filesystem_share"}
     root_names = {tool['name'] for tool in root_response['result']['tools']}
     refreshed_root_names = {tool['name'] for tool in refreshed_root_response['result']['tools']}
     assert proxy_names == set(DOWNSTREAM_TOOL_NAMES)

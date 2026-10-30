@@ -20,6 +20,13 @@ export interface UploadTransferPort {
   transfer(descriptor: UploadTransfer, file: File, sessionId: string): Promise<void>;
 }
 
+export interface NodeSharingApi {
+  inspectAccess(id: string, signal?: AbortSignal): Promise<import('./domain/sharing').NodeAccess>;
+  replaceAccess(id: string, revision: string, body: import('./domain/sharing').ReplaceAccess): Promise<import('./domain/sharing').NodeAccess>;
+  listEligibleSharingGroups(id: string, signal?: AbortSignal): Promise<import('./domain/sharing').SharingGroup[]>;
+}
+
 export interface FilesApi {
   readonly filesystem: FilesystemApi;
+  readonly sharing: NodeSharingApi;
 }

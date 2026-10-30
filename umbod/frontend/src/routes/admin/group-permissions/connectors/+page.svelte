@@ -1,27 +1,17 @@
 <script lang="ts">
-  import { page } from '$app/state';
-  import { operationState } from '$lib/admin/operations/operation-state.svelte';
-  import AdminShell from '$lib/components/admin/AdminShell.svelte';
   import GroupPermissionsManager from '$lib/components/admin/group-permissions/GroupPermissionsManager.svelte';
-  import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
-  import type { GroupPermissionsPageData, SaveGroupPermissionsResult } from '$lib/admin/group-permissions';
+  import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
+  import { getGroupPermissionsWorkspace } from '$lib/components/admin/group-permissions/group-permissions-context';
 
-  type AdminGroupPermissionsPageData = GroupPermissionsPageData & {
-    accountIdentity?: HeaderAccountIdentityState;
-  };
-
-  let { data }: { data: AdminGroupPermissionsPageData; form?: SaveGroupPermissionsResult } = $props();
-  const form = $derived(operationState.forOwner({ route: page.url.pathname }) as SaveGroupPermissionsResult);
-
-  const fallbackAccountIdentity: HeaderAccountIdentityState = { kind: 'hidden' };
+  const workspace = getGroupPermissionsWorkspace();
 </script>
 
-<svelte:head>
-  <title>Connectors · Group permissions</title>
-</svelte:head>
+<svelte:head><title>Connectors · Group permissions</title></svelte:head>
 
-<AdminShell activeItem="groupPermissions" accountIdentity={data.accountIdentity ?? fallbackAccountIdentity} contentWidth="wide">
-  <div class="admin-page">
-    <GroupPermissionsManager data={data} {form} />
-  </div>
-</AdminShell>
+{#if workspace.selectedGroup && !workspace.selectedGroup.registered}
+  <p>This group is not registered for connector permissions. Manage its filesystem access or register it on the Groups page.</p>
+{:else if workspace.connectors}
+  <GroupPermissionsManager state={workspace.connectors} />
+{:else}
+  <DelayedSpinner active label="Loading group permissions" />
+{/if}

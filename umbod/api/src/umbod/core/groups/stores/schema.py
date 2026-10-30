@@ -2,6 +2,8 @@ from typing import cast
 
 from pydantic import BaseModel, ConfigDict
 
+from umbod.core.groups.models import Group
+
 from umbod.core.persistence.query import (
     Field,
     Fields,
@@ -10,13 +12,12 @@ from umbod.core.persistence.query import (
     Table,
     TableIdentity,
     TextCodec,
+    IntegerCodec,
 )
 
 
-class PermissionGroupRecord(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    group_id: str
+class PermissionGroupRecord(Group):
+    pass
 
 
 class PermissionGroupKey(BaseModel):
@@ -33,11 +34,14 @@ class GroupIdResult(BaseModel):
 
 GROUP_IDENTITY = TableIdentity("mcp_permission_groups")
 GROUP_ID = Field[PermissionGroupRecord, str](GROUP_IDENTITY, "group_id", TextCodec())
+GROUP_LABEL = Field[PermissionGroupRecord, str](GROUP_IDENTITY, "label", TextCodec())
+GROUP_DESCRIPTION = Field[PermissionGroupRecord, str](GROUP_IDENTITY, "description", TextCodec())
+GROUP_REVISION = Field[PermissionGroupRecord, int](GROUP_IDENTITY, "revision", IntegerCodec())
 GROUP_TABLE = Table(
     GROUP_IDENTITY,
     RowCodec(
         PermissionGroupRecord,
-        cast(tuple[Field[PermissionGroupRecord, object], ...], (GROUP_ID,)),
+        cast(tuple[Field[PermissionGroupRecord, object], ...], (GROUP_ID, GROUP_LABEL, GROUP_DESCRIPTION, GROUP_REVISION)),
     ),
     KeyCodec(
         PermissionGroupKey,

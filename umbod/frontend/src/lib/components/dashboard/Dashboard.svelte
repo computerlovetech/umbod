@@ -68,7 +68,6 @@
     <section class="catalogue" aria-labelledby="connectors-heading" aria-busy={state.refreshing}>
       <div class="section-heading">
         <h2 id="connectors-heading">Connectors</h2>
-        {#if state.phase === 'ready'}<button aria-label="Refresh connectors" disabled={state.refreshing} onclick={state.loadCatalogue}>Refresh</button>{/if}
       </div>
       {#if state.catalogueError}
         <div class="feedback" role="alert">

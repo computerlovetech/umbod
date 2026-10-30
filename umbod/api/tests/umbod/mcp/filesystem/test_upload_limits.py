@@ -28,7 +28,7 @@ def server_for(filesystem: FilesystemMcp, services: FilesystemServiceFactory) ->
 
 @pytest.mark.asyncio
 async def test_lower_configured_limit_rejects_without_storage(filesystem_mcp: FilesystemMcp) -> None:
-    services = DatabaseFilesystemServiceFactory(filesystem_mcp.database, filesystem_mcp.content, 3)
+    services = DatabaseFilesystemServiceFactory(filesystem_mcp.database, filesystem_mcp.content, 3, "https://issuer")
     async with Client(server_for(filesystem_mcp, services)) as client:
         result = await upload(client, await root_id(client), {"encoding": "utf-8", "text": "four"})
     assert result.is_error

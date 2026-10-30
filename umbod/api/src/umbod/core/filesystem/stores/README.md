@@ -13,6 +13,7 @@ description: "Database-neutral namespace and access-policy persistence."
 - [namespace.py](./namespace.py) — Namespace persistence and revision-checked single-file removal.
 - [schema.py](./schema.py) — Node and access-policy tables.
 - [session.py](./session.py) — Storage failure translation.
+- [sharing.py](./sharing.py) — Serialized sharing, session-bound registered-group IDs and metadata, and non-registering grant writes.
 - [transactions.py](./transactions.py) — Combined namespace and policy writes.
 - [uploads.py](./uploads.py) — Upload session table and combined publication transactions.
 

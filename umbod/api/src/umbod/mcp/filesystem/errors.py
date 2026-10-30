@@ -4,6 +4,7 @@ from contextlib import contextmanager
 from fastmcp.exceptions import ToolError
 
 from umbod.core.filesystem.authorization.errors import PermissionDenied
+from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
 from umbod.core.filesystem.content.errors import UploadTooLarge
 from umbod.core.filesystem.uploads.errors import (
     UploadConflict, UploadExpired, UploadLengthMismatch, UploadMediaTypeMismatch,
@@ -26,6 +27,8 @@ class InvalidReadEncoding(Exception):
 
 
 _ERROR_MESSAGES: dict[type[Exception], str] = {
+    InvalidSharingPolicy: "filesystem_invalid_sharing_policy: Invalid filesystem sharing policy",
+    SharingPolicyUnavailable: "filesystem_policy_unavailable: Filesystem sharing configuration unavailable",
     ReadTooLarge: "filesystem_read_too_large: Filesystem file exceeds read limit",
     InvalidReadEncoding: "filesystem_read_invalid_encoding: File is not valid UTF-8; use base64",
     UploadTooLarge: "filesystem_upload_too_large: Filesystem upload too large",

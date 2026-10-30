@@ -9,7 +9,7 @@ export type TransportRequestBody =
   | { kind: 'raw'; value: File; schema: z.ZodType<File>; headers: Record<string, string> }
   | { kind: 'multipart'; form: FormData; metadata: unknown; metadataSchema: z.ZodType<unknown> };
 
-const conditionalHeadersSchema = z.strictObject({ 'If-Match': z.string().regex(/^"[1-9][0-9]*"$/) });
+const conditionalHeadersSchema = z.strictObject({ 'If-Match': z.string().regex(/^"[\x21\x23-\x2b\x2d-\x7e]+"$/) });
 
 export interface TransportRequest<TOut> {
   method: HttpMethod;
@@ -127,21 +127,22 @@ class HttpTransport implements Transport {
 
   private buildRequestInit(opts: TransportRequest<unknown>): RequestInit {
     const requestBody = opts.requestBody ?? this.legacyRequestBody(opts) ?? { kind: 'absent' };
+    const conditional = opts.conditionalHeaders ? this.parseOutbound(conditionalHeadersSchema, opts.conditionalHeaders) : {};
     if (requestBody.kind === 'absent') {
-      return { method: opts.method, headers: { ...this.authRequestHeaders().headers, ...(opts.conditionalHeaders ? this.parseOutbound(conditionalHeadersSchema, opts.conditionalHeaders) : {}) } };
+      return { method: opts.method, headers: { ...this.authRequestHeaders().headers, ...conditional } };
     }
     if (requestBody.kind === 'raw') {
       const body = this.parseOutbound(requestBody.schema, requestBody.value);
-      return { method: opts.method, headers: { ...this.authRequestHeaders().headers, ...requestBody.headers }, body };
+      return { method: opts.method, headers: { ...this.authRequestHeaders().headers, ...requestBody.headers, ...conditional }, body };
     }
     if (requestBody.kind === 'multipart') {
       this.parseOutbound(requestBody.metadataSchema, requestBody.metadata);
-      return { method: opts.method, ...this.authRequestHeaders(), body: requestBody.form };
+      return { method: opts.method, headers: { ...this.authRequestHeaders().headers, ...conditional }, body: requestBody.form };
     }
     const parsed = this.parseOutbound(requestBody.schema, requestBody.value);
     return {
       method: opts.method,
-      headers: { ...this.authRequestHeaders().headers, 'content-type': 'application/json' },
+      headers: { ...this.authRequestHeaders().headers, 'content-type': 'application/json', ...conditional },
       body: JSON.stringify(parsed)
     };
   }

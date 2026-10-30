@@ -94,7 +94,7 @@ async def filesystem_mcp() -> AsyncIterator[FilesystemMcp]:
     ))
     metrics = InMemoryMcpMetricsRecorder()
     content = RecordingContent(create_content_driver(InMemoryContentConfig(type="inmemory")))
-    services = DatabaseFilesystemServiceFactory(runtime.database, content, 20_971_520)
+    services = DatabaseFilesystemServiceFactory(runtime.database, content, 20_971_520, "https://issuer")
     files = ContentService(
         VerifiedIdentityResolver(), create_filesystem_transactions(database=runtime.database),
         content, 20_971_520,

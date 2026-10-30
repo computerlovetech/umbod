@@ -7,17 +7,28 @@ from umbod.core.persistence import Database
 from umbod.core.filesystem.ports import ContentDriver
 from umbod.core.filesystem.uploads import UploadService
 from umbod.core.filesystem.uploads.service import SystemUploadClock
-from umbod.infrastructure import create_filesystem_transactions, create_filesystem_uploads
+from umbod.core.filesystem.sharing import FilesystemSharing
+from umbod.infrastructure import (
+    create_filesystem_browsing, create_filesystem_creation, create_filesystem_sharing,
+    create_filesystem_transactions, create_filesystem_uploads,
+)
 
 from .upload_models import MAX_UPLOAD_BYTES
-from umbod.infrastructure import create_filesystem_browsing, create_filesystem_creation
 
 
 class DatabaseFilesystemServiceFactory:
-    def __init__(self, database: Database, content: ContentDriver, max_upload_bytes: int) -> None:
+    def __init__(
+        self, database: Database, content: ContentDriver, max_upload_bytes: int, managed_issuer: str,
+    ) -> None:
         self._database = database
+        self._managed_issuer = managed_issuer
         self._content = content
         self._max_upload_bytes = min(max_upload_bytes, MAX_UPLOAD_BYTES)
+
+    def sharing(self) -> FilesystemSharing:
+        return create_filesystem_sharing(
+            database=self._database, resolver=VerifiedIdentityResolver(), issuer=self._managed_issuer,
+        )
 
     def uploads(self) -> UploadService:
         return create_filesystem_uploads(

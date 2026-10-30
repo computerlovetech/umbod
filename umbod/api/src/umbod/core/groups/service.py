@@ -1,4 +1,4 @@
-from .models import Group, GroupInUse, RegisterGroup
+from .models import Group, GroupInUse, RegisterGroup, RegisterGroupMetadata, UpdateGroupMetadata
 from .ports import GroupCatalogue
 
 
@@ -12,6 +12,14 @@ class GroupManagementService:
     async def register_group(self, request: RegisterGroup) -> None:
         async with self._catalogue.write() as session:
             await session.register(request.group_id)
+
+    async def register_group_metadata(self, request: RegisterGroupMetadata) -> None:
+        async with self._catalogue.write() as session:
+            await session.register_metadata(request)
+
+    async def update_group_metadata(self, group_id: str, request: UpdateGroupMetadata) -> Group:
+        async with self._catalogue.write() as session:
+            return await session.update_metadata(group_id, request)
 
     async def delete_group(self, group_id: str) -> None:
         async with self._catalogue.write() as session:

@@ -11,6 +11,7 @@ description: "Operator settings, validation and conversion into runtime applicat
 - [build.py](./build.py) — Operator-to-runtime assembly and local filesystem content directory normalization.
 - [defaults.py](./defaults.py) — Configuration defaults.
 - [derive.py](./derive.py) — Configuration loading.
+- [identity_policy.py](./identity_policy.py) — Shared local identity eligibility and filesystem managed-issuer selection.
 - [inspection.py](./inspection.py) — Redacted inspection.
 - [operator.py](./operator.py) — Operator-facing settings.
 - [personal_connection_policy.py](./personal_connection_policy.py) — Personal identity and OAuth policy resolution.

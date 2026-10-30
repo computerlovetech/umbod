@@ -95,7 +95,10 @@ export const groupPermissionCapabilityRefSchema = z.object({
 });
 
 export const groupPermissionSummarySchema = z.object({
-  groupId: z.string()
+  groupId: z.string(),
+  label: z.string(),
+  description: z.string(),
+  revision: z.number().int().positive()
 });
 
 export const groupPermissionSetSchema = z.object({
@@ -164,8 +167,8 @@ export function capabilityPermissionId(capability: GroupPermissionCapabilityRef)
   return `${capability.connectorId}\u0000${capability.kind}\u0000${capability.key}`;
 }
 
-export function mapGroupPermissionSummary(group: ApiGroupPermissionSummary): GroupPermissionSummary {
-  return { groupId: group.group_id };
+export function mapGroupPermissionSummary(group: import('./groups/domain/schemas').CatalogueGroup): GroupPermissionSummary {
+  return { groupId: group.group_id, label: group.label, description: group.description, revision: group.revision };
 }
 
 export function mapGroupPermissionSet(group: ApiGroupPermissionSet): GroupPermissionSet {
