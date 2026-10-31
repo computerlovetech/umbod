@@ -9,10 +9,20 @@
     {
       "pattern": "umbod.ai",
       "custom_domain": true
-    },
-    {
-      "pattern": "preview.umbod.ai",
-      "custom_domain": true
     }
-  ]
+  ],
+  "env": {
+    "preview": {
+      "name": "umbod-website-preview",
+      "assets": {
+        "directory": "./dist"
+      },
+      "routes": [
+        {
+          "pattern": "preview.umbod.ai",
+          "custom_domain": true
+        }
+      ]
+    }
+  }
 }
