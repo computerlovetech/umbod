@@ -86,6 +86,20 @@ def main() -> None:
         container["env"].extend({"name": name, "value": value} for name, value in identity_environment.items())
         container["env"].append({"name": "UMBOD_OIDC_CLIENT_SECRET", "valueFrom": {"secretKeyRef": {"name": "personal-runtime-identity", "key": "client-secret"}}})
         container["volumeMounts"].append({"name": "personal-ca", "mountPath": "/personal-ca", "readOnly": True})
+    if os.environ.get("UMBOD_TEST_CONTENT_BACKEND") == "s3":
+        shared_names = {
+            "UMBOD_FILESYSTEM_CONTENT_BACKEND", "UMBOD_FILESYSTEM_S3_BUCKET",
+            "UMBOD_FILESYSTEM_S3_REGION", "UMBOD_FILESYSTEM_S3_ENDPOINT_URL",
+            "UMBOD_FILESYSTEM_S3_PREFIX", "UMBOD_FILESYSTEM_S3_ADDRESSING_STYLE",
+            "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY",
+        }
+        expected = {entry["name"]: entry for entry in primary["env"] if entry["name"] in shared_names}
+        if expected.keys() != shared_names or expected["UMBOD_FILESYSTEM_CONTENT_BACKEND"].get("value") != "s3":
+            raise RuntimeError("S3 worker configuration is incomplete")
+        for container in pod["containers"]:
+            actual = {entry["name"]: entry for entry in container["env"] if entry["name"] in shared_names}
+            if actual != expected:
+                raise RuntimeError("S3 worker configuration must be shared by every API and MCP worker")
     kubectl("patch", "deployment", "umbod-core", "--type=json", "-p", json.dumps([{"op": "replace", "path": "/spec/template/spec", "value": pod}]))
     kubectl("rollout", "status", "deployment/umbod-core", "--timeout=3m")
 

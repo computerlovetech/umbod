@@ -1,6 +1,6 @@
 from typing import Annotated, Literal, Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from umbod.config import defaults
@@ -58,6 +58,27 @@ class OperatorSettings(BaseSettings):
         default=defaults.FILESYSTEM_UPLOAD_MAX_BYTES, gt=0
     )
     filesystem_content_directory: Optional[str] = None
+    filesystem_content_backend: Literal["local", "s3"] = "local"
+    filesystem_s3_bucket: str = ""
+    filesystem_s3_region: str = "us-east-1"
+    filesystem_s3_endpoint_url: str = ""
+    filesystem_s3_prefix: str = ""
+    filesystem_s3_addressing_style: Literal["auto", "virtual", "path"] = "auto"
+
+    @model_validator(mode="after")
+    def validate_filesystem_backend_settings(self) -> "OperatorSettings":
+        if self.filesystem_content_backend == "s3":
+            if self.filesystem_content_directory is not None:
+                raise ValueError("S3 content backend cannot use a local content directory")
+        elif (
+            self.filesystem_s3_bucket
+            or self.filesystem_s3_endpoint_url
+            or self.filesystem_s3_prefix
+            or self.filesystem_s3_region != "us-east-1"
+            or self.filesystem_s3_addressing_style != "auto"
+        ):
+            raise ValueError("S3 settings require the S3 content backend")
+        return self
 
     data_dir: str = defaults.DATA_DIR
     connector_store: str = Field(

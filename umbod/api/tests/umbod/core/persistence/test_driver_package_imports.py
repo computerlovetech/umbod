@@ -106,6 +106,7 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
         'ContentConfig',
         'InMemoryContentConfig',
         'LocalContentConfig',
+        'S3ContentConfig',
         'FilesystemConfig',
         'create_access_control_driver',
         'create_content_driver',
@@ -140,6 +141,7 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
         'InMemoryContent',
         'LocalNamespace',
         'LocalContent',
+        'S3Content',
     }
     assert forbidden.isdisjoint(set(infrastructure.__all__))
 

@@ -35,6 +35,8 @@ The chart runs API and MCP as containers in one fixed, single-replica core Deplo
 
 Without persistence, the chart uses an ephemeral `emptyDir` volume. With `persistence.enabled=true`, it mounts a ReadWriteOnce PersistentVolumeClaim. Umbod does not migrate SQLite schemas or persisted documents between incompatible versions.
 
+The filesystem keeps namespace, ownership, and access grants in the application database. File bytes use local content storage by default, or the S3 backend in images containing that feature. API and MCP must use the same content storage configuration. S3 does not remove the need to persist the database, and file transfers still pass through Umbod. See [Files](../using-umbod/files.md) and [S3 file-content storage](s3-file-storage.md).
+
 ## Traffic boundaries
 
 - Browsers load static assets from the frontend Service and make requests to `/api/admin` directly. Production Ingress routes `/api` to the Python API without stripping the prefix.

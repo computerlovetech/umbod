@@ -6,6 +6,10 @@ Paths and commands below are relative to the repository root unless a working di
 
 Use Vercel's [skills.sh](https://skills.sh/) to install agent skills. Repository skill sources live in `skills/`; edit those, not installed copies in `.agents/skills/`.
 
+## UI Components
+
+Read the [component index](umbod/frontend/COMPONENT_INDEX.md) when working with UI Svelte components.
+
 ## Architecture decisions
 
 Architecture decision records live in [`umbod/project/architecture-records/`](umbod/project/architecture-records/). Read the applicable accepted ADRs before changing architecture; document intentional changes there rather than introducing a parallel pattern.

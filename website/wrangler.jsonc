@@ -1,14 +1,28 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "umbod-website",
+  "name": "umbod-website-preview",
   "compatibility_date": "2026-09-03",
   "assets": {
     "directory": "./dist"
   },
   "routes": [
     {
-      "pattern": "umbod.ai",
+      "pattern": "preview.umbod.ai",
       "custom_domain": true
     }
-  ]
+  ],
+  "env": {
+    "production": {
+      "name": "umbod-website",
+      "assets": {
+        "directory": "./dist"
+      },
+      "routes": [
+        {
+          "pattern": "umbod.ai",
+          "custom_domain": true
+        }
+      ]
+    }
+  }
 }

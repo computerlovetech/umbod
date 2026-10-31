@@ -27,6 +27,7 @@ dependencies = [
     "uvicorn[standard]>=0.46.0",
     "opentelemetry-proto>=1.40.0,<2",
     "protobuf>=6.33.0,<8",
+    "aiobotocore>=3,<4",
 ]
 
 [project.scripts]

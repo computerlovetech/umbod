@@ -2,6 +2,7 @@ from .config import (
     ContentConfig,
     InMemoryContentConfig,
     LocalContentConfig,
+    S3ContentConfig,
     FilesystemConfig,
 )
 from .factory import (
@@ -29,6 +30,7 @@ __all__ = [
     "ContentConfig",
     "InMemoryContentConfig",
     "LocalContentConfig",
+    "S3ContentConfig",
     "FilesystemConfig",
     "create_access_control_driver",
     "create_content_driver",

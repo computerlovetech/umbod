@@ -19,6 +19,7 @@ from contextlib import AbstractAsyncContextManager
 from functools import cached_property
 from typing import TYPE_CHECKING, Protocol
 from umbod_sdk.connectors.discovery import load_connector_plugins
+from pydantic import TypeAdapter
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -78,7 +79,7 @@ from umbod.core.connectors.downstream_mcp.adapters.settings import (
 )
 from umbod.rest.settings import APISettings
 from umbod.core.filesystem import ContentDriver
-from umbod.infrastructure import InMemoryContentConfig, LocalContentConfig, create_content_driver
+from umbod.infrastructure import ContentConfig, create_content_driver
 
 
 if TYPE_CHECKING:
@@ -253,10 +254,10 @@ class ConnectorApiDependencyFactories:
 
     @cached_property
     def filesystem_content(self) -> ContentDriver:
-        config = self.settings.filesystem.content
-        if config.type == "local":
-            return create_content_driver(LocalContentConfig(type="local", directory=config.directory))
-        return create_content_driver(InMemoryContentConfig(type="inmemory"))
+        config = TypeAdapter(ContentConfig).validate_python(
+            self.settings.filesystem.content.model_dump(mode="python")
+        )
+        return create_content_driver(config)
 
     def validate_startup(self) -> None:
         self.connector_registry.create()

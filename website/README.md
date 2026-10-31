@@ -62,16 +62,9 @@ bunx wrangler dev --port 8787
 
 ## Deploy to Cloudflare Workers
 
-The Wrangler configuration publishes the built site and assigns `umbod.ai` as its
-Cloudflare Worker custom domain.
-
-```bash
-bun install
-bunx wrangler login
-bun run deploy
-```
-
-The Cloudflare account used by Wrangler must contain the active `umbod.ai` zone.
+- [Deployment runbook](deployment.md) — Cloudflare Git integration setup for main-to-preview deployment without GitHub secrets.
+- [Website CI](../.github/workflows/website-ci.yml) — Validates website changes; Cloudflare’s Git integration deploys main to `preview.umbod.ai`.
+- [Wrangler configuration](wrangler.jsonc) — Isolated production and preview Workers with separate custom domains.
 
 ## Redirect the other domains
 

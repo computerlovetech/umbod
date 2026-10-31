@@ -1,19 +1,12 @@
 import os
 import stat
 from pathlib import Path
-from uuid import UUID
 
-from umbod.core.filesystem import StorageFailure, StorageKey
+from umbod.core.filesystem import StorageFailure
+
+from .keys import validate_key as validate_key
 
 CHUNK_SIZE = 64 * 1024
-
-
-def validate_key(key: StorageKey) -> None:
-    try:
-        if UUID(key).hex != key:
-            raise ValueError("Noncanonical content key")
-    except (ValueError, AttributeError, TypeError) as error:
-        raise StorageFailure("Invalid content key") from error
 
 
 def prepare_directory(directory: Path) -> Path:

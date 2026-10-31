@@ -11,6 +11,7 @@ on:
       - 'umbod/scripts/release_versions.py'
       - 'umbod/scripts/tests/test_release_versions.py'
       - 'umbod/scripts/tests/test_release_workflow.py'
+      - 'umbod/scripts/tests/test_website_deployment.py'
       - '.github/workflows/umbod-release.yml'
       - '.github/workflows/website-ci.yml'
       - '.github/workflows/harness-linting.yml'
@@ -27,6 +28,7 @@ on:
       - 'umbod/scripts/release_versions.py'
       - 'umbod/scripts/tests/test_release_versions.py'
       - 'umbod/scripts/tests/test_release_workflow.py'
+      - 'umbod/scripts/tests/test_website_deployment.py'
       - '.github/workflows/umbod-release.yml'
       - '.github/workflows/website-ci.yml'
       - '.github/workflows/harness-linting.yml'
@@ -64,7 +66,7 @@ jobs:
         working-directory: umbod
         run: |
           python3 -m pip install pytest pyyaml
-          python3 -m pytest scripts/tests/test_release_versions.py scripts/tests/test_release_workflow.py -q
+          python3 -m pytest scripts/tests/test_release_versions.py scripts/tests/test_release_workflow.py scripts/tests/test_website_deployment.py -q
       - name: Website build
         working-directory: website
         run: bun run build

@@ -2,6 +2,8 @@
 
 Connector plugins add tools, prompts, and resources to Umbod. A plugin is a Python distribution packaged in a plugin-bundle container image.
 
+For account ownership, administrator publication, and user sign-in, see [Shared and Personal connectors](../using-umbod/connectors.md). Personal account connections are distinct from installing a connector plugin.
+
 ## Start with the SDK CLI
 
 Install the `umbod` SDK as a `uv` tool, then use these commands in a connector project:

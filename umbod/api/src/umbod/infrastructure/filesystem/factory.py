@@ -29,6 +29,7 @@ from .config import (
     FilesystemConfig,
     InMemoryContentConfig,
     LocalContentConfig,
+    S3ContentConfig,
 )
 
 
@@ -99,6 +100,11 @@ def create_content_driver(config: ContentConfig) -> ContentDriver:
         from .local_content import LocalContent
 
         return LocalContent(config.directory)
+    if isinstance(config, S3ContentConfig):
+        from .s3.edge import SDKClientProvider
+        from .s3_content import S3Content
+
+        return S3Content(config, SDKClientProvider(config))
     assert_never(config)
 
 

@@ -17,7 +17,7 @@ def test_filesystem_core_does_not_import_host_filesystem_or_infrastructure() -> 
     root = Path(__file__).parents[4] / "src" / "umbod" / "core" / "filesystem"
     forbidden = (
         "os", "fcntl", "tempfile", "pathlib", "sqlite3", "aiosqlite", "sqlalchemy",
-        "fastapi", "starlette", "mcp", "jwt", "umbod.infrastructure", "umbod.config",
+        "fastapi", "starlette", "mcp", "jwt", "aiobotocore", "botocore", "boto3", "umbod.infrastructure", "umbod.config",
         "umbod.rest", "umbod.mcp",
     )
     violations: list[str] = []
@@ -88,7 +88,8 @@ def test_importing_infrastructure_composition_does_not_load_concrete_filesystem_
     program = (
         "import sys, umbod.infrastructure; "
         "forbidden = {'umbod.infrastructure.filesystem.inmemory', "
-        "'umbod.infrastructure.filesystem.local_content'}; "
+        "'umbod.infrastructure.filesystem.local_content', "
+        "'umbod.infrastructure.filesystem.s3_content', 'aiobotocore', 'botocore'}; "
         "loaded = forbidden.intersection(sys.modules); "
         "raise SystemExit(','.join(sorted(loaded)) if loaded else 0)"
     )

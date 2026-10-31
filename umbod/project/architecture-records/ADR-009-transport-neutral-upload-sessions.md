@@ -58,6 +58,10 @@ All application rules remain in core filesystem services, neutral stores remain 
 
 Abandoned or superseded immutable content can remain unreferenced, as permitted by ADR-006. Expiry prevents further use but does not reclaim stored bytes or session rows. Admission quotas, physical orphan reclamation, and retention policy need a separate bounded design before claiming automatic cleanup or abuse-resistant storage accounting.
 
+## S3 byte-storage extension
+
+[ADR-014](ADR-014-s3-content-storage.md) adds S3 behind the existing content-driver port while retaining authenticated Umbod byte transfer and this session lifecycle. The earlier S3 deferral describes the initial implementation, not a prohibition on another low-level adapter. Direct S3 transfer instructions, client multipart coordination, and migration remain outside this extension.
+
 ## Alternatives considered
 
 Keeping multipart/form-data uploads would preserve a single request but couple all byte transfers to the REST server. S3 multipart uploads would improve large-file recovery but add part coordination before it is needed. A process-local session dictionary would simplify the first implementation but break shared-worker and persistent-restart behavior. Custom HEAD size-limit headers would introduce a private HTTP convention without removing authoritative validation.

@@ -9,7 +9,9 @@ from umbod.config.app import (
     CorsConfig,
     EndpointsConfig,
     FeatureTogglesConfig,
+    FilesystemContentConfig,
     FilesystemRuntimeConfig,
+    S3FilesystemContentConfig,
     LocalFilesystemContentConfig,
     McpConfig,
     OAuthStorageConfig,
@@ -70,6 +72,20 @@ def _filesystem_content_directory(operator: OperatorSettings) -> Path:
     if operator.filesystem_content_directory is not None:
         return Path(operator.filesystem_content_directory).expanduser()
     return Path(operator.data_dir).expanduser() / "filesystem-content"
+
+
+def _filesystem_content(operator: OperatorSettings) -> FilesystemContentConfig:
+    if operator.filesystem_content_backend == "s3":
+        return S3FilesystemContentConfig(
+            bucket=operator.filesystem_s3_bucket,
+            region=operator.filesystem_s3_region,
+            endpoint_url=operator.filesystem_s3_endpoint_url,
+            prefix=operator.filesystem_s3_prefix,
+            addressing_style=operator.filesystem_s3_addressing_style,
+        )
+    return LocalFilesystemContentConfig(
+        directory=_filesystem_content_directory(operator)
+    )
 
 
 def _cors_origins(operator: OperatorSettings) -> list[str]:
@@ -233,9 +249,7 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
         connector_security=connector_security,
         connector_store=connector_store,
         filesystem=FilesystemRuntimeConfig(
-            content=LocalFilesystemContentConfig(
-                directory=_filesystem_content_directory(operator)
-            ),
+            content=_filesystem_content(operator),
             upload_max_bytes=operator.filesystem_upload_max_bytes,
         ),
         openapi_connectors=OpenApiConnectorConfig(

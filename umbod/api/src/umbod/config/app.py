@@ -1,6 +1,8 @@
+import ipaddress
 import re
 from pathlib import Path
 from typing import Annotated, Literal, Union
+from unicodedata import category
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -188,8 +190,76 @@ class LocalFilesystemContentConfig(ConfigModel):
         return value
 
 
+class S3FilesystemContentConfig(ConfigModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["s3"] = "s3"
+    bucket: str
+    region: str
+    endpoint_url: str
+    prefix: str
+    addressing_style: Literal["auto", "virtual", "path"]
+
+    @field_validator("bucket")
+    @classmethod
+    def validate_bucket(cls, value: str) -> str:
+        if (
+            not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", value)
+            or any(sequence in value for sequence in ("..", ".-", "-."))
+            or value.startswith(("xn--", "sthree-", "amzn-s3-demo-"))
+            or value.endswith(("-s3alias", "--ol-s3", ".mrap", "--x-s3", "--table-s3"))
+        ):
+            raise ValueError("Invalid general-purpose S3 bucket name")
+        try:
+            ipaddress.ip_address(value)
+        except ValueError:
+            return value
+        raise ValueError("Invalid general-purpose S3 bucket name")
+
+    @field_validator("region")
+    @classmethod
+    def validate_region(cls, value: str) -> str:
+        if not value.strip() or any(character.isspace() for character in value):
+            raise ValueError("S3 region must be nonblank without whitespace")
+        return value
+
+    @field_validator("endpoint_url")
+    @classmethod
+    def validate_endpoint_url(cls, value: str) -> str:
+        if value == "":
+            return value
+        parsed = urlsplit(value)
+        parsed.port
+        if (
+            parsed.scheme not in ("http", "https")
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or "?" in value
+            or "#" in value
+            or "\\" in value
+            or any(character.isspace() or category(character) == "Cc" for character in value)
+        ):
+            raise ValueError("S3 endpoint must be HTTP(S) without credentials, query, or fragment")
+        return value
+
+    @field_validator("prefix")
+    @classmethod
+    def validate_prefix(cls, value: str) -> str:
+        if value == "":
+            return value
+        if (
+            "\\" in value
+            or any(category(character) == "Cc" for character in value)
+            or any(segment in ("", ".", "..") for segment in value.split("/"))
+            or len(value.encode("utf-8")) > 991
+        ):
+            raise ValueError("S3 prefix must contain canonical relative path segments")
+        return value
+
+
 FilesystemContentConfig = Annotated[
-    Union[InMemoryFilesystemContentConfig, LocalFilesystemContentConfig],
+    Union[InMemoryFilesystemContentConfig, LocalFilesystemContentConfig, S3FilesystemContentConfig],
     Field(discriminator="type"),
 ]
 

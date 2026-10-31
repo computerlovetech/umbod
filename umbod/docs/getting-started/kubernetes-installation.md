@@ -113,6 +113,8 @@ ingress:
   host: umbod.example.com
 ```
 
+For deployments using S3 for file bytes, follow [S3 file-content storage](../operations/s3-file-storage.md). S3 does not replace the persistent application database.
+
 Review the [generated Helm values reference](../reference/helm-values.md) before installing. In particular, confirm the ingress class, public origins, OIDC claims, storage class, and immutable image tags.
 
 Install or upgrade Umbod:

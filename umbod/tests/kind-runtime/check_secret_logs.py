@@ -5,7 +5,7 @@ import sys
 
 
 def sensitive_values() -> list[str]:
-    values = [os.environ[key] for key in ("UMBOD_TEST_OTLP_BEARER_TOKEN", "UMBOD_TEST_ROOT_SECRET", "UMBOD_TEST_BEARER_TOKEN", "UMBOD_TEST_BEARER_TOKEN_B") if os.environ.get(key)]
+    values = [os.environ[key] for key in ("UMBOD_TEST_OTLP_BEARER_TOKEN", "UMBOD_TEST_ROOT_SECRET", "UMBOD_TEST_BEARER_TOKEN", "UMBOD_TEST_BEARER_TOKEN_B", "UMBOD_TEST_AWS_ACCESS_KEY_ID", "UMBOD_TEST_AWS_SECRET_ACCESS_KEY") if os.environ.get(key)]
     proxy_tokens = os.environ.get("UMBOD_TEST_PERSONAL_PROXY_TOKENS", "")
     if proxy_tokens and Path(proxy_tokens).exists():
         values.extend(Path(proxy_tokens).read_text().splitlines())

@@ -41,9 +41,15 @@ Install, configure, and run Umbod on your own infrastructure. Start with a local
 
 </div>
 
+## Connect accounts and work with files
+
+- [Shared and Personal connectors](using-umbod/connectors.md): administrator setup, user access, and personal account authorization.
+- [Files](using-umbod/files.md): private uploads, folders, sharing, and agent access.
+- [S3 file-content storage](operations/s3-file-storage.md): configure Helm deployments to keep file bytes in an S3 bucket.
+
 ## Early beta
 
-Umbod is in early beta. These guides cover installation, operations, and connector development. Questions or feedback? [Join the community on Discord](https://discord.gg/Njy4GnurpE) or [visit the source on GitHub](https://github.com/computerlovetech/umbod).
+Umbod is in early beta. These guides cover installation, everyday use, operations, and connector development. Questions or feedback? [Join the community on Discord](https://discord.gg/Njy4GnurpE) or [visit the source on GitHub](https://github.com/computerlovetech/umbod).
 
 ## About the name
 

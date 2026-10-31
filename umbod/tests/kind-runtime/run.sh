@@ -10,6 +10,15 @@ cluster_name="${UMBOD_TEST_KIND_CLUSTER_NAME:-umbod-runtime-tests}"
 kube_context="kind-${cluster_name}"
 release_name="umbod"
 cluster_created=false
+export UMBOD_TEST_CONTENT_BACKEND="${UMBOD_TEST_CONTENT_BACKEND:-local}"
+if [[ "${UMBOD_TEST_CONTENT_BACKEND}" != "local" && "${UMBOD_TEST_CONTENT_BACKEND}" != "s3" ]]; then
+    printf '%s\n' 'UMBOD_TEST_CONTENT_BACKEND must be local or s3' >&2
+    exit 1
+fi
+if [[ "${UMBOD_TEST_CONTENT_BACKEND}" == "s3" ]]; then
+    export UMBOD_TEST_AWS_ACCESS_KEY_ID="$(python3 -c 'import secrets; print(secrets.token_hex(16))')"
+    export UMBOD_TEST_AWS_SECRET_ACCESS_KEY="$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')"
+fi
 api_b_forward_pid=""
 api_forward_pid=""
 mcp_forward_pid=""
@@ -53,7 +62,8 @@ finish() {
     if [[ "${cluster_created}" == "true" ]]; then
         if [[ ${exit_status} -ne 0 ]]; then
             kubectl --context "${kube_context}" get pods,deployments,services -o wide || true
-            kubectl --context "${kube_context}" describe pods || true
+            kubectl --context "${kube_context}" describe pods \
+                | python3 "${script_directory}/check_secret_logs.py" --diagnostics || true
             kubectl --context "${kube_context}" logs --all-containers --prefix --tail=150 -l "app.kubernetes.io/instance=${release_name}" \
                 | python3 "${script_directory}/check_secret_logs.py" --diagnostics || true
         fi
@@ -71,6 +81,17 @@ host_temporary_directory="$(mktemp -d)"
 export UMBOD_TEST_PERSONAL_CA="${host_temporary_directory}/ca.crt"
 export UMBOD_TEST_PERSONAL_PROXY_TOKENS="${host_temporary_directory}/proxy-tokens"
 
+if [[ "${UMBOD_TEST_CONTENT_BACKEND}" == "s3" ]]; then
+    export UMBOD_TEST_S3_IMAGE="motoserver/moto:5.1.4"
+    case "$(docker info --format '{{.Architecture}}')" in
+        aarch64|arm64) s3_image_digest="sha256:aa1bee6a3c50d464a926c4b857c35713f0d1cfacb030e1dea2c1862cb838e35b" ;;
+        x86_64|amd64) s3_image_digest="sha256:d8663daaec297e2aee350b9a6778b03bce85e8c710d614db83b6007c5d916235" ;;
+        *) printf '%s\n' 'Unsupported Docker architecture for the test S3 emulator' >&2; exit 1 ;;
+    esac
+    docker pull "${UMBOD_TEST_S3_IMAGE}@${s3_image_digest}"
+    docker tag "${UMBOD_TEST_S3_IMAGE}@${s3_image_digest}" "${UMBOD_TEST_S3_IMAGE}"
+fi
+
 docker build --tag ghcr.io/computerlovetech/umbod:ci --file "${app_directory}/api/Dockerfile" "${repository_directory}"
 docker build --tag ghcr.io/computerlovetech/umbod-frontend:ci "${app_directory}/frontend"
 docker build --tag umbod-kind-test-connector:ci "${script_directory}/connector"
@@ -78,6 +99,10 @@ docker build --tag umbod-kind-test-connector:ci "${script_directory}/connector"
 kind create cluster --name "${cluster_name}" --image "${UMBOD_KIND_NODE_IMAGE:-kindest/node:v1.32.2}" --wait 2m
 cluster_created=true
 kind load docker-image --name "${cluster_name}" ghcr.io/computerlovetech/umbod:ci ghcr.io/computerlovetech/umbod-frontend:ci umbod-kind-test-connector:ci
+
+if [[ "${UMBOD_TEST_CONTENT_BACKEND}" == "s3" ]]; then
+    kind load docker-image --name "${cluster_name}" "${UMBOD_TEST_S3_IMAGE}"
+fi
 
 kubectl --context "${kube_context}" create secret generic umbod-ci \
     --from-literal="UMBOD_MCP_TEST_BEARER_TOKEN=${UMBOD_TEST_BEARER_TOKEN}" \
@@ -89,6 +114,10 @@ helm --kube-context "${kube_context}" install "${release_name}" "${chart_directo
     --values "${script_directory}/values.yaml" \
     --wait --timeout 5m
 helm --kube-context "${kube_context}" test "${release_name}" --logs --timeout 2m
+
+if [[ "${UMBOD_TEST_CONTENT_BACKEND}" == "s3" ]]; then
+    python3 "${script_directory}/setup_s3_runtime.py"
+fi
 
 kubectl --context "${kube_context}" set env deployment/umbod-core --containers=mcp \
     UMBOD_MCP_TOOL_EXPOSURE=flat UMBOD_MCP_STATELESS_HTTP=false UMBOD_MCP_PERMISSION_CLAIM=groups
@@ -112,7 +141,7 @@ for attempt in $(seq 1 30); do
 done
 
 python3 "${script_directory}/bootstrap.py"
-(cd "${app_directory}/api" && uv run --locked pytest live_runtime_tests --ignore=live_runtime_tests/test_running_personal_mcp_execution.py --ignore=live_runtime_tests/test_running_filesystem.py --ignore=live_runtime_tests/test_running_filesystem_uploads.py)
+(cd "${app_directory}/api" && uv run --locked pytest live_runtime_tests --ignore=live_runtime_tests/test_running_personal_mcp_execution.py --ignore=live_runtime_tests/test_running_filesystem.py --ignore=live_runtime_tests/test_running_filesystem_uploads.py --ignore=live_runtime_tests/test_running_filesystem_s3.py)
 kubectl --context "${kube_context}" logs deployment/umbod-core --container api \
     | python3 "${script_directory}/check_telemetry_logs.py"
 kubectl --context "${kube_context}" logs deployment/umbod-core --container mcp \
@@ -161,7 +190,7 @@ opener.addheaders = [("Authorization", "Bearer " + os.environ["UMBOD_TEST_BEARER
 install_opener(opener)
 runpy.run_path(os.environ["UMBOD_TEST_BOOTSTRAP_PATH"], run_name="__main__")
 ')
-(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_personal_mcp_execution.py live_runtime_tests/test_running_filesystem.py live_runtime_tests/test_running_filesystem_uploads.py live_runtime_tests/test_running_filesystem_sharing.py live_runtime_tests/test_running_identity_directory.py)
+(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_personal_mcp_execution.py live_runtime_tests/test_running_filesystem.py live_runtime_tests/test_running_filesystem_uploads.py live_runtime_tests/test_running_filesystem_s3.py live_runtime_tests/test_running_filesystem_sharing.py live_runtime_tests/test_running_identity_directory.py)
 for container_name in api api-b mcp mcp-b; do
     kubectl --context "${kube_context}" logs deployment/umbod-core --container "${container_name}" \
         | python3 "${script_directory}/check_secret_logs.py"

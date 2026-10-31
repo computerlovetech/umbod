@@ -6,6 +6,7 @@ description: "Reusable and actor-owned Svelte presentation and interaction modul
 
 # Files
 
+- [Component index](../../../COMPONENT_INDEX.md) — Reusable UI building blocks, their locations, and when to use them.
 - [admin/](./admin/) — Administration views and controls.
 - [Connector list empty state](./admin/connectors/ConnectorListEmptyState.svelte) — Consistent empty-list presentation for catalog, OpenAPI, and MCP tabs.
 - [Group management](./admin/groups/README.md) — Central administrator group catalogue forms.
