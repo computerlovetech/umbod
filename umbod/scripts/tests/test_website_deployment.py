@@ -11,14 +11,14 @@ def repository() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def test_default_cloudflare_build_targets_preview_not_production(repository: Path) -> None:
+def test_existing_cloudflare_worker_serves_both_domains(repository: Path) -> None:
     config = json.loads((repository / "website/wrangler.jsonc").read_text())
-    production = config["env"]["production"]
-    assert config["name"] == "umbod-website-preview"
-    assert config["routes"] == [{"pattern": "preview.umbod.ai", "custom_domain": True}]
-    assert production["name"] == "umbod-website"
-    assert production["routes"] == [{"pattern": "umbod.ai", "custom_domain": True}]
-    assert production["assets"] == config["assets"]
+    assert config["name"] == "umbod-website"
+    assert config["routes"] == [
+        {"pattern": "umbod.ai", "custom_domain": True},
+        {"pattern": "preview.umbod.ai", "custom_domain": True},
+    ]
+    assert "env" not in config
 
 
 def test_website_ci_validates_without_deploying_or_requiring_cloudflare_secrets(repository: Path) -> None:

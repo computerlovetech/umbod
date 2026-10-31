@@ -62,9 +62,9 @@ bunx wrangler dev --port 8787
 
 ## Deploy to Cloudflare Workers
 
-- [Deployment runbook](deployment.md) — Cloudflare Git integration setup for main-to-preview deployment without GitHub secrets.
-- [Website CI](../.github/workflows/website-ci.yml) — Validates website changes; Cloudflare’s Git integration deploys main to `preview.umbod.ai`.
-- [Wrangler configuration](wrangler.jsonc) — Isolated production and preview Workers with separate custom domains.
+- [Deployment runbook](deployment.md) — Cloudflare Git integration setup for deploying main to both domains without GitHub secrets.
+- [Website CI](../.github/workflows/website-ci.yml) — Validates website changes; Cloudflare’s Git integration deploys main to both domains.
+- [Wrangler configuration](wrangler.jsonc) — One Worker serving `umbod.ai` and `preview.umbod.ai` from the same deployment.
 
 ## Redirect the other domains
 
