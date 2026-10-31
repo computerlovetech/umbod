@@ -20,6 +20,11 @@ const retiredAssets = [
   'public/oauth/client-metadata.json',
 ];
 
+test('repository installation instructions match committed release metadata', () => {
+  const versions = [...read('../README.md').matchAll(/--version ([^\s]+)/g)].map(([, version]) => version);
+  assert.deepEqual(versions, [release.chartVersion]);
+});
+
 test('home and enterprise lead with Kubernetes onboarding and secondary contact', () => {
   for (const path of ['index.html', 'enterprise/index.html']) {
     const html = read(path);

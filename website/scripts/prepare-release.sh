@@ -9,6 +9,10 @@ if [[ -z "${release_tag}" && -f "${repository}/website/release-source.tag" ]]; t
   bootstrap=true
 fi
 [[ -n "${release_tag}" && "${release_tag}" != *$'\n'* ]] || { echo "Production builds require exactly one umbod-v release tag on HEAD" >&2; exit 1; }
+if [[ "${bootstrap}" == false ]]; then
+  python3 "${repository}/umbod/scripts/release_versions.py" --tag "${release_tag}" --metadata "${repository}/release-metadata.json" > /dev/null
+  exit 0
+fi
 versions="$(python3 "${repository}/umbod/scripts/release_versions.py" --tag "${release_tag}")"
 if [[ "${bootstrap}" == true ]]; then
   release_commit="$(git -C "${repository}" rev-parse --verify "refs/tags/${release_tag}^{commit}")"

@@ -6,6 +6,13 @@ Paths and commands below are relative to the repository root unless a working di
 
 Use Vercel's [skills.sh](https://skills.sh/) to install agent skills. Repository skill sources live in `skills/`; edit those, not installed copies in `.agents/skills/`.
 
+## Release branches
+
+- Use the manual [release-umbod skill](skills/development/release-umbod/SKILL.md) for release preparation and publication.
+- Never push to, force-update, or delete `production` directly. Only the successful release workflow may advance it to the verified release commit.
+- Update committed `release-metadata.json` on `main` before tagging; tag-derived metadata validation must pass before publication.
+- Follow [website deployment](website/deployment.md) for branch protection and identity requirements. A project policy alone is not server-enforced workflow-only access.
+
 ## UI Components
 
 Read the [component index](umbod/frontend/COMPONENT_INDEX.md) when working with UI Svelte components.

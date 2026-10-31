@@ -3,6 +3,7 @@ on:
   pull_request:
     paths:
       - 'website/**'
+      - 'README.md'
       - 'release-metadata.json'
       - 'umbod/docs/**'
       - 'umbod/docs-theme/**'
@@ -20,6 +21,7 @@ on:
     branches: [main]
     paths:
       - 'website/**'
+      - 'README.md'
       - 'release-metadata.json'
       - 'umbod/docs/**'
       - 'umbod/docs-theme/**'

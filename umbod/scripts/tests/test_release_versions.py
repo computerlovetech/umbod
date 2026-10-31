@@ -1,4 +1,8 @@
+import json
+from pathlib import Path
+
 import pytest
+
 from scripts.release_versions import main
 
 
@@ -64,3 +68,66 @@ def test_tag_cli_requires_tag_and_rejects_obsolete_modes(arguments: list[str]) -
     with pytest.raises(SystemExit) as error:
         main(arguments)
     assert error.value.code == 2
+
+
+
+@pytest.mark.parametrize(
+    "tag,semver,sdk_version",
+    [
+        ("umbod-v1.2.3", "1.2.3", "1.2.3"),
+        ("umbod-v1.2.3-beta.4", "1.2.3-beta.4", "1.2.3b4"),
+    ],
+)
+def test_matching_committed_metadata_emits_versions_without_modifying_file(
+    tag: str,
+    semver: str,
+    sdk_version: str,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    metadata = tmp_path / "release-metadata.json"
+    committed = json.dumps({"chartVersion": semver, "imageTag": semver, "sdkVersion": sdk_version})
+    metadata.write_text(committed)
+    assert main(["--tag", tag, "--metadata", str(metadata)]) == 0
+    assert capsys.readouterr().out.splitlines() == [
+        f"sdk_version={sdk_version}",
+        f"image_version={semver}",
+        f"chart_version={semver}",
+    ]
+    assert metadata.read_text() == committed
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        '{"chartVersion":"1.2.2","imageTag":"1.2.3","sdkVersion":"1.2.3"}',
+        '{"chartVersion":"1.2.3","imageTag":"1.2.2","sdkVersion":"1.2.3"}',
+        '{"chartVersion":"1.2.3","imageTag":"1.2.3","sdkVersion":"1.2.2"}',
+        '{"chartVersion":"1.2.3","imageTag":"1.2.3"}',
+        '{"chartVersion":"1.2.3","imageTag":"1.2.3","sdkVersion":"1.2.3","extra":"value"}',
+        '[]',
+        'null',
+        '{broken',
+    ],
+)
+def test_invalid_committed_metadata_fails_before_emitting_version_outputs(
+    content: str, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    metadata = tmp_path / "release-metadata.json"
+    metadata.write_text(content)
+    with pytest.raises(SystemExit) as error:
+        main(["--tag", "umbod-v1.2.3", "--metadata", str(metadata)])
+    assert error.value.code == 2
+    assert capsys.readouterr().out == ""
+    assert metadata.read_text() == content
+
+
+def test_missing_committed_metadata_fails_before_emitting_outputs(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as error:
+        main(["--tag", "umbod-v1.2.3", "--metadata", str(tmp_path / "missing.json")])
+    assert error.value.code == 2
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "Cannot read release metadata" in output.err

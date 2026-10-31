@@ -16,7 +16,7 @@ def test_release_workflow_only_accepts_umbod_tag_pushes(workflow: str) -> None:
 
 
 def test_release_workflow_derives_all_versions_from_full_tag(workflow: str) -> None:
-    assert 'python3 umbod/scripts/release_versions.py --tag "${GITHUB_REF_NAME}" >> "${GITHUB_OUTPUT}"' in workflow
+    assert 'python3 umbod/scripts/release_versions.py --tag "${GITHUB_REF_NAME}" --metadata release-metadata.json >> "${GITHUB_OUTPUT}"' in workflow
     for version in ("sdk_version", "image_version", "chart_version"):
         assert f"{version}: ${{{{ steps.resolve.outputs.{version} }}}}" in workflow
     for obsolete in ("--latest", "--shared", "--increment", "--bootstrap", "highest_common", "chart_image_version"):
@@ -107,3 +107,11 @@ def test_release_workflow_stamps_and_validates_chart_with_same_image_version(wor
     assert '"${RUNNER_TEMP}/umbod/scripts/validate.sh"' in chart
     assert chart.index("scripts/validate.sh") < chart.index("helm package") < chart.index("helm push")
     assert 'shown="$(helm show chart' in chart
+
+
+
+def test_release_metadata_validation_precedes_artifact_publication(workflow: str) -> None:
+    plan = workflow.split("\n  sdk-publish:", 1)[0]
+    validation = 'python3 umbod/scripts/release_versions.py --tag "${GITHUB_REF_NAME}" --metadata release-metadata.json'
+    assert plan.index(validation) < plan.index("Ensure release versions are unpublished")
+    assert workflow.index(validation) < workflow.index("Build and publish SDK")

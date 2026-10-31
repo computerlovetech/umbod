@@ -11,8 +11,9 @@ See [website context](CONTEXT.md) for positioning and tone.
 Update chart, image, and SDK release versions in the repository-root
 [`release-metadata.json`](../release-metadata.json). MkDocs substitutes these values
 in the guides and generated Helm reference; Vite substitutes them in the landing
-page during development and preview builds. Production release builds stamp a
-build-local copy with tag-derived versions before testing and building. Do not edit
+page during development and preview builds. Release preflight and production
+builds require committed metadata to match the tag; ordinary production builds do
+not rewrite it. Only the legacy deployment bootstrap stamps a build-local copy. Do not edit
 release tags in the rendered `website/public/docs/` or `website/dist/` output.
 
 Vite builds two HTML entries: `index.html` and `enterprise/index.html`. Shared

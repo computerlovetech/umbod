@@ -60,7 +60,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 umbod/scripts/release_versions.py --tag "${GITHUB_REF_NAME}" >> "${GITHUB_OUTPUT}"
+          python3 umbod/scripts/release_versions.py --tag "${GITHUB_REF_NAME}" --metadata release-metadata.json >> "${GITHUB_OUTPUT}"
 
       - name: Ensure release versions are unpublished
         shell: bash

@@ -71,7 +71,7 @@ def test_production_builds_verified_release_before_advancing_branch(release_work
     assert "wrangler deploy" not in str(release_workflow)
 
 
-def test_release_build_stamps_metadata_before_build_without_changing_preview_build(repository: Path) -> None:
+def test_release_build_validates_metadata_before_build_without_changing_preview_build(repository: Path) -> None:
     scripts = json.loads((repository / "website/package.json").read_text())["scripts"]
     assert scripts["build:release"] == "bash scripts/prepare-release.sh && bun run build"
     assert scripts["build"] == "bun run docs && vite build"
@@ -119,9 +119,14 @@ def release_checkout(repository: Path, tmp_path: Path) -> Path:
         ("umbod-v1.2.3-beta.4", "1.2.3-beta.4", "1.2.3b4"),
     ],
 )
-def test_release_build_fetches_exact_tag_and_stamps_versions(
+def test_release_build_fetches_exact_tag_and_preserves_matching_committed_versions(
     release_checkout: Path, tag: str, semver: str, sdk_version: str
 ) -> None:
+    metadata_path = release_checkout / "release-metadata.json"
+    committed = json.dumps({"chartVersion": semver, "imageTag": semver, "sdkVersion": sdk_version})
+    metadata_path.write_text(committed)
+    run_git(release_checkout, ["add", "release-metadata.json"])
+    run_git(release_checkout, ["commit", "-m", "Align release metadata"])
     run_git(release_checkout, ["tag", tag])
     run_git(release_checkout, ["push", "origin", tag])
     run_git(release_checkout, ["tag", "-d", tag])
@@ -133,7 +138,8 @@ def test_release_build_fetches_exact_tag_and_stamps_versions(
         check=False,
     )
     assert result.returncode == 0, result.stderr
-    assert json.loads((release_checkout / "release-metadata.json").read_text()) == {
+    assert metadata_path.read_text() == committed
+    assert json.loads(metadata_path.read_text()) == {
         "chartVersion": semver,
         "imageTag": semver,
         "sdkVersion": sdk_version,
@@ -287,3 +293,41 @@ def test_production_bootstrap_builds_from_shallow_cloudflare_checkout(release_ch
     assert result.returncode == 0, result.stderr
     assert run_git(shallow, ["rev-parse", "--is-shallow-repository"]) == "true"
     assert json.loads((shallow / "release-metadata.json").read_text())["chartVersion"] == "1.2.3"
+
+
+
+@pytest.mark.parametrize("tag", ["umbod-v1.2.3", "umbod-v1.2.3-beta.4"])
+def test_ordinary_release_build_rejects_version_drift_without_rewriting_metadata(
+    release_checkout: Path, tag: str
+) -> None:
+    run_git(release_checkout, ["tag", tag])
+    run_git(release_checkout, ["push", "origin", tag])
+    metadata = release_checkout / "release-metadata.json"
+    committed = metadata.read_text()
+    result = subprocess.run(
+        ["bash", "scripts/prepare-release.sh"],
+        cwd=release_checkout / "website",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "Update committed release metadata before tagging" in result.stderr
+    assert metadata.read_text() == committed
+
+
+
+def test_release_promotion_is_only_workflow_job_with_repository_contents_write(repository: Path) -> None:
+    writers: list[tuple[str, str]] = []
+    for path in (repository / ".github/workflows").glob("*.yml"):
+        workflow = yaml.load(path.read_text(), Loader=yaml.BaseLoader)
+        permissions = workflow.get("permissions", {})
+        assert permissions != "write-all", path.name
+        if isinstance(permissions, dict):
+            assert permissions.get("contents") != "write", path.name
+        for name, job in workflow.get("jobs", {}).items():
+            permissions = job.get("permissions", {})
+            assert permissions != "write-all", (path.name, name)
+            if isinstance(permissions, dict) and permissions.get("contents") == "write":
+                writers.append((path.name, name))
+    assert writers == [("umbod-release.yml", "website")]

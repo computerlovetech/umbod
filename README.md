@@ -34,7 +34,7 @@ kind create cluster --name umbod --wait 2m
 
 helm upgrade --install umbod \
   oci://ghcr.io/computerlovetech/charts/umbod \
-  --version 0.0.1-beta.4 \
+  --version 0.0.1-beta.8 \
   --kube-context kind-umbod \
   --set config.profile=local \
   --set config.authentication.mode=dev \

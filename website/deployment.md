@@ -12,6 +12,8 @@ The default [Wrangler configuration](wrangler.jsonc) deploys `umbod-website` at
 
 - Preview watches `main`.
 - Production watches `production`.
+- Release preflight rejects tags whose committed `release-metadata.json` does not
+  match the chart, image, and SDK versions derived from that tag, before publication.
 - After SDK, all images, and the Helm chart publish successfully, the
   [release workflow](../.github/workflows/umbod-release.yml) validates the release
   website and advances `production` to the verified release-tag commit.
@@ -50,30 +52,43 @@ a successful Cloudflare deployment replaces it.
 
 [Release preparation](scripts/prepare-release.sh) fetches Umbod tags from origin
 and requires exactly one canonical `umbod-v*` tag on the checked-out commit.
-It stamps build-local `release-metadata.json` with tag-derived chart, image, and SDK
-versions before building. Missing, malformed, or ambiguous release tags fail the
-build rather than deploying unversioned content.
+Ordinary releases validate committed `release-metadata.json` against the tag's
+chart, image, and SDK versions without rewriting it. Update metadata on main before
+creating the tag, so preview and production builds use the same release versions.
+Missing, malformed, ambiguous tags or mismatched metadata fail the build.
 
 A one-time production bootstrap may carry `website/release-source.tag` when the
 latest existing release predates the deployment setup. The bootstrap must be a
 single commit directly above that tag and may change only the website package
 manifest, Wrangler configuration, release preparation script, and tag marker.
+Only this legacy bootstrap stamps build-local metadata from its source tag.
 Released pages and documentation cannot change. Main records the bootstrap commit
 as an ancestor without importing its tag marker, so the next release can advance
 production with a normal fast-forward push.
 
-This keeps installation instructions aligned with the release even when committed
-metadata names an older version. The promotion does not commit generated metadata
-or website output. Ordinary promotions point `production` at the exact verified
-release commit; the one-time bootstrap described above adds only deployment files.
-Preview’s ordinary build continues to use committed metadata.
+The promotion does not commit generated metadata or website output. Ordinary
+promotions point `production` at the exact verified release commit with matching
+committed metadata; the one-time bootstrap described above adds only deployment
+files. Preview uses main's committed metadata and can advance independently after
+a release, but its version must not differ merely because the build command differs.
 
 ## Promotion safety and recovery
 
-Configure GitHub branch rules so the release workflow can update `production`;
-keep direct human or unrelated automation pushes restricted. No custom token
-needs to be created, but repository or organization policy must allow the job’s
-built-in token to write repository contents.
+Only the release workflow should update `production`; do not push to it manually.
+The `production-history-protection` GitHub ruleset blocks branch recreation,
+deletion and non-fast-forward updates with no bypass actors. It does not block
+ordinary human fast-forward pushes.
+
+Strict update-actor enforcement is not yet configured. GitHub rejected its built-in
+Actions identity as a ruleset bypass actor, so the current built-in token cannot
+be used to claim workflow-only branch protection. Completing that protection
+requires an installed, dedicated GitHub App and a short-lived token issued only
+to the approved release-promotion job; protect the credential and workflow-change
+approval boundary as well. Restrict updates to that app without human/admin
+bypass, while retaining the separate no-bypass history ruleset. A bypass app
+identifies an actor, not a workflow path; stricter workflow identity requires
+credential issuance bound to that workflow. Do not lock all updates without first
+provisioning and verifying the authorized promotion identity.
 
 Promotions serialize and use a normal, non-forced Git push. An older release
 cannot replace a newer production branch tip if that would require moving it

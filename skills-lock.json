@@ -81,6 +81,11 @@
       "sourceType": "local",
       "computedHash": "659d59ae6a237b611927889577617c8975697b14465526a5b7aaee80e0a16753"
     },
+    "release-umbod": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "40113387c97b3cbe9934e1a8d58c5376c571c6ddcddb0a9f1b999f885c546e62"
+    },
     "reusable-components": {
       "source": "./skills",
       "sourceType": "local",
