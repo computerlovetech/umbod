@@ -11,8 +11,9 @@ See [website context](CONTEXT.md) for positioning and tone.
 Update chart, image, and SDK release versions in the repository-root
 [`release-metadata.json`](../release-metadata.json). MkDocs substitutes these values
 in the guides and generated Helm reference; Vite substitutes them in the landing
-page during development and build. Do not edit release tags in the rendered
-`website/public/docs/` or `website/dist/` output.
+page during development and preview builds. Production release builds stamp a
+build-local copy with tag-derived versions before testing and building. Do not edit
+release tags in the rendered `website/public/docs/` or `website/dist/` output.
 
 Vite builds two HTML entries: `index.html` and `enterprise/index.html`. Shared
 header/footer partials are inserted at build time, so navigation works without
@@ -62,8 +63,10 @@ bunx wrangler dev --port 8787
 
 ## Deploy to Cloudflare Workers
 
-- [Deployment runbook](deployment.md) — Cloudflare main-to-preview setup, separate production deployment, and no GitHub secrets.
+- [Deployment runbook](deployment.md) — Cloudflare branch settings, release promotion to production, versioned builds, and recovery.
 - [Website CI](../.github/workflows/website-ci.yml) — Validates website changes; Cloudflare’s Git integration handles preview deployments from main.
+- [Release workflow](../.github/workflows/umbod-release.yml) — Promotes the verified release commit to the production branch after artifact publication.
+- [Release preparation](scripts/prepare-release.sh) — Validates the exact release tag and stamps build-local installation versions.
 - [Wrangler configuration](wrangler.jsonc) — Separate Workers and custom domains for production and the preview environment.
 
 ## Redirect the other domains

@@ -41,8 +41,8 @@ def test_release_workflow_verifies_tag_commit_on_main_with_exact_successful_push
 
 def test_release_workflow_uses_verified_commit_for_all_publication_sources(workflow: str) -> None:
     publication = workflow.split("\n  sdk-publish:", 1)[1]
-    assert publication.count("uses: actions/checkout@v6") == 3
-    assert publication.count("ref: ${{ needs.plan.outputs.release_sha }}") == 3
+    assert publication.count("uses: actions/checkout@v6") == 4
+    assert publication.count("ref: ${{ needs.plan.outputs.release_sha }}") == 4
     assert "org.opencontainers.image.revision=${{ needs.plan.outputs.release_sha }}" in publication
     assert "github.sha" not in workflow
 
@@ -50,7 +50,7 @@ def test_release_workflow_uses_verified_commit_for_all_publication_sources(workf
 def test_release_workflow_requires_sdk_then_all_images_then_chart(workflow: str) -> None:
     sdk = workflow.split("\n  sdk-publish:", 1)[1].split("\n  images:", 1)[0]
     images = workflow.split("\n  images:", 1)[1].split("\n  chart:", 1)[0]
-    chart = workflow.split("\n  chart:", 1)[1]
+    chart = workflow.split("\n  chart:", 1)[1].split("\n  website:", 1)[0]
     assert "needs: plan" in sdk
     assert "needs: [plan, sdk-publish]" in images
     assert "needs: [plan, images]" in chart
@@ -97,7 +97,7 @@ def test_release_workflow_preserves_sdk_stamping_and_multiarch_images(workflow: 
 
 
 def test_release_workflow_stamps_and_validates_chart_with_same_image_version(workflow: str) -> None:
-    chart = workflow.split("\n  chart:", 1)[1]
+    chart = workflow.split("\n  chart:", 1)[1].split("\n  website:", 1)[0]
     assert chart.count("IMAGE_VERSION: ${{ needs.plan.outputs.image_version }}") == 2
     assert "VERSION: ${{ needs.plan.outputs.chart_version }}" in chart
     assert 'f"version: {version}"' in chart

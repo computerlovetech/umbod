@@ -262,3 +262,41 @@ jobs:
           rendered="$(helm template umbod "oci://${CHART_REGISTRY}/umbod" --version "${VERSION}")"
           grep -Fq "image: \"${CORE_IMAGE}:${IMAGE_VERSION}\"" <<< "${rendered}"
           grep -Fq "image: \"${FRONTEND_IMAGE}:${IMAGE_VERSION}\"" <<< "${rendered}"
+
+  website:
+    name: Promote released website to production branch
+    needs: [plan, chart]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: website-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.plan.outputs.release_sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.2'
+      - name: Install website dependencies
+        working-directory: website
+        run: bun install --frozen-lockfile
+      - name: Build release website and documentation
+        working-directory: website
+        run: bun run build:release
+      - name: Website tests
+        working-directory: website
+        run: bun run test
+      - name: Advance production to verified release commit
+        env:
+          RELEASE_SHA: ${{ needs.plan.outputs.release_sha }}
+        run: git push origin "${RELEASE_SHA}:refs/heads/production"

@@ -7,6 +7,7 @@
     "docs": "python -m pip install \"mkdocs-material==9.7.7\" && cd ../umbod && python -m mkdocs build --strict --site-dir ../website/public/docs",
     "dev": "bun run docs && vite dev",
     "build": "bun run docs && vite build",
+    "build:release": "bash scripts/prepare-release.sh && bun run build",
     "preview": "vite preview",
     "deploy": "bun run build && wrangler deploy",
     "test": "node --test tests/*.test.mjs"
