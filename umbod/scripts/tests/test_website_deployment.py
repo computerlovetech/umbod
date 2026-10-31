@@ -259,3 +259,31 @@ def test_production_bootstrap_rejects_more_than_one_commit_above_release(release
     )
     assert result.returncode != 0
     assert "directly follow its release commit" in result.stderr
+
+
+def test_production_bootstrap_builds_from_shallow_cloudflare_checkout(release_checkout: Path) -> None:
+    tag = "umbod-v1.2.3"
+    run_git(release_checkout, ["tag", tag])
+    run_git(release_checkout, ["push", "origin", tag])
+    (release_checkout / "website/release-source.tag").write_text(f"{tag}\n")
+    run_git(release_checkout, ["add", "."])
+    run_git(release_checkout, ["commit", "-m", "Bootstrap deployment"])
+    run_git(release_checkout, ["push", "origin", "HEAD:refs/heads/production"])
+    remote = Path(run_git(release_checkout, ["remote", "get-url", "origin"]))
+    shallow = release_checkout.parent / "shallow-bootstrap"
+    subprocess.run(
+        ["git", "clone", "--depth", "1", "--branch", "production", remote.as_uri(), str(shallow)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    result = subprocess.run(
+        ["bash", "scripts/prepare-release.sh"],
+        cwd=shallow / "website",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert run_git(shallow, ["rev-parse", "--is-shallow-repository"]) == "true"
+    assert json.loads((shallow / "release-metadata.json").read_text())["chartVersion"] == "1.2.3"

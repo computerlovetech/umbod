@@ -64,7 +64,8 @@ production with a normal fast-forward push.
 
 This keeps installation instructions aligned with the release even when committed
 metadata names an older version. The promotion does not commit generated metadata
-or website output: `production` points at the exact verified release commit.
+or website output. Ordinary promotions point `production` at the exact verified
+release commit; the one-time bootstrap described above adds only deployment files.
 Preview’s ordinary build continues to use committed metadata.
 
 ## Promotion safety and recovery
