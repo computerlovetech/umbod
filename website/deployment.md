@@ -54,6 +54,14 @@ It stamps build-local `release-metadata.json` with tag-derived chart, image, and
 versions before building. Missing, malformed, or ambiguous release tags fail the
 build rather than deploying unversioned content.
 
+A one-time production bootstrap may carry `website/release-source.tag` when the
+latest existing release predates the deployment setup. The bootstrap must be a
+single commit directly above that tag and may change only the website package
+manifest, Wrangler configuration, release preparation script, and tag marker.
+Released pages and documentation cannot change. Main records the bootstrap commit
+as an ancestor without importing its tag marker, so the next release can advance
+production with a normal fast-forward push.
+
 This keeps installation instructions aligned with the release even when committed
 metadata names an older version. The promotion does not commit generated metadata
 or website output: `production` points at the exact verified release commit.

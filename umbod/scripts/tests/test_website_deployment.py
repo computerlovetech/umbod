@@ -209,3 +209,53 @@ def test_release_build_rejects_local_tag_deleted_from_origin(release_checkout: P
     assert result.returncode != 0
     assert (release_checkout / "release-metadata.json").read_text() == original
     assert run_git(release_checkout, ["tag", "--list", tag]) == ""
+
+
+@pytest.mark.parametrize("change_released_content", [False, True])
+def test_production_bootstrap_only_accepts_deployment_changes_above_release(
+    release_checkout: Path, change_released_content: bool
+) -> None:
+    tag = "umbod-v1.2.3-beta.4"
+    run_git(release_checkout, ["tag", tag])
+    run_git(release_checkout, ["push", "origin", tag])
+    (release_checkout / "website/release-source.tag").write_text(f"{tag}\n")
+    if change_released_content:
+        (release_checkout / "website/index.html").write_text("Unreleased content")
+    run_git(release_checkout, ["add", "."])
+    run_git(release_checkout, ["commit", "-m", "Bootstrap deployment"])
+    original = (release_checkout / "release-metadata.json").read_text()
+    result = subprocess.run(
+        ["bash", "scripts/prepare-release.sh"],
+        cwd=release_checkout / "website",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert (result.returncode == 0) != change_released_content, result.stderr
+    if change_released_content:
+        assert (release_checkout / "release-metadata.json").read_text() == original
+    else:
+        assert json.loads((release_checkout / "release-metadata.json").read_text()) == {
+            "chartVersion": "1.2.3-beta.4",
+            "imageTag": "1.2.3-beta.4",
+            "sdkVersion": "1.2.3b4",
+        }
+
+
+def test_production_bootstrap_rejects_more_than_one_commit_above_release(release_checkout: Path) -> None:
+    tag = "umbod-v1.2.3"
+    run_git(release_checkout, ["tag", tag])
+    run_git(release_checkout, ["push", "origin", tag])
+    (release_checkout / "website/release-source.tag").write_text(f"{tag}\n")
+    run_git(release_checkout, ["add", "."])
+    run_git(release_checkout, ["commit", "-m", "Bootstrap deployment"])
+    run_git(release_checkout, ["commit", "--allow-empty", "-m", "Unreleased follow-up"])
+    result = subprocess.run(
+        ["bash", "scripts/prepare-release.sh"],
+        cwd=release_checkout / "website",
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "directly follow its release commit" in result.stderr
