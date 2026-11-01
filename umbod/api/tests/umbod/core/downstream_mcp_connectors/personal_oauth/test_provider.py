@@ -153,6 +153,38 @@ async def test_unsupported_server_metadata_fails_before_registration(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("registered_grants", [
+    ["authorization_code", "refresh_token"], ["refresh_token", "authorization_code"], ["authorization_code"],
+])
+async def test_registration_requests_refresh_when_the_server_supports_it(
+    preparation: PreparePersonalOAuth, resource_metadata: dict[str, object], server_metadata: dict[str, object],
+    client_metadata: dict[str, object], registered_grants: list[str],
+) -> None:
+    # MCP SDK authorization servers reject registrations without refresh_token.
+    server_metadata["grant_types_supported"] = ["authorization_code", "refresh_token"]
+    client_metadata["grant_types"] = registered_grants
+    transport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata), response(server_metadata), response(client_metadata)])
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    await provider.prepare(preparation)
+    registration = json.loads(transport.requests[2].body.get_secret_value())
+    assert registration["grant_types"] == ["authorization_code", "refresh_token"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("registered_grants", [["refresh_token"], ["authorization_code", "client_credentials"]])
+async def test_registration_rejects_grants_beyond_the_request(
+    preparation: PreparePersonalOAuth, resource_metadata: dict[str, object], server_metadata: dict[str, object],
+    client_metadata: dict[str, object], registered_grants: list[str],
+) -> None:
+    server_metadata["grant_types_supported"] = ["authorization_code", "refresh_token"]
+    client_metadata["grant_types"] = registered_grants
+    transport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata), response(server_metadata), response(client_metadata)])
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    with pytest.raises(PersonalOAuthProviderUnsupported):
+        await provider.prepare(preparation)
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(("field", "value"), [
     ("client_secret", "provider-secret"), ("scope", "read"), ("scope", " "),
     ("redirect_uris", ["https://attacker.example/callback"]),

@@ -175,12 +175,16 @@ class DiscoveredPersonalOAuthProvider:
 
     async def _register(self, command: PreparePersonalOAuth, server: AuthorizationServer) -> str:
         validated_url(server.registration_endpoint)
+        # MCP SDK authorization servers reject registrations without refresh_token when they support it.
+        grant_types = ["authorization_code"] + (
+            ["refresh_token"] if "refresh_token" in server.grant_types_supported else []
+        )
         registration: dict[str, object] = {
             "client_name": "Umbod",
             "application_type": "native" if command.redirect_uri.startswith("http://") else "web",
             "redirect_uris": [command.redirect_uri],
             "token_endpoint_auth_method": "none",
-            "grant_types": ["authorization_code"],
+            "grant_types": grant_types,
             "response_types": ["code"],
         }
         if command.policy.requested_scopes:
@@ -194,7 +198,8 @@ class DiscoveredPersonalOAuthProvider:
             "client_secret" in raw_client
             or client.token_endpoint_auth_method != "none"
             or client.redirect_uris != [command.redirect_uri]
-            or client.grant_types != ["authorization_code"]
+            or "authorization_code" not in client.grant_types
+            or not set(client.grant_types) <= set(grant_types)
             or client.response_types != ["code"]
             or ("application_type" in raw_client and raw_client["application_type"] != registration["application_type"])
             or ("scope" in raw_client and parse_oauth_scopes(client.scope) != command.policy.requested_scopes)
