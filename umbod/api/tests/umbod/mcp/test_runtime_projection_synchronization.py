@@ -36,7 +36,8 @@ def _synchronizer(events: EventStream, checkpoints: EventCheckpointStore, reconc
 
 
 @pytest.mark.asyncio
-async def test_two_live_workers_independently_replay_and_apply_changes(events: EventStream, checkpoints: EventCheckpointStore) -> None:
+@pytest.mark.parametrize("event_type", ["connector.publication.changed", "filesystem.discovery_changed"])
+async def test_two_live_workers_independently_replay_and_apply_changes(events: EventStream, checkpoints: EventCheckpointStore, event_type: str) -> None:
     await events.append(MessagingEvent(event_type='connector.discovery.changed', subject='connector'))
     first_reconcile = AsyncMock()
     second_reconcile = AsyncMock()
@@ -47,7 +48,7 @@ async def test_two_live_workers_independently_replay_and_apply_changes(events: E
 
     await first.bootstrap()
     await second.bootstrap()
-    await events.append(MessagingEvent(event_type='connector.publication.changed', subject='connector'))
+    await events.append(MessagingEvent(event_type=event_type, subject='connector'))
     await first.poll_once()
     await second.poll_once()
 
@@ -266,7 +267,7 @@ async def test_sql_bootstrap_without_api_url_never_copies_authoritative_store_st
         metrics_recorder=Mock(),
         group_permission_runtime_state=None,
         connector_runtime=SimpleNamespace(connector_tool_mappings=[], connector_configuration_store=configuration, connector_publishing_store=publishing),
-        mcp=SimpleNamespace(runtime_projection_health=RuntimeProjectionHealth(), downstream_mcp_discovery_runtime=Mock(), downstream_mcp_discovery_coordinator=coordinator, connector_tool_registry=registry, connector_prompt_registry=SimpleNamespace(reconcile_all=AsyncMock()), connector_resource_registry=SimpleNamespace(reconcile_all=AsyncMock())),
+        mcp=SimpleNamespace(runtime_projection_health=RuntimeProjectionHealth(), filesystem_discovery_runtime=SimpleNamespace(reconcile=AsyncMock()), downstream_mcp_discovery_runtime=Mock(), downstream_mcp_discovery_coordinator=coordinator, connector_tool_registry=registry, connector_prompt_registry=SimpleNamespace(reconcile_all=AsyncMock()), connector_resource_registry=SimpleNamespace(reconcile_all=AsyncMock())),
     )
     adapters = SimpleNamespace(create_projection_reader=lambda: events, create_checkpoint_store=lambda: checkpoints)
     monkeypatch.setattr(public_app, 'McpMessagingAdapterFactory', lambda *_args: adapters)
@@ -274,6 +275,7 @@ async def test_sql_bootstrap_without_api_url_never_copies_authoritative_store_st
     app = await public_app.build_starlette_app(context)
     async with app.router.lifespan_context(app):
         assert context.mcp.runtime_projection_health.ready
+        context.mcp.filesystem_discovery_runtime.reconcile.assert_awaited_once()
         coordinator.reconcile_native_capabilities.assert_awaited_once()
         registry.reconcile_all.assert_awaited_once()
         assert configuration.mock_calls == []

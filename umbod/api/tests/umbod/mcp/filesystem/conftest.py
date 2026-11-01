@@ -1,10 +1,13 @@
 from collections.abc import AsyncIterator
 from contextvars import ContextVar
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from unittest.mock import Mock
 
 import pytest_asyncio
 from fastmcp import FastMCP
+from fastmcp.server.auth import AuthContext
+from umbod.mcp.connectors.downstream_mcp.provider import _REQUEST_CONNECTOR_SCOPE
 
 from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.callers import (
@@ -25,7 +28,10 @@ from umbod.core.persistence import Database
 from umbod.core.filesystem.content import ContentService, FilesystemContent
 from umbod.core.filesystem.ports import ContentDriver, ByteStream
 from umbod.core.filesystem.models import ContentRef, StorageKey
+from umbod.core.filesystem.stores.discovery import DatabaseFilesystemAuthorizationReader
 from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory, register_filesystem_tools
+from umbod.mcp.filesystem.authorization import FilesystemToolVisibility, FilesystemVisibilityMiddleware
+from umbod.mcp.filesystem.runtime import FilesystemDiscoveryRuntime
 from umbod.mcp.metrics.in_memory import InMemoryMcpMetricsRecorder
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.listeners import create_mcp_signals
@@ -76,10 +82,17 @@ class FilesystemMcp:
     content: RecordingContent
     files: FilesystemContent
     database: Database
+    runtime: FilesystemDiscoveryRuntime
+    visibility: FilesystemToolVisibility
 
 
-@pytest_asyncio.fixture
-async def filesystem_mcp() -> AsyncIterator[FilesystemMcp]:
+class InvocationFilesystemToolVisibility(FilesystemToolVisibility):
+    async def authorize(self, context: AuthContext) -> bool:
+        return not _REQUEST_CONNECTOR_SCOPE.get()
+
+
+@asynccontextmanager
+async def filesystem_server(filtered: bool) -> AsyncIterator[FilesystemMcp]:
     runtime = await prepared_inmemory_runtime()
     await create_root_provisioning(database=runtime.database).provision(
         RootBootstrapSpec(grants=(RootBootstrapGrant(
@@ -99,12 +112,31 @@ async def filesystem_mcp() -> AsyncIterator[FilesystemMcp]:
         VerifiedIdentityResolver(), create_filesystem_transactions(database=runtime.database),
         content, 20_971_520,
     )
+    discovery = FilesystemDiscoveryRuntime(DatabaseFilesystemAuthorizationReader(runtime.database))
+    await discovery.reconcile()
+    visibility_type = FilesystemToolVisibility if filtered else InvocationFilesystemToolVisibility
+    visibility = visibility_type(callers, discovery)
+    if filtered:
+        server.add_middleware(FilesystemVisibilityMiddleware(visibility))
     register_filesystem_tools(
         McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), metrics, Mock()))),
         callers,
         services,
+        visibility,
     )
     try:
-        yield FilesystemMcp(server, callers, metrics, services, content, files, runtime.database)
+        yield FilesystemMcp(server, callers, metrics, services, content, files, runtime.database, discovery, visibility)
     finally:
         await runtime.shutdown()
+
+
+@pytest_asyncio.fixture
+async def filesystem_mcp() -> AsyncIterator[FilesystemMcp]:
+    async with filesystem_server(filtered=True) as filesystem:
+        yield filesystem
+
+
+@pytest_asyncio.fixture
+async def filesystem_invocation_mcp() -> AsyncIterator[FilesystemMcp]:
+    async with filesystem_server(filtered=False) as filesystem:
+        yield filesystem

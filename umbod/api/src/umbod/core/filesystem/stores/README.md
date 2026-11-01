@@ -9,6 +9,8 @@ description: "Database-neutral namespace and access-policy persistence."
 - [__init__.py](./__init__.py) — Public module exports.
 - [access_control.py](./access_control.py) — Ownership, grants and complete per-node policy cleanup.
 - [administration.py](./administration.py) — Root policy transactions.
+- [discovery.py](./discovery.py) — Coherent read-only authorization snapshots without root initialization or writer reservations.
+- [discovery_events.py](./discovery_events.py) — Sanitized durable invalidation events appended within namespace and policy transactions.
 - [group_usage.py](./group_usage.py) — Group catalogue usage checks.
 - [namespace.py](./namespace.py) — Namespace persistence and revision-checked single-file removal.
 - [schema.py](./schema.py) — Node and access-policy tables.

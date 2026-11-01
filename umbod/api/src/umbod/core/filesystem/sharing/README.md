@@ -18,5 +18,3 @@ description: "Caller-authorized group and observed-user sharing with combined br
 - [Group policy rules](../group_policy.py) — Shared root and node group validation and grant canonicalization.
 - [Sharing persistence](../stores/sharing.py) — Collaborators composed from one serialized database session.
 - [Sharing tests](../../../../../tests/umbod/core/filesystem/sharing/) — Public behavior across ports, persistence drivers and concurrent writers.
-- [ADR-013](../../../../../../project/architecture-records/ADR-013-direct-node-group-sharing.md) — Approved group-sharing boundaries and concurrency contract.
-- [ADR-015](../../../../../../project/architecture-records/ADR-015-direct-node-user-sharing.md) — Observed-user recipients and shared-operation boundaries.

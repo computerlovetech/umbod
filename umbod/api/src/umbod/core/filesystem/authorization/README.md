@@ -7,6 +7,7 @@ description: "Direct-node permission evaluation and caller-to-principal resoluti
 # Files
 
 - [__init__.py](./__init__.py) — Public module exports.
+- [discovery.py](./discovery.py) — Immutable caller-neutral snapshots and direct-node operation eligibility.
 - [errors.py](./errors.py) — Permission denial.
 - [local_resolver.py](./local_resolver.py) — Opt-in local identity mapping.
 - [models.py](./models.py) — Resolved identities and decisions.

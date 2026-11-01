@@ -27,6 +27,7 @@ from .schema import (
     OwnershipRecord,
 )
 from .session import storage_session
+from .discovery_events import append_discovery_changed
 
 
 def grant_key(node_id: NodeId, principal: Principal) -> GrantKey:
@@ -74,6 +75,7 @@ class SessionAccessControl:
     async def clear_node(self, node_id: NodeId) -> None:
         await self._session.delete(GRANT_TABLE, DeleteQuery(filter=Equals(GRANT_NODE, str(node_id))))
         await self._session.delete(OWNER_TABLE, DeleteQuery(filter=Equals(OWNER_NODE, str(node_id))))
+        await append_discovery_changed(self._session)
 
     async def get_owner(self, node_id: NodeId) -> Ownership:
         record = await self._session.find_one(
@@ -101,6 +103,8 @@ class SessionAccessControl:
                 ),
             ),
         )
+
+        await append_discovery_changed(self._session)
 
     async def list_grants(self, node_id: NodeId) -> list[AccessGrant]:
         records = await self._session.find_many(
@@ -130,6 +134,8 @@ class SessionAccessControl:
             ),
         )
 
+        await append_discovery_changed(self._session)
+
     async def remove_grant(self, node_id: NodeId, principal: Principal) -> None:
         key = grant_key(node_id, principal)
         await self._session.delete(
@@ -145,3 +151,4 @@ class SessionAccessControl:
                 )
             ),
         )
+        await append_discovery_changed(self._session)

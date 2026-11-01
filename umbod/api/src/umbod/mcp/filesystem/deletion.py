@@ -6,7 +6,6 @@ from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ToolAnnotations
 from pydantic import PrivateAttr
 
-from .authorization import root_filesystem_tool_access
 from .errors import filesystem_operation
 from .models import DeleteFileCommand, FileDeletionResult
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
@@ -31,7 +30,6 @@ class FilesystemDeleteFileTool(Tool):
             annotations=ToolAnnotations(
                 readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=False,
             ),
-            auth=root_filesystem_tool_access,
         )
         self._callers = callers
         self._services = services

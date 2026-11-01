@@ -28,11 +28,11 @@ DENIED = "filesystem_permission_denied: Filesystem access denied"
 
 @pytest.mark.asyncio
 async def test_delete_removes_namespace_and_policies_retains_bytes_and_preserves_siblings(
-    filesystem_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
+    filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    namespace = create_namespace_driver(database=filesystem_mcp.database)
-    policies = create_access_control_driver(database=filesystem_mcp.database)
-    async with Client(filesystem_mcp.server) as client:
+    namespace = create_namespace_driver(database=filesystem_invocation_mcp.database)
+    policies = create_access_control_driver(database=filesystem_invocation_mcp.database)
+    async with Client(filesystem_invocation_mcp.server) as client:
         parent = await root_id(client)
         published = await upload(client, parent, {"encoding": "utf-8", "text": "retained payload"})
         node_id = published.structured_content["id"]
@@ -50,13 +50,13 @@ async def test_delete_removes_namespace_and_policies_retains_bytes_and_preserves
         forbidden_get = Mock(side_effect=AssertionError("Deletion must not read bytes"))
         forbidden_put = Mock(side_effect=AssertionError("Deletion must not write bytes"))
         with monkeypatch.context() as patches:
-            patches.setattr(filesystem_mcp.content, "get", forbidden_get)
-            patches.setattr(filesystem_mcp.content, "put", forbidden_put)
-            captures = filesystem_mcp.callers.count
+            patches.setattr(filesystem_invocation_mcp.content, "get", forbidden_get)
+            patches.setattr(filesystem_invocation_mcp.content, "put", forbidden_put)
+            captures = filesystem_invocation_mcp.callers.count
             result = await client.call_tool(TOOL, {
                 "node_id": node_id, "expected_revision": published.structured_content["revision"],
             })
-            assert filesystem_mcp.callers.count == captures + 1
+            assert filesystem_invocation_mcp.callers.count == captures + 1
         forbidden_get.assert_not_called()
         forbidden_put.assert_not_called()
         assert result.content[0].text == "File deleted successfully."
@@ -76,15 +76,15 @@ async def test_delete_removes_namespace_and_policies_retains_bytes_and_preserves
         await policies.get_owner(UUID(node_id))
     assert await policies.list_grants(UUID(node_id)) == []
     assert await policies.get_owner(UUID(sibling)) == sibling_owner
-    assert b"".join([chunk async for chunk in filesystem_mcp.content.get(stored.content.key)]) == b"retained payload"
+    assert b"".join([chunk async for chunk in filesystem_invocation_mcp.content.get(stored.content.key)]) == b"retained payload"
     assert any(sample.labels["tool_name"] == TOOL and sample.labels["outcome"] == "success"
-               for sample in filesystem_mcp.metrics.metric_samples())
+               for sample in filesystem_invocation_mcp.metrics.metric_samples())
 
 
 @pytest.mark.asyncio
-async def test_stale_revision_preserves_node_and_policy(filesystem_mcp: FilesystemMcp) -> None:
-    policies = create_access_control_driver(database=filesystem_mcp.database)
-    async with Client(filesystem_mcp.server) as client:
+async def test_stale_revision_preserves_node_and_policy(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    policies = create_access_control_driver(database=filesystem_invocation_mcp.database)
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "file", "file")
         before = await client.call_tool("get_filesystem_node", {"node_id": node_id})
         owner = await policies.get_owner(UUID(node_id))
@@ -102,17 +102,17 @@ async def test_stale_revision_preserves_node_and_policy(filesystem_mcp: Filesyst
     assert await policies.get_owner(UUID(node_id)) == owner
     assert await policies.list_grants(UUID(node_id)) == [grant]
     assert any(sample.labels["tool_name"] == TOOL and sample.labels["outcome"] == "failure"
-               for sample in filesystem_mcp.metrics.metric_samples())
+               for sample in filesystem_invocation_mcp.metrics.metric_samples())
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("revision", [1, 999])
 async def test_missing_and_unauthorized_nodes_have_identical_safe_errors(
-    filesystem_mcp: FilesystemMcp, revision: int,
+    filesystem_invocation_mcp: FilesystemMcp, revision: int,
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "private", "file")
-        filesystem_mcp.callers.current.set(caller_snapshot(
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
             "bob", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED,
         ))
         denied = await client.call_tool(TOOL, {"node_id": node_id, "expected_revision": revision}, raise_on_error=False)
@@ -124,12 +124,12 @@ async def test_missing_and_unauthorized_nodes_have_identical_safe_errors(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("root", [False, True])
-async def test_authorized_directory_and_root_are_rejected(filesystem_mcp: FilesystemMcp, root: bool) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_authorized_directory_and_root_are_rejected(filesystem_invocation_mcp: FilesystemMcp, root: bool) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         parent = await root_id(client)
         node_id = parent if root else await create_node(client, parent, "folder", "directory")
         if root:
-            await create_access_control_driver(database=filesystem_mcp.database).set_owner(Ownership(
+            await create_access_control_driver(database=filesystem_invocation_mcp.database).set_owner(Ownership(
                 node_id=UUID(node_id), owner=Principal(type=PrincipalType.USER, issuer="https://issuer", id="alice"),
             ))
         result = await client.call_tool(TOOL, {"node_id": node_id, "expected_revision": 999}, raise_on_error=False)
@@ -149,19 +149,19 @@ async def test_authorized_directory_and_root_are_rejected(filesystem_mcp: Filesy
       for field in ("caller", "owner", "identity", "groups", "grants", "storage_key", "content")],
 ])
 async def test_delete_rejects_invalid_arguments_without_capturing_identity(
-    filesystem_mcp: FilesystemMcp, arguments: dict[str, Any],
+    filesystem_invocation_mcp: FilesystemMcp, arguments: dict[str, Any],
 ) -> None:
-    captures = filesystem_mcp.callers.count
-    async with Client(filesystem_mcp.server) as client:
+    captures = filesystem_invocation_mcp.callers.count
+    async with Client(filesystem_invocation_mcp.server) as client:
         result = await client.call_tool(TOOL, arguments, raise_on_error=False)
     assert result.is_error
     assert result.content[0].text == "filesystem_invalid_delete: Invalid file deletion arguments"
-    assert filesystem_mcp.callers.count == captures
+    assert filesystem_invocation_mcp.callers.count == captures
 
 
 @pytest.mark.asyncio
-async def test_maximum_revision_is_validated_without_coercion(filesystem_mcp: FilesystemMcp) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_maximum_revision_is_validated_without_coercion(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "file", "file")
         result = await client.call_tool(TOOL, {
             "node_id": node_id, "expected_revision": 9_999_999_999_999_999_999,
@@ -175,11 +175,11 @@ async def test_maximum_revision_is_validated_without_coercion(filesystem_mcp: Fi
     AuthenticationProvenance.LOCAL_SIMULATION, AuthenticationProvenance.LOCAL_SEMANTIC,
 ])
 async def test_delete_requires_current_verified_identity(
-    filesystem_mcp: FilesystemMcp, provenance: AuthenticationProvenance,
+    filesystem_invocation_mcp: FilesystemMcp, provenance: AuthenticationProvenance,
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "file", "file")
-        filesystem_mcp.callers.current.set(caller_snapshot("alice", "https://issuer", ("writers",), provenance))
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot("alice", "https://issuer", ("writers",), provenance))
         result = await client.call_tool(TOOL, {"node_id": node_id, "expected_revision": 1}, raise_on_error=False)
     assert result.is_error
     assert result.content[0].text == DENIED
@@ -187,16 +187,16 @@ async def test_delete_requires_current_verified_identity(
 
 @pytest.mark.asyncio
 async def test_direct_node_grant_authorizes_without_parent_access_and_revocation_is_fresh(
-    filesystem_mcp: FilesystemMcp,
+    filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
-    policies = create_access_control_driver(database=filesystem_mcp.database)
+    policies = create_access_control_driver(database=filesystem_invocation_mcp.database)
     principal = Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob")
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "file", "file")
         grant = AccessGrant(node_id=UUID(node_id), principal=principal,
                             permissions={Permission.DISCOVER, Permission.DELETE}, recursive=False)
         await policies.add_grant(grant)
-        filesystem_mcp.callers.current.set(caller_snapshot(
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
             "bob", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED,
         ))
         await client.call_tool("get_filesystem_node", {"node_id": node_id})
@@ -211,9 +211,9 @@ async def test_direct_node_grant_authorizes_without_parent_access_and_revocation
 
 @pytest.mark.asyncio
 async def test_delete_schema_declares_only_revision_and_node_and_destructive_annotations(
-    filesystem_mcp: FilesystemMcp,
+    filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         descriptor = next(tool for tool in await client.list_tools() if tool.name == TOOL)
     schema = descriptor.input_schema
     assert set(schema["properties"]) == set(schema["required"]) == {"node_id", "expected_revision"}
@@ -231,31 +231,31 @@ async def test_delete_schema_declares_only_revision_and_node_and_destructive_ann
 
 @pytest.mark.asyncio
 async def test_connector_scope_hides_delete_and_blocks_direct_invocation_before_capture(
-    filesystem_mcp: FilesystemMcp,
+    filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "file", "file")
-    captures = filesystem_mcp.callers.count
+    captures = filesystem_invocation_mcp.callers.count
     token = set_request_connector_scope("connector-only")
     try:
-        async with Client(filesystem_mcp.server) as client:
+        async with Client(filesystem_invocation_mcp.server) as client:
             descriptors = await client.list_tools()
             result = await client.call_tool(TOOL, {"node_id": node_id, "expected_revision": 1}, raise_on_error=False)
         assert TOOL not in {tool.name for tool in descriptors}
         assert result.is_error
-        assert filesystem_mcp.callers.count == captures
+        assert filesystem_invocation_mcp.callers.count == captures
     finally:
         reset_request_connector_scope(token)
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         deleted = await client.call_tool(TOOL, {"node_id": node_id, "expected_revision": 1})
     assert deleted.structured_content == {"node_id": node_id, "deleted": True}
 
 
 @pytest.mark.asyncio
 async def test_each_delete_captures_once_and_creates_a_fresh_operation_service(
-    filesystem_mcp: FilesystemMcp,
+    filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
-    caller = filesystem_mcp.callers.current.get()
+    caller = filesystem_invocation_mcp.callers.current.get()
     callers = Mock(spec=FilesystemCallerCapture)
     callers.capture.return_value = caller
     services = [Mock(spec=FilesystemDeletion), Mock(spec=FilesystemDeletion)]
@@ -276,10 +276,10 @@ async def test_each_delete_captures_once_and_creates_a_fresh_operation_service(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("stage", ["capture", "factory", "service"])
 async def test_delete_cancellation_propagates_from_each_operation_stage(
-    filesystem_mcp: FilesystemMcp, stage: str,
+    filesystem_invocation_mcp: FilesystemMcp, stage: str,
 ) -> None:
     callers = Mock(spec=FilesystemCallerCapture)
-    callers.capture.return_value = filesystem_mcp.callers.current.get()
+    callers.capture.return_value = filesystem_invocation_mcp.callers.current.get()
     service = Mock(spec=FilesystemDeletion)
     service.delete_file = AsyncMock()
     factory = Mock(spec=FilesystemServiceFactory)

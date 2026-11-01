@@ -11,7 +11,7 @@ import pytest_asyncio
 from fastmcp import Client
 
 from conftest import RuntimeEndpoints
-from test_running_filesystem import FILESYSTEM, checked_summary, tool_payload
+from test_running_filesystem import FILESYSTEM, checked_summary, tool_payload, wait_for_filesystem_tools
 from test_running_personal_mcp_execution import mcp_client, proxy_token
 
 
@@ -50,6 +50,8 @@ async def native_upload_runtime(runtime_endpoints: RuntimeEndpoints) -> AsyncIte
             token = proxy_token(runtime_endpoints.mcp_url, runtime_endpoints.bearer_token, identity)
             other_token = proxy_token(second_mcp, os.environ["UMBOD_TEST_BEARER_TOKEN_B"], identity)
             async with mcp_client(runtime_endpoints.mcp_url, token) as client, mcp_client(second_mcp, other_token) as other_client:
+                await wait_for_filesystem_tools(client, {"create_filesystem_directory", "filesystem_upload"})
+                await wait_for_filesystem_tools(other_client, {"filesystem_upload"})
                 directory = tool_payload(await client.call_tool("create_filesystem_directory", {
                     "parent_id": root["id"], "name": "native-upload-" + uuid4().hex,
                     "metadata": {"content_type": "application/octet-stream", "attributes": {}},
@@ -95,6 +97,7 @@ async def test_native_upload_is_readable_through_rest_and_private_across_workers
     assert response.status_code == 200
     assert response.headers["content-type"].split(";")[0] == content_type
     assert response.content == expected
+    await wait_for_filesystem_tools(runtime.client, {"filesystem_read_file"})
     if len(expected) <= 1_048_576:
         assert tool_payload(await runtime.client.call_tool("filesystem_read_file", {
             "node_id": node["id"], "encoding": "base64", "max_bytes": len(expected),
@@ -151,6 +154,7 @@ async def test_read_rejects_oversize_rest_file_without_changing_rest_downloads(
     )
     assert transferred.status_code == 204, transferred.text
     node = checked_summary(runtime.api.post(session["complete_url"]), 201)
+    await wait_for_filesystem_tools(runtime.client, {"filesystem_read_file"})
     result = await runtime.client.call_tool("filesystem_read_file", {
         "node_id": node["id"], "encoding": "base64", "max_bytes": 1_048_576,
     }, raise_on_error=False)

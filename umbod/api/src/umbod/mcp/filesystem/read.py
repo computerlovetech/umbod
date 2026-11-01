@@ -14,7 +14,6 @@ from umbod.core.filesystem.content import ContentDownload
 from umbod.core.filesystem.errors import StorageFailure
 from umbod.core.filesystem.ports import ByteStream
 
-from .authorization import root_filesystem_tool_access
 from .errors import InvalidReadEncoding, ReadTooLarge, filesystem_operation
 from .ports import ClosableByteStream, FilesystemCallerCapture, FilesystemServiceFactory
 from .read_models import Base64ReadContent, ReadContent, ReadFileCommand, ReadFileResult, Utf8ReadContent
@@ -81,7 +80,6 @@ class FilesystemReadFileTool(Tool):
             annotations=ToolAnnotations(
                 readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False,
             ),
-            auth=root_filesystem_tool_access,
         )
         self._callers = callers
         self._services = services

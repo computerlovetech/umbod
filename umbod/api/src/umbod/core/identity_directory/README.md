@@ -13,7 +13,3 @@ description: Minimal observed identities and membership values independent of au
 - [service.py](./service.py) — Best-effort observation with sanitized failure logging.
 - [user_models.py](./user_models.py) — Name search with neutral subject exclusions, minimal results, identity bindings and reverse subject-profile lookup models.
 - [users.py](./users.py) — Verified-caller name search and stable-ID resolution without permission changes.
-
-# Related links
-
-- [ADR-012](../../../../../project/architecture-records/ADR-012-login-observed-identity-directory.md) — Directory trust and storage boundaries.

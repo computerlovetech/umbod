@@ -96,6 +96,9 @@ from umbod.mcp.connectors.downstream_mcp.inventory import shared_tool_inventory
 from umbod.mcp.middleware import McpAuditMiddleware
 from umbod.mcp.middleware.protocol_metrics import McpProtocolMetricsMiddleware
 from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesystemServiceFactory, RuntimeFilesystemGroupClaimFields, StaticFilesystemGroupClaimFields, register_filesystem_tools
+from umbod.core.filesystem.stores.discovery import DatabaseFilesystemAuthorizationReader
+from umbod.mcp.filesystem.authorization import FilesystemToolVisibility, FilesystemVisibilityMiddleware
+from umbod.mcp.filesystem.runtime import FilesystemDiscoveryRuntime
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.core.persistence import Database, PersistenceRuntime
 from umbod.core.connectors.downstream_mcp.adapters.settings import (
@@ -215,18 +218,26 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     filesystem_content = create_content_driver(
         TypeAdapter(ContentConfig).validate_python(settings.filesystem.content.model_dump())
     )
+    filesystem_callers = CurrentFilesystemCallerCapture(
+        mcp,
+        RuntimeFilesystemGroupClaimFields(group_permission_runtime_state)
+        if group_permission_runtime_state is not None
+        else StaticFilesystemGroupClaimFields(settings.mcp.permission_group_claim),
+    )
+    filesystem_runtime = FilesystemDiscoveryRuntime(
+        DatabaseFilesystemAuthorizationReader(persistence_runtime.database),
+    )
+    mcp.filesystem_discovery_runtime = filesystem_runtime
+    filesystem_visibility = FilesystemToolVisibility(filesystem_callers, filesystem_runtime)
+    mcp.add_middleware(FilesystemVisibilityMiddleware(filesystem_visibility))
     register_filesystem_tools(
         McpObservedToolRegistrar(mcp, publisher),
-        CurrentFilesystemCallerCapture(
-            mcp,
-            RuntimeFilesystemGroupClaimFields(group_permission_runtime_state)
-            if group_permission_runtime_state is not None
-            else StaticFilesystemGroupClaimFields(settings.mcp.permission_group_claim),
-        ),
+        filesystem_callers,
         DatabaseFilesystemServiceFactory(
             persistence_runtime.database, filesystem_content, settings.filesystem.upload_max_bytes,
             filesystem_managed_issuer(settings),
         ),
+        filesystem_visibility,
     )
     await initialize_openapi_discovery(mcp)
     await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, signals, mcp.execution_pipelines, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes)
@@ -495,6 +506,7 @@ def _create_runtime_projection_synchronizer(context: PublicAppRuntimeContext) ->
     uses_http_readers = _uses_http_runtime_data_readers(context)
 
     async def reconcile() -> None:
+        await context.mcp.filesystem_discovery_runtime.reconcile()
         await context.mcp.downstream_mcp_discovery_coordinator.reconcile_native_capabilities()
         await reconcile_openapi_discovery(context.mcp)
         if uses_http_readers:

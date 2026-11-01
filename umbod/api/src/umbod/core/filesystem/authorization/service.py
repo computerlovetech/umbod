@@ -3,6 +3,7 @@ from umbod.core.callers import CallerSnapshot
 from ..errors import MissingNode, OwnershipNotFound
 from ..models import NodeId, Permission
 from ..ports import AccessControlDriver, NamespaceDriver
+from .discovery import effective_permissions
 from .errors import PermissionDenied
 from .models import AuthorizationDecision, ResolvedIdentity, UnresolvedIdentity
 from .ports import FilesystemIdentityResolver
@@ -56,12 +57,9 @@ async def allows_resolved(
     except (MissingNode, OwnershipNotFound):
         return False
     principals = identity.principals
-    if ownership.owner in principals:
+    if permission in effective_permissions(principals, node_id, (ownership,), ()):
         return True
     grants = await access_control.list_grants(node_id)
-    return any(
-        grant.node_id == node_id
-        and grant.principal in principals
-        and permission in grant.permissions
-        for grant in grants
+    return permission in effective_permissions(
+        principals, node_id, (ownership,), grants,
     )

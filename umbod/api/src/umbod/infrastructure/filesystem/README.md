@@ -19,7 +19,6 @@ description: "Filesystem composition and concrete content storage over the appli
 
 # Related links
 
-- [ADR-014](../../../../../project/architecture-records/ADR-014-s3-content-storage.md) — S3 configuration, credential ownership, streaming, and migration boundaries.
 - [ADR-009](../../../../../project/architecture-records/ADR-009-transport-neutral-upload-sessions.md) — Upload publication remains separate from byte storage and transfer instructions.
 - [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Shared-database namespace and policy storage, independently selected content storage.
 - [Filesystem boundary detail](../../../../../project/architecture-records/supporting/filesystem-boundaries.md) — Trusted POSIX directory requirements and byte publication outside database transactions.

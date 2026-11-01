@@ -28,6 +28,7 @@ from .schema import (
     NODE_ID, NODE_KEY_PROJECTION, NODE_NAME, NODE_PARENT, NODE_TABLE, NodeKey, NodeRecord,
 )
 from .session import storage_session
+from .discovery_events import append_discovery_changed
 
 
 def node_record(node: Node) -> NodeRecord:
@@ -111,6 +112,7 @@ class SessionNamespace:
         if node.revision != expected_revision:
             raise RevisionConflict(str(node_id))
         await self._session.delete(NODE_TABLE, DeleteQuery(filter=Equals(NODE_ID, str(node_id))))
+        await append_discovery_changed(self._session)
 
     async def initialize_root(self) -> None:
         record = await self._session.find_one(
@@ -119,6 +121,7 @@ class SessionNamespace:
         )
         if record is None:
             await self._session.insert(NODE_TABLE, InsertCommand(row=node_record(initial_root())))
+            await append_discovery_changed(self._session)
 
     async def get_node(self, node_id: NodeId) -> Node:
         record = await self._session.find_one(
@@ -177,6 +180,7 @@ class SessionNamespace:
             NODE_TABLE, InsertCommand(row=node_record(node))
         ):
             raise NameCollision(name)
+        await append_discovery_changed(self._session)
         return node.model_copy(deep=True)
 
     async def update_node(

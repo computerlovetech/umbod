@@ -7,6 +7,7 @@ from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 
 from conftest import RuntimeEndpoints
+from test_running_filesystem import FILESYSTEM_TOOLS
 
 
 @pytest.mark.asyncio
@@ -55,9 +56,10 @@ async def test_local_rest_test_user_respects_policy_while_mcp_requires_verified_
             headers = {"Authorization": "Bearer " + runtime_endpoints.bearer_token}
             client: Client[Any] = Client(StreamableHttpTransport(runtime_endpoints.mcp_url, headers=headers))
             async with client:
+                assert not {tool.name for tool in await client.list_tools()} & FILESYSTEM_TOOLS
                 result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
                 assert result.is_error
-                assert "filesystem_permission_denied" in result.content[0].text
+                assert result.content[0].text == "Authorization failed for tool 'get_filesystem_root': not found or not authorized"
         finally:
             current = rest.get(policy_path)
             assert current.status_code == 200

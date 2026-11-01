@@ -140,6 +140,9 @@ async def test_evaluation_only_reads_target_node_owner_and_direct_grants(
 ) -> None:
     node_id = uuid4()
     namespace.get_node.return_value = create_autospec(Node, instance=True)
+    policies.get_owner.return_value = Ownership(
+        node_id=node_id, owner=principal("other", PrincipalType.USER, "provider"),
+    )
     policies.list_grants.return_value = [AccessGrant(
         node_id=node_id, principal=principal("alice", PrincipalType.USER, "provider"), permissions={Permission.READ}, recursive=True,
     )]

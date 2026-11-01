@@ -48,13 +48,13 @@ async def read_file(client: Client, node_id: str, encoding: str, max_bytes: int)
     (b"x" * CAP, "base64"),
 ], ids=["unicode", "binary", "empty-text", "empty-base64", "text-cap", "binary-cap"])
 async def test_read_roundtrips_structured_and_text_only_content(
-    filesystem_mcp: FilesystemMcp, payload: bytes, encoding: str,
+    filesystem_invocation_mcp: FilesystemMcp, payload: bytes, encoding: str,
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         published = await upload(client, await root_id(client), {
             "encoding": "base64", "data": base64.b64encode(payload).decode(),
         })
-        captures = filesystem_mcp.callers.count
+        captures = filesystem_invocation_mcp.callers.count
         result = await read_file(client, published.structured_content["id"], encoding, len(payload))
         descriptor = next(tool for tool in await client.list_tools() if tool.name == TOOL)
     expected_content = {"encoding": "utf-8", "text": payload.decode()} if encoding == "utf-8" else {
@@ -67,15 +67,15 @@ async def test_read_roundtrips_structured_and_text_only_content(
     }
     assert json.loads(result.content[0].text) == result.structured_content
     validate(result.structured_content, descriptor.output_schema)
-    assert filesystem_mcp.callers.count == captures + 1
+    assert filesystem_invocation_mcp.callers.count == captures + 1
     assert any(sample.labels["tool_name"] == TOOL and sample.labels["outcome"] == "success"
-               for sample in filesystem_mcp.metrics.metric_samples())
+               for sample in filesystem_invocation_mcp.metrics.metric_samples())
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("encoding", ["utf-8", "base64"])
-async def test_created_empty_file_reads_without_stored_content(filesystem_mcp: FilesystemMcp, encoding: str) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_created_empty_file_reads_without_stored_content(filesystem_invocation_mcp: FilesystemMcp, encoding: str) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "empty", "file")
         result = await read_file(client, node_id, encoding, 0)
     assert not result.is_error
@@ -83,12 +83,12 @@ async def test_created_empty_file_reads_without_stored_content(filesystem_mcp: F
         "node_id": node_id, "revision": 1, "size_bytes": 0,
         "content": {"encoding": encoding, "text" if encoding == "utf-8" else "data": ""},
     }
-    assert filesystem_mcp.content.put_count == 0
+    assert filesystem_invocation_mcp.content.put_count == 0
 
 
 @pytest.mark.asyncio
-async def test_invalid_utf8_has_safe_error_and_base64_remains_readable(filesystem_mcp: FilesystemMcp) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_invalid_utf8_has_safe_error_and_base64_remains_readable(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         published = await upload(client, await root_id(client), {"encoding": "base64", "data": "/w=="})
         result = await read_file(client, published.structured_content["id"], "utf-8", CAP)
         binary = await read_file(client, published.structured_content["id"], "base64", CAP)
@@ -96,7 +96,7 @@ async def test_invalid_utf8_has_safe_error_and_base64_remains_readable(filesyste
     assert result.content[0].text == "filesystem_read_invalid_encoding: File is not valid UTF-8; use base64"
     assert binary.structured_content["content"] == {"encoding": "base64", "data": "/w=="}
     assert any(sample.labels["tool_name"] == TOOL and sample.labels["outcome"] == "failure"
-               for sample in filesystem_mcp.metrics.metric_samples())
+               for sample in filesystem_invocation_mcp.metrics.metric_samples())
 
 
 @pytest.mark.asyncio
@@ -113,19 +113,19 @@ async def test_invalid_utf8_has_safe_error_and_base64_remains_readable(filesyste
       for field in ("caller", "owner", "identity", "groups", "grants", "storage_key", "content")],
 ])
 async def test_read_rejects_invalid_arguments_before_capture(
-    filesystem_mcp: FilesystemMcp, arguments: dict[str, Any],
+    filesystem_invocation_mcp: FilesystemMcp, arguments: dict[str, Any],
 ) -> None:
-    captures = filesystem_mcp.callers.count
-    async with Client(filesystem_mcp.server) as client:
+    captures = filesystem_invocation_mcp.callers.count
+    async with Client(filesystem_invocation_mcp.server) as client:
         result = await client.call_tool(TOOL, arguments, raise_on_error=False)
     assert result.is_error
     assert result.content[0].text == "filesystem_invalid_read: Invalid file read arguments"
-    assert filesystem_mcp.callers.count == captures
+    assert filesystem_invocation_mcp.callers.count == captures
 
 
 @pytest.mark.asyncio
-async def test_read_schema_advertises_required_bounded_arguments_and_annotations(filesystem_mcp: FilesystemMcp) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_read_schema_advertises_required_bounded_arguments_and_annotations(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         descriptor = next(tool for tool in await client.list_tools() if tool.name == TOOL)
     schema = descriptor.input_schema
     assert set(schema["properties"]) == set(schema["required"]) == {"node_id", "encoding", "max_bytes"}
@@ -151,21 +151,21 @@ async def test_read_schema_advertises_required_bounded_arguments_and_annotations
     ("https://issuer", AuthenticationProvenance.LOCAL_SEMANTIC),
 ])
 async def test_read_rejects_untrusted_identity(
-    filesystem_mcp: FilesystemMcp, issuer: str, provenance: AuthenticationProvenance,
+    filesystem_invocation_mcp: FilesystemMcp, issuer: str, provenance: AuthenticationProvenance,
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "private", "file")
-        filesystem_mcp.callers.current.set(caller_snapshot("alice", issuer, ("writers",), provenance))
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot("alice", issuer, ("writers",), provenance))
         result = await read_file(client, node_id, "utf-8", CAP)
     assert result.is_error
     assert result.content[0].text == DENIED
 
 
 @pytest.mark.asyncio
-async def test_read_without_authentication_is_denied(filesystem_mcp: FilesystemMcp) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_read_without_authentication_is_denied(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "private", "file")
-        filesystem_mcp.callers.current.set(CallerSnapshot(
+        filesystem_invocation_mcp.callers.current.set(CallerSnapshot(
             caller=CallerContext(authentication=AuthenticationProvenance.UNAVAILABLE,
                                  subject=UnavailableSubject(kind="unavailable")),
             groups=GroupMembership(group_ids=()),
@@ -176,10 +176,10 @@ async def test_read_without_authentication_is_denied(filesystem_mcp: FilesystemM
 
 
 @pytest.mark.asyncio
-async def test_missing_and_unauthorized_reads_have_identical_errors(filesystem_mcp: FilesystemMcp) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_missing_and_unauthorized_reads_have_identical_errors(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "private", "file")
-        filesystem_mcp.callers.current.set(caller_snapshot(
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
             "bob", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED,
         ))
         denied = await read_file(client, node_id, "utf-8", CAP)
@@ -190,17 +190,17 @@ async def test_missing_and_unauthorized_reads_have_identical_errors(filesystem_m
 
 
 @pytest.mark.asyncio
-async def test_direct_read_grant_needs_no_ancestor_access_and_revocation_is_fresh(filesystem_mcp: FilesystemMcp) -> None:
-    policies = create_access_control_driver(database=filesystem_mcp.database)
+async def test_direct_read_grant_needs_no_ancestor_access_and_revocation_is_fresh(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    policies = create_access_control_driver(database=filesystem_invocation_mcp.database)
     principal = Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob")
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         directory = await create_node(client, await root_id(client), "private", "directory")
         published = await upload(client, directory, {"encoding": "utf-8", "text": "shared"})
         node_id = published.structured_content["id"]
         await policies.add_grant(AccessGrant(
             node_id=UUID(node_id), principal=principal, permissions={Permission.DISCOVER, Permission.READ}, recursive=False,
         ))
-        filesystem_mcp.callers.current.set(caller_snapshot(
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
             "bob", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED,
         ))
         parent = await client.call_tool("get_filesystem_node", {"node_id": directory}, raise_on_error=False)
@@ -214,32 +214,32 @@ async def test_direct_read_grant_needs_no_ancestor_access_and_revocation_is_fres
 
 
 @pytest.mark.asyncio
-async def test_connector_scope_hides_read_and_denies_invocation_before_capture(filesystem_mcp: FilesystemMcp) -> None:
-    captures = filesystem_mcp.callers.count
+async def test_connector_scope_hides_read_and_denies_invocation_before_capture(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    captures = filesystem_invocation_mcp.callers.count
     token = set_request_connector_scope("connector-only")
     try:
-        async with Client(filesystem_mcp.server) as client:
+        async with Client(filesystem_invocation_mcp.server) as client:
             descriptors = await client.list_tools()
             result = await read_file(client, str(uuid4()), "utf-8", CAP)
         assert TOOL not in {tool.name for tool in descriptors}
         assert result.is_error
-        assert filesystem_mcp.callers.count == captures
+        assert filesystem_invocation_mcp.callers.count == captures
     finally:
         reset_request_connector_scope(token)
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         assert TOOL in {tool.name for tool in await client.list_tools()}
 
 
 @pytest.mark.asyncio
-async def test_each_read_captures_once_opens_once_and_creates_fresh_service(filesystem_mcp: FilesystemMcp) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_each_read_captures_once_opens_once_and_creates_fresh_service(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = UUID(await create_node(client, await root_id(client), "empty", "file"))
-    caller = filesystem_mcp.callers.current.get()
+    caller = filesystem_invocation_mcp.callers.current.get()
     callers = Mock(spec=FilesystemCallerCapture)
     callers.capture.return_value = caller
     services = [Mock(spec=FilesystemContent), Mock(spec=FilesystemContent)]
     for service in services:
-        service.open_download = AsyncMock(side_effect=filesystem_mcp.files.open_download)
+        service.open_download = AsyncMock(side_effect=filesystem_invocation_mcp.files.open_download)
     factory = Mock(spec=FilesystemServiceFactory)
     factory.content.side_effect = services
     tool = FilesystemReadFileTool(callers, factory)
@@ -253,13 +253,13 @@ async def test_each_read_captures_once_opens_once_and_creates_fresh_service(file
 
 
 @pytest.mark.asyncio
-async def test_read_cap_is_independent_of_configured_upload_limit(filesystem_mcp: FilesystemMcp) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_read_cap_is_independent_of_configured_upload_limit(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         published = await upload(client, await root_id(client), {"encoding": "utf-8", "text": "readable"})
-    factory = DatabaseFilesystemServiceFactory(filesystem_mcp.database, filesystem_mcp.content, 0, "https://issuer")
+    factory = DatabaseFilesystemServiceFactory(filesystem_invocation_mcp.database, filesystem_invocation_mcp.content, 0, "https://issuer")
     first = factory.content()
     assert first is not factory.content()
-    result = await FilesystemReadFileTool(filesystem_mcp.callers, factory).run({
+    result = await FilesystemReadFileTool(filesystem_invocation_mcp.callers, factory).run({
         "node_id": published.structured_content["id"], "encoding": "utf-8", "max_bytes": CAP,
     })
     assert result.structured_content["content"] == {"encoding": "utf-8", "text": "readable"}
@@ -267,17 +267,17 @@ async def test_read_cap_is_independent_of_configured_upload_limit(filesystem_mcp
 
 @pytest.mark.asyncio
 async def test_read_preserves_captured_revision_and_bytes_during_namespace_update(
-    filesystem_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
+    filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    namespace = create_namespace_driver(database=filesystem_mcp.database)
-    async with Client(filesystem_mcp.server) as client:
+    namespace = create_namespace_driver(database=filesystem_invocation_mcp.database)
+    async with Client(filesystem_invocation_mcp.server) as client:
         published = await upload(client, await root_id(client), {"encoding": "utf-8", "text": "original"})
         node_id = UUID(published.structured_content["id"])
         replacement = await upload(client, await create_node(client, await root_id(client), "other", "directory"), {
             "encoding": "utf-8", "text": "replacement",
         })
         replacement_node = await namespace.get_node(UUID(replacement.structured_content["id"]))
-        original_get = filesystem_mcp.content.get
+        original_get = filesystem_invocation_mcp.content.get
 
         async def update_then_stream(key: StorageKey) -> ByteStream:
             await namespace.update_node(node_id, content=replacement_node.content,
@@ -285,7 +285,7 @@ async def test_read_preserves_captured_revision_and_bytes_during_namespace_updat
             async for chunk in original_get(key):
                 yield chunk
 
-        monkeypatch.setattr(filesystem_mcp.content, "get", update_then_stream)
+        monkeypatch.setattr(filesystem_invocation_mcp.content, "get", update_then_stream)
         result = await read_file(client, str(node_id), "utf-8", CAP)
     assert result.structured_content == {
         "node_id": str(node_id), "revision": published.structured_content["revision"], "size_bytes": 8,

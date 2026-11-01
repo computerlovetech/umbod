@@ -39,6 +39,7 @@ class DatabaseProjectionEventReader:
             'connector.capability_description_override.changed',
             'connector.discovery.changed',
             'mcp.group_permission.changed',
+            'filesystem.discovery_changed',
         ))
 
 

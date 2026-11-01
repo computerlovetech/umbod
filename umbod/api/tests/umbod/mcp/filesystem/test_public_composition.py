@@ -10,6 +10,8 @@ from umbod.core.filesystem.content import FilesystemContent
 from umbod.core.filesystem.deletion import FilesystemDeletion
 from umbod.core.filesystem.sharing import FilesystemSharing
 from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesystemServiceFactory
+from umbod.core.filesystem.authorization.discovery import FilesystemOperation
+from umbod.mcp.filesystem.authorization import FilesystemToolVisibility
 
 
 @pytest.mark.asyncio
@@ -39,6 +41,7 @@ async def test_public_composition_sanitizes_unexpected_filesystem_failures(
 ) -> None:
     failure = RuntimeError("SECRET backend /private/path")
     server = await build_test_mcp(connector_registrations=[])
+    monkeypatch.setattr(FilesystemToolVisibility, "capture", AsyncMock(return_value=frozenset(FilesystemOperation)))
     if stage == "capture":
         monkeypatch.setattr(CurrentFilesystemCallerCapture, "capture", Mock(side_effect=failure))
     elif stage == "factory":

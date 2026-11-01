@@ -21,6 +21,8 @@ Read the [component index](umbod/frontend/COMPONENT_INDEX.md) when working with 
 
 Architecture decision records live in [`umbod/project/architecture-records/`](umbod/project/architecture-records/). Read the applicable accepted ADRs before changing architecture; document intentional changes there rather than introducing a parallel pattern.
 
+Never write an ADR unless explicitly asked to do so by the user.
+
 - [ADR-001: Backend-Neutral Persistence Module Boundaries](umbod/project/architecture-records/ADR-001-backend-neutral-persistence.md) — Read for database boundaries, migrations, or runtime lifetimes.
 - [ADR-002: Client-Owned Credentials for Multi-Provider MCP Tool Authentication](umbod/project/architecture-records/ADR-002-client-side-credential-storage.md) (Proposed) — Read for MCP credential ownership and authentication.
 - [ADR-003: Umbod-Specific Connector Development CLI](umbod/project/architecture-records/ADR-003-umbod-specific-connector-cli.md) — Read before adding SDK CLI commands.
@@ -29,8 +31,11 @@ Architecture decision records live in [`umbod/project/architecture-records/`](um
 - [ADR-006: Filesystem Storage Infrastructure Boundary](umbod/project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Read for file storage, namespaces, or ownership persistence.
 - [ADR-007: Actor-Specific Composition of Shared UI Components](umbod/project/architecture-records/ADR-007-actor-specific-ui-composition.md) — Read for shared components and actor-owned views.
 - [ADR-008: Event-Synchronized In-Memory Tool Runtime](umbod/project/architecture-records/ADR-008-event-synchronized-tool-runtime.md) — Read before tool registration, discovery, routing, synchronization, or invocation changes.
+- [ADR-009: Explicit Deferred Read Planning](umbod/project/architecture-records/ADR-009-deferred-read-planning.md) — Read for deferred persistence reads and request-scoped read plans.
 - [ADR-009: Transport-Neutral File Upload Sessions](umbod/project/architecture-records/ADR-009-transport-neutral-upload-sessions.md) — Read for upload sessions, transfer instructions, or file publication.
+- [ADR-010: Key-Value Storage Drivers Below Request Cache Policy](umbod/project/architecture-records/ADR-010-key-value-storage-drivers.md) — Read for key-value drivers and request-cache policy boundaries.
 - [ADR-011: State Ownership and Rendering Boundaries](umbod/project/architecture-records/ADR-011-state-ownership-and-rendering-boundaries.md) — Read before changing UI state, derived values, component event handling, or state lifetimes.
+- [ADR-012: Show Only MCP Tools With an Authorized Operation](umbod/project/architecture-records/ADR-012-permission-aware-mcp-tool-visibility.md) (Proposed) — Read for caller-specific tool visibility and partially authorized tools.
 
 ## Where to start by task
 

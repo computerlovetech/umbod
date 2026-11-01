@@ -11,7 +11,6 @@ from umbod.core.filesystem.sharing import (
     SharingRecipientSearchResult, SharingScope,
 )
 
-from .authorization import root_filesystem_tool_access
 from .errors import filesystem_operation
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
 from .sharing_models import (
@@ -41,7 +40,6 @@ class FilesystemSearchSharingRecipientsTool(Tool):
             annotations=ToolAnnotations(
                 readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False,
             ),
-            auth=root_filesystem_tool_access,
         )
         self._callers = callers
         self._services = services
@@ -91,7 +89,6 @@ class FilesystemShareTool(Tool):
             annotations=ToolAnnotations(
                 readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False,
             ),
-            auth=root_filesystem_tool_access,
         )
         self._callers = callers
         self._services = services

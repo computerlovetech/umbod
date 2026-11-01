@@ -6,7 +6,7 @@ from umbod.core.filesystem.browsing import NodeSummary
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.tools.registration import tool_result_is_error
 
-from .authorization import root_filesystem_tool_access
+from .authorization import FilesystemToolVisibility
 from .browsing import FilesystemBrowseTool
 from .deletion import FilesystemDeleteFileTool
 from .errors import filesystem_operation
@@ -22,31 +22,18 @@ def register_filesystem_tools(
     registrar: McpObservedToolRegistrar,
     callers: FilesystemCallerCapture,
     services: FilesystemServiceFactory,
+    visibility: FilesystemToolVisibility,
 ) -> None:
-    registrar.register_tool(
-        FilesystemBrowseTool(callers, services), result_is_error=tool_result_is_error,
-        operation_names=frozenset({"ls", "tree", "stat"}),
-    )
-
-    registrar.register_tool(
-        FilesystemUploadTool(callers, services), result_is_error=tool_result_is_error,
-        operation_names=frozenset(),
-    )
-
-    registrar.register_tool(
-        FilesystemDeleteFileTool(callers, services), result_is_error=tool_result_is_error,
-        operation_names=frozenset(),
-    )
-
-    registrar.register_tool(
-        FilesystemReadFileTool(callers, services), result_is_error=tool_result_is_error,
-        operation_names=frozenset(),
-    )
-
-    for tool in (
-        FilesystemSearchSharingRecipientsTool(callers, services), FilesystemShareTool(callers, services),
+    for tool, operation_names in (
+        (FilesystemBrowseTool(callers, services), frozenset({"ls", "tree", "stat"})),
+        (FilesystemUploadTool(callers, services), frozenset()),
+        (FilesystemDeleteFileTool(callers, services), frozenset()),
+        (FilesystemReadFileTool(callers, services), frozenset()),
+        (FilesystemSearchSharingRecipientsTool(callers, services), frozenset()),
+        (FilesystemShareTool(callers, services), frozenset()),
     ):
-        registrar.register_tool(tool, result_is_error=tool_result_is_error, operation_names=frozenset())
+        tool.auth = visibility.authorize
+        registrar.register_tool(tool, result_is_error=tool_result_is_error, operation_names=operation_names)
 
     async def get_filesystem_root() -> FilesystemNodeSummary:
         with filesystem_operation():
@@ -91,7 +78,7 @@ def register_filesystem_tools(
             function, name=function.__name__, description=(
                 description + " Includes manageable direct group sharing only, not a full effective-access audit."
                 if readonly else description
-            ), auth=root_filesystem_tool_access
+            ), auth=visibility.authorize
         )
         tool.annotations = ToolAnnotations(
             readOnlyHint=readonly,

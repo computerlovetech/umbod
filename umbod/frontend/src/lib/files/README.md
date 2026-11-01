@@ -30,7 +30,6 @@ description: "User filesystem browsing, direct-node group sharing, directory cre
 
 # Architecture
 
-- [ADR-013: Direct-Node Group Sharing](../../../../project/architecture-records/ADR-013-direct-node-group-sharing.md) — Direct-node authority, editable group scope and opaque revision contract.
 
 - [ADR-009: Transport-Neutral Upload Sessions](../../../../project/architecture-records/ADR-009-transport-neutral-upload-sessions.md) — Accepted upload session and transfer boundary contract.
 - [ADR-006: Filesystem Infrastructure Boundary](../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Filesystem ownership and storage authority.

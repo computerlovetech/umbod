@@ -12,6 +12,7 @@ MessagingEventType = Literal[
     "connector.invocation_policy.changed",
     "connector.capability_description_override.changed",
     "mcp.group_permission.changed",
+    "filesystem.discovery_changed",
 ]
 
 

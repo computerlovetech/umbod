@@ -18,7 +18,11 @@ from typing import Any, AsyncIterator
 from unittest.mock import AsyncMock, Mock
 
 from umbod.core.filesystem.browsing import FilesystemBrowsing, NodeSummary
-from umbod.core.filesystem.models import NodeKind, NodeMetadata, RootParent
+from umbod.core.filesystem.models import NodeKind, NodeMetadata, RootParent, Permission, Principal, PrincipalType
+from umbod.core.filesystem.provisioning.models import RootBootstrapGrant, RootBootstrapSpec
+from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSnapshot, DeclaredIssuer, GroupMembership, SubjectIdentity
+from umbod.infrastructure import create_root_provisioning
+from umbod.mcp.filesystem.caller import CurrentFilesystemCallerCapture
 from umbod.core.filesystem.sharing import (
     FilesystemSharing, NodeSharingSummaries, RestrictedNodeSharingSummary,
 )
@@ -97,6 +101,21 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_p
     await persistence_runtime.readiness.ensure_ready()
     config = PublicAppConfig(settings=settings, telemetry=create_configured_mcp_telemetry(settings), connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=True, api_base_url=None, persistence_runtime=persistence_runtime)
     context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
+    principal = Principal(type=PrincipalType.USER, issuer='https://issuer', id='scope-user')
+    await create_root_provisioning(database=persistence_runtime.database).provision(
+        RootBootstrapSpec(grants=(RootBootstrapGrant(
+            principal=principal,
+            permissions=frozenset({Permission.DISCOVER, Permission.WRITE, Permission.SHARE}),
+        ),)),
+    )
+    snapshot = CallerSnapshot(
+        caller=CallerContext(
+            authentication=AuthenticationProvenance.UPSTREAM_VERIFIED,
+            subject=SubjectIdentity(issuer=DeclaredIssuer(value=principal.issuer), subject=principal.id),
+        ),
+        groups=GroupMembership(group_ids=()),
+    )
+    monkeypatch.setattr(CurrentFilesystemCallerCapture, 'capture', Mock(return_value=snapshot))
     browsing = Mock(spec=FilesystemBrowsing)
     browsing.get_root = AsyncMock(return_value=NodeSummary(
         id='00000000-0000-0000-0000-000000000001', parent_id=RootParent(),
@@ -138,7 +157,7 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_p
     sharing.search_recipients.assert_not_called()
     proxy_names = {tool['name'] for tool in proxy_response['result']['tools']}
     concurrent_proxy_names = {tool['name'] for tool in concurrent_proxy_response['result']['tools']}
-    expected_root_names = {f'scope_test_{name}' for name in DOWNSTREAM_TOOL_NAMES} | {"filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_delete_file", "filesystem_read_file", "filesystem_search_sharing_recipients", "filesystem_share"}
+    expected_root_names = {f'scope_test_{name}' for name in DOWNSTREAM_TOOL_NAMES} | {"filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_search_sharing_recipients", "filesystem_share"}
     root_names = {tool['name'] for tool in root_response['result']['tools']}
     refreshed_root_names = {tool['name'] for tool in refreshed_root_response['result']['tools']}
     assert proxy_names == set(DOWNSTREAM_TOOL_NAMES)

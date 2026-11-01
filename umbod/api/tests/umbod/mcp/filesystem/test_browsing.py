@@ -21,12 +21,13 @@ ROOT = {"type": "root"}
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["ls", "tree", "stat", "unknown"])
 async def test_browse_observation_records_only_declared_operation_names(
-    filesystem_mcp: FilesystemMcp, operation: str,
+    filesystem_invocation_mcp: FilesystemMcp, operation: str,
 ) -> None:
     server = FastMCP()
     publisher = Mock(spec=McpInvocationPublisher)
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, publisher), filesystem_mcp.callers, filesystem_mcp.services,
+        McpObservedToolRegistrar(server, publisher), filesystem_invocation_mcp.callers, filesystem_invocation_mcp.services,
+        filesystem_invocation_mcp.visibility,
     )
     async with Client(server) as client:
         result = await client.call_tool(TOOL, {"operation": operation, "target": ROOT}, raise_on_error=False)
@@ -49,12 +50,12 @@ async def create_node(client: Client, parent: str, name: str, kind: str) -> str:
 
 @pytest.mark.asyncio
 async def test_browse_discovery_declares_operations_without_constructing_services(
-    filesystem_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
+    filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     factory = Mock(side_effect=AssertionError("Discovery must not access services"))
-    monkeypatch.setattr(filesystem_mcp.services, "browsing", factory)
-    monkeypatch.setattr(filesystem_mcp.services, "sharing", factory)
-    async with Client(filesystem_mcp.server) as client:
+    monkeypatch.setattr(filesystem_invocation_mcp.services, "browsing", factory)
+    monkeypatch.setattr(filesystem_invocation_mcp.services, "sharing", factory)
+    async with Client(filesystem_invocation_mcp.server) as client:
         descriptor = next(tool for tool in await client.list_tools() if tool.name == TOOL)
     assert descriptor.input_schema["type"] == "object"
     branches = descriptor.input_schema["oneOf"]
@@ -71,16 +72,16 @@ async def test_browse_discovery_declares_operations_without_constructing_service
 
 @pytest.mark.asyncio
 async def test_listing_root_is_one_invocation_with_context_and_structured_entries(
-    filesystem_mcp: FilesystemMcp,
+    filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         directory = await create_node(client, root, "projects", "directory")
         await create_node(client, root, "notes.txt", "file")
-        captures = filesystem_mcp.callers.count
+        captures = filesystem_invocation_mcp.callers.count
         result = await client.call_tool(TOOL, {"operation": "ls", "target": ROOT})
         descriptor = next(tool for tool in await client.list_tools() if tool.name == TOOL)
-    assert filesystem_mcp.callers.count == captures + 1
+    assert filesystem_invocation_mcp.callers.count == captures + 1
     validate(result.structured_content, descriptor.output_schema)
     listing = result.structured_content["result"]
     assert listing["node"]["id"] == root
@@ -90,14 +91,14 @@ async def test_listing_root_is_one_invocation_with_context_and_structured_entrie
     assert listing["truncated"] is False
     assert '"projects"/' in result.content[0].text
     assert any(sample.labels["tool_name"] == TOOL and sample.labels["outcome"] == "success" and sample.value > 0
-               for sample in filesystem_mcp.metrics.metric_samples())
+               for sample in filesystem_invocation_mcp.metrics.metric_samples())
 
 
 @pytest.mark.asyncio
 async def test_tree_resolves_path_and_returns_descendants_with_depth_cutoffs(
-    filesystem_mcp: FilesystemMcp,
+    filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         projects = await create_node(client, root, "projects", "directory")
         reports = await create_node(client, projects, "reports", "directory")
@@ -114,8 +115,8 @@ async def test_tree_resolves_path_and_returns_descendants_with_depth_cutoffs(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["ls", "tree"])
-async def test_browse_entry_limits_are_explicit(filesystem_mcp: FilesystemMcp, operation: str) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_browse_entry_limits_are_explicit(filesystem_invocation_mcp: FilesystemMcp, operation: str) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         await create_node(client, root, "a", "file")
         await create_node(client, root, "b", "file")
@@ -130,8 +131,8 @@ async def test_browse_entry_limits_are_explicit(filesystem_mcp: FilesystemMcp, o
 
 
 @pytest.mark.asyncio
-async def test_stat_accepts_file_id_without_reading_bytes(filesystem_mcp: FilesystemMcp) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_stat_accepts_file_id_without_reading_bytes(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         node_id = await create_node(client, root, "notes.txt", "file")
         result = await client.call_tool(TOOL, {
@@ -147,12 +148,13 @@ async def test_stat_accepts_file_id_without_reading_bytes(filesystem_mcp: Filesy
 
 @pytest.mark.asyncio
 async def test_independently_accessible_directory_by_id_preserves_partial_location(
-    filesystem_mcp: FilesystemMcp,
+    filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         directory = await create_node(client, root, "private", "directory")
-        filesystem_mcp.callers.current.set(caller_snapshot(
+        await filesystem_invocation_mcp.runtime.reconcile()
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
             "alice", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED,
         ))
         result = await client.call_tool(TOOL, {
@@ -168,11 +170,11 @@ async def test_independently_accessible_directory_by_id_preserves_partial_locati
 
 
 @pytest.mark.asyncio
-async def test_browse_filters_other_owners_and_hides_path_existence(filesystem_mcp: FilesystemMcp) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_browse_filters_other_owners_and_hides_path_existence(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         await create_node(client, root, "private", "directory")
-        filesystem_mcp.callers.current.set(caller_snapshot(
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
             "bob", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED,
         ))
         listing = await client.call_tool(TOOL, {"operation": "tree", "target": ROOT})
@@ -203,19 +205,19 @@ async def test_browse_filters_other_owners_and_hides_path_existence(filesystem_m
     {"operation": "tree", "target": ROOT, "depth": 0},
     {"operation": "tree", "target": ROOT, "depth": 17},
 ])
-async def test_browse_rejects_invalid_commands_before_caller_capture(
-    filesystem_mcp: FilesystemMcp, arguments: dict[str, Any],
+async def test_browse_rejects_invalid_commands_before_invocation_caller_capture(
+    filesystem_invocation_mcp: FilesystemMcp, arguments: dict[str, Any],
 ) -> None:
-    captures = filesystem_mcp.callers.count
-    async with Client(filesystem_mcp.server) as client:
+    captures = filesystem_invocation_mcp.callers.count
+    async with Client(filesystem_invocation_mcp.server) as client:
         result = await client.call_tool(TOOL, arguments, raise_on_error=False)
     assert result.is_error
-    assert filesystem_mcp.callers.count == captures
+    assert filesystem_invocation_mcp.callers.count == captures
 
 
 @pytest.mark.asyncio
-async def test_listing_file_returns_existing_safe_kind_error(filesystem_mcp: FilesystemMcp) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_listing_file_returns_existing_safe_kind_error(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         node_id = await create_node(client, root, "file", "file")
         result = await client.call_tool(TOOL, {

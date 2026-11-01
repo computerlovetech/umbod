@@ -8,7 +8,6 @@ from pydantic import PrivateAttr, ValidationError as ModelValidationError
 
 from umbod.core.filesystem.browsing.exploration import BrowsingExplorer, ListingLimits, TreeLimits
 
-from .authorization import root_filesystem_tool_access
 from .browsing_models import (
     BROWSE_COMMAND,
     BROWSE_RESPONSE,
@@ -50,7 +49,6 @@ class FilesystemBrowseTool(Tool):
             annotations=ToolAnnotations(
                 readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False,
             ),
-            auth=root_filesystem_tool_access,
         )
         self._callers = callers
         self._services = services

@@ -110,7 +110,7 @@ def test_claims_cannot_promote_unverified_provider(
 
 @pytest.mark.asyncio
 async def test_each_tool_invocation_captures_exactly_one_current_token(
-    filesystem_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
+    filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
     upstream_provider: GoogleProvider,
 ) -> None:
     token = access_token()
@@ -119,9 +119,10 @@ async def test_each_tool_invocation_captures_exactly_one_current_token(
     monkeypatch.setattr("umbod.mcp.filesystem.caller.get_access_token", source)
     server = FastMCP(auth=upstream_provider)
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_mcp.metrics, Mock()))),
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock()))),
         CurrentFilesystemCallerCapture(server, StaticFilesystemGroupClaimFields("active")),
-        filesystem_mcp.services,
+        filesystem_invocation_mcp.services,
+        filesystem_invocation_mcp.visibility,
     )
     assert source.call_count == 0
     async with Client(server) as client:

@@ -9,7 +9,6 @@ from umbod.core.filesystem.browsing import NodeSummary
 from umbod.core.filesystem.content.errors import UploadTooLarge
 from umbod.core.filesystem.ports import ByteStream
 
-from .authorization import root_filesystem_tool_access
 from .errors import filesystem_operation
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
 from .upload_models import MAX_UPLOAD_BYTES, UploadCommand
@@ -37,7 +36,6 @@ class FilesystemUploadTool(Tool):
             annotations=ToolAnnotations(
                 readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False,
             ),
-            auth=root_filesystem_tool_access,
         )
         self._callers = callers
         self._services = services

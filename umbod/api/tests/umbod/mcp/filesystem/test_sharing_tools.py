@@ -40,8 +40,8 @@ def arguments(tool: str, node_id: str) -> dict[str, Any]:
 
 
 @pytest.mark.asyncio
-async def test_advertised_schemas_and_annotations_are_exact(filesystem_mcp: FilesystemMcp) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_advertised_schemas_and_annotations_are_exact(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         descriptors = {tool.name: tool for tool in await client.list_tools()}
     for name in (LIST, SHARE):
         descriptor = descriptors[name]
@@ -88,13 +88,13 @@ async def test_advertised_schemas_and_annotations_are_exact(filesystem_mcp: File
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["file", "directory"])
 async def test_additive_union_retry_preserves_other_grants_and_exact_ids(
-    filesystem_mcp: FilesystemMcp, kind: str,
+    filesystem_invocation_mcp: FilesystemMcp, kind: str,
 ) -> None:
     group_id = ' Team/"\n '
-    groups = create_group_management(database=filesystem_mcp.database)
+    groups = create_group_management(database=filesystem_invocation_mcp.database)
     await groups.register_group_metadata(RegisterGroupMetadata(group_id=group_id, label="Team", description="Registered"))
-    policies = create_access_control_driver(database=filesystem_mcp.database)
-    async with Client(filesystem_mcp.server) as client:
+    policies = create_access_control_driver(database=filesystem_invocation_mcp.database)
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "shared", kind)
         protected = AccessGrant(
             node_id=UUID(node_id), principal=Principal(type=PrincipalType.USER, issuer="foreign", id="protected"),
@@ -124,19 +124,19 @@ async def test_additive_union_retry_preserves_other_grants_and_exact_ids(
     if child is not None:
         assert not await policies.list_grants(UUID(child))
     assert any(sample.labels["tool_name"] == SHARE and sample.labels["outcome"] == "success"
-               for sample in filesystem_mcp.metrics.metric_samples())
+               for sample in filesystem_invocation_mcp.metrics.metric_samples())
 
 
 @pytest.mark.asyncio
-async def test_eligible_groups_use_current_metadata_and_exclude_protected_collisions(filesystem_mcp: FilesystemMcp) -> None:
-    groups = create_group_management(database=filesystem_mcp.database)
+async def test_eligible_groups_use_current_metadata_and_exclude_protected_collisions(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    groups = create_group_management(database=filesystem_invocation_mcp.database)
     group_id = ' Exact/"\n '
     label = 'Current "label"\nnext'
     await groups.register_group_metadata(RegisterGroupMetadata(group_id=group_id, label="Old", description="Old"))
     await groups.update_group_metadata(group_id, UpdateGroupMetadata(label=label, description="Current", expected_revision=1))
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "owned", "file")
-        await create_access_control_driver(database=filesystem_mcp.database).add_grant(AccessGrant(
+        await create_access_control_driver(database=filesystem_invocation_mcp.database).add_grant(AccessGrant(
             node_id=UUID(node_id), principal=Principal(type=PrincipalType.GROUP, issuer="https://issuer", id="writers"),
             permissions={Permission.READ}, recursive=True,
         ))
@@ -162,14 +162,14 @@ async def test_eligible_groups_use_current_metadata_and_exclude_protected_collis
     *[{field: "SECRET"} for field in ("caller", "owner", "issuer", "recursive", "revision", "principal")],
 ])
 async def test_invalid_arguments_rejected_before_caller_capture(
-    filesystem_mcp: FilesystemMcp, tool: str, patch: dict[str, Any],
+    filesystem_invocation_mcp: FilesystemMcp, tool: str, patch: dict[str, Any],
 ) -> None:
-    captures = filesystem_mcp.callers.count
-    async with Client(filesystem_mcp.server) as client:
+    captures = filesystem_invocation_mcp.callers.count
+    async with Client(filesystem_invocation_mcp.server) as client:
         result = await client.call_tool(tool, {**arguments(tool, str(uuid4())), **patch}, raise_on_error=False)
     assert result.content[0].text == "filesystem_invalid_sharing: Invalid filesystem sharing arguments"
     assert result.structured_content is None
-    assert filesystem_mcp.callers.count == captures
+    assert filesystem_invocation_mcp.callers.count == captures
 
 
 @pytest.mark.asyncio
@@ -180,13 +180,13 @@ async def test_invalid_arguments_rejected_before_caller_capture(
       for value in ([], ["READ"], ["unknown"], [None], [True], "read", None)],
 ])
 async def test_share_requires_explicit_nonempty_valid_permissions_and_group(
-    filesystem_mcp: FilesystemMcp, payload: dict[str, Any],
+    filesystem_invocation_mcp: FilesystemMcp, payload: dict[str, Any],
 ) -> None:
-    captures = filesystem_mcp.callers.count
-    async with Client(filesystem_mcp.server) as client:
+    captures = filesystem_invocation_mcp.callers.count
+    async with Client(filesystem_invocation_mcp.server) as client:
         result = await client.call_tool(SHARE, payload, raise_on_error=False)
     assert result.content[0].text == "filesystem_invalid_sharing: Invalid filesystem sharing arguments"
-    assert filesystem_mcp.callers.count == captures
+    assert filesystem_invocation_mcp.callers.count == captures
 
 
 @pytest.mark.asyncio
@@ -200,12 +200,12 @@ async def test_share_requires_explicit_nonempty_valid_permissions_and_group(
     (AuthenticationProvenance.UPSTREAM_VERIFIED, "admin", "https://issuer", ("umbod-admins", "writers")),
 ])
 async def test_missing_and_private_nodes_are_indistinguishable_without_direct_authority(
-    filesystem_mcp: FilesystemMcp, tool: str, provenance: AuthenticationProvenance,
+    filesystem_invocation_mcp: FilesystemMcp, tool: str, provenance: AuthenticationProvenance,
     subject: str, issuer: str, memberships: tuple[str, ...],
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "private", "file")
-        filesystem_mcp.callers.current.set(caller_snapshot(subject, issuer, memberships, provenance))
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(subject, issuer, memberships, provenance))
         private = await client.call_tool(tool, arguments(tool, node_id), raise_on_error=False)
         missing = await client.call_tool(tool, arguments(tool, str(uuid4())), raise_on_error=False)
     assert private.content == missing.content
@@ -215,9 +215,9 @@ async def test_missing_and_private_nodes_are_indistinguishable_without_direct_au
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool,recipient_type", [(LIST, "legacy"), (SHARE, "legacy"), (SHARE, "group"), (SHARE, "user")])
 async def test_discovery_has_no_io_and_each_invocation_captures_and_calls_once(
-    filesystem_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch, tool: str, recipient_type: str,
+    filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch, tool: str, recipient_type: str,
 ) -> None:
-    snapshot = filesystem_mcp.callers.current.get()
+    snapshot = filesystem_invocation_mcp.callers.current.get()
     node_id = uuid4()
     service = Mock(spec=FilesystemSharing)
     service.search_recipients = AsyncMock(return_value=SharingRecipientSearchResult(recipients=(), has_more=False))
@@ -230,12 +230,12 @@ async def test_discovery_has_no_io_and_each_invocation_captures_and_calls_once(
     )
     service.share = AsyncMock(return_value=authoritative)
     factory = Mock(return_value=service)
-    monkeypatch.setattr(filesystem_mcp.services, "sharing", factory)
-    captures = filesystem_mcp.callers.count
-    async with Client(filesystem_mcp.server) as client:
+    monkeypatch.setattr(filesystem_invocation_mcp.services, "sharing", factory)
+    captures = filesystem_invocation_mcp.callers.count
+    async with Client(filesystem_invocation_mcp.server) as client:
         await client.list_tools()
         assert factory.call_count == 0
-        assert filesystem_mcp.callers.count == captures
+        assert filesystem_invocation_mcp.callers.count == captures
         payload = (
             {"node_id": str(node_id), "recipient": recipient.model_dump(mode="json"), "permissions": ["read"]}
             if recipient_type != "legacy" else arguments(tool, str(node_id))
@@ -244,7 +244,7 @@ async def test_discovery_has_no_io_and_each_invocation_captures_and_calls_once(
             response = await client.call_tool(tool, payload)
             if recipient_type != "legacy":
                 assert response.structured_content == authoritative.model_dump(mode="json")
-    assert filesystem_mcp.callers.count == captures + 2
+    assert filesystem_invocation_mcp.callers.count == captures + 2
     assert factory.call_count == 2
     if tool == LIST:
         assert service.search_recipients.await_count == 2
@@ -268,31 +268,31 @@ async def test_discovery_has_no_io_and_each_invocation_captures_and_calls_once(
     (RuntimeError, "filesystem_operation_failed: Filesystem operation failed"),
 ])
 async def test_failures_are_sanitized_and_observed(
-    filesystem_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
+    filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
     tool: str, error_type: type[Exception], expected: str,
 ) -> None:
     service = Mock(spec=FilesystemSharing)
     setattr(service, "share" if tool == SHARE else "search_recipients", AsyncMock(side_effect=error_type("SECRET /private")))
-    monkeypatch.setattr(filesystem_mcp.services, "sharing", lambda: service)
-    async with Client(filesystem_mcp.server) as client:
+    monkeypatch.setattr(filesystem_invocation_mcp.services, "sharing", lambda: service)
+    async with Client(filesystem_invocation_mcp.server) as client:
         result = await client.call_tool(tool, arguments(tool, str(uuid4())), raise_on_error=False)
     assert result.content[0].text == expected
     assert result.structured_content is None
     assert any(sample.labels["tool_name"] == tool and sample.labels["outcome"] == "failure"
-               for sample in filesystem_mcp.metrics.metric_samples())
+               for sample in filesystem_invocation_mcp.metrics.metric_samples())
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool,recipient_type", [(LIST, "legacy"), (SHARE, "legacy"), (SHARE, "group"), (SHARE, "user")])
 async def test_connector_scope_excludes_sharing_before_capture(
-    filesystem_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch, tool: str, recipient_type: str,
+    filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch, tool: str, recipient_type: str,
 ) -> None:
     factory = Mock()
-    monkeypatch.setattr(filesystem_mcp.services, "sharing", factory)
-    captures = filesystem_mcp.callers.count
+    monkeypatch.setattr(filesystem_invocation_mcp.services, "sharing", factory)
+    captures = filesystem_invocation_mcp.callers.count
     token = set_request_connector_scope("connector-only")
     try:
-        async with Client(filesystem_mcp.server) as client:
+        async with Client(filesystem_invocation_mcp.server) as client:
             descriptors = await client.list_tools()
             payload = arguments(tool, str(uuid4()))
             if recipient_type != "legacy":
@@ -301,7 +301,7 @@ async def test_connector_scope_excludes_sharing_before_capture(
             result = await client.call_tool(tool, payload, raise_on_error=False)
         assert tool not in {descriptor.name for descriptor in descriptors}
         assert result.is_error
-        assert filesystem_mcp.callers.count == captures
+        assert filesystem_invocation_mcp.callers.count == captures
         factory.assert_not_called()
     finally:
         reset_request_connector_scope(token)
@@ -310,11 +310,11 @@ async def test_connector_scope_excludes_sharing_before_capture(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool", [LIST, SHARE])
 async def test_direct_authority_is_fresh_and_concurrent_callers_are_isolated(
-    filesystem_mcp: FilesystemMcp, tool: str,
+    filesystem_invocation_mcp: FilesystemMcp, tool: str,
 ) -> None:
-    policies = create_access_control_driver(database=filesystem_mcp.database)
+    policies = create_access_control_driver(database=filesystem_invocation_mcp.database)
     principal = Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob")
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "private", "file")
     await policies.add_grant(AccessGrant(
         node_id=UUID(node_id), principal=principal,
@@ -322,10 +322,10 @@ async def test_direct_authority_is_fresh_and_concurrent_callers_are_isolated(
     ))
 
     async def invoke(subject: str) -> bool:
-        filesystem_mcp.callers.current.set(caller_snapshot(
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
             subject, "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED,
         ))
-        async with Client(filesystem_mcp.server) as client:
+        async with Client(filesystem_invocation_mcp.server) as client:
             result = await client.call_tool(tool, arguments(tool, node_id), raise_on_error=False)
         return result.is_error
 
@@ -338,10 +338,10 @@ async def test_direct_authority_is_fresh_and_concurrent_callers_are_isolated(
 @pytest.mark.parametrize("tool_type", [FilesystemSearchSharingRecipientsTool, FilesystemShareTool])
 @pytest.mark.parametrize("stage", ["capture", "factory", "service"])
 async def test_cancellation_propagates(
-    filesystem_mcp: FilesystemMcp, tool_type: type[FilesystemSearchSharingRecipientsTool | FilesystemShareTool], stage: str,
+    filesystem_invocation_mcp: FilesystemMcp, tool_type: type[FilesystemSearchSharingRecipientsTool | FilesystemShareTool], stage: str,
 ) -> None:
     callers = Mock(spec=FilesystemCallerCapture)
-    callers.capture.return_value = filesystem_mcp.callers.current.get()
+    callers.capture.return_value = filesystem_invocation_mcp.callers.current.get()
     service = Mock(spec=FilesystemSharing)
     service.search_recipients = AsyncMock(side_effect=asyncio.CancelledError())
     service.share = AsyncMock(side_effect=asyncio.CancelledError())
@@ -361,9 +361,9 @@ async def test_cancellation_propagates(
 @pytest.mark.parametrize("recipient_type", ["group", "user"])
 @pytest.mark.parametrize("kind", ["file", "directory"])
 async def test_canonical_recipients_union_retry_and_direct_node_access(
-    filesystem_mcp: FilesystemMcp, recipient_type: str, kind: str,
+    filesystem_invocation_mcp: FilesystemMcp, recipient_type: str, kind: str,
 ) -> None:
-    directory = DatabaseIdentityDirectory(filesystem_mcp.database)
+    directory = DatabaseIdentityDirectory(filesystem_invocation_mcp.database)
     await directory.observe(IdentityObservation(
         issuer="https://issuer", subject="bob", claim="groups", groups=(), name="Bob Reader",
         email="", email_verification="unknown", observed_at=datetime.now(timezone.utc),
@@ -373,7 +373,7 @@ async def test_canonical_recipients_union_retry_and_direct_node_access(
         {"type": "user", "user_id": users.users[0].user_id}
         if recipient_type == "user" else {"type": "group", "group_id": "writers"}
     )
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         node_id = await create_node(client, await root_id(client), "shared", kind)
         child_id = await create_node(client, node_id, "private-child", "file") if kind == "directory" else ""
         command = {"node_id": node_id, "recipient": recipient}
@@ -387,7 +387,7 @@ async def test_canonical_recipients_union_retry_and_direct_node_access(
         for response in (first, second, retry):
             validate(response.structured_content, descriptor.output_schema)
             assert json.loads(response.content[0].text) == response.structured_content
-        filesystem_mcp.callers.current.set(caller_snapshot(
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
             "bob", "https://issuer", ("writers",) if recipient_type == "group" else (),
             AuthenticationProvenance.UPSTREAM_VERIFIED,
         ))
@@ -409,19 +409,19 @@ async def test_canonical_recipients_union_retry_and_direct_node_access(
       for field in ("issuer", "subject", "recursive", "owner", "label")],
 ])
 async def test_malformed_recipient_never_captures_or_invokes_core(
-    filesystem_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch, recipient: Any,
+    filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch, recipient: Any,
 ) -> None:
     factory = Mock()
-    monkeypatch.setattr(filesystem_mcp.services, "sharing", factory)
-    captures = filesystem_mcp.callers.count
-    async with Client(filesystem_mcp.server) as client:
+    monkeypatch.setattr(filesystem_invocation_mcp.services, "sharing", factory)
+    captures = filesystem_invocation_mcp.callers.count
+    async with Client(filesystem_invocation_mcp.server) as client:
         descriptor = next(tool for tool in await client.list_tools() if tool.name == SHARE)
         payload = {"node_id": str(uuid4()), "recipient": recipient, "permissions": ["read"]}
         with pytest.raises(SchemaValidationError):
             validate(payload, descriptor.input_schema)
         result = await client.call_tool(SHARE, payload, raise_on_error=False)
     assert result.content[0].text == "filesystem_invalid_sharing: Invalid filesystem sharing arguments"
-    assert filesystem_mcp.callers.count == captures
+    assert filesystem_invocation_mcp.callers.count == captures
     factory.assert_not_called()
 
 
@@ -433,13 +433,13 @@ async def test_malformed_recipient_never_captures_or_invokes_core(
     {"recipient": {"type": "group", "group_id": " \n"}},
 ])
 async def test_canonical_request_rejects_mixed_legacy_fields_and_authority(
-    filesystem_mcp: FilesystemMcp, patch: dict[str, Any],
+    filesystem_invocation_mcp: FilesystemMcp, patch: dict[str, Any],
 ) -> None:
-    captures = filesystem_mcp.callers.count
-    async with Client(filesystem_mcp.server) as client:
+    captures = filesystem_invocation_mcp.callers.count
+    async with Client(filesystem_invocation_mcp.server) as client:
         response = await client.call_tool(SHARE, {
             "node_id": str(uuid4()), "recipient": {"type": "user", "user_id": "observed"},
             "permissions": ["read"], **patch,
         }, raise_on_error=False)
     assert response.content[0].text == "filesystem_invalid_sharing: Invalid filesystem sharing arguments"
-    assert filesystem_mcp.callers.count == captures
+    assert filesystem_invocation_mcp.callers.count == captures

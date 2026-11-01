@@ -21,5 +21,4 @@ description: "Authenticated filesystem browsing, creation, transfers, typed reci
 
 - [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Filesystem storage and ownership boundary.
 - [ADR-009](../../../../../project/architecture-records/ADR-009-transport-neutral-upload-sessions.md) — Accepted upload contract; abandoned sessions and unreferenced bytes have no automatic cleanup guarantee.
-- [ADR-015](../../../../../project/architecture-records/ADR-015-direct-node-user-sharing.md) — Shared recipient models, filtered policy views and scoped replacement safeguards.
 - [Planned contracts](planned/README.md) — Content replacement, rename/move and owned/shared listing remain unavailable.

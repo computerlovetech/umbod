@@ -7,7 +7,7 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 # Files
 
 - [__init__.py](./__init__.py) — Package exports.
-- [authorization.py](./authorization.py) — Root-endpoint tool eligibility.
+- [authorization.py](./authorization.py) — Caller-specific tool visibility and request-local eligibility reuse across tool listing and lookup.
 - [browsing.py](./browsing.py) — Observed ls, tree and stat operations through shared core exploration.
 - [browsing_models.py](./browsing_models.py) — Discriminated operation inputs and MCP output schemas with required node sharing metadata.
 - [caller.py](./caller.py) — Invocation caller capture.
@@ -21,6 +21,7 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 - [read_models.py](./read_models.py) — Strict read budgets and bounded encoded output schemas.
 - [registration.py](./registration.py) — Filesystem tool registration, retaining existing browsing and creation tools.
 - [rendering.py](./rendering.py) — Readable filesystem listings with explicit visibility and expansion limits.
+- [runtime.py](./runtime.py) — Caller-neutral authorization snapshots hydrated at startup and reconciled through durable events.
 - [sharing.py](./sharing.py) — Invocation-local batch enrichment of returned nodes through core sharing; no policy decisions or discovery queries.
 - [sharing_models.py](./sharing_models.py) — Strict unified recipient-search scopes and sharing inputs with legacy group mutation compatibility.
 - [sharing_tools.py](./sharing_tools.py) — Node-authorized group/user recipient search and idempotent additive direct-node sharing.
@@ -29,9 +30,7 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 
 # Related links
 
-- [ADR-015](../../../../../project/architecture-records/ADR-015-direct-node-user-sharing.md) — Recipient-based MCP sharing and mixed direct-grant summaries.
-
-- [ADR-013](../../../../../project/architecture-records/ADR-013-direct-node-group-sharing.md) — Manageable direct grants, restricted field omission, and the limits of sharing summaries.
+- [ADR-012](../../../../../project/architecture-records/ADR-012-permission-aware-mcp-tool-visibility.md) — At-least-one-authorized-operation visibility with independent invocation authorization.
 - [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Filesystem ownership and storage boundary.
 - [Root-access administration](../../rest/filesystem_administration/README.md) — Root initialization and grants are trusted administration, not MCP bootstrap; local test identities gain no implicit access.
 - [Filesystem HTTP boundary](../../rest/filesystem/README.md) — REST session transfers and downloads remain separate from the one-shot MCP upload contract.

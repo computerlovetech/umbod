@@ -15,4 +15,3 @@ description: Best-effort identity observation and server-scoped provider group d
 - [in-memory.test-support.ts](./in-memory.test-support.ts) — Test-only directory and observation adapter.
 - [api.test.ts](./api.test.ts) — Port contract and HTTP validation tests.
 - [observation-coordinator.test.ts](./observation-coordinator.test.ts) — Pending, retry, visibility and disposal tests.
-- [ADR-012](../../../../project/architecture-records/ADR-012-login-observed-identity-directory.md) — Login-observed discovery boundaries.

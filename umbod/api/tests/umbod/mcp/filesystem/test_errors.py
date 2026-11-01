@@ -49,7 +49,7 @@ class SpecializedStorageFailure(StorageFailure):
     (SpecializedStorageFailure, "filesystem_storage_failure: Filesystem storage unavailable"),
 ])
 async def test_expected_domain_failures_do_not_leak_details(
-    filesystem_mcp: FilesystemMcp, error_type: type[Exception], expected: str,
+    filesystem_invocation_mcp: FilesystemMcp, error_type: type[Exception], expected: str,
 ) -> None:
     server = FastMCP()
     browsing = Mock(spec=FilesystemBrowsing)
@@ -57,14 +57,14 @@ async def test_expected_domain_failures_do_not_leak_details(
     factory = Mock(spec=FilesystemServiceFactory)
     factory.browsing.return_value = browsing
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_mcp.metrics, Mock()))),
-        filesystem_mcp.callers, factory,
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock()))),
+        filesystem_invocation_mcp.callers, factory, filesystem_invocation_mcp.visibility,
     )
     async with Client(server) as client:
         result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
     assert result.is_error
     assert result.content[0].text == expected
-    assert any(sample.labels["outcome"] == "failure" for sample in filesystem_mcp.metrics.metric_samples())
+    assert any(sample.labels["outcome"] == "failure" for sample in filesystem_invocation_mcp.metrics.metric_samples())
 
 
 TOOL_OPERATIONS = [
@@ -93,13 +93,13 @@ TOOL_OPERATIONS = [
 @pytest.mark.parametrize("error_type", [RuntimeError, ToolError])
 @pytest.mark.parametrize("tool,operation,arguments", TOOL_OPERATIONS)
 async def test_unmasked_tools_sanitize_all_operation_stages(
-    filesystem_mcp: FilesystemMcp, stage: str, error_type: type[Exception],
+    filesystem_invocation_mcp: FilesystemMcp, stage: str, error_type: type[Exception],
     tool: str, operation: str, arguments: dict[str, Any],
 ) -> None:
     server = FastMCP()
     error = error_type("SECRET backend /private/path")
     callers = Mock(spec=FilesystemCallerCapture)
-    callers.capture.return_value = filesystem_mcp.callers.capture()
+    callers.capture.return_value = filesystem_invocation_mcp.callers.capture()
     service_type = {
         "open_download": FilesystemContent,
         "delete_file": FilesystemDeletion,
@@ -121,8 +121,8 @@ async def test_unmasked_tools_sanitize_all_operation_stages(
     if stage == "factory":
         factory_method.side_effect = error
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_mcp.metrics, Mock()))),
-        callers, factory,
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock()))),
+        callers, factory, filesystem_invocation_mcp.visibility,
     )
     async with Client(server) as client:
         result = await client.call_tool(tool, arguments, raise_on_error=False)

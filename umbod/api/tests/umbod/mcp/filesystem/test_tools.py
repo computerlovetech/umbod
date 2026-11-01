@@ -18,11 +18,14 @@ async def root_id(client: Client) -> str:
 
 
 @pytest.mark.asyncio
-async def test_observed_tools_publish_safe_schemas(filesystem_mcp: FilesystemMcp) -> None:
-    tools = await filesystem_mcp.server.list_tools()
+async def test_observed_tools_publish_safe_schemas(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
+        await client.call_tool(CREATE, {"parent_id": await root_id(client), "name": "schema-witness", "metadata": METADATA})
+    await filesystem_invocation_mcp.runtime.reconcile()
+    tools = await filesystem_invocation_mcp.server.list_tools()
     assert len(tools) == 11
     assert all(isinstance(tool, ObservedFunctionTool) for tool in tools)
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         descriptors = {tool.name: tool for tool in await client.list_tools()}
     assert set(descriptors) == {
         "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
@@ -45,15 +48,15 @@ async def test_observed_tools_publish_safe_schemas(filesystem_mcp: FilesystemMcp
 
 @pytest.mark.asyncio
 async def test_bootstrap_group_can_create_private_nodes_and_filter_children(
-    filesystem_mcp: FilesystemMcp,
+    filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         created = await client.call_tool(CREATE, {"parent_id": root, "name": "private", "metadata": METADATA})
         child_id = str(created.data.id)
         assert created.data.name == "private"
         assert (await client.call_tool("get_filesystem_node", {"node_id": child_id})).data.id == created.data.id
-        filesystem_mcp.callers.current.set(caller_snapshot(
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
             "bob", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED
         ))
         listed = await client.call_tool("list_filesystem_children", {"parent_id": root})
@@ -67,16 +70,16 @@ async def test_bootstrap_group_can_create_private_nodes_and_filter_children(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool", ["create_filesystem_file", "create_filesystem_directory"])
 async def test_creation_is_observed_and_projects_no_storage_keys(
-    filesystem_mcp: FilesystemMcp, tool: str,
+    filesystem_invocation_mcp: FilesystemMcp, tool: str,
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         result = await client.call_tool(tool, {"parent_id": root, "name": "empty", "metadata": METADATA})
         assert set(result.structured_content) == {
             "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision"
         }
     assert any(sample.labels["tool_name"] == tool and sample.labels["outcome"] == "success"
-               for sample in filesystem_mcp.metrics.metric_samples())
+               for sample in filesystem_invocation_mcp.metrics.metric_samples())
 
 
 @pytest.mark.asyncio
@@ -85,21 +88,21 @@ async def test_creation_is_observed_and_projects_no_storage_keys(
     AuthenticationProvenance.LOCAL_SIMULATION, AuthenticationProvenance.LOCAL_SEMANTIC,
 ])
 async def test_nonverified_callers_remain_denied(
-    filesystem_mcp: FilesystemMcp, provenance: AuthenticationProvenance,
+    filesystem_invocation_mcp: FilesystemMcp, provenance: AuthenticationProvenance,
 ) -> None:
-    filesystem_mcp.callers.current.set(caller_snapshot("alice", "https://issuer", ("writers",), provenance))
-    async with Client(filesystem_mcp.server) as client:
+    filesystem_invocation_mcp.callers.current.set(caller_snapshot("alice", "https://issuer", ("writers",), provenance))
+    async with Client(filesystem_invocation_mcp.server) as client:
         result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
     assert result.is_error
     assert "filesystem_permission_denied" in result.content[0].text
 
 
 @pytest.mark.asyncio
-async def test_same_group_identifier_from_other_issuer_has_no_access(filesystem_mcp: FilesystemMcp) -> None:
-    filesystem_mcp.callers.current.set(caller_snapshot(
+async def test_same_group_identifier_from_other_issuer_has_no_access(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    filesystem_invocation_mcp.callers.current.set(caller_snapshot(
         "alice", "https://other-issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED
     ))
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
     assert result.is_error
 
@@ -114,17 +117,17 @@ async def test_same_group_identifier_from_other_issuer_has_no_access(filesystem_
     {"name": "file", "metadata": METADATA, "content": "secret"},
 ])
 async def test_invalid_body_and_authority_injection_are_rejected(
-    filesystem_mcp: FilesystemMcp, arguments: dict[str, Any],
+    filesystem_invocation_mcp: FilesystemMcp, arguments: dict[str, Any],
 ) -> None:
-    async with Client(filesystem_mcp.server) as client:
+    async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         result = await client.call_tool(CREATE, {"parent_id": root, **arguments}, raise_on_error=False)
     assert result.is_error
 
 
 @pytest.mark.asyncio
-async def test_filesystem_invalid_names_and_collisions_have_fixed_errors(filesystem_mcp: FilesystemMcp) -> None:
-    async with Client(filesystem_mcp.server) as client:
+async def test_filesystem_invalid_names_and_collisions_have_fixed_errors(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         invalid = await client.call_tool(CREATE, {"parent_id": root, "name": "../sensitive", "metadata": METADATA}, raise_on_error=False)
         assert invalid.content[0].text == "filesystem_invalid_name: Invalid filesystem name"
@@ -135,15 +138,15 @@ async def test_filesystem_invalid_names_and_collisions_have_fixed_errors(filesys
 
 @pytest.mark.asyncio
 async def test_concurrent_callers_and_later_membership_revocation_are_isolated(
-    filesystem_mcp: FilesystemMcp,
+    filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
     async def invoke(groups: tuple[str, ...]) -> bool:
-        filesystem_mcp.callers.current.set(caller_snapshot(
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
             "alice", "https://issuer", groups, AuthenticationProvenance.UPSTREAM_VERIFIED
         ))
-        async with Client(filesystem_mcp.server) as client:
+        async with Client(filesystem_invocation_mcp.server) as client:
             return (await client.call_tool("get_filesystem_root", {}, raise_on_error=False)).is_error
 
     assert await asyncio.gather(invoke(("writers",)), invoke(())) == [False, True]
     assert await invoke(()) is True
-    assert filesystem_mcp.callers.count == 3
+    assert filesystem_invocation_mcp.callers.count == 3

@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from conftest import RuntimeEndpoints
-from test_running_filesystem import FILESYSTEM, checked_summary, tool_payload
+from test_running_filesystem import FILESYSTEM, checked_summary, tool_payload, wait_for_filesystem_tools
 from test_running_filesystem_uploads import NativeUploadRuntime, native_upload_runtime as native_upload_runtime
 from test_running_personal_mcp_execution import mcp_client, proxy_token
 
@@ -95,6 +95,7 @@ async def test_s3_stream_upload_publishes_only_after_completion_and_survives_wor
     assert reopened.status_code == 200
     assert reopened.content == content
     if len(content) <= 1_048_576:
+        await wait_for_filesystem_tools(runtime.client, {"filesystem_read_file"})
         read = tool_payload(await runtime.client.call_tool("filesystem_read_file", {
             "node_id": node["id"], "encoding": "base64", "max_bytes": len(content),
         }))
@@ -104,6 +105,7 @@ async def test_s3_stream_upload_publishes_only_after_completion_and_survives_wor
             endpoint = os.environ["UMBOD_TEST_MCP_B_URL"]
             token = proxy_token(endpoint, runtime_endpoints.bearer_token, identity)
             async with mcp_client(endpoint, token) as secondary:
+                await wait_for_filesystem_tools(secondary, {"filesystem_read_file"})
                 secondary_read = tool_payload(await secondary.call_tool("filesystem_read_file", {
                     "node_id": node["id"], "encoding": "base64", "max_bytes": len(content),
                 }))

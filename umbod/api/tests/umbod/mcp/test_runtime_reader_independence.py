@@ -44,6 +44,7 @@ def runtime_context(source: str, transport: str, api_url: str) -> SimpleNamespac
         connector_tool_runtime_state_store=InMemoryConnectorToolRuntimeStateStore(),
         connector_runtime=SimpleNamespace(connector_tool_mappings=(SimpleNamespace(connector_id="connector", operation_name="read"),)),
         mcp=SimpleNamespace(
+            filesystem_discovery_runtime=SimpleNamespace(reconcile=AsyncMock()),
             runtime_projection_health=RuntimeProjectionHealth(),
             downstream_mcp_discovery_coordinator=Mock(spec=DownstreamDiscoveryCoordinator),
             downstream_mcp_discovery_runtime=Mock(),

@@ -1,7 +1,9 @@
+import asyncio
 import base64
 import json
 import os
 import ssl
+import time
 from typing import Any
 from uuid import uuid4
 
@@ -15,6 +17,23 @@ from test_running_personal_mcp_execution import mcp_client, proxy_token
 
 
 FILESYSTEM = "/api/me/filesystem"
+FILESYSTEM_TOOLS = frozenset({
+    "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
+    "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_read_file",
+    "filesystem_delete_file", "filesystem_search_sharing_recipients", "filesystem_share",
+})
+
+
+async def wait_for_filesystem_tools(
+    client: Client[Any], required: set[str], excluded: frozenset[str] = frozenset(),
+) -> set[str]:
+    deadline = time.monotonic() + 15
+    while True:
+        names = {tool.name for tool in await client.list_tools()} & FILESYSTEM_TOOLS
+        if required <= names and not names & excluded:
+            return names
+        assert time.monotonic() < deadline, f"Filesystem tools did not reconcile: {names}; required={required}; excluded={excluded}"
+        await asyncio.sleep(0.1)
 
 
 def tool_payload(result: CallToolResult) -> dict[str, Any]:
@@ -67,6 +86,8 @@ async def check_mcp_file_deletion(
     assert transferred.status_code == 204, transferred.text
     node = checked_summary(alice_second.post(upload["complete_url"]), 201)
     node_path = FILESYSTEM + "/nodes/" + node["id"]
+    await wait_for_filesystem_tools(alice_mcp, {"filesystem_read_file", "filesystem_delete_file"})
+    await wait_for_filesystem_tools(bob_mcp, {"filesystem_read_file", "filesystem_delete_file"})
     read_arguments = {"node_id": node["id"], "encoding": "utf-8", "max_bytes": len(data)}
     assert tool_payload(await alice_mcp.call_tool("filesystem_read_file", read_arguments)) == {
         "node_id": node["id"], "revision": node["revision"], "size_bytes": len(data),
@@ -121,6 +142,90 @@ async def check_mcp_file_deletion(
     repeated = await alice_mcp.call_tool("filesystem_delete_file", arguments, raise_on_error=False)
     assert repeated.is_error
     assert "filesystem_permission_denied" in repeated.content[0].text
+
+
+@pytest.mark.asyncio
+async def test_cross_worker_discovery_distinguishes_root_creation_from_direct_file_read(
+    runtime_endpoints: RuntimeEndpoints,
+) -> None:
+    second_mcp = os.environ["UMBOD_TEST_MCP_B_URL"]
+    tls = ssl.create_default_context(cafile=os.environ["UMBOD_TEST_PERSONAL_CA"])
+    with httpx.Client(
+        base_url=runtime_endpoints.api_base_url,
+        headers={"Authorization": "Bearer " + runtime_endpoints.bearer_token}, timeout=30,
+    ) as alice, httpx.Client(
+        base_url=os.environ["UMBOD_TEST_PERSONAL_URL"], verify=tls, timeout=30,
+    ) as identity:
+        token = proxy_token(second_mcp, os.environ["UMBOD_TEST_BEARER_TOKEN_B"], identity)
+        policy_path = "/api/admin/filesystem/root-access"
+        previous_response = alice.get(policy_path)
+        assert previous_response.status_code == 200
+        previous = previous_response.json()
+        configured = alice.put(policy_path, json={
+            "expected_revision": previous["revision"],
+            "groups": [{"group_id": "admin", "permissions": ["discover", "write"]}],
+        })
+        assert configured.status_code == 200, configured.text
+        access_path = ""
+        try:
+            root = checked_summary(alice.get(FILESYSTEM + "/root"), 200)
+            async with mcp_client(second_mcp, token) as bob:
+                root_tools = {
+                    "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
+                    "create_filesystem_file", "create_filesystem_directory", "filesystem_upload",
+                }
+                assert await wait_for_filesystem_tools(bob, root_tools, FILESYSTEM_TOOLS - root_tools) == root_tools
+                folder = checked_summary(alice.post(FILESYSTEM + "/nodes/" + root["id"] + "/directories", json={
+                    "name": "discovery-" + uuid4().hex,
+                    "metadata": {"content_type": {}, "attributes": {}},
+                }), 201)
+                begun = alice.post(FILESYSTEM + "/nodes/" + folder["id"] + "/uploads", json={
+                    "name": "direct-read.txt", "size_bytes": 0,
+                    "metadata": {"content_type": "text/plain", "attributes": {}},
+                })
+                assert begun.status_code == 201, begun.text
+                upload = begun.json()
+                transferred = alice.put(upload["transfer"]["url"], content=b"", headers=upload["transfer"]["headers"])
+                assert transferred.status_code == 204, transferred.text
+                file = checked_summary(alice.post(upload["complete_url"]), 201)
+                access_path = FILESYSTEM + "/nodes/" + file["id"] + "/access?recipient_type=group"
+                initial = alice.get(access_path)
+                assert initial.status_code == 200
+                shared = alice.put(access_path, headers={"If-Match": initial.headers["etag"]}, json={
+                    "grants": [{"recipient": {"type": "group", "group_id": "admin"}, "permissions": ["discover", "read"]}],
+                })
+                assert shared.status_code == 200, shared.text
+                current = alice.get(policy_path)
+                assert current.status_code == 200
+                revoked = alice.put(policy_path, json={"expected_revision": current.json()["revision"], "groups": []})
+                assert revoked.status_code == 200, revoked.text
+                read_tools = {"filesystem_browse", "get_filesystem_node", "filesystem_read_file"}
+                assert await wait_for_filesystem_tools(bob, read_tools, FILESYSTEM_TOOLS - read_tools) == read_tools
+                assert tool_payload(await bob.call_tool("filesystem_read_file", {
+                    "node_id": file["id"], "encoding": "utf-8", "max_bytes": 0,
+                }))["content"] == {"encoding": "utf-8", "text": ""}
+                root_error = await bob.call_tool("get_filesystem_root", {}, raise_on_error=False)
+                assert root_error.is_error
+                assert root_error.content[0].text == "Authorization failed for tool 'get_filesystem_root': not found or not authorized"
+                denied = await bob.call_tool("filesystem_read_file", {
+                    "node_id": folder["id"], "encoding": "utf-8", "max_bytes": 0,
+                }, raise_on_error=False)
+                missing = await bob.call_tool("filesystem_read_file", {
+                    "node_id": str(uuid4()), "encoding": "utf-8", "max_bytes": 0,
+                }, raise_on_error=False)
+                assert denied.is_error and missing.is_error
+                assert denied.content == missing.content
+                assert "filesystem_permission_denied" in denied.content[0].text
+        finally:
+            if access_path:
+                current_access = alice.get(access_path)
+                assert current_access.status_code == 200
+                cleared = alice.put(access_path, json={"grants": []}, headers={"If-Match": current_access.headers["etag"]})
+                assert cleared.status_code == 200, cleared.text
+            current = alice.get(policy_path)
+            assert current.status_code == 200
+            restored = alice.put(policy_path, json={"expected_revision": current.json()["revision"], "groups": previous["groups"]})
+            assert restored.status_code == 200, restored.text
 
 
 @pytest.mark.asyncio
@@ -229,6 +334,10 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
         })
         assert private_upload.status_code == 403
         async with mcp_client(second_mcp, alice_token) as alice_mcp, mcp_client(runtime_endpoints.mcp_url, bob_token) as bob_mcp:
+            await wait_for_filesystem_tools(alice_mcp, set(FILESYSTEM_TOOLS))
+            await wait_for_filesystem_tools(bob_mcp, {
+                "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file",
+            })
             assert tool_payload(await alice_mcp.call_tool("get_filesystem_root", {})) == {
                 **root, "sharing": {"can_share": False},
             }
@@ -357,9 +466,10 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             assert alice.get(FILESYSTEM + "/root").status_code == 403
             assert bob.get(FILESYSTEM + "/root").status_code == 403
             assert alice_second.get(FILESYSTEM + "/nodes/" + root["id"] + "/breadcrumbs").status_code == 403
+            await wait_for_filesystem_tools(bob_mcp, {"get_filesystem_node"}, frozenset({"get_filesystem_root"}))
             revoked_root = await bob_mcp.call_tool("get_filesystem_root", {}, raise_on_error=False)
             assert revoked_root.is_error
-            assert "filesystem_permission_denied" in revoked_root.content[0].text
+            assert revoked_root.content[0].text == "Authorization failed for tool 'get_filesystem_root': not found or not authorized"
             assert checked_summary(alice_second.get(FILESYSTEM + "/nodes/" + alice_file["id"]), 200) == alice_file
             checked_breadcrumbs(alice_second.get(breadcrumb_path), [alice_directory], False)
             checked_breadcrumbs(

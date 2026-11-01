@@ -29,6 +29,7 @@ def context(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         connector_runtime=SimpleNamespace(connector_tool_mappings=()),
         group_permission_runtime_state=None,
         mcp=SimpleNamespace(
+            filesystem_discovery_runtime=SimpleNamespace(reconcile=AsyncMock()),
             downstream_mcp_discovery_runtime=Mock(),
             downstream_mcp_discovery_coordinator=SimpleNamespace(reconcile_native_capabilities=AsyncMock(), initialize_native_capabilities=AsyncMock(), stop=Mock()),
             connector_tool_registry=SimpleNamespace(reconcile_all=AsyncMock(), client_notifier=Mock(spec=CapabilityListChangeNotifier)),

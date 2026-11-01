@@ -9,7 +9,7 @@ import pytest
 from fastmcp import Client
 
 from conftest import RuntimeEndpoints
-from test_running_filesystem import FILESYSTEM, checked_summary, tool_payload
+from test_running_filesystem import FILESYSTEM, checked_summary, tool_payload, wait_for_filesystem_tools
 from test_running_personal_mcp_execution import mcp_client, proxy_token
 from user_sharing_support import assert_mcp_user_target_sharing, assert_rest_recipient_scopes, observed_recipient
 
@@ -42,6 +42,8 @@ async def assert_mcp_sharing_metadata(
 async def assert_mcp_additive_sharing(
     alice: Client[Any], bob: Client[Any], node_id: str, eligible: dict[str, Any],
 ) -> None:
+    await wait_for_filesystem_tools(alice, {"filesystem_search_sharing_recipients", "filesystem_share"})
+    await wait_for_filesystem_tools(bob, {"filesystem_search_sharing_recipients", "filesystem_share"})
     search = {"node_id": node_id, "query": "admin", "recipient_type": "group"}
     expected = sorted((
         {"type": "group", "group_id": group["group_id"], "label": group["label"]}
@@ -98,6 +100,10 @@ async def test_signed_direct_node_group_sharing_and_revocation(runtime_endpoints
         assert configured.status_code == 200, configured.text
         try:
             root = checked_summary(alice.get(FILESYSTEM + "/root"), 200)
+            checked_summary(bob.post(FILESYSTEM + "/nodes/" + root["id"] + "/directories", json={
+                "name": "bob-sharing-authority-" + uuid4().hex,
+                "metadata": {"content_type": {}, "attributes": {}},
+            }), 201)
             folder = checked_summary(alice.post(FILESYSTEM + "/nodes/" + root["id"] + "/directories", json={
                 "name": "sharing-folder-" + uuid4().hex,
                 "metadata": {"content_type": {}, "attributes": {}},
@@ -246,6 +252,8 @@ async def test_signed_observed_user_and_group_targets_use_existing_sharing_tool(
             async with mcp_client(runtime_endpoints.mcp_url, alice_token) as alice_mcp, mcp_client(
                 os.environ["UMBOD_TEST_MCP_B_URL"], bob_token,
             ) as bob_mcp:
+                await wait_for_filesystem_tools(alice_mcp, {"filesystem_search_sharing_recipients", "filesystem_share"})
+                await wait_for_filesystem_tools(bob_mcp, {"get_filesystem_node"})
                 recipient = await observed_recipient(alice_mcp, file["id"], bob_claims["name"])
                 await assert_mcp_user_target_sharing(alice_mcp, bob_mcp, file["id"], recipient)
                 assert bob.get(node_path + "/content").content == b"direct-node sharing runtime"
