@@ -1,3 +1,5 @@
+from tests.umbod.core.downstream_mcp_connectors.adapters.credential_fakes import MemoryCredentialStore
+
 from umbod.core.connectors.downstream_mcp.adapters.composition import create_downstream_mcp_connections
 from umbod.core.connectors.downstream_mcp.adapters.settings import DownstreamMcpInfrastructureSettings
 
@@ -13,7 +15,7 @@ def infrastructure_settings() -> DownstreamMcpInfrastructureSettings:
 
 def test_connections_use_explicit_network_configuration() -> None:
     settings = infrastructure_settings()
-    connections = create_downstream_mcp_connections(settings, None)
+    connections = create_downstream_mcp_connections(settings, MemoryCredentialStore())
 
     assert settings.discovery_timeout_seconds == 17.0
     assert connections.discovery is not None
@@ -25,8 +27,8 @@ def test_connections_use_explicit_network_configuration() -> None:
 
 def test_connections_create_request_owned_bundles() -> None:
     settings = infrastructure_settings()
-    first_connections = create_downstream_mcp_connections(settings, None)
-    second_connections = create_downstream_mcp_connections(settings, None)
+    first_connections = create_downstream_mcp_connections(settings, MemoryCredentialStore())
+    second_connections = create_downstream_mcp_connections(settings, MemoryCredentialStore())
 
     assert first_connections is not second_connections
     assert first_connections.connection is not second_connections.connection

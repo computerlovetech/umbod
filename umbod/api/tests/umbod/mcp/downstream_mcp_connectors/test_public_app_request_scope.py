@@ -128,14 +128,17 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_p
             assert allowed_response['result']['structuredContent']['id'] == '00000000-0000-0000-0000-000000000001'
             service_factory.assert_called_once_with()
             forbidden_response = await _post(client, PUBLIC_PATH, _request(7, 'tools/call', {'name': 'get_filesystem_root', 'arguments': {}}))
+            forbidden_search = await _post(client, PUBLIC_PATH, _request(8, 'tools/call', {'name': 'filesystem_search_sharing_recipients', 'arguments': {'node_id': '00000000-0000-0000-0000-000000000001', 'query': 'Observed'}}))
     service_factory.assert_called_once_with()
     sharing.summarize_nodes.assert_awaited_once_with(
         browsing.get_root.call_args.args[0], (browsing.get_root.return_value.id,),
     )
     assert 'error' in forbidden_response or forbidden_response['result'].get('isError') is True
+    assert 'error' in forbidden_search or forbidden_search['result'].get('isError') is True
+    sharing.search_recipients.assert_not_called()
     proxy_names = {tool['name'] for tool in proxy_response['result']['tools']}
     concurrent_proxy_names = {tool['name'] for tool in concurrent_proxy_response['result']['tools']}
-    expected_root_names = {f'scope_test_{name}' for name in DOWNSTREAM_TOOL_NAMES} | {"filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_delete_file", "filesystem_read_file", "filesystem_list_sharing_groups", "filesystem_share"}
+    expected_root_names = {f'scope_test_{name}' for name in DOWNSTREAM_TOOL_NAMES} | {"filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_delete_file", "filesystem_read_file", "filesystem_search_sharing_recipients", "filesystem_share"}
     root_names = {tool['name'] for tool in root_response['result']['tools']}
     refreshed_root_names = {tool['name'] for tool in refreshed_root_response['result']['tools']}
     assert proxy_names == set(DOWNSTREAM_TOOL_NAMES)

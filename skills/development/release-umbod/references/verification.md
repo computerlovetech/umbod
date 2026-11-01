@@ -21,7 +21,7 @@ Record each result against the final candidate SHA. Re-run checks invalidated by
 | Frontend | `umbod/frontend` | `bun install --frozen-lockfile && bun run test && bun run check` |
 | Documentation | `umbod` | `uv run --locked mkdocs build --strict` |
 | Website and rendered docs | `website` | `bun install --frozen-lockfile && bun run test && bun run build` |
-| Shared analysis | `umbod` | `uv run semgrep scan --config ../.semgrep.yml .`; apply repository remediation rules, never report findings as a clean scan |
+| Shared analysis | `umbod` | `uv run semgrep scan --config ../.semgrep.yml --config ../.semgrep/production-design.yml --config ../.semgrep/test-correctness.yml --no-rewrite-rule-ids .`; apply repository remediation rules, never report findings as a clean scan |
 | API/MCP changes | Repository root | `bash umbod/tests/kind-runtime/run.sh`; inspect failing assertions and pod diagnostics |
 | Helm changes | Repository root | `umbod/deploy/helm/umbod/scripts/validate.sh` and `bash umbod/deploy/helm/umbod/scripts/kind-install-test.sh`; applicable negative schema checks |
 | UI changes | `umbod` | Required Docker Compose setup and browser verification at `http://localhost:3010` from `AGENTS.md` |

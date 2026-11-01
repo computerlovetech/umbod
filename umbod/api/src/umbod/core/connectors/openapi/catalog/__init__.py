@@ -1,5 +1,4 @@
 from umbod.core.connectors.openapi.catalog.capability_catalog import (
-    PersistedAuthorizedOpenApiCapabilityCatalog,
     StoreBackedOpenApiCapabilityCatalog,
 )
 from umbod.core.connectors.openapi.catalog.capability_schemas import (
@@ -16,7 +15,6 @@ from umbod.core.connectors.openapi.catalog.tool_catalog import (
 __all__ = [
     "OpenApiConnectorToolCatalog",
     "OpenApiOperationTool",
-    "PersistedAuthorizedOpenApiCapabilityCatalog",
     "StoreBackedOpenApiCapabilityCatalog",
     "openapi_execution_schema",
     "openapi_json_schema",

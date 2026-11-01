@@ -6,12 +6,12 @@ description: "User filesystem browsing, direct-node group sharing, directory cre
 
 # Files
 
-- [api.ts](./api.ts) — Filesystem operations and node-scoped sharing ports.
-- [domain/sharing.ts](./domain/sharing.ts) — Strict sharing replacement, authoritative access and registered recipient contracts.
+- [api.ts](./api.ts) — Filesystem operations and typed recipient-filtered sharing ports.
+- [domain/sharing.ts](./domain/sharing.ts) — Strict group/user grant targets, labelled access views and minimal blocked recipient contracts.
 - [state/sharing-eligibility-state.svelte.ts](./state/sharing-eligibility-state.svelte.ts) — Independent current-node and bounded row authority probes with stale-result fencing.
-- [state/sharing-dialog-state.svelte.ts](./state/sharing-dialog-state.svelte.ts) — Group drafts, explicit permission edits, conflict recovery and operation lifetime.
+- [state/sharing-dialog-state.svelte.ts](./state/sharing-dialog-state.svelte.ts) — Group-filtered drafts and saves, explicit permissions, conflict recovery and operation lifetime.
 - [state/sharing-state.test.ts](./state/sharing-state.test.ts) — Eligibility, mutation, cancellation, self-revocation and stale-result behavior tests.
-- [sharing-api.test.ts](./sharing-api.test.ts) — Sharing adapter and strong conditional JSON transport regression tests.
+- [sharing-api.test.ts](./sharing-api.test.ts) — Mixed recipient preservation, scoped query validation and strong conditional JSON transport tests.
 - [breadcrumbs-api.test.ts](./breadcrumbs-api.test.ts) — Minimal breadcrumb schemas, visibility boundaries and shared HTTP transport tests.
 - [state/navigation-state.svelte.ts](./state/navigation-state.svelte.ts) — Independent path reads, confirmed parent navigation and known-ancestor overflow state.
 - [state/navigation-state.test.ts](./state/navigation-state.test.ts) — Deep links, partial paths, stale responses, disposal, ancestor overflow and read isolation tests.

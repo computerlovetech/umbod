@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from unittest.mock import create_autospec
 from uuid import UUID, uuid4
 
@@ -9,12 +10,16 @@ from umbod.core.filesystem.authorization import FilesystemIdentityResolver
 from umbod.core.filesystem.sharing import (
     EligibleSharingGroup, EligibleSharingGroups,
     FilesystemSharing, InvalidSharingPolicy, SharingPolicyUnavailable,
-    NodeGroupPolicyView, ReplaceNodeGroupPolicy,
+    NodePolicyView, ReplaceNodePolicy, SharingScope, SharingRecipientType,
+    GroupSharingTarget, SharingGrantSummary,
 )
 from umbod.core.persistence import Database, TransactionMode
 from umbod.core.groups import RegisterGroupMetadata
 from umbod.core.groups.stores.composition import create_group_management
 from umbod.core.groups.stores.registration import register_group_in_session
+from umbod.core.identity_directory.models import IdentityObservation
+from umbod.core.identity_directory.store import DatabaseIdentityDirectory
+from umbod.core.identity_directory.user_models import ScopedUserSearch
 from umbod.infrastructure import create_access_control_driver
 from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationError
 from umbod.rest.authentication.verifiers import SimulatedJwtVerifier
@@ -68,25 +73,25 @@ def test_owner_can_replace_and_revoke_with_authoritative_etag_without_content_ch
 ) -> None:
     client = sharing_http.client
     path = access_path(private_node)
-    initial = client.get(path)
+    initial = client.get(path, params={"recipient_type": "group"})
     assert initial.status_code == 200, initial.text
-    assert set(initial.json()) == {"node_id", "revision", "groups", "blocked_group_ids"}
-    assert initial.json()["groups"] == []
+    assert set(initial.json()) == {"node_id", "revision", "grants", "blocked_recipients"}
+    assert initial.json()["grants"] == []
     assert initial.headers["etag"] == '"' + initial.json()["revision"] + '"'
-    groups = [{"group_id": "team", "permissions": ["discover", "share"]}]
-    saved = client.put(path, json={"groups": groups}, headers={"If-Match": initial.headers["etag"]})
+    grants = [{"recipient": {"type": "group", "group_id": "team"}, "permissions": ["discover", "share"]}]
+    saved = client.put(path, params={"recipient_type": "group"}, json={"grants": grants}, headers={"If-Match": initial.headers["etag"]})
     assert saved.status_code == 200, saved.text
     assert saved.headers["etag"] != initial.headers["etag"]
-    assert saved.json() == client.get(path).json()
-    assert set(saved.json()["groups"][0]["permissions"]) == {"discover", "share"}
+    assert saved.json() == client.get(path, params={"recipient_type": "group"}).json()
+    assert set(saved.json()["grants"][0]["permissions"]) == {"discover", "share"}
     assert client.get(f"{BASE}/nodes/{private_node['id']}").json() == private_node
     bob = {"Authorization": "Bearer bob"}
     assert client.get(path, headers=bob).status_code == 200
-    revoked = client.put(path, json={"groups": []}, headers={**bob, "If-Match": saved.headers["etag"]})
+    revoked = client.put(path, params={"recipient_type": "group"}, json={"grants": []}, headers={**bob, "If-Match": saved.headers["etag"]})
     assert revoked.status_code == 200, revoked.text
-    assert revoked.json()["groups"] == []
+    assert revoked.json()["grants"] == []
     assert client.get(path, headers=bob).status_code == 403
-    stale = client.put(path, json={"groups": groups}, headers={"If-Match": saved.headers["etag"]})
+    stale = client.put(path, params={"recipient_type": "group"}, json={"grants": grants}, headers={"If-Match": saved.headers["etag"]})
     assert stale.status_code == 412
     for response in (initial, saved, revoked, stale):
         assert response.headers["cache-control"] == "no-store"
@@ -94,15 +99,19 @@ def test_owner_can_replace_and_revoke_with_authoritative_etag_without_content_ch
 
 @pytest.mark.parametrize("permissions", [{Permission.DISCOVER}, {Permission.SHARE}, set()])
 @pytest.mark.parametrize("method", ["GET", "PUT"])
+@pytest.mark.parametrize("recipient_type", ["group", "user"])
 def test_missing_discover_or_share_denies_before_stale_revision_and_unknown_recipient(
     sharing_http: FilesystemHttp, private_node: dict[str, object], permissions: set[Permission], method: str,
+    recipient_type: str,
 ) -> None:
     if permissions:
         grant_recipient(sharing_http, private_node, permissions)
     headers = {"Authorization": "Bearer bob", "If-Match": OPAQUE}
-    body = {"groups": [{"group_id": "secret-unregistered", "permissions": ["read"]}]}
-    denied = sharing_http.client.request(method, access_path(private_node), json=body, headers=headers)
-    missing = sharing_http.client.request(method, f"{BASE}/nodes/{uuid4()}/access", json=body, headers=headers)
+    body = {"grants": [{"recipient": {
+        "type": recipient_type, f"{recipient_type}_id": "secret-unregistered",
+    }, "permissions": ["read"]}]}
+    denied = sharing_http.client.request(method, access_path(private_node), json=body, headers=headers, params={"recipient_type": recipient_type})
+    missing = sharing_http.client.request(method, f"{BASE}/nodes/{uuid4()}/access", json=body, headers=headers, params={"recipient_type": recipient_type})
     assert denied.status_code == missing.status_code == 403
     assert denied.json() == missing.json()
     assert "secret" not in denied.text
@@ -112,7 +121,7 @@ def test_missing_discover_or_share_denies_before_stale_revision_and_unknown_reci
 def test_sharing_preconditions_are_not_content_revisions(
     sharing_http: FilesystemHttp, private_node: dict[str, object], header: str,
 ) -> None:
-    response = sharing_http.client.put(access_path(private_node), json={"groups": []}, headers={"If-Match": header})
+    response = sharing_http.client.put(access_path(private_node), params={"recipient_type": "group"}, json={"grants": []}, headers={"If-Match": header})
     assert response.status_code == 422
 
 
@@ -120,27 +129,31 @@ def test_sharing_requires_precondition_and_rejects_multiple_headers(
     sharing_http: FilesystemHttp, private_node: dict[str, object],
 ) -> None:
     path = access_path(private_node)
-    assert sharing_http.client.put(path, json={"groups": []}).status_code == 428
-    response = sharing_http.client.put(path, json={"groups": []}, headers=[("If-Match", OPAQUE), ("If-Match", OPAQUE)])
+    assert sharing_http.client.put(path, params={"recipient_type": "group"}, json={"grants": []}).status_code == 428
+    response = sharing_http.client.put(path, params={"recipient_type": "group"}, json={"grants": []}, headers=[("If-Match", OPAQUE), ("If-Match", OPAQUE)])
     assert response.status_code == 422
 
 
 @pytest.mark.parametrize("body", [
-    {"grants": []}, {"groups": [], "issuer": "evil"}, {"groups": [], "users": []},
-    {"groups": [], "recursive": True}, {"groups": [], "expected_revision": "abc"},
-    {"groups": [{"group_id": "team", "permissions": ["read"], "issuer": "evil"}]},
-    {"groups": [{"group_id": "team", "permissions": ["read"], "recursive": True}]},
-    {"groups": [{"group_id": "team", "permissions": []}]},
-    {"groups": [{"group_id": " ", "permissions": ["read"]}]},
-    {"groups": [{"group_id": "team", "permissions": ["read"]}] * 2},
+    {"groups": []}, {"grants": [], "issuer": "evil"}, {"grants": [], "users": []},
+    {"grants": [], "recursive": True}, {"grants": [], "expected_revision": "abc"},
+    {"grants": [{"recipient": {"type": "group", "group_id": "team"}, "permissions": ["read"], "issuer": "evil"}]},
+    {"grants": [{"recipient": {"type": "group", "group_id": "team"}, "permissions": ["read"], "recursive": True}]},
+    {"grants": [{"recipient": {"type": "group", "group_id": "team"}, "permissions": []}]},
+    {"grants": [{"recipient": {"type": "group", "group_id": " "}, "permissions": ["read"]}]},
+    {"grants": [{"recipient": {"type": "group", "group_id": "team"}, "permissions": ["read"]}] * 2},
+    *[{"grants": [{"recipient": {"type": "group", "group_id": "team", field: "evil"}, "permissions": ["read"]}]}
+      for field in ("issuer", "recursive", "label", "user_id")],
+    {"grants": [{"recipient": {"type": "user", "user_id": "observed"}, "permissions": ["read"]}]},
 ])
-def test_group_only_request_rejects_obsolete_or_extra_authority_without_writes(
+def test_canonical_request_rejects_obsolete_or_extra_authority_without_writes(
     sharing_http: FilesystemHttp, private_node: dict[str, object], body: dict[str, object],
 ) -> None:
     path = access_path(private_node)
     before = sharing_http.client.get(path)
-    response = sharing_http.client.put(path, json=body, headers={"If-Match": before.headers["etag"]})
+    response = sharing_http.client.put(path, params={"recipient_type": "group"}, json=body, headers={"If-Match": before.headers["etag"]})
     assert response.status_code == 422
+    assert response.headers["cache-control"] == "no-store"
     assert sharing_http.client.get(path).json() == before.json()
 
 
@@ -150,14 +163,14 @@ def test_group_ids_are_exact_registered_recipients_without_automatic_creation(
     register_recipient(sharing_http, " Exact ")
     path = access_path(private_node)
     initial = sharing_http.client.get(path)
-    rejected = sharing_http.client.put(path, json={"groups": [{"group_id": "Exact", "permissions": ["read"]}]}, headers={"If-Match": initial.headers["etag"]})
+    rejected = sharing_http.client.put(path, params={"recipient_type": "group"}, json={"grants": [{"recipient": {"type": "group", "group_id": "Exact"}, "permissions": ["read"]}]}, headers={"If-Match": initial.headers["etag"]})
     assert rejected.status_code == 422
     assert rejected.json()["detail"]["code"] == "filesystem_sharing_invalid"
     assert "Exact" not in rejected.text
     assert sharing_http.client.get(path).json() == initial.json()
-    accepted = sharing_http.client.put(path, json={"groups": [{"group_id": " Exact ", "permissions": ["read"]}]}, headers={"If-Match": initial.headers["etag"]})
+    accepted = sharing_http.client.put(path, params={"recipient_type": "group"}, json={"grants": [{"recipient": {"type": "group", "group_id": " Exact "}, "permissions": ["read"]}]}, headers={"If-Match": initial.headers["etag"]})
     assert accepted.status_code == 200, accepted.text
-    assert accepted.json()["groups"][0]["group_id"] == " Exact "
+    assert accepted.json()["grants"][0]["recipient"]["group_id"] == " Exact "
 
 
 @pytest.mark.parametrize("error,status,code", [
@@ -215,7 +228,7 @@ def test_blank_configured_issuer_fails_closed(sharing_http: FilesystemHttp, issu
     assert response.json()["detail"]["code"] == "filesystem_policy_unavailable"
 
 
-def test_replacement_preserves_foreign_user_and_recursive_grants(
+def test_group_replacement_preserves_foreign_user_and_recursive_grants(
     sharing_http: FilesystemHttp, private_node: dict[str, object],
 ) -> None:
     driver = create_access_control_driver(database=sharing_http.factories.persistence_runtime.database)
@@ -232,12 +245,12 @@ def test_replacement_preserves_foreign_user_and_recursive_grants(
     for grant in protected:
         sharing_http.client.portal.call(driver.add_grant, grant)
     path = access_path(private_node)
-    initial = sharing_http.client.get(path)
-    assert initial.json()["groups"] == []
-    assert initial.json()["blocked_group_ids"] == ["team"]
-    collision = sharing_http.client.put(path, json={"groups": [{"group_id": "team", "permissions": ["read"]}]}, headers={"If-Match": initial.headers["etag"]})
+    initial = sharing_http.client.get(path, params={"recipient_type": "group"})
+    assert initial.json()["grants"] == []
+    assert initial.json()["blocked_recipients"] == [{"type": "group", "group_id": "team"}]
+    collision = sharing_http.client.put(path, params={"recipient_type": "group"}, json={"grants": [{"recipient": {"type": "group", "group_id": "team"}, "permissions": ["read"]}]}, headers={"If-Match": initial.headers["etag"]})
     assert collision.status_code == 422
-    revoked = sharing_http.client.put(path, json={"groups": []}, headers={"If-Match": initial.headers["etag"]})
+    revoked = sharing_http.client.put(path, params={"recipient_type": "group"}, json={"grants": []}, headers={"If-Match": initial.headers["etag"]})
     assert revoked.status_code == 200
     assert revoked.json() == initial.json()
     stored = sharing_http.client.portal.call(driver.list_grants, identifier)
@@ -285,8 +298,9 @@ def test_eligible_groups_requires_both_permissions_and_hides_missing_target(
 
 class RecordingSharing:
     def __init__(self, node_id: UUID) -> None:
-        self.view = NodeGroupPolicyView(node_id=node_id, revision="before", groups=(), blocked_group_ids=())
-        self.commands: list[ReplaceNodeGroupPolicy] = []
+        self.view = NodePolicyView(node_id=node_id, revision="before", grants=(), blocked_recipients=())
+        self.commands: list[ReplaceNodePolicy] = []
+        self.scopes: list[SharingScope] = []
 
     async def eligible_groups(self, snapshot: CallerSnapshot, node_id: UUID) -> EligibleSharingGroups:
         assert node_id == self.view.node_id
@@ -295,24 +309,34 @@ class RecordingSharing:
             group_id=" Exact ", label="Display label", description="Collaboration",
         ),))
 
-    async def inspect(self, snapshot: CallerSnapshot, node_id: UUID) -> NodeGroupPolicyView:
+    async def inspect(self, snapshot: CallerSnapshot, node_id: UUID, scope: SharingScope) -> NodePolicyView:
+        self.scopes.append(scope)
         assert node_id == self.view.node_id
         assert snapshot.caller
         return self.view
 
     async def replace(
-        self, snapshot: CallerSnapshot, node_id: UUID, command: ReplaceNodeGroupPolicy,
-    ) -> NodeGroupPolicyView:
+        self, snapshot: CallerSnapshot, node_id: UUID, command: ReplaceNodePolicy,
+    ) -> NodePolicyView:
         assert node_id == self.view.node_id
         assert snapshot.caller
         self.commands.append(command)
-        self.view = NodeGroupPolicyView(
-            node_id=node_id, revision="after", groups=command.groups, blocked_group_ids=("protected",),
+        self.view = NodePolicyView(
+            node_id=node_id, revision="after", grants=tuple(
+                SharingGrantSummary.model_validate({
+                    "recipient": {**grant.recipient.model_dump(), "label": "Authoritative label"},
+                    "permissions": grant.permissions,
+                }) for grant in command.grants
+            ),
+            blocked_recipients=(GroupSharingTarget(type="group", group_id="protected"),),
         )
         return self.view
 
 
-def test_routes_use_sharing_port_and_return_its_authoritative_projection(sharing_http: FilesystemHttp) -> None:
+@pytest.mark.parametrize("recipient_type", ["group", "user"])
+def test_routes_use_sharing_port_and_return_its_authoritative_projection(
+    sharing_http: FilesystemHttp, recipient_type: SharingRecipientType,
+) -> None:
     identifier = uuid4()
     service = RecordingSharing(identifier)
 
@@ -330,8 +354,304 @@ def test_routes_use_sharing_port_and_return_its_authoritative_projection(sharing
     assert eligible.headers["cache-control"] == "no-store"
     inspected = sharing_http.client.get(path)
     assert inspected.headers["etag"] == '\"before\"'
-    saved = sharing_http.client.put(path, json={"groups": []}, headers={"If-Match": inspected.headers["etag"]})
+    recipient = (
+        {"type": "group", "group_id": " Exact "}
+        if recipient_type == "group" else {"type": "user", "user_id": "observed"}
+    )
+    saved = sharing_http.client.put(path, params={"recipient_type": recipient_type}, json={"grants": [
+        {"recipient": recipient, "permissions": ["read"]},
+    ]}, headers={"If-Match": inspected.headers["etag"]})
     assert saved.status_code == 200
     assert saved.headers["etag"] == '\"after\"'
     assert saved.json() == service.view.model_dump(mode="json")
-    assert service.commands == [ReplaceNodeGroupPolicy(expected_revision="before", groups=())]
+    assert service.scopes == [SharingScope(recipient_types=frozenset(("group", "user")))]
+    assert len(service.commands) == 1
+    assert service.commands[0].model_dump(mode="json") == {
+        "recipient_type": recipient_type, "expected_revision": "before",
+        "grants": [{"recipient": recipient, "permissions": ["read"]}],
+    }
+
+
+def observe_user(http: FilesystemHttp, issuer: str, subject: str, label: str) -> str:
+    async def observe() -> str:
+        directory = DatabaseIdentityDirectory(http.factories.persistence_runtime.database)
+        await directory.observe(IdentityObservation(
+            issuer=issuer, subject=subject, claim="filesystem_groups", groups=(), name=label,
+            email="private@example.test", email_verification="verified",
+            observed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        ))
+        page = await directory.search_user_names(ScopedUserSearch(
+            issuer=issuer, query=label, limit=50, excluded_subjects=frozenset(),
+        ))
+        return page.users[0].user_id
+
+    return http.client.portal.call(observe)
+
+
+@pytest.fixture
+def observed_user(sharing_http: FilesystemHttp) -> str:
+    return observe_user(sharing_http, "issuer", "bob", "Bob Reader")
+
+
+@pytest.fixture
+def mixed_policy(
+    sharing_http: FilesystemHttp, private_node: dict[str, object], observed_user: str,
+) -> dict[str, object]:
+    path = access_path(private_node)
+    for recipient in (
+        {"type": "group", "group_id": "team"},
+        {"type": "user", "user_id": observed_user},
+    ):
+        revision = sharing_http.client.get(path).headers["etag"]
+        response = sharing_http.client.put(
+            path, params={"recipient_type": recipient["type"]},
+            json={"grants": [{"recipient": recipient, "permissions": ["discover", "read"]}]},
+            headers={"If-Match": revision},
+        )
+        assert response.status_code == 200, response.text
+    return private_node
+
+
+@pytest.mark.parametrize("recipient_type", ["group", "user", "both"])
+def test_get_returns_canonical_labeled_recipients_with_one_global_revision(
+    sharing_http: FilesystemHttp, mixed_policy: dict[str, object],
+    observed_user: str, recipient_type: str,
+) -> None:
+    path = access_path(mixed_policy)
+    complete = sharing_http.client.get(path)
+    params = {} if recipient_type == "both" else {"recipient_type": recipient_type}
+    response = sharing_http.client.get(path, params=params)
+    expected = [
+        {"recipient": {"type": "group", "group_id": "team", "label": "team"}, "permissions": ["discover", "read"]},
+        {"recipient": {"type": "user", "user_id": observed_user, "label": "Bob Reader"}, "permissions": ["discover", "read"]},
+    ]
+    assert response.status_code == 200
+    assert response.json() == {
+        "node_id": mixed_policy["id"], "revision": complete.json()["revision"],
+        "grants": [grant for grant in expected if recipient_type == "both" or grant["recipient"]["type"] == recipient_type],
+        "blocked_recipients": [],
+    }
+    assert response.headers["etag"] == complete.headers["etag"]
+    assert response.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("recipient_type", ["group", "user"])
+def test_replacement_only_removes_selected_type_and_returns_selected_view(
+    sharing_http: FilesystemHttp, mixed_policy: dict[str, object], recipient_type: str,
+) -> None:
+    path = access_path(mixed_policy)
+    before = sharing_http.client.get(path)
+    response = sharing_http.client.put(
+        path, params={"recipient_type": recipient_type}, json={"grants": []},
+        headers={"If-Match": before.headers["etag"]},
+    )
+    assert response.status_code == 200
+    assert response.json()["grants"] == []
+    assert response.headers["etag"] != before.headers["etag"]
+    complete = sharing_http.client.get(path)
+    assert complete.json()["grants"] == [
+        grant for grant in before.json()["grants"] if grant["recipient"]["type"] != recipient_type
+    ]
+    assert complete.headers["etag"] == response.headers["etag"]
+    assert sharing_http.client.get(path, params={"recipient_type": recipient_type}).json() == response.json()
+
+
+def test_user_change_invalidates_group_etag_without_modifying_group_grants(
+    sharing_http: FilesystemHttp, mixed_policy: dict[str, object],
+) -> None:
+    path = access_path(mixed_policy)
+    groups = sharing_http.client.get(path, params={"recipient_type": "group"})
+    users = sharing_http.client.put(
+        path, params={"recipient_type": "user"}, json={"grants": []},
+        headers={"If-Match": groups.headers["etag"]},
+    )
+    assert users.status_code == 200
+    stale = sharing_http.client.put(
+        path, params={"recipient_type": "group"}, json={"grants": []},
+        headers={"If-Match": groups.headers["etag"]},
+    )
+    assert stale.status_code == 412
+    current = sharing_http.client.get(path, params={"recipient_type": "group"})
+    assert current.json()["grants"] == groups.json()["grants"]
+    assert current.headers["etag"] == users.headers["etag"]
+    assert stale.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("method", ["GET", "PUT"])
+@pytest.mark.parametrize("query", [
+    "recipient_type=", "recipient_type=invalid", "recipient_type=GROUP",
+    "recipient_type=group&recipient_type=user", "recipient_type=user&recipient_type=user",
+    "recipient_type=group&recipient_type=group", "recipient_type=%20group%20",
+])
+def test_invalid_recipient_query_is_rejected_without_mutation(
+    sharing_http: FilesystemHttp, mixed_policy: dict[str, object], method: str, query: str,
+) -> None:
+    path = access_path(mixed_policy)
+    before = sharing_http.client.get(path)
+    response = sharing_http.client.request(
+        method, path + "?" + query, json={"grants": []},
+        headers={"If-Match": before.headers["etag"]},
+    )
+    assert response.status_code == 422
+    assert response.headers["cache-control"] == "no-store"
+    after = sharing_http.client.get(path)
+    assert after.json() == before.json()
+    assert after.headers["etag"] == before.headers["etag"]
+
+
+def test_put_requires_explicit_recipient_type_without_mutation(
+    sharing_http: FilesystemHttp, mixed_policy: dict[str, object],
+) -> None:
+    path = access_path(mixed_policy)
+    before = sharing_http.client.get(path)
+    response = sharing_http.client.put(
+        path, json={"grants": []}, headers={"If-Match": before.headers["etag"]},
+    )
+    assert response.status_code == 422
+    assert sharing_http.client.get(path).json() == before.json()
+
+
+@pytest.mark.parametrize("recipient_type", ["group", "user"])
+def test_valid_recipient_scope_still_requires_if_match(
+    sharing_http: FilesystemHttp, mixed_policy: dict[str, object], recipient_type: str,
+) -> None:
+    path = access_path(mixed_policy)
+    before = sharing_http.client.get(path)
+    response = sharing_http.client.put(path, params={"recipient_type": recipient_type}, json={"grants": []})
+    assert response.status_code == 428
+    assert response.json()["detail"]["code"] == "filesystem_precondition_required"
+    assert sharing_http.client.get(path).json() == before.json()
+
+
+@pytest.mark.parametrize("invalid_kind", ["duplicate", "mismatch", "label"])
+def test_user_replacement_rejects_duplicate_mismatched_or_response_recipients(
+    sharing_http: FilesystemHttp, mixed_policy: dict[str, object], observed_user: str, invalid_kind: str,
+) -> None:
+    path = access_path(mixed_policy)
+    before = sharing_http.client.get(path)
+    recipient = {"type": "user", "user_id": observed_user}
+    if invalid_kind == "mismatch":
+        recipient = {"type": "group", "group_id": "team"}
+    if invalid_kind == "label":
+        recipient["label"] = "Bob Reader"
+    grants = [{"recipient": recipient, "permissions": ["read"]}] * (2 if invalid_kind == "duplicate" else 1)
+    response = sharing_http.client.put(
+        path, params={"recipient_type": "user"}, json={"grants": grants},
+        headers={"If-Match": before.headers["etag"]},
+    )
+    assert response.status_code == 422
+    assert sharing_http.client.get(path).json() == before.json()
+
+
+@pytest.mark.parametrize("invalid_identity", ["subject", "foreign_issuer", "unknown"])
+def test_user_targets_resolve_only_observed_ids_in_the_exact_configured_issuer(
+    sharing_http: FilesystemHttp, private_node: dict[str, object], observed_user: str, invalid_identity: str,
+) -> None:
+    identifier = {
+        "subject": "bob", "unknown": "never-observed",
+        "foreign_issuer": observe_user(sharing_http, " issuer ", "bob", "Foreign Bob"),
+    }[invalid_identity]
+    assert observed_user != "bob"
+    path = access_path(private_node)
+    before = sharing_http.client.get(path)
+    response = sharing_http.client.put(
+        path, params={"recipient_type": "user"},
+        json={"grants": [{"recipient": {"type": "user", "user_id": identifier}, "permissions": ["read"]}]},
+        headers={"If-Match": before.headers["etag"]},
+    )
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "filesystem_sharing_invalid"
+    assert "Foreign Bob" not in response.text
+    assert sharing_http.client.get(path).json() == before.json()
+
+
+def test_observed_user_id_binds_to_subject_for_direct_authorization_and_revocation(
+    sharing_http: FilesystemHttp, private_node: dict[str, object], observed_user: str,
+) -> None:
+    path = access_path(private_node)
+    before = sharing_http.client.get(path)
+    saved = sharing_http.client.put(
+        path, params={"recipient_type": "user"},
+        json={"grants": [{"recipient": {"type": "user", "user_id": observed_user}, "permissions": ["discover", "share"]}]},
+        headers={"If-Match": before.headers["etag"]},
+    )
+    assert saved.status_code == 200, saved.text
+    driver = create_access_control_driver(database=sharing_http.factories.persistence_runtime.database)
+    stored = sharing_http.client.portal.call(driver.list_grants, UUID(str(private_node["id"])))
+    assert stored == [AccessGrant(
+        node_id=UUID(str(private_node["id"])),
+        principal=Principal(type=PrincipalType.USER, issuer="issuer", id="bob"),
+        permissions={Permission.DISCOVER, Permission.SHARE}, recursive=False,
+    )]
+    bob = {"Authorization": "Bearer bob"}
+    assert sharing_http.client.get(path, headers=bob).status_code == 200
+    revoked = sharing_http.client.put(
+        path, params={"recipient_type": "user"}, json={"grants": []},
+        headers={**bob, "If-Match": saved.headers["etag"]},
+    )
+    assert revoked.status_code == 200
+    assert sharing_http.client.get(path, headers=bob).status_code == 403
+
+
+@pytest.mark.parametrize("query,types", [
+    ("", frozenset(("group", "user"))),
+    ("?recipient_type=group", frozenset(("group",))),
+    ("?recipient_type=user", frozenset(("user",))),
+])
+def test_inspection_passes_explicit_sharing_scope_to_port(
+    sharing_http: FilesystemHttp, query: str, types: frozenset[SharingRecipientType],
+) -> None:
+    identifier = uuid4()
+    service = RecordingSharing(identifier)
+
+    def provide() -> FilesystemSharing:
+        return service
+
+    sharing_http.app.dependency_overrides[get_filesystem_sharing] = provide
+    response = sharing_http.client.get(f"{BASE}/nodes/{identifier}/access" + query)
+    assert response.status_code == 200
+    assert service.scopes == [SharingScope(recipient_types=types)]
+    assert service.commands == []
+
+
+def test_user_replacement_preserves_recursive_foreign_and_unobserved_grants(
+    sharing_http: FilesystemHttp, private_node: dict[str, object], observed_user: str,
+) -> None:
+    driver = create_access_control_driver(database=sharing_http.factories.persistence_runtime.database)
+    identifier = UUID(str(private_node["id"]))
+    protected = [
+        AccessGrant(
+            node_id=identifier, principal=Principal(type=PrincipalType.USER, issuer=issuer, id=subject),
+            permissions={Permission.READ}, recursive=recursive,
+        )
+        for issuer, subject, recursive in (
+            ("issuer", "bob", True), ("foreign", "bob", False),
+            ("issuer", "unobserved-subject", False),
+        )
+    ]
+    for grant in protected:
+        sharing_http.client.portal.call(driver.add_grant, grant)
+    path = access_path(private_node)
+    before = sharing_http.client.get(path)
+    users = sharing_http.client.get(path, params={"recipient_type": "user"})
+    assert users.json()["grants"] == []
+    assert users.json()["blocked_recipients"] == [{"type": "user", "user_id": observed_user}]
+    groups = sharing_http.client.get(path, params={"recipient_type": "group"})
+    assert groups.json()["blocked_recipients"] == []
+    assert users.headers["etag"] == groups.headers["etag"] == before.headers["etag"]
+    collision = sharing_http.client.put(
+        path, params={"recipient_type": "user"},
+        json={"grants": [{"recipient": {"type": "user", "user_id": observed_user}, "permissions": ["read"]}]},
+        headers={"If-Match": before.headers["etag"]},
+    )
+    assert collision.status_code == 422
+    unchanged = sharing_http.client.put(
+        path, params={"recipient_type": "user"}, json={"grants": []},
+        headers={"If-Match": before.headers["etag"]},
+    )
+    assert unchanged.status_code == 200
+    assert unchanged.json() == users.json()
+    assert unchanged.headers["etag"] == before.headers["etag"]
+    stored = sharing_http.client.portal.call(driver.list_grants, identifier)
+    assert len(stored) == len(protected)
+    assert all(grant in stored for grant in protected)

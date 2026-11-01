@@ -1,3 +1,4 @@
+from tests.support.filesystem.sharing_policy import GROUP_SCOPE
 from uuid import uuid4
 
 import pytest
@@ -57,10 +58,10 @@ async def test_summary_matches_inspect_protected_scope_and_current_exact_labels(
             permissions={Permission.READ}, recursive=False,
         ))
     await context.groups.update_group_metadata(" Team ", UpdateGroupMetadata(expected_revision=1, label="Current label", description="hidden description"))
-    view = await context.service.inspect(caller(), context.node.id)
+    view = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     summary = (await context.service.summarize_nodes(caller(), (context.node.id,))).nodes[0]
     assert isinstance(summary, ShareableNodeSharingSummary)
-    assert [(grant.recipient.group_id, grant.permissions) for grant in summary.grants] == [(grant.group_id, grant.permissions) for grant in view.groups]
+    assert summary.grants == view.grants
     assert [grant.recipient.group_id for grant in summary.grants] == [" Team ", "Team", "a/b", "team"]
     assert summary.grants[0].recipient.label == "Current label"
     assert set(summary.model_dump()) == {"node_id", "can_share", "grants"}

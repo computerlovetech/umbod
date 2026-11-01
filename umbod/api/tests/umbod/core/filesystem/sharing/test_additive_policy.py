@@ -1,3 +1,4 @@
+from tests.support.filesystem.sharing_policy import GROUP_SCOPE, group_commands, group_policies
 from dataclasses import replace
 from uuid import uuid4
 
@@ -8,7 +9,9 @@ from umbod.core.filesystem import (
     RevisionConflict, SYSTEM_ROOT_OWNER,
 )
 from umbod.core.filesystem.authorization import PermissionDenied
-from umbod.core.filesystem.sharing import GroupPolicy, InvalidSharingPolicy, ReplaceNodeGroupPolicy
+from umbod.core.filesystem.sharing import (
+    GroupPolicy, GroupSharingTarget, InvalidSharingPolicy, ReplaceNodePolicy, ShareNodePolicy,
+)
 from umbod.core.filesystem.stores.access_control import SessionAccessControl
 from umbod.core.groups import RegisterGroup
 from umbod.core.persistence import TransactionMode
@@ -18,8 +21,11 @@ from .conftest import SharingContext
 from .test_policy import principal
 
 
-def command(identifier: str, *permissions: Permission) -> GroupPolicy:
-    return GroupPolicy(group_id=identifier, permissions=frozenset(permissions))
+def command(identifier: str, *permissions: Permission) -> ShareNodePolicy:
+    return ShareNodePolicy(
+        recipient=GroupSharingTarget(type="group", group_id=identifier),
+        permissions=frozenset(permissions),
+    )
 
 
 @pytest.mark.asyncio
@@ -35,8 +41,9 @@ async def test_additive_sharing_preserves_exact_recipient_ids_and_unions_permiss
         repeated = await context.service.share(caller(), context.node.id, command(identifier, Permission.READ))
         assert not repeated.changed
         assert repeated.permissions == added.permissions
-    assert (await context.service.inspect(caller(), context.node.id)).groups == tuple(
-        command(identifier, Permission.READ, Permission.WRITE) for identifier in sorted(identifiers)
+    assert group_policies(await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)) == tuple(
+        GroupPolicy(group_id=identifier, permissions=frozenset({Permission.READ, Permission.WRITE}))
+        for identifier in sorted(identifiers)
     )
     assert await context.namespace.get_node(context.node.id) == context.node
     assert (await context.policies.get_owner(context.node.id)).owner == alice()
@@ -78,10 +85,10 @@ async def test_ancestor_authority_does_not_allow_sharing_child(context: SharingC
 @pytest.mark.parametrize("identifier", ["team", " Team", "Team ", " Team "])
 async def test_recipient_matching_does_not_trim_or_fold_case(context: SharingContext, identifier: str) -> None:
     await context.groups.register_group(RegisterGroup(group_id="Team"))
-    before = await context.service.inspect(caller(), context.node.id)
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     with pytest.raises(InvalidSharingPolicy):
         await context.service.share(caller(), context.node.id, command(identifier, Permission.READ))
-    assert await context.service.inspect(caller(), context.node.id) == before
+    assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == before
     assert tuple(group.group_id for group in await context.groups.list_groups()) == ("Team",)
 
 
@@ -91,10 +98,10 @@ async def test_unknown_or_deleted_recipient_is_not_registered_or_granted(context
     if deleted:
         await context.groups.register_group(RegisterGroup(group_id="team"))
         await context.groups.delete_group("team")
-    before = await context.service.inspect(caller(), context.node.id)
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     with pytest.raises(InvalidSharingPolicy):
         await context.service.share(caller(), context.node.id, command("team", Permission.READ))
-    assert await context.service.inspect(caller(), context.node.id) == before
+    assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == before
     assert await context.groups.list_groups() == ()
 
 
@@ -102,11 +109,11 @@ async def test_unknown_or_deleted_recipient_is_not_registered_or_granted(context
 @pytest.mark.parametrize("recursive,permissions", [(True, {Permission.READ}), (False, set())])
 async def test_protected_recipient_collision_is_not_overwritten(context: SharingContext, recursive: bool, permissions: set[Permission]) -> None:
     await context.policies.add_grant(AccessGrant(node_id=context.node.id, principal=principal("team"), permissions=permissions, recursive=recursive))
-    before = await context.service.inspect(caller(), context.node.id)
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     groups = await context.groups.list_groups()
     with pytest.raises(InvalidSharingPolicy):
         await context.service.share(caller(), context.node.id, command("team", Permission.WRITE))
-    assert await context.service.inspect(caller(), context.node.id) == before
+    assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == before
     assert await context.groups.list_groups() == groups
 
 
@@ -151,12 +158,12 @@ async def test_additive_share_preserves_unrelated_protected_policy_owner_and_con
 @pytest.mark.asyncio
 async def test_share_invalidates_previous_replacement_but_allows_explicit_fresh_replace(context: SharingContext) -> None:
     await context.groups.register_group(RegisterGroup(group_id="team"))
-    before = await context.service.inspect(caller(), context.node.id)
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     await context.service.share(caller(), context.node.id, command("team", Permission.READ))
     with pytest.raises(RevisionConflict):
-        await context.service.replace(caller(), context.node.id, ReplaceNodeGroupPolicy(expected_revision=before.revision, groups=()))
-    current = await context.service.inspect(caller(), context.node.id)
+        await context.service.replace(caller(), context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision=before.revision, grants=group_commands(())))
+    current = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     await context.service.share(caller(), context.node.id, command("team", Permission.READ))
-    assert await context.service.inspect(caller(), context.node.id) == current
-    result = await context.service.replace(caller(), context.node.id, ReplaceNodeGroupPolicy(expected_revision=current.revision, groups=()))
-    assert result.groups == ()
+    assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == current
+    result = await context.service.replace(caller(), context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision=current.revision, grants=group_commands(())))
+    assert group_policies(result) == ()

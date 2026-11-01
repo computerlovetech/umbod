@@ -27,16 +27,18 @@ async def test_observed_tools_publish_safe_schemas(filesystem_mcp: FilesystemMcp
     assert set(descriptors) == {
         "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
         "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_delete_file",
-        "filesystem_read_file", "filesystem_list_sharing_groups", "filesystem_share",
+        "filesystem_read_file", "filesystem_search_sharing_recipients", "filesystem_share",
     }
     schema = descriptors[CREATE].input_schema
     assert set(schema["properties"]) == {"parent_id", "name", "metadata"}
     assert set(schema["required"]) == {"parent_id", "name", "metadata"}
     assert schema["properties"]["parent_id"]["format"] == "uuid"
     for name, tool in descriptors.items():
-        mutation = name.startswith("create_") or name in {"filesystem_upload", "filesystem_delete_file", "filesystem_share"}
+        mutation = name.startswith("create_") or name in {
+            "filesystem_upload", "filesystem_delete_file", "filesystem_share",
+        }
         assert tool.annotations.read_only_hint == (not mutation)
-        assert tool.annotations.idempotent_hint == (not mutation or name == "filesystem_share")
+        assert tool.annotations.idempotent_hint == (not mutation or name in {"filesystem_share"})
     assert "content" not in descriptors[CREATE].output_schema["properties"]
     assert "owner" not in descriptors[CREATE].output_schema["properties"]
 

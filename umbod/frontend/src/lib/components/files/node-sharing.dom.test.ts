@@ -21,7 +21,7 @@ afterEach(async (): Promise<void> => {
   vi.restoreAllMocks();
 });
 
-const view: NodeAccess = { node_id: fileId, revision: 'opaque', groups: [{ group_id: ' Provider Team ', permissions: ['write', 'share'] }], blocked_group_ids: ['blocked'] };
+const view: NodeAccess = { node_id: fileId, revision: 'opaque', grants: [{ recipient: { type: 'group', group_id: ' Provider Team ', label: 'Design' }, permissions: ['write', 'share'] }, { recipient: { type: 'user', user_id: 'person-a', label: 'Hidden person' }, permissions: ['read'] }], blocked_recipients: [{ type: 'group', group_id: 'blocked' }, { type: 'user', user_id: 'protected-person' }] };
 const groups = [{ group_id: ' Provider Team ', label: 'Design', description: 'Design team' }, { group_id: 'second', label: 'Readers', description: 'Project readers' }];
 
 async function setup(id: string = folderId, configure = true): Promise<{ api: InMemoryFilesApi; state: FilesState; signIn: ReturnType<typeof vi.fn> }> {
@@ -113,6 +113,8 @@ describe('Files group sharing UI', (): void => {
     expect(document.querySelector('dialog')?.getAttribute('aria-labelledby')).toBeTruthy();
     expect(document.querySelector('form')?.getAttribute('aria-label')).toBe('Manage group sharing');
     expect(document.querySelector('dialog')?.textContent).toContain('Design team');
+    expect(document.querySelector('dialog')?.textContent).not.toContain('Hidden person');
+    expect(document.querySelector('dialog')?.textContent).not.toContain('protected-person');
     expect(document.querySelector('dialog')?.textContent).not.toContain('Discover makes this item visible');
     expect(document.querySelector('dialog')?.textContent).not.toContain('Other existing access rules');
     expect(document.querySelector('dialog')?.textContent).not.toContain('No editable group access');
@@ -128,7 +130,8 @@ describe('Files group sharing UI', (): void => {
     await tick();
     submit();
     await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
-    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'opaque', { groups: [{ group_id: 'second', permissions: ['discover', 'read', 'delete'] }] });
+    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'opaque', { grants: [{ recipient: { type: 'group', group_id: 'second' }, permissions: ['discover', 'read', 'delete'] }] }, 'group');
+    expect((await api.sharing.inspectAccess(fileId, 'user')).grants).toEqual([view.grants[1]]);
     expect(document.querySelector('h1')).toBe(heading);
     expect(state.node?.id).toBe(folderId);
     expect(document.body.textContent).toContain('Sharing updated for “Notes.txt”');
@@ -175,8 +178,8 @@ describe('Files group sharing UI', (): void => {
     submit();
     await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
     expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'opaque', {
-      groups: [{ group_id: ' Provider Team ', permissions: ['discover', 'read'] }]
-    });
+      grants: [{ recipient: { type: 'group', group_id: ' Provider Team ' }, permissions: ['discover', 'read'] }]
+    }, 'group');
   });
 
   test('Escape dismisses search results without dismissing the sharing dialog', async (): Promise<void> => {

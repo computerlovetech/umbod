@@ -1,0 +1,172 @@
+rules:
+  - id: python.tests.review-patching
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Test design review: is patching needed in this context? Patching may couple the test to
+      implementation details or bypass real behavior. When a focused test needs private patching,
+      investigate a missing dependency-injection seam. Prefer existing public operations and injected
+      or recording fakes when isolation is preserved. Boundary isolation, failure simulation, or
+      framework integration may justify retaining patching. Do not add abstractions merely to
+      eliminate mocks.
+    paths:
+      include:
+        - '**/tests/**'
+        - '**/live_runtime_tests/**'
+        - '**/test_*.py'
+        - '**/*_test.py'
+        - '**/conftest.py'
+    metadata:
+      reviewed-boundaries:
+        - target: fastmcp.server.auth.oidc_proxy.httpx2.get
+          replacement: return_value
+          reason: Isolates upstream OIDC discovery HTTP without replacing Umbod authentication behavior.
+        - target: umbod.rest.metrics.http_server.Server
+          replacements: [FailingServer, CapturingServer, RestartableServer]
+          reason: Deterministic Uvicorn failure, configuration capture, and lifecycle simulation.
+        - target: umbod.rest.metrics.http_server.Config
+          replacement: CapturingConfig
+          reason: Records Uvicorn bind configuration while preserving the real metrics lifecycle wrapper.
+    patterns:
+      - pattern-either:
+          - pattern: unittest.mock.patch(...)
+          - patterns:
+              - pattern: unittest.mock.patch.$METHOD(...)
+              - metavariable-regex:
+                  metavariable: $METHOD
+                  regex: '^(object|dict|multiple)$'
+          - patterns:
+              - pattern-either:
+                  - pattern: mock.patch(...)
+                  - patterns:
+                      - pattern: mock.patch.$METHOD(...)
+                      - metavariable-regex:
+                          metavariable: $METHOD
+                          regex: '^(object|dict|multiple)$'
+              - pattern-either:
+                  - pattern-inside: |
+                      import mock
+                      ...
+                  - pattern-inside: |
+                      from mock import patch
+                      ...
+          - patterns:
+              - pattern-either:
+                  - pattern: $FIXTURE.patch(...)
+                  - patterns:
+                      - pattern: $FIXTURE.patch.$METHOD(...)
+                      - metavariable-regex:
+                          metavariable: $METHOD
+                          regex: '^(object|dict|multiple)$'
+              - metavariable-regex:
+                  metavariable: $FIXTURE
+                  regex: '^(mocker|session_mocker|module_mocker|class_mocker|package_mocker)$'
+      - pattern-not: unittest.mock.patch("fastmcp.server.auth.oidc_proxy.httpx2.get", return_value=$RESPONSE)
+      - pattern-not: unittest.mock.patch("umbod.rest.metrics.http_server.Server", FailingServer)
+      - pattern-not: unittest.mock.patch("umbod.rest.metrics.http_server.Server", CapturingServer)
+      - pattern-not: unittest.mock.patch("umbod.rest.metrics.http_server.Server", RestartableServer)
+      - pattern-not: unittest.mock.patch("umbod.rest.metrics.http_server.Config", CapturingConfig)
+
+  - id: python.tests.review-private-monkeypatch
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Test design review: is private monkeypatching needed in this context? Patching may couple the
+      test to implementation details or bypass real behavior. When a focused test needs private
+      patching, investigate a missing dependency-injection seam. Prefer existing public operations
+      and injected or recording fakes when isolation is preserved. Boundary isolation, failure
+      simulation, or framework integration may justify retaining patching. Do not add abstractions
+      merely to eliminate mocks.
+    paths:
+      include:
+        - '**/tests/**'
+        - '**/live_runtime_tests/**'
+        - '**/test_*.py'
+        - '**/*_test.py'
+        - '**/conftest.py'
+    pattern-either:
+      - patterns:
+          - pattern-either:
+              - pattern: monkeypatch.setattr($OBJECT, $ATTRIBUTE, $VALUE, ...)
+              - pattern: monkeypatch.delattr($OBJECT, $ATTRIBUTE, ...)
+          - metavariable-regex:
+              metavariable: $ATTRIBUTE
+              regex: "^['\"]_(?!_)[A-Za-z0-9_]*['\"]$"
+      - patterns:
+          - pattern-either:
+              - pattern: monkeypatch.setattr($TARGET, $VALUE, ...)
+              - pattern: monkeypatch.delattr($TARGET, ...)
+          - metavariable-regex:
+              metavariable: $TARGET
+              regex: "^['\"][^'\"]+\\._(?!_)[A-Za-z0-9_]*['\"]$"
+
+  - id: python.tests.no-mutable-parameter-defaults
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Mutable parameter defaults share state between test calls and cases. Allocate fresh values
+      per call or require an explicit argument; preserve explicitly supplied empty containers.
+    paths:
+      include:
+        - '**/tests/**'
+        - '**/live_runtime_tests/**'
+        - '**/test_*.py'
+        - '**/*_test.py'
+        - '**/conftest.py'
+    patterns:
+      - pattern: |
+          def $FUNCTION(..., $PARAM=$DEFAULT, ...):
+            ...
+      - metavariable-pattern:
+          metavariable: $DEFAULT
+          pattern-either:
+            - pattern: '[...]'
+            - pattern: '{...}'
+            - pattern: '{$ITEM, ...}'
+            - pattern: dict(...)
+            - pattern: list(...)
+            - pattern: set(...)
+            - pattern: '[$ITEM for $TARGET in $ITERABLE]'
+            - pattern: '{$KEY: $VALUE for $TARGET in $ITERABLE}'
+            - pattern: '{$ITEM for $TARGET in $ITERABLE}'
+
+  - id: python.tests.review-container-truthiness-default
+    languages: [python]
+    severity: WARNING
+    message: >-
+      Test helper review: this fallback treats an explicitly supplied empty container as absent.
+      When empty arguments or an empty schema are valid scenario inputs, default only on None.
+      Retain this expression if empty and missing inputs intentionally have the same meaning.
+    paths:
+      include:
+        - '**/tests/**'
+        - '**/live_runtime_tests/**'
+        - '**/test_*.py'
+        - '**/*_test.py'
+        - '**/conftest.py'
+    patterns:
+      - pattern-either:
+          - pattern-inside: |
+              def $FUNCTION(..., $PARAM: $CONTAINER[...] | None, ...):
+                ...
+          - pattern-inside: |
+              def $FUNCTION(..., $PARAM: None | $CONTAINER[...], ...):
+                ...
+          - pattern-inside: |
+              def $FUNCTION(..., $PARAM: Optional[$CONTAINER[...]], ...):
+                ...
+          - pattern-inside: |
+              def $FUNCTION(..., $PARAM: Union[$CONTAINER[...], None], ...):
+                ...
+          - pattern-inside: |
+              def $FUNCTION(..., $PARAM: Union[None, $CONTAINER[...]], ...):
+                ...
+      - metavariable-regex:
+          metavariable: $CONTAINER
+          regex: '^(dict|list|set|Dict|List|Set|Mapping|Sequence|MutableMapping|MutableSequence|typing\.(Dict|List|Set|Mapping|Sequence|MutableMapping|MutableSequence)|collections\.abc\.(Mapping|Sequence|MutableMapping|MutableSequence))$'
+      - pattern: $PARAM or $FALLBACK
+      - pattern-not: $PARAM or {}
+      - pattern-not: $PARAM or []
+      - pattern-not: $PARAM or dict()
+      - pattern-not: $PARAM or list()
+      - pattern-not: $PARAM or set()

@@ -9,6 +9,7 @@ on:
     branches: [main]
     paths:
       - '.semgrep.yml'
+      - '.semgrep/**'
       - '.semgrepignore'
       - 'codecov.yml'
       - 'umbod/**'

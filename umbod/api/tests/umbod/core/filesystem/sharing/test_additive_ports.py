@@ -1,3 +1,4 @@
+from tests.support.filesystem.sharing_policy import GROUP_SCOPE, group_policies
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -11,7 +12,7 @@ from umbod.core.filesystem.authorization import (
 )
 from umbod.core.filesystem.namespace import initial_root
 from umbod.core.filesystem.sharing import (
-    FilesystemSharing, GroupPolicy, InvalidSharingPolicy, ShareNodeGroupResult, SharingService,
+    FilesystemSharing, GroupPolicy, GroupSharingTarget, InvalidSharingPolicy, ShareNodeResult, SharingService,
 )
 from umbod.core.filesystem.sharing.ports import SharingSession
 from tests.support.filesystem.group_sharing import (
@@ -20,6 +21,7 @@ from tests.support.filesystem.group_sharing import (
 from tests.umbod.core.filesystem.test_authorized_content import caller
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
 from .test_ports import transactions
+from .test_additive_policy import command
 
 
 class CountingResolver:
@@ -52,7 +54,7 @@ class CountingTransactions:
         self.transactions += 1
         async with self.ports.transaction() as session:
             yield InMemorySharingSession(
-                namespace=session.namespace, access_control=session.access_control,
+                namespace=session.namespace, access_control=session.access_control, users=session.users,
                 groups=session.groups, grants=self.grants,
             )
 
@@ -63,70 +65,72 @@ async def test_public_share_unions_permissions_and_skips_repeat_and_subset_write
     resolver = CountingResolver()
     service: FilesystemSharing = SharingService(resolver, ports, "issuer")
     node_id = initial_root().id
-    read = GroupPolicy(group_id="team", permissions=frozenset({Permission.READ}))
-    discover = GroupPolicy(group_id="team", permissions=frozenset({Permission.DISCOVER}))
+    read = command("team", Permission.READ)
+    discover = command("team", Permission.DISCOVER)
     first = await service.share(caller(), node_id, read)
-    assert first == ShareNodeGroupResult(node_id=node_id, group_id="team", permissions=read.permissions, changed=True)
+    assert first == ShareNodeResult(node_id=node_id, recipient=read.recipient, permissions=read.permissions, changed=True)
     added = await service.share(caller(), node_id, discover)
     assert added.permissions == read.permissions | discover.permissions
     assert added.changed
-    for command in (discover, read, GroupPolicy(group_id="team", permissions=added.permissions)):
-        result = await service.share(caller(), node_id, command)
+    for policy in (discover, read, command("team", *added.permissions)):
+        result = await service.share(caller(), node_id, policy)
         assert result.permissions == added.permissions
         assert not result.changed
     assert ports.grants.writes == 2
     assert ports.transactions == 5
     assert resolver.resolutions == 5
-    assert (await service.inspect(caller(), node_id)).groups == (GroupPolicy(group_id="team", permissions=added.permissions),)
+    assert group_policies(await service.inspect(caller(), node_id, GROUP_SCOPE)) == (GroupPolicy(group_id="team", permissions=added.permissions),)
 
 
 @pytest.mark.asyncio
 async def test_repeat_still_checks_current_authority_and_registration() -> None:
     ports = CountingTransactions(transactions())
     service: FilesystemSharing = SharingService(VerifiedIdentityResolver(), ports, "issuer")
-    command = GroupPolicy(group_id="team", permissions=frozenset({Permission.READ}))
-    await service.share(caller(), initial_root().id, command)
+    policy = command("team", Permission.READ)
+    await service.share(caller(), initial_root().id, policy)
     with pytest.raises(PermissionDenied):
-        await service.share(snapshot("admin", "issuer", ("admins",)), initial_root().id, command)
+        await service.share(snapshot("admin", "issuer", ("admins",)), initial_root().id, policy)
     ports.ports.groups.identifiers = frozenset()
     with pytest.raises(InvalidSharingPolicy):
-        await service.share(caller(), initial_root().id, command)
+        await service.share(caller(), initial_root().id, policy)
     assert ports.grants.writes == 1
 
 
 @pytest.mark.parametrize("overrides", [
-    {"node_id": None}, {"group_id": ""}, {"group_id": " \t"}, {"group_id": 123},
+    {"node_id": None}, {"recipient": {"type": "group", "group_id": ""}},
+    {"recipient": {"type": "group", "group_id": " \t"}},
+    {"recipient": {"type": "group", "group_id": 123}},
     {"permissions": []}, {"permissions": ["invalid"]}, {"permissions": None},
     {"changed": None}, {"issuer": "foreign"},
 ])
 def test_result_rejects_invalid_fields(overrides: dict[str, object]) -> None:
     payload: dict[str, object] = {
-        "node_id": initial_root().id, "group_id": " Team ",
+        "node_id": initial_root().id, "recipient": {"type": "group", "group_id": " Team "},
         "permissions": [Permission.READ], "changed": True,
     }
     with pytest.raises(ValidationError):
-        ShareNodeGroupResult.model_validate(payload | overrides)
+        ShareNodeResult.model_validate(payload | overrides)
 
 
-@pytest.mark.parametrize("missing", ["node_id", "group_id", "permissions", "changed"])
+@pytest.mark.parametrize("missing", ["node_id", "recipient", "permissions", "changed"])
 def test_result_requires_all_fields(missing: str) -> None:
     payload: dict[str, object] = {
-        "node_id": initial_root().id, "group_id": "team",
+        "node_id": initial_root().id, "recipient": {"type": "group", "group_id": "team"},
         "permissions": [Permission.READ], "changed": True,
     }
     del payload[missing]
     with pytest.raises(ValidationError):
-        ShareNodeGroupResult.model_validate(payload)
+        ShareNodeResult.model_validate(payload)
 
 
 def test_result_is_frozen_preserves_exact_id_and_sorts_json_permissions() -> None:
-    result = ShareNodeGroupResult(
-        node_id=initial_root().id, group_id=" Team ",
+    result = ShareNodeResult(
+        node_id=initial_root().id, recipient=GroupSharingTarget(type="group", group_id=" Team "),
         permissions=frozenset({Permission.WRITE, Permission.DISCOVER, Permission.READ}),
         changed=False,
     )
-    assert result.group_id == " Team "
+    assert result.recipient.group_id == " Team "
     assert result.model_dump(mode="json")["permissions"] == ["discover", "read", "write"]
-    assert ShareNodeGroupResult.model_validate_json(result.model_dump_json()) == result
+    assert ShareNodeResult.model_validate_json(result.model_dump_json()) == result
     with pytest.raises(ValidationError):
         result.changed = True

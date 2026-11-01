@@ -9,7 +9,7 @@ from mcp.client.auth import AuthorizationCodeResult
 from pydantic import BaseModel
 
 from umbod.core.connectors.downstream_mcp.models import EndpointUrl
-from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage import (
     ConnectorOAuthStorage,
 )
 

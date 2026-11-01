@@ -2,10 +2,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage import AuthorizationDocument
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage_adapters import (
+    DetachedConnectorOAuthStorage,
+)
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
-    AuthorizationDocument,
     ConnectorOAuth,
-    ConnectorOAuthStorage,
     require_sign_in,
 )
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import (
@@ -18,8 +20,8 @@ from umbod.core.invocation.diagnostics import (
 
 
 def test_oauth_options_preserve_background_sign_in_policy() -> None:
-    storage = ConnectorOAuthStorage(
-        AuthorizationDocument(endpoint_url="https://tools.example/mcp"), "", None
+    storage = DetachedConnectorOAuthStorage(
+        AuthorizationDocument(endpoint_url="https://tools.example/mcp"), ""
     )
     oauth = ConnectorOAuth(storage)
 
@@ -29,8 +31,8 @@ def test_oauth_options_preserve_background_sign_in_policy() -> None:
 
 
 def test_oauth_options_preserve_interactive_handlers() -> None:
-    storage = ConnectorOAuthStorage(
-        AuthorizationDocument(endpoint_url="https://tools.example/mcp"), "", None
+    storage = DetachedConnectorOAuthStorage(
+        AuthorizationDocument(endpoint_url="https://tools.example/mcp"), ""
     )
     redirect_handler = AsyncMock()
     callback_handler = AsyncMock()
@@ -47,8 +49,8 @@ def test_oauth_options_preserve_interactive_handlers() -> None:
 
 
 def test_oauth_rejects_unknown_options() -> None:
-    storage = ConnectorOAuthStorage(
-        AuthorizationDocument(endpoint_url="https://tools.example/mcp"), "", None
+    storage = DetachedConnectorOAuthStorage(
+        AuthorizationDocument(endpoint_url="https://tools.example/mcp"), ""
     )
 
     with pytest.raises(TypeError):

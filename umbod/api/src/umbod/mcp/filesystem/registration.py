@@ -14,7 +14,7 @@ from .models import FilesystemChildren, FilesystemNodeMetadata, FilesystemNodeSu
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
 from .read import FilesystemReadFileTool
 from .sharing import enrich_nodes
-from .sharing_tools import FilesystemListSharingGroupsTool, FilesystemShareTool
+from .sharing_tools import FilesystemSearchSharingRecipientsTool, FilesystemShareTool
 from .upload import FilesystemUploadTool
 
 
@@ -43,7 +43,9 @@ def register_filesystem_tools(
         operation_names=frozenset(),
     )
 
-    for tool in (FilesystemListSharingGroupsTool(callers, services), FilesystemShareTool(callers, services)):
+    for tool in (
+        FilesystemSearchSharingRecipientsTool(callers, services), FilesystemShareTool(callers, services),
+    ):
         registrar.register_tool(tool, result_is_error=tool_result_is_error, operation_names=frozenset())
 
     async def get_filesystem_root() -> FilesystemNodeSummary:
@@ -87,7 +89,7 @@ def register_filesystem_tools(
     ):
         tool = registrar.register(
             function, name=function.__name__, description=(
-                description + " Includes manageable direct sharing, not a full effective-access audit."
+                description + " Includes manageable direct group sharing only, not a full effective-access audit."
                 if readonly else description
             ), auth=root_filesystem_tool_access
         )

@@ -1,7 +1,7 @@
 ---
 type: Software Module
 title: "MCP filesystem"
-description: "MCP adapters for authorized filesystem browsing, content reads, creation, uploads, file deletion, and direct group sharing."
+description: "MCP adapters for authorized filesystem browsing, content reads, creation, uploads, file deletion, and direct group/user sharing."
 ---
 
 # Files
@@ -22,12 +22,14 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 - [registration.py](./registration.py) — Filesystem tool registration, retaining existing browsing and creation tools.
 - [rendering.py](./rendering.py) — Readable filesystem listings with explicit visibility and expansion limits.
 - [sharing.py](./sharing.py) — Invocation-local batch enrichment of returned nodes through core sharing; no policy decisions or discovery queries.
-- [sharing_models.py](./sharing_models.py) — Strict node-specific eligibility and additive group-sharing commands using core policy validation.
-- [sharing_tools.py](./sharing_tools.py) — Authorized registered-group eligibility and idempotent additive direct-node sharing.
+- [sharing_models.py](./sharing_models.py) — Strict unified recipient-search scopes and sharing inputs with legacy group mutation compatibility.
+- [sharing_tools.py](./sharing_tools.py) — Node-authorized group/user recipient search and idempotent additive direct-node sharing.
 - [upload.py](./upload.py) — One-shot private uploads capped at 10,485,760 decoded bytes or the lower server limit; no chunking or idempotent retries.
 - [upload_models.py](./upload_models.py) — Bounded UTF-8 and canonical padded base64 inputs; results never echo content.
 
 # Related links
+
+- [ADR-015](../../../../../project/architecture-records/ADR-015-direct-node-user-sharing.md) — Recipient-based MCP sharing and mixed direct-grant summaries.
 
 - [ADR-013](../../../../../project/architecture-records/ADR-013-direct-node-group-sharing.md) — Manageable direct grants, restricted field omission, and the limits of sharing summaries.
 - [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Filesystem ownership and storage boundary.

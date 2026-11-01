@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 from umbod.core.groups.models import Group
+from umbod.core.identity_directory.ports import ObservedUserDirectory
+from tests.support.identity_directory import InMemoryIdentityDirectory
 from umbod.core.filesystem import (
     AccessControlDriver, AccessGrant, ContentRef, MissingNode, NamespaceDriver,
     Node, NodeId, NodeKind, NodeMetadata, Ownership, OwnershipNotFound, Principal,
@@ -93,6 +95,7 @@ class SharingGroups:
 
 @dataclass(frozen=True)
 class InMemorySharingSession:
+    users: ObservedUserDirectory
     namespace: NamespaceDriver
     access_control: AccessControlDriver
     groups: RegisteredGroupReader
@@ -103,6 +106,7 @@ class InMemorySharingTransactions:
     def __init__(
         self, namespace: SharingNamespace, policies: SharingPolicies, groups: SharingGroups,
     ) -> None:
+        self.users = InMemoryIdentityDirectory()
         self.namespace = namespace
         self.policies = policies
         self.groups = groups
@@ -115,7 +119,7 @@ class InMemorySharingTransactions:
             try:
                 yield InMemorySharingSession(
                     namespace=self.namespace, access_control=self.policies,
-                    groups=self.groups, grants=self.policies,
+                    groups=self.groups, grants=self.policies, users=self.users,
                 )
             except BaseException:
                 self.policies.grants = previous

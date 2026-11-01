@@ -21,8 +21,8 @@ export interface UploadTransferPort {
 }
 
 export interface NodeSharingApi {
-  inspectAccess(id: string, signal?: AbortSignal): Promise<import('./domain/sharing').NodeAccess>;
-  replaceAccess(id: string, revision: string, body: import('./domain/sharing').ReplaceAccess): Promise<import('./domain/sharing').NodeAccess>;
+  inspectAccess(id: string, recipientType?: import('./domain/sharing').SharingRecipientType, signal?: AbortSignal): Promise<import('./domain/sharing').NodeAccess>;
+  replaceAccess(id: string, revision: string, body: import('./domain/sharing').ReplaceAccess, recipientType: import('./domain/sharing').SharingRecipientType): Promise<import('./domain/sharing').NodeAccess>;
   listEligibleSharingGroups(id: string, signal?: AbortSignal): Promise<import('./domain/sharing').SharingGroup[]>;
 }
 

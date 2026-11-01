@@ -1,5 +1,6 @@
 import json
 from copy import deepcopy
+from datetime import datetime, timezone
 from typing import Any
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
@@ -16,6 +17,9 @@ from umbod.core.filesystem.sharing import (
 )
 from umbod.core.groups import RegisterGroupMetadata, UpdateGroupMetadata
 from umbod.core.groups.stores.composition import create_group_management
+from umbod.core.identity_directory.models import IdentityObservation
+from umbod.core.identity_directory.store import DatabaseIdentityDirectory
+from umbod.core.identity_directory.user_models import ScopedUserSearch
 from umbod.infrastructure import create_access_control_driver
 
 from .conftest import FilesystemMcp, caller_snapshot
@@ -153,6 +157,13 @@ async def test_read_sharing_projects_current_exact_recipients_and_protects_other
     groups = create_group_management(database=filesystem_mcp.database)
     await groups.register_group_metadata(RegisterGroupMetadata(group_id=identifier, label="Old", description="hidden"))
     await groups.update_group_metadata(identifier, UpdateGroupMetadata(label=label, description="hidden", expected_revision=1))
+    directory = DatabaseIdentityDirectory(filesystem_mcp.database)
+    await directory.observe(IdentityObservation(
+        issuer="https://issuer", subject="bob", claim="groups", groups=(), name='Bob "Reader"',
+        email="", email_verification="unknown", observed_at=datetime.now(timezone.utc),
+    ))
+    users = await directory.search_user_names(ScopedUserSearch(issuer="https://issuer", query="Bob", limit=50, excluded_subjects=frozenset()))
+    user_id = users.users[0].user_id
     policies = create_access_control_driver(database=filesystem_mcp.database)
     async with Client(filesystem_mcp.server) as client:
         root = await root_id(client)
@@ -176,8 +187,14 @@ async def test_read_sharing_projects_current_exact_recipients_and_protects_other
             node_id=UUID(target_node), principal=Principal(type=PrincipalType.GROUP, issuer="https://issuer", id="recursive"),
             permissions={Permission.READ}, recursive=True,
         ))
+        await policies.add_grant(AccessGrant(
+            node_id=UUID(target_node), principal=Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob"),
+            permissions={Permission.READ}, recursive=False,
+        ))
         tool, arguments = request(variant, target)
         result = await client.call_tool(tool, arguments)
+        descriptor = next(item for item in await client.list_tools() if item.name == tool)
+    validate(result.structured_content, descriptor.output_schema)
     nodes = returned_nodes(variant, result.structured_content)
     node = next(node for node in nodes if node["id"] == target_node)
     expected_grants = [{
@@ -189,11 +206,17 @@ async def test_read_sharing_projects_current_exact_recipients_and_protects_other
             "recipient": {"type": "group", "group_id": "writers", "label": "writers"},
             "permissions": ["discover", "write"],
         })
+    expected_grants.append({
+        "recipient": {"type": "user", "user_id": user_id, "label": 'Bob "Reader"'},
+        "permissions": ["read"],
+    })
     assert node["sharing"] == {"can_share": True, "grants": expected_grants}
     if variant in {"ls", "tree", "stat"}:
         text = result.content[0].text
         assert json.dumps(label) in text
         assert json.dumps(identifier) in text
+        assert json.dumps('Bob "Reader"') in text
+        assert user_id in text
         assert "foreign" not in text
         assert "recursive" not in text
 

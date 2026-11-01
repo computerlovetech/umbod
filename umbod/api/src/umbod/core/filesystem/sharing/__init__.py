@@ -1,14 +1,28 @@
 from ..group_policy import GroupPolicy
 from .errors import InvalidSharingPolicy, SharingPolicyUnavailable
 from .models import (
-    EligibleSharingGroup, EligibleSharingGroups, GroupSharingRecipient, NodeGroupPolicyView,
-    NodeSharingSummaries, NodeSharingSummary, ReplaceNodeGroupPolicy,
-    RestrictedNodeSharingSummary, ShareableNodeSharingSummary, ShareNodeGroupResult, SharingGrantSummary,
+    EligibleSharingGroup, EligibleSharingGroups, GroupSharingRecipient, NodePolicyView,
+    NodeSharingSummaries, NodeSharingSummary, ReplaceNodePolicy,
+    RestrictedNodeSharingSummary, ShareableNodeSharingSummary, ShareNodePolicy, ShareNodeResult,
+    SharingGrantSummary, SharingRecipient, SharingTarget, GroupSharingTarget,
+    UserSharingRecipient, UserSharingTarget, SharingRecipientType, SharingScope,
+    SharingRecipientSearchQuery, SharingRecipientSearchResult,
 )
 from .ports import FilesystemSharing
 from .service import SharingService
 
 __all__ = [
+    "GroupSharingTarget",
+    "UserSharingTarget",
+    "SharingTarget",
+    "SharingRecipientType",
+    "SharingScope",
+    "SharingRecipientSearchQuery",
+    "SharingRecipientSearchResult",
+    "UserSharingRecipient",
+    "SharingRecipient",
+    "ShareNodePolicy",
+    "ShareNodeResult",
     "EligibleSharingGroup",
     "EligibleSharingGroups",
     "FilesystemSharing",
@@ -19,10 +33,9 @@ __all__ = [
     "RestrictedNodeSharingSummary",
     "ShareableNodeSharingSummary",
     "SharingGrantSummary",
-    "ShareNodeGroupResult",
     "InvalidSharingPolicy",
-    "NodeGroupPolicyView",
-    "ReplaceNodeGroupPolicy",
+    "NodePolicyView",
+    "ReplaceNodePolicy",
     "SharingPolicyUnavailable",
     "SharingService",
 ]

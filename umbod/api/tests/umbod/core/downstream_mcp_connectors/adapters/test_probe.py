@@ -1,3 +1,5 @@
+from tests.umbod.core.downstream_mcp_connectors.adapters.credential_fakes import MemoryCredentialStore
+
 from collections.abc import Sequence
 from types import SimpleNamespace
 from typing import cast
@@ -184,7 +186,7 @@ async def test_exception_classification_terminates_for_cyclic_exception_chain() 
 
 @pytest.mark.asyncio
 async def test_probe_transport_extends_httpx_default_read_timeout() -> None:
-    strategy = FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False).create(
+    strategy = FastMCPDownstreamConnectionFactory(True, MemoryCredentialStore(), oauth_enabled=False).create(
         NoAuthConnectionConfiguration(endpoint_url="http://127.0.0.1:8000/mcp")
     )
     transport = strategy.create_client().transport
@@ -234,7 +236,7 @@ async def test_catalog_respects_probe_deadline(deadline: float, succeeds: bool) 
                     if task.done():
                         await task
                     await asyncio.sleep(0.01)
-            probe = FastMCPDownstreamConnection(True, deadline, FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False))
+            probe = FastMCPDownstreamConnection(True, deadline, FastMCPDownstreamConnectionFactory(True, MemoryCredentialStore(), oauth_enabled=False))
             result = await probe.probe(NoAuthConnectionConfiguration(endpoint_url=endpoint))
             if succeeds:
                 assert isinstance(result, ProbeCapabilities)

@@ -1,3 +1,4 @@
+from tests.support.filesystem.sharing_policy import GROUP_SCOPE, group_commands, group_policies
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -9,7 +10,7 @@ import pytest_asyncio
 from umbod.core.filesystem import AccessGrant, Permission, RevisionConflict, StorageFailure
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
 from umbod.core.filesystem.sharing import (
-    FilesystemSharing, InvalidSharingPolicy, ReplaceNodeGroupPolicy, ShareNodeGroupResult,
+    FilesystemSharing, InvalidSharingPolicy, ReplaceNodePolicy, ShareNodeResult, GroupPolicy,
     SharingService,
 )
 from umbod.core.filesystem.sharing.ports import SharingSession, SharingTransactions
@@ -59,7 +60,7 @@ async def test_independent_connections_serialize_additive_requests_without_lost_
     first = asyncio.create_task(gated.share(caller(), context.node.id, first_command))
     await asyncio.wait_for(checked.wait(), 5)
 
-    async def share_second() -> ShareNodeGroupResult:
+    async def share_second() -> ShareNodeResult:
         started.set()
         return await sharing_service(second).share(caller(), context.node.id, second_command)
 
@@ -69,17 +70,20 @@ async def test_independent_connections_serialize_additive_requests_without_lost_
     release.set()
     first_result, second_result = await asyncio.gather(first, later)
     assert first_result.changed
-    view = await context.service.inspect(caller(), context.node.id)
+    view = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     if scenario == "different-groups":
         assert second_result.changed
-        assert view.groups == (second_command, first_command)
+        assert group_policies(view) == tuple(
+            GroupPolicy(group_id=result.recipient.group_id, permissions=result.permissions)
+            for result in (second_command, first_command)
+        )
     elif scenario == "same-group":
         assert second_result.changed
         assert second_result.permissions == frozenset({Permission.READ, Permission.WRITE})
-        assert view.groups == (command("team", Permission.READ, Permission.WRITE),)
+        assert group_policies(view) == (GroupPolicy(group_id="team", permissions=frozenset({Permission.READ, Permission.WRITE})),)
     else:
         assert not second_result.changed
-        assert view.groups == (first_command,)
+        assert group_policies(view) == (GroupPolicy(group_id="team", permissions=first_command.permissions),)
 
 
 @pytest.mark.asyncio
@@ -104,7 +108,7 @@ async def test_additive_share_commits_before_independent_group_deletion(
     assert (await sharing).changed
     with pytest.raises(GroupInUse):
         await deletion
-    assert (await context.service.inspect(caller(), context.node.id)).groups == (command("team", Permission.READ),)
+    assert group_policies(await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)) == (GroupPolicy(group_id="team", permissions=frozenset({Permission.READ})),)
 
 
 @pytest.mark.asyncio
@@ -113,7 +117,7 @@ async def test_independent_group_deletion_before_additive_share_prevents_resurre
 ) -> None:
     context, second = independent_connections
     await context.groups.register_group(RegisterGroup(group_id="team"))
-    before = await context.service.inspect(caller(), context.node.id)
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     checked, release, started = asyncio.Event(), asyncio.Event(), asyncio.Event()
     catalogue = DatabaseGroupCatalogue(context.database, shared_group_usage)
 
@@ -138,7 +142,7 @@ async def test_independent_group_deletion_before_additive_share_prevents_resurre
     with pytest.raises(InvalidSharingPolicy):
         await sharing
     assert await context.groups.list_groups() == ()
-    assert await context.service.inspect(caller(), context.node.id) == before
+    assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == before
 
 
 @pytest.mark.asyncio
@@ -178,14 +182,14 @@ async def test_independent_additive_commit_invalidates_old_replace_and_allows_fr
 ) -> None:
     context, second = independent_connections
     await context.groups.register_group(RegisterGroup(group_id="team"))
-    before = await context.service.inspect(caller(), context.node.id)
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     await sharing_service(second).share(caller(), context.node.id, command("team", Permission.READ))
     with pytest.raises(RevisionConflict):
-        await context.service.replace(caller(), context.node.id, ReplaceNodeGroupPolicy(expected_revision=before.revision, groups=()))
-    current = await context.service.inspect(caller(), context.node.id)
-    result = await sharing_service(second).replace(caller(), context.node.id, ReplaceNodeGroupPolicy(expected_revision=current.revision, groups=()))
-    assert result.groups == ()
-    assert await context.service.inspect(caller(), context.node.id) == result
+        await context.service.replace(caller(), context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision=before.revision, grants=group_commands(())))
+    current = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
+    result = await sharing_service(second).replace(caller(), context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision=current.revision, grants=group_commands(())))
+    assert group_policies(result) == ()
+    assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == result
 
 
 class WriteThenFailGrants:
@@ -207,7 +211,7 @@ class WriteThenFailTransactions:
     async def transaction(self) -> AsyncIterator[SharingSession]:
         async with self.transactions.transaction() as session:
             yield DatabaseSharingSession(
-                namespace=session.namespace, access_control=session.access_control,
+                namespace=session.namespace, access_control=session.access_control, users=session.users,
                 groups=session.groups, grants=WriteThenFailGrants(session, self.failure),
             )
 
@@ -217,11 +221,11 @@ class WriteThenFailTransactions:
 async def test_additive_write_error_or_cancellation_restores_previous_policy(context: SharingContext, cancelled: bool) -> None:
     await context.groups.register_group(RegisterGroup(group_id="team"))
     await context.service.share(caller(), context.node.id, command("team", Permission.READ))
-    before = await context.service.inspect(caller(), context.node.id)
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     groups = await context.groups.list_groups()
     failure = asyncio.CancelledError() if cancelled else RuntimeError("private storage failure")
     service: FilesystemSharing = SharingService(VerifiedIdentityResolver(), WriteThenFailTransactions(DatabaseSharingTransactions(context.database), failure), "issuer")
     with pytest.raises(asyncio.CancelledError if cancelled else StorageFailure):
         await service.share(caller(), context.node.id, command("team", Permission.WRITE))
-    assert await context.service.inspect(caller(), context.node.id) == before
+    assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == before
     assert await context.groups.list_groups() == groups

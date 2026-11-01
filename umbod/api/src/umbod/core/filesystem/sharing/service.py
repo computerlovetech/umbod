@@ -1,64 +1,27 @@
-import hashlib
-import json
+from pydantic import ValidationError
 
 from umbod.core.callers import CallerSnapshot
+from umbod.core.identity_directory.user_models import ObservedUserProfile, UserSearchQuery, normalized_name
+from umbod.core.identity_directory.users import (
+    ObservedUserNotFound, ObservedUserService, UserSearchDenied,
+)
 
 from ..authorization import (
-    FilesystemIdentityResolver, PermissionDenied, ResolvedIdentity,
+    FilesystemIdentityResolver, ObservedUserPrincipalResolver, PermissionDenied, ResolvedIdentity,
     UnresolvedIdentity, allows_resolved,
 )
 from ..errors import RevisionConflict
-from ..group_policy import GroupPolicy, canonical_grants, editable_grant
 from ..models import AccessGrant, NodeId, Permission, Principal, PrincipalType
 from .errors import InvalidSharingPolicy, SharingPolicyUnavailable
 from .models import (
-    EligibleSharingGroup, EligibleSharingGroups, NodeGroupPolicyView, NodePolicyState,
-    GroupSharingRecipient, NodeSharingSummaries, NodeSharingSummary, ReplaceNodeGroupPolicy,
-    RestrictedNodeSharingSummary, ShareableNodeSharingSummary, ShareNodeGroupResult, SharingGrantSummary,
+    EligibleSharingGroup, EligibleSharingGroups, NodePolicyView, NodePolicyState,
+    NodeSharingSummaries, NodeSharingSummary, ReplaceNodePolicy,
+    RestrictedNodeSharingSummary, ShareableNodeSharingSummary, ShareNodePolicy, ShareNodeResult,
+    GroupSharingTarget, GroupSharingRecipient, UserSharingRecipient, SharingRecipient,
+    SharingTarget, SharingScope, SharingRecipientSearchQuery, SharingRecipientSearchResult,
 )
 from .ports import SharingSession, SharingTransactions
-
-
-def managed_grant(grant: AccessGrant, issuer: str, registered: frozenset[str]) -> bool:
-    return editable_grant(grant, issuer) and grant.principal.id in registered
-
-
-def policy_view(state: NodePolicyState, issuer: str) -> NodeGroupPolicyView:
-    eligible = frozenset(
-        grant.principal.id for grant in state.grants
-        if managed_grant(grant, issuer, state.registered_group_ids)
-    )
-    blocked = {
-        grant.principal.id for grant in state.grants
-        if grant.principal.type == PrincipalType.GROUP
-        and grant.principal.issuer == issuer
-        and grant.principal.id.strip()
-        and not managed_grant(grant, issuer, state.registered_group_ids)
-    }
-    payload = {
-        "node": state.node.model_dump(mode="json"),
-        "ownership": state.ownership.model_dump(mode="json"),
-        "grants": canonical_grants(state.grants),
-        "managed_issuer": issuer,
-        "editable_group_ids": sorted(eligible),
-    }
-    revision = hashlib.sha256(
-        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    ).hexdigest()
-    return NodeGroupPolicyView(
-        node_id=state.node.id,
-        revision=revision,
-        groups=tuple(sorted(
-            (
-                GroupPolicy(group_id=grant.principal.id, permissions=frozenset(grant.permissions))
-                for grant in state.grants
-                if managed_grant(grant, issuer, state.registered_group_ids)
-                and grant.principal.id not in blocked
-            ),
-            key=lambda group: group.group_id,
-        )),
-        blocked_group_ids=tuple(sorted(blocked)),
-    )
+from .projection import PolicyProjection, manageable_direct_grant, project_policy
 
 
 class SharingService:
@@ -118,109 +81,216 @@ class SharingService:
                 group.group_id: group
                 for group in await session.groups.registered_groups()
             } if authorized else {}
-            summaries: list[NodeSharingSummary] = []
-            for node_id in unique_ids:
-                if node_id not in authorized:
-                    summaries.append(RestrictedNodeSharingSummary(node_id=node_id, can_share=False))
-                    continue
-                state = NodePolicyState(
+            states = {
+                node_id: NodePolicyState(
                     node=await session.namespace.get_node(node_id),
                     ownership=await session.access_control.get_owner(node_id),
                     grants=tuple(await session.access_control.list_grants(node_id)),
                     registered_group_ids=frozenset(groups),
                 )
-                view = policy_view(state, self._issuer)
+                for node_id in unique_ids if node_id in authorized
+            }
+            profiles = await self._profiles(session, snapshot, tuple(states.values()), False)
+            summaries: list[NodeSharingSummary] = []
+            for node_id in unique_ids:
+                if node_id not in authorized:
+                    summaries.append(RestrictedNodeSharingSummary(node_id=node_id, can_share=False))
+                    continue
+                state = states[node_id]
+                projection = project_policy(state, self._issuer, tuple(groups.values()), profiles)
                 summaries.append(ShareableNodeSharingSummary(
-                    node_id=node_id, can_share=True,
-                    grants=tuple(
-                        SharingGrantSummary(
-                            recipient=GroupSharingRecipient(
-                                type="group", group_id=grant.group_id,
-                                label=groups[grant.group_id].label,
-                            ),
-                            permissions=grant.permissions,
-                        )
-                        for grant in view.groups
-                    ),
+                    node_id=node_id, can_share=True, grants=projection.grants,
                 ))
             return NodeSharingSummaries(nodes=tuple(summaries))
+
+    async def _profiles(
+        self, session: SharingSession, snapshot: CallerSnapshot,
+        states: tuple[NodePolicyState, ...], require_authority: bool,
+    ) -> tuple[ObservedUserProfile, ...]:
+        subjects = frozenset(
+            grant.principal.id for state in states for grant in state.grants
+            if grant.principal.type == PrincipalType.USER
+            and grant.principal.issuer == self._issuer and grant.principal.id.strip()
+        )
+        if not subjects and not require_authority:
+            return ()
+        try:
+            return await ObservedUserService(session.users, self._issuer).profiles(
+                snapshot.caller, subjects,
+            )
+        except UserSearchDenied:
+            if require_authority:
+                raise PermissionDenied() from None
+            return ()
+
+    async def _projection(
+        self, session: SharingSession, snapshot: CallerSnapshot,
+        state: NodePolicyState, require_user_authority: bool,
+    ) -> PolicyProjection:
+        profiles = await self._profiles(session, snapshot, (state,), require_user_authority)
+        groups = await session.groups.registered_groups()
+        return project_policy(state, self._issuer, groups, profiles)
 
     async def eligible_groups(self, snapshot: CallerSnapshot, node_id: NodeId) -> EligibleSharingGroups:
         identity = await self._identity(snapshot)
         async with self._transactions.transaction() as session:
-            view = policy_view(await self._observe(session, identity, node_id), self._issuer)
-            groups = await session.groups.registered_groups()
-            return EligibleSharingGroups(groups=tuple(
-                EligibleSharingGroup(
-                    group_id=group.group_id, label=group.label, description=group.description,
-                )
-                for group in sorted(groups, key=lambda group: group.group_id)
-                if group.group_id.strip() and group.group_id not in view.blocked_group_ids
-            ))
+            state = await self._observe(session, identity, node_id)
+            return await self._eligible_groups(session, state)
 
-    async def inspect(self, snapshot: CallerSnapshot, node_id: NodeId) -> NodeGroupPolicyView:
-        identity = await self._identity(snapshot)
-        async with self._transactions.transaction() as session:
-            return policy_view(await self._observe(session, identity, node_id), self._issuer)
+    async def _eligible_groups(
+        self, session: SharingSession, state: NodePolicyState,
+    ) -> EligibleSharingGroups:
+        groups = await session.groups.registered_groups()
+        projection = project_policy(state, self._issuer, groups, ())
+        blocked = {
+            target.group_id for target in projection.blocked
+            if isinstance(target, GroupSharingTarget)
+        }
+        return EligibleSharingGroups(groups=tuple(
+            EligibleSharingGroup(
+                group_id=group.group_id, label=group.label, description=group.description,
+            )
+            for group in sorted(groups, key=lambda group: group.group_id)
+            if group.group_id.strip() and group.group_id not in blocked
+        ))
 
-    async def share(
-        self, snapshot: CallerSnapshot, node_id: NodeId, command: GroupPolicy,
-    ) -> ShareNodeGroupResult:
+    async def search_recipients(
+        self, snapshot: CallerSnapshot, node_id: NodeId, query: SharingRecipientSearchQuery,
+    ) -> SharingRecipientSearchResult:
         identity = await self._identity(snapshot)
         async with self._transactions.transaction() as session:
             state = await self._observe(session, identity, node_id)
-            view = policy_view(state, self._issuer)
-            if (
-                command.group_id not in state.registered_group_ids
-                or command.group_id in view.blocked_group_ids
-            ):
-                raise InvalidSharingPolicy()
-            current = frozenset(
-                permission for group in view.groups if group.group_id == command.group_id
-                for permission in group.permissions
+            recipients: list[SharingRecipient] = []
+            has_more = False
+            if "user" in query.scope.recipient_types:
+                excluded_subjects = frozenset(
+                    grant.principal.id for grant in state.grants
+                    if grant.principal.type == PrincipalType.USER
+                    and grant.principal.issuer == self._issuer and grant.principal.id.strip()
+                    and not manageable_direct_grant(grant)
+                )
+                try:
+                    users = await ObservedUserService(session.users, self._issuer).search(
+                        snapshot.caller, UserSearchQuery(
+                            query=query.query, limit=50, excluded_subjects=excluded_subjects,
+                        ),
+                    )
+                except UserSearchDenied:
+                    raise PermissionDenied() from None
+                recipients.extend(
+                    UserSharingRecipient(type="user", user_id=user.user_id, label=user.name)
+                    for user in users.users
+                )
+                has_more = users.has_more
+            if "group" in query.scope.recipient_types:
+                groups = await self._eligible_groups(session, state)
+                text = normalized_name(query.query)
+                recipients.extend(
+                    GroupSharingRecipient(type="group", group_id=group.group_id, label=group.label)
+                    for group in groups.groups
+                    if text in normalized_name(group.group_id) or text in normalized_name(group.label)
+                )
+            recipients.sort(key=self._recipient_order)
+            return SharingRecipientSearchResult(
+                recipients=tuple(recipients[:50]), has_more=has_more or len(recipients) > 50,
             )
+
+    @staticmethod
+    def _recipient_order(recipient: SharingRecipient) -> tuple[str, str, str]:
+        identifier = recipient.group_id if isinstance(recipient, GroupSharingRecipient) else recipient.user_id
+        return recipient.type, normalized_name(recipient.label), identifier
+
+    async def inspect(
+        self, snapshot: CallerSnapshot, node_id: NodeId, scope: SharingScope,
+    ) -> NodePolicyView:
+        identity = await self._identity(snapshot)
+        async with self._transactions.transaction() as session:
+            state = await self._observe(session, identity, node_id)
+            projection = await self._projection(session, snapshot, state, False)
+            return projection.view(state, scope)
+
+    def _group_principal(
+        self, state: NodePolicyState, target: GroupSharingTarget,
+    ) -> Principal:
+        principal = Principal(type=PrincipalType.GROUP, issuer=self._issuer, id=target.group_id)
+        if target.group_id not in state.registered_group_ids:
+            raise InvalidSharingPolicy()
+        return principal
+
+    async def _principal(
+        self, session: SharingSession, snapshot: CallerSnapshot,
+        state: NodePolicyState, target: SharingTarget,
+    ) -> Principal:
+        if isinstance(target, GroupSharingTarget):
+            return self._group_principal(state, target)
+        return await self._user_principal(session, snapshot, target.user_id)
+
+    async def share(
+        self, snapshot: CallerSnapshot, node_id: NodeId, command: ShareNodePolicy,
+    ) -> ShareNodeResult:
+        identity = await self._identity(snapshot)
+        async with self._transactions.transaction() as session:
+            state = await self._observe(session, identity, node_id)
+            principal = await self._principal(session, snapshot, state, command.recipient)
+            grants = tuple(grant for grant in state.grants if grant.principal == principal)
+            if any(not manageable_direct_grant(grant) for grant in grants):
+                raise InvalidSharingPolicy()
+            current = frozenset(permission for grant in grants for permission in grant.permissions)
             permissions = current | command.permissions
             changed = permissions != current
             if changed:
                 await session.grants.upsert(AccessGrant(
-                    node_id=node_id,
-                    principal=Principal(
-                        type=PrincipalType.GROUP, issuer=self._issuer, id=command.group_id,
-                    ),
+                    node_id=node_id, principal=principal,
                     permissions=set(permissions), recursive=False,
                 ))
-            return ShareNodeGroupResult(
-                node_id=node_id, group_id=command.group_id,
+            return ShareNodeResult(
+                node_id=node_id, recipient=command.recipient,
                 permissions=permissions, changed=changed,
             )
 
+    async def _user_principal(
+        self, session: SharingSession, snapshot: CallerSnapshot, user_id: str,
+    ) -> Principal:
+        users = ObservedUserService(session.users, self._issuer)
+        try:
+            return await ObservedUserPrincipalResolver(users).resolve(snapshot.caller, user_id)
+        except UserSearchDenied:
+            raise PermissionDenied() from None
+        except (ObservedUserNotFound, ValidationError):
+            raise InvalidSharingPolicy() from None
+
     async def replace(
-        self, snapshot: CallerSnapshot, node_id: NodeId, command: ReplaceNodeGroupPolicy,
-    ) -> NodeGroupPolicyView:
+        self, snapshot: CallerSnapshot, node_id: NodeId, command: ReplaceNodePolicy,
+    ) -> NodePolicyView:
         identity = await self._identity(snapshot)
         async with self._transactions.transaction() as session:
             state = await self._observe(session, identity, node_id)
-            view = policy_view(state, self._issuer)
-            if command.expected_revision != view.revision:
+            projection = await self._projection(
+                session, snapshot, state, command.recipient_type == "user",
+            )
+            if command.expected_revision != projection.revision:
                 raise RevisionConflict()
-            recipients = {group.group_id for group in command.groups}
-            if (
-                not recipients.issubset(state.registered_group_ids)
-                or recipients.intersection(view.blocked_group_ids)
-            ):
-                raise InvalidSharingPolicy()
-            for grant in state.grants:
-                if (
-                    managed_grant(grant, self._issuer, state.registered_group_ids)
-                    and grant.principal.id not in view.blocked_group_ids
+            resolved: list[AccessGrant] = []
+            for requested in command.grants:
+                principal = await self._principal(session, snapshot, state, requested.recipient)
+                if any(
+                    grant.principal == principal and principal not in projection.editable_principals
+                    for grant in state.grants
                 ):
-                    await session.access_control.remove_grant(node_id, grant.principal)
-            for group in command.groups:
-                await session.grants.upsert(AccessGrant(
-                    node_id=node_id,
-                    principal=Principal(
-                        type=PrincipalType.GROUP, issuer=self._issuer, id=group.group_id,
-                    ),
-                    permissions=set(group.permissions), recursive=False,
+                    raise InvalidSharingPolicy()
+                resolved.append(AccessGrant(
+                    node_id=node_id, principal=principal,
+                    permissions=set(requested.permissions), recursive=False,
                 ))
-            return policy_view(await self._state(session, node_id), self._issuer)
+            for principal in projection.editable_principals:
+                if principal.type.value == command.recipient_type:
+                    await session.access_control.remove_grant(node_id, principal)
+            for grant in resolved:
+                await session.grants.upsert(grant)
+            updated = await self._state(session, node_id)
+            authoritative = await self._projection(
+                session, snapshot, updated, command.recipient_type == "user",
+            )
+            return authoritative.view(
+                updated, SharingScope(recipient_types=frozenset({command.recipient_type})),
+            )

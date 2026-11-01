@@ -1,3 +1,4 @@
+from tests.support.filesystem.sharing_policy import GROUP_SCOPE, group_commands, group_policies
 from uuid import uuid4
 
 import pytest
@@ -5,7 +6,7 @@ import pytest
 from umbod.core.filesystem import AccessGrant, Ownership, Permission, Principal, PrincipalType
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
 from umbod.core.filesystem.namespace import initial_root
-from umbod.core.filesystem.sharing import GroupPolicy, ReplaceNodeGroupPolicy, SharingService
+from umbod.core.filesystem.sharing import GroupPolicy, ReplaceNodePolicy, SharingService
 from tests.support.filesystem.group_sharing import (
     InMemorySharingTransactions, SharingGroups, SharingNamespace, SharingPolicies,
 )
@@ -28,7 +29,7 @@ async def test_denied_or_missing_nodes_never_read_recipient_catalogue() -> None:
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
     for node_id in (initial_root().id, uuid4()):
         with pytest.raises(PermissionDenied):
-            await service.replace(snapshot("admin", "issuer", ("admins",)), node_id, ReplaceNodeGroupPolicy(expected_revision="unknown", groups=()))
+            await service.replace(snapshot("admin", "issuer", ("admins",)), node_id, ReplaceNodePolicy(recipient_type="group", expected_revision="unknown", grants=group_commands(())))
         with pytest.raises(PermissionDenied):
             await service.eligible_groups(snapshot("admin", "issuer", ("admins",)), node_id)
     assert ports.groups.reads == 0
@@ -39,12 +40,12 @@ async def test_port_fake_replacement_returns_authoritative_policy() -> None:
     ports = transactions()
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
     root = initial_root()
-    before = await service.inspect(caller(), root.id)
+    before = await service.inspect(caller(), root.id, GROUP_SCOPE)
     policy = GroupPolicy(group_id="team", permissions=frozenset({Permission.READ}))
-    result = await service.replace(caller(), root.id, ReplaceNodeGroupPolicy(expected_revision=before.revision, groups=(policy,)))
-    assert result.groups == (policy,)
+    result = await service.replace(caller(), root.id, ReplaceNodePolicy(recipient_type="group", expected_revision=before.revision, grants=group_commands((policy,))))
+    assert group_policies(result) == (policy,)
     assert result.revision != before.revision
-    assert await service.inspect(caller(), root.id) == result
+    assert await service.inspect(caller(), root.id, GROUP_SCOPE) == result
     assert tuple(group.group_id for group in (await service.eligible_groups(caller(), root.id)).groups) == ("team",)
 
 
@@ -59,9 +60,9 @@ async def test_grant_order_does_not_change_canonical_revision() -> None:
     )
     for grant in grants:
         await ports.policies.upsert(grant)
-    before = await service.inspect(caller(), root.id)
+    before = await service.inspect(caller(), root.id, GROUP_SCOPE)
     for grant in grants:
         await ports.policies.remove_grant(root.id, grant.principal)
     for grant in reversed(grants):
         await ports.policies.upsert(grant)
-    assert await service.inspect(caller(), root.id) == before
+    assert await service.inspect(caller(), root.id, GROUP_SCOPE) == before

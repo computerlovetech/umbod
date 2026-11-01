@@ -1,14 +1,14 @@
 import re
-from typing import Annotated, Self
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from umbod.core.callers import CallerSnapshot
-from umbod.core.filesystem.group_policy import GroupPolicy
 from umbod.core.filesystem.sharing import (
-    EligibleSharingGroups, FilesystemSharing, NodeGroupPolicyView, ReplaceNodeGroupPolicy,
+    EligibleSharingGroups, FilesystemSharing, NodePolicyView, ReplaceNodePolicy,
+    ShareNodePolicy, SharingRecipientType, SharingScope,
 )
 
 from .deps import get_filesystem_caller, get_filesystem_sharing
@@ -17,18 +17,36 @@ from .errors import filesystem_errors
 router = APIRouter()
 Caller = Annotated[CallerSnapshot, Depends(get_filesystem_caller)]
 Sharing = Annotated[FilesystemSharing, Depends(get_filesystem_sharing)]
+RECIPIENT_TYPE = TypeAdapter(SharingRecipientType)
+RECIPIENT_QUERY = {
+    "name": "recipient_type", "in": "query",
+    "schema": {"type": "string", "enum": ["group", "user"]},
+}
 
 
-class ReplaceNodeGroupsRequest(BaseModel):
+class ReplaceNodeAccessRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    groups: tuple[GroupPolicy, ...]
+    grants: tuple[ShareNodePolicy, ...]
 
-    @model_validator(mode="after")
-    def unique_groups(self) -> Self:
-        if len({group.group_id for group in self.groups}) != len(self.groups):
-            raise ValueError("Policy keys must be unique")
-        return self
+
+def required_recipient_type(request: Request) -> SharingRecipientType:
+    values = request.query_params.getlist("recipient_type")
+    if len(values) == 1:
+        try:
+            return RECIPIENT_TYPE.validate_python(values[0])
+        except ValidationError:
+            pass
+    raise HTTPException(422, detail=[{
+        "loc": ["query", "recipient_type"], "type": "value_error",
+        "msg": "Expected exactly one recipient_type: group or user.",
+    }])
+
+
+def sharing_scope(request: Request) -> SharingScope:
+    if "recipient_type" not in request.query_params:
+        return SharingScope(recipient_types=frozenset(("group", "user")))
+    return SharingScope(recipient_types=frozenset((required_recipient_type(request),)))
 
 
 def expected_sharing_revision(request: Request) -> str:
@@ -57,22 +75,32 @@ async def eligible_groups(
         return await sharing.eligible_groups(caller, node_id)
 
 
-@router.get("/nodes/{node_id}/access", response_model=NodeGroupPolicyView)
+@router.get(
+    "/nodes/{node_id}/access", response_model=NodePolicyView,
+    openapi_extra={"parameters": [{
+        **RECIPIENT_QUERY, "required": False,
+        "description": "Filter the access view by recipient type; omitted returns both types.",
+    }]},
+)
 async def inspect_access(
     node_id: UUID, caller: Caller, sharing: Sharing, response: Response,
-) -> NodeGroupPolicyView:
+    scope: Annotated[SharingScope, Depends(sharing_scope)],
+) -> NodePolicyView:
     with filesystem_errors():
-        view = await sharing.inspect(caller, node_id)
+        view = await sharing.inspect(caller, node_id, scope)
     response.headers["ETag"] = f'"{view.revision}"'
     return view
 
 
 @router.put(
-    "/nodes/{node_id}/access", response_model=NodeGroupPolicyView,
+    "/nodes/{node_id}/access", response_model=NodePolicyView,
     openapi_extra={"parameters": [{
+        **RECIPIENT_QUERY, "required": True,
+        "description": "Replace only this recipient type; preserve all other and protected grants.",
+    }, {
         "name": "If-Match", "in": "header", "required": True,
         "schema": {"type": "string"},
-        "description": "One strong quoted opaque sharing revision, not a node content revision.",
+        "description": "One strong quoted opaque whole-policy revision, not a node content revision.",
     }]},
     responses={
         403: {"description": "Missing, undiscoverable or unauthorized node."},
@@ -81,12 +109,20 @@ async def inspect_access(
     },
 )
 async def replace_access(
-    node_id: UUID, body: ReplaceNodeGroupsRequest, caller: Caller, sharing: Sharing,
+    node_id: UUID, body: ReplaceNodeAccessRequest, caller: Caller, sharing: Sharing,
     response: Response, revision: Annotated[str, Depends(expected_sharing_revision)],
-) -> NodeGroupPolicyView:
+    recipient_type: Annotated[SharingRecipientType, Depends(required_recipient_type)],
+) -> NodePolicyView:
+    try:
+        command = ReplaceNodePolicy(
+            expected_revision=revision, recipient_type=recipient_type, grants=body.grants,
+        )
+    except ValidationError:
+        raise HTTPException(422, detail=[{
+            "loc": ["body", "grants"], "type": "value_error",
+            "msg": "Recipients must be unique and match recipient_type.",
+        }]) from None
     with filesystem_errors():
-        view = await sharing.replace(caller, node_id, ReplaceNodeGroupPolicy(
-            expected_revision=revision, groups=body.groups,
-        ))
+        view = await sharing.replace(caller, node_id, command)
     response.headers["ETag"] = f'"{view.revision}"'
     return view

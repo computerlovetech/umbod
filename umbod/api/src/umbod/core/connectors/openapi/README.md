@@ -8,7 +8,7 @@ description: "OpenAPI connector configuration, import, catalogue and execution c
 
 - [__init__.py](./__init__.py) — Public module exports.
 - [administrator_catalog.py](./administrator_catalog.py) — Administrator catalogue projection.
-- [catalog/](./catalog/) — Normalized capability catalogue.
+- [catalog/](./catalog/) — Stored capability normalization and operation tool schemas.
 - [errors.py](./errors.py) — Connector failures.
 - [execution/](./execution/README.md) — Authoritative operation execution.
 - [importing/](./importing/) — Source document validation.

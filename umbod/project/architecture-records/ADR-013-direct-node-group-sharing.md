@@ -57,6 +57,10 @@ A node-authorized eligible-groups query exposes registered group IDs, labels, an
 
 The dialog edits only the complete editable group scope. It preserves exact IDs, untouched permissions, and direct-node scope, and reconciles successful authoritative responses without reloading the workspace. Conflicts preserve the draft until an explicit reload and review; uncertain mutation outcomes require authoritative reconciliation before another save. Navigation and disposal fence obsolete asynchronous results, and pending writes prevent duplicate submission and dismissal.
 
+## Shared-recipient follow-up
+
+[ADR-015](ADR-015-direct-node-user-sharing.md) extends the existing sharing operations, MCP tool, and recipient projection to include observed users alongside groups. It supersedes this record's initial group-only node access contract. REST inspection supports recipient-type filtering; replacement requires an explicit recipient-type scope. The group-only workspace requests the group scope, preserving user grants during group edits. REST eligible-group discovery and trusted root administration retain their contracts. MCP recipient discovery is unified as `filesystem_search_sharing_recipients`, replacing the original group-only tool and standalone user search.
+
 ## Verification
 
 Behavior contracts cover both persistence drivers, independent SQLite connections, stale replacements, both sharing/deletion orderings, invalid-recipient rollback, protected-scope preservation, blocked principal collisions, issuer and ownership changes, revocation, and non-inherited access. HTTP tests verify request eligibility, strict group-only bodies, opaque preconditions, sanitized errors, authoritative responses, and unchanged remaining planned resources. Kind verification exercises authenticated running services without introducing fixture data into production images or chart values.

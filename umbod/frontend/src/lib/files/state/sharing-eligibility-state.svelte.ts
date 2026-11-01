@@ -90,7 +90,7 @@ export class SharingEligibilityState {
     this.controllers.set(id, controller);
     this.versions.set(id, version);
     try {
-      const access = nodeAccessSchema.parse(await this.api.inspectAccess(id, controller.signal));
+      const access = nodeAccessSchema.parse(await this.api.inspectAccess(id, 'group', controller.signal));
       if (this.disposed || generation !== this.generation || this.versions.get(id) !== version || controller.signal.aborted) return;
       if (access.node_id === id) this.allowed.set(id, true);
     } catch {

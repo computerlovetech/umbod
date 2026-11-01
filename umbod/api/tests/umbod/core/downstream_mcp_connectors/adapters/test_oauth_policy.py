@@ -1,3 +1,5 @@
+from tests.umbod.core.downstream_mcp_connectors.adapters.credential_fakes import MemoryCredentialStore
+
 import pytest
 from pydantic import SecretStr
 
@@ -34,7 +36,7 @@ def connections(enabled: bool = False) -> DownstreamMcpConnections:
         OperatorSettings(_env_file=None, mcp_downstream_oauth_enabled=enabled)
     )
     return create_downstream_mcp_connections(
-        downstream_mcp_infrastructure_settings_from_app_config(config), None
+        downstream_mcp_infrastructure_settings_from_app_config(config), MemoryCredentialStore()
     )
 
 
@@ -88,7 +90,7 @@ async def test_disabled_blocks_probe_runtime_and_background_discovery() -> None:
 def test_disabled_still_constructs_non_oauth_clients(
     configuration: NoAuthConnectionConfiguration | StaticBearerConnectionConfiguration,
 ) -> None:
-    strategy = FastMCPDownstreamConnectionFactory(True, None, oauth_enabled=False).create(configuration)
+    strategy = FastMCPDownstreamConnectionFactory(True, MemoryCredentialStore(), oauth_enabled=False).create(configuration)
     client = strategy.create_client()
     assert client.transport.auth is None
     if configuration.connection_type == "static_bearer":

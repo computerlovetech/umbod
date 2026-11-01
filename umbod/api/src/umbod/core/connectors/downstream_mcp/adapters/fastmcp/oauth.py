@@ -5,27 +5,17 @@ SDK-specific token and issuer metadata stay out of the connector domain model.
 """
 
 import asyncio
-import time
 from typing import TypedDict, Unpack
 from weakref import WeakValueDictionary
 from collections.abc import Awaitable, Callable
 
 from mcp.client.auth import AuthorizationCodeResult, OAuthClientProvider
 from mcp.shared.auth import (
-    OAuthClientInformationFull,
     OAuthClientMetadata,
-    OAuthMetadata,
-    OAuthToken,
 )
-from pydantic import BaseModel, Field, SecretStr
 import httpx2
 
-from umbod.core.connectors.downstream_mcp.models import OAuthCredentialState
-from umbod.core.connectors.downstream_mcp.stores.ports import (
-    ConnectorIdQuery,
-    CredentialFound,
-    EncryptedCredentialStore,
-)
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage import ConnectorOAuthStorage
 
 
 class SignInRequired(ValueError):
@@ -34,76 +24,6 @@ class SignInRequired(ValueError):
 
 
 _authorization_locks: WeakValueDictionary = WeakValueDictionary()
-
-
-class AuthorizationDocument(BaseModel):
-    endpoint_url: str
-    client_info: OAuthClientInformationFull | None = Field(default=None, repr=False)
-    tokens: OAuthToken | None = Field(default=None, repr=False)
-    expires_at: float | None = None
-    metadata: OAuthMetadata | None = None
-    authorization_server: str | None = None
-
-
-class ConnectorOAuthStorage:
-    """SDK TokenStorage with atomic token/expiry writes and stale-write protection."""
-
-    def __init__(
-        self,
-        document: AuthorizationDocument,
-        connector_id: str,
-        credentials: EncryptedCredentialStore | None,
-    ) -> None:
-        self.document = document
-        self.connector_id = connector_id
-        self.credentials = credentials
-        self._expected: SecretStr | None = None
-
-    async def load(self) -> None:
-        if self.credentials is None:
-            return
-        result = await self.credentials.get(ConnectorIdQuery(connector_id=self.connector_id))
-        if isinstance(result, CredentialFound):
-            if not isinstance(result.credential, OAuthCredentialState):
-                raise SignInRequired()
-            document = AuthorizationDocument.model_validate_json(
-                result.credential.authorization.get_secret_value()
-            )
-            if document.endpoint_url != self.document.endpoint_url:
-                raise SignInRequired()
-            self.document = document
-            self._expected = result.credential.authorization
-        else:
-            raise SignInRequired()
-
-    async def save(self) -> None:
-        if self.credentials is not None and self._expected is not None:
-            replacement = self.export()
-            if not await self.credentials.replace_oauth_authorization(
-                self.connector_id, self._expected, replacement
-            ):
-                raise SignInRequired()
-            self._expected = replacement
-
-    def export(self) -> SecretStr:
-        return SecretStr(self.document.model_dump_json())
-
-    async def get_tokens(self) -> OAuthToken | None:
-        return self.document.tokens
-
-    async def set_tokens(self, tokens: OAuthToken) -> None:
-        self.document.tokens = tokens
-        self.document.expires_at = (
-            time.time() + tokens.expires_in if tokens.expires_in is not None else None
-        )
-        await self.save()
-
-    async def get_client_info(self) -> OAuthClientInformationFull | None:
-        return self.document.client_info
-
-    async def set_client_info(self, client_info: OAuthClientInformationFull) -> None:
-        self.document.client_info = client_info
-        await self.save()
 
 
 async def require_sign_in(_url: str) -> None:

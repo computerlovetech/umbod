@@ -84,7 +84,11 @@ def _invocation(arguments: dict[str, Any] | None = None) -> ConnectorInvocation:
         connector_id="secret-connector",
         operation_name="send",
         public_tool_name="connector_send",
-        arguments=arguments or {"token": "credential-canary", "message": "argument-canary"},
+        arguments=(
+            {"token": "credential-canary", "message": "argument-canary"}
+            if arguments is None
+            else arguments
+        ),
     )
 
 
@@ -255,6 +259,36 @@ async def test_modern_initial_result_uses_actual_mcp_wire_models_without_sensiti
 
 
 @pytest.mark.asyncio
+async def test_modern_approval_preserves_empty_arguments() -> None:
+    _identity()
+    codec = _approval_codec(lambda: 1000.0)
+    policy = McpConnectorInvocationApprovalPolicy(
+        FixedPolicy(AskInvocationDecision(7)),
+        nonce_store=InMemoryApprovalNonceStore(),
+        state_codec=codec,
+        caller_capture=CurrentInvocationApprovalCallerCapture(),
+    )
+    invocation = _invocation({})
+
+    with pytest.raises(ModernConnectorApprovalRequired) as raised:
+        await _with_context(ApprovalContext(modern=True), lambda: policy.evaluate(invocation))
+
+    assert invocation.arguments == {}
+    assert codec.verify(
+        raised.value.result.input_required.request_state,
+        ConnectorInvocation.create(
+            connector_kind="native",
+            connector_id="secret-connector",
+            operation_name="send",
+            public_tool_name="connector_send",
+            arguments={},
+        ),
+        7,
+        CurrentInvocationApprovalCallerCapture().capture(),
+    ) == {"nonce": "approval-nonce", "expires_at": 1300}
+
+
+@pytest.mark.asyncio
 async def test_modern_acceptance_consumes_state_once_at_five_minute_boundary() -> None:
     _identity()
     now = [1000.0]
@@ -313,7 +347,7 @@ async def test_modern_concurrent_replay_has_exactly_one_winner() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mutation", ["arguments", "principal", "revision", "expired"])
+@pytest.mark.parametrize("mutation", ["arguments", "empty_arguments", "principal", "revision", "expired"])
 async def test_modern_resume_rejects_changed_or_expired_approval(mutation: str) -> None:
     _identity()
     now = [1000.0]
@@ -334,6 +368,8 @@ async def test_modern_resume_rejects_changed_or_expired_approval(mutation: str) 
         "connector_approval": ElicitResult(action="accept", content={"value": True})
     }
     invocation = _invocation({"message": "changed"}) if mutation == "arguments" else _invocation()
+    if mutation == "empty_arguments":
+        invocation = _invocation({})
     if mutation == "principal":
         _identity("user-2")
     if mutation == "revision":

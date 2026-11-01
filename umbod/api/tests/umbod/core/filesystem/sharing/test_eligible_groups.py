@@ -1,3 +1,4 @@
+from tests.support.filesystem.sharing_policy import GROUP_SCOPE
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -34,13 +35,13 @@ async def test_catalogue_preserves_exact_ids_and_metadata_without_membership_or_
         name="Private Name", email="private@example.test", email_verification="verified",
         observed_at=datetime.now(timezone.utc),
     ))
-    before = await context.service.inspect(caller(), context.node.id)
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     result = await context.service.eligible_groups(caller(), context.node.id)
     assert result == EligibleSharingGroups(groups=tuple(
         EligibleSharingGroup(group_id=value, label=("Label " + value).strip(), description="Managed collaboration group")
         for value in sorted(identifiers)
     ))
-    assert await context.service.inspect(caller(), context.node.id) == before
+    assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == before
     assert {group.group_id for group in await context.groups.list_groups()} == set(identifiers)
     serialized = result.model_dump_json()
     for secret in ("revision", "issuer", "private", "email", "token", "observed-only"):
@@ -54,7 +55,7 @@ async def test_existing_editable_group_remains_eligible_and_metadata_does_not_ch
     await context.policies.add_grant(AccessGrant(
         node_id=context.node.id, principal=principal("team"), permissions={Permission.READ}, recursive=False,
     ))
-    before = await context.service.inspect(caller(), context.node.id)
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     await context.groups.update_group_metadata("team", UpdateGroupMetadata(
         expected_revision=1, label="Updated label", description="Updated description",
     ))
@@ -62,7 +63,10 @@ async def test_existing_editable_group_remains_eligible_and_metadata_does_not_ch
     assert result.groups == (EligibleSharingGroup(
         group_id="team", label="Updated label", description="Updated description",
     ),)
-    assert await context.service.inspect(caller(), context.node.id) == before
+    after = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
+    assert after.revision == before.revision
+    assert after.grants[0].permissions == before.grants[0].permissions
+    assert after.grants[0].recipient.label == "Updated label"
 
 
 @pytest.mark.asyncio

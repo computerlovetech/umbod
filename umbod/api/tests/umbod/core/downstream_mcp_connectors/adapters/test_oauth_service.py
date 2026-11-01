@@ -4,10 +4,11 @@ import httpx2
 import pytest
 from mcp.shared.auth import OAuthClientInformationFull, OAuthMetadata, OAuthToken
 
-from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
-    AuthorizationDocument,
-    ConnectorOAuthStorage,
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage import AuthorizationDocument, ConnectorOAuthStorage
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage_adapters import (
+    DetachedConnectorOAuthStorage,
 )
+
 from tests.umbod.core.downstream_mcp_connectors.adapters.oauth_fakes import (
     MemoryDiscovery,
     ScriptedSessionFactory,
@@ -28,8 +29,8 @@ class MemoryHost:
         self.scopes = "read"
         self.authorized = False
         self.reconnections = 0
-        self.saved = ConnectorOAuthStorage(
-            AuthorizationDocument(endpoint_url="https://tools.example/mcp"), "", None
+        self.saved = DetachedConnectorOAuthStorage(
+            AuthorizationDocument(endpoint_url="https://tools.example/mcp"), ""
         )
 
     def resolve(self, connector_id: str) -> str:

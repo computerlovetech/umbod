@@ -3,6 +3,8 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 from umbod.core.groups.models import Group
+from umbod.core.identity_directory.ports import ObservedUserDirectory
+from umbod.core.identity_directory.store import SessionObservedUsers
 from umbod.core.groups.stores.schema import GROUP_ID_PROJECTION, GROUP_TABLE
 from umbod.core.persistence import (
     AllFields, Database, DatabaseSession, NoFilter, Query, TransactionMode, Unordered,
@@ -45,6 +47,7 @@ class SessionSharingGrants:
 
 @dataclass(frozen=True)
 class DatabaseSharingSession:
+    users: ObservedUserDirectory
     namespace: NamespaceDriver
     access_control: AccessControlDriver
     groups: RegisteredGroupReader
@@ -60,6 +63,7 @@ class DatabaseSharingTransactions:
         async with storage_session(self._database, TransactionMode.SERIALIZED_WRITE) as session:
             access_control = SessionAccessControl(session)
             yield DatabaseSharingSession(
+                users=SessionObservedUsers(session),
                 namespace=SessionNamespace(session),
                 access_control=access_control,
                 groups=SessionRegisteredGroups(session),

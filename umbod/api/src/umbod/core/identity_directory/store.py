@@ -1,9 +1,11 @@
 import json
+from typing import Optional
 
 from umbod.core.persistence import (
     AllFields,
     AllOf,
     Database,
+    DatabaseSession,
     Equals,
     Query,
     TransactionMode,
@@ -19,6 +21,16 @@ from .models import (
     UserPage,
     merge_user,
     new_user,
+)
+from .user_models import (
+    ObservedUserIdentity,
+    ObservedUserProfile,
+    SubjectUsersLookup,
+    ScopedUserSearch,
+    UserLookup,
+    UserSearchPage,
+    UserSearchResult,
+    normalized_name,
 )
 from .schema import (
     DirectoryKey,
@@ -36,6 +48,62 @@ from .schema import (
 
 def identity_key(*values: str) -> str:
     return json.dumps(values, ensure_ascii=True, separators=(",", ":"))
+
+
+class SessionObservedUsers:
+    def __init__(self, session: DatabaseSession) -> None:
+        self._session = session
+
+    async def search_user_names(self, search: ScopedUserSearch) -> UserSearchPage:
+        rows = await self._session.find_many(
+            USER_TABLE,
+            Query(Equals(USER_ISSUER, search.issuer), AllFields(), Unordered()),
+        )
+        query = normalized_name(search.query)
+        users = sorted(
+            (
+                UserSearchResult(user_id=row.payload.user_id, name=row.payload.name)
+                for row in rows
+                if row.payload.subject not in search.excluded_subjects
+                and query in normalized_name(row.payload.name)
+            ),
+            key=lambda user: (normalized_name(user.name), user.user_id),
+        )
+        return UserSearchPage(
+            users=tuple(users[: search.limit]), has_more=len(users) > search.limit
+        )
+
+    async def find_user_identity(
+        self, lookup: UserLookup
+    ) -> Optional[ObservedUserIdentity]:
+        rows = await self._session.find_many(
+            USER_TABLE,
+            Query(Equals(USER_ISSUER, lookup.issuer), AllFields(), Unordered()),
+        )
+        for row in rows:
+            user = row.payload
+            if user.user_id == lookup.user_id:
+                return ObservedUserIdentity(
+                    user_id=user.user_id, issuer=user.issuer, subject=user.subject
+                )
+        return None
+
+    async def find_subject_users(
+        self, lookup: SubjectUsersLookup,
+    ) -> tuple[ObservedUserProfile, ...]:
+        if not lookup.subjects:
+            return ()
+        rows = await self._session.find_many(
+            USER_TABLE,
+            Query(Equals(USER_ISSUER, lookup.issuer), AllFields(), Unordered()),
+        )
+        return tuple(
+            ObservedUserProfile(
+                user_id=row.payload.user_id, issuer=row.payload.issuer,
+                subject=row.payload.subject, name=row.payload.name,
+            )
+            for row in rows if row.payload.subject in lookup.subjects
+        )
 
 
 class DatabaseIdentityDirectory:
@@ -125,6 +193,22 @@ class DatabaseIdentityDirectory:
             groups=tuple(groups[: scope.limit]),
             has_more=len(groups) > scope.limit,
         )
+
+    async def search_user_names(self, search: ScopedUserSearch) -> UserSearchPage:
+        async with self._database.read_session() as session:
+            return await SessionObservedUsers(session).search_user_names(search)
+
+    async def find_user_identity(
+        self, lookup: UserLookup,
+    ) -> Optional[ObservedUserIdentity]:
+        async with self._database.read_session() as session:
+            return await SessionObservedUsers(session).find_user_identity(lookup)
+
+    async def find_subject_users(
+        self, lookup: SubjectUsersLookup,
+    ) -> tuple[ObservedUserProfile, ...]:
+        async with self._database.read_session() as session:
+            return await SessionObservedUsers(session).find_subject_users(lookup)
 
     async def search_users(self, scope: DirectoryScope) -> UserPage:
         if not scope.issuer.strip():

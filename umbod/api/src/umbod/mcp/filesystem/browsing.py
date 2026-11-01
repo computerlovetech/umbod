@@ -43,7 +43,7 @@ class FilesystemBrowseTool(Tool):
                 "No working directory or shell execution. Only discoverable nodes are returned; "
                 "breadcrumbs may be partial. Limits bound returned entries, not storage work. "
                 "Separate reads may observe concurrent changes. No file bytes are read. "
-                "Sharing metadata describes manageable direct sharing, not a full effective-access audit."
+                "Sharing metadata describes manageable direct group and user sharing, not a full effective-access audit."
             ),
             parameters=browse_input_schema(),
             output_schema={"type": "object", **BROWSE_RESPONSE.json_schema()},

@@ -1,4 +1,16 @@
 import asyncio
+from typing import Optional
+
+from umbod.core.identity_directory.user_models import (
+    ObservedUserIdentity,
+    ObservedUserProfile,
+    SubjectUsersLookup,
+    ScopedUserSearch,
+    UserLookup,
+    UserSearchPage,
+    UserSearchResult,
+    normalized_name,
+)
 
 from umbod.core.identity_directory.models import (
     DirectoryScope,
@@ -57,6 +69,43 @@ class InMemoryIdentityDirectory:
             claim=scope.claim,
             groups=tuple(groups[: scope.limit]),
             has_more=len(groups) > scope.limit,
+        )
+
+    async def search_user_names(self, search: ScopedUserSearch) -> UserSearchPage:
+        query = normalized_name(search.query)
+        users = sorted(
+            (
+                UserSearchResult(user_id=user.user_id, name=user.name)
+                for (issuer, _), user in self.users.items()
+                if issuer == search.issuer
+                and user.subject not in search.excluded_subjects
+                and query in normalized_name(user.name)
+            ),
+            key=lambda user: (normalized_name(user.name), user.user_id),
+        )
+        return UserSearchPage(
+            users=tuple(users[: search.limit]), has_more=len(users) > search.limit
+        )
+
+    async def find_user_identity(
+        self, lookup: UserLookup
+    ) -> Optional[ObservedUserIdentity]:
+        for (issuer, _), user in self.users.items():
+            if issuer == lookup.issuer and user.user_id == lookup.user_id:
+                return ObservedUserIdentity(
+                    user_id=user.user_id, issuer=user.issuer, subject=user.subject
+                )
+        return None
+
+    async def find_subject_users(
+        self, lookup: SubjectUsersLookup,
+    ) -> tuple[ObservedUserProfile, ...]:
+        return tuple(
+            ObservedUserProfile(
+                user_id=user.user_id, issuer=user.issuer, subject=user.subject, name=user.name,
+            )
+            for (issuer, subject), user in self.users.items()
+            if issuer == lookup.issuer and subject in lookup.subjects
         )
 
     async def search_users(self, scope: DirectoryScope) -> UserPage:

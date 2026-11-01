@@ -11,6 +11,7 @@ from fastmcp import Client
 from conftest import RuntimeEndpoints
 from test_running_filesystem import FILESYSTEM, checked_summary, tool_payload
 from test_running_personal_mcp_execution import mcp_client, proxy_token
+from user_sharing_support import assert_mcp_user_target_sharing, assert_rest_recipient_scopes, observed_recipient
 
 
 def upload_private_file(client: httpx.Client, parent_id: str) -> dict[str, Any]:
@@ -41,13 +42,21 @@ async def assert_mcp_sharing_metadata(
 async def assert_mcp_additive_sharing(
     alice: Client[Any], bob: Client[Any], node_id: str, eligible: dict[str, Any],
 ) -> None:
-    assert tool_payload(await alice.call_tool("filesystem_list_sharing_groups", {"node_id": node_id})) == eligible
+    search = {"node_id": node_id, "query": "admin", "recipient_type": "group"}
+    expected = sorted((
+        {"type": "group", "group_id": group["group_id"], "label": group["label"]}
+        for group in eligible["groups"]
+        if "admin" in group["group_id"].casefold() or "admin" in group["label"].casefold()
+    ), key=lambda recipient: (recipient["label"].casefold(), recipient["group_id"]))
+    assert tool_payload(await alice.call_tool("filesystem_search_sharing_recipients", search)) == {
+        "recipients": expected, "has_more": False,
+    }
     arguments = {"node_id": node_id, "group_id": "admin", "permissions": ["read"]}
     unknown = await alice.call_tool("filesystem_share", {**arguments, "group_id": "unregistered-" + uuid4().hex}, raise_on_error=False)
     assert unknown.is_error
     assert unknown.content[0].text == "filesystem_invalid_sharing_policy: Invalid filesystem sharing policy"
-    denied_groups = await bob.call_tool("filesystem_list_sharing_groups", {"node_id": node_id}, raise_on_error=False)
-    missing_groups = await bob.call_tool("filesystem_list_sharing_groups", {"node_id": str(uuid4())}, raise_on_error=False)
+    denied_groups = await bob.call_tool("filesystem_search_sharing_recipients", search, raise_on_error=False)
+    missing_groups = await bob.call_tool("filesystem_search_sharing_recipients", {**search, "node_id": str(uuid4())}, raise_on_error=False)
     assert denied_groups.is_error and missing_groups.is_error
     assert denied_groups.content == missing_groups.content
     denied_share = await bob.call_tool("filesystem_share", arguments, raise_on_error=False)
@@ -96,8 +105,8 @@ async def test_signed_direct_node_group_sharing_and_revocation(runtime_endpoints
             file = upload_private_file(alice, folder["id"])
             node_path = FILESYSTEM + "/nodes/" + file["id"]
             folder_path = FILESYSTEM + "/nodes/" + folder["id"]
-            access_path = node_path + "/access"
-            eligible_path = access_path + "/eligible-groups"
+            access_path = node_path + "/access?recipient_type=group"
+            eligible_path = node_path + "/access/eligible-groups"
             eligible = alice.get(eligible_path)
             assert eligible.status_code == 200, eligible.text
             assert set(eligible.json()) == {"groups"}
@@ -113,11 +122,11 @@ async def test_signed_direct_node_group_sharing_and_revocation(runtime_endpoints
             assert bob.get(node_path + "/content").status_code == 403
             initial = alice.get(access_path)
             assert initial.status_code == 200, initial.text
-            assert initial.json()["groups"] == []
-            assert set(initial.json()) == {"node_id", "revision", "groups", "blocked_group_ids"}
-            assert alice.put(access_path, json={"groups": []}).status_code == 428
-            assert alice.put(access_path, json={"groups": []}, headers={"If-Match": '"1"'}).status_code == 422
-            group = {"group_id": "admin", "permissions": ["discover", "read"]}
+            assert initial.json()["grants"] == []
+            assert set(initial.json()) == {"node_id", "revision", "grants", "blocked_recipients"}
+            assert alice.put(access_path, json={"grants": []}).status_code == 428
+            assert alice.put(access_path, json={"grants": []}, headers={"If-Match": '"1"'}).status_code == 422
+            group = {"recipient": {"type": "group", "group_id": "admin"}, "permissions": ["discover", "read"]}
             async with mcp_client(runtime_endpoints.mcp_url, alice_token) as alice_mcp, mcp_client(
                 os.environ["UMBOD_TEST_MCP_B_URL"], bob_token,
             ) as bob_mcp:
@@ -141,7 +150,9 @@ async def test_signed_direct_node_group_sharing_and_revocation(runtime_endpoints
                 }]}
                 await assert_mcp_sharing_metadata(alice_mcp, file, sharing)
                 await assert_mcp_sharing_metadata(bob_mcp, file, {"can_share": False})
-                denied_group_discovery = await bob_mcp.call_tool("filesystem_list_sharing_groups", {"node_id": file["id"]}, raise_on_error=False)
+                denied_group_discovery = await bob_mcp.call_tool("filesystem_search_sharing_recipients", {
+                    "node_id": file["id"], "query": "admin", "recipient_type": "group",
+                }, raise_on_error=False)
                 assert denied_group_discovery.is_error
                 denied_delegation = await bob_mcp.call_tool("filesystem_share", {
                     "node_id": file["id"], "group_id": "admin", "permissions": ["share"],
@@ -158,13 +169,13 @@ async def test_signed_direct_node_group_sharing_and_revocation(runtime_endpoints
             assert bob.get(access_path).status_code == 403
             assert bob.get(eligible_path).status_code == 403
             assert alice.get(eligible_path).json() == eligible.json()
-            denied = bob.put(access_path, json={"groups": []}, headers={"If-Match": initial.headers["etag"]})
+            denied = bob.put(access_path, json={"grants": []}, headers={"If-Match": initial.headers["etag"]})
             assert denied.status_code == 403
-            stale = alice.put(access_path, json={"groups": []}, headers={"If-Match": initial.headers["etag"]})
+            stale = alice.put(access_path, json={"grants": []}, headers={"If-Match": initial.headers["etag"]})
             assert stale.status_code == 412
-            revoked = alice.put(access_path, json={"groups": []}, headers={"If-Match": shared.headers["etag"]})
+            revoked = alice.put(access_path, json={"grants": []}, headers={"If-Match": shared.headers["etag"]})
             assert revoked.status_code == 200, revoked.text
-            assert revoked.json()["groups"] == []
+            assert revoked.json()["grants"] == []
             async with mcp_client(runtime_endpoints.mcp_url, alice_token) as alice_mcp, mcp_client(
                 os.environ["UMBOD_TEST_MCP_B_URL"], bob_token,
             ) as bob_mcp:
@@ -174,8 +185,9 @@ async def test_signed_direct_node_group_sharing_and_revocation(runtime_endpoints
                 assert "filesystem_permission_denied" in denied_metadata.content[0].text
             assert bob.get(node_path).status_code == 403
             assert bob.get(node_path + "/content").status_code == 403
-            folder_policy = alice.get(folder_path + "/access")
-            folder_shared = alice.put(folder_path + "/access", json={"groups": [group]}, headers={"If-Match": folder_policy.headers["etag"]})
+            folder_access = folder_path + "/access?recipient_type=group"
+            folder_policy = alice.get(folder_access)
+            folder_shared = alice.put(folder_access, json={"grants": [group]}, headers={"If-Match": folder_policy.headers["etag"]})
             assert folder_shared.status_code == 200, folder_shared.text
             assert bob.get(folder_path).status_code == 200
             assert bob.get(folder_path + "/children").json() == {"nodes": []}
@@ -184,6 +196,87 @@ async def test_signed_direct_node_group_sharing_and_revocation(runtime_endpoints
         finally:
             current = alice.get(root_policy_path).json()
             restored = alice.put(root_policy_path, json={
+                "expected_revision": current["revision"], "groups": previous["groups"],
+            })
+            assert restored.status_code == 200, restored.text
+
+
+@pytest.mark.asyncio
+async def test_signed_observed_user_and_group_targets_use_existing_sharing_tool(
+    runtime_endpoints: RuntimeEndpoints,
+) -> None:
+    if jwt.get_unverified_header(runtime_endpoints.bearer_token).get("alg") != "RS256":
+        pytest.skip("Requires the runner's signed personal-runtime phase")
+    bob_bearer = os.environ["UMBOD_TEST_BEARER_TOKEN_B"]
+    bob_claims = jwt.decode(bob_bearer, options={"verify_signature": False})
+    tls = ssl.create_default_context(cafile=os.environ["UMBOD_TEST_PERSONAL_CA"])
+    with httpx.Client(
+        base_url=os.environ["UMBOD_TEST_PERSONAL_URL"], verify=tls, timeout=30,
+    ) as identity:
+        alice_token = proxy_token(runtime_endpoints.mcp_url, runtime_endpoints.bearer_token, identity)
+        bob_token = proxy_token(os.environ["UMBOD_TEST_MCP_B_URL"], bob_bearer, identity)
+    with httpx.Client(
+        base_url=runtime_endpoints.api_base_url,
+        headers={"Authorization": "Bearer " + runtime_endpoints.bearer_token}, timeout=30,
+    ) as alice, httpx.Client(
+        base_url=os.environ["UMBOD_TEST_API_B_BASE_URL"],
+        headers={"Authorization": "Bearer " + bob_bearer}, timeout=30,
+    ) as bob:
+        assert bob.post("/api/me/identity-observations").status_code == 204
+        assert alice.post("/api/admin/groups", json={"group_id": "admin"}).status_code == 204
+        root_policy = "/api/admin/filesystem/root-access"
+        previous = alice.get(root_policy).json()
+        configured = alice.put(root_policy, json={
+            "expected_revision": previous["revision"],
+            "groups": [{"group_id": "admin", "permissions": ["discover", "write"]}],
+        })
+        assert configured.status_code == 200, configured.text
+        try:
+            root = checked_summary(alice.get(FILESYSTEM + "/root"), 200)
+            folder = checked_summary(alice.post(FILESYSTEM + "/nodes/" + root["id"] + "/directories", json={
+                "name": "user-sharing-folder-" + uuid4().hex,
+                "metadata": {"content_type": {}, "attributes": {}},
+            }), 201)
+            file = upload_private_file(alice, folder["id"])
+            node_path = FILESYSTEM + "/nodes/" + file["id"]
+            group_access = node_path + "/access?recipient_type=group"
+            initial_groups = alice.get(group_access)
+            assert initial_groups.status_code == 200
+            assert bob.get(node_path + "/content").status_code == 403
+            async with mcp_client(runtime_endpoints.mcp_url, alice_token) as alice_mcp, mcp_client(
+                os.environ["UMBOD_TEST_MCP_B_URL"], bob_token,
+            ) as bob_mcp:
+                recipient = await observed_recipient(alice_mcp, file["id"], bob_claims["name"])
+                await assert_mcp_user_target_sharing(alice_mcp, bob_mcp, file["id"], recipient)
+                assert bob.get(node_path + "/content").content == b"direct-node sharing runtime"
+                assert bob.get(FILESYSTEM + "/nodes/" + folder["id"]).status_code == 403
+                group_command = {
+                    "node_id": file["id"], "recipient": {"type": "group", "group_id": "admin"},
+                    "permissions": ["discover", "read"],
+                }
+                assert tool_payload(await alice_mcp.call_tool("filesystem_share", group_command)) == {**group_command, "changed": True}
+                mixed = tool_payload(await alice_mcp.call_tool("get_filesystem_node", {"node_id": file["id"]}))["sharing"]
+                assert {grant["recipient"]["type"] for grant in mixed["grants"]} == {"group", "user"}
+                stale = alice.put(group_access, json={"grants": []}, headers={"If-Match": initial_groups.headers["etag"]})
+                assert stale.status_code == 412
+                current_groups = alice.get(group_access)
+                assert {grant["recipient"]["type"] for grant in current_groups.json()["grants"]} == {"group"}
+                replaced = alice.put(group_access, json={"grants": []}, headers={"If-Match": current_groups.headers["etag"]})
+                assert replaced.status_code == 200, replaced.text
+                assert bob.get(node_path + "/content").status_code == 200
+                assert checked_summary(alice.get(node_path), 200)["revision"] == file["revision"]
+                remaining = tool_payload(await alice_mcp.call_tool("get_filesystem_node", {"node_id": file["id"]}))["sharing"]
+                assert remaining == {
+                    "can_share": True, "grants": [{
+                        "recipient": {"type": "user", "user_id": recipient["user_id"], "label": recipient["label"]},
+                        "permissions": ["discover", "read"],
+                    }],
+                }
+                assert_rest_recipient_scopes(alice, bob, node_path, recipient)
+                assert checked_summary(alice.get(node_path), 200)["revision"] == file["revision"]
+        finally:
+            current = alice.get(root_policy).json()
+            restored = alice.put(root_policy, json={
                 "expected_revision": current["revision"], "groups": previous["groups"],
             })
             assert restored.status_code == 200, restored.text

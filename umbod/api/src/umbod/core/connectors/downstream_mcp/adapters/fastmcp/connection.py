@@ -8,10 +8,16 @@ from fastmcp.client.transports import StreamableHttpTransport
 from pydantic import SecretStr
 
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
-    AuthorizationDocument,
     ConnectorOAuth,
-    ConnectorOAuthStorage,
     SignInRequired,
+)
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage import (
+    AuthorizationDocument,
+    ConnectorOAuthStorage,
+)
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage_adapters import (
+    DetachedConnectorOAuthStorage,
+    PersistedConnectorOAuthStorage,
 )
 from umbod.core.connectors.downstream_mcp.connection import (
     DownstreamMcpConnectionConfiguration,
@@ -116,21 +122,15 @@ class FastMCPOAuthConnection(_FastMCPConnection):
         self,
         configuration: OAuthConnectionConfiguration,
         tls_verification: TlsVerification,
-        credentials: EncryptedCredentialStore | None,
+        storage: ConnectorOAuthStorage,
     ) -> None:
         super().__init__(configuration, tls_verification)
-        document = AuthorizationDocument.model_validate_json(
-            configuration.authorization.get_secret_value()
-        )
-        if document.endpoint_url != configuration.endpoint_url:
+        if (
+            storage.document.endpoint_url != configuration.endpoint_url
+            or storage.connector_id != configuration.connector_id
+        ):
             raise SignInRequired()
-        self._oauth = InteractiveConnectorOAuth(
-            ConnectorOAuthStorage(
-                document,
-                configuration.connector_id,
-                credentials if configuration.persist_refresh else None,
-            )
-        )
+        self._oauth = InteractiveConnectorOAuth(storage)
 
     def create_client(self) -> Client:
         return Client(self._create_transport(headers=None, auth=self._oauth))
@@ -143,7 +143,7 @@ class FastMCPDownstreamConnectionFactory:
     def __init__(
         self,
         tls_verification: TlsVerification,
-        credentials: EncryptedCredentialStore | None,
+        credentials: EncryptedCredentialStore,
         *,
         oauth_enabled: bool,
     ) -> None:
@@ -166,8 +166,16 @@ class FastMCPDownstreamConnectionFactory:
             raise DownstreamConnectorValidationError(
                 DownstreamConnectorValidationFailed(code="oauth_disabled")
             )
+        document = AuthorizationDocument.model_validate_json(
+            configuration.authorization.get_secret_value()
+        )
+        storage: ConnectorOAuthStorage
+        if configuration.persist_refresh:
+            storage = PersistedConnectorOAuthStorage(
+                document, configuration.connector_id, self._credentials
+            )
+        else:
+            storage = DetachedConnectorOAuthStorage(document, configuration.connector_id)
         return FastMCPOAuthConnection(
-            configuration,
-            self._tls_verification,
-            self._credentials,
+            configuration, self._tls_verification, storage
         )

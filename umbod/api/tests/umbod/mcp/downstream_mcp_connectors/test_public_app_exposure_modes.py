@@ -15,7 +15,7 @@ from tests.support.configuration import InMemoryConnectorCurrentConfigurationSto
 from umbod.core.connectors.native.runtime import ConnectorRuntime
 from umbod.core.activation import ActivationStatus
 from umbod.core.connectors.downstream_mcp.models import DiscoveredPrompt, DiscoveredResource, DiscoveredResourceTemplate, DiscoveredToolWithOutputSchema, NoAuthConnectorDefinition, NoAuthCredentialState, PromptArgument, ToolCatalogSnapshot, ToolIdentity
-from umbod.core.connectors.downstream_mcp.stores import ReplaceToolCatalog, SaveConnectorDefinition, SaveCredential
+from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, ReplaceToolCatalog, SaveConnectorDefinition, SaveCredential, ToolCatalogFound
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.mcp.settings import MCPAppSettings, MCPSettings
 from fastmcp import Client, FastMCP
@@ -61,7 +61,7 @@ async def _persist_downstream_state(database_path: str, input_schema: dict[str, 
     await prepared_sqlite_runtime(database_path)
     await ConnectorDefinitionStoreService(create_sqlite_runtime(database_path).database, CONNECTOR_DEFINITION_TABLE).save(SaveConnectorDefinition(definition=NoAuthConnectorDefinition(connector_id=CONNECTOR_ID, display_name='Vikunja', tool_name_prefix='Vikunja', endpoint_url='https://vikunja.example.test/mcp')))
     await EncryptedCredentialStoreService(create_sqlite_runtime(database_path).database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('test-secret')).save(SaveCredential(credential=NoAuthCredentialState(connector_id=CONNECTOR_ID)))
-    await ToolCatalogStoreService(create_sqlite_runtime(database_path).database, TOOL_CATALOG_TABLE).replace(ReplaceToolCatalog(snapshot=ToolCatalogSnapshot(connector_id=CONNECTOR_ID, discovered_at=datetime(2026, 1, 1, tzinfo=UTC), prompts=(DiscoveredPrompt(name='task_prompt', title='Task prompt', description='Summarize a project', arguments=(PromptArgument(name='project', required=True),)),), resources=(DiscoveredResource(name='fixed', title='Fixed tasks', uri='data://vikunja/fixed', description='Fixed tasks'),), resource_templates=(DiscoveredResourceTemplate(name='task', title='Task', uri_template='data://vikunja/{task_id}', description='Task by identifier'),), tools=(DiscoveredToolWithOutputSchema(identity=ToolIdentity(connector_id=CONNECTOR_ID, downstream_name=OPERATION_NAME), title='List Vikunja tasks', description='List tasks from a Vikunja project.', input_schema=input_schema or {'type': 'object', 'properties': {'project_id': {'type': 'integer'}}, 'required': ['project_id']}, output_schema={'type': 'object'}),))))
+    await ToolCatalogStoreService(create_sqlite_runtime(database_path).database, TOOL_CATALOG_TABLE).replace(ReplaceToolCatalog(snapshot=ToolCatalogSnapshot(connector_id=CONNECTOR_ID, discovered_at=datetime(2026, 1, 1, tzinfo=UTC), prompts=(DiscoveredPrompt(name='task_prompt', title='Task prompt', description='Summarize a project', arguments=(PromptArgument(name='project', required=True),)),), resources=(DiscoveredResource(name='fixed', title='Fixed tasks', uri='data://vikunja/fixed', description='Fixed tasks'),), resource_templates=(DiscoveredResourceTemplate(name='task', title='Task', uri_template='data://vikunja/{task_id}', description='Task by identifier'),), tools=(DiscoveredToolWithOutputSchema(identity=ToolIdentity(connector_id=CONNECTOR_ID, downstream_name=OPERATION_NAME), title='List Vikunja tasks', description='List tasks from a Vikunja project.', input_schema={'type': 'object', 'properties': {'project_id': {'type': 'integer'}}, 'required': ['project_id']} if input_schema is None else input_schema, output_schema={'type': 'object'}),))))
     database = (await prepared_sqlite_runtime(database_path)).database
     publishing_store = await create_connector_publishing_store(database)
     await publishing_store.publish_connector(CONNECTOR_ID)
@@ -79,6 +79,19 @@ async def _build_public_mcp(tmp_path: Path, exposure_mode: str, input_schema: di
     connector_runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
     persistence_runtime = await prepared_sqlite_runtime(database_path)
     return (await build_mcp_with_openapi_adapters(settings, MCPAuthProviderFactory().create(settings), connector_runtime, (None, None), create_configured_openapi_runtime_adapters(settings), persistence_runtime, telemetry=create_configured_mcp_telemetry(settings), downstream_client_factory=recorder), recorder)
+
+@pytest.mark.asyncio
+async def test_persisted_downstream_catalog_preserves_empty_input_schema(tmp_path: Path) -> None:
+    database_path = str(tmp_path / "empty-schema.sqlite3")
+    await _persist_downstream_state(database_path, {})
+    runtime = await prepared_sqlite_runtime(database_path)
+    catalog = await ToolCatalogStoreService(runtime.database, TOOL_CATALOG_TABLE).get(
+        ConnectorIdQuery(connector_id=CONNECTOR_ID)
+    )
+
+    assert isinstance(catalog, ToolCatalogFound)
+    assert catalog.snapshot.tools[0].input_schema == {}
+
 
 @pytest.mark.asyncio
 async def test_flat_exposes_and_invokes_persisted_downstream_proxy_directly(tmp_path: Path) -> None:

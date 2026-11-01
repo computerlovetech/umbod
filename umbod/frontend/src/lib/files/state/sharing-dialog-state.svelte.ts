@@ -44,7 +44,7 @@ export class SharingDialogState {
   get filter(): string { return this.query; }
   get status(): string { return this.announcement; }
   get editable(): boolean { return this.stage === 'ready' && !this.saving && !this.recovery; }
-  get canSave(): boolean { return this.editable && !this.invalidRecipients && !this.catalogueLoading && !this.catalogueFailure && replaceAccessSchema.safeParse({ groups: this.draft.map(({ group_id, permissions }) => ({ group_id, permissions })) }).success; }
+  get canSave(): boolean { return this.editable && !this.invalidRecipients && !this.catalogueLoading && !this.catalogueFailure && replaceAccessSchema.safeParse({ grants: this.draft.map(({ group_id, permissions }) => ({ recipient: { type: 'group', group_id }, permissions })) }).success; }
   get availableGroups(): readonly SharingGroup[] {
     const query = this.query.toLocaleLowerCase();
     return this.catalogue.filter((group) => !this.blocked.includes(group.group_id) && !this.draft.some((entry) => entry.group_id === group.group_id) && [group.label, group.description, group.group_id].some((text) => text.toLocaleLowerCase().includes(query)));
@@ -80,7 +80,7 @@ export class SharingDialogState {
     const id = this.target.id;
     try {
       const [access, groups] = await Promise.all([
-        this.api.inspectAccess(id, this.controller.signal), this.api.listEligibleSharingGroups(id, this.controller.signal)
+        this.api.inspectAccess(id, 'group', this.controller.signal), this.api.listEligibleSharingGroups(id, this.controller.signal)
       ]);
       if (!this.current(generation)) return;
       const view = nodeAccessSchema.parse(access);
@@ -144,11 +144,11 @@ export class SharingDialogState {
     if (!this.canSave || !this.target) return;
     const id = this.target.id;
     const generation = this.generation;
-    const body = replaceAccessSchema.parse({ groups: this.draft.map(({ group_id, permissions }) => ({ group_id, permissions })) });
+    const body = replaceAccessSchema.parse({ grants: this.draft.map(({ group_id, permissions }) => ({ recipient: { type: 'group', group_id }, permissions })) });
     this.saving = true;
     this.banner = '';
     try {
-      const view = nodeAccessSchema.parse(await this.api.replaceAccess(id, this.revision, body));
+      const view = nodeAccessSchema.parse(await this.api.replaceAccess(id, this.revision, body, 'group'));
       if (!this.current(generation)) return;
       if (view.node_id !== id) throw new Error('Unexpected node access');
       this.accept(view);
@@ -213,10 +213,12 @@ export class SharingDialogState {
 
   private accept(view: NodeAccess): void {
     this.revision = view.revision;
-    this.blocked = view.blocked_group_ids;
-    this.draft = Object.freeze(view.groups.map((entry) => {
+    this.blocked = view.blocked_recipients.flatMap((recipient) => recipient.type === 'group' ? [recipient.group_id] : []);
+    this.draft = Object.freeze(view.grants.flatMap(({ recipient, permissions }) => {
+      if (recipient.type !== 'group') return [];
+      const entry = { group_id: recipient.group_id, permissions };
       const metadata = this.catalogue.find((group) => group.group_id === entry.group_id);
-      return Object.freeze({ ...entry, label: metadata?.label || entry.group_id, description: metadata?.description || '', permissions: Object.freeze([...entry.permissions]) });
+      return [Object.freeze({ ...entry, label: recipient.label || entry.group_id, description: metadata?.description || '', permissions: Object.freeze([...entry.permissions]) })];
     }));
   }
 

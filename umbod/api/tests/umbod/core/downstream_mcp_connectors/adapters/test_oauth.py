@@ -11,10 +11,13 @@ from mcp.shared.auth import OAuthClientInformationFull, OAuthMetadata, OAuthToke
 from pydantic import SecretStr
 
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage import AuthorizationDocument
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage_adapters import (
+    DetachedConnectorOAuthStorage,
+    PersistedConnectorOAuthStorage,
+)
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
-    AuthorizationDocument,
     ConnectorOAuth,
-    ConnectorOAuthStorage,
     SignInRequired,
 )
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.connection import FastMCPConnectionStrategy
@@ -73,7 +76,7 @@ def store_at(path):
 
 
 async def seed(store, connector_id="one", expired=False):
-    value = ConnectorOAuthStorage(document(expired=expired), "", None).export()
+    value = DetachedConnectorOAuthStorage(document(expired=expired), "").export()
     await store.save(
         SaveCredential(
             credential=OAuthCredentialState(connector_id=connector_id, authorization=value)
@@ -122,7 +125,7 @@ async def test_expired_token_refreshes_once_across_two_clients_and_persists(tmp_
         return httpx2.Response(200, json={"ok": True})
 
     async def use():
-        oauth = ConnectorOAuth(ConnectorOAuthStorage(document(), "one", store_at(path)))
+        oauth = ConnectorOAuth(PersistedConnectorOAuthStorage(document(), "one", store_at(path)))
         async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle), auth=oauth) as client:
             assert (await client.post("https://tools.example/mcp")).status_code == 200
 
@@ -154,16 +157,16 @@ async def test_authorization_is_scoped_to_connector_and_endpoint(tmp_path):
     store = store_at(tmp_path / "oauth.sqlite3")
     await seed(store)
     with pytest.raises(SignInRequired):
-        await ConnectorOAuthStorage(document(), "other", store).load()
+        await PersistedConnectorOAuthStorage(document(), "other", store).load()
     with pytest.raises(SignInRequired):
-        await ConnectorOAuthStorage(document("https://other.example/mcp"), "one", store).load()
+        await PersistedConnectorOAuthStorage(document("https://other.example/mcp"), "one", store).load()
 
 
 @pytest.mark.asyncio
 async def test_runtime_never_starts_browser_authorization() -> None:
     authorization = document()
     authorization.tokens = None
-    oauth = ConnectorOAuth(ConnectorOAuthStorage(authorization, "", None))
+    oauth = ConnectorOAuth(DetachedConnectorOAuthStorage(authorization, ""))
     requests: list[httpx2.Request] = []
 
     def handle(request: httpx2.Request) -> httpx2.Response:

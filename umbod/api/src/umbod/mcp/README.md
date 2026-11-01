@@ -15,7 +15,7 @@ description: "MCP application composition, capability exposure, authentication a
 - [connectors/](./connectors/) — Connector-kind delivery adapters.
 - [Personal discovery](./connectors/downstream_mcp/personal_discovery.py) — Operation-scoped owner inventories, current connector grants and indexed authorization.
 - [context.py](./context.py) — Application configuration and runtime dependencies.
-- [filesystem/](./filesystem/README.md) — Filesystem browsing and empty creation.
+- [filesystem/](./filesystem/README.md) — Filesystem browsing, creation, content, and node-authorized group/user sharing discovery.
 - [listeners/](./listeners/README.md) — Invocation observation adapters.
 - [live_permission_updates.py](./live_permission_updates.py) — Permission synchronization.
 - [logging/](./logging/) — Invocation and audit logging.

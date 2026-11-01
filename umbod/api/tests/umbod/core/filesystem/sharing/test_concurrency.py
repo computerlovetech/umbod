@@ -1,3 +1,4 @@
+from tests.support.filesystem.sharing_policy import GROUP_SCOPE, group_commands, group_policies
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -7,7 +8,7 @@ import pytest
 
 from umbod.core.filesystem import AccessGrant, RevisionConflict, StorageFailure
 from umbod.core.filesystem.authorization import VerifiedIdentityResolver
-from umbod.core.filesystem.sharing import InvalidSharingPolicy, ReplaceNodeGroupPolicy, SharingService
+from umbod.core.filesystem.sharing import InvalidSharingPolicy, ReplaceNodePolicy, SharingService
 from umbod.core.filesystem.sharing.ports import SharingSession, SharingTransactions
 from umbod.core.filesystem.stores.sharing import DatabaseSharingSession, DatabaseSharingTransactions
 from umbod.core.groups import GroupInUse, RegisterGroup
@@ -42,17 +43,17 @@ class GatedTransactions:
         async with self._transactions.transaction() as session:
             yield DatabaseSharingSession(
                 namespace=session.namespace, access_control=session.access_control,
-                groups=session.groups, grants=GatedGrants(session, self._checked, self._release),
+                groups=session.groups, grants=GatedGrants(session, self._checked, self._release), users=session.users,
             )
 
 
 @pytest.mark.asyncio
 async def test_sharing_first_blocks_group_deletion_until_reference_is_committed(context: SharingContext) -> None:
     await context.groups.register_group(RegisterGroup(group_id="team"))
-    before = await context.service.inspect(caller(), context.node.id)
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     checked, release, started = asyncio.Event(), asyncio.Event(), asyncio.Event()
     service = SharingService(VerifiedIdentityResolver(), GatedTransactions(DatabaseSharingTransactions(context.database), checked, release), "issuer")
-    sharing = asyncio.create_task(service.replace(caller(), context.node.id, ReplaceNodeGroupPolicy(expected_revision=before.revision, groups=(group("team"),))))
+    sharing = asyncio.create_task(service.replace(caller(), context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision=before.revision, grants=group_commands((group("team"),)))))
     await asyncio.wait_for(checked.wait(), 5)
 
     async def delete() -> None:
@@ -66,13 +67,13 @@ async def test_sharing_first_blocks_group_deletion_until_reference_is_committed(
     await sharing
     with pytest.raises(GroupInUse):
         await deletion
-    assert (await context.service.inspect(caller(), context.node.id)).groups == (group("team"),)
+    assert group_policies(await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)) == (group("team"),)
 
 
 @pytest.mark.asyncio
 async def test_group_deletion_first_rejects_sharing_without_resurrection(context: SharingContext) -> None:
     await context.groups.register_group(RegisterGroup(group_id="team"))
-    before = await context.service.inspect(caller(), context.node.id)
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     checked, release, started = asyncio.Event(), asyncio.Event(), asyncio.Event()
     catalogue = DatabaseGroupCatalogue(context.database, shared_group_usage)
 
@@ -85,7 +86,7 @@ async def test_group_deletion_first_rejects_sharing_without_resurrection(context
 
     async def share() -> None:
         started.set()
-        await context.service.replace(caller(), context.node.id, ReplaceNodeGroupPolicy(expected_revision=before.revision, groups=(group("team"),)))
+        await context.service.replace(caller(), context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision=before.revision, grants=group_commands((group("team"),))))
 
     deletion = asyncio.create_task(delete())
     await asyncio.wait_for(checked.wait(), 5)
@@ -97,7 +98,7 @@ async def test_group_deletion_first_rejects_sharing_without_resurrection(context
     with pytest.raises(InvalidSharingPolicy):
         await sharing
     assert await context.groups.list_groups() == ()
-    assert await context.service.inspect(caller(), context.node.id) == before
+    assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == before
 
 
 @pytest.mark.asyncio
@@ -110,19 +111,19 @@ async def test_separate_sqlite_connections_have_exactly_one_replacement_winner(t
         context = await sharing_context(first.database)
         for identifier in ("first", "second"):
             await context.groups.register_group(RegisterGroup(group_id=identifier))
-        before = await context.service.inspect(caller(), context.node.id)
+        before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
         services = (
             SharingService(VerifiedIdentityResolver(), DatabaseSharingTransactions(first.database), "issuer"),
             SharingService(VerifiedIdentityResolver(), DatabaseSharingTransactions(second.database), "issuer"),
         )
         results = await asyncio.gather(*(
-            service.replace(caller(), context.node.id, ReplaceNodeGroupPolicy(expected_revision=before.revision, groups=(group(identifier),)))
+            service.replace(caller(), context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision=before.revision, grants=group_commands((group(identifier),))))
             for service, identifier in zip(services, ("first", "second"), strict=True)
         ), return_exceptions=True)
         assert sum(isinstance(result, RevisionConflict) for result in results) == 1
         winners = [result for result in results if not isinstance(result, BaseException)]
         assert len(winners) == 1
-        assert await context.service.inspect(caller(), context.node.id) == winners[0]
+        assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == winners[0]
     finally:
         await second.shutdown()
         await first.shutdown()
@@ -151,7 +152,7 @@ class FailingTransactions:
         async with self._transactions.transaction() as session:
             yield DatabaseSharingSession(
                 namespace=session.namespace, access_control=session.access_control,
-                groups=session.groups, grants=FailingGrants(session, self._failure),
+                groups=session.groups, grants=FailingGrants(session, self._failure), users=session.users,
             )
 
 
@@ -161,9 +162,9 @@ async def test_partial_replacement_failure_restores_exact_policy(context: Sharin
     for identifier in ("old", "first", "second"):
         await context.groups.register_group(RegisterGroup(group_id=identifier))
     await replace(context, (group("old"),))
-    before = await context.service.inspect(caller(), context.node.id)
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     failure = asyncio.CancelledError() if cancelled else RuntimeError("private persistence failure")
     service = SharingService(VerifiedIdentityResolver(), FailingTransactions(DatabaseSharingTransactions(context.database), failure), "issuer")
     with pytest.raises(asyncio.CancelledError if cancelled else StorageFailure):
-        await service.replace(caller(), context.node.id, ReplaceNodeGroupPolicy(expected_revision=before.revision, groups=(group("first"), group("second"))))
-    assert await context.service.inspect(caller(), context.node.id) == before
+        await service.replace(caller(), context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision=before.revision, grants=group_commands((group("first"), group("second")))))
+    assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == before

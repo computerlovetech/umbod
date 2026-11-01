@@ -3,13 +3,13 @@ from typing import Protocol
 
 from umbod.core.callers import CallerSnapshot
 from umbod.core.groups.models import Group
+from umbod.core.identity_directory.ports import ObservedUserDirectory
 
-from ..group_policy import GroupPolicy
 from ..models import AccessGrant, NodeId
 from ..ports import AccessControlDriver, NamespaceDriver
 from .models import (
-    EligibleSharingGroups, NodeGroupPolicyView, NodeSharingSummaries, ReplaceNodeGroupPolicy,
-    ShareNodeGroupResult,
+    EligibleSharingGroups, NodePolicyView, NodeSharingSummaries, ReplaceNodePolicy,
+    ShareNodePolicy, ShareNodeResult, SharingScope, SharingRecipientSearchQuery, SharingRecipientSearchResult,
 )
 
 
@@ -24,6 +24,9 @@ class SharingGrantWriter(Protocol):
 
 
 class SharingSession(Protocol):
+    @property
+    def users(self) -> ObservedUserDirectory: ...
+
     @property
     def namespace(self) -> NamespaceDriver: ...
 
@@ -42,9 +45,13 @@ class SharingTransactions(Protocol):
 
 
 class FilesystemSharing(Protocol):
+    async def search_recipients(
+        self, snapshot: CallerSnapshot, node_id: NodeId, query: SharingRecipientSearchQuery,
+    ) -> SharingRecipientSearchResult: ...
+
     async def share(
-        self, snapshot: CallerSnapshot, node_id: NodeId, command: GroupPolicy,
-    ) -> ShareNodeGroupResult: ...
+        self, snapshot: CallerSnapshot, node_id: NodeId, command: ShareNodePolicy,
+    ) -> ShareNodeResult: ...
 
     async def summarize_nodes(
         self, snapshot: CallerSnapshot, node_ids: tuple[NodeId, ...],
@@ -52,8 +59,10 @@ class FilesystemSharing(Protocol):
 
     async def eligible_groups(self, snapshot: CallerSnapshot, node_id: NodeId) -> EligibleSharingGroups: ...
 
-    async def inspect(self, snapshot: CallerSnapshot, node_id: NodeId) -> NodeGroupPolicyView: ...
+    async def inspect(
+        self, snapshot: CallerSnapshot, node_id: NodeId, scope: SharingScope,
+    ) -> NodePolicyView: ...
 
     async def replace(
-        self, snapshot: CallerSnapshot, node_id: NodeId, command: ReplaceNodeGroupPolicy,
-    ) -> NodeGroupPolicyView: ...
+        self, snapshot: CallerSnapshot, node_id: NodeId, command: ReplaceNodePolicy,
+    ) -> NodePolicyView: ...

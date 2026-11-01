@@ -15,11 +15,15 @@ from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesys
 @pytest.mark.asyncio
 @pytest.mark.parametrize("stage", ["capture", "factory", "service"])
 @pytest.mark.parametrize("tool,operation,method,arguments", [
-    ("filesystem_list_sharing_groups", "sharing", "eligible_groups", {
-        "node_id": "00000000-0000-0000-0000-000000000001",
+    ("filesystem_search_sharing_recipients", "sharing", "search_recipients", {
+        "node_id": "00000000-0000-0000-0000-000000000001", "query": "Observed",
     }),
     ("filesystem_share", "sharing", "share", {
         "node_id": "00000000-0000-0000-0000-000000000001", "group_id": "writers", "permissions": ["read"],
+    }),
+    ("filesystem_share", "sharing", "share", {
+        "node_id": "00000000-0000-0000-0000-000000000001",
+        "recipient": {"type": "user", "user_id": "observed-user"}, "permissions": ["read"],
     }),
     ("get_filesystem_root", "browsing", "get_root", {}),
     ("filesystem_delete_file", "deletion", "delete_file", {

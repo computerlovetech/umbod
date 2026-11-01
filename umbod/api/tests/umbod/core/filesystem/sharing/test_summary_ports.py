@@ -1,3 +1,4 @@
+from tests.support.filesystem.sharing_policy import GROUP_SCOPE, group_policies
 from asyncio import CancelledError
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -127,6 +128,6 @@ async def test_protected_same_principal_collision_does_not_leak_manageable_grant
 
     ports.policies.list_grants = grants
     service: FilesystemSharing = SharingService(CountingResolver(), ports, "issuer")
-    assert (await service.inspect(caller(), root.id)).groups == ()
+    assert group_policies(await service.inspect(caller(), root.id, GROUP_SCOPE)) == ()
     summary = (await service.summarize_nodes(caller(), (root.id,))).nodes[0]
     assert summary.model_dump(mode="json") == {"node_id": str(root.id), "can_share": True, "grants": []}

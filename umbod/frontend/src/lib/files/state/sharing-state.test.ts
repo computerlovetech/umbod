@@ -11,7 +11,7 @@ const groups: SharingGroup[] = [
   { group_id: ' Team A ', label: 'Friendly team', description: 'Design people' },
   { group_id: 'team-b', label: 'Team B', description: 'Other people' }
 ];
-const access: NodeAccess = { node_id: fileId, revision: 'hash-1', groups: [{ group_id: ' Team A ', permissions: ['write', 'share'] }], blocked_group_ids: ['blocked'] };
+const access: NodeAccess = { node_id: fileId, revision: 'hash-1', grants: [{ recipient: { type: 'group', group_id: ' Team A ', label: 'Friendly team' }, permissions: ['write', 'share'] }, { recipient: { type: 'user', user_id: 'person-a', label: 'Hidden person' }, permissions: ['read'] }], blocked_recipients: [{ type: 'group', group_id: 'blocked' }, { type: 'user', user_id: 'protected-person' }] };
 
 function fixture(): { api: InMemoryFilesApi; state: SharingDialogState; revoke: ReturnType<typeof vi.fn>; recheck: ReturnType<typeof vi.fn> } {
   const api = new InMemoryFilesApi(rootId, filesystemFixture);
@@ -46,9 +46,12 @@ describe('sharing eligibility', (): void => {
     eligibility.select(nodes);
     expect(inspect).toHaveBeenCalledTimes(4);
     eligibility.remove(nodes[0].id);
-    expect(inspect.mock.calls[0][1]?.aborted).toBe(true);
+    expect(inspect.mock.calls[0][2]?.aborted).toBe(true);
     eligibility.reset();
-    for (const [, signal] of inspect.mock.calls) expect(signal?.aborted).toBe(true);
+    for (const [, recipientType, signal] of inspect.mock.calls) {
+      expect(recipientType).toBe('group');
+      expect(signal?.aborted).toBe(true);
+    }
     response.resolve(access);
     await Promise.resolve();
     await Promise.resolve();
@@ -98,14 +101,15 @@ describe('sharing dialog state', (): void => {
     const inspect = vi.spyOn(api.sharing, 'inspectAccess');
     const replace = vi.spyOn(api.sharing, 'replaceAccess');
     await state.show(filesystemFixture[2]);
-    expect(state.groups[0]).toEqual({ ...access.groups[0], label: 'Friendly team', description: 'Design people' });
+    expect(inspect.mock.calls[0]).toEqual([fileId, 'group', expect.any(AbortSignal)]);
+    expect(state.groups).toEqual([{ group_id: ' Team A ', permissions: access.grants[0].permissions, label: 'Friendly team', description: 'Design people' }]);
     expect(state.canSave).toBe(true);
     state.add('team-b');
     expect(state.groups[1].permissions).toEqual(['discover', 'read']);
     state.changePermission('team-b', 'delete', true);
     state.remove(' Team A ');
     await state.save();
-    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'hash-1', { groups: [{ group_id: 'team-b', permissions: ['discover', 'read', 'delete'] }] });
+    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'hash-1', { grants: [{ recipient: { type: 'group', group_id: 'team-b' }, permissions: ['discover', 'read', 'delete'] }] }, 'group');
     expect(state.open).toBe(false);
     expect(state.status).toContain('Notes.txt');
     expect(revoke).toHaveBeenCalledWith(fileId);
@@ -115,7 +119,9 @@ describe('sharing dialog state', (): void => {
     expect(state.groups[0].permissions).toEqual(['discover', 'read', 'delete']);
     state.remove('team-b');
     await state.save();
-    expect(replace.mock.calls[1][2]).toEqual({ groups: [] });
+    expect(replace.mock.calls[1][2]).toEqual({ grants: [] });
+    expect(replace.mock.calls.every((call) => call[3] === 'group')).toBe(true);
+    expect((await api.sharing.inspectAccess(fileId, 'user')).grants).toEqual([access.grants[1]]);
   });
 
   test('requires a nonempty permission set and excludes blocked groups while allowing existing entries to be removed', async (): Promise<void> => {
@@ -269,7 +275,7 @@ describe('sharing dialog state', (): void => {
     eligibility.selectCurrent(filesystemFixture[2]);
     await vi.waitFor(() => expect(eligibility.available(fileId)).toBe(true));
     await eligibility.dialog.show(filesystemFixture[2]);
-    vi.spyOn(api.sharing, 'replaceAccess').mockImplementationOnce(async (): Promise<NodeAccess> => { api.sharing.revoke(fileId); return { ...access, revision: 'revoked', groups: [] }; });
+    vi.spyOn(api.sharing, 'replaceAccess').mockImplementationOnce(async (): Promise<NodeAccess> => { api.sharing.revoke(fileId); return { ...access, revision: 'revoked', grants: [] }; });
     eligibility.dialog.remove(' Team A ');
     await eligibility.dialog.save();
     await vi.waitFor(() => expect(eligibility.available(fileId)).toBe(false));

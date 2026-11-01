@@ -12,6 +12,7 @@ description: "Direct-node permission evaluation and caller-to-principal resoluti
 - [models.py](./models.py) — Resolved identities and decisions.
 - [ports.py](./ports.py) — Resolver and authorization contracts.
 - [resolver.py](./resolver.py) — Verified identity mapping.
+- [recipients.py](./recipients.py) — Observed-user identifiers resolved to existing user principals without granting access.
 - [service.py](./service.py) — Shared policy evaluator.
 
 # Related links

@@ -5,10 +5,20 @@ export const sharingRevisionSchema = z.string().regex(/^[\x21\x23-\x2b\x2d-\x7e]
 export const sharingPermissionSchema = z.enum(['discover', 'read', 'write', 'delete', 'share']);
 const groupIdSchema = z.string().min(1);
 const permissionsSchema = z.array(sharingPermissionSchema).nonempty().refine((values) => new Set(values).size === values.length);
-const outboundGroupSchema = z.strictObject({ group_id: groupIdSchema, permissions: permissionsSchema });
-const inboundGroupSchema = z.strictObject({ group_id: groupIdSchema, permissions: permissionsSchema });
-export const replaceAccessSchema = z.strictObject({ groups: z.array(outboundGroupSchema) }).refine((body) => new Set(body.groups.map((group) => group.group_id)).size === body.groups.length);
-export const nodeAccessSchema = z.strictObject({ node_id: nodeIdSchema, revision: sharingRevisionSchema, groups: z.array(inboundGroupSchema), blocked_group_ids: z.array(groupIdSchema) });
+export const sharingRecipientTypeSchema = z.enum(['group', 'user']);
+export const sharingRecipientTargetSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('group'), group_id: groupIdSchema }),
+  z.strictObject({ type: z.literal('user'), user_id: z.string().min(1) })
+]);
+export const sharingRecipientSchema = z.discriminatedUnion('type', [
+  z.strictObject({ type: z.literal('group'), group_id: groupIdSchema, label: z.string() }),
+  z.strictObject({ type: z.literal('user'), user_id: z.string().min(1), label: z.string() })
+]);
+const outboundGrantSchema = z.strictObject({ recipient: sharingRecipientTargetSchema, permissions: permissionsSchema });
+const inboundGrantSchema = z.strictObject({ recipient: sharingRecipientSchema, permissions: permissionsSchema });
+export const replaceAccessSchema = z.strictObject({ grants: z.array(outboundGrantSchema) }).refine((body) => new Set(body.grants.map(({ recipient }) => JSON.stringify(recipient))).size === body.grants.length);
+export const nodeAccessSchema = z.strictObject({ node_id: nodeIdSchema, revision: sharingRevisionSchema, grants: z.array(inboundGrantSchema), blocked_recipients: z.array(sharingRecipientTargetSchema) });
+export type SharingRecipientType = z.infer<typeof sharingRecipientTypeSchema>;
 export const eligibleSharingGroupsSchema = z.strictObject({ groups: z.array(z.strictObject({ group_id: groupIdSchema, label: z.string(), description: z.string() })) });
 export type SharingPermission = z.infer<typeof sharingPermissionSchema>;
 export type NodeAccess = z.infer<typeof nodeAccessSchema>;

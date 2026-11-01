@@ -4,7 +4,7 @@ from typing import Protocol, Self
 
 from fastmcp import Client
 
-from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage import (
     ConnectorOAuthStorage,
 )
 from umbod.core.connectors.downstream_mcp.oauth.ports import (

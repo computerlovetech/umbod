@@ -1,8 +1,9 @@
+from tests.support.filesystem.sharing_policy import GROUP_SCOPE, group_commands, group_policies
 import pytest
 
 from umbod.core.filesystem import AccessGrant, NodeKind, Ownership, Permission, Principal, PrincipalType
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
-from umbod.core.filesystem.sharing import GroupPolicy, ReplaceNodeGroupPolicy
+from umbod.core.filesystem.sharing import GroupPolicy, ReplaceNodePolicy
 from umbod.core.groups import RegisterGroup
 from umbod.infrastructure import create_filesystem_sharing
 from tests.umbod.core.filesystem.test_authorized_content import caller, metadata
@@ -15,8 +16,8 @@ async def test_group_ownership_is_direct_authority(context: SharingContext) -> N
     owner = Principal(type=PrincipalType.GROUP, issuer="issuer", id="owners")
     await context.policies.set_owner(Ownership(node_id=context.node.id, owner=owner))
     actor = snapshot("bob", "issuer", ("owners",))
-    before = await context.service.inspect(actor, context.node.id)
-    result = await context.service.replace(actor, context.node.id, ReplaceNodeGroupPolicy(expected_revision=before.revision, groups=()))
+    before = await context.service.inspect(actor, context.node.id, GROUP_SCOPE)
+    result = await context.service.replace(actor, context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision=before.revision, grants=group_commands(())))
     assert result == before
     assert (await context.policies.get_owner(context.node.id)).owner == owner
 
@@ -30,10 +31,10 @@ async def test_unowned_nodes_and_unresolved_identity_fail_closed(context: Sharin
         permissions=set(Permission), recursive=False,
     ))
     with pytest.raises(PermissionDenied):
-        await context.service.inspect(caller(), unowned.id)
+        await context.service.inspect(caller(), unowned.id, GROUP_SCOPE)
     unresolved = snapshot("alice", "issuer", ("",))
     with pytest.raises(PermissionDenied):
-        await context.service.replace(unresolved, context.node.id, ReplaceNodeGroupPolicy(expected_revision="unknown", groups=()))
+        await context.service.replace(unresolved, context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision="unknown", grants=group_commands(())))
 
 
 @pytest.mark.asyncio
@@ -41,15 +42,15 @@ async def test_configured_issuer_is_exact_and_independent_of_caller_issuer(conte
     await context.groups.register_group(RegisterGroup(group_id=" Team "))
     service = create_filesystem_sharing(database=context.database, resolver=VerifiedIdentityResolver(), issuer=" Exact Issuer ")
     policy = GroupPolicy(group_id=" Team ", permissions=frozenset({Permission.SHARE, Permission.DISCOVER}))
-    before = await service.inspect(caller(), context.node.id)
-    saved = await service.replace(caller(), context.node.id, ReplaceNodeGroupPolicy(expected_revision=before.revision, groups=(policy,)))
+    before = await service.inspect(caller(), context.node.id, GROUP_SCOPE)
+    saved = await service.replace(caller(), context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision=before.revision, grants=group_commands((policy,))))
     grants = await context.policies.list_grants(context.node.id)
     assert grants[0].principal == Principal(type=PrincipalType.GROUP, issuer=" Exact Issuer ", id=" Team ")
     exact = snapshot("bob", " Exact Issuer ", (" Team ",))
-    assert await service.inspect(exact, context.node.id) == saved
+    assert await service.inspect(exact, context.node.id, GROUP_SCOPE) == saved
     for actor in (snapshot("bob", "Exact Issuer", (" Team ",)), snapshot("bob", " Exact Issuer ", ("Team",))):
         with pytest.raises(PermissionDenied):
-            await service.inspect(actor, context.node.id)
-    view = await context.service.inspect(caller(), context.node.id)
-    assert view.groups == ()
+            await service.inspect(actor, context.node.id, GROUP_SCOPE)
+    view = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
+    assert group_policies(view) == ()
     assert view.revision != saved.revision
