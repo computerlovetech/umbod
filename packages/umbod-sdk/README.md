@@ -158,6 +158,14 @@ my-umbod-connectors/
 
 The public [connector authoring guide](https://umbod.ai/docs/plugins/build-a-connector/) describes the supported image build and deployment workflow.
 
+## Tool schemas
+
+The tool decorator requires `description` and accepts optional `name`, `parameters`, and `output_schema` settings. Input schemas are derived from public function parameters and their type annotations; parameters without defaults are required. Injected arguments such as `configuration` are excluded from the agent-facing schema. The `parameters` setting supplies parameter descriptions, not a replacement input schema.
+
+An explicit `output_schema` must be a JSON Schema dictionary. Omitting it means no declared output schema, which is distinct from supplying an empty dictionary; `None` is invalid. Registration metadata represents this distinction with `output_schema_status` set to `absent` or `present`, and includes `output_schema` when present.
+
+These SDK contracts are separate from changes to Umbod's built-in filesystem tools. For typed sharing recipients, alternative schema branches, removed discovery-tool names, and REST migration requirements, see the [filesystem sharing reference](https://umbod.ai/docs/reference/filesystem-sharing/).
+
 ## Declaring plugin discovery metadata
 
 Use the standardized Python package entry-point metadata in the connector distribution's `pyproject.toml`:

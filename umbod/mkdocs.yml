@@ -57,6 +57,7 @@ nav:
   - Reference:
       - Helm values: reference/helm-values.md
       - Endpoints and ports: reference/endpoints-and-ports.md
+      - Filesystem sharing: reference/filesystem-sharing.md
 
 markdown_extensions:
   - admonition

@@ -21,6 +21,7 @@ Connect your internal APIs and MCP servers to the agents your teams use. Umbod g
 
 - **Connect once.** Bring OpenAPI services and downstream MCP servers together, or build a custom connector.
 - **Control access.** Decide which groups can use which tools through a shared administration interface.
+- **Share files.** Upload files and share individual files or folders with registered groups or users already observed by Umbod.
 - **Keep your choice of agent.** Keep connectors and access rules independent of your agent vendor.
 
 ## Get started
@@ -34,7 +35,7 @@ kind create cluster --name umbod --wait 2m
 
 helm upgrade --install umbod \
   oci://ghcr.io/computerlovetech/charts/umbod \
-  --version 0.0.1-beta.8 \
+  --version 0.0.1-beta.9 \
   --kube-context kind-umbod \
   --set config.profile=local \
   --set config.authentication.mode=dev \
@@ -62,6 +63,7 @@ Need a custom integration? **[Build a connector →](https://umbod.ai/docs/plugi
 | | |
 | --- | --- |
 | [Installation](https://umbod.ai/docs/getting-started/kubernetes-installation/) | Install locally or configure a shared cluster. |
+| [Files](https://umbod.ai/docs/using-umbod/files/) | Upload, share, and access files through the workspace or MCP. |
 | [Architecture](https://umbod.ai/docs/operations/service-topology/) | Understand the services, data flow, and storage. |
 | [Configuration](https://umbod.ai/docs/operations/configuration/) | Configure authentication, public origins, and persistence. |
 | [Helm reference](https://umbod.ai/docs/reference/helm-values/) | Find chart settings and defaults. |
@@ -69,7 +71,7 @@ Need a custom integration? **[Build a connector →](https://umbod.ai/docs/plugi
 
 ## Project status
 
-Umbod is in **early beta**. Connector administration, tool publication, group permissions, and Helm installation are available today. The current chart runs a single core replica backed by SQLite and is intended for development and evaluation.
+Umbod is in **early beta**. Connector administration, tool publication, group permissions, file uploads and direct file sharing, and Helm installation are available today. The current chart runs a single core replica backed by SQLite and is intended for development and evaluation.
 
 Try it with an integration your team actually needs. [Report an issue](https://github.com/computerlovetech/umbod/issues) or [join the conversation on Discord](https://discord.gg/Njy4GnurpE).
 
@@ -86,7 +88,8 @@ Try it with an integration your team actually needs. [Report an issue](https://g
 | Group permissions | ✅ Complete | 🟡 Evolving | Manage group-level access to MCP tools from the admin UI. |
 | Authentication and deployment profiles | ✅ Complete | 🟡 Evolving | Support local development authentication and production OIDC-based deployments. |
 | Helm chart for Kubernetes | ✅ Complete | 🟡 Evolving | Install and configure Umbod on Kubernetes using Helm. |
-| Virtual filesystem | ⬜ Planned | ⚪ Not assessed | Provide a unified filesystem interface for accessing connector-backed resources. |
+| File uploads and sharing | ✅ Complete | 🟡 Evolving | Store files locally or in S3 and share individual nodes with registered groups or observed users; permissions do not inherit. |
+| Connector-backed filesystem resources | ⬜ Planned | ⚪ Not assessed | Extend the filesystem to connector-backed resources. |
 | Tool description overrides | ⬜ Planned | ⚪ Not assessed | Override published tool descriptions from the `/admin` interface. |
 | Configurable `toolPolicy` | ✅ Complete | 🟡 Evolving | Configure tool access policies as `allow`, `ask`, or `blocked`, controlling whether tools run directly, require approval, or cannot be used. |
 | Agent observability tools | ⬜ Planned | ⚪ Not assessed | Provide built-in tools such as `give_feedback` and `self_diagnose` for agent feedback and diagnostics. |

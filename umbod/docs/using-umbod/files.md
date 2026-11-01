@@ -31,7 +31,17 @@ For nodes you may share, open the sharing dialog, search registered groups, choo
 | `delete` | Delete a file; directories and root cannot currently be deleted |
 | `share` | Manage access grants |
 
-Permissions apply directly to the selected node. They do not inherit from a parent folder. A share on a folder is therefore not a recursive share of its contents. Owners have authority over their nodes; other users need matching grants.
+Permissions apply directly to the selected node. They do not inherit from a parent folder. A share on a folder is therefore not a recursive share of its contents. Owners have authority over their nodes; other users need matching grants. Sharing requires current `discover` and `share` authority on that node. For normal file reading, grant both `discover` and `read`; `read` alone does not make a file visible.
+
+### Share with an observed user
+
+MCP tools and REST clients can also grant access directly to a user. The browser sharing dialog currently manages groups only. Find an eligible recipient with `filesystem_search_sharing_recipients`, then pass its opaque `user_id` to `filesystem_share`; see the [filesystem sharing reference](../reference/filesystem-sharing.md) for request fields and REST replacement rules.
+
+Umbod's user directory records users observed during verified authentication. It is not a complete or live identity-provider directory, and an observed record does not prove an account is still active. Search matches user names, not email addresses or authentication subjects. Users without names are not searchable; identical names can identify different users. Always use the returned opaque ID rather than inventing one from a name or email.
+
+A recipient can access a directly shared file by its node ID without access to the parent directory. Sharing does not send notifications or provide a dedicated shared-files listing. Communicate the node ID separately when the recipient cannot find it by browsing.
+
+Sharing summaries describe manageable direct grants, not every source of effective access. An empty summary is not proof that nobody else has access. Protected grants, including recursive, unresolved, malformed, and foreign-issuer grants, are not rewritten by the sharing editor.
 
 ### Read and delete
 
@@ -41,9 +51,11 @@ Deletion requires permission and confirmation. It removes the file's namespace e
 
 ## Agent access
 
-Filesystem tools are available through Umbod's root MCP endpoint, not connector-scoped endpoints. They support browsing, inspecting nodes, uploading, reading complete files, deleting files, and group sharing, subject to the caller's filesystem permissions.
+Filesystem tools are available through Umbod's root MCP endpoint, not connector-scoped endpoints. They support browsing, inspecting nodes, uploading, reading complete files, deleting files, and direct group/user sharing, subject to the caller's filesystem permissions.
 
 Connecting an agent does not grant it unrestricted file access. Tool operations use Umbod's virtual filesystem and check authorization; they do not browse arbitrary host paths or bootstrap root permissions.
+
+Recipient discovery uses `filesystem_search_sharing_recipients`; the former `filesystem_list_sharing_groups` and `search_users` tools are no longer available. `filesystem_share` accepts a typed `recipient`, with legacy top-level `group_id` requests still supported. Refresh cached tool schemas: search and share expose alternative schema branches, and REST access-policy updates have a breaking request change. See [Filesystem sharing](../reference/filesystem-sharing.md).
 
 MCP uploads have a maximum of 10 MiB, or the configured filesystem limit if lower. Complete-file MCP reads are limited to 1 MiB. These tool limits are separate from browser/API upload and proxy limits.
 
