@@ -39,25 +39,37 @@ MCP tools and REST clients can also grant access directly to a user. The browser
 
 Umbod's user directory records users observed during verified authentication. It is not a complete or live identity-provider directory, and an observed record does not prove an account is still active. Search matches user names, not email addresses or authentication subjects. Users without names are not searchable; identical names can identify different users. Always use the returned opaque ID rather than inventing one from a name or email.
 
-A recipient can access a directly shared file by its node ID without access to the parent directory. Sharing does not send notifications or provide a dedicated shared-files listing. Communicate the node ID separately when the recipient cannot find it by browsing.
+A recipient can access a directly shared file by its node ID without access to the parent directory. Sharing does not send notifications or provide a dedicated shared-files listing. Communicate the node ID or MCP resource URI separately when the recipient cannot find it by browsing.
 
 Sharing summaries describe manageable direct grants, not every source of effective access. An empty summary is not proof that nobody else has access. Protected grants, including recursive, unresolved, malformed, and foreign-issuer grants, are not rewritten by the sharing editor.
 
 ### Read and delete
 
-The current Files view provides file metadata and permission-dependent actions, but does not yet provide a download/open-content control. Authenticated clients can download through the REST node-content endpoint; agents can read supported files through filesystem tools.
+The current Files view provides file metadata and permission-dependent actions, but does not yet provide a download/open-content control. Authenticated clients can download through the REST node-content endpoint; agents can read supported files through native MCP resources.
 
 Deletion requires permission and confirmation. It removes the file's namespace entry and access policy; it does not currently guarantee physical removal of the stored bytes. Do not treat deletion as secure erasure or immediate recovery of storage space.
 
 ## Agent access
 
-Filesystem tools are available through Umbod's root MCP endpoint, not connector-scoped endpoints. They support browsing, inspecting nodes, uploading, reading complete files, deleting files, and direct group/user sharing, subject to the caller's filesystem permissions.
+Filesystem tools and resources are available through Umbod's root MCP endpoint, not connector-scoped endpoints. Tools support browsing, inspecting nodes, uploading, deleting files, and direct group/user sharing. Native MCP resources provide complete-file reads, subject to the caller's filesystem permissions.
 
-Connecting an agent does not grant it unrestricted file access. Tool operations use Umbod's virtual filesystem and check authorization; they do not browse arbitrary host paths or bootstrap root permissions.
+Connecting an agent does not grant it unrestricted file access. Tools and resource reads use Umbod's virtual filesystem and check authorization; they do not browse arbitrary host paths or bootstrap root permissions.
+
+### Native file resources
+
+Files have canonical resource URIs of the form `umbod://filesystem/files/{node_id}`. Browsing, node inspection, file creation, and upload tools return native `resource_link` content alongside file metadata. The links identify files without loading their bytes. Directories do not receive file-content links.
+
+Read a file through MCP `resources/read` using its URI. The URI identifies current content, not a historical revision; the response includes the captured `revision` and `size_bytes` in content metadata. Umbod advertises a parameterized file template through `resources/templates/list`, rather than enumerating every file in `resources/list`. Template visibility requires an eligible read operation; each read independently checks current access.
+
+Known textual MIME types return UTF-8 text; binary or unspecified MIME types return MCP base64 blobs. Text types include `text/*`, JSON, XML, and their structured suffixes. Invalid UTF-8 in a declared text file fails rather than being replaced or silently decoded. Reads return at most **1 MiB of raw content**, with no partial results or silent truncation. Use an authenticated REST download for larger files.
+
+Resource links are locators, not access grants. Reads require current `discover` and `read` permissions, including when following a retained link after sharing changes. A direct file grant does not require access to its ancestors. Client applications decide how to display links and load resources; a link is not an automatic download.
+
+The beta `filesystem_read_file` tool has been removed, without a compatibility alias. Refresh cached MCP capabilities and use native resource reads instead.
 
 Recipient discovery uses `filesystem_search_sharing_recipients`; the former `filesystem_list_sharing_groups` and `search_users` tools are no longer available. `filesystem_share` accepts a typed `recipient`, with legacy top-level `group_id` requests still supported. Refresh cached tool schemas: search and share expose alternative schema branches, and REST access-policy updates have a breaking request change. See [Filesystem sharing](../reference/filesystem-sharing.md).
 
-MCP uploads have a maximum of 10 MiB, or the configured filesystem limit if lower. Complete-file MCP reads are limited to 1 MiB. These tool limits are separate from browser/API upload and proxy limits.
+MCP uploads have a maximum of 10 MiB, or the configured filesystem limit if lower. Complete-file MCP resource reads are limited to 1 MiB. These limits are separate from browser/API upload and proxy limits.
 
 ## For administrators and operators
 

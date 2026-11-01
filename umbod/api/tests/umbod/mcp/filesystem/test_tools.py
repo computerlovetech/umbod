@@ -23,14 +23,14 @@ async def test_observed_tools_publish_safe_schemas(filesystem_invocation_mcp: Fi
         await client.call_tool(CREATE, {"parent_id": await root_id(client), "name": "schema-witness", "metadata": METADATA})
     await filesystem_invocation_mcp.runtime.reconcile()
     tools = await filesystem_invocation_mcp.server.list_tools()
-    assert len(tools) == 11
+    assert len(tools) == 10
     assert all(isinstance(tool, ObservedFunctionTool) for tool in tools)
     async with Client(filesystem_invocation_mcp.server) as client:
         descriptors = {tool.name: tool for tool in await client.list_tools()}
     assert set(descriptors) == {
         "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
         "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_delete_file",
-        "filesystem_read_file", "filesystem_search_sharing_recipients", "filesystem_share",
+        "filesystem_search_sharing_recipients", "filesystem_share",
     }
     schema = descriptors[CREATE].input_schema
     assert set(schema["properties"]) == {"parent_id", "name", "metadata"}

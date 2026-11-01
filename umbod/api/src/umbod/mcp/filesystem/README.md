@@ -7,7 +7,7 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 # Files
 
 - [__init__.py](./__init__.py) — Package exports.
-- [authorization.py](./authorization.py) — Caller-specific tool visibility and request-local eligibility reuse across tool listing and lookup.
+- [authorization.py](./authorization.py) — Caller-specific tool and resource-template visibility with independent endpoint-scope restrictions.
 - [browsing.py](./browsing.py) — Observed ls, tree and stat operations through shared core exploration.
 - [browsing_models.py](./browsing_models.py) — Discriminated operation inputs and MCP output schemas with required node sharing metadata.
 - [caller.py](./caller.py) — Invocation caller capture.
@@ -15,11 +15,11 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 - [deletion.py](./deletion.py) — Revision-checked removal of one file and its policies, never directories or stored bytes.
 - [errors.py](./errors.py) — Safe public failures preserving authorization-denial classification for invocation and audit telemetry.
 - [factory.py](./factory.py) — Operation-local service composition.
+- [links.py](./links.py) — Canonical current-file URIs and native resource links alongside structured tool results.
 - [models.py](./models.py) — Required authorized/restricted sharing projections, enriched nodes, child envelopes, and deletion contracts.
 - [ports.py](./ports.py) — Caller and service factory contracts.
-- [read.py](./read.py) — Complete, authorized UTF-8 or base64 reads capped at 1 MiB, with explicit budgets and snapshot revisions; never truncated.
-- [read_models.py](./read_models.py) — Strict read budgets and bounded encoded output schemas.
-- [registration.py](./registration.py) — Filesystem tool registration, retaining existing browsing and creation tools.
+- [resources.py](./resources.py) — Authorized current-file resources with MIME-aware text/blob content, captured revisions, and complete reads capped at 1 MiB.
+- [registration.py](./registration.py) — Observed filesystem tools with explicit output schemas and native file links.
 - [rendering.py](./rendering.py) — Readable filesystem listings with explicit visibility and expansion limits.
 - [runtime.py](./runtime.py) — Caller-neutral authorization snapshots hydrated at startup and reconciled through durable events.
 - [sharing.py](./sharing.py) — Invocation-local batch enrichment of returned nodes through core sharing; no policy decisions or discovery queries.

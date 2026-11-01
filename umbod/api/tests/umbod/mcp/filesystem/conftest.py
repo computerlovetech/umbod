@@ -29,7 +29,7 @@ from umbod.core.filesystem.content import ContentService, FilesystemContent
 from umbod.core.filesystem.ports import ContentDriver, ByteStream
 from umbod.core.filesystem.models import ContentRef, StorageKey
 from umbod.core.filesystem.stores.discovery import DatabaseFilesystemAuthorizationReader
-from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory, register_filesystem_tools
+from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory, register_filesystem_resources, register_filesystem_tools
 from umbod.mcp.filesystem.authorization import FilesystemToolVisibility, FilesystemVisibilityMiddleware
 from umbod.mcp.filesystem.runtime import FilesystemDiscoveryRuntime
 from umbod.mcp.metrics.in_memory import InMemoryMcpMetricsRecorder
@@ -124,6 +124,7 @@ async def filesystem_server(filtered: bool) -> AsyncIterator[FilesystemMcp]:
         services,
         visibility,
     )
+    register_filesystem_resources(server, callers, services)
     try:
         yield FilesystemMcp(server, callers, metrics, services, content, files, runtime.database, discovery, visibility)
     finally:

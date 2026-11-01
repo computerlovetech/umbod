@@ -11,7 +11,6 @@ from fastmcp.exceptions import ToolError
 from umbod.core.filesystem.authorization.errors import PermissionDenied
 from umbod.core.filesystem.browsing import FilesystemBrowsing
 from umbod.core.filesystem.creation import FilesystemCreation
-from umbod.core.filesystem.content import FilesystemContent
 from umbod.core.filesystem.deletion import FilesystemDeletion
 from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
 from umbod.core.filesystem.content.errors import UploadTooLarge
@@ -135,9 +134,6 @@ async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
 
 
 TOOL_OPERATIONS = [
-    ("filesystem_read_file", "open_download", {
-        "node_id": "00000000-0000-0000-0000-000000000001", "encoding": "utf-8", "max_bytes": 1_048_576,
-    }),
     ("filesystem_delete_file", "delete_file", {
         "node_id": "00000000-0000-0000-0000-000000000001", "expected_revision": 1,
     }),
@@ -168,7 +164,6 @@ async def test_unmasked_tools_sanitize_all_operation_stages(
     callers = Mock(spec=FilesystemCallerCapture)
     callers.capture.return_value = filesystem_invocation_mcp.callers.capture()
     service_type = {
-        "open_download": FilesystemContent,
         "delete_file": FilesystemDeletion,
         "create_file": FilesystemCreation,
         "create_directory": FilesystemCreation,
@@ -177,7 +172,6 @@ async def test_unmasked_tools_sanitize_all_operation_stages(
     setattr(service, operation, AsyncMock(side_effect=error))
     factory = Mock(spec=FilesystemServiceFactory)
     factory_method = {
-        "open_download": factory.content,
         "delete_file": factory.deletion,
         "create_file": factory.creation,
         "create_directory": factory.creation,

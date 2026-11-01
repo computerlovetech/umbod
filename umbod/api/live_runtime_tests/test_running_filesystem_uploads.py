@@ -9,9 +9,13 @@ import httpx
 import pytest
 import pytest_asyncio
 from fastmcp import Client
+from mcp.shared.exceptions import MCPError
+from mcp.types import BlobResourceContents, TextResourceContents
 
 from conftest import RuntimeEndpoints
-from test_running_filesystem import FILESYSTEM, checked_summary, tool_payload, wait_for_filesystem_tools
+from test_running_filesystem import (
+    FILESYSTEM, checked_summary, file_resource_link, file_resource_uri, tool_payload, wait_for_filesystem_tools,
+)
 from test_running_personal_mcp_execution import mcp_client, proxy_token
 
 
@@ -72,23 +76,30 @@ PNG_BYTES = base64.b64decode(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("content,expected", [
-    ({"encoding": "utf-8", "text": "résumé 東京\n"}, "résumé 東京\n".encode("utf-8")),
-    ({"encoding": "base64", "data": base64.b64encode(b"\x00\xff\x80\r\n").decode("ascii")}, b"\x00\xff\x80\r\n"),
-    ({"encoding": "base64", "data": ""}, b""),
-    ({"encoding": "base64", "data": base64.b64encode(PNG_BYTES).decode("ascii")}, PNG_BYTES),
-    ({"encoding": "base64", "data": base64.b64encode(b"x" * 10_485_760).decode("ascii")}, b"x" * 10_485_760),
-], ids=["unicode-text", "binary", "empty", "png-image", "maximum-size"])
+@pytest.mark.parametrize("content,expected,content_type", [
+    ({"encoding": "utf-8", "text": "résumé 東京\n"}, "résumé 東京\n".encode("utf-8"), "text/plain"),
+    ({"encoding": "utf-8", "text": "{}"}, b"{}", "application/json"),
+    ({"encoding": "utf-8", "text": "{}"}, b"{}", "application/vnd.umbod+json"),
+    ({"encoding": "utf-8", "text": "<file/>"}, b"<file/>", "application/xml"),
+    ({"encoding": "utf-8", "text": "<file/>"}, b"<file/>", "application/vnd.umbod+xml"),
+    ({"encoding": "base64", "data": base64.b64encode(b"\x00\xff\x80\r\n").decode("ascii")}, b"\x00\xff\x80\r\n", "application/octet-stream"),
+    ({"encoding": "utf-8", "text": "unknown"}, b"unknown", "application/x-unknown"),
+    ({"encoding": "base64", "data": ""}, b"", "application/octet-stream"),
+    ({"encoding": "base64", "data": base64.b64encode(PNG_BYTES).decode("ascii")}, PNG_BYTES, "image/png"),
+    ({"encoding": "base64", "data": base64.b64encode(b"x" * 1_048_576).decode("ascii")}, b"x" * 1_048_576, "application/octet-stream"),
+    ({"encoding": "base64", "data": base64.b64encode(b"x" * 10_485_760).decode("ascii")}, b"x" * 10_485_760, "application/octet-stream"),
+], ids=["unicode-text", "json", "json-suffix", "xml", "xml-suffix", "binary", "unknown-mime", "empty", "png-image", "resource-limit", "maximum-size"])
 async def test_native_upload_is_readable_through_rest_and_private_across_workers(
-    native_upload_runtime: NativeUploadRuntime, content: dict[str, str], expected: bytes,
+    native_upload_runtime: NativeUploadRuntime, content: dict[str, str], expected: bytes, content_type: str,
 ) -> None:
     runtime = native_upload_runtime
-    content_type = "image/png" if expected == PNG_BYTES else "application/octet-stream"
-    node = tool_payload(await runtime.client.call_tool("filesystem_upload", {
+    result = await runtime.client.call_tool("filesystem_upload", {
         "parent_id": runtime.directory_id, "name": "artifact.png" if content_type == "image/png" else "artifact.bin",
         "metadata": {"content_type": content_type, "attributes": {}},
         "content": content,
-    }))
+    })
+    node = tool_payload(result)
+    uri = file_resource_link(result, node["id"])
     assert node["parent_id"] == runtime.directory_id
     assert node["metadata"]["content_type"] == content_type
     path = FILESYSTEM + "/nodes/" + node["id"]
@@ -97,22 +108,51 @@ async def test_native_upload_is_readable_through_rest_and_private_across_workers
     assert response.status_code == 200
     assert response.headers["content-type"].split(";")[0] == content_type
     assert response.content == expected
-    await wait_for_filesystem_tools(runtime.client, {"filesystem_read_file"})
+    await wait_for_filesystem_tools(runtime.client, {"filesystem_delete_file"})
     if len(expected) <= 1_048_576:
-        assert tool_payload(await runtime.client.call_tool("filesystem_read_file", {
-            "node_id": node["id"], "encoding": "base64", "max_bytes": len(expected),
-        })) == {
-            "node_id": node["id"], "revision": node["revision"], "size_bytes": len(expected),
-            "content": {"encoding": "base64", "data": base64.b64encode(expected).decode("ascii")},
-        }
-    if expected:
-        limited = await runtime.client.call_tool("filesystem_read_file", {
-            "node_id": node["id"], "encoding": "base64", "max_bytes": min(len(expected) - 1, 1_048_576),
-        }, raise_on_error=False)
-        assert limited.is_error
-        assert "filesystem_read_too_large" in limited.content[0].text
+        contents = await runtime.client.read_resource(uri)
+        assert len(contents) == 1
+        resource = contents[0]
+        assert str(resource.uri) == uri
+        assert resource.mime_type == content_type
+        assert resource.meta == {"revision": node["revision"], "size_bytes": len(expected)}
+        if content_type.startswith("text/") or content_type in {"application/json", "application/xml"} or content_type.endswith(("+json", "+xml")):
+            assert isinstance(resource, TextResourceContents)
+            assert resource.text == expected.decode("utf-8")
+        else:
+            assert isinstance(resource, BlobResourceContents)
+            assert base64.b64decode(resource.blob) == expected
+    else:
+        with pytest.raises(MCPError):
+            await runtime.client.read_resource(uri)
     assert runtime.other_api.get(path).status_code == 403
     assert runtime.other_api.get(path + "/content").status_code == 403
+    await wait_for_filesystem_tools(runtime.other_client, {"get_filesystem_node"})
+    with pytest.raises(MCPError) as denied:
+        await runtime.other_client.read_resource(uri)
+    with pytest.raises(MCPError) as missing:
+        await runtime.other_client.read_resource(file_resource_uri(str(uuid4())))
+    assert denied.value.error.message == missing.value.error.message
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("content_type", ["text/plain", "application/json", "application/xml", "application/vnd.umbod+json", "application/vnd.umbod+xml"])
+async def test_known_text_resource_rejects_invalid_utf8_safely(
+    native_upload_runtime: NativeUploadRuntime, content_type: str,
+) -> None:
+    runtime = native_upload_runtime
+    data = b"private-invalid-text-\xff"
+    result = await runtime.client.call_tool("filesystem_upload", {
+        "parent_id": runtime.directory_id, "name": "invalid-text",
+        "metadata": {"content_type": content_type, "attributes": {}},
+        "content": {"encoding": "base64", "data": base64.b64encode(data).decode("ascii")},
+    })
+    node = tool_payload(result)
+    await wait_for_filesystem_tools(runtime.client, {"filesystem_delete_file"})
+    with pytest.raises(MCPError) as error:
+        await runtime.client.read_resource(file_resource_link(result, node["id"]))
+    assert "private-invalid-text" not in error.value.error.message
+    assert "UnicodeDecodeError" not in error.value.error.message
 
 
 @pytest.mark.asyncio
@@ -154,12 +194,9 @@ async def test_read_rejects_oversize_rest_file_without_changing_rest_downloads(
     )
     assert transferred.status_code == 204, transferred.text
     node = checked_summary(runtime.api.post(session["complete_url"]), 201)
-    await wait_for_filesystem_tools(runtime.client, {"filesystem_read_file"})
-    result = await runtime.client.call_tool("filesystem_read_file", {
-        "node_id": node["id"], "encoding": "base64", "max_bytes": 1_048_576,
-    }, raise_on_error=False)
-    assert result.is_error
-    assert "filesystem_read_too_large" in result.content[0].text
+    await wait_for_filesystem_tools(runtime.client, {"filesystem_delete_file"})
+    with pytest.raises(MCPError):
+        await runtime.client.read_resource(file_resource_uri(node["id"]))
     downloaded = runtime.api.get(FILESYSTEM + "/nodes/" + node["id"] + "/content")
     assert downloaded.status_code == 200
     assert downloaded.content == data

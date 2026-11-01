@@ -6,6 +6,7 @@ from uuid import UUID, uuid4
 import httpx2
 import pytest
 from fastmcp import Client, FastMCP
+from mcp.shared.exceptions import MCPError
 from fastmcp.client.transports import StreamableHttpTransport
 from fastmcp.server.auth.auth import AccessToken
 from fastmcp.server.auth.providers.google import GoogleProvider
@@ -20,6 +21,7 @@ from umbod.mcp.connectors.downstream_mcp.provider import _REQUEST_CONNECTOR_SCOP
 from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, StaticFilesystemGroupClaimFields, register_filesystem_tools
 from umbod.mcp.filesystem.authorization import FilesystemToolVisibility, FilesystemVisibilityMiddleware
 from umbod.mcp.filesystem.runtime import FilesystemDiscoveryRuntime
+from umbod.mcp.filesystem.links import FILE_RESOURCE_TEMPLATE, file_resource_uri
 from umbod.mcp.signals import McpInvocationPublisher
 from umbod.mcp.tools import McpObservedToolRegistrar
 
@@ -32,7 +34,7 @@ BOOTSTRAP_TOOLS = {
     "create_filesystem_file", "create_filesystem_directory", "filesystem_upload",
 }
 INSPECT_TOOLS = {"filesystem_browse", "get_filesystem_node"}
-FILE_READ_TOOLS = INSPECT_TOOLS | {"filesystem_read_file"}
+FILE_READ_TOOLS = INSPECT_TOOLS
 
 
 def select_caller(filesystem: FilesystemMcp, subject: str, groups: tuple[str, ...] = ()) -> None:
@@ -196,11 +198,8 @@ async def test_revoked_last_witness_rejects_retained_invocation_before_discovery
     )
     assert await listed_tools(filesystem_mcp) == FILE_READ_TOOLS
     async with Client(filesystem_mcp.server) as client:
-        result = await client.call_tool("filesystem_read_file", {
-            "node_id": str(node_id), "encoding": "utf-8", "max_bytes": 100,
-        }, raise_on_error=False)
-    assert result.is_error
-    assert result.content[0].text == "filesystem_permission_denied: Filesystem access denied"
+        with pytest.raises(MCPError, match="filesystem_permission_denied: Filesystem access denied"):
+            await client.read_resource(file_resource_uri(node_id))
     await filesystem_mcp.runtime.reconcile()
     assert await listed_tools(filesystem_mcp) == set()
 
@@ -274,3 +273,55 @@ async def test_http_lookup_enforces_visibility_callback_with_verified_request_id
     else:
         browsing.assert_not_called()
         assert "Unknown tool" in result.content[0].text
+
+
+async def listed_templates(filesystem: FilesystemMcp) -> set[str]:
+    async with Client(filesystem.server) as client:
+        return {str(template.uri_template) for template in await client.list_resource_templates()}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind,permissions,visible", [
+    ("file", {Permission.DISCOVER, Permission.READ}, True),
+    ("file", {Permission.DISCOVER}, False),
+    ("file", {Permission.READ}, False),
+    ("directory", {Permission.DISCOVER, Permission.READ}, False),
+])
+async def test_template_visibility_requires_in_memory_file_read_witness(
+    filesystem_mcp: FilesystemMcp, kind: str, permissions: set[Permission], visible: bool,
+) -> None:
+    node_id = await private_node(filesystem_mcp, kind)
+    await grant(filesystem_mcp, node_id, "bob", permissions)
+    await filesystem_mcp.runtime.reconcile()
+    select_caller(filesystem_mcp, "bob")
+    assert (FILE_RESOURCE_TEMPLATE in await listed_templates(filesystem_mcp)) is visible
+
+
+@pytest.mark.asyncio
+async def test_template_discovery_is_root_only_and_does_not_construct_services(
+    filesystem_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await private_node(filesystem_mcp)
+    await filesystem_mcp.runtime.reconcile()
+    forbidden = Mock(side_effect=AssertionError("Discovery performed I/O"))
+    monkeypatch.setattr(filesystem_mcp.database, "read_session", forbidden)
+    monkeypatch.setattr(filesystem_mcp.services, "content", forbidden)
+    assert await listed_templates(filesystem_mcp) == {FILE_RESOURCE_TEMPLATE}
+    token = _REQUEST_CONNECTOR_SCOPE.set("connector")
+    try:
+        assert await listed_templates(filesystem_mcp) == set()
+    finally:
+        _REQUEST_CONNECTOR_SCOPE.reset(token)
+    forbidden.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_template_discovery_preserves_unrelated_template(
+    filesystem_mcp: FilesystemMcp,
+) -> None:
+    @filesystem_mcp.server.resource("other://values/{value}")
+    def unrelated(value: str) -> str:
+        return value
+
+    select_caller(filesystem_mcp, "bob")
+    assert await listed_templates(filesystem_mcp) == {"other://values/{value}"}

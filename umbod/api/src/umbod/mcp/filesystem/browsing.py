@@ -23,6 +23,7 @@ from .browsing_models import (
     browse_input_schema,
 )
 from .errors import filesystem_operation
+from .links import file_link_result
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
 from .rendering import render_inspection, render_listing, render_tree
 from .sharing import enrich_nodes
@@ -42,6 +43,7 @@ class FilesystemBrowseTool(Tool):
                 "No working directory or shell execution. Only discoverable nodes are returned; "
                 "breadcrumbs may be partial. Limits bound returned entries, not storage work. "
                 "Separate reads may observe concurrent changes. No file bytes are read. "
+                "File entries include MCP resource links; use resources/read to read their current content (maximum 1 MiB). "
                 "Sharing metadata describes manageable direct group and user sharing, not a full effective-access audit."
             ),
             parameters=browse_input_schema(),
@@ -95,4 +97,4 @@ class FilesystemBrowseTool(Tool):
                 )
                 response = DirectoryListingResponse(operation="ls", result=listing)
                 rendered = render_listing(listing)
-            return ToolResult(content=rendered, structured_content=response.model_dump(mode="json"))
+            return file_link_result(response, nodes, rendered)

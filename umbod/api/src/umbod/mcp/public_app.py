@@ -95,7 +95,7 @@ from umbod.mcp.signals import McpInvocationPublisher, McpSignals, McpToolExecuti
 from umbod.mcp.connectors.downstream_mcp.inventory import shared_tool_inventory
 from umbod.mcp.middleware import McpAuditMiddleware
 from umbod.mcp.middleware.protocol_metrics import McpProtocolMetricsMiddleware
-from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesystemServiceFactory, RuntimeFilesystemGroupClaimFields, StaticFilesystemGroupClaimFields, register_filesystem_tools
+from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesystemServiceFactory, RuntimeFilesystemGroupClaimFields, StaticFilesystemGroupClaimFields, register_filesystem_resources, register_filesystem_tools
 from umbod.core.filesystem.stores.discovery import DatabaseFilesystemAuthorizationReader
 from umbod.mcp.filesystem.authorization import FilesystemToolVisibility, FilesystemVisibilityMiddleware
 from umbod.mcp.filesystem.runtime import FilesystemDiscoveryRuntime
@@ -230,15 +230,15 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     mcp.filesystem_discovery_runtime = filesystem_runtime
     filesystem_visibility = FilesystemToolVisibility(filesystem_callers, filesystem_runtime)
     mcp.add_middleware(FilesystemVisibilityMiddleware(filesystem_visibility))
-    register_filesystem_tools(
-        McpObservedToolRegistrar(mcp, publisher),
-        filesystem_callers,
-        DatabaseFilesystemServiceFactory(
-            persistence_runtime.database, filesystem_content, settings.filesystem.upload_max_bytes,
-            filesystem_managed_issuer(settings),
-        ),
-        filesystem_visibility,
+    filesystem_services = DatabaseFilesystemServiceFactory(
+        persistence_runtime.database, filesystem_content, settings.filesystem.upload_max_bytes,
+        filesystem_managed_issuer(settings),
     )
+    register_filesystem_tools(
+        McpObservedToolRegistrar(mcp, publisher), filesystem_callers,
+        filesystem_services, filesystem_visibility,
+    )
+    register_filesystem_resources(mcp, filesystem_callers, filesystem_services)
     await initialize_openapi_discovery(mcp)
     await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, signals, mcp.execution_pipelines, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes)
     mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.execution_pipelines)

@@ -9,9 +9,10 @@ from urllib.parse import urlsplit
 
 import httpx
 import pytest
+from mcp.types import BlobResourceContents
 
 from conftest import RuntimeEndpoints
-from test_running_filesystem import FILESYSTEM, checked_summary, tool_payload, wait_for_filesystem_tools
+from test_running_filesystem import FILESYSTEM, checked_summary, file_resource_uri, wait_for_filesystem_tools
 from test_running_filesystem_uploads import NativeUploadRuntime, native_upload_runtime as native_upload_runtime
 from test_running_personal_mcp_execution import mcp_client, proxy_token
 
@@ -95,20 +96,20 @@ async def test_s3_stream_upload_publishes_only_after_completion_and_survives_wor
     assert reopened.status_code == 200
     assert reopened.content == content
     if len(content) <= 1_048_576:
-        await wait_for_filesystem_tools(runtime.client, {"filesystem_read_file"})
-        read = tool_payload(await runtime.client.call_tool("filesystem_read_file", {
-            "node_id": node["id"], "encoding": "base64", "max_bytes": len(content),
-        }))
-        assert read["content"] == {"encoding": "base64", "data": base64.b64encode(content).decode("ascii")}
+        await wait_for_filesystem_tools(runtime.client, {"filesystem_delete_file"})
+        uri = file_resource_uri(node["id"])
+        read = await runtime.client.read_resource(uri)
+        assert len(read) == 1
+        assert isinstance(read[0], BlobResourceContents)
+        assert base64.b64decode(read[0].blob) == content
+        assert read[0].meta == {"revision": node["revision"], "size_bytes": len(content)}
         tls = ssl.create_default_context(cafile=os.environ["UMBOD_TEST_PERSONAL_CA"])
         with httpx.Client(base_url=os.environ["UMBOD_TEST_PERSONAL_URL"], verify=tls, timeout=30) as identity:
             endpoint = os.environ["UMBOD_TEST_MCP_B_URL"]
             token = proxy_token(endpoint, runtime_endpoints.bearer_token, identity)
             async with mcp_client(endpoint, token) as secondary:
-                await wait_for_filesystem_tools(secondary, {"filesystem_read_file"})
-                secondary_read = tool_payload(await secondary.call_tool("filesystem_read_file", {
-                    "node_id": node["id"], "encoding": "base64", "max_bytes": len(content),
-                }))
+                await wait_for_filesystem_tools(secondary, {"filesystem_delete_file"})
+                secondary_read = await secondary.read_resource(uri)
                 assert secondary_read == read
     assert storage_objects()[key] == staged[key]
     late = runtime.api.put(session["transfer"]["url"], content=b"replacement", headers=session["transfer"]["headers"])

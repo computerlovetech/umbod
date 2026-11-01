@@ -10,6 +10,7 @@ from umbod.core.filesystem.content.errors import UploadTooLarge
 from umbod.core.filesystem.ports import ByteStream
 
 from .errors import filesystem_operation
+from .links import file_link_result
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
 from .upload_models import MAX_UPLOAD_BYTES, UploadCommand
 
@@ -29,7 +30,8 @@ class FilesystemUploadTool(Tool):
                 "Create a private file with UTF-8 text or canonical padded base64 content. "
                 "Maximum 10485760 decoded bytes (10 MiB); lower server limits apply. "
                 "One-shot upload, without chunking or resumability. Retrying is not idempotent. "
-                "Returns file metadata only, never uploaded content."
+                "Returns file metadata and an MCP resource link, never uploaded content. "
+                "Use resources/read for current content up to 1 MiB; larger files require an HTTP download."
             ),
             parameters=UploadCommand.model_json_schema(),
             output_schema=NodeSummary.model_json_schema(),
@@ -64,7 +66,4 @@ class FilesystemUploadTool(Tool):
                 content_stream(content),
             )
             result = await uploads.complete(caller, session.id)
-            return ToolResult(
-                content="File uploaded successfully.",
-                structured_content=result.node.model_dump(mode="json"),
-            )
+            return file_link_result(result.node, [result.node], "File uploaded successfully.")

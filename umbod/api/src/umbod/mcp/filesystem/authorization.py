@@ -6,12 +6,14 @@ from typing import Optional
 from fastmcp.server.auth import AuthContext
 from fastmcp.server.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import Tool
-from mcp.types import ListToolsRequest
+from fastmcp.resources import ResourceTemplate
+from mcp.types import ListResourceTemplatesRequest, ListToolsRequest
 
 from umbod.core.filesystem.authorization import ResolvedIdentity, VerifiedIdentityResolver
 from umbod.core.filesystem.authorization.discovery import FilesystemOperation, permitted_operations
 from umbod.mcp.connectors.downstream_mcp.provider import _REQUEST_CONNECTOR_SCOPE
 
+from .links import FILE_RESOURCE_TEMPLATE
 from .ports import FilesystemCallerCapture
 from .runtime import FilesystemDiscoveryRuntime
 
@@ -24,7 +26,6 @@ FILESYSTEM_TOOL_OPERATIONS: dict[str, FilesystemOperation] = {
     "create_filesystem_file": FilesystemOperation.CREATE,
     "create_filesystem_directory": FilesystemOperation.CREATE,
     "filesystem_upload": FilesystemOperation.CREATE,
-    "filesystem_read_file": FilesystemOperation.READ,
     "filesystem_delete_file": FilesystemOperation.DELETE,
     "filesystem_search_sharing_recipients": FilesystemOperation.SHARE,
     "filesystem_share": FilesystemOperation.SHARE,
@@ -73,6 +74,19 @@ class FilesystemToolVisibility:
 class FilesystemVisibilityMiddleware(Middleware):
     def __init__(self, visibility: FilesystemToolVisibility) -> None:
         self._visibility = visibility
+
+    async def on_list_resource_templates(
+        self,
+        context: MiddlewareContext[ListResourceTemplatesRequest],
+        call_next: CallNext[ListResourceTemplatesRequest, Sequence[ResourceTemplate]],
+    ) -> Sequence[ResourceTemplate]:
+        async with self._visibility.discovery_operation() as operations:
+            templates = await call_next(context)
+            return [
+                template for template in templates
+                if template.uri_template != FILE_RESOURCE_TEMPLATE
+                or FilesystemOperation.READ in operations
+            ]
 
     async def on_list_tools(
         self,

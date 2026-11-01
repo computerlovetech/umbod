@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 
-from fastmcp.exceptions import ToolError
+from fastmcp.exceptions import ResourceError, ToolError
 
 from umbod.mcp.tools.errors import ToolAuthorizationDenied
 
@@ -32,7 +32,7 @@ _ERROR_MESSAGES: dict[type[Exception], str] = {
     InvalidSharingPolicy: "filesystem_invalid_sharing_policy: Invalid filesystem sharing policy",
     SharingPolicyUnavailable: "filesystem_policy_unavailable: Filesystem sharing configuration unavailable",
     ReadTooLarge: "filesystem_read_too_large: Filesystem file exceeds read limit",
-    InvalidReadEncoding: "filesystem_read_invalid_encoding: File is not valid UTF-8; use base64",
+    InvalidReadEncoding: "filesystem_read_invalid_encoding: File is not valid UTF-8",
     UploadTooLarge: "filesystem_upload_too_large: Filesystem upload too large",
     UploadConflict: "filesystem_upload_conflict: Filesystem upload conflict",
     UploadExpired: "filesystem_upload_expired: Filesystem upload expired",
@@ -44,6 +44,19 @@ _ERROR_MESSAGES: dict[type[Exception], str] = {
     RevisionConflict: "filesystem_revision_conflict: Filesystem revision conflict",
     StorageFailure: "filesystem_storage_failure: Filesystem storage unavailable",
 }
+
+
+@contextmanager
+def filesystem_resource_operation() -> Iterator[None]:
+    try:
+        yield
+    except (PermissionDenied, MissingNode):
+        raise ResourceError("filesystem_permission_denied: Filesystem access denied") from None
+    except Exception as error:
+        for error_type, message in _ERROR_MESSAGES.items():
+            if isinstance(error, error_type):
+                raise ResourceError(message) from None
+        raise ResourceError("filesystem_operation_failed: Filesystem operation failed") from None
 
 
 @contextmanager
