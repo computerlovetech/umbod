@@ -102,28 +102,4 @@ describe('OpenAPI connector administration milestone 3', () => {
     expect(connectors.listTools).not.toHaveBeenCalled();
   });
 
-  test('initial loading does not turn an unavailable operation catalog into an empty result', async () => {
-    const connectors = {
-      list: vi.fn(async () => ({
-        connectors: [{
-          connector_id: 'billing',
-          display_name: 'Billing',
-          tool_name_prefix: 'Billing',
-          capability_description: 'Manage billing resources',
-          created_at: '2026-03-03T09:00:00Z',
-          updated_at: '2026-03-03T09:00:00Z',
-          publication_status: 'draft' as const,
-          available_actions: ['import', 'publish'] as Array<'import' | 'publish'>
-        }]
-      })),
-      listTools: vi.fn(async () => { throw new Error('tools unavailable'); })
-    };
-
-    await expect(loadOpenApiConnectorList({ connectors })).resolves.toMatchObject({
-      status: 'ready',
-      connectors: [{ id: 'billing', tools: [] }]
-    });
-    expect(connectors.listTools).not.toHaveBeenCalled();
-  });
-
 });

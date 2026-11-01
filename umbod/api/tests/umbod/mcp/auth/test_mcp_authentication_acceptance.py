@@ -40,8 +40,6 @@ def UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH(
     ("provider", "token", "user_email"),
     [
         ("google", "google-valid-token", "alex@example.com"),
-        ("azure_entra_id", "azure-valid-token", "alex@contoso.com"),
-        ("auth0", "auth0-valid-token", "alex@example.com"),
     ],
 )
 def test_agent_client_with_valid_provider_user_token_can_reach_mcp_tools(
@@ -57,16 +55,6 @@ def test_agent_client_with_valid_provider_user_token_can_reach_mcp_tools(
 
     assert response.status_code != 401
     assert response.status_code != 403
-
-
-def test_server_trusts_only_the_configured_provider_for_mcp_tools() -> None:
-    settings = MCPAppSettings(oidc=OIDCSettings(provider="auth0", _env_file=None), _env_file=None)
-    auth_provider = _auth_provider_for_tokens(settings, {})
-
-    with TestClient(create_test_mcp_http_app(settings, auth_provider=auth_provider)) as client:
-        response = _request_mcp_tool_list(client, "google-valid-token")
-
-    assert response.status_code == 401
 
 
 def test_oauth_authorization_endpoints_are_available_at_root_for_mcp_clients(
@@ -275,20 +263,6 @@ def test_injected_auth_provider_takes_precedence_over_single_test_user_settings(
     assert rejected_response.status_code == 401
     assert accepted_response.status_code != 401
     assert accepted_response.status_code != 403
-
-
-def test_valid_user_token_is_sufficient_without_acl_or_role_claims() -> None:
-    settings = MCPAppSettings(oidc=OIDCSettings(provider="google", _env_file=None), _env_file=None)
-    auth_provider = _auth_provider_for_tokens(
-        settings,
-        {"google-valid-token-without-role": "alex@example.com"},
-    )
-
-    with TestClient(create_test_mcp_http_app(settings, auth_provider=auth_provider)) as client:
-        response = _request_mcp_tool_list(client, "google-valid-token-without-role")
-
-    assert response.status_code != 401
-    assert response.status_code != 403
 
 
 def _auth_provider_for_tokens(

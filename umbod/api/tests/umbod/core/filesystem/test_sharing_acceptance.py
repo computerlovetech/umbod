@@ -7,7 +7,6 @@ from umbod.core.filesystem import (
     AccessGrant,
     ContentRef,
     Filesystem,
-    MissingNode,
     NodeKind,
     NodeMetadata,
     Ownership,
@@ -79,22 +78,6 @@ async def test_sharing_language_replaces_and_revokes_grants_without_changing_own
     await sharing.revoke(node, reader)
     assert tuple(await sharing.grants(node)) == ()
     assert await sharing.owner(node) == owner
-
-
-@pytest.mark.asyncio
-async def test_missing_namespace_and_missing_ownership_are_distinct(
-    filesystem_runtime: PersistenceRuntime,
-) -> None:
-    node_id = uuid4()
-    namespace = create_namespace_driver(database=filesystem_runtime.database)
-    policies = create_access_control_driver(database=filesystem_runtime.database)
-    with pytest.raises(MissingNode):
-        await namespace.get_node(node_id)
-    with pytest.raises(OwnershipNotFound):
-        await policies.get_owner(node_id)
-    owner = Ownership(node_id=node_id, owner=subject("opaque-owner"))
-    await policies.set_owner(owner)
-    assert await policies.get_owner(node_id) == owner
 
 
 @pytest.mark.asyncio

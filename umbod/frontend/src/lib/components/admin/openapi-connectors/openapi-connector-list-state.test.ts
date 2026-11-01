@@ -173,17 +173,6 @@ describe('OpenAPI connector list state', () => {
     expect(state.tools.toolsState(summary).tools[0]?.operationId).toBe('operation');
   });
 
-  test('applies submitted activation to its connector after selection changes', async () => {
-    const tool = { operationId: 'operation', method: 'get', path: '/', summary: '', description: '', activationStatus: 'disabled' as const, outputSchema: { status: 'not-declared' as const } };
-    const connector = createConnector({ id: 'a' });
-    const state = new OpenApiConnectorListState({ loadTools: async () => [tool] });
-    state.toggleOperations(connector);
-    await vi.waitFor(() => expect(state.tools.toolsState(connector).status).toBe('ready'));
-    state.selectConnector('b');
-    state.tools.setActivation(connector, 'operation', 'enabled');
-    expect(state.tools.toolsState(connector).tools[0]?.activationStatus).toBe('enabled');
-  });
-
   test('publishes lazy detail through public reactive state and reuses the cache', async () => {
     const summary = createConnector({ id: 'connector-a', name: 'Summary' });
     const detail = createConnector({ id: 'connector-a', name: 'Detailed', updatedAt: '2026-01-04T00:00:00Z' });

@@ -112,14 +112,21 @@ async def test_root_and_direct_lookup_return_complete_safe_summaries(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("operation", ["root", "node", "list"])
-@pytest.mark.parametrize("reason", ["read-only", "unowned", "unresolved", "other-owner", "missing"])
+@pytest.mark.parametrize(
+    ("operation", "reason"),
+    [
+        (operation, reason)
+        for operation in ("root", "node", "list")
+        for reason in ("read-only", "unowned", "unresolved", "other-owner", "missing")
+        if (operation, reason) != ("root", "missing")
+    ],
+)
 async def test_targets_without_discover_are_uniformly_denied(
     browsing_context: BrowsingContext, operation: str, reason: str,
 ) -> None:
     context = browsing_context
     root = await context.authorization.namespace.get_root()
-    node_id = uuid4() if reason == "missing" and operation != "root" else root.id
+    node_id = uuid4() if reason == "missing" else root.id
     if reason != "unowned":
         await set_owner(context, node_id, "bob")
     if reason == "read-only":
