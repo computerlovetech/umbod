@@ -6,7 +6,7 @@ from typing import Any, Optional
 
 import pytest
 from fastmcp import FastMCP
-from fastmcp.exceptions import ValidationError
+from fastmcp.exceptions import ToolError, ValidationError
 from fastmcp.tools import FunctionTool, ToolResult
 
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
@@ -27,6 +27,8 @@ from umbod.mcp.signals import (
 )
 from umbod.mcp.metrics import CompletedToolInvocation, InvocationOutcome, InvocationScope
 from umbod.mcp.tools import McpObservedToolRegistrar
+from umbod.mcp.tools.errors import ToolAuthorizationDenied
+from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from tests.support.signals import InMemorySignalFailureHandler
 from umbod.mcp.listeners.invocation_metrics import InvocationMetricsReceiver
 from umbod.mcp.metrics import McpMetricsRecorder, ToolInvocationMetricIdentity
@@ -234,6 +236,31 @@ async def test_original_exception_identity_is_preserved() -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("failure_type,category,severity", [
+    (ToolAuthorizationDenied, McpToolInvocationFailureCategory.AUTHORIZATION, "WARNING"),
+    (ToolError, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, "ERROR"),
+])
+async def test_only_typed_authorization_denials_avoid_error_telemetry(
+    failure_type: type[ToolError], category: McpToolInvocationFailureCategory, severity: str,
+) -> None:
+    failure = failure_type("filesystem_permission_denied: Filesystem access denied")
+    logger = RecordingLogger()
+
+    async def invoke() -> None:
+        raise failure
+
+    with pytest.raises(failure_type) as raised:
+        await _registered_tool(invoke, _publisher(logger, RecordingMetrics())).run({})
+
+    assert raised.value is failure
+    assert len(logger.events) == 1
+    event = logger.events[0]
+    assert isinstance(event, McpToolInvocationFailed)
+    assert event.failure_category == category
+    assert StructuredMcpToolInvocationLogFormatter().format_invocation_completed(event).severity_text == severity
+
+
+@pytest.mark.asyncio
 async def test_cancellation_emits_no_completion() -> None:
     logger = RecordingLogger()
 
@@ -258,13 +285,14 @@ async def test_observer_failure_does_not_change_success_result(failing_method: s
 
 
 @pytest.mark.asyncio
-async def test_observer_failure_does_not_replace_original_exception() -> None:
-    failure = RuntimeError("domain failure")
+@pytest.mark.parametrize("failure_type", [RuntimeError, ToolAuthorizationDenied])
+async def test_observer_failure_does_not_replace_original_exception(failure_type: type[Exception]) -> None:
+    failure = failure_type("domain failure")
 
     async def invoke() -> None:
         raise failure
 
-    with pytest.raises(RuntimeError) as raised:
+    with pytest.raises(failure_type) as raised:
         await _registered_tool(invoke, RaisingObserver("failed")).run({})
 
     assert raised.value is failure

@@ -15,6 +15,7 @@ from umbod.core.invocation.failure_evidence import (
     InvocationReturnedFailure,
     exception_evidence,
 )
+from umbod.mcp.tools.errors import ToolAuthorizationDenied
 from umbod.mcp.signals import McpInvocationPublisher
 from umbod.mcp.signals.events import McpToolIdentity, McpToolInvocationFailureCategory
 
@@ -57,6 +58,9 @@ class ObservedFunctionTool(Tool):
         try:
             result = await self._delegate.run(arguments)
         except (asyncio.CancelledError, AuthorizationError):
+            raise
+        except ToolAuthorizationDenied as error:
+            self._publish_failure(lifecycle, McpToolInvocationFailureCategory.AUTHORIZATION, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
             raise
         except ValidationError as error:
             self._publish_failure(lifecycle, McpToolInvocationFailureCategory.VALIDATION, exception_evidence(error, InvocationFailureOrigin.INTERNAL))

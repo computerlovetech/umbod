@@ -7,6 +7,7 @@ from typing import Mapping, Protocol, Self
 from umbod.core.invocation.failure_evidence import InvocationExceptionEvidence
 from umbod.mcp.signals.events import (
     McpToolInvocationFailed,
+    McpToolInvocationFailureCategory,
     McpToolInvocationEvent,
     McpToolInvocationOutcome,
 )
@@ -90,7 +91,7 @@ def assemble_invocation_log_record(
     correlation = getattr(event.started, "correlation", None)
     return StructuredLogRecord(
         body="mcp tool invocation completed",
-        severity_text=_severity_for(_enum_value(event.outcome)),
+        severity_text=_severity_for(event),
         attributes=attributes,
         trace_id=correlation.trace_id if correlation is not None else None,
         span_id=correlation.span_id if correlation is not None else None,
@@ -139,7 +140,9 @@ def _enum_value(value: StrEnum) -> str:
     return str(value.value)
 
 
-def _severity_for(outcome: str) -> str:
-    if outcome == McpToolInvocationOutcome.FAILURE:
+def _severity_for(event: McpToolInvocationEvent) -> str:
+    if isinstance(event, McpToolInvocationFailed) and event.failure_category == McpToolInvocationFailureCategory.AUTHORIZATION:
+        return "WARNING"
+    if event.outcome == McpToolInvocationOutcome.FAILURE:
         return "ERROR"
     return "INFO"

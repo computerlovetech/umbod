@@ -1,4 +1,6 @@
 import asyncio
+import json
+from io import StringIO
 from typing import Any
 from unittest.mock import AsyncMock, Mock
 
@@ -22,7 +24,15 @@ from umbod.mcp.filesystem.errors import filesystem_operation
 from umbod.mcp.filesystem.ports import FilesystemCallerCapture, FilesystemServiceFactory
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.listeners import create_mcp_signals
-from umbod.mcp.signals import McpInvocationPublisher
+from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter
+from umbod.mcp.logging.audit.recorder import McpAuditRecorder
+from umbod.mcp.logging.audit.sink import StdoutMcpAuditEventSink
+from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
+from umbod.mcp.logging.invocation.sink import StdoutMcpToolInvocationLogSink
+from umbod.mcp.signals import (
+    McpInvocationActor, McpInvocationContext, McpInvocationCorrelation,
+    McpInvocationPublisher, set_mcp_invocation_context,
+)
 from .conftest import FilesystemMcp
 
 
@@ -64,6 +74,63 @@ async def test_expected_domain_failures_do_not_leak_details(
         result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
     assert result.is_error
     assert result.content[0].text == expected
+    assert any(sample.labels["outcome"] == "failure" for sample in filesystem_invocation_mcp.metrics.metric_samples())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error_type,category,severity", [
+    (PermissionDenied, "authorization", 13),
+    (MissingNode, "authorization", 13),
+    (StorageFailure, "unexpected_error", 17),
+    (RuntimeError, "unexpected_error", 17),
+    (ToolError, "unexpected_error", 17),
+])
+async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
+    filesystem_invocation_mcp: FilesystemMcp, error_type: type[Exception],
+    category: str, severity: int,
+) -> None:
+    output = StringIO()
+    server = FastMCP()
+    browsing = Mock(spec=FilesystemBrowsing)
+    browsing.get_root = AsyncMock(side_effect=error_type("SECRET backend /private/path"))
+    factory = Mock(spec=FilesystemServiceFactory)
+    factory.browsing.return_value = browsing
+    signals = create_mcp_signals(
+        StdoutMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter(), output),
+        filesystem_invocation_mcp.metrics,
+        McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), output), "test"),
+    )
+    register_filesystem_tools(
+        McpObservedToolRegistrar(server, McpInvocationPublisher(signals)),
+        filesystem_invocation_mcp.callers, factory, filesystem_invocation_mcp.visibility,
+    )
+    set_mcp_invocation_context(McpInvocationContext(
+        actor=McpInvocationActor(authenticated_user_id="test-caller"),
+        correlation=McpInvocationCorrelation(trace_id="test-trace", span_id="test-span"),
+        server_name="test",
+    ))
+
+    async with Client(server) as client:
+        result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
+
+    records = [json.loads(line) for line in output.getvalue().splitlines()]
+    assert result.is_error
+    assert len(records) == 2
+    assert {record["body"] for record in records} == {"mcp tool invocation completed", "mcp audit event"}
+    for record in records:
+        assert record["attributes"]["mcp.failure.category"] == category
+        assert record["attributes"]["mcp.tool.name"] == "get_filesystem_root"
+        assert record["attributes"]["enduser.id"] == "test-caller"
+        assert record["trace_id"] == "test-trace"
+        assert record["severity_number"] == severity
+    invocation = next(record for record in records if record["body"] == "mcp tool invocation completed")
+    if category == "authorization":
+        assert result.content[0].text == "filesystem_permission_denied: Filesystem access denied"
+        assert invocation["attributes"]["exception.type"] == "ToolAuthorizationDenied"
+    assert invocation["attributes"]["mcp.failure.origin"] == "internal"
+    assert "exception.stacktrace" in invocation["attributes"]
+    assert "SECRET" not in output.getvalue()
+    assert "/private/path" not in output.getvalue()
     assert any(sample.labels["outcome"] == "failure" for sample in filesystem_invocation_mcp.metrics.metric_samples())
 
 

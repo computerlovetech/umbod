@@ -7,6 +7,8 @@ from typing import Mapping
 from umbod.mcp.logging.audit.event import (
     McpAnonymousAuditActor,
     McpAuditEvent,
+    McpAuditFailure,
+    McpAuditFailureCategory,
     McpAuditOutcome,
     McpAuditRecord,
     McpAuditResult,
@@ -87,7 +89,7 @@ def assemble_audit_record(
 ) -> StructuredMcpAuditRecord:
     return StructuredMcpAuditRecord(
         body="mcp audit event",
-        severity_text=_severity_for(event.outcome),
+        severity_text=_severity_for(event),
         attributes=attributes,
         trace_id=event.correlation.trace_id,
         span_id=event.correlation.span_id,
@@ -141,7 +143,9 @@ def _enum_value(value: StrEnum) -> str:
     return str(value.value)
 
 
-def _severity_for(outcome: McpAuditOutcome) -> str:
-    if outcome == McpAuditOutcome.FAILURE:
+def _severity_for(event: McpAuditEvent) -> str:
+    if isinstance(event.result, McpAuditFailure) and event.result.failure_category == McpAuditFailureCategory.AUTHORIZATION:
+        return "WARNING"
+    if event.outcome == McpAuditOutcome.FAILURE:
         return "ERROR"
     return "INFO"

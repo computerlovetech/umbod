@@ -13,7 +13,7 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 - [caller.py](./caller.py) — Invocation caller capture.
 - [claim_fields.py](./claim_fields.py) — Permission claim sources.
 - [deletion.py](./deletion.py) — Revision-checked removal of one file and its policies, never directories or stored bytes.
-- [errors.py](./errors.py) — Safe public failures.
+- [errors.py](./errors.py) — Safe public failures preserving authorization-denial classification for invocation and audit telemetry.
 - [factory.py](./factory.py) — Operation-local service composition.
 - [models.py](./models.py) — Required authorized/restricted sharing projections, enriched nodes, child envelopes, and deletion contracts.
 - [ports.py](./ports.py) — Caller and service factory contracts.

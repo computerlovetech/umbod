@@ -3,6 +3,8 @@ from contextlib import contextmanager
 
 from fastmcp.exceptions import ToolError
 
+from umbod.mcp.tools.errors import ToolAuthorizationDenied
+
 from umbod.core.filesystem.authorization.errors import PermissionDenied
 from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
 from umbod.core.filesystem.content.errors import UploadTooLarge
@@ -36,8 +38,6 @@ _ERROR_MESSAGES: dict[type[Exception], str] = {
     UploadExpired: "filesystem_upload_expired: Filesystem upload expired",
     UploadLengthMismatch: "filesystem_upload_length_mismatch: Invalid upload length",
     UploadMediaTypeMismatch: "filesystem_upload_media_type_mismatch: Invalid upload content type",
-    PermissionDenied: "filesystem_permission_denied: Filesystem access denied",
-    MissingNode: "filesystem_permission_denied: Filesystem access denied",
     InvalidName: "filesystem_invalid_name: Invalid filesystem name",
     NameCollision: "filesystem_name_collision: Filesystem name already exists",
     WrongNodeKind: "filesystem_wrong_node_kind: Invalid filesystem node kind",
@@ -50,6 +50,8 @@ _ERROR_MESSAGES: dict[type[Exception], str] = {
 def filesystem_operation() -> Iterator[None]:
     try:
         yield
+    except (PermissionDenied, MissingNode):
+        raise ToolAuthorizationDenied("filesystem_permission_denied: Filesystem access denied") from None
     except Exception as error:
         for error_type, message in _ERROR_MESSAGES.items():
             if isinstance(error, error_type):

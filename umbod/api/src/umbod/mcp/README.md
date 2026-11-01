@@ -31,7 +31,7 @@ description: "MCP application composition, capability exposure, authentication a
 - [settings.py](./settings.py) — MCP settings.
 - [signals/](./signals/README.md) — Neutral execution events.
 - [telemetry/](./telemetry/README.md) — Required application telemetry and listener composition.
-- [tools/](./tools/) — Observed internal tool registration.
+- [tools/](./tools/) — Observed internal tool registration and typed authorization denials.
 
 # Architecture
 
