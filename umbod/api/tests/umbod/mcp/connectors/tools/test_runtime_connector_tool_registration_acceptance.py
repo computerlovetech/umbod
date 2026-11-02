@@ -1,4 +1,5 @@
 from tests.support.native_tool_states import enabled_native_tool_states
+from umbod.logging import create_application_failure_signal
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
 from tests.persistence_runtime import create_inmemory_runtime
@@ -49,13 +50,14 @@ GITHUB_REGISTRATION: dict[str, Any] = {'id': 'github', 'display_name': 'GitHub',
 
 @pytest.mark.asyncio
 async def test_connector_tool_invocation_emits_invocation_and_audit_logs() -> None:
+    application_failures = create_application_failure_signal()
     configuration_store = InMemoryConnectorCurrentConfigurationStore()
     publishing_store = ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE)
     (invocation_stream, audit_stream) = (StringIO(), StringIO())
     await _save_valid_slack_configuration(configuration_store)
     await publishing_store.publish_connector('slack')
     mcp = FastMCP(name='test')
-    signals = create_mcp_signals(StdoutMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter(), invocation_stream), PrometheusMcpMetricsRecorder(), McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), audit_stream), 'test'))
+    signals = create_mcp_signals(StdoutMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter(), invocation_stream), PrometheusMcpMetricsRecorder(), McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), audit_stream), 'test', application_failures=application_failures), application_failures=application_failures)
     await register_connector_tools(
         mcp,
         signals=signals,
@@ -328,8 +330,9 @@ async def _save_valid_slack_configuration(configuration_store: InMemoryConnector
     await configuration_store.save_current_configuration('slack', SlackAdminConfiguration(workspace_name='Computerlove', bot_token=SecretStr('xoxb-valid'), default_channel_id='C-PROJECT-ALPHA'))
 
 async def _build_mcp_with_runtime_state(configuration_store: InMemoryConnectorCurrentConfigurationStore, publishing_store: ConnectorPublishingStoreService, runtime_state_store: InMemoryConnectorToolRuntimeStateStore) -> FastMCP:
+    application_failures = create_application_failure_signal()
     mcp = FastMCP(name='test')
-    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test"))
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test", application_failures=application_failures), application_failures=application_failures)
     await register_connector_tools(
         mcp,
         signals=signals,

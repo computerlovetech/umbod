@@ -11,6 +11,7 @@ import pytest_asyncio
 from fastmcp import FastMCP
 from fastmcp.server.auth import AuthContext
 from mcp.server.request_state import RequestStateSecurity
+from umbod.logging import create_application_failure_signal
 from umbod.mcp.connectors.downstream_mcp.provider import _REQUEST_CONNECTOR_SCOPE
 
 from tests.persistence_runtime import prepared_inmemory_runtime
@@ -100,6 +101,7 @@ class InvocationFilesystemToolVisibility(FilesystemToolVisibility):
 
 @asynccontextmanager
 async def filesystem_server(filtered: bool) -> AsyncIterator[FilesystemMcp]:
+    application_failures = create_application_failure_signal()
     runtime = await prepared_inmemory_runtime()
     await create_root_provisioning(database=runtime.database).provision(
         RootBootstrapSpec(grants=(RootBootstrapGrant(
@@ -116,7 +118,7 @@ async def filesystem_server(filtered: bool) -> AsyncIterator[FilesystemMcp]:
     ))
     metrics = InMemoryMcpMetricsRecorder()
     content = RecordingContent(create_content_driver(InMemoryContentConfig(type="inmemory")))
-    services = DatabaseFilesystemServiceFactory(runtime.database, content, 20_971_520, "https://issuer")
+    services = DatabaseFilesystemServiceFactory(runtime.database, content, 20_971_520, "https://issuer", "https://api.example")
     files = ContentService(
         VerifiedIdentityResolver(), create_filesystem_transactions(database=runtime.database),
         content, 20_971_520,
@@ -132,7 +134,7 @@ async def filesystem_server(filtered: bool) -> AsyncIterator[FilesystemMcp]:
         clock=time.time, random_token=lambda: secrets.token_urlsafe(24),
     )
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), metrics, Mock()))),
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), metrics, Mock(), application_failures=application_failures))),
         callers,
         services,
         visibility,

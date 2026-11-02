@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from umbod.logging import create_application_failure_signal
+
 from umbod.mcp.logging import create_default_mcp_audit_recorder, create_default_mcp_tool_invocation_log_sink
 from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
 from umbod.mcp.metrics.http_server import McpMetricsHttpServer
@@ -19,10 +21,12 @@ class ConfiguredMcpMetricsServerFactory(McpMetricsServerFactory):
 
 
 def create_configured_mcp_telemetry(settings: MCPAppSettings) -> McpTelemetryDependencies:
+    application_failures = create_application_failure_signal()
     recorder = PrometheusMcpMetricsRecorder()
     return McpTelemetryDependencies(
+        application_failures=application_failures,
         invocation_log_sink=create_default_mcp_tool_invocation_log_sink(),
-        audit_recorder=create_default_mcp_audit_recorder(settings.runtime.app_name),
+        audit_recorder=create_default_mcp_audit_recorder(settings.runtime.app_name, application_failures),
         metrics_recorder=recorder,
         metrics_server_factory=ConfiguredMcpMetricsServerFactory(recorder, settings.mcp.metrics_port, "0.0.0.0"),
     )

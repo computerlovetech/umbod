@@ -15,21 +15,23 @@ async function ready(files: FilesState): Promise<void> {
 }
 
 describe('file deletion state', (): void => {
-  test('checks file targets independently and fails closed while stalled', async (): Promise<void> => {
+  test('seeds file targets without probes and explicit checks fail closed while stalled', async (): Promise<void> => {
     const { api, files } = fixture();
     const check = vi.spyOn(api.filesystem, 'checkDeleteEligibility');
     await files.load(folderId);
-    expect(check).toHaveBeenCalledExactlyOnceWith(fileId, expect.any(AbortSignal));
+    expect(check).not.toHaveBeenCalled();
     const eligibility = deferred<void>();
     check.mockReturnValueOnce(eligibility.promise);
     await files.load(fileId);
+    const checking = files.deletion.select(filesystemFixture[2]);
     expect(files.phase).toBe('ready');
     expect(files.node?.name).toBe('Notes.txt');
     expect(files.deletion.available).toBe(false);
     files.deletion.show();
     expect(files.deletion.confirmation).toBeUndefined();
     eligibility.resolve();
-    await vi.waitFor(() => expect(files.deletion.available).toBe(true));
+    await checking;
+    expect(files.deletion.available).toBe(true);
   });
 
   test('captures file and revision, cancels without mutation and reloads parent after success', async (): Promise<void> => {
@@ -153,6 +155,7 @@ describe('file deletion state', (): void => {
     const { api, files } = fixture();
     vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockRejectedValue(error);
     await files.load(fileId);
+    await files.deletion.select(filesystemFixture[2]);
     await Promise.resolve();
     expect(files.phase).toBe('ready');
     expect(files.deletion.available).toBe(false);
@@ -168,6 +171,7 @@ describe('file deletion state', (): void => {
     const { api, files } = fixture();
     const check = vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockRejectedValueOnce(error);
     await files.load(fileId);
+    await files.deletion.select(filesystemFixture[2]);
     await vi.waitFor(() => expect(files.deletion.needsReload).toBe(true));
     expect(files.phase).toBe('ready');
     expect(files.node?.name).toBe('Notes.txt');
@@ -176,7 +180,7 @@ describe('file deletion state', (): void => {
     expect(files.deletion.message).toContain("Couldn't check deletion availability");
     await files.deletion.reconcile();
     await vi.waitFor(() => expect(files.deletion.available).toBe(true));
-    expect(check).toHaveBeenCalledTimes(2);
+    expect(check).toHaveBeenCalledTimes(1);
     expect(files.deletion.message).toBe('');
     expect(files.deletion.needsReload).toBe(false);
   });
@@ -185,6 +189,7 @@ describe('file deletion state', (): void => {
     const { api, files } = fixture();
     vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockRejectedValueOnce(new HttpError(status, 'Unavailable', {}));
     await files.load(fileId);
+    await files.deletion.select(filesystemFixture[2]);
     await Promise.resolve();
     expect(files.deletion.available).toBe(false);
     expect(files.deletion.message).toBe('');
@@ -196,6 +201,7 @@ describe('file deletion state', (): void => {
     const { api, files } = fixture();
     vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockRejectedValueOnce(new AuthenticationRequiredError());
     await files.load(fileId);
+    await files.deletion.select(filesystemFixture[2]);
     await vi.waitFor(() => expect(files.deletion.signInRequired).toBe(true));
     expect(files.deletion.available).toBe(false);
     expect(files.deletion.message).toBe('');
@@ -245,10 +251,11 @@ describe('file deletion state', (): void => {
     const eligibility = deferred<void>();
     vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockReturnValueOnce(eligibility.promise);
     await files.load(fileId);
+    const checking = files.deletion.select(filesystemFixture[2]);
     if (action === 'dispose') files.dispose();
     else await files.load(folderId);
     eligibility.resolve();
-    await Promise.resolve();
+    await checking;
     expect(files.deletion.available).toBe(false);
     const second = fixture();
     const response = deferred<void>();

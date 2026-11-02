@@ -31,25 +31,25 @@ describe('files reads and authoritative navigation', () => {
 
   test('deep file links retrieve the authoritative path without listing ancestors', async (): Promise<void> => {
     const { api, files } = fixture();
-    const root = vi.spyOn(api.filesystem, 'getRoot');
+    const root = vi.spyOn(api.filesystem, 'browse');
     const getNode = vi.spyOn(api.filesystem, 'getNode');
     const children = vi.spyOn(api.filesystem, 'listChildren');
     await files.load(fileId);
     expect(files.node?.name).toBe('Notes.txt');
     expect(files.children).toEqual([]);
     expect(files.navigation.path?.items.map((item) => item.id)).toEqual([rootId, folderId, fileId]);
-    expect(root).not.toHaveBeenCalled();
+    expect(root).toHaveBeenCalledExactlyOnceWith(fileId, expect.any(AbortSignal));
     expect(getNode.mock.calls).toEqual([[fileId, expect.any(AbortSignal)]]);
     expect(children).not.toHaveBeenCalled();
   });
 
   test('directory deep links list children and retrieve authoritative paths without a root read', async (): Promise<void> => {
     const { api, files } = fixture();
-    const root = vi.spyOn(api.filesystem, 'getRoot');
+    const root = vi.spyOn(api.filesystem, 'browse');
     await files.load(folderId);
     expect(files.children.map((node) => node.id)).toEqual([fileId]);
     expect(files.navigation.path?.items.map((item) => item.id)).toEqual([rootId, folderId]);
-    expect(root).not.toHaveBeenCalled();
+    expect(root).toHaveBeenCalledExactlyOnceWith(folderId, expect.any(AbortSignal));
   });
 
   test('back and forward URL selections reload authoritative paths and discard folder drafts', async (): Promise<void> => {
@@ -78,7 +78,7 @@ describe('files reads and authoritative navigation', () => {
     [new NetworkError('offline'), 'error']
   ])('distinguishes failed reads and allows explicit retry', async (error, phase): Promise<void> => {
     const { api, files } = fixture();
-    const read = vi.spyOn(api.filesystem, 'getRoot').mockRejectedValueOnce(error);
+    const read = vi.spyOn(api.filesystem, 'browse').mockRejectedValueOnce(error);
     await files.load(null);
     expect(files.phase).toBe(phase);
     expect(files.node).toBeUndefined();
@@ -107,24 +107,26 @@ describe('files reads and authoritative navigation', () => {
     await first;
     expect(files.node?.id).toBe(fileId);
     expect(files.children).toEqual([]);
-    const lateNode = deferred<NodeSummary>();
-    vi.spyOn(api.filesystem, 'getRoot').mockImplementationOnce(() => lateNode.promise);
+    const snapshot = await api.filesystem.browse(null);
+    const lateNode = deferred<typeof snapshot>();
+    vi.spyOn(api.filesystem, 'browse').mockImplementationOnce(() => lateNode.promise);
     const second = files.load(null);
     await files.load(folderId);
-    lateNode.resolve(filesystemFixture[0]);
+    lateNode.resolve(snapshot);
     await second;
     expect(files.node?.id).toBe(folderId);
   });
 
   test('disposal aborts transport and ignores late results', async (): Promise<void> => {
     const { api, files } = fixture();
-    const late = deferred<NodeSummary>();
-    const read = vi.spyOn(api.filesystem, 'getRoot').mockImplementationOnce(() => late.promise);
+    const snapshot = await api.filesystem.browse(null);
+    const late = deferred<typeof snapshot>();
+    const read = vi.spyOn(api.filesystem, 'browse').mockImplementationOnce(() => late.promise);
     const pending = files.load(null);
-    const signal = read.mock.calls[0][0];
+    const signal = read.mock.calls[0][1];
     files.dispose();
     expect(signal?.aborted).toBe(true);
-    late.resolve(filesystemFixture[0]);
+    late.resolve(snapshot);
     await pending;
     expect(files.node).toBeUndefined();
   });
@@ -343,7 +345,7 @@ describe('server-authoritative folder creation', () => {
     await files.load(folderId);
     form.navigate();
     await files.load(null);
-    vi.spyOn(api.filesystem, 'getRoot').mockRejectedValueOnce(new HttpError(403, 'Forbidden', {}));
+    vi.spyOn(api.filesystem, 'browse').mockRejectedValueOnce(new HttpError(403, 'Forbidden', {}));
     commit.resolve();
     await write;
     expect(files.phase).toBe('denied');

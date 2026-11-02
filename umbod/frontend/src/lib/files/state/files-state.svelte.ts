@@ -8,7 +8,7 @@ import { RowEditingState } from './row-editing-state.svelte';
 import { DragMoveState } from './drag-move-state.svelte';
 import { DeletionState } from './deletion-state.svelte';
 import type { FilesApi } from '../api';
-import { nodeIdSchema, type NodeSummary } from '../domain/schemas';
+import { browseResultSchema, nodeIdSchema, type NodeSummary } from '../domain/schemas';
 import { readFailure, type FilesPhase } from '../errors';
 
 export function filesHref(id?: string): string {
@@ -20,8 +20,8 @@ export class FilesState {
   phase = $state<FilesPhase>('loading');
   node = $state.raw<NodeSummary | undefined>(undefined);
   children = $state.raw<NodeSummary[]>([]);
-  uploadAvailability = $state<'hidden' | 'loading' | 'allowed' | 'denied' | 'sign-in' | 'error'>('hidden');
-  private eligibilityGeneration = 0;
+  uploadAvailability = $state<'hidden' | 'allowed' | 'denied' | 'sign-in'>('hidden');
+  createDirectoryAllowed = $state(false);
   private updateSequence = 0;
   private readonly updatedNodes = new Map<string, { node: NodeSummary; sequence: number }>();
   private readonly confirmedDeletedIds = new Set<string>();
@@ -75,37 +75,34 @@ export class FilesState {
     this.children = [];
     this.phase = 'loading';
     this.uploadAvailability = 'hidden';
+    this.createDirectoryAllowed = false;
+    const listingStartSequence = this.updateSequence;
     try {
-      const loadedNode = target === null
-        ? await this.api.filesystem.getRoot(signal)
-        : await this.api.filesystem.getNode(nodeIdSchema.parse(target), signal);
-      if (this.disposed || generation !== this.generation) return;
+      const result = browseResultSchema.parse(await this.api.filesystem.browse(target === null ? null : nodeIdSchema.parse(target), signal));
+      if (this.disposed || generation !== this.generation || signal.aborted) return;
+      if (target !== null && result.node.id !== target) throw new Error('Unexpected browse target');
+      const loadedNode = result.node;
       const known = this.updatedNodes.get(loadedNode.id)?.node;
-      let node = known && known.revision > loadedNode.revision ? known : loadedNode;
+      const node = known && known.revision > loadedNode.revision ? known : loadedNode;
       if (target === null) this.rootId = node.id;
+      const capabilities = new Map(result.capabilities.map((capability) => [capability.node_id, capability]));
+      const current = capabilities.get(node.id)!;
       this.node = node;
-      this.sharing.selectCurrent(node);
-      void this.navigation.select(node);
-      const listingStartSequence = this.updateSequence;
-      const children = node.kind === 'directory' ? await this.api.filesystem.listChildren(node.id, signal) : [];
-      if (this.disposed || generation !== this.generation) return;
-      const latest = this.updatedNodes.get(node.id)?.node;
-      if (latest && latest.revision > node.revision) {
-        node = latest;
-        this.node = latest;
-        void this.navigation.select(latest);
-      }
-      this.children = node.kind === 'directory' ? this.reconcileChildren(node.id, children, listingStartSequence, true) : [];
+      this.navigation.seed(node, result.breadcrumbs);
+      if (typeof node.parent_id === 'string' && node.parent_id !== loadedNode.parent_id) void this.navigation.select(node);
+      else this.navigation.acceptUpdatedNode(node);
+      this.children = node.kind === 'directory' ? this.reconcileChildren(node.id, result.entries, listingStartSequence, true) : [];
+      this.sharing.seed(result.capabilities);
       this.phase = 'ready';
-      void this.update.select(node);
-      void this.description.select(node);
+      void this.update.select(node, current);
+      void this.description.select(node, current.edit_description);
       this.sharing.select(this.children);
-      this.rowEditing.select(this.children);
+      this.rowEditing.select(this.children, capabilities);
       if (node.kind === 'directory') {
-        void this.checkUploadAvailability();
-        void this.rowDeletion.select(this.children);
-      }
-      else void this.deletion.select(node);
+        this.uploadAvailability = current.upload ? 'allowed' : 'denied';
+        this.createDirectoryAllowed = current.create_directory;
+        this.rowDeletion.select(this.children, capabilities);
+      } else void this.deletion.select(node, current.delete);
     } catch (error) {
       if (this.disposed || generation !== this.generation) return;
       this.phase = readFailure(error);
@@ -146,11 +143,15 @@ export class FilesState {
       this.rowEditing.select(this.children);
     }
     if (this.node?.id !== node.id || this.node.revision > node.revision) return;
+    const previousParent = typeof this.node.parent_id === 'string' ? this.node.parent_id : undefined;
+    const nextParent = typeof node.parent_id === 'string' ? node.parent_id : undefined;
+    const parentChanged = previousParent !== nextParent;
     this.node = node;
     this.description.acceptUpdatedNode(node);
     this.update.acceptUpdatedNode(node);
     if (node.kind === 'file') this.deletion.acceptUpdatedNode(node);
-    void this.navigation.select(node);
+    if (parentChanged) void this.navigation.select(node);
+    else this.navigation.acceptUpdatedNode(node);
   };
 
   private acceptDescription = (node: NodeSummary): void => { this.acceptUpdate(node); };
@@ -174,24 +175,7 @@ export class FilesState {
 
   rejectUploadAccess = (parentId: string, phase: 'denied' | 'sign-in'): void => {
     if (this.disposed || this.node?.id !== parentId) return;
-    ++this.eligibilityGeneration;
     this.uploadAvailability = phase;
-  };
-
-  checkUploadAvailability = async (): Promise<void> => {
-    const target = this.creationTarget();
-    if (!target || this.disposed) return;
-    const eligibilityGeneration = ++this.eligibilityGeneration;
-    this.uploadAvailability = 'loading';
-    try {
-      await this.api.filesystem.checkUploadEligibility(target.parentId, this.controller?.signal);
-      if (this.disposed || target.generation !== this.generation || eligibilityGeneration !== this.eligibilityGeneration) return;
-      this.uploadAvailability = 'allowed';
-    } catch (error) {
-      if (this.disposed || target.generation !== this.generation || eligibilityGeneration !== this.eligibilityGeneration) return;
-      const failure = readFailure(error);
-      this.uploadAvailability = failure === 'sign-in' ? 'sign-in' : failure === 'denied' || failure === 'missing' ? 'denied' : 'error';
-    }
   };
 
   acceptCreated = async (parentId: string, generation: number, node: NodeSummary): Promise<void> => {

@@ -1,5 +1,13 @@
 from __future__ import annotations
 
+import json
+
+import pytest
+
+from tests.support.application_failures import CapturingApplicationFailures
+from umbod.logging import create_application_failure_signal
+from umbod.logging import OpenTelemetryJsonFormatter
+
 from umbod.mcp.logging import (
     McpAuditActivityType,
     McpAuthenticatedAuditActor,
@@ -26,7 +34,7 @@ class RecordingSink:
 
 class FailingSink:
     def record_mcp_activity(self, event: McpAuditEvent) -> None:
-        raise RuntimeError("sink failed")
+        raise RuntimeError("secret-canary")
 
 
 def _identity() -> McpAuditIdentity:
@@ -42,7 +50,7 @@ def _correlation() -> McpAuditCorrelation:
 
 def test_record_client_connection_emits_server_scoped_success_event() -> None:
     sink = RecordingSink()
-    recorder = McpAuditRecorder(sink, "umbod")
+    recorder = McpAuditRecorder(sink, "umbod", application_failures=create_application_failure_signal())
 
     recorder.record_client_connection(_identity(), _correlation())
 
@@ -57,7 +65,7 @@ def test_record_client_connection_emits_server_scoped_success_event() -> None:
 
 def test_record_tool_discovery_emits_server_scoped_success_event() -> None:
     sink = RecordingSink()
-    recorder = McpAuditRecorder(sink, "umbod")
+    recorder = McpAuditRecorder(sink, "umbod", application_failures=create_application_failure_signal())
 
     recorder.record_tool_discovery(_identity(), _correlation())
 
@@ -69,7 +77,7 @@ def test_record_tool_discovery_emits_server_scoped_success_event() -> None:
 
 def test_record_tool_invocation_denied_marks_authorization_failure() -> None:
     sink = RecordingSink()
-    recorder = McpAuditRecorder(sink, "umbod")
+    recorder = McpAuditRecorder(sink, "umbod", application_failures=create_application_failure_signal())
     target = recorder.tool_target(
         McpToolIdentity(
             tool_name="slack_post",
@@ -94,7 +102,7 @@ def test_record_tool_invocation_denied_marks_authorization_failure() -> None:
 
 def test_record_tool_invocation_uses_provided_outcome_and_timestamp() -> None:
     sink = RecordingSink()
-    recorder = McpAuditRecorder(sink, "umbod")
+    recorder = McpAuditRecorder(sink, "umbod", application_failures=create_application_failure_signal())
     target = recorder.tool_target(McpToolIdentity("slack_post", "slack", "post"))
 
     recorder.record_tool_invocation(
@@ -112,7 +120,32 @@ def test_record_tool_invocation_uses_provided_outcome_and_timestamp() -> None:
     assert event.actor.authenticated_user_id == "user@example.com"
 
 
-def test_record_swallows_sink_failure() -> None:
-    recorder = McpAuditRecorder(FailingSink(), "umbod")
+def test_record_publishes_sink_failure_without_logging(caplog: pytest.LogCaptureFixture) -> None:
+    failures = CapturingApplicationFailures()
+    recorder = McpAuditRecorder(FailingSink(), "umbod", application_failures=failures)
 
-    recorder.record_client_connection(_identity(), _correlation())
+    recorder.record_client_connection(_identity(), McpAuditCorrelation("a" * 32, None))
+
+    assert caplog.records == []
+    assert len(failures.events) == 1
+    event = failures.events[0]
+    assert event.correlation.trace_id == "a" * 32
+    assert event.correlation.span_id is None
+    assert dict(event.attributes)["reason"] == "sink_failed"
+    assert "secret-canary" not in event.model_dump_json()
+
+
+def test_record_swallows_sink_failure(caplog: pytest.LogCaptureFixture) -> None:
+    recorder = McpAuditRecorder(FailingSink(), "umbod", application_failures=create_application_failure_signal())
+
+    recorder.record_client_connection(_identity(), McpAuditCorrelation("a" * 32, "b" * 16))
+
+    assert len(caplog.records) == 1
+    serialized = OpenTelemetryJsonFormatter("test").format(caplog.records[0])
+    payload = json.loads(serialized)
+    assert "secret-canary" not in serialized
+    assert payload["trace_id"] == "a" * 32
+    assert payload["span_id"] == "b" * 16
+    assert payload["attributes"]["exception.type"] == "RuntimeError"
+    assert payload["attributes"]["reason"] == "sink_failed"
+    assert "record_mcp_activity" in payload["attributes"]["exception.stacktrace"]

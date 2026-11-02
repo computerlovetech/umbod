@@ -102,7 +102,7 @@ class PersonalToolRuntimeService:
                     key=admission.target.key,
                     expected_connection_revision=admission.target.authorization_revision,
                 ))
-                raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=InvocationFailureDiagnostic(execution_mode="personal", stage="authorization", reason="authorization_rejected")) from None
+                raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=error.diagnostic.model_copy(update={"stage": "authorization", "reason": "authorization_rejected"})) from None
             stage = "output"
             _validate_result(admission.tool, result)
             return result
@@ -113,7 +113,8 @@ class PersonalToolRuntimeService:
             if current_invocation_failure() is None:
                 capture_invocation_exception(error, InvocationFailureOrigin.MCP if stage == "transport" else InvocationFailureOrigin.INTERNAL)
             diagnostic = error.diagnostic
-            if diagnostic == PERSONAL_RUNTIME_FAILURE:
+            evidence = current_invocation_failure()
+            if diagnostic == PERSONAL_RUNTIME_FAILURE and not (stage == "transport" and evidence is not None and evidence.origin == InvocationFailureOrigin.INTERNAL):
                 diagnostic = {
                     "context": InvocationFailureDiagnostic(execution_mode="personal", stage="context", reason="context_unavailable"),
                     "admission": InvocationFailureDiagnostic(execution_mode="personal", stage="admission", reason="admission_denied"),

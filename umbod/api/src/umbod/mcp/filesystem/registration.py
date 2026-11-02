@@ -18,6 +18,7 @@ from .sharing import enrich_nodes
 from .sharing_tools import FilesystemSearchSharingRecipientsTool, FilesystemShareTool
 from .update import FilesystemUpdateNodeTool
 from .upload import FilesystemUploadTool
+from .upload_sessions import FilesystemBeginUploadTool, FilesystemCompleteUploadTool
 
 
 def register_filesystem_tools(
@@ -30,6 +31,8 @@ def register_filesystem_tools(
     for tool, operation_names in (
         (FilesystemBrowseTool(callers, services), frozenset({"ls", "tree", "stat"})),
         (FilesystemUploadTool(callers, services), frozenset()),
+        (FilesystemBeginUploadTool(callers, services), frozenset()),
+        (FilesystemCompleteUploadTool(callers, services), frozenset()),
         (FilesystemUpdateNodeTool(callers, services), frozenset()),
         (FilesystemDeleteFileTool(callers, services, deletion_approval), frozenset()),
         (FilesystemSearchSharingRecipientsTool(callers, services), frozenset()),

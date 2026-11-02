@@ -13,6 +13,9 @@ existingSecret: ""
 config:
   profile: production
   logLevel: info
+  telemetryAnalytics:
+    enabled: false
+    sqlitePath: /app/data/analytics.sqlite3
   authentication:
     mode: auth0
     oidc:

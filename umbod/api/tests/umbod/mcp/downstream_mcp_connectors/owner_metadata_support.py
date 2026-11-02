@@ -2,6 +2,7 @@ from tests.support.native_tool_states import enabled_native_tool_states
 from dataclasses import replace
 from typing import cast
 
+from umbod.logging import create_application_failure_signal
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
 from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
@@ -43,6 +44,7 @@ async def _discover(execution: ExecutionCase, case: RuntimeCase, value_type: str
 
 
 async def metadata_server(case: RuntimeCase, exposure: str) -> FastMCP:
+    application_failures = create_application_failure_signal()
     execution = await execution_case(case)
     await _discover(execution, case, "string")
     await _discover(execution, await _install_bob(case), "integer")
@@ -55,7 +57,7 @@ async def metadata_server(case: RuntimeCase, exposure: str) -> FastMCP:
     if exposure == "flat":
         public.add_provider(provider)
         return public
-    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test"))
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test", application_failures=application_failures), application_failures=application_failures)
     await register_connector_tools(
         public,
         signals=signals,

@@ -3,7 +3,7 @@ from typing import Generic, Literal, Optional, Protocol, TypeVar, cast, overload
 
 from pydantic import BaseModel
 
-from umbod.core.persistence.ports import DatabaseSession
+from umbod.core.persistence.ports import ReadSession
 from umbod.core.persistence.query import Query, Table, validate_query
 
 RowT = TypeVar("RowT", bound=BaseModel)
@@ -53,7 +53,7 @@ class ReadPlanOperations(Protocol):
         self, table: Table[RowT, KeyT], query: Query[RowT, ResultT]
     ) -> OneRead[ResultT]: ...
 
-    async def execute(self, session: DatabaseSession) -> ReadResults: ...
+    async def execute(self, session: ReadSession) -> ReadResults: ...
 
 
 @dataclass(frozen=True)
@@ -62,7 +62,7 @@ class _Read:
     query: Query[BaseModel, BaseModel]
     cardinality: Literal["many", "one"]
 
-    async def run(self, session: DatabaseSession) -> object:
+    async def run(self, session: ReadSession) -> object:
         if self.cardinality == "many":
             return tuple(await session.find_many(self.table, self.query))
         return await session.find_one(self.table, self.query)
@@ -73,7 +73,7 @@ class _OptimizedReads:
     reads: tuple[_Read, ...]
     result_indices: tuple[int, ...]
 
-    async def run(self, session: DatabaseSession) -> tuple[object, ...]:
+    async def run(self, session: ReadSession) -> tuple[object, ...]:
         values: list[object] = []
         for read in self.reads:
             values.append(await read.run(session))
@@ -133,7 +133,7 @@ class ReadPlan:
         )
         self._handles.append(cast(ManyRead[BaseModel] | OneRead[BaseModel], handle))
 
-    async def execute(self, session: DatabaseSession) -> ReadResults:
+    async def execute(self, session: ReadSession) -> ReadResults:
         self._frozen = True
         optimized = _optimize(tuple(self._reads))
         values = await optimized.run(session)

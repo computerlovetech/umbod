@@ -34,6 +34,7 @@ describe('admin shell logout', () => {
     expect(shell.body).toContain('aria-label="Workspace navigation"');
     expect(shell.body).toContain('href="/dashboard"');
     expect(shell.body).toContain('Administration</a>');
+    expect(shell.body).toContain('href="/admin/analytics"');
     expect(shell.body).toContain('href="/admin/connectors"');
     expect(shell.body).toContain('href="/admin/group-permissions/connectors"');
     expect(shell.body).not.toContain('href="/admin/group-permissions"');

@@ -220,14 +220,14 @@ describe('selected node updates', (): void => {
   test('starts at independently accessible source parent without querying inaccessible root', async (): Promise<void> => {
     const api = new InMemoryFilesApi(rootId, filesystemFixture, undefined, undefined, (node) => node.id !== rootId);
     const files = new FilesState(api);
-    const root = vi.spyOn(api.filesystem, 'getRoot');
+    const root = vi.spyOn(api.filesystem, 'browse');
     await files.load(fileId);
     await vi.waitFor(() => expect(files.update.canMove).toBe(true));
     files.update.showMove();
     await vi.waitFor(() => expect(files.update.loading).toBe(false));
     expect(files.update.folder?.id).toBe(folderId);
     expect(files.update.navigation.path?.complete).toBe(false);
-    expect(root).not.toHaveBeenCalled();
+    expect(root.mock.calls.map(([target]) => target)).not.toContain(null);
     files.dispose();
   });
 

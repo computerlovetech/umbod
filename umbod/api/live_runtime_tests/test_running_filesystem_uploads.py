@@ -1,4 +1,5 @@
 import base64
+import hashlib
 import os
 import ssl
 from collections.abc import AsyncIterator
@@ -14,7 +15,7 @@ from mcp.types import BlobResourceContents, TextResourceContents
 
 from conftest import RuntimeEndpoints
 from test_running_filesystem import (
-    FILESYSTEM, checked_summary, file_resource_link, file_resource_uri, tool_payload, wait_for_filesystem_tools,
+    FILESYSTEM, checked_root_browse, checked_summary, file_resource_link, file_resource_uri, tool_payload, wait_for_filesystem_tools,
 )
 from test_running_personal_mcp_execution import mcp_client, proxy_token
 
@@ -50,7 +51,7 @@ async def native_upload_runtime(runtime_endpoints: RuntimeEndpoints) -> AsyncIte
         })
         assert configured.status_code == 200, configured.text
         try:
-            root = checked_summary(api.get(FILESYSTEM + "/root"), 200)
+            root = checked_root_browse(api.get(FILESYSTEM + "/browse"))
             token = proxy_token(runtime_endpoints.mcp_url, runtime_endpoints.bearer_token, identity)
             other_token = proxy_token(second_mcp, os.environ["UMBOD_TEST_BEARER_TOKEN_B"], identity)
             async with mcp_client(runtime_endpoints.mcp_url, token) as client, mcp_client(second_mcp, other_token) as other_client:
@@ -214,3 +215,110 @@ async def test_native_upload_cannot_write_another_callers_directory(
     }, raise_on_error=False)
     assert result.is_error
     assert "filesystem_permission_denied" in result.content[0].text
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("data", [
+    b"", b"\x00\xff\x80\r\n" * 1000, b"x" * 10_485_761,
+], ids=["empty", "binary", "above-inline-limit"])
+async def test_upload_session_transfers_original_bytes_without_oauth_credentials(
+    native_upload_runtime: NativeUploadRuntime, runtime_endpoints: RuntimeEndpoints, data: bytes,
+) -> None:
+    runtime = native_upload_runtime
+    await wait_for_filesystem_tools(runtime.client, {"filesystem_begin_upload", "filesystem_complete_upload"})
+    digest = hashlib.sha256(data).hexdigest()
+    begun = tool_payload(await runtime.client.call_tool("filesystem_begin_upload", {
+        "parent_id": runtime.directory_id, "name": "original.bin", "size_bytes": len(data),
+        "expected_sha256": digest,
+        "metadata": {"content_type": "application/octet-stream", "attributes": {}},
+    }))
+    transfer = begun["transfer"]
+    assert begun["complete_tool"] == "filesystem_complete_upload"
+    assert transfer["method"] == "PUT"
+    assert transfer["url"].startswith(runtime_endpoints.api_base_url + "/api/filesystem/uploads/")
+    assert "Authorization" not in transfer["headers"]
+    with httpx.Client(timeout=60, follow_redirects=False) as anonymous:
+        response = anonymous.put(transfer["url"], headers=transfer["headers"], content=data)
+        assert response.status_code == 204, response.text
+        assert response.headers["cache-control"] == "no-store"
+    completed = await runtime.client.call_tool("filesystem_complete_upload", {"upload_id": begun["upload_id"]})
+    receipt = tool_payload(completed)
+    node = receipt["node"]
+    uri = file_resource_link(completed, node["id"])
+    assert receipt["size_bytes"] == len(data)
+    assert receipt["sha256"] == digest
+    assert node["parent_id"] == runtime.directory_id
+    downloaded = runtime.api.get(FILESYSTEM + "/nodes/" + node["id"] + "/content")
+    assert downloaded.status_code == 200
+    assert downloaded.content == data
+    repeated = tool_payload(await runtime.client.call_tool("filesystem_complete_upload", {"upload_id": begun["upload_id"]}))
+    assert repeated == receipt
+    assert runtime.other_api.get(FILESYSTEM + "/nodes/" + node["id"]).status_code == 403
+    if len(data) <= 1_048_576:
+        resources = await runtime.client.read_resource(uri)
+        assert len(resources) == 1
+        assert isinstance(resources[0], BlobResourceContents)
+        assert base64.b64decode(resources[0].blob) == data
+
+
+@pytest.mark.asyncio
+async def test_upload_transfer_capability_does_not_authorize_other_operations_or_replay(
+    native_upload_runtime: NativeUploadRuntime,
+) -> None:
+    runtime = native_upload_runtime
+    await wait_for_filesystem_tools(runtime.client, {"filesystem_begin_upload", "filesystem_complete_upload"})
+    begun = tool_payload(await runtime.client.call_tool("filesystem_begin_upload", {
+        "parent_id": runtime.directory_id, "name": "capability.bin", "size_bytes": 3,
+        "metadata": {"content_type": "application/octet-stream", "attributes": {}},
+    }))
+    transfer = begun["transfer"]
+    with httpx.Client(timeout=30, follow_redirects=False) as anonymous:
+        denied = anonymous.put(transfer["url"], content=b"abc", headers={"Content-Type": "application/octet-stream"})
+        assert denied.status_code == 403
+        wrong = anonymous.put(transfer["url"], content=b"abc", headers={
+            **transfer["headers"], "X-Umbod-Upload-Token": "incorrect-token",
+        })
+        assert wrong.status_code == 403
+        assert wrong.json() == denied.json()
+        assert anonymous.get(transfer["url"], headers=transfer["headers"]).status_code == 401
+        session_url = transfer["url"].removesuffix("/transfer")
+        assert anonymous.get(session_url, headers=transfer["headers"]).status_code == 401
+        assert anonymous.post(session_url + "/complete", headers=transfer["headers"]).status_code == 401
+        assert anonymous.put(transfer["url"], content=b"abc", headers=transfer["headers"]).status_code == 204
+        assert anonymous.put(transfer["url"], content=b"xyz", headers=transfer["headers"]).status_code == 409
+    await wait_for_filesystem_tools(runtime.other_client, {"filesystem_complete_upload"})
+    denied_completion = await runtime.other_client.call_tool("filesystem_complete_upload", {
+        "upload_id": begun["upload_id"],
+    }, raise_on_error=False)
+    assert denied_completion.is_error
+    assert "filesystem_permission_denied" in denied_completion.content[0].text
+    receipt = tool_payload(await runtime.client.call_tool("filesystem_complete_upload", {"upload_id": begun["upload_id"]}))
+    assert receipt["sha256"] == hashlib.sha256(b"abc").hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_upload_checksum_mismatch_can_retry_without_publishing_bad_content(
+    native_upload_runtime: NativeUploadRuntime,
+) -> None:
+    runtime = native_upload_runtime
+    await wait_for_filesystem_tools(runtime.client, {"filesystem_begin_upload", "filesystem_complete_upload"})
+    begun = tool_payload(await runtime.client.call_tool("filesystem_begin_upload", {
+        "parent_id": runtime.directory_id, "name": "verified.bin", "size_bytes": 3,
+        "expected_sha256": hashlib.sha256(b"abc").hexdigest(),
+        "metadata": {"content_type": "application/octet-stream", "attributes": {}},
+    }))
+    transfer = begun["transfer"]
+    with httpx.Client(timeout=30, follow_redirects=False) as anonymous:
+        mismatch = anonymous.put(transfer["url"], content=b"xyz", headers=transfer["headers"])
+        assert mismatch.status_code == 422
+        pending = await runtime.client.call_tool("filesystem_complete_upload", {
+            "upload_id": begun["upload_id"],
+        }, raise_on_error=False)
+        assert pending.is_error
+        children = tool_payload(await runtime.client.call_tool("list_filesystem_children", {
+            "parent_id": runtime.directory_id,
+        }))
+        assert children["nodes"] == []
+        assert anonymous.put(transfer["url"], content=b"abc", headers=transfer["headers"]).status_code == 204
+    receipt = tool_payload(await runtime.client.call_tool("filesystem_complete_upload", {"upload_id": begun["upload_id"]}))
+    assert receipt["sha256"] == hashlib.sha256(b"abc").hexdigest()

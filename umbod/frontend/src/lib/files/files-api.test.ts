@@ -22,7 +22,7 @@ const configuration = new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/ap
 describe('filesystem port', () => {
   test('browses root, directories and files and creates only folders', async (): Promise<void> => {
     const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture);
-    expect((await api.filesystem.getRoot()).parent_id).toEqual({});
+    expect((await api.filesystem.browse(null)).node.parent_id).toEqual({});
     expect((await api.filesystem.getNode(fileId)).kind).toBe('file');
     expect((await api.filesystem.listChildren(rootId)).map((node) => node.id)).toEqual([folderId]);
     const created = await api.filesystem.createFolder(rootId, input);
@@ -35,9 +35,8 @@ describe('filesystem port', () => {
 });
 
 describe('filesystem upload port', () => {
-  test('checks eligibility and creates a file with an explicit name and inferred metadata', async (): Promise<void> => {
+  test('creates a file with an explicit name and inferred metadata', async (): Promise<void> => {
     const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture);
-    await expect(api.filesystem.checkUploadEligibility(rootId)).resolves.toBeUndefined();
     const created = await api.filesystem.uploadFile(rootId, {
       file: new File(['hello'], 'original.txt', { type: 'text/plain' }), name: 'Renamed.txt'
     });
@@ -51,7 +50,6 @@ describe('filesystem upload port', () => {
 
   test('allows zero bytes and the size limit, rejecting larger files without creating nodes', async (): Promise<void> => {
     const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture, 2);
-    await expect(api.filesystem.checkUploadEligibility(rootId)).resolves.toBeUndefined();
     const empty = await api.filesystem.uploadFile(rootId, { file: new File([], 'empty'), name: 'empty' });
     expect(empty.metadata.content_type).toBe('application/octet-stream');
     await api.filesystem.uploadFile(rootId, { file: new File(['ab'], 'limit'), name: 'limit' });
@@ -63,13 +61,21 @@ describe('filesystem upload port', () => {
     const api: FilesApi = new InMemoryFilesApi(rootId, filesystemFixture);
     const upload = { file: new File([], 'original'), name: 'Projects' };
     const missingId = '00000000-0000-4000-8000-000000000099';
-    await expect(api.filesystem.checkUploadEligibility(missingId)).rejects.toMatchObject({ status: 404 });
-    await expect(api.filesystem.checkUploadEligibility(fileId)).rejects.toMatchObject({ status: 403 });
     await expect(api.filesystem.uploadFile(missingId, upload)).rejects.toMatchObject({ cause: { status: 404 } });
     await expect(api.filesystem.uploadFile(fileId, upload)).rejects.toMatchObject({ cause: { status: 403 } });
     await expect(api.filesystem.uploadFile(rootId, upload)).rejects.toMatchObject({ cause: { status: 409 } });
     await expect(api.filesystem.uploadFile(folderId, { ...upload, name: 'Notes.txt' })).rejects.toMatchObject({ cause: { status: 409 } });
     await expect(api.filesystem.uploadFile(rootId, { ...upload, name: '..' })).rejects.toBeInstanceOf(z.ZodError);
+  });
+
+  test.each(['read', 'write'] as const)('begin upload enforces parent %s permission without a probe', async (permission): Promise<void> => {
+    const api = new InMemoryFilesApi(
+      rootId, filesystemFixture, undefined, undefined,
+      () => permission !== 'read', () => permission !== 'write'
+    );
+    await expect(api.filesystem.beginUpload(rootId, {
+      name: 'Denied.txt', metadata: { content_type: 'text/plain', attributes: {} }, size_bytes: 0
+    })).rejects.toMatchObject({ status: 403 });
   });
 
   test('validates seed nodes', (): void => {
@@ -127,14 +133,6 @@ describe('filesystem schemas', () => {
 });
 
 describe('filesystem upload HTTP boundary', () => {
-  test('checks eligibility with OPTIONS and standard Allow', async (): Promise<void> => {
-    const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204, headers: { Allow: 'POST, OPTIONS' } }));
-    const api = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
-    const signal = new AbortController().signal;
-    await expect(api.filesystem.checkUploadEligibility(rootId, signal)).resolves.toBeUndefined();
-    expect(request).toHaveBeenCalledWith('/api/me/filesystem/nodes/' + rootId + '/uploads', expect.objectContaining({ method: 'OPTIONS', signal }));
-  });
-
   test('begins JSON, transfers raw bytes and completes without duplicating the API prefix', async (): Promise<void> => {
     const created = filesystemNode({ id: fileId, parent_id: rootId, name: 'Chosen.txt', kind: 'file' });
     const request = vi.fn<typeof fetch>()
@@ -173,14 +171,12 @@ describe('filesystem upload HTTP boundary', () => {
     expect(request).not.toHaveBeenCalled();
   });
 
-  test('validates eligibility headers and session responses', async (): Promise<void> => {
+  test('validates session responses', async (): Promise<void> => {
     const request = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(new Response(null, { status: 204, headers: { Allow: 'OPTIONS' } }))
       .mockResolvedValueOnce(Response.json({ invalid: true }));
     const api = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
-    await expect(api.filesystem.checkUploadEligibility(rootId)).rejects.toMatchObject({ direction: 'inbound' });
     await expect(api.filesystem.uploadFile(rootId, { file: new File([], 'original'), name: 'chosen' })).rejects.toMatchObject({ phase: 'begin', cause: { direction: 'inbound' } });
-    expect(request).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenCalledTimes(1);
   });
 
   test.each([401, 403, 404, 409, 413, 500])('preserves upload HTTP %s without replay', async (status): Promise<void> => {
@@ -196,17 +192,17 @@ describe('filesystem upload HTTP boundary', () => {
 describe('filesystem HTTP boundary', () => {
   test('uses only the four implemented user operations with validated bodies', async (): Promise<void> => {
     const request = vi.fn<typeof fetch>()
-      .mockResolvedValueOnce(Response.json(filesystemFixture[0]))
+      .mockResolvedValueOnce(Response.json(await new InMemoryFilesApi(rootId, filesystemFixture).filesystem.browse(null)))
       .mockResolvedValueOnce(Response.json(filesystemFixture[1]))
       .mockResolvedValueOnce(Response.json({ nodes: [filesystemFixture[1]] }))
       .mockResolvedValueOnce(Response.json(filesystemNode({ id: fileId, parent_id: rootId, name: input.name }), { status: 201 }));
     const api: FilesApi = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
-    await api.filesystem.getRoot();
+    await api.filesystem.browse(null);
     await api.filesystem.getNode(folderId);
     await api.filesystem.listChildren(rootId);
     await api.filesystem.createFolder(rootId, input);
     expect(request.mock.calls.map(([url]) => url)).toEqual([
-      '/api/me/filesystem/root', '/api/me/filesystem/nodes/' + folderId,
+      '/api/me/filesystem/browse', '/api/me/filesystem/nodes/' + folderId,
       '/api/me/filesystem/nodes/' + rootId + '/children', '/api/me/filesystem/nodes/' + rootId + '/directories'
     ]);
     expect(request.mock.calls.map(([, init]) => init?.method)).toEqual(['GET', 'GET', 'GET', 'POST']);
@@ -219,7 +215,7 @@ describe('filesystem HTTP boundary', () => {
     const api: FilesApi = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
     await expect(api.filesystem.createFolder(rootId, { ...input, name: '' })).rejects.toMatchObject({ direction: 'outbound' });
     expect(request).not.toHaveBeenCalled();
-    await expect(api.filesystem.getRoot()).rejects.toBeInstanceOf(SchemaValidationError);
+    await expect(api.filesystem.browse(null)).rejects.toBeInstanceOf(SchemaValidationError);
     expect(() => api.filesystem.getNode('invalid')).toThrow(z.ZodError);
     expect(request).toHaveBeenCalledTimes(1);
   });
@@ -234,7 +230,7 @@ describe('filesystem HTTP boundary', () => {
   test('keeps rejected authentication explicit', async (): Promise<void> => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 401 }));
     const api: FilesApi = new HttpFilesApi(browserTransport({ origin: () => 'https://umbod.test', fetch: request, configuration }), () => 'https://umbod.test');
-    await expect(api.filesystem.getRoot()).rejects.toBeInstanceOf(AuthenticationRequiredError);
+    await expect(api.filesystem.browse(null)).rejects.toBeInstanceOf(AuthenticationRequiredError);
     expect(request).toHaveBeenCalledTimes(1);
   });
 });

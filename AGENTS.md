@@ -17,6 +17,15 @@ Use Vercel's [skills.sh](https://skills.sh/) to install agent skills. Repository
 
 Read the [component index](umbod/frontend/COMPONENT_INDEX.md) when working with UI Svelte components.
 
+## Application side effects
+
+- Follow ADR-013: use the existing application-local typed signals by default for optional application side effects such as logging, metrics, and audit observation. Operations publish facts; registered receivers own those effects.
+- Inject publishing ports and compose receivers explicitly per application. Do not introduce a global event bus or create implicit default channels inside producers.
+- Capture immutable, sanitized diagnostic snapshots before publication. No receiver should receive raw exceptions, credentials, payloads, or unapproved metadata.
+- Publish ordinary receiver failures to the separate application-failure channel. Only its terminal dispatch-failure handler, or bootstrap code before signals exist, may use minimal nonrecursive direct logging.
+- Do not replace primary I/O, acknowledged telemetry delivery, or required durable writes with best-effort signals. Preserve their failure and transaction semantics.
+- Follow [safe application diagnostics](umbod/docs/operations/application-diagnostics.md) for field contracts, privacy boundaries, and verification.
+
 ## Architecture decisions
 
 Architecture decision records live in [`umbod/project/architecture-records/`](umbod/project/architecture-records/). Read the applicable accepted ADRs before changing architecture; document intentional changes there rather than introducing a parallel pattern.
@@ -36,6 +45,7 @@ Never write an ADR unless explicitly asked to do so by the user.
 - [ADR-010: Key-Value Storage Drivers Below Request Cache Policy](umbod/project/architecture-records/ADR-010-key-value-storage-drivers.md) — Read for key-value drivers and request-cache policy boundaries.
 - [ADR-011: State Ownership and Rendering Boundaries](umbod/project/architecture-records/ADR-011-state-ownership-and-rendering-boundaries.md) — Read before changing UI state, derived values, component event handling, or state lifetimes.
 - [ADR-012: Show Only MCP Tools With an Authorized Operation](umbod/project/architecture-records/ADR-012-permission-aware-mcp-tool-visibility.md) (Proposed) — Read for caller-specific tool visibility and partially authorized tools.
+- [ADR-013: Signal-Owned Application Logging and Side Effects](umbod/project/architecture-records/ADR-013-signal-owned-application-logging.md) — Read before adding application logs, diagnostic events, observational side effects, or signal failure handling.
 
 ## Where to start by task
 

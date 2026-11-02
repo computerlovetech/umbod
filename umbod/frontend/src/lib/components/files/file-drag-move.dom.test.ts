@@ -73,7 +73,15 @@ describe('file row drag move UI', (): void => {
   test('shows the dragged file icon and name beside the pointer instead of the native row image', async (): Promise<void> => {
     await setup();
     const data = new DataTransfer();
-    dispatch(row(fileId), 'dragstart', data, { clientX: 100, clientY: 200 });
+    const link = row(fileId).querySelector<HTMLAnchorElement>('a')!;
+    const dragImage = document.querySelector<HTMLImageElement>('img.file-drag-image')!;
+    expect(link.getAttribute('draggable')).toBe('false');
+    expect(row(fileId).getAttribute('draggable')).toBe('true');
+    expect(dragImage.getAttribute('draggable')).toBe('false');
+    expect(dragImage.getAttribute('src')).toMatch(/^data:image\/gif;base64,/);
+    expect(dragImage.width).toBe(1);
+    expect(dragImage.height).toBe(1);
+    dispatch(link, 'dragstart', data, { clientX: 100, clientY: 200 });
     await tick();
     const preview = document.querySelector<HTMLElement>('.file-drag-preview')!;
     expect(preview.textContent).toContain('Move file');
@@ -82,7 +90,8 @@ describe('file row drag move UI', (): void => {
     expect(preview.getAttribute('aria-hidden')).toBe('true');
     expect(preview.style.getPropertyValue('--preview-x')).toBe('116px');
     expect(preview.style.getPropertyValue('--preview-y')).toBe('216px');
-    expect(data.setDragImage).toHaveBeenCalledWith(document.querySelector('.file-drag-image'), 0, 0);
+    expect(data.setDragImage).toHaveBeenCalledExactlyOnceWith(dragImage, 0, 0);
+    expect(Array.from(data.types)).toEqual([fileMoveTransferType]);
     dispatch(window, 'dragover', data, { clientX: 200, clientY: 300 });
     await tick();
     expect(preview.style.getPropertyValue('--preview-x')).toBe('216px');

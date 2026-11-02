@@ -8,10 +8,11 @@ from umbod.core.callers import CallerSnapshot
 from umbod.core.filesystem import FilesystemCreation
 from umbod.core.filesystem.browsing import Breadcrumbs, FilesystemBrowsing, NodeSummary
 from umbod.core.filesystem.content import FilesystemContent
+from umbod.core.filesystem.browsing.exploration import BrowseResult, FilesystemBrowser
 
 from .deps import (
     get_filesystem_browsing, get_filesystem_caller, get_filesystem_creation,
-    get_filesystem_content,
+    get_filesystem_content, get_filesystem_explorer, get_filesystem_browse_node_id,
 )
 from .deletion import router as deletion_router
 from .metadata import router as metadata_router
@@ -29,10 +30,21 @@ Creation = Annotated[FilesystemCreation, Depends(get_filesystem_creation)]
 Content = Annotated[FilesystemContent, Depends(get_filesystem_content)]
 
 
-@router.get("/root", response_model=NodeSummary)
-async def get_root(caller: Caller, browsing: Browsing) -> NodeSummary:
+@router.get(
+    "/browse", response_model=BrowseResult,
+    openapi_extra={"parameters": [{
+        "name": "node_id", "in": "query", "required": False,
+        "description": "Node to browse; omit to browse the filesystem root.",
+        "schema": {"type": "string", "format": "uuid"},
+    }]},
+)
+async def browse(
+    caller: Caller,
+    explorer: Annotated[FilesystemBrowser, Depends(get_filesystem_explorer)],
+    node_id: Annotated[UUID, Depends(get_filesystem_browse_node_id)],
+) -> BrowseResult:
     with filesystem_errors():
-        return await browsing.get_root(caller)
+        return await explorer.browse_node(caller, node_id)
 
 
 @router.get("/nodes/{node_id}", response_model=NodeSummary)

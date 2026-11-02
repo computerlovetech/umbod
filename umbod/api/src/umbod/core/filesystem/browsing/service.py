@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from typing import Optional
 
 from umbod.core.callers import CallerSnapshot
 
@@ -7,11 +8,12 @@ from ..authorization import (
     UnresolvedIdentity, allows_resolved,
 )
 from ..errors import MissingNode, StorageFailure
-from ..models import Node, NodeId, NodeKind, Permission, RootParent
+from ..models import Node, NodeId, Permission
 from ..namespace import ROOT_ID, require_directory
 from ..ports import NamespaceDriver
 from ..transactions import FilesystemTransactions
-from .models import BreadcrumbItem, Breadcrumbs, NodeSummary
+from .models import Breadcrumbs, NodeSummary
+from .ancestry import discoverable_breadcrumbs
 
 
 def summary(node: Node) -> NodeSummary:
@@ -45,35 +47,19 @@ class BrowsingService:
         identity = await self._resolver.resolve(caller)
         if isinstance(identity, UnresolvedIdentity):
             raise discover_denied(node_id)
-        items: list[BreadcrumbItem] = []
-        visited: set[NodeId] = set()
-        current_id = node_id
         async with self._transactions.transaction() as session:
-            while True:
-                if current_id in visited:
-                    raise StorageFailure("Invalid filesystem ancestry")
-                visited.add(current_id)
+            async def discover(current_id: NodeId) -> Optional[NodeSummary]:
                 if not await allows_resolved(
                     identity, current_id, Permission.DISCOVER,
                     session.namespace, session.access_control,
                 ):
-                    if not items:
-                        raise discover_denied(node_id)
-                    return Breadcrumbs(items=list(reversed(items)), complete=False)
+                    return None
                 try:
-                    node = await session.namespace.get_node(current_id)
+                    return summary(await session.namespace.get_node(current_id))
                 except MissingNode:
                     raise StorageFailure("Invalid filesystem ancestry") from None
-                if node.id != current_id or (items and node.kind != NodeKind.DIRECTORY):
-                    raise StorageFailure("Invalid filesystem ancestry")
-                items.append(BreadcrumbItem(id=node.id, name=node.name, kind=node.kind))
-                if node.id == ROOT_ID:
-                    if not isinstance(node.parent_id, RootParent) or node.kind != NodeKind.DIRECTORY or node.name != "":
-                        raise StorageFailure("Invalid filesystem ancestry")
-                    return Breadcrumbs(items=list(reversed(items)), complete=True)
-                if isinstance(node.parent_id, RootParent):
-                    raise StorageFailure("Invalid filesystem ancestry")
-                current_id = node.parent_id
+
+            return await discoverable_breadcrumbs(node_id, discover)
 
     async def _require_discover(self, caller: CallerSnapshot, node_id: NodeId) -> None:
         try:

@@ -33,7 +33,7 @@ export class NewFolderState {
 
   show = (): void => {
     const target = this.files.creationTarget();
-    if (!target || this.disposed) return;
+    if (!target || this.disposed || !this.files.createDirectoryAllowed) return;
     this.parentId = target.parentId;
     this.pending = this.pendingParents.has(target.parentId);
     this.uncertain = this.blockedParents.has(target.parentId);
@@ -58,7 +58,7 @@ export class NewFolderState {
 
   submit = async (): Promise<void> => {
     const target = this.files.creationTarget();
-    if (this.disposed || !this.open || !target || this.parentId !== target.parentId || this.pendingParents.has(target.parentId) || this.blockedParents.has(target.parentId)) return;
+    if (this.disposed || !this.files.createDirectoryAllowed || !this.open || !target || this.parentId !== target.parentId || this.pendingParents.has(target.parentId) || this.blockedParents.has(target.parentId)) return;
     const parsed = createFolderSchema.safeParse({ name: this.name, metadata: { content_type: {}, attributes: this.description ? { description: this.description } : {} } });
     if (!parsed.success) {
       this.error = 'Enter a folder name without path separators.';

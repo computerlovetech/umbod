@@ -20,7 +20,7 @@ def creation_payload(kind: str, body: dict[str, object]) -> dict[str, Any]:
 
 def test_group_root_creation_and_private_children(filesystem_http: FilesystemHttp) -> None:
     client = filesystem_http.client
-    root = client.get(f"{BASE}/root").json()
+    root = client.get(f"{BASE}/browse").json()["node"]
     response = client.post(f"{BASE}/nodes/{root['id']}/directories", **creation_payload("directories", BODY))
     assert response.status_code == 201
     child = response.json()
@@ -30,7 +30,7 @@ def test_group_root_creation_and_private_children(filesystem_http: FilesystemHtt
     assert client.get(f"{BASE}/nodes/{child['id']}").json() == child
     assert client.get(f"{BASE}/nodes/{root['id']}/children").json() == {"nodes": [child]}
     bob = {"Authorization": "Bearer bob"}
-    assert client.get(f"{BASE}/root", headers=bob).status_code == 200
+    assert client.get(f"{BASE}/browse", headers=bob).status_code == 200
     assert client.get(f"{BASE}/nodes/{root['id']}/children", headers=bob).json() == {"nodes": []}
     denied = client.get(f"{BASE}/nodes/{child['id']}", headers=bob)
     missing = client.get(f"{BASE}/nodes/{uuid4()}", headers=bob)
@@ -41,7 +41,7 @@ def test_group_root_creation_and_private_children(filesystem_http: FilesystemHtt
 
 
 @pytest.mark.parametrize("suffix,method", [
-    ("/root", "GET"), ("/nodes/{id}", "GET"),
+    ("/browse", "GET"), ("/nodes/{id}", "GET"),
     ("/nodes/{id}/children", "GET"),
     ("/nodes/{id}/uploads", "POST"), ("/nodes/{id}/directories", "POST"),
 ])
@@ -49,7 +49,7 @@ def test_all_paths_deny_untrusted_or_ungranted_callers(
     filesystem_http: FilesystemHttp, suffix: str, method: str,
 ) -> None:
     client = filesystem_http.client
-    identifier = client.get(f"{BASE}/root").json()["id"]
+    identifier = client.get(f"{BASE}/browse").json()["node"]["id"]
     path = BASE + suffix.format(id=identifier)
     payload = creation_payload("uploads" if suffix.endswith("/uploads") else "directories", BODY)
     outsider = client.request(method, path, **payload, headers={"Authorization": "Bearer outsider"})
@@ -73,7 +73,7 @@ def test_creation_rejects_invalid_or_authority_injecting_bodies(
     filesystem_http: FilesystemHttp, body: dict[str, object],
 ) -> None:
     client = filesystem_http.client
-    root_id = client.get(f"{BASE}/root").json()["id"]
+    root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
     response = client.post(f"{BASE}/nodes/{root_id}/directories", json=body)
     assert response.status_code == 422
     assert client.get(f"{BASE}/nodes/{root_id}/children").json() == {"nodes": []}
@@ -84,7 +84,7 @@ def test_creation_rejects_nested_metadata_extras(
     filesystem_http: FilesystemHttp, field: str,
 ) -> None:
     client = filesystem_http.client
-    root_id = client.get(f"{BASE}/root").json()["id"]
+    root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
     response = client.post(f"{BASE}/nodes/{root_id}/directories", **creation_payload("directories", {
         **BODY, "metadata": {**METADATA, field: "injected"},
     }))
@@ -98,7 +98,7 @@ def test_metadata_attributes_remain_arbitrary_data(
     filesystem_http: FilesystemHttp,
 ) -> None:
     client = filesystem_http.client
-    root_id = client.get(f"{BASE}/root").json()["id"]
+    root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
     attributes = {"owner": "not-an-owner", "content": "not-content", "caller": "not-a-caller"}
     response = client.post(f"{BASE}/nodes/{root_id}/directories", **creation_payload("directories", {
         **BODY, "metadata": {**METADATA, "attributes": attributes},
@@ -125,7 +125,7 @@ def test_invalid_uuid_is_framework_validation(
 
 def test_creation_domain_errors_and_cookie_csrf(filesystem_http: FilesystemHttp) -> None:
     client = filesystem_http.client
-    root_id = client.get(f"{BASE}/root").json()["id"]
+    root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
     path = f"{BASE}/nodes/{root_id}/directories"
     blocked = client.post(path, **creation_payload("directories", BODY), headers={"Cookie": "session=present"})
     assert blocked.status_code == 403

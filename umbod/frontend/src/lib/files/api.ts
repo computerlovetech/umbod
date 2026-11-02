@@ -1,7 +1,7 @@
-import type { UpdateNode, UpdateDescription, Breadcrumbs, CreateFolder, FileUpload, NodeSummary, BeginUpload, UploadSession, UploadTransfer } from './domain/schemas';
+import type { BrowseResult, UpdateNode, UpdateDescription, Breadcrumbs, CreateFolder, FileUpload, NodeSummary, BeginUpload, UploadSession, UploadTransfer } from './domain/schemas';
 
 export interface FilesystemApi {
-  getRoot(signal?: AbortSignal): Promise<NodeSummary>;
+  browse(target: string | null, signal?: AbortSignal): Promise<BrowseResult>;
   getNode(id: string, signal?: AbortSignal): Promise<NodeSummary>;
   getBreadcrumbs(id: string, signal?: AbortSignal): Promise<Breadcrumbs>;
   listChildren(parentId: string, signal?: AbortSignal): Promise<NodeSummary[]>;
@@ -12,9 +12,7 @@ export interface FilesystemApi {
   updateDescription(id: string, revision: number, input: UpdateDescription): Promise<NodeSummary>;
   checkDeleteEligibility(id: string, signal?: AbortSignal): Promise<void>;
   deleteFile(id: string, revision: number): Promise<void>;
-  checkUploadEligibility(parentId: string, signal?: AbortSignal): Promise<void>;
   beginUpload(parentId: string, input: BeginUpload): Promise<UploadSession>;
-  getUpload(id: string): Promise<UploadSession>;
   transferUpload(session: UploadSession, file: File): Promise<void>;
   completeUpload(session: UploadSession): Promise<NodeSummary>;
   uploadFile(parentId: string, input: FileUpload): Promise<NodeSummary>;

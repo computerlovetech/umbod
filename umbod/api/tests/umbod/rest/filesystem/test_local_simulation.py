@@ -34,7 +34,7 @@ def test_local_filesystem_requires_explicit_root_grant_and_retains_private_owner
         initial = client.get(POLICY).json()
         assert initial["status"] == "uninitialized"
         assert set(initial) == {"status", "revision", "groups", "blocked_group_ids"}
-        assert client.get(BASE + "/root").status_code == 403
+        assert client.get(BASE + "/browse").status_code == 403
         assert client.get(BASE + "/nodes?scope=owned").status_code == 404
         initial = client.get(POLICY).json()
         saved = client.put(POLICY, json={
@@ -43,7 +43,7 @@ def test_local_filesystem_requires_explicit_root_grant_and_retains_private_owner
             }],
         })
         assert saved.status_code == 200
-        root = client.get(BASE + "/root").json()
+        root = client.get(BASE + "/browse").json()["node"]
         created = client.post(BASE + f"/nodes/{root['id']}/directories", json={
             "name": "private-local-directory", "metadata": {"content_type": {}, "attributes": {}},
         })
@@ -52,7 +52,7 @@ def test_local_filesystem_requires_explicit_root_grant_and_retains_private_owner
         assert client.get(BASE + f"/nodes/{root['id']}/children").json() == {"nodes": [child]}
         revoked = client.put(POLICY, json={"expected_revision": saved.json()["revision"], "groups": []})
         assert revoked.status_code == 200
-        assert client.get(BASE + "/root").status_code == 403
+        assert client.get(BASE + "/browse").status_code == 403
         assert client.get(BASE + f"/nodes/{child['id']}").json() == child
     other_settings = local_filesystem_settings.model_copy(update={
         "admin_authentication": local_filesystem_settings.admin_authentication.model_copy(update={"simulated_user_id": "other-user"}),
@@ -72,7 +72,7 @@ def test_local_filesystem_rejects_client_selected_issuer(
             }],
         })
         assert saved.status_code == 422
-        assert client.get(BASE + "/root", headers={
+        assert client.get(BASE + "/browse", headers={
             "Authorization": 'Bearer {"iss":"attacker","sub":"test-user","groups":["admin"]}',
             "X-Umbod-Issuer": "attacker",
         }).status_code == 403

@@ -29,6 +29,20 @@ export class FilesNavigationState {
     await this.reload();
   };
 
+  seed = (node: BreadcrumbItem, path: Breadcrumbs): void => {
+    if (this.disposed) return;
+    this.reset();
+    this.selected = node;
+    this.path = path;
+    this.phase = 'ready';
+  };
+
+  acceptUpdatedNode = (node: BreadcrumbItem): void => {
+    if (this.disposed || this.selected?.id !== node.id || !this.path) return;
+    this.selected = node;
+    this.path = { ...this.path, items: this.path.items.map((item) => item.id === node.id ? { ...item, name: node.name } : item) };
+  };
+
   reload = async (): Promise<void> => {
     const selected = this.selected;
     if (this.disposed || !selected) return;

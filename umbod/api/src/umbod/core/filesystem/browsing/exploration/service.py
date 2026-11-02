@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Literal
 
 from umbod.core.callers import CallerSnapshot
@@ -8,6 +9,7 @@ from ...models import NodeId, NodeKind
 from ..models import NodeSummary
 from ..ports import FilesystemBrowsing
 from .models import (
+    BrowseResult, NodeCapabilities,
     DirectoryListing, DirectoryTree, ListingLimits, NodeInspection, NodeTarget,
     PathTarget, Target, TreeEntry, TreeLimits,
 )
@@ -57,6 +59,20 @@ class BrowsingExplorer:
         node = await self._resolve(caller, target)
         breadcrumbs = await self._browsing.get_breadcrumbs(caller, node.id)
         return NodeInspection(node=node, breadcrumbs=breadcrumbs)
+
+    async def browse_node(
+        self, caller: CallerSnapshot, target: Target,
+        capabilities: Callable[[NodeSummary], NodeCapabilities],
+    ) -> BrowseResult:
+        inspection = await self.inspect_node(caller, target)
+        entries = (
+            await self._children(caller, inspection.node, {inspection.node.id})
+            if inspection.node.kind == NodeKind.DIRECTORY else []
+        )
+        return BrowseResult(
+            node=inspection.node, breadcrumbs=inspection.breadcrumbs, entries=entries,
+            truncated=False, capabilities=[capabilities(node) for node in [inspection.node, *entries]],
+        )
 
     async def list_directory(
         self, caller: CallerSnapshot, target: Target, limits: ListingLimits

@@ -121,6 +121,7 @@ describe('Files group sharing UI', (): void => {
     const pending = deferred<NodeAccess>();
     vi.spyOn(api.sharing, 'inspectAccess').mockReturnValue(pending.promise);
     await state.load(fileId);
+    state.sharing.recheck(fileId);
     await tick();
     expect(document.querySelector('button[aria-label^="Share"]')).toBeNull();
     pending.reject(new HttpError(403, 'Forbidden', {}));

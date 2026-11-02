@@ -5,6 +5,7 @@ from enum import StrEnum
 from typing import Mapping, Protocol, Self
 
 from umbod.core.invocation.failure_evidence import InvocationExceptionEvidence
+from umbod.core.invocation.diagnostics import DownstreamHttpResponse
 from umbod.mcp.signals.events import (
     McpToolInvocationFailed,
     McpToolInvocationFailureCategory,
@@ -130,6 +131,10 @@ class _InvocationLogAttributesBuilder:
                 self._attributes[McpToolInvocationLogAttribute.FAILURE_STAGE] = event.diagnostic.stage
                 self._attributes[McpToolInvocationLogAttribute.FAILURE_REASON] = event.diagnostic.reason
                 self._attributes[McpToolInvocationLogAttribute.EXECUTION_MODE] = event.diagnostic.execution_mode
+                response = event.diagnostic.downstream_response
+                self._attributes["mcp.downstream.response_received"] = isinstance(response, DownstreamHttpResponse)
+                if isinstance(response, DownstreamHttpResponse):
+                    self._attributes["mcp.downstream.http.status_code"] = response.status_code
         return self
 
     def build(self) -> dict[str, StructuredAttributeValue]:

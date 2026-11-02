@@ -9,7 +9,8 @@ description: "Transport-neutral inspection, directory listing and bounded tree c
 - [__init__.py](./__init__.py) — Public exploration contracts and composition.
 - [models.py](./models.py) — Strict targets, required limits and safe summary-only results.
 - [ports.py](./ports.py) — Caller-supplied exploration operations without transport dependencies.
-- [service.py](./service.py) — Deterministic depth-first traversal; output bounds do not bound database work or provide an atomic snapshot.
+- [service.py](./service.py) — Shared inspection, complete folder/file browsing, bounded listings and deterministic depth-first traversal.
+- [scoped.py](./scoped.py) — Request-local authorization and operation eligibility over scoped facts without content reads.
 
 # Related links
 

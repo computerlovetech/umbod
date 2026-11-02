@@ -7,6 +7,7 @@ from .config import (
 )
 from .factory import (
     create_filesystem_browsing,
+    create_filesystem_explorer,
     create_filesystem_sharing,
     create_filesystem_transactions,
     create_filesystem_creation,
@@ -21,6 +22,7 @@ from .factory import (
 
 __all__ = [
     "create_filesystem_browsing",
+    "create_filesystem_explorer",
     "create_filesystem_sharing",
     "create_filesystem_transactions",
     "create_filesystem_creation",

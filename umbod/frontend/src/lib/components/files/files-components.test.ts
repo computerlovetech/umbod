@@ -1,7 +1,7 @@
 import { Window } from 'happy-dom';
 import { render } from 'svelte/server';
 import { describe, expect, test, vi } from 'vitest';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
 import type { FilesApi } from '$lib/files/api';
 import type { NodeSummary } from '$lib/files/domain/schemas';
 import { deferred, fileId, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
@@ -41,7 +41,7 @@ describe('Files user composition', () => {
 
   test('shell renders unprivileged and loads every URL selection including history navigation independently', async (): Promise<void> => {
     const { api } = fixture();
-    const getRoot = vi.spyOn(api.filesystem, 'getRoot');
+    const getRoot = vi.spyOn(api.filesystem, 'browse');
     const getNode = vi.spyOn(api.filesystem, 'getNode');
     const getChildren = vi.spyOn(api.filesystem, 'listChildren');
     const currentUser = vi.fn(() => deferred<never>().promise);
@@ -56,7 +56,7 @@ describe('Files user composition', () => {
     navigation.callback?.({ to: { url: new URL('https://umbod.test' + filesHref(folderId)) } });
     await vi.waitFor(() => expect(getChildren).toHaveBeenCalledWith(folderId, expect.any(AbortSignal)));
     navigation.callback?.({ to: { url: new URL('https://umbod.test/files') } });
-    await vi.waitFor(() => expect(getRoot).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(getRoot).toHaveBeenCalledTimes(3));
     await vi.waitFor(() => expect(getChildren).toHaveBeenCalledTimes(3));
     navigation.callback?.({ to: { url: new URL('https://umbod.test' + filesHref(fileId)) } });
     await vi.waitFor(() => expect(getNode).toHaveBeenCalledWith(fileId, expect.any(AbortSignal)));
@@ -124,22 +124,20 @@ describe('Files user composition', () => {
     expect(body).not.toMatch(/Upload|Download|Share|Search/);
   });
 
-  test('a stalled listing retains the authorized folder heading and independent navigation without enabling mutations', async (): Promise<void> => {
+  test('a stalled browse exposes no partial heading, path or mutations', async (): Promise<void> => {
     const { api, state, folder, upload } = fixture();
     const listing = deferred<NodeSummary[]>();
     vi.spyOn(api.filesystem, 'listChildren').mockReturnValueOnce(listing.promise);
-    const uploadEligibility = vi.spyOn(api.filesystem, 'checkUploadEligibility');
     const loading = state.load(folderId);
-    await vi.waitFor(() => expect(state.navigation.phase).toBe('ready'));
+    await Promise.resolve();
     const document = new Window().document;
     document.body.innerHTML = content(state, folder, upload);
-    expect(document.querySelector('#files-heading')?.textContent).toBe('Projects');
-    expect(document.querySelector('.mobile-path a')?.getAttribute('href')).toBe('/files');
-    expect(document.querySelector('nav[aria-label="File path"] [aria-current="page"]')?.textContent).toBe('Projects');
+    expect(document.querySelector('#files-heading')?.textContent).toBe('Files');
+    expect(document.querySelector('.mobile-path a')).toBeNull();
+    expect(document.querySelector('nav[aria-label="File path"]')).toBeNull();
     expect(document.body.textContent).toContain('Loading files');
     expect(state.phase).toBe('loading');
     expect(state.creationTarget()).toBeUndefined();
-    expect(uploadEligibility).not.toHaveBeenCalled();
     expect(document.querySelector('#upload-file-button, #new-folder-button, .row-delete')).toBeNull();
     listing.resolve([filesystemFixture[2]]);
     await loading;
@@ -149,23 +147,21 @@ describe('Files user composition', () => {
   test.each([
     [new Error('private listing diagnostic'), "Couldn't load files"],
     [new HttpError(403, 'private listing diagnostic', {}), "You don't have access"]
-  ])('a failed listing retains the authorized heading and path without granting ready actions', async (error, message): Promise<void> => {
+  ])('a failed browse hides heading, path and actions', async (error, message): Promise<void> => {
     const { api, state, folder, upload } = fixture();
     vi.spyOn(api.filesystem, 'listChildren').mockRejectedValueOnce(error);
-    const uploadEligibility = vi.spyOn(api.filesystem, 'checkUploadEligibility');
     await state.load(folderId);
-    await vi.waitFor(() => expect(state.navigation.phase).toBe('ready'));
+    await Promise.resolve();
     const document = new Window().document;
     document.body.innerHTML = content(state, folder, upload);
-    expect(document.querySelector('#files-heading')?.textContent).toBe('Projects');
-    expect(document.querySelector('.mobile-path a')?.getAttribute('href')).toBe('/files');
-    expect(document.querySelector('nav[aria-label="File path"] [aria-current="page"]')?.textContent).toBe('Projects');
+    expect(document.querySelector('#files-heading')?.textContent).toBe('Files');
+    expect(document.querySelector('.mobile-path a')).toBeNull();
+    expect(document.querySelector('nav[aria-label="File path"]')).toBeNull();
     expect(document.body.textContent).toContain(message);
     expect(document.body.textContent).not.toContain('private listing diagnostic');
     expect(document.body.textContent).not.toContain('This folder is empty');
     expect(state.phase).not.toBe('ready');
     expect(state.creationTarget()).toBeUndefined();
-    expect(uploadEligibility).not.toHaveBeenCalled();
     expect(document.querySelector('#upload-file-button, #new-folder-button, .row-delete')).toBeNull();
   });
 
@@ -175,15 +171,33 @@ describe('Files user composition', () => {
     vi.spyOn(api.filesystem, 'listChildren').mockResolvedValueOnce([]);
     await state.load(null);
     expect(content(state, folder, upload)).toContain('This folder is empty.');
-    vi.spyOn(api.filesystem, 'getRoot').mockRejectedValueOnce(new HttpError(403, 'Forbidden', {}));
+    vi.spyOn(api.filesystem, 'browse').mockRejectedValueOnce(new HttpError(403, 'Forbidden', {}));
     await state.load(null);
     expect(content(state, folder, upload)).toContain("You don't have access");
     expect(content(state, folder, upload)).not.toContain('This folder is empty.');
     expect(content(state, folder, upload)).not.toContain('New folder');
-    vi.spyOn(api.filesystem, 'getRoot').mockRejectedValueOnce(new Error('private diagnostic'));
+    vi.spyOn(api.filesystem, 'browse').mockRejectedValueOnce(new Error('private diagnostic'));
     await state.reload();
     expect(content(state, folder, upload)).toContain("Couldn't load files");
     expect(content(state, folder, upload)).not.toContain('private diagnostic');
+  });
+
+  test('actual upload authentication rejection preserves sign-in recovery without a probe retry', async (): Promise<void> => {
+    const { api, state, folder, upload } = fixture();
+    await state.load(null);
+    upload.show();
+    upload.select([new File(['content'], 'Retained.txt', { type: 'text/plain' })]);
+    vi.spyOn(api.filesystem, 'uploadFile').mockRejectedValueOnce(new AuthenticationRequiredError());
+    await upload.submit();
+    const body = content(state, folder, upload);
+    expect(state.uploadAvailability).toBe('sign-in');
+    expect(body).toContain('Sign in to check upload availability.');
+    const document = new Window().document;
+    document.body.innerHTML = body;
+    expect(document.querySelector('.availability-error button')?.textContent).toBe('Sign in');
+    expect(document.querySelector('#upload-file-button')).toBeNull();
+    expect(body).not.toContain('Retry upload check');
+    expect(body).not.toContain("Couldn't check upload availability");
   });
 
   test('folder form preserves denied input, disables all submits while pending and exposes uncertainty reload', async (): Promise<void> => {

@@ -108,4 +108,23 @@ helm --kube-context "${kube_context}" install "${release_name}" "${chart_directo
     --wait \
     --timeout 5m
 
+core_pod="$(kubectl --context "${kube_context}" get pods \
+    --selector "app.kubernetes.io/instance=${release_name},app.kubernetes.io/component=core" \
+    --output jsonpath='{.items[0].metadata.name}')"
+kubectl --context "${kube_context}" exec "${core_pod}" --container api -- python -c '
+import os
+import sqlite3
+from pathlib import Path
+
+assert os.environ["UMBOD_TELEMETRY_ANALYTICS_ENABLED"] == "true"
+analytics_path = Path(os.environ["UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH"])
+application_path = Path(os.environ["UMBOD_DATA_DIR"]) / "umbod.sqlite3"
+assert analytics_path == Path("/app/data/analytics.sqlite3")
+assert analytics_path.is_file() and application_path.is_file()
+assert not analytics_path.samefile(application_path)
+with sqlite3.connect(analytics_path.as_uri() + "?mode=ro", uri=True) as connection:
+    assert connection.execute("SELECT name FROM sqlite_master WHERE name = ?", ("analytics_logs",)).fetchall() == [("analytics_logs",)]
+with sqlite3.connect(application_path.as_uri() + "?mode=ro", uri=True) as connection:
+    assert connection.execute("SELECT name FROM sqlite_master WHERE name = ?", ("analytics_logs",)).fetchall() == []
+'
 helm --kube-context "${kube_context}" test "${release_name}" --logs --timeout 2m

@@ -36,7 +36,7 @@ tags:
 - [DelayedLoadingOverlay](src/lib/components/admin/shared/DelayedLoadingOverlay.svelte) — Delayed loading scrim around content; use for visual pending feedback, not input blocking; currently has no production consumer.
 - [ToastProvider](src/lib/components/feedback/ToastProvider.svelte) — Notification context and rendering scope; use around application content, where it is already mounted by the root layout.
 - [Toast API](src/lib/components/feedback/index.ts) — Public provider, useToast, and notification types; use to send success, warning, or error messages from descendants.
-- [ToastRegion](src/lib/components/feedback/ToastRegion.svelte) — Dismissible notification presenter with status/alert semantics; normally use through ToastProvider rather than mounting separately.
+- [ToastRegion](src/lib/components/feedback/ToastRegion.svelte) — Labelled notification region with dismissible status/alert messages; normally use through ToastProvider rather than separately.
 - [DateTimeView](src/lib/components/shared/DateTimeView.svelte) — Consistent English/UTC timestamp display; use for dates with exact source values available on hover.
 
 ## Layout and identity
@@ -79,6 +79,8 @@ tags:
 - [Global baseline](src/app.css) — Application typography, page reset, and focus ring; use as the baseline rather than recreating global styles per feature.
 
 ## Scope and composition
+
+- [Log analytics composition](src/lib/components/admin/analytics/README.md) — Feature-owned query form and result table; excluded from reusable controls because it owns administrator analytics workflows.
 
 - [Files compositions](src/lib/components/files/README.md) — Feature-owned sharing, rename, move and upload dialogs; excluded from reusable controls because they own files workflows.
 

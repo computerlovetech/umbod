@@ -87,6 +87,8 @@ def main() -> None:
     for container in pod["containers"]:
         identity_environment = {"UMBOD_PROFILE": "production", "UMBOD_AUTH": "auth0", "UMBOD_OIDC_DOMAIN": "identity.personal-runtime.kind.invalid", "UMBOD_OIDC_CLIENT_ID": "kind-client", "UMBOD_OIDC_AUDIENCE": "kind-client", "UMBOD_OIDC_ISSUER_URL": "https://identity.personal-runtime.kind.invalid/", "UMBOD_ADMIN_MEMBERSHIP_CLAIM": "groups", "UMBOD_MCP_PERMISSION_CLAIM": "groups", "SSL_CERT_FILE": "/personal-ca/ca.crt", "UMBOD_PUBLIC_API_ORIGIN": "https://umbod-runtime.kind.invalid"}
         container["env"] = [entry for entry in container["env"] if entry["name"] not in (*identity_environment, "UMBOD_OIDC_CLIENT_SECRET", "UMBOD_MCP_TEST_BEARER_TOKEN")]
+        if container["name"] in ("mcp", "mcp-b"):
+            identity_environment["UMBOD_PUBLIC_API_ORIGIN"] = os.environ["UMBOD_TEST_API_BASE_URL"]
         container["env"].extend({"name": name, "value": value} for name, value in identity_environment.items())
         container["env"].append({"name": "UMBOD_OIDC_CLIENT_SECRET", "valueFrom": {"secretKeyRef": {"name": "personal-runtime-identity", "key": "client-secret"}}})
         container["volumeMounts"].append({"name": "personal-ca", "mountPath": "/personal-ca", "readOnly": True})

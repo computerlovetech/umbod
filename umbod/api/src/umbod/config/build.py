@@ -21,6 +21,7 @@ from umbod.config.app import (
     PersonalConnectionsConfig,
     RestConfig,
     RuntimeConfig,
+    TelemetryAnalyticsConfig,
     UserProfileConfig,
 )
 from umbod.config.operator import OperatorSettings
@@ -248,6 +249,10 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
         ),
         connector_security=connector_security,
         connector_store=connector_store,
+        telemetry_analytics=TelemetryAnalyticsConfig(
+            enabled=operator.telemetry_analytics_enabled,
+            sqlite_path=operator.telemetry_analytics_sqlite_path,
+        ),
         filesystem=FilesystemRuntimeConfig(
             content=_filesystem_content(operator),
             upload_max_bytes=operator.filesystem_upload_max_bytes,

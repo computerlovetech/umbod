@@ -8,8 +8,8 @@ description: Required application telemetry dependencies and configured listener
 
 - [__init__.py](./__init__.py) — Public telemetry contracts.
 - [ports.py](./ports.py) — Composite metrics recording and listener lifecycle ports.
-- [dependencies.py](./dependencies.py) — Required application-owned telemetry bundle.
-- [composition.py](./composition.py) — Fresh configured recording and listener adapters.
+- [dependencies.py](./dependencies.py) — Required application-owned telemetry and failure-publishing dependencies.
+- [composition.py](./composition.py) — Fresh failure channels, recording adapters, and listener composition.
 
 # Related modules
 

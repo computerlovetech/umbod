@@ -13,7 +13,7 @@ describe('ToastRegion', () => {
 
     const { body } = render(ToastRegion, { props: { state } });
 
-    expect(body).toContain('aria-label="Notifications"');
+    expect(body).toContain('role="region" aria-label="Notifications"');
     expect(body).toContain('Success');
     expect(body).toContain('Warning');
     expect(body).toContain('Error');

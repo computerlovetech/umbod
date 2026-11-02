@@ -4,6 +4,7 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from umbod.config import defaults
+from umbod.config.app import validate_telemetry_analytics_sqlite_path
 
 Profile = str
 AuthRecipe = str
@@ -32,6 +33,8 @@ class OperatorSettings(BaseSettings):
     personal_connections_enabled: PersonalConnectionsMode = "auto"
     personal_connections_oauth_enabled: PersonalConnectionsMode = "auto"
     personal_connections_identity_namespace: str = ""
+    telemetry_analytics_enabled: bool = False
+    telemetry_analytics_sqlite_path: str = defaults.TELEMETRY_ANALYTICS_SQLITE_PATH
     otlp_enabled: bool = False
     otlp_bearer_token: str = Field(default="", repr=False)
     otlp_allow_unauthenticated: bool = False
@@ -263,6 +266,11 @@ class OperatorSettings(BaseSettings):
         default=defaults.ADMIN_SIMULATED_USER_NAME,
         validation_alias="UMBOD_ADMIN_AUTHENTICATION_SIMULATED_USER_NAME",
     )
+
+    @field_validator("telemetry_analytics_sqlite_path")
+    @classmethod
+    def validate_analytics_sqlite_path(cls, value: str) -> str:
+        return validate_telemetry_analytics_sqlite_path(value)
 
     @field_validator("filesystem_content_directory", mode="before")
     @classmethod

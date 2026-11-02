@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from umbod.core.filesystem import FilesystemCreation
 from umbod.core.filesystem.browsing import FilesystemBrowsing
+from umbod.core.filesystem.browsing.exploration import FilesystemBrowser
 from umbod.core.filesystem.uploads import UploadService
 from umbod.rest.filesystem import deps
 
@@ -34,13 +35,17 @@ def test_unexpected_service_and_response_errors_are_safe_and_no_store(
     method: str, path: str, operation: str, failure: str,
 ) -> None:
     browsing = create_autospec(FilesystemBrowsing, instance=True)
+    explorer = create_autospec(FilesystemBrowser, instance=True)
     creation = create_autospec(FilesystemCreation, instance=True)
     content = create_autospec(UploadService, instance=True)
-    service = content if operation == "begin" else creation if method == "POST" else browsing
+    service = explorer if operation == "browse_node" else content if operation == "begin" else creation if method == "POST" else browsing
     if failure == "service":
         getattr(service, operation).side_effect = RuntimeError("private storage/key credential")
     else:
         getattr(service, operation).return_value = {"credential": "private storage/key"}
+
+    def provide_explorer() -> FilesystemBrowser:
+        return explorer
 
     def provide_browsing() -> FilesystemBrowsing:
         return browsing
@@ -51,6 +56,7 @@ def test_unexpected_service_and_response_errors_are_safe_and_no_store(
     def provide_content() -> UploadService:
         return content
 
+    filesystem_http.app.dependency_overrides[deps.get_filesystem_explorer] = provide_explorer
     filesystem_http.app.dependency_overrides[deps.get_filesystem_uploads] = provide_content
     filesystem_http.app.dependency_overrides[deps.get_filesystem_browsing] = provide_browsing
     filesystem_http.app.dependency_overrides[deps.get_filesystem_creation] = provide_creation
@@ -64,7 +70,8 @@ def test_unexpected_service_and_response_errors_are_safe_and_no_store(
 
 
 @pytest.mark.parametrize("factory,method,path", [
-    ("create_filesystem_browsing", "GET", "/root"),
+    ("create_filesystem_browsing", "GET", "/nodes/{id}"),
+    ("create_filesystem_explorer", "GET", "/browse"),
     ("create_filesystem_uploads", "POST", "/nodes/{id}/uploads"),
     ("create_filesystem_creation", "POST", "/nodes/{id}/directories"),
 ])

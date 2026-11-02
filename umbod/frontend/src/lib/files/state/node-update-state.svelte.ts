@@ -63,11 +63,16 @@ export class NodeUpdateState {
     this.navigation.reset();
   };
 
-  select = async (node: NodeSummary): Promise<void> => {
+  select = async (node: NodeSummary, eligibility?: { rename: boolean; move: boolean }): Promise<void> => {
     this.reset();
     if (this.disposed) return;
     this.current = node;
     if (typeof node.parent_id !== 'string') return;
+    if (eligibility) {
+      this.renameAvailability = eligibility.rename ? 'allowed' : 'denied';
+      this.moveAvailability = eligibility.move ? 'allowed' : 'denied';
+      return;
+    }
     await this.checkEligibility();
   };
 

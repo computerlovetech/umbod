@@ -1,6 +1,6 @@
 import { SvelteMap } from 'svelte/reactivity';
 import type { FilesystemApi } from '../api';
-import type { NodeSummary } from '../domain/schemas';
+import type { BrowseCapabilities, NodeSummary } from '../domain/schemas';
 import { NodeUpdateState } from './node-update-state.svelte';
 import { DescriptionState } from './description-state.svelte';
 
@@ -24,7 +24,7 @@ export class RowEditingState {
 
   constructor(private readonly api: FilesystemApi, private readonly accept: (node: NodeSummary) => void, private readonly reload: () => Promise<void>) {}
 
-  select = (nodes: NodeSummary[]): void => {
+  select = (nodes: NodeSummary[], capabilities?: ReadonlyMap<string, BrowseCapabilities>): void => {
     if (this.disposed) return;
     for (const node of nodes) {
       let entry = this.controllers.get(node.id);
@@ -47,7 +47,11 @@ export class RowEditingState {
         entry.description.acceptUpdatedNode(node);
       } else {
         this.nodes.set(node.id, node);
-        this.queue.push({ id: node.id, operation: 'update' }, { id: node.id, operation: 'description' });
+        const eligibility = capabilities?.get(node.id);
+        if (eligibility) {
+          void entry.update.select(node, eligibility);
+          void entry.description.select(node, eligibility.edit_description);
+        } else this.queue.push({ id: node.id, operation: 'update' }, { id: node.id, operation: 'description' });
       }
     }
     this.drain();

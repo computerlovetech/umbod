@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import logging
 
 import mcp.types as mt
@@ -11,6 +12,8 @@ from fastmcp.exceptions import AuthorizationError
 from fastmcp.server.middleware.middleware import MiddlewareContext
 from fastmcp.tools import FunctionTool, ToolResult
 
+from umbod.logging import create_application_failure_signal
+from umbod.logging import OpenTelemetryJsonFormatter
 from umbod.mcp.logging import (
     McpAuditActivityType,
     McpAuthenticatedAuditActor,
@@ -74,7 +77,7 @@ class CallNextStub:
 
 def _middleware(sink: RecordingSink) -> McpAuditMiddleware:
     return McpAuditMiddleware(
-        recorder=McpAuditRecorder(sink, "umbod"),
+        recorder=McpAuditRecorder(sink, "umbod", application_failures=create_application_failure_signal()),
         identity_source=FakeIdentitySource(),
         exposure_mode="flat",
     )
@@ -106,12 +109,8 @@ async def test_on_initialize_records_client_connection(caplog: pytest.LogCapture
     assert sink.events[0].actor.authenticated_user_id == "user@example.com"
     record = next(record for record in caplog.records if record.msg == "MCP client initialized")
     assert record.mcp_exposure_mode == "flat"
-    assert record.mcp_client_name == "claude-ai"
-    assert record.mcp_client_version == "1.0"
-    assert record.mcp_oauth_client_id == "oauth-client-id"
-    assert record.mcp_oauth_client_name == "oauth-client-name"
-    assert record.mcp_authenticated_subject == "user@example.com"
-    assert record.mcp_session_id == "session-1"
+    assert record.mcp_authenticated is True
+    assert record.mcp_session_present is True
 
 
 @pytest.mark.asyncio
@@ -133,12 +132,63 @@ async def test_on_list_tools_records_tool_discovery(caplog: pytest.LogCaptureFix
     record = next(record for record in caplog.records if record.msg == "MCP tools listed")
     assert record.mcp_exposure_mode == "flat"
     assert record.mcp_tool_count == 1
-    assert record.mcp_tool_names == ["search_tools"]
-    assert record.mcp_tool_names_hash == (
-        "29693a83b3796e3fcfa0d4806d2730ebd1a9c5ceba33da071431355fcc25aaf3"
-    )
-    assert record.mcp_authenticated_subject == "user@example.com"
-    assert record.mcp_session_id == "session-1"
+    assert record.mcp_authenticated is True
+    assert record.mcp_session_present is True
+
+
+class CanaryIdentitySource(FakeIdentitySource):
+    def identity_from_request(self, fastmcp_context: object | None) -> McpAuditIdentity:
+        return McpAuditIdentity(
+            actor=McpAuthenticatedAuditActor("secret-canary-subject"),
+            client=McpAuditClientMetadata({
+                "client_id": "secret-canary-client-id",
+                "client_name": "secret-canary-client-name",
+                "session_id": "secret-canary-session",
+                "request_id": "secret-canary-request",
+            }),
+        )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["initialize", "tools/list"])
+@pytest.mark.parametrize("exposure_mode", ["flat", "gateway", "codemode", "secret-canary-mode"])
+async def test_debug_output_keeps_privacy_and_does_not_change_audit_identity(
+    method: str, exposure_mode: str, caplog: pytest.LogCaptureFixture,
+) -> None:
+    sink = RecordingSink()
+    middleware = McpAuditMiddleware(McpAuditRecorder(sink, "umbod", application_failures=create_application_failure_signal()), CanaryIdentitySource(), exposure_mode)
+
+    async def private_tool() -> str:
+        return "unused"
+
+    request = mt.InitializeRequest(params=mt.InitializeRequestParams(
+        protocolVersion="2025-06-18",
+        capabilities=mt.ClientCapabilities(),
+        clientInfo=mt.Implementation(name="secret-canary-client", version="secret-canary-version"),
+    ))
+    tools = [FunctionTool.from_function(private_tool, name="secret-canary-tool")]
+    with caplog.at_level(logging.DEBUG, logger="umbod.mcp.middleware.audit"):
+        if method == "initialize":
+            await middleware.on_initialize(_context(method, request), CallNextStub("init", None))
+        else:
+            await middleware.on_list_tools(_context(method, object()), CallNextStub(tools, None))
+
+    serialized = [OpenTelemetryJsonFormatter("test").format(record) for record in caplog.records]
+    assert len(serialized) == 1
+    assert "secret-canary" not in serialized[0]
+    attributes = json.loads(serialized[0])["attributes"]
+    expected: dict[str, object] = {
+        "logger.name": "umbod.mcp.middleware.audit",
+        "mcp_event": method,
+        "mcp_exposure_mode": exposure_mode if exposure_mode in {"flat", "gateway", "codemode"} else "other",
+        "mcp_authenticated": True,
+        "mcp_session_present": True,
+    }
+    if method == "tools/list":
+        expected["mcp_tool_count"] = 1
+    assert attributes == expected
+    assert sink.events[0].actor.authenticated_user_id == "secret-canary-subject"
+    assert sink.events[0].client.attributes["client_id"] == "secret-canary-client-id"
 
 
 @pytest.mark.asyncio

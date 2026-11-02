@@ -25,6 +25,7 @@ description: "FastAPI delivery for administration, authenticated users, system e
 - [settings.py](./settings.py) — REST settings.
 - [system/](./system/) — Internal state, events and health.
 - [telemetry/](./telemetry/README.md) — OTLP receiver.
+- [telemetry_analytics/](./telemetry_analytics/README.md) — Administrator-only aggregate log counts.
 - [user_catalogue/](./user_catalogue/README.md) — Cross-kind user catalogue.
 - [users/](./users/) — Unified authenticated profile, UI capabilities and profile enrichment.
 

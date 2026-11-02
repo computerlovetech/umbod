@@ -15,6 +15,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [capabilities](./capabilities/README.md) — Capability identity and catalogues.
 - [configuration](./configuration/) — Encrypted connector configuration.
 - [connectors](./connectors/) — Native, OpenAPI and downstream MCP connectors.
+- [diagnostics](./diagnostics/README.md) — Safe failure-event snapshots and signal publication contracts.
 - [filesystem](./filesystem/README.md) — Namespaces, content and access policy.
 - [groups](./groups/README.md) — Group catalogue.
 - [icons](./icons/README.md) — Favicon discovery.
@@ -28,7 +29,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [persistence](./persistence/README.md) — Database ports and read plans.
 - [publishing](./publishing/README.md) — Connector publication.
 - [signals](./signals/README.md) — Application-local signals.
-- [telemetry](./telemetry/README.md) — Telemetry models and sink ports.
+- [telemetry](./telemetry/README.md) — Telemetry exports, sink ports and analytical read contracts.
 - [user_catalogue](./user_catalogue/README.md) — Caller-visible connector catalogue.
 
 # Related links

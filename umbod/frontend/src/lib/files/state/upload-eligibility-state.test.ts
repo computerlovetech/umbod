@@ -13,145 +13,121 @@ function fixture(): { api: FilesApi; files: FilesState; upload: UploadState } {
   return { api, files, upload: new UploadState(api, files) };
 }
 
-describe('directory upload eligibility', () => {
-  test('directory browsing is ready while eligibility is pending and files never request eligibility', async (): Promise<void> => {
+describe('browse upload capabilities', () => {
+  test('directory capabilities allow upload while file inspection hides it', async (): Promise<void> => {
     const { api, files, upload } = fixture();
-    const pending = deferred<void>();
-    const eligibility = vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(pending.promise);
+    const browse = vi.spyOn(api.filesystem, 'browse');
+    await files.load(null);
+    expect(files.phase).toBe('ready');
+    expect(files.uploadAvailability).toBe('allowed');
+    expect(upload.available).toBe(true);
+    expect(browse).toHaveBeenCalledExactlyOnceWith(null, expect.any(AbortSignal));
+    await files.load(fileId);
+    expect(files.uploadAvailability).toBe('hidden');
+    expect(upload.available).toBe(false);
+  });
+
+  test('read-only browse hides upload and reload restores the authoritative capability', async (): Promise<void> => {
+    let writable = false;
+    const api = new InMemoryFilesApi(rootId, filesystemFixture, undefined, undefined, undefined, () => writable);
+    const files = new FilesState(api);
+    const upload = new UploadState(api, files);
     await files.load(null);
     expect(files.phase).toBe('ready');
     expect(files.children.map((node) => node.id)).toEqual([folderId]);
-    expect(files.uploadAvailability).toBe('loading');
+    expect(files.uploadAvailability).toBe('denied');
+    upload.show();
+    expect(upload.open).toBe(false);
+    writable = true;
+    await files.reload();
+    expect(upload.available).toBe(true);
+    writable = false;
+    await files.reload();
     expect(upload.available).toBe(false);
-    expect(eligibility).toHaveBeenCalledWith(rootId, expect.any(AbortSignal));
-    pending.resolve(undefined);
-    await vi.waitFor(() => expect(files.uploadAvailability).toBe('allowed'));
-    await files.load(fileId);
-    expect(files.phase).toBe('ready');
-    expect(files.uploadAvailability).toBe('hidden');
-    expect(eligibility).toHaveBeenCalledTimes(1);
   });
 
   test.each([
     [new HttpError(403, 'Forbidden', {}), 'denied'],
-    [new HttpError(404, 'Missing', {}), 'denied'],
+    [new HttpError(404, 'Missing', {}), 'missing'],
     [new AuthenticationRequiredError(), 'sign-in'],
-    [new NetworkError('offline'), 'error'],
-    [new HttpError(500, 'Failed', {}), 'error']
-  ])('eligibility failure %s hides upload without blocking browsing and explicit retry recovers', async (error, availability): Promise<void> => {
+    [new NetworkError('offline'), 'error']
+  ])('browse failure %s blocks upload until successful reload', async (error, phase): Promise<void> => {
     const { api, files, upload } = fixture();
-    const eligibility = vi.spyOn(api.filesystem, 'checkUploadEligibility').mockRejectedValueOnce(error);
     await files.load(null);
-    await vi.waitFor(() => expect(files.uploadAvailability).toBe(availability));
-    expect(files.phase).toBe('ready');
-    expect(files.node?.id).toBe(rootId);
-    expect(files.children.map((node) => node.id)).toEqual([folderId]);
-    upload.show();
-    expect(upload.open).toBe(false);
+    vi.spyOn(api.filesystem, 'browse').mockRejectedValueOnce(error);
+    await files.reload();
+    expect(files.phase).toBe(phase);
+    expect(files.uploadAvailability).toBe('hidden');
     expect(upload.available).toBe(false);
-    expect(eligibility).toHaveBeenCalledTimes(1);
-    await files.checkUploadAvailability();
-    expect(files.uploadAvailability).toBe('allowed');
+    await files.reload();
+    expect(upload.available).toBe(true);
   });
 
-  test.each(['resolve', 'reject'])('stale eligibility %s cannot enable upload or replace eligibility for another parent', async (outcome): Promise<void> => {
+  test.each(['resolve', 'reject'])('stale browse %s cannot restore upload after navigation', async (outcome): Promise<void> => {
     const { api, files, upload } = fixture();
-    const old = deferred<void>();
-    const current = deferred<void>();
-    const eligibility = vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(old.promise).mockReturnValueOnce(current.promise);
-    await files.load(null);
-    const oldSignal = eligibility.mock.calls[0][1];
-    await files.load(folderId);
-    expect(oldSignal?.aborted).toBe(true);
-    expect(files.uploadAvailability).toBe('loading');
-    if (outcome === 'resolve') old.resolve(undefined);
-    else old.reject(new HttpError(403, 'Forbidden', {}));
-    await old.promise.catch(() => undefined);
-    expect(files.node?.id).toBe(folderId);
-    expect(files.uploadAvailability).toBe('loading');
-    upload.show();
-    expect(upload.open).toBe(false);
-    current.resolve(undefined);
-    await vi.waitFor(() => expect(files.uploadAvailability).toBe('allowed'));
-  });
-
-  test('later eligibility check wins within the same directory', async (): Promise<void> => {
-    const { api, files } = fixture();
-    const old = deferred<void>();
-    vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(old.promise).mockResolvedValueOnce(undefined);
-    await files.load(null);
-    await files.checkUploadAvailability();
-    old.resolve(undefined);
-    await old.promise;
-    expect(files.uploadAvailability).toBe('allowed');
-  });
-
-  test.each(['resolve', 'reject'])('disposal aborts and ignores late eligibility %s', async (outcome): Promise<void> => {
-    const { api, files } = fixture();
-    const pending = deferred<void>();
-    const eligibility = vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(pending.promise);
-    await files.load(null);
-    const signal = eligibility.mock.calls[0][1];
-    files.dispose();
-    if (outcome === 'resolve') pending.resolve(undefined);
+    const response = await api.filesystem.browse(null);
+    const pending = deferred<typeof response>();
+    const browse = vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(pending.promise);
+    const loading = files.load(null);
+    const signal = browse.mock.calls[0][1];
+    await files.load(fileId);
+    if (outcome === 'resolve') pending.resolve(response);
     else pending.reject(new NetworkError('late'));
-    await pending.promise.catch(() => undefined);
+    await loading;
     expect(signal?.aborted).toBe(true);
-    expect(files.uploadAvailability).not.toBe('allowed');
-    await files.checkUploadAvailability();
-    expect(eligibility).toHaveBeenCalledTimes(1);
+    expect(files.node?.id).toBe(fileId);
+    expect(files.uploadAvailability).toBe('hidden');
+    expect(upload.available).toBe(false);
+  });
+
+  test.each(['resolve', 'reject'])('disposal ignores late browse %s capabilities', async (outcome): Promise<void> => {
+    const { api, files, upload } = fixture();
+    const response = await api.filesystem.browse(null);
+    const pending = deferred<typeof response>();
+    const browse = vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(pending.promise);
+    const loading = files.load(null);
+    const signal = browse.mock.calls[0][1];
+    files.dispose();
+    if (outcome === 'resolve') pending.resolve(response);
+    else pending.reject(new NetworkError('late'));
+    await loading;
+    expect(signal?.aborted).toBe(true);
+    expect(upload.available).toBe(false);
+    await files.reload();
+    expect(browse).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('write rejection invalidates upload eligibility', () => {
+describe('write rejection invalidates upload capability', () => {
   test.each([
     { error: new AuthenticationRequiredError(), availability: 'sign-in' },
     { error: new HttpError(403, 'Forbidden', {}), availability: 'denied' }
-  ])('$availability upload rejection invalidates an outstanding successful eligibility response', async ({ error, availability }): Promise<void> => {
+  ])('$availability rejection retains the draft and requires authoritative reload', async ({ error, availability }): Promise<void> => {
     const { api, files, upload } = fixture();
     await files.load(null);
-    await vi.waitFor(() => expect(upload.available).toBe(true));
     upload.show();
     const file = new File(['x'], 'Retained.txt');
     upload.select([file]);
-    const response = deferred<NodeSummary>();
-    vi.spyOn(api.filesystem, 'uploadFile').mockReturnValueOnce(response.promise);
-    const pending = upload.submit();
-    const eligibility = deferred<void>();
-    vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(eligibility.promise);
-    const checking = files.checkUploadAvailability();
-    response.reject(error);
-    await pending;
+    vi.spyOn(api.filesystem, 'uploadFile').mockRejectedValueOnce(error);
+    await upload.submit();
     expect(files.uploadAvailability).toBe(availability);
     expect(files.phase).toBe('ready');
     expect(files.children.map((node) => node.id)).toEqual([folderId]);
     expect(upload.file).toBe(file);
     expect(upload.name).toBe(file.name);
     expect(upload.available).toBe(false);
-    eligibility.resolve(undefined);
-    await checking;
-    expect(files.uploadAvailability).toBe(availability);
-    expect(upload.available).toBe(false);
     upload.changeName('Renamed.txt');
     expect(upload.canSubmit).toBe(false);
-    await files.checkUploadAvailability();
+    await files.reload();
     expect(files.uploadAvailability).toBe('allowed');
   });
 
-  test.each(['denied', 'sign-in'] as const)('rejectUploadAccess for another parent cannot invalidate the current allowed or pending eligibility: %s', async (availability): Promise<void> => {
-    const { api, files, upload } = fixture();
+  test.each(['denied', 'sign-in'] as const)('rejection for another parent cannot revoke current upload: %s', async (availability): Promise<void> => {
+    const { files, upload } = fixture();
     await files.load(folderId);
-    await vi.waitFor(() => expect(upload.available).toBe(true));
     files.rejectUploadAccess(rootId, availability);
     expect(files.uploadAvailability).toBe('allowed');
-    const eligibility = deferred<void>();
-    vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(eligibility.promise);
-    const checking = files.checkUploadAvailability();
-    files.rejectUploadAccess(rootId, availability);
-    expect(files.uploadAvailability).toBe('loading');
-    eligibility.resolve(undefined);
-    await checking;
-    expect(files.uploadAvailability).toBe('allowed');
+    expect(upload.available).toBe(true);
   });
 });
 

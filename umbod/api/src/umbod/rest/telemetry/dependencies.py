@@ -5,6 +5,7 @@ from fastapi import Depends, Request
 
 from umbod.config import OtlpReceiverConfig
 from umbod.core.telemetry import TelemetrySink
+from umbod.core.telemetry.analytics import TelemetryAnalyticsReader, TelemetryAnalyticsWriter
 from umbod.core.telemetry.adapters import StdoutTelemetrySink
 from umbod.rest.telemetry.errors import TelemetryHttpError
 
@@ -15,6 +16,14 @@ def get_receiver_config() -> OtlpReceiverConfig:
 
 def get_telemetry_sink() -> TelemetrySink:
     return StdoutTelemetrySink()
+
+
+def get_analytics_writer() -> TelemetryAnalyticsWriter:
+    raise RuntimeError("Telemetry analytics writer is not installed")
+
+
+def get_analytics_reader() -> TelemetryAnalyticsReader:
+    raise RuntimeError("Telemetry analytics reader is not installed")
 
 
 def authenticate_export(

@@ -61,6 +61,27 @@ class OtlpReceiverConfig(ConfigModel):
     max_request_bytes: int = Field(default=defaults.OTLP_MAX_REQUEST_BYTES, gt=0)
 
 
+def validate_telemetry_analytics_sqlite_path(value: str) -> str:
+    if (
+        not value.strip()
+        or ":memory:" in value.lower()
+        or value.strip().lower().startswith("file:")
+        or "\x00" in value
+    ):
+        raise ValueError("Telemetry analytics requires a nonblank on-disk SQLite path")
+    return value
+
+
+class TelemetryAnalyticsConfig(ConfigModel):
+    enabled: bool = False
+    sqlite_path: str = defaults.TELEMETRY_ANALYTICS_SQLITE_PATH
+
+    @field_validator("sqlite_path")
+    @classmethod
+    def validate_sqlite_path(cls, value: str) -> str:
+        return validate_telemetry_analytics_sqlite_path(value)
+
+
 class McpConfig(ConfigModel):
     metrics_enabled: bool = True
     port: int = defaults.MCP_PORT
@@ -330,6 +351,9 @@ class AppConfig(ConfigModel):
     endpoints: EndpointsConfig = Field(default_factory=EndpointsConfig)
     rest: RestConfig = Field(default_factory=RestConfig)
     otlp_receiver: OtlpReceiverConfig = Field(default_factory=OtlpReceiverConfig)
+    telemetry_analytics: TelemetryAnalyticsConfig = Field(
+        default_factory=TelemetryAnalyticsConfig
+    )
     mcp: McpConfig = Field(default_factory=McpConfig)
     oidc: OidcConfig = Field(default_factory=OidcConfig)
     oauth_storage: OAuthStorageConfig = Field(default_factory=OAuthStorageConfig)
@@ -350,6 +374,33 @@ class AppConfig(ConfigModel):
     personal_connections: PersonalConnectionsConfig = Field(
         default_factory=PersonalConnectionsConfig
     )
+
+    @model_validator(mode="after")
+    def validate_telemetry_analytics_storage(self) -> "AppConfig":
+        if not self.telemetry_analytics.enabled or self.connector_store.type != "sqlite":
+            return self
+        try:
+            analytics_path = Path(self.telemetry_analytics.sqlite_path).resolve()
+            application_path = Path(self.connector_store.sqlite_path)
+            resolved_application_path = application_path.resolve()
+            protected_paths = [application_path, resolved_application_path]
+            protected_paths.extend(
+                Path(f"{path}{suffix}")
+                for path in (application_path, resolved_application_path)
+                for suffix in ("-wal", "-shm", "-journal")
+            )
+            for protected_path in protected_paths:
+                if analytics_path == protected_path.resolve() or (
+                    analytics_path.exists()
+                    and protected_path.exists()
+                    and analytics_path.samefile(protected_path)
+                ):
+                    raise ValueError(
+                        "Telemetry analytics must use a separate SQLite file from application storage and its sidecars"
+                    )
+        except (OSError, RuntimeError) as error:
+            raise ValueError("Cannot verify telemetry analytics SQLite file separation") from error
+        return self
 
     @model_validator(mode="after")
     def validate_personal_connections(self) -> "AppConfig":

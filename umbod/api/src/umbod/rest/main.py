@@ -12,6 +12,8 @@ from starlette.middleware import Middleware
 from starlette.routing import BaseRoute
 from umbod.core.connectors.native.registry import ConnectorRegistration
 from umbod.core.persistence import PersistenceRuntime
+from umbod.core.telemetry.analytics import TelemetryAnalyticsRuntime
+from umbod.infrastructure import create_configured_analytics_runtime
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.adapters.settings import downstream_mcp_infrastructure_settings_from_app_config
 from umbod.infrastructure import PersonalDiscoveryPreparation
@@ -28,6 +30,7 @@ from umbod.rest.authentication.rest_middleware import RestAuthenticationMiddlewa
 from umbod.rest.admin_overview import router as admin_overview_router
 from umbod.rest.user_catalogue import router as user_catalogue_router
 from umbod.rest.filesystem import router as filesystem_router
+from umbod.rest.filesystem.upload_transfers import router as filesystem_transfer_router
 from umbod.rest.filesystem_administration import router as filesystem_administration_router
 from umbod.rest.connectors.downstream_mcp.personal_connections import router as personal_connections_router
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback import (
@@ -59,12 +62,14 @@ from umbod.rest.metrics import (
     RestMetricsHttpServer,
 )
 from umbod.config import AppConfig, load_server_app_config
-from umbod.logging import flush_logging
+from umbod.logging import create_application_failure_signal, flush_logging
 from umbod.rest.settings import APISettings
 from umbod.rest.system import router as system_router
 from umbod.rest.system.routes import health
 from umbod.rest.system.schemas import HealthResponse
 from umbod.rest.telemetry import install_telemetry_receiver
+from umbod.rest.telemetry_analytics import router as telemetry_analytics_router
+from umbod.rest.telemetry.composition import install_analytics_dependencies
 from umbod.rest.users import create_user_profile_router
 from umbod.rest.users.jwks import (
     CachedSigningKeyResolver,
@@ -150,6 +155,7 @@ def _mount_admin_app(
     app_config: AppConfig,
     verifier_factory: JwtVerifierFactory,
     oauth_service: OAuthService | None,
+    analytics_runtime: TelemetryAnalyticsRuntime,
 ) -> tuple[BaseRoute, ...]:
     admin_router = APIRouter()
     admin_router.include_router(connector_router)
@@ -158,6 +164,7 @@ def _mount_admin_app(
     admin_router.include_router(groups_router)
     admin_router.include_router(identity_directory_admin_router)
     admin_router.include_router(admin_overview_router)
+    admin_router.include_router(telemetry_analytics_router)
     admin_router.include_router(openapi_connector_router)
     admin_router.include_router(oauth_router)
     admin_router.include_router(downstream_mcp_connector_router)
@@ -175,6 +182,7 @@ def _mount_admin_app(
         return app_config
 
     _attach_dependency_factories(admin_app, dependency_factories)
+    install_analytics_dependencies(admin_app, analytics_runtime)
     admin_app.dependency_overrides[get_app_config] = provide_app_config
     _attach_admin_authorization(admin_app, settings, verifier_factory)
     @admin_app.middleware("http")
@@ -182,7 +190,10 @@ def _mount_admin_app(
         request: Request, call_next: Callable[[Request], Awaitable[Response]],
     ) -> Response:
         response = await call_next(request)
-        if request.url.path.rstrip("/").endswith("/filesystem/root-access"):
+        if (
+            request.url.path.rstrip("/").endswith("/filesystem/root-access")
+            or request.url.path.startswith("/api/admin/telemetry/")
+        ):
             response.headers["Cache-Control"] = "no-store"
         return response
 
@@ -276,9 +287,10 @@ def _create_lifespan(
     metrics_server: RestMetricsHttpServer,
     persistence_runtime: PersistenceRuntime,
     settings: APISettings,
+    analytics_runtime: TelemetryAnalyticsRuntime,
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[dict[str, SigningKeyResolver]]]:
 
-    return _create_configured_lifespan(metrics_server, persistence_runtime, settings, True)
+    return _create_configured_lifespan(metrics_server, persistence_runtime, settings, True, analytics_runtime)
 
 
 def _create_configured_lifespan(
@@ -286,6 +298,7 @@ def _create_configured_lifespan(
     persistence_runtime: PersistenceRuntime,
     settings: APISettings,
     metrics_enabled: bool,
+    analytics_runtime: TelemetryAnalyticsRuntime,
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[dict[str, SigningKeyResolver]]]:
 
     @asynccontextmanager
@@ -304,6 +317,7 @@ def _create_configured_lifespan(
         )
         try:
             await persistence_runtime.readiness.ensure_ready()
+            await analytics_runtime.ensure_ready()
             if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled:
                 downstream_settings = downstream_mcp_infrastructure_settings_from_app_config(settings)
                 await PersonalDiscoveryPreparation(persistence_runtime.database, AuthenticatedTextCipher(downstream_settings.credential_secret)).prepare()
@@ -322,7 +336,10 @@ def _create_configured_lifespan(
                 flush_logging()
         finally:
             resolver.clear()
-            await persistence_runtime.shutdown()
+            try:
+                await analytics_runtime.shutdown()
+            finally:
+                await persistence_runtime.shutdown()
 
     return lifespan
 
@@ -334,6 +351,7 @@ def create_app(*args: Any, **kwargs: Any) -> FastAPI:
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(
         app_settings.connector_store
     ).create()
+    analytics_runtime = create_configured_analytics_runtime(app_settings)
     dependency_factories = ConnectorApiDependencyFactories.from_settings(
         app_settings, persistence_runtime, create_app_arguments.connector_registrations
     )
@@ -344,7 +362,7 @@ def create_app(*args: Any, **kwargs: Any) -> FastAPI:
     )
     app = LifespanRootApiAppFactory(
         app_settings,
-        lifespan=_create_configured_lifespan(metrics_server, persistence_runtime, app_settings, app_settings.rest.metrics_enabled),
+        lifespan=_create_configured_lifespan(metrics_server, persistence_runtime, app_settings, app_settings.rest.metrics_enabled, analytics_runtime),
     ).create()
     verifier_factory = (
         SuppliedJwtVerifierFactory(create_app_arguments.admin_verifier)
@@ -352,18 +370,22 @@ def create_app(*args: Any, **kwargs: Any) -> FastAPI:
     )
     admin_routes = _mount_admin_app(
         app, app_settings, dependency_factories, app_settings, verifier_factory,
-        create_app_arguments.oauth_service,
+        create_app_arguments.oauth_service, analytics_runtime,
     )
     _mount_personal_connections_app(
         app, app_settings, dependency_factories
     )
+    transfer_app = SubApiAppFactory(title="umbod-filesystem-transfer-api", router=filesystem_transfer_router).create()
+    _attach_dependency_factories(transfer_app, dependency_factories)
+    app.mount("/api/filesystem", transfer_app)
     _mount_personal_oauth_callback_app(app, app_settings, dependency_factories)
     _mount_system_app(app, dependency_factories)
     install_telemetry_receiver(app, app_settings)
+    install_analytics_dependencies(app, analytics_runtime)
     app.user_middleware.extend([
         Middleware(
             AdminRestMetricsMiddleware, recorder=metrics_recorder, routes=admin_routes,
-            mount_path="/api/admin",
+            mount_path="/api/admin", application_failures=create_application_failure_signal(),
         ),
         Middleware(
             RestCookieCsrfMiddleware,

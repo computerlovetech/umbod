@@ -3,6 +3,7 @@ from unittest.mock import AsyncMock, Mock
 import pytest
 from fastmcp import Client, FastMCP
 
+from umbod.logging import create_application_failure_signal
 from umbod.core.filesystem.uploads import UploadService
 from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory, register_filesystem_tools
 from umbod.mcp.filesystem.ports import FilesystemServiceFactory
@@ -16,10 +17,11 @@ from .test_upload import CAP, upload
 
 
 def server_for(filesystem: FilesystemMcp, services: FilesystemServiceFactory) -> FastMCP:
+    application_failures = create_application_failure_signal()
     server = FastMCP()
     register_filesystem_tools(
         McpObservedToolRegistrar(server, McpInvocationPublisher(
-            create_mcp_signals(Mock(), filesystem.metrics, Mock()),
+            create_mcp_signals(Mock(), filesystem.metrics, Mock(), application_failures=application_failures),
         )),
         filesystem.callers, services, filesystem.visibility, filesystem.approval,
     )
@@ -28,7 +30,7 @@ def server_for(filesystem: FilesystemMcp, services: FilesystemServiceFactory) ->
 
 @pytest.mark.asyncio
 async def test_lower_configured_limit_rejects_without_storage(filesystem_invocation_mcp: FilesystemMcp) -> None:
-    services = DatabaseFilesystemServiceFactory(filesystem_invocation_mcp.database, filesystem_invocation_mcp.content, 3, "https://issuer")
+    services = DatabaseFilesystemServiceFactory(filesystem_invocation_mcp.database, filesystem_invocation_mcp.content, 3, "https://issuer", "https://api.example")
     async with Client(server_for(filesystem_invocation_mcp, services)) as client:
         result = await upload(client, await root_id(client), {"encoding": "utf-8", "text": "four"})
     assert result.is_error
@@ -41,6 +43,7 @@ async def test_lower_configured_limit_rejects_without_storage(filesystem_invocat
 async def test_upload_sanitizes_failures_at_every_stage(
     filesystem_invocation_mcp: FilesystemMcp, stage: str,
 ) -> None:
+    application_failures = create_application_failure_signal()
     services = Mock(spec=FilesystemServiceFactory, wraps=filesystem_invocation_mcp.services)
     uploads = Mock(spec=UploadService, wraps=filesystem_invocation_mcp.services.uploads())
     services.uploads.return_value = uploads
@@ -57,7 +60,7 @@ async def test_upload_sanitizes_failures_at_every_stage(
     server = FastMCP()
     register_filesystem_tools(
         McpObservedToolRegistrar(server, McpInvocationPublisher(
-            create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock()),
+            create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock(), application_failures=application_failures),
         )), callers, services, filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
     )
     async with Client(filesystem_invocation_mcp.server) as client:

@@ -1,6 +1,8 @@
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
+from fastapi.exceptions import RequestValidationError
+from pydantic import ValidationError
 
 from umbod.config.identity_policy import filesystem_managed_issuer
 from umbod.core.callers import CallerContext, CallerSnapshot, group_membership_from_values
@@ -13,10 +15,13 @@ from umbod.core.filesystem.authorization import (
     PermissionDenied, UnresolvedIdentity,
 )
 from umbod.core.filesystem.browsing import FilesystemBrowsing
+from umbod.core.filesystem.browsing.exploration import FilesystemBrowser
+from umbod.core.filesystem.models import NodeId
+from umbod.core.filesystem.namespace import ROOT_ID
 from umbod.core.filesystem.sharing import FilesystemSharing
 from umbod.core.persistence import Database
 from umbod.infrastructure import (
-    create_filesystem_browsing, create_filesystem_creation, create_filesystem_transactions,
+    create_filesystem_explorer, create_filesystem_browsing, create_filesystem_creation, create_filesystem_transactions,
     create_filesystem_uploads, create_filesystem_sharing,
 )
 from umbod.rest.authentication.local import LOCAL_DEVELOPMENT_ISSUER, local_rest_identity_enabled
@@ -28,6 +33,7 @@ from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.core.filesystem.uploads import SystemUploadClock, UploadClock, UploadService
 
 from .errors import filesystem_errors
+from .models import BrowseNodeQuery
 
 
 def get_filesystem_caller(
@@ -76,6 +82,28 @@ def get_filesystem_browsing(
     resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
 ) -> FilesystemBrowsing:
     return create_filesystem_browsing(database=database, resolver=resolver)
+
+
+def get_filesystem_browse_node_id(request: Request) -> NodeId:
+    if "node_id" not in request.query_params:
+        return ROOT_ID
+    try:
+        return BrowseNodeQuery.model_validate({"node_id": request.query_params["node_id"]}).node_id
+    except ValidationError as error:
+        raise RequestValidationError([
+            {**entry, "loc": ("query", *entry["loc"])} for entry in error.errors()
+        ]) from error
+
+
+def get_filesystem_explorer(
+    database: Annotated[Database, Depends(get_filesystem_database)],
+    resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
+    factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
+) -> FilesystemBrowser:
+    return create_filesystem_explorer(
+        database=database, resolver=resolver,
+        sharing_available=bool(filesystem_managed_issuer(factories.settings).strip()),
+    )
 
 
 def get_filesystem_sharing(

@@ -41,7 +41,7 @@ def sharing_http(filesystem_http: FilesystemHttp) -> FilesystemHttp:
 
 @pytest.fixture
 def private_node(sharing_http: FilesystemHttp) -> dict[str, object]:
-    root = sharing_http.client.get(BASE + "/root").json()
+    root = sharing_http.client.get(BASE + "/browse").json()["node"]
     response = sharing_http.client.post(f"{BASE}/nodes/{root['id']}/directories", json=BODY)
     assert response.status_code == 201
     return response.json()

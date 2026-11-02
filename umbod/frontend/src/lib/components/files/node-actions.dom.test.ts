@@ -141,7 +141,11 @@ describe('Files row actions menu', (): void => {
 
   test('denied delete eligibility hides Delete while retaining the other authorized actions', async (): Promise<void> => {
     const { api } = await setup((api): void => {
-      vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockRejectedValue(new HttpError(403, 'Forbidden', {}));
+      const browse = api.filesystem.browse;
+      vi.spyOn(api.filesystem, 'browse').mockImplementation(async (target, signal) => {
+        const result = await browse(target, signal);
+        return { ...result, capabilities: result.capabilities.map((capability) => ({ ...capability, delete: false })) };
+      });
     });
     const remove = vi.spyOn(api.filesystem, 'deleteFile');
     await openMenu();
@@ -152,9 +156,11 @@ describe('Files row actions menu', (): void => {
 
   test('sharing alone keeps the row menu eligible when editing and deletion are denied', async (): Promise<void> => {
     await setup((api): void => {
-      vi.spyOn(api.filesystem, 'checkUpdateEligibility').mockRejectedValue(new HttpError(403, 'Forbidden', {}));
-      vi.spyOn(api.filesystem, 'checkDescriptionEligibility').mockRejectedValue(new HttpError(403, 'Forbidden', {}));
-      vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockRejectedValue(new HttpError(403, 'Forbidden', {}));
+      const browse = api.filesystem.browse;
+      vi.spyOn(api.filesystem, 'browse').mockImplementation(async (target, signal) => {
+        const result = await browse(target, signal);
+        return { ...result, capabilities: result.capabilities.map((capability) => ({ ...capability, rename: false, move: false, edit_description: false, delete: false })) };
+      });
     });
     expect(document.querySelectorAll('tbody button')).toHaveLength(1);
     await openMenu();

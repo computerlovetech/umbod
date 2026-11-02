@@ -2,7 +2,7 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from ...models import NodeId
+from ...models import AccessGrant, Node, NodeId, Ownership
 from ..models import Breadcrumbs, NodeSummary
 
 
@@ -53,6 +53,27 @@ class NodeInspection(ExplorationModel):
 class DirectoryListing(NodeInspection):
     entries: list[NodeSummary]
     truncated: bool
+
+
+class NodeCapabilities(ExplorationModel):
+    node_id: NodeId
+    rename: bool
+    move: bool
+    edit_description: bool
+    delete: bool
+    share: bool
+    upload: bool
+    create_directory: bool
+
+
+class BrowseResult(DirectoryListing):
+    capabilities: list[NodeCapabilities]
+
+
+class BrowseScope(ExplorationModel):
+    nodes: tuple[Node, ...]
+    ownerships: tuple[Ownership, ...]
+    grants: tuple[AccessGrant, ...]
 
 
 class TreeEntry(ExplorationModel):

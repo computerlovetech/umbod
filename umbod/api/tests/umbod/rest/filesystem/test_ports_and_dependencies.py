@@ -9,6 +9,7 @@ from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSn
 from umbod.core.filesystem import FilesystemCreation, InvalidName, NameCollision, NodeMetadata, StorageFailure, WrongNodeKind
 from umbod.core.filesystem.authorization import PermissionDenied
 from umbod.core.filesystem.browsing import FilesystemBrowsing
+from umbod.core.filesystem.browsing.exploration import FilesystemBrowser
 from umbod.core.filesystem.uploads import UploadService
 from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import get_caller_context, get_verified_access_claims
@@ -18,7 +19,7 @@ from .conftest import FilesystemHttp
 from .test_http_contract import BASE, BODY, creation_payload
 
 OPERATIONS = [
-    ("GET", "/root", "get_root"),
+    ("GET", "/browse?node_id={id}", "browse_node"),
     ("GET", "/nodes/{id}", "get_node"),
     ("GET", "/nodes/{id}/children", "list_children"),
     ("GET", "/nodes/{id}/breadcrumbs", "get_breadcrumbs"),
@@ -40,10 +41,14 @@ def test_port_delegation_and_fixed_error_translation(
     error: type[Exception], status: int, code: str, message: str,
 ) -> None:
     browsing = create_autospec(FilesystemBrowsing, instance=True)
+    explorer = create_autospec(FilesystemBrowser, instance=True)
     creation = create_autospec(FilesystemCreation, instance=True)
     content = create_autospec(UploadService, instance=True)
-    service = content if operation == "begin" else creation if method == "POST" else browsing
+    service = explorer if operation == "browse_node" else content if operation == "begin" else creation if method == "POST" else browsing
     getattr(service, operation).side_effect = error("secret storage/key owner credential")
+
+    def provide_explorer() -> FilesystemBrowser:
+        return explorer
 
     def provide_browsing() -> FilesystemBrowsing:
         return browsing
@@ -54,6 +59,7 @@ def test_port_delegation_and_fixed_error_translation(
     def provide_content() -> UploadService:
         return content
 
+    filesystem_http.app.dependency_overrides[deps.get_filesystem_explorer] = provide_explorer
     filesystem_http.app.dependency_overrides[deps.get_filesystem_uploads] = provide_content
     filesystem_http.app.dependency_overrides[deps.get_filesystem_browsing] = provide_browsing
     filesystem_http.app.dependency_overrides[deps.get_filesystem_creation] = provide_creation
@@ -69,8 +75,7 @@ def test_port_delegation_and_fixed_error_translation(
     assert isinstance(arguments[0], CallerSnapshot)
     assert arguments[0].groups.group_ids == ("team",)
     assert arguments[0].caller.subject == SubjectIdentity(issuer=DeclaredIssuer(value="issuer"), subject="alice")
-    if operation != "get_root":
-        assert arguments[1] == identifier and isinstance(arguments[1], UUID)
+    assert arguments[1] == identifier and isinstance(arguments[1], UUID)
     if method == "POST":
         assert arguments[2:4] == ("child", NodeMetadata.model_validate(BODY["metadata"]))
     if operation == "begin":
@@ -144,7 +149,7 @@ def test_unresolved_identity_is_denied_without_promotion(
         return context.model_copy(update={"authentication": provenance})
 
     filesystem_http.app.dependency_overrides[get_caller_context] = unresolved
-    response = filesystem_http.client.get(f"{BASE}/root")
+    response = filesystem_http.client.get(f"{BASE}/browse")
     assert response.status_code == 403
     assert response.json()["detail"]["code"] == "filesystem_permission_denied"
 
@@ -155,8 +160,9 @@ def test_services_are_request_local_and_use_prepared_runtime(
     real_factory = deps.create_filesystem_browsing
     factory = Mock(side_effect=real_factory)
     monkeypatch.setattr(deps, "create_filesystem_browsing", factory)
+    root_id = filesystem_http.client.get(f"{BASE}/browse").json()["node"]["id"]
     for _ in range(2):
-        assert filesystem_http.client.get(f"{BASE}/root").status_code == 200
+        assert filesystem_http.client.get(f"{BASE}/nodes/{root_id}").status_code == 200
     assert factory.call_count == 2
     first, second = factory.call_args_list
     assert first.kwargs["database"] is second.kwargs["database"] is filesystem_http.factories.persistence_runtime.database

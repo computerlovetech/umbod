@@ -3,6 +3,7 @@ from unittest.mock import Mock
 import pytest
 
 from tests.support.signals import InMemorySignalFailureHandler
+from umbod.logging import create_application_failure_signal
 from umbod.mcp.listeners import create_mcp_signals, register_mcp_listeners
 from umbod.mcp.logging import McpAuditRecorder, McpToolInvocationLogSink
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder, InvocationScope, McpMetricsRecorder
@@ -15,8 +16,9 @@ def ports() -> tuple[Mock, Mock, Mock]:
 
 
 def test_custom_receiver_receives_same_immutable_completion_as_log_sink(ports: tuple[Mock, Mock, Mock]) -> None:
+    application_failures = create_application_failure_signal()
     log, metrics, audit = ports
-    signals = create_mcp_signals(log, metrics, audit)
+    signals = create_mcp_signals(log, metrics, audit, application_failures=application_failures)
     observed: list[McpToolInvocationCompleted] = []
     signals.invocation_completed.connect("custom", observed.append)
     publisher = McpInvocationPublisher(signals)
@@ -29,6 +31,7 @@ def test_custom_receiver_receives_same_immutable_completion_as_log_sink(ports: t
 
 @pytest.mark.parametrize("failed_receiver", ["logging", "metrics", "audit"])
 def test_receiver_failure_does_not_prevent_other_delivery(ports: tuple[Mock, Mock, Mock], failed_receiver: str) -> None:
+    application_failures = create_application_failure_signal()
     log, metrics, audit = ports
     methods = {
         "logging": log.record_invocation_completed,
@@ -36,7 +39,7 @@ def test_receiver_failure_does_not_prevent_other_delivery(ports: tuple[Mock, Moc
         "audit": audit.record_tool_invocation,
     }
     methods[failed_receiver].side_effect = RuntimeError("failure")
-    signals = create_mcp_signals(log, metrics, audit)
+    signals = create_mcp_signals(log, metrics, audit, application_failures=application_failures)
     publisher = McpInvocationPublisher(signals)
     publisher.succeeded(publisher.start(McpToolIdentity("tool", "connector", "operation")))
     for method in methods.values():
@@ -44,9 +47,11 @@ def test_receiver_failure_does_not_prevent_other_delivery(ports: tuple[Mock, Moc
 
 
 def test_app_signal_receivers_are_isolated(ports: tuple[Mock, Mock, Mock]) -> None:
-    first = create_mcp_signals(*ports)
+    application_failures = create_application_failure_signal()
+    first = create_mcp_signals(*ports, application_failures=application_failures)
     other_ports = tuple(Mock(spec=port_type) for port_type in (McpToolInvocationLogSink, McpMetricsRecorder, McpAuditRecorder))
-    second = create_mcp_signals(*other_ports)
+    other_application_failures = create_application_failure_signal()
+    second = create_mcp_signals(*other_ports, application_failures=other_application_failures)
     first.tool_inventory_observed.send(ToolInventoryObserved((McpToolIdentity("tool", None, None),)))
     ports[1].initialize_invocation.assert_called_once()
     other_ports[1].initialize_invocation.assert_not_called()
@@ -54,10 +59,11 @@ def test_app_signal_receivers_are_isolated(ports: tuple[Mock, Mock, Mock]) -> No
 
 
 def test_inventory_repeated_observations_initialize_zero_series_without_completion(ports: tuple[Mock, Mock, Mock]) -> None:
+    application_failures = create_application_failure_signal()
     log, _, audit = ports
     recorder = InMemoryMcpMetricsRecorder()
     metrics: McpMetricsRecorder = recorder
-    signals = create_mcp_signals(log, metrics, audit)
+    signals = create_mcp_signals(log, metrics, audit, application_failures=application_failures)
     publisher = McpInvocationPublisher(signals)
     identity = McpToolIdentity("tool", "connector", "operation")
     publisher.tool_registered(identity)
@@ -71,23 +77,26 @@ def test_inventory_repeated_observations_initialize_zero_series_without_completi
 
 
 def test_inventory_failure_does_not_skip_remaining_identities(ports: tuple[Mock, Mock, Mock]) -> None:
+    application_failures = create_application_failure_signal()
     log, metrics, audit = ports
     metrics.initialize_invocation.side_effect = [RuntimeError("failure"), None]
-    signals = create_mcp_signals(log, metrics, audit)
+    signals = create_mcp_signals(log, metrics, audit, application_failures=application_failures)
     signals.tool_inventory_observed.send(ToolInventoryObserved((McpToolIdentity("first", None, None), McpToolIdentity("second", None, None))))
     assert metrics.initialize_invocation.call_count == 2
 
 
 @pytest.mark.parametrize("connector_id,scope", [(None, InvocationScope.REQUEST), ("connector", InvocationScope.CONNECTOR)])
 def test_completion_metrics_preserve_scope(ports: tuple[Mock, Mock, Mock], connector_id: str | None, scope: InvocationScope) -> None:
-    publisher = McpInvocationPublisher(create_mcp_signals(*ports))
+    application_failures = create_application_failure_signal()
+    publisher = McpInvocationPublisher(create_mcp_signals(*ports, application_failures=application_failures))
     publisher.succeeded(publisher.start(McpToolIdentity("tool", connector_id, None)))
     assert ports[1].record_completed_invocation.call_args.args[0].scope == scope
 
 
 @pytest.mark.parametrize("tool_name,connector_id,audits", [("search_tools", None, 0), ("execute_tool", None, 0), ("execute_code", None, 0), ("other", None, 1), ("execute_code", "connector", 1)])
 def test_audit_completion_ownership(ports: tuple[Mock, Mock, Mock], tool_name: str, connector_id: str | None, audits: int) -> None:
-    publisher = McpInvocationPublisher(create_mcp_signals(*ports))
+    application_failures = create_application_failure_signal()
+    publisher = McpInvocationPublisher(create_mcp_signals(*ports, application_failures=application_failures))
     publisher.succeeded(publisher.start(McpToolIdentity(tool_name, connector_id, None)))
     assert ports[2].record_tool_invocation.call_count == audits
 

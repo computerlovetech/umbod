@@ -16,7 +16,7 @@ VALUE_SECTIONS = {
     "imagePullSecrets": ("Image pull secrets", "Provide credentials for pulling images from private registries."),
     "serviceAccount": ("Service account", "Control the service account created for the workloads and whether its token is mounted."),
     "existingSecret": ("Application secret", "Name the existing Kubernetes Secret that supplies application credentials."),
-    "config": ("Application configuration", "Set the runtime profile, logging, authentication, authorization, public origins, and features."),
+    "config": ("Application configuration", "Set the runtime profile, logging, authentication, authorization, public origins, features, and analytics backend."),
     "plugins": ("Connector plugins", "Configure available connectors and their deployment image and resources."),
     "core": ("Core API and MCP workloads", "Configure the shared core image and the API and MCP containers."),
     "frontend": ("Frontend workload", "Configure the web frontend image, replicas, environment, and resources."),

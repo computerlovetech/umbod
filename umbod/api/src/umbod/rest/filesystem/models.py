@@ -26,6 +26,10 @@ class FilesystemNodeMetadata(NodeMetadata):
         return NodeMetadata(content_type=self.content_type, attributes=self.attributes)
 
 
+class BrowseNodeQuery(BaseModel):
+    node_id: UUID
+
+
 class CreateNodeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 

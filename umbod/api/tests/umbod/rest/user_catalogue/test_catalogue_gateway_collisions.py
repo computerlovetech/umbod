@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import cast
 
+from umbod.logging import create_application_failure_signal
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
 from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
@@ -116,6 +117,7 @@ async def test_catalogue_gateway_collision_suppresses_unrelated_tools_but_preser
 async def test_actual_runtime_rejects_gateway_collisions_without_disabling_unrelated_flat_tool(
     runtime_case: RuntimeCase, mode: str, publish_alpha: bool,
 ) -> None:
+    application_failures = create_application_failure_signal()
     execution = await execution_case(runtime_case)
     await _shared_collision(runtime_case.bundle, runtime_case.query.now)
     provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), InvocationLog())
@@ -138,7 +140,7 @@ async def test_actual_runtime_rejects_gateway_collisions_without_disabling_unrel
             parameters={}, tool_name_prefix=prefix,
         ))
     public = FastMCP("catalogue-collision-parity")
-    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test"))
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test", application_failures=application_failures), application_failures=application_failures)
     await register_connector_tools(
         public,
         signals=signals,

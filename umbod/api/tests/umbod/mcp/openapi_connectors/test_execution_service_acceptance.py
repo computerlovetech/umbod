@@ -1,3 +1,4 @@
+from umbod.logging import create_application_failure_signal
 from umbod.core.activation import CAPABILITY_ACTIVATION_STATE_TABLE
 from umbod.core.connectors.openapi.stores import CATALOG_OPERATION_TABLE, CATALOG_SOURCE_TABLE, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, OpenApiConnectorStoreService
 from umbod.core.permissions.stores.schema import CONNECTOR_PERMISSION_TABLE, CAPABILITY_PERMISSION_TABLE
@@ -446,12 +447,13 @@ async def test_openapi_failure_evidence_preserves_origin_and_one_safe_completion
     expected_type: str,
     expected_code: str,
 ) -> None:
+    application_failures = create_application_failure_signal()
     events: list[str] = []
     store = await RecordingStore.create(events)
     await _save(store, _records())
     sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
-    signals = create_mcp_signals(sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, "test"))
+    signals = create_mcp_signals(sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, "test", application_failures=application_failures), application_failures=application_failures)
     recorder = FailureEvidenceRecorder()
     observer = ConnectorInvocationSignalInterceptor("Inventory", signals, lambda result: False)
     transport: OutboundOperationTransport = RecordingTransport(events)
@@ -540,12 +542,13 @@ async def test_openapi_cancellation_preserves_identity_without_failure_evidence(
 async def test_openapi_http_error_status_is_a_successful_completion_without_failure_evidence(
     status: int,
 ) -> None:
+    application_failures = create_application_failure_signal()
     events: list[str] = []
     store = await RecordingStore.create(events)
     await _save(store, _records())
     sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
-    signals = create_mcp_signals(sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, "test"))
+    signals = create_mcp_signals(sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, "test", application_failures=application_failures), application_failures=application_failures)
     recorder = FailureEvidenceRecorder()
     observer = ConnectorInvocationSignalInterceptor("Inventory", signals, lambda result: False)
     service = OpenApiCapabilityExecutionService(

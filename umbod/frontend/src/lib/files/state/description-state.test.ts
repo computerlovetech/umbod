@@ -144,11 +144,14 @@ describe('current description state', (): void => {
     const response = deferred<void>();
     vi.spyOn(api.filesystem, 'checkDescriptionEligibility').mockReturnValueOnce(response.promise).mockRejectedValueOnce(new HttpError(403, 'Forbidden', {}));
     await files.load(fileId);
+    const checking = files.description.select(filesystemFixture[2]);
     files.description.show();
     expect(files.description.available).toBe(false);
     expect(files.description.open).toBe(false);
     await files.load(folderId);
+    await files.description.select(filesystemFixture[1]);
     response.resolve();
+    await checking;
     await vi.waitFor(() => expect(files.description.eligibility).toBe('denied'));
     files.description.show();
     expect(files.description.open).toBe(false);

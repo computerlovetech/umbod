@@ -9,7 +9,7 @@ import pytest
 from fastmcp import Client
 
 from conftest import RuntimeEndpoints
-from test_running_filesystem import FILESYSTEM, checked_summary, tool_payload, wait_for_filesystem_tools
+from test_running_filesystem import FILESYSTEM, checked_root_browse, checked_summary, tool_payload, wait_for_filesystem_tools
 from test_running_personal_mcp_execution import mcp_client, proxy_token
 from user_sharing_support import assert_mcp_user_target_sharing, assert_rest_recipient_scopes, observed_recipient
 
@@ -99,7 +99,7 @@ async def test_signed_direct_node_group_sharing_and_revocation(runtime_endpoints
         })
         assert configured.status_code == 200, configured.text
         try:
-            root = checked_summary(alice.get(FILESYSTEM + "/root"), 200)
+            root = checked_root_browse(alice.get(FILESYSTEM + "/browse"))
             checked_summary(bob.post(FILESYSTEM + "/nodes/" + root["id"] + "/directories", json={
                 "name": "bob-sharing-authority-" + uuid4().hex,
                 "metadata": {"content_type": {}, "attributes": {}},
@@ -238,7 +238,7 @@ async def test_signed_observed_user_and_group_targets_use_existing_sharing_tool(
         })
         assert configured.status_code == 200, configured.text
         try:
-            root = checked_summary(alice.get(FILESYSTEM + "/root"), 200)
+            root = checked_root_browse(alice.get(FILESYSTEM + "/browse"))
             folder = checked_summary(alice.post(FILESYSTEM + "/nodes/" + root["id"] + "/directories", json={
                 "name": "user-sharing-folder-" + uuid4().hex,
                 "metadata": {"content_type": {}, "attributes": {}},

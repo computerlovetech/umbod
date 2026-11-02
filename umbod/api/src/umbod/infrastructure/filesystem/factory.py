@@ -14,6 +14,8 @@ from umbod.core.filesystem import (
 )
 from umbod.core.filesystem.authorization import AuthorizationService, FilesystemIdentityResolver
 from umbod.core.filesystem.browsing import BrowsingService, FilesystemBrowsing
+from umbod.core.filesystem.browsing.exploration import FilesystemBrowser, ScopedBrowsingExplorer
+from umbod.core.filesystem.stores.exploration import DatabaseBrowseScopeReader
 from umbod.core.filesystem.stores import DatabaseAccessControl, DatabaseNamespace, DatabaseFilesystemTransactions
 from umbod.core.persistence import Database
 from umbod.core.filesystem.uploads import UploadClock, UploadService
@@ -47,6 +49,12 @@ def create_filesystem_browsing(
             access_control=create_access_control_driver(database=database),
         ),
     )
+
+
+def create_filesystem_explorer(
+    *, database: Database, resolver: FilesystemIdentityResolver, sharing_available: bool,
+) -> FilesystemBrowser:
+    return ScopedBrowsingExplorer(DatabaseBrowseScopeReader(database), resolver, sharing_available)
 
 
 def create_filesystem_transactions(*, database: Database) -> FilesystemTransactions:

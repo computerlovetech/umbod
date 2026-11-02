@@ -42,10 +42,14 @@ export class DescriptionState {
     this.conflict = false;
   };
 
-  select = async (node: NodeSummary): Promise<void> => {
+  select = async (node: NodeSummary, allowed?: boolean): Promise<void> => {
     if (this.disposed) return;
     this.reset();
     this.current = node;
+    if (allowed !== undefined) {
+      this.availability = allowed ? 'allowed' : 'denied';
+      return;
+    }
     await this.checkEligibility();
   };
 

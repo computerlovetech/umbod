@@ -16,3 +16,11 @@ class UploadLengthMismatch(UploadSessionError):
 
 class UploadMediaTypeMismatch(UploadSessionError):
     pass
+
+
+class UploadChecksumMismatch(UploadSessionError):
+    pass
+
+
+class UploadReceiptUnavailable(UploadSessionError):
+    pass

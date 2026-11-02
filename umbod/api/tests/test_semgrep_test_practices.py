@@ -12,6 +12,9 @@ PRIVATE_RULE = "python.tests.review-private-monkeypatch"
 MUTABLE_DEFAULT_RULE = "python.tests.no-mutable-parameter-defaults"
 TRUTHINESS_RULE = "python.tests.review-container-truthiness-default"
 PRINT_RULE = "python.no-print-use-typer-output"
+RAW_EXCEPTION_RULE = "python.logging.no-raw-exception"
+DYNAMIC_LOG_RULE = "python.logging.no-dynamic-message"
+SIGNAL_SIDE_EFFECT_RULE = "python.diagnostics.publish-side-effects"
 
 
 class ScanCase(NamedTuple):
@@ -380,9 +383,66 @@ PRINT_CASES = tuple(
     ScanCase(f"shared_print_{index}", f"shared_print/{path}", 'print("value")\n', (PRINT_RULE,))
     for index, path in enumerate(SOURCE_PATHS + ("api/tests/helpers.py", "api/src/tests/helpers.py"))
 )
+LOGGING_OPERATIONS = (
+    ("exception", 'logger.exception("Operation failed")', (RAW_EXCEPTION_RULE,)),
+    ("logging_exception", 'logging.exception("Operation failed")', (RAW_EXCEPTION_RULE,)),
+    ("owned_exception", 'self._logger.exception("Operation failed")', (RAW_EXCEPTION_RULE,)),
+    ("exception_info", 'logger.error("Operation failed", exc_info=True)', (RAW_EXCEPTION_RULE,)),
+    ("exception_tuple", 'logger.warning("Operation failed", exc_info=error_info)', (RAW_EXCEPTION_RULE,)),
+    ("interpolated", 'logger.error(f"Operation failed: {error}")', (DYNAMIC_LOG_RULE,)),
+    ("formatted", 'logger.error("Operation failed: {}".format(error))', (DYNAMIC_LOG_RULE,)),
+    ("percent", 'logger.error("Operation failed: %s" % error)', (DYNAMIC_LOG_RULE,)),
+    ("deferred_format", 'logger.error("Operation failed: %s", error)', (DYNAMIC_LOG_RULE,)),
+    ("stringified", 'logger.error(str(error))', (DYNAMIC_LOG_RULE,)),
+    ("fixed", 'logger.error("Operation failed")', ()),
+    ("safe_boundary", 'report_application_failure(publisher, kind, error, context)', ()),
+    ("task_result", 'task.exception()', ()),
+)
+LOGGING_CASES = tuple(
+    ScanCase(
+        f"logging_{name}_{path_index}",
+        f"logging/{name}/{path}",
+        f"import logging\n{source}\n",
+        expected_rules if path in SOURCE_PATHS else (),
+    )
+    for name, source, expected_rules in LOGGING_OPERATIONS
+    for path_index, path in enumerate(SOURCE_PATHS + TEST_PATHS)
+)
+SIGNAL_PRODUCER_PATHS = (
+    "api/src/umbod/core/diagnostics/capture.py",
+    "api/src/umbod/rest/metrics/middleware.py",
+    "api/src/umbod/mcp/logging/audit/recorder.py",
+    "api/src/umbod/mcp/connectors/openapi/codemode_execution.py",
+)
+SIGNAL_RECEIVER_PATHS = (
+    "api/src/umbod/logging.py",
+    "api/src/umbod/mcp/listeners/registration.py",
+    "api/tests/umbod/core/diagnostics/test_capture.py",
+    "api/live_runtime_tests/test_diagnostics.py",
+)
+SIGNAL_SIDE_EFFECT_OPERATIONS = (
+    ("logging_import", "import logging", True),
+    ("logging_from_import", "from logging import getLogger", True),
+    ("output_import", "from umbod.logging import emit_structured_record", True),
+    ("direct_logging", 'logger.error("Operation failed")', True),
+    ("publish", "publisher.send(event)", False),
+    ("capture_and_publish", "report_application_failure(publisher, kind, error, context)", False),
+    ("core_contract", "from umbod.core.signals import SignalPublisher", False),
+)
+SIGNAL_SIDE_EFFECT_CASES = tuple(
+    ScanCase(
+        f"signal_side_effect_{name}_{path_index}",
+        f"signals/{name}/{path}",
+        source + "\n",
+        (SIGNAL_SIDE_EFFECT_RULE,) if prohibited and path in SIGNAL_PRODUCER_PATHS else (),
+    )
+    for name, source, prohibited in SIGNAL_SIDE_EFFECT_OPERATIONS
+    for path_index, path in enumerate(SIGNAL_PRODUCER_PATHS + SIGNAL_RECEIVER_PATHS)
+)
 DESIGN_CORRECTNESS_CASES = (
     DESIGN_CASES + MUTABLE_CASES + TRUTHINESS_CASES + SAFE_DEFAULT_CASES
     + EXPLICIT_RESOLVER_CASES + EMPTY_FALLBACK_CASES + NONEMPTY_FALLBACK_CASES + PRINT_CASES
+    + LOGGING_CASES + SIGNAL_SIDE_EFFECT_CASES
 )
 ALL_CASES = CASES + DESIGN_CORRECTNESS_CASES
 
@@ -393,6 +453,8 @@ EXTERNAL_SCOPE_CASES = (
     + tuple(case for case in MUTABLE_CASES if "/empty_dict/" in case.path)
     + tuple(case for case in TRUTHINESS_CASES if "/0/optional/" in case.path)
     + PRINT_CASES
+    + tuple(case for case in LOGGING_CASES if "/exception/" in case.path or "/task_result/" in case.path)
+    + SIGNAL_SIDE_EFFECT_CASES
 )
 
 
@@ -487,7 +549,10 @@ def test_shared_rules_separate_production_design_from_test_correctness(
 ) -> None:
     findings = findings_by_case[case.path]
     assert sorted(finding["check_id"] for finding in findings) == sorted(case.expected_rules)
-    error_rules = {MUTABLE_DEFAULT_RULE, PRINT_RULE, "python.no-parameter-default-values"}
+    error_rules = {
+        MUTABLE_DEFAULT_RULE, PRINT_RULE, "python.no-parameter-default-values",
+        RAW_EXCEPTION_RULE, DYNAMIC_LOG_RULE, SIGNAL_SIDE_EFFECT_RULE,
+    }
     for finding in findings:
         expected_severity = "ERROR" if finding["check_id"] in error_rules else "WARNING"
         assert finding["extra"]["severity"] == expected_severity

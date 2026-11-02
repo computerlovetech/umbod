@@ -32,6 +32,21 @@ Set `persistence.enabled=true` to create a ReadWriteOnce PersistentVolumeClaim. 
 
 Umbod does not migrate SQLite schemas or persisted documents between incompatible versions. Reset persistent storage before installing an incompatible Umbod version.
 
+## Analytics backend
+
+The chart configures the SQLite analytics backend separately from application persistence:
+
+| Helm value | Default | Purpose |
+| --- | --- | --- |
+| `config.telemetryAnalytics.enabled` | `false` | Enable analytical log storage and queries in the API |
+| `config.telemetryAnalytics.sqlitePath` | `/app/data/analytics.sqlite3` | Analytics-only SQLite file beneath the mounted data directory |
+
+These values map to `UMBOD_TELEMETRY_ANALYTICS_ENABLED` and `UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH` in the API container only. The SQLite driver is currently the only analytics backend. The chart rejects nonboolean enablement, unsupported settings, noncanonical or unmounted paths, memory databases, and the default application database or its sidecars.
+
+Analytics has its own database file, schema preparation, connections and runtime lifecycle. It does not use the application database, application migrations or application `PersistenceRuntime`. Both files currently use the same Kubernetes data volume; this is database separation, not a separate analytics PVC. With `persistence.enabled=false`, both are ephemeral. Enable persistence to retain analytics across core Pod replacements, or select an existing claim.
+
+Telemetry collection still requires `UMBOD_OTLP_ENABLED=true` through `core.api.env` and the dedicated `UMBOD_OTLP_BEARER_TOKEN` in `existingSecret`. Enabling analytics does not enable ingestion or change its authentication. Existing `core.api.env` overrides remain final and render each analytics setting once; advanced path overrides must preserve the mounted location and database separation. The application additionally rejects file aliases and collisions at startup. Do not put credentials in chart values. See [telemetry ingestion](../reference/telemetry-ingestion.md) for normalization, ownership, acknowledgement, retention and retry limitations.
+
 ## Filesystem runtime
 
 The application environment contract selects local or S3 file-content storage independently of the application database backend. Local storage remains the default for operator deployments. Namespace, ownership and grants use the existing application database; content storage does not create another database runtime. Embedded hosts constructing `AppConfig` directly default to in-memory content.

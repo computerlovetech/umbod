@@ -15,7 +15,7 @@ from .test_http_contract import BASE, BODY
 @pytest.fixture
 def published_file(filesystem_http: FilesystemHttp) -> dict[str, object]:
     client = filesystem_http.client
-    root_id = client.get(f"{BASE}/root").json()["id"]
+    root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
     response = upload_file(client, f"{BASE}/nodes/{root_id}/uploads", "file.bin", b"payload")
     assert response.status_code == 201
     return response.json()
@@ -125,7 +125,7 @@ def test_authorization_revoked_after_eligibility_is_checked_again(
 @pytest.mark.parametrize("root", [False, True])
 def test_authorized_directory_and_root_are_not_deletable(filesystem_http: FilesystemHttp, root: bool) -> None:
     client = filesystem_http.client
-    root_id = client.get(f"{BASE}/root").json()["id"]
+    root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
     if root:
         node_id = root_id
         policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
@@ -173,7 +173,7 @@ def test_delete_keeps_cookie_csrf_protection(filesystem_http: FilesystemHttp, pu
 
 def test_completed_upload_retry_cannot_restore_deleted_file(filesystem_http: FilesystemHttp) -> None:
     client = filesystem_http.client
-    root_id = client.get(f"{BASE}/root").json()["id"]
+    root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
     begun = begin_upload(client, f"{BASE}/nodes/{root_id}/uploads", "file.bin", b"x").json()
     assert client.put(begun["transfer"]["url"], content=b"x", headers=begun["transfer"]["headers"]).status_code == 204
     published = client.post(begun["complete_url"])

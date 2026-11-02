@@ -11,7 +11,7 @@ from .test_http_contract import BASE, BODY, creation_payload
 
 def test_breadcrumbs_return_minimal_ordered_items_and_no_store(filesystem_http: FilesystemHttp) -> None:
     client = filesystem_http.client
-    root = client.get(f"{BASE}/root").json()
+    root = client.get(f"{BASE}/browse").json()["node"]
     directory = client.post(f"{BASE}/nodes/{root['id']}/directories", **creation_payload("directories", BODY)).json()
     response = client.get(f"{BASE}/nodes/{directory['id']}/breadcrumbs")
     assert response.status_code == 200
@@ -27,7 +27,7 @@ def test_breadcrumbs_return_minimal_ordered_items_and_no_store(filesystem_http: 
 
 def test_known_child_does_not_require_discoverable_root(filesystem_http: FilesystemHttp) -> None:
     client = filesystem_http.client
-    root = client.get(f"{BASE}/root").json()
+    root = client.get(f"{BASE}/browse").json()["node"]
     directory = client.post(f"{BASE}/nodes/{root['id']}/directories", **creation_payload("directories", BODY)).json()
     policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
     client.portal.call(policies.clear_node, UUID(root["id"]))
@@ -42,7 +42,7 @@ def test_known_child_does_not_require_discoverable_root(filesystem_http: Filesys
 @pytest.mark.parametrize("identifier", ["unknown", "hidden"])
 def test_target_denial_is_fixed_and_no_store(filesystem_http: FilesystemHttp, identifier: str) -> None:
     client = filesystem_http.client
-    root_id = client.get(f"{BASE}/root").json()["id"]
+    root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
     response = client.get(
         f"{BASE}/nodes/{uuid4() if identifier == 'unknown' else root_id}/breadcrumbs",
         headers={"Authorization": "Bearer outsider"},

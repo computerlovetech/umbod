@@ -67,6 +67,26 @@ _SECRET_FIELDS: tuple[tuple[str, str], ...] = (
 
 _CATALOG: tuple[ConfigurationCatalogEntry, ...] = (
     ConfigurationCatalogEntry(
+        "telemetry_analytics",
+        "Telemetry analytics",
+        "telemetry_analytics",
+        "enabled",
+        "UMBOD_TELEMETRY_ANALYTICS_ENABLED",
+        "Enabled",
+        "Whether independent SQLite telemetry analytics storage is enabled.",
+        "boolean",
+    ),
+    ConfigurationCatalogEntry(
+        "telemetry_analytics",
+        "Telemetry analytics",
+        "telemetry_analytics",
+        "sqlite_path",
+        "UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH",
+        "SQLite path",
+        "Independent analytics database file, separate from application persistence.",
+        "string",
+    ),
+    ConfigurationCatalogEntry(
         "personal_connections",
         "Personal connections",
         "personal_connections",

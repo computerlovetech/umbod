@@ -185,7 +185,7 @@ def test_production_admin_configuration_requires_issuer_and_audience(
         create_app(settings, [])
 
 
-@pytest.mark.parametrize("path", ["/api/probe", "/api/me/docs", "/api/me/filesystem/root"])
+@pytest.mark.parametrize("path", ["/api/probe", "/api/me/docs", "/api/me/filesystem/browse"])
 def test_production_shared_boundary_rejects_missing_credentials_and_forged_local_identity(
     client: TestClient, path: str,
 ) -> None:

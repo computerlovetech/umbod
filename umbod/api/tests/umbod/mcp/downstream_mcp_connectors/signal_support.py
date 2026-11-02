@@ -1,5 +1,6 @@
 from typing import Callable
 
+from umbod.logging import create_application_failure_signal
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.logging import McpAuditEvent, McpAuditRecorder
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
@@ -14,11 +15,12 @@ class DiscardingAuditSink:
 
 
 def invocation_signals(metrics: McpMetricsRecorder, *completion_receivers: Callable[[McpToolInvocationCompleted], None]) -> McpSignals:
+    application_failures = create_application_failure_signal()
     signals = create_mcp_signals(
         InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter()),
         metrics,
-        McpAuditRecorder(DiscardingAuditSink(), "test"),
-    )
+        McpAuditRecorder(DiscardingAuditSink(), "test", application_failures=application_failures),
+     application_failures=application_failures)
     for index, receiver in enumerate(completion_receivers):
         signals.invocation_completed.connect(f"test.invocation.{index}", receiver)
     return signals

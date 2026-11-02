@@ -211,7 +211,7 @@ def test_local_policy_does_not_depend_on_oidc_configuration(admin_settings: AppC
         assert set(initial) == {"status", "revision", "groups", "blocked_group_ids"}
         response = client.put(PATH, json={"expected_revision": initial["revision"], "groups": [{"group_id": "team", "permissions": ["discover"]}]})
         assert response.status_code == 200
-        assert client.get("/api/me/filesystem/root").status_code in (401, 403)
+        assert client.get("/api/me/filesystem/browse").status_code in (401, 403)
 
 
 

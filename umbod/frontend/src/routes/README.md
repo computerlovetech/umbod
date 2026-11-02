@@ -12,6 +12,7 @@ description: "Static SvelteKit SPA layouts, browser loaders and page composition
 - [+page.ts](./+page.ts) — Dashboard entry redirect.
 - [admin/](./admin/) — Administration routes and capability-checked profile layout.
 - [Admin layout tests](./admin/layout.test.ts) — Explicit capability denial, authenticated identity and preserved HTTP failures.
+- [Log analytics](./admin/analytics/README.md) — Instance-wide log-count query route.
 - [Groups](./admin/groups/README.md) — Central administrator group catalogue route.
 - [Group permissions](./admin/group-permissions/README.md) — Persistent permissions layout and lazy tab editors.
 - [dashboard/](./dashboard/) — User catalogue page.

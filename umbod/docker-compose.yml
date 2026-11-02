@@ -16,6 +16,11 @@ services:
       - traefik.http.routers.umbod-browser-api.priority=50
       - traefik.http.routers.umbod-browser-api.middlewares=umbod-browser-response@docker,umbod-auth@docker
       - traefik.http.routers.umbod-browser-api.service=umbod-browser-api
+      - "traefik.http.routers.umbod-upload-transfer.rule=Host(`umbod-admin.computerlove.tech`) && Method(`PUT`) && PathRegexp(`^/api/filesystem/uploads/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/transfer$$`)"
+      - traefik.http.routers.umbod-upload-transfer.entryPoints=http
+      - traefik.http.routers.umbod-upload-transfer.priority=100
+      - traefik.http.routers.umbod-upload-transfer.middlewares=umbod-browser-response@docker
+      - traefik.http.routers.umbod-upload-transfer.service=umbod-browser-api
       - traefik.http.services.umbod-browser-api.loadbalancer.server.port=8000
     environment:
       - UMBOD_PROFILE=${UMBOD_PROFILE:-local}
@@ -24,6 +29,11 @@ services:
       - UMBOD_FEATURE_MCP_ADMINISTRATOR_ENABLED=${UMBOD_FEATURE_MCP_ADMINISTRATOR_ENABLED:-true}
       - UMBOD_LOG_LEVEL=${UMBOD_LOG_LEVEL:-info}
       - UMBOD_REST_METRICS_PORT=8001
+      - UMBOD_TELEMETRY_ANALYTICS_ENABLED=${UMBOD_TELEMETRY_ANALYTICS_ENABLED:-true}
+      - UMBOD_OTLP_ENABLED=${UMBOD_OTLP_ENABLED:-false}
+      - UMBOD_OTLP_BEARER_TOKEN
+      - UMBOD_OTLP_MAX_REQUEST_BYTES=${UMBOD_OTLP_MAX_REQUEST_BYTES:-10485760}
+      - UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH=${UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH:-/app/data/analytics.sqlite3}
       - UMBOD_PERSONAL_CONNECTIONS_ENABLED=${UMBOD_PERSONAL_CONNECTIONS_ENABLED:-auto}
       - UMBOD_PERSONAL_CONNECTIONS_OAUTH_ENABLED=${UMBOD_PERSONAL_CONNECTIONS_OAUTH_ENABLED:-auto}
       - UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE=${UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE:-}

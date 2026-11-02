@@ -11,7 +11,8 @@ from umbod.core.filesystem.authorization.errors import PermissionDenied
 from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
 from umbod.core.filesystem.content.errors import UploadTooLarge
 from umbod.core.filesystem.uploads.errors import (
-    UploadConflict, UploadExpired, UploadLengthMismatch, UploadMediaTypeMismatch,
+    UploadChecksumMismatch, UploadConflict, UploadExpired, UploadLengthMismatch, UploadMediaTypeMismatch,
+    UploadReceiptUnavailable,
 )
 from umbod.core.filesystem.errors import (
     InvalidMove,
@@ -38,6 +39,8 @@ _ERROR_MESSAGES: dict[type[Exception], str] = {
     ReadTooLarge: "filesystem_read_too_large: Filesystem file exceeds read limit",
     InvalidReadEncoding: "filesystem_read_invalid_encoding: File is not valid UTF-8",
     UploadTooLarge: "filesystem_upload_too_large: Filesystem upload too large",
+    UploadChecksumMismatch: "filesystem_upload_checksum_mismatch: Upload checksum does not match",
+    UploadReceiptUnavailable: "filesystem_upload_receipt_unavailable: Legacy upload has no verified receipt",
     UploadConflict: "filesystem_upload_conflict: Filesystem upload conflict",
     UploadExpired: "filesystem_upload_expired: Filesystem upload expired",
     UploadLengthMismatch: "filesystem_upload_length_mismatch: Invalid upload length",

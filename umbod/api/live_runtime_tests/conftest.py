@@ -12,6 +12,11 @@ class RuntimeEndpoints:
 
 
 @pytest.fixture(scope="session")
+def otlp_bearer_token() -> str:
+    return os.environ["UMBOD_TEST_OTLP_BEARER_TOKEN"]
+
+
+@pytest.fixture(scope="session")
 def runtime_endpoints() -> RuntimeEndpoints:
     return RuntimeEndpoints(
         api_base_url=os.environ.get("UMBOD_TEST_API_BASE_URL", "http://localhost:18010"),

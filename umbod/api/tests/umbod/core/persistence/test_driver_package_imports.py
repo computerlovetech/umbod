@@ -103,6 +103,9 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
         'PersonalDiscoveryPreparation',
         'create_inmemory_key_value_driver',
         'create_request_cache',
+        'create_configured_analytics_runtime',
+        'create_disabled_analytics_runtime',
+        'create_sqlite_analytics_runtime',
         'ContentConfig',
         'InMemoryContentConfig',
         'LocalContentConfig',
@@ -113,6 +116,7 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
         'create_namespace_driver',
         'create_filesystem',
         'create_filesystem_browsing',
+        'create_filesystem_explorer',
         'create_filesystem_transactions',
         'create_filesystem_creation',
         'create_filesystem_uploads',
@@ -316,7 +320,7 @@ def test_personal_identity_policy_does_not_load_persistence_drivers() -> None:
 def test_infrastructure_contains_only_approved_io_composition_and_drivers() -> None:
     infrastructure_root = Path(__file__).parents[4] / 'src' / 'umbod' / 'infrastructure'
     source_entries = {path.relative_to(infrastructure_root).parts[0] for path in infrastructure_root.rglob('*.py')}
-    assert source_entries == {'__init__.py', 'persistence', 'filesystem', 'key_value'}
+    assert source_entries == {'__init__.py', 'persistence', 'filesystem', 'key_value', 'telemetry'}
 
 
 def test_driver_packages_export_adapter_types() -> None:

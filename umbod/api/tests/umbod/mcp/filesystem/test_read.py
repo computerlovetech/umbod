@@ -254,7 +254,7 @@ async def test_resource_read_cap_is_independent_of_upload_limit(filesystem_invoc
     async with Client(filesystem_invocation_mcp.server) as client:
         published = await publish(client, b"readable", "text/plain")
     factory = DatabaseFilesystemServiceFactory(
-        filesystem_invocation_mcp.database, filesystem_invocation_mcp.content, 0, "https://issuer",
+        filesystem_invocation_mcp.database, filesystem_invocation_mcp.content, 0, "https://issuer", "https://api.example",
     )
     result = await FilesystemFileResource(
         UUID(published["id"]), filesystem_invocation_mcp.callers, factory,

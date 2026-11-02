@@ -1,3 +1,4 @@
+import json
 from typing import cast
 from unittest.mock import create_autospec
 
@@ -5,6 +6,7 @@ import pytest
 
 from umbod.core.connectors.openapi.management.models import OpenApiConnector
 from umbod.core.connectors.openapi.stores import OpenApiConnectorReader
+from umbod.logging import OpenTelemetryJsonFormatter
 from umbod.mcp.connectors.openapi.inventory import read_openapi_tool_inventory
 from tests.umbod.mcp.downstream_mcp_connectors.signal_support import invocation_signals
 from umbod.mcp.metrics import InMemoryMcpMetricsRecorder, McpMetricsRecorder
@@ -54,5 +56,10 @@ async def test_metrics_initialization_failure_does_not_abort_openapi_inventory_s
 
     recorder.initialize_invocation.assert_called_once()
     recorder.record_completed_invocation.assert_not_called()
-    assert "mcp.inventory.metrics" in caplog.text
-    assert "private-initialization-detail" not in caplog.text
+    record = next(record for record in caplog.records if record.msg == "Signal receiver failed")
+    serialized = OpenTelemetryJsonFormatter("test").format(record)
+    attributes = json.loads(serialized)["attributes"]
+    assert attributes["receiver.name"] == "mcp.inventory.metrics"
+    assert "receiver.name_hash" not in attributes
+    assert attributes["reason"] == "receiver_failed"
+    assert "private-initialization-detail" not in serialized

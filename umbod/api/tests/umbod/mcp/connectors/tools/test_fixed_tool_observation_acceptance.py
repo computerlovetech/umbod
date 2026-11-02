@@ -13,6 +13,8 @@ from tests.umbod.mcp.connectors.tools.test_connector_tool_exposure_mode_acceptan
     InMemoryConnectorPublishingStore,
 )
 from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
+from umbod.logging import create_application_failure_signal
+from umbod.logging import OpenTelemetryJsonFormatter
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.mcp.connectors.native.tools import register_connector_tools
 from umbod.mcp.logging import (
@@ -31,6 +33,7 @@ from pydantic import SecretStr
 
 
 async def _observed_server(mode: str) -> tuple[FastMCP, InMemoryMcpMetricsRecorder, InMemoryMcpToolInvocationLogSink, StringIO]:
+    application_failures = create_application_failure_signal()
     configurations = InMemoryConnectorCurrentConfigurationStore()
     await configurations.save_current_configuration(
         "slack",
@@ -41,9 +44,9 @@ async def _observed_server(mode: str) -> tuple[FastMCP, InMemoryMcpMetricsRecord
     metrics = InMemoryMcpMetricsRecorder()
     logs = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     stream = StringIO()
-    audit = McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), stream), "test")
+    audit = McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), stream), "test", application_failures=application_failures)
     server = FastMCP("test", middleware=[McpAuditMiddleware(audit, McpAuditIdentityAdapter(), mode)])
-    signals = create_mcp_signals(logs, metrics, audit)
+    signals = create_mcp_signals(logs, metrics, audit, application_failures=application_failures)
     server.invocation_signals = signals
 
     def operation(limit: int) -> dict[str, int]:
@@ -111,8 +114,17 @@ async def test_custom_receivers_are_isolated_and_extend_real_tool_execution(
     assert _counts(metrics, "umbod_mcp_tool_invocations_total") == {("slack_first", "success"): 1}
     assert len(logs.invocation_records()) == 2
     assert len(_audit_records(stream)) == 2
-    assert "test.failing_action" in caplog.text
-    assert "private-receiver-detail" not in caplog.text
+    failure_records = [record for record in caplog.records if record.msg == "Signal receiver failed"]
+    assert len(failure_records) == 2
+    serialized = [OpenTelemetryJsonFormatter("test").format(record) for record in failure_records]
+    assert all(
+        json.loads(payload)["attributes"]["receiver.name_hash"]
+        == hashlib.sha256(b"test.failing_action").hexdigest()
+        for payload in serialized
+    )
+    assert all(json.loads(payload)["attributes"]["receiver.name"] == "unrecognized" for payload in serialized)
+    assert all("test.failing_action" not in payload for payload in serialized)
+    assert all("private-receiver-detail" not in payload for payload in serialized)
 
 
 @pytest.mark.asyncio

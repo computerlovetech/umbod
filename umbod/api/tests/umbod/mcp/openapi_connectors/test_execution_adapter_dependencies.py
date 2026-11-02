@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, create_autospec
 
 import pytest
 
+from tests.support.application_failures import CapturingApplicationFailures
 from umbod.core.connectors.openapi.execution import (
     AsyncStreamingHttpClient,
     OpenApiCapabilityExecutionResult,
@@ -88,7 +89,8 @@ class AdapterHarness:
             group_permission_reader_factory=SimpleNamespace(create=self.create_reader),
             openapi_outbound_http_client_factory=SimpleNamespace(create=self.create_client),
         )
-        self.adapter = OpenApiCodeModeExecutionAdapter(server, self.pipelines, self.factory)
+        self.application_failures = CapturingApplicationFailures()
+        self.adapter = OpenApiCodeModeExecutionAdapter(server, self.pipelines, self.factory, application_failures=self.application_failures)
 
     def create_pipeline(
         self, connector_name: str, is_error: Callable[[object], bool]
@@ -181,3 +183,30 @@ async def test_each_execution_passes_its_resources_and_pipeline_to_a_fresh_servi
         assert operation_input.body.value == {'name': 'input'}
     assert harness.factory.resources[0][3] is not harness.factory.resources[1][3]
     assert harness.pipelines.create.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_lookup_failure_publishes_without_logging_and_execution_continues(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    class LookupFailureHarness(AdapterHarness):
+        async def create_store(self) -> SimpleNamespace:
+            store = await super().create_store()
+            store.get_connector.side_effect = RuntimeError("secret-canary")
+            return store
+
+    harness = LookupFailureHarness("none")
+    harness.release.set()
+
+    result = await harness.execute("private-operation")
+
+    assert result == OpenApiCapabilityExecutionResult(
+        status="success", message="private-operation",
+    ).model_dump(mode="json")
+    assert caplog.records == []
+    assert len(harness.application_failures.events) == 1
+    event = harness.application_failures.events[0]
+    assert dict(event.attributes)["reason"] == "lookup_failed"
+    assert "secret-canary" not in event.model_dump_json()
+    assert "private-operation" not in event.model_dump_json()
+    assert harness.closed == ["client", "reader", "store"]

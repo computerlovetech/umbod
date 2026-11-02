@@ -9,7 +9,7 @@ from umbod.core.filesystem.errors import InvalidMove, RevisionConflict, RootMuta
 from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
 from umbod.core.filesystem.content import UploadTooLarge
 from umbod.core.filesystem.uploads.errors import (
-    UploadConflict, UploadExpired, UploadLengthMismatch, UploadMediaTypeMismatch,
+    UploadChecksumMismatch, UploadConflict, UploadExpired, UploadLengthMismatch, UploadMediaTypeMismatch,
 )
 
 
@@ -42,6 +42,10 @@ def filesystem_errors() -> Iterator[None]:
     except UploadConflict:
         raise HTTPException(409, detail={
             "code": "filesystem_upload_conflict", "message": "Upload is not in the required state.",
+        }) from None
+    except UploadChecksumMismatch:
+        raise HTTPException(422, detail={
+            "code": "filesystem_upload_checksum_mismatch", "message": "Upload checksum does not match.",
         }) from None
     except UploadLengthMismatch:
         raise HTTPException(422, detail={

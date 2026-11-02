@@ -47,6 +47,8 @@ class ScriptedNetwork(httpcore2.AsyncNetworkBackend):
         self.tool_delay = 0.0
         self.raw_body = b""
         self.read_size = 65536
+        self.chunked_call = False
+        self.interim_response = False
 
     async def connect_tcp(
         self, host: str, port: int, timeout: float | None = None,
@@ -123,9 +125,15 @@ class ScriptedStream(httpcore2.AsyncNetworkStream):
             response_headers.update(self.network.call_response_headers)
             if self.network.raw_body:
                 payload = self.network.raw_body
-        if not self.streaming:
+        if rpc_method == "tools/call" and self.network.chunked_call:
+            response_headers.pop("content-length", None)
+            response_headers["transfer-encoding"] = "chunked"
+            payload = f"{len(payload):x}\r\n".encode() + payload + b"\r\n0\r\n\r\n"
+        elif not self.streaming:
             response_headers.setdefault("content-length", str(len(payload)))
         self.reply = f"HTTP/1.1 {status} Fixture\r\n".encode() + b"".join(f"{key}: {value}\r\n".encode() for key, value in response_headers.items()) + b"\r\n" + payload
+        if self.network.interim_response:
+            self.reply = b"HTTP/1.1 100 Continue\r\n\r\nHTTP/1.1 103 Early Hints\r\n\r\n" + self.reply
         self.ready.set()
 
     async def read(self, max_bytes: int, timeout: float | None = None) -> bytes:

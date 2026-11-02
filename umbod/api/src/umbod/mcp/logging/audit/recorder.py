@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-import logging
 import time
 
+from umbod.core.diagnostics import ApplicationFailure, ApplicationFailureKind, CorrelatedFailureContext, report_application_failure
+from umbod.core.signals import SignalPublisher
 from umbod.mcp.logging.audit.event import (
     McpAuditActivityType,
     McpAuditCorrelation,
@@ -21,11 +22,11 @@ from umbod.mcp.logging.audit.identity import McpAuditIdentity
 from umbod.mcp.logging.audit.sink import create_default_mcp_audit_event_sink
 from umbod.mcp.signals.events import McpToolIdentity
 
-logger = logging.getLogger(__name__)
 
 
 class McpAuditRecorder:
-    def __init__(self, sink: McpAuditEventSink, server_name: str) -> None:
+    def __init__(self, sink: McpAuditEventSink, server_name: str, application_failures: SignalPublisher[ApplicationFailure]) -> None:
+        self._application_failures = application_failures
         self._sink = sink
         self._server_name = server_name
 
@@ -131,13 +132,16 @@ class McpAuditRecorder:
                     correlation=correlation,
                 )
             )
-        except Exception:
-            logger.error("MCP audit logging failed")
+        except Exception as error:
+            report_application_failure(
+                self._application_failures, ApplicationFailureKind.AUDIT_SINK, error,
+                CorrelatedFailureContext(correlation.trace_id, correlation.span_id),
+            )
 
 
 def _present_metadata(**values: str | None) -> dict[str, str]:
     return {key: value for key, value in values.items() if value is not None}
 
 
-def create_default_mcp_audit_recorder(server_name: str) -> McpAuditRecorder:
-    return McpAuditRecorder(create_default_mcp_audit_event_sink(), server_name)
+def create_default_mcp_audit_recorder(server_name: str, application_failures: SignalPublisher[ApplicationFailure]) -> McpAuditRecorder:
+    return McpAuditRecorder(create_default_mcp_audit_event_sink(), server_name, application_failures)

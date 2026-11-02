@@ -6,6 +6,7 @@
   import { workspaceNavigation, workspacePresentation } from '$lib/workspace/navigation';
 
   type AdminShellActiveItem =
+    | 'analytics'
     | 'overview'
     | 'connectors'
     | 'groups'

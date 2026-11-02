@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from umbod.logging import create_application_failure_signal
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.logging import (
     McpAuditActivityType,
@@ -79,11 +80,12 @@ def _in_memory_sink() -> InMemoryMcpToolInvocationLogSink:
 
 
 def _signals(log_sink: McpToolInvocationLogSink, audit_sink: McpAuditEventSink) -> McpSignals:
+    application_failures = create_application_failure_signal()
     return create_mcp_signals(
         log_sink,
         InMemoryMcpMetricsRecorder(),
-        McpAuditRecorder(audit_sink, "umbod"),
-    )
+        McpAuditRecorder(audit_sink, "umbod", application_failures=application_failures),
+     application_failures=application_failures)
 
 
 def test_registered_logging_receiver_records_completed_event_to_sink() -> None:
@@ -158,10 +160,11 @@ def test_registered_audit_receiver_generates_correlation_when_missing() -> None:
 
 
 def test_dispatcher_fans_out_to_all_registered_listeners() -> None:
+    application_failures = create_application_failure_signal()
     sink = _in_memory_sink()
     audit_sink = RecordingAuditSink()
     metrics = InMemoryMcpMetricsRecorder()
-    signals = create_mcp_signals(sink, metrics, McpAuditRecorder(audit_sink, "umbod"))
+    signals = create_mcp_signals(sink, metrics, McpAuditRecorder(audit_sink, "umbod", application_failures=application_failures), application_failures=application_failures)
 
     signals.invocation_completed.send(_completed(None, _CORRELATION))
 

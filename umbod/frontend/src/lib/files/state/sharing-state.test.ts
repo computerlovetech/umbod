@@ -27,7 +27,7 @@ describe('sharing eligibility', (): void => {
     const eligibility = new SharingEligibilityState(api.sharing);
     const response = deferred<NodeAccess>();
     vi.spyOn(api.sharing, 'inspectAccess').mockReturnValueOnce(response.promise);
-    eligibility.selectCurrent(filesystemFixture[2]);
+    eligibility.select([filesystemFixture[2]]);
     expect(eligibility.available(fileId)).toBe(false);
     response.resolve(access);
     await vi.waitFor(() => expect(eligibility.available(fileId)).toBe(true));
@@ -60,13 +60,13 @@ describe('sharing eligibility', (): void => {
     eligibility.dispose();
   });
 
-  test('checks current directory independently of failed listing and starts newly created rows', async (): Promise<void> => {
+  test('fails closed on browse failure and checks newly created unseeded rows', async (): Promise<void> => {
     const { api } = fixture();
     api.sharing.configure({ ...access, node_id: folderId }, groups);
     vi.spyOn(api.filesystem, 'listChildren').mockRejectedValueOnce(new Error('listing failed'));
     const files = new FilesState(api);
     await files.load(folderId);
-    await vi.waitFor(() => expect(files.sharing.available(folderId)).toBe(true));
+    expect(files.sharing.available(folderId)).toBe(false);
     expect(files.phase).toBe('error');
     await files.load(folderId);
     const target = files.creationTarget()!;
@@ -272,7 +272,7 @@ describe('sharing dialog state', (): void => {
   test('self-revocation hides action until a new inspection confirms authority', async (): Promise<void> => {
     const { api } = fixture();
     const eligibility = new SharingEligibilityState(api.sharing);
-    eligibility.selectCurrent(filesystemFixture[2]);
+    eligibility.select([filesystemFixture[2]]);
     await vi.waitFor(() => expect(eligibility.available(fileId)).toBe(true));
     await eligibility.dialog.show(filesystemFixture[2]);
     vi.spyOn(api.sharing, 'replaceAccess').mockImplementationOnce(async (): Promise<NodeAccess> => { api.sharing.revoke(fileId); return { ...access, revision: 'revoked', grants: [] }; });

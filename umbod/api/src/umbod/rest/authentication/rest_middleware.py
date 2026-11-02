@@ -12,7 +12,7 @@ from umbod.rest.authentication.local import LOCAL_DEVELOPMENT_ISSUER, local_rest
 from umbod.rest.authentication.middleware import JwtVerifierFactory
 from umbod.rest.authentication.tokens import extract_request_jwt_token
 from umbod.rest.authentication.verifiers import SimulatedJwtVerifier
-from umbod.rest.authentication.rest_paths import protected_rest_request, within_namespace
+from umbod.rest.authentication.rest_paths import delegated_upload_request, protected_rest_request, within_namespace
 
 
 class RestAuthenticationMiddleware(BaseHTTPMiddleware):
@@ -43,6 +43,10 @@ class RestAuthenticationMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = get_route_path(request.scope)
+        if delegated_upload_request(request.scope):
+            response = await call_next(request)
+            response.headers["Cache-Control"] = "no-store"
+            return response
         if (
             (
                 self._settings.admin_authentication.mode == "disabled"

@@ -1,5 +1,4 @@
 import inspect
-import logging
 
 from fastmcp import FastMCP
 from pydantic import JsonValue, TypeAdapter
@@ -11,6 +10,8 @@ from umbod.core.connectors.openapi.execution import (
     PresentJsonBody,
 )
 from umbod.core.connectors.openapi.stores import OpenApiConnectorStore
+from umbod.core.diagnostics import ApplicationFailure, ApplicationFailureKind, ConnectorLookupFailureContext, report_application_failure
+from umbod.core.signals import SignalPublisher
 from umbod.mcp.signals import McpToolExecutionPipelineFactory
 from umbod.mcp.connectors.native.tools.deployment_modes.codemode import (
     OpenApiCodeModeExecutor,
@@ -20,7 +21,6 @@ from umbod.mcp.connectors.openapi.execution_service_factory import OpenApiCapabi
 from umbod.mcp.connectors.openapi.ports import OpenApiExecutionServiceFactory
 from umbod.mcp.connectors.openapi.deps import capture_openapi_groups
 
-logger = logging.getLogger(__name__)
 
 
 def openapi_response_is_error(result: object) -> bool:
@@ -44,7 +44,9 @@ class OpenApiCodeModeExecutionAdapter:
         server: FastMCP,
         execution_pipelines: McpToolExecutionPipelineFactory,
         execution_services: OpenApiExecutionServiceFactory,
+        application_failures: SignalPublisher[ApplicationFailure],
     ) -> None:
+        self._application_failures = application_failures
         self._server = server
         self._execution_pipelines = execution_pipelines
         self._execution_services = execution_services
@@ -78,15 +80,14 @@ class OpenApiCodeModeExecutionAdapter:
             body=body,
         )
 
-    @staticmethod
-    async def _connector_display_name(store: OpenApiConnectorStore, invocation: OpenApiCodeModeInvocation) -> str:
+    async def _connector_display_name(self, store: OpenApiConnectorStore, invocation: OpenApiCodeModeInvocation) -> str:
         connector_name = invocation.connector_id
         try:
             connector_name = (await store.get_connector(invocation.connector_id)).display_name
-        except Exception:
-            logger.exception(
-                'OpenAPI connector display name lookup failed',
-                extra={'connector_id': invocation.connector_id, 'operation_name': invocation.operation_id},
+        except Exception as error:
+            report_application_failure(
+                self._application_failures, ApplicationFailureKind.CONNECTOR_LOOKUP, error,
+                ConnectorLookupFailureContext(invocation.connector_id, invocation.operation_id),
             )
         return connector_name
 
@@ -97,14 +98,16 @@ class OpenApiCodeModeExecutionAdapterFactory:
         server: FastMCP,
         execution_pipelines: McpToolExecutionPipelineFactory,
         execution_services: OpenApiExecutionServiceFactory,
+        application_failures: SignalPublisher[ApplicationFailure],
     ) -> OpenApiCodeModeExecutor:
-        return OpenApiCodeModeExecutionAdapter(server, execution_pipelines, execution_services).execute
+        return OpenApiCodeModeExecutionAdapter(server, execution_pipelines, execution_services, application_failures).execute
 
 
 def build_openapi_codemode_executor(
     server: FastMCP,
     execution_pipelines: McpToolExecutionPipelineFactory,
+    application_failures: SignalPublisher[ApplicationFailure],
 ) -> OpenApiCodeModeExecutor:
     return OpenApiCodeModeExecutionAdapterFactory().create(
-        server, execution_pipelines, OpenApiCapabilityExecutionServiceFactory(server)
+        server, execution_pipelines, OpenApiCapabilityExecutionServiceFactory(server), application_failures
     )

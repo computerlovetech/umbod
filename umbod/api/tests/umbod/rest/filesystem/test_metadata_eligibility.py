@@ -16,7 +16,7 @@ from .test_http_contract import BASE
 @pytest.fixture(params=["file", "directory"])
 def editable_node(filesystem_http: FilesystemHttp, request: pytest.FixtureRequest) -> dict[str, object]:
     client = filesystem_http.client
-    root_id = client.get(f"{BASE}/root").json()["id"]
+    root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
     if request.param == "file":
         response = upload_file(client, f"{BASE}/nodes/{root_id}/uploads", "file", b"bytes")
     else:

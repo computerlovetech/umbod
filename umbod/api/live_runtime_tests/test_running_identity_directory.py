@@ -10,7 +10,7 @@ import jwt
 import pytest
 
 from conftest import RuntimeEndpoints
-from test_running_filesystem import FILESYSTEM, checked_summary
+from test_running_filesystem import FILESYSTEM, checked_root_browse, checked_summary
 from test_running_personal_mcp_execution import mcp_client, proxy_token
 
 
@@ -118,7 +118,7 @@ async def test_signed_rest_observation_is_searchable_through_mcp(
         })
         assert configured.status_code == 200, configured.text
         try:
-            root = checked_summary(api.get(FILESYSTEM + "/root"), 200)
+            root = checked_root_browse(api.get(FILESYSTEM + "/browse"))
             node = checked_summary(api.post(FILESYSTEM + "/nodes/" + root["id"] + "/directories", json={
                 "name": "recipient-search-" + uuid4().hex,
                 "metadata": {"content_type": {}, "attributes": {}},

@@ -22,7 +22,8 @@ class SystemAddressResolver:
 
 
 class PinnedPublicNetworkBackend(httpcore2.AsyncNetworkBackend):
-    def __init__(self, resolver: PublicAddressResolver, backend: httpcore2.AsyncNetworkBackend, check: Callable[[], None], token: SecretStr) -> None:
+    def __init__(self, resolver: PublicAddressResolver, backend: httpcore2.AsyncNetworkBackend, check: Callable[[], None], token: SecretStr, observer_factory: Callable[[], Callable[[bytes], None]]) -> None:
+        self._observer_factory = observer_factory
         self._resolver = resolver
         self._backend = backend
         self._check = check
@@ -51,7 +52,7 @@ class PinnedPublicNetworkBackend(httpcore2.AsyncNetworkBackend):
         stream = await self._backend.connect_tcp(
             addresses[0], port, timeout=timeout, local_address=local_address, socket_options=socket_options
         )
-        return CheckedNetworkStream(stream, self._check, self._token)
+        return CheckedNetworkStream(stream, self._check, self._token, self._observer_factory())
 
     async def connect_unix_socket(
         self,
@@ -66,7 +67,8 @@ class PinnedPublicNetworkBackend(httpcore2.AsyncNetworkBackend):
 
 
 class CheckedNetworkStream(httpcore2.AsyncNetworkStream):
-    def __init__(self, stream: httpcore2.AsyncNetworkStream, check: Callable[[], None], token: SecretStr) -> None:
+    def __init__(self, stream: httpcore2.AsyncNetworkStream, check: Callable[[], None], token: SecretStr, observe_response: Callable[[bytes], None]) -> None:
+        self._observe_response = observe_response
         self._stream = stream
         self._check = check
         self._token = token
@@ -80,6 +82,7 @@ class CheckedNetworkStream(httpcore2.AsyncNetworkStream):
         combined = self._trailer + result
         if self._secret_bytes in combined:
             raise PersonalRuntimeUnavailable("Personal MCP unavailable") from None
+        self._observe_response(result)
         self._trailer = combined[-max(0, len(self._secret_bytes) - 1):] if len(self._secret_bytes) > 1 else b""
         return result
 
@@ -99,7 +102,7 @@ class CheckedNetworkStream(httpcore2.AsyncNetworkStream):
         if not ssl_context.check_hostname or ssl_context.verify_mode != ssl.CERT_REQUIRED:
             raise PersonalRuntimeUnavailable("Personal MCP unavailable")
         secured = await self._stream.start_tls(ssl_context, server_hostname, timeout)
-        return CheckedNetworkStream(secured, self._check, self._token)
+        return CheckedNetworkStream(secured, self._check, self._token, self._observe_response)
 
     def get_extra_info(self, info: str) -> object:
         return self._stream.get_extra_info(info)

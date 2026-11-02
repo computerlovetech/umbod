@@ -1,4 +1,3 @@
-import logging
 from time import perf_counter
 from typing import Optional, Sequence, cast
 
@@ -7,11 +6,12 @@ from starlette._utils import get_route_path
 from starlette.routing import BaseRoute, Match
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
+from umbod.core.diagnostics import ApplicationFailure, ApplicationFailureKind, RestFailureContext, report_application_failure
+from umbod.core.signals import SignalPublisher
 from umbod.rest.metrics.models import CompletedRestRequest
 from umbod.rest.metrics.recorder import RestMetricsRecorder
 
 
-logger = logging.getLogger(__name__)
 KNOWN_METHODS = frozenset({"DELETE", "GET", "HEAD", "OPTIONS", "PATCH", "POST", "PUT"})
 
 
@@ -22,7 +22,9 @@ class AdminRestMetricsMiddleware:
         recorder: RestMetricsRecorder,
         routes: Sequence[BaseRoute],
         mount_path: str,
+        application_failures: SignalPublisher[ApplicationFailure],
     ) -> None:
+        self.application_failures = application_failures
         self.app = app
         self.recorder = recorder
         self.routes = tuple(iter_route_contexts(routes))
@@ -68,14 +70,10 @@ class AdminRestMetricsMiddleware:
                     duration_seconds=max(perf_counter() - started_at, 1e-12),
                 )
             )
-        except Exception:
-            logger.exception(
-                "REST metrics recording failed",
-                extra={
-                    "method": bounded_method,
-                    "normalized_route": normalized_route,
-                    "status_code": status_code,
-                },
+        except Exception as error:
+            report_application_failure(
+                self.application_failures, ApplicationFailureKind.REST_METRICS, error,
+                RestFailureContext(bounded_method, status_code, normalized_route),
             )
 
     def _matched_route(self, scope: Scope) -> Optional[str]:

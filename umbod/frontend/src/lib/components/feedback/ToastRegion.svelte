@@ -17,7 +17,7 @@
   };
 </script>
 
-<div class="toast-region" aria-label="Notifications">
+<div class="toast-region" role="region" aria-label="Notifications">
   {#each state.toasts as toast (toast.id)}
     <div
       class={`toast toast--${toast.variant}`}

@@ -7,12 +7,14 @@ description: "Persisted upload staging, authorization and atomic file publicatio
 # Files
 
 - [__init__.py](./__init__.py) — Public upload service and persistence contracts.
-- [models.py](./models.py) — Pending, uploaded and completed lifecycle records.
+- [models.py](./models.py) — Legacy-compatible receipts, checksum expectations, bounded delegated identities and transfer claim states.
 - [ports.py](./ports.py) — Session storage, combined transactions and injectable clock.
 - [errors.py](./errors.py) — Expiry, lifecycle conflicts and transfer validation failures.
-- [service.py](./service.py) — Bounded immutable transfers and idempotent publication while the published node exists.
+- [service.py](./service.py) — Streaming hashes, atomic capability claims, immutable staging and idempotent publication; crashed claims are not recovered.
 
 # Related links
+
+- [Capability upload protocol](../../../../../../docs/reference/filesystem-upload-transfers.md) — Transfer deadlines, completion and crash-recovery limitations.
 
 - [Session persistence](../stores/README.md) — Neutral database storage shared with namespace and ownership.
 - [ADR-009](../../../../../../project/architecture-records/ADR-009-transport-neutral-upload-sessions.md) — Accepted contract; abandoned rows and unreferenced bytes persist without automatic reclamation.

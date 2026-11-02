@@ -10,6 +10,7 @@ from fastmcp.tools import ToolResult
 from fastmcp.exceptions import ToolError
 from fastmcp.server.providers.proxy import ProxyTool
 
+from umbod.logging import create_application_failure_signal
 from umbod.core.invocation.failure_evidence import current_invocation_failure
 
 from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import execution_case
@@ -35,6 +36,7 @@ SENSITIVE = "sensitive-sentinel-token-url-arguments-results"
 
 @pytest.fixture
 def configured_signals(capsys: pytest.CaptureFixture[str]) -> Iterator[McpSignals]:
+    application_failures = create_application_failure_signal()
     root = logging.getLogger()
     original_handlers, original_level = root.handlers[:], root.level
     names = ("uvicorn", "uvicorn.error", "uvicorn.access", "fastmcp", "mcp")
@@ -44,8 +46,8 @@ def configured_signals(capsys: pytest.CaptureFixture[str]) -> Iterator[McpSignal
         yield create_mcp_signals(
             create_default_mcp_tool_invocation_log_sink(),
             InMemoryMcpMetricsRecorder(),
-            McpAuditRecorder(DiscardingAuditSink(), "test"),
-        )
+            McpAuditRecorder(DiscardingAuditSink(), "test", application_failures=application_failures),
+         application_failures=application_failures)
     finally:
         root.handlers = original_handlers
         root.setLevel(original_level)
@@ -57,6 +59,8 @@ def configured_signals(capsys: pytest.CaptureFixture[str]) -> Iterator[McpSignal
 def completion_records(capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture) -> list[dict[str, Any]]:
     output = capsys.readouterr()
     assert SENSITIVE not in output.out + output.err + caplog.text
+    assert "https://" not in output.out + output.err
+    assert "owner-token" not in output.out + output.err
     records = [json.loads(line) for line in output.out.splitlines()]
     return [record for record in records if record["body"] == "mcp tool invocation completed"]
 

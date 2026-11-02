@@ -11,6 +11,8 @@ description: API, MCP, CLI, and shared application services.
 - [CLI](umbod/cli/README.md) — Commands.
 - [Core](umbod/core/README.md) — Application logic.
 - [Configuration](umbod/config/README.md) — Runtime settings.
+- [Shared logging](umbod/logging.py) — Failure signal composition, logging receivers, and bounded JSON output.
+- [Application diagnostics](../../docs/operations/application-diagnostics.md) — Field contracts, privacy rules, and failure investigation.
 - [Hosting](umbod/hosting/README.md) — Service startup.
 - [Infrastructure](umbod/infrastructure/README.md) — External adapters.
 - [Messaging](messaging/README.md) — Events.

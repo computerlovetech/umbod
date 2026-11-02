@@ -250,6 +250,7 @@ def test_browser_response_stripping_does_not_change_internal_forwardauth() -> No
                     "traefik.http.routers.umbod-frontend-secure.middlewares",
                     "traefik.http.routers.umbod-browser-api.middlewares",
                     "traefik.http.routers.umbod-browser-api-secure.middlewares",
+                    "traefik.http.routers.umbod-upload-transfer.middlewares",
                     "traefik.http.routers.umbod-oauth.middlewares",
                     "traefik.http.routers.umbod-oauth-secure.middlewares",
                 }

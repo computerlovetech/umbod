@@ -1,6 +1,6 @@
 import { InMemoryNodeSharing } from './in-memory-sharing.test-support';
 import type { FilesApi, FilesystemApi } from '../api';
-import { updateNodeSchema, type UpdateNode, updateDescriptionSchema, type UpdateDescription, breadcrumbsSchema, type Breadcrumbs, type BreadcrumbItem, fileRevisionSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, beginUploadSchema, uploadSessionSchema, rawUploadSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
+import { browseResultSchema, type BrowseResult, updateNodeSchema, type UpdateNode, updateDescriptionSchema, type UpdateDescription, breadcrumbsSchema, type Breadcrumbs, type BreadcrumbItem, fileRevisionSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, beginUploadSchema, uploadSessionSchema, rawUploadSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
 import { UploadPhaseError } from '../errors';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 
@@ -9,12 +9,34 @@ export class InMemoryFilesystem implements FilesystemApi {
   private readonly sessions = new Map<string, { session: UploadSession; parentId: string; input: BeginUpload; bytes: Uint8Array | undefined; node: NodeSummary | undefined }>();
   private readonly content = new Map<string, Uint8Array>();
 
-  constructor(private readonly rootId: string, nodes: NodeSummary[], private readonly uploadLimitBytes?: number, private readonly canDelete: (node: NodeSummary) => boolean = () => true, private readonly canRead: (node: NodeSummary) => boolean = () => true, private readonly canWrite: (node: NodeSummary) => boolean = () => true) {
+  constructor(private readonly rootId: string, nodes: NodeSummary[], private readonly uploadLimitBytes?: number, private readonly canDelete: (node: NodeSummary) => boolean = () => true, private readonly canRead: (node: NodeSummary) => boolean = () => true, private readonly canWrite: (node: NodeSummary) => boolean = () => true, private readonly canShare: (id: string) => boolean = () => false) {
     nodeIdSchema.parse(rootId);
     for (const node of nodes) this.nodes.set(node.id, nodeSummarySchema.parse(node));
   }
 
-  getRoot = async (signal?: AbortSignal): Promise<NodeSummary> => this.getNode(this.rootId, signal);
+  browse = async (target: string | null, signal?: AbortSignal): Promise<BrowseResult> => {
+    const node = await this.getNode(target ?? this.rootId, signal);
+    const breadcrumbs = await this.getBreadcrumbs(node.id, signal);
+    const entries = node.kind === 'directory' ? await this.listChildren(node.id, signal) : [];
+    signal?.throwIfAborted();
+    return browseResultSchema.parse({
+      node, breadcrumbs, entries, truncated: false,
+      capabilities: [node, ...entries].map((entry) => {
+        const writable = this.canWrite(entry);
+        const parent = typeof entry.parent_id === 'string' ? this.nodes.get(entry.parent_id) : undefined;
+        return {
+          node_id: entry.id,
+          rename: writable && !!parent,
+          move: writable && !!parent && this.canWrite(parent),
+          edit_description: writable,
+          delete: entry.kind === 'file' && !!parent && this.canDelete(entry),
+          share: this.canShare(entry.id),
+          upload: entry.kind === 'directory' && writable,
+          create_directory: entry.kind === 'directory' && writable
+        };
+      })
+    });
+  };
 
   getNode = async (id: string, signal?: AbortSignal): Promise<NodeSummary> => {
     signal?.throwIfAborted();
@@ -114,14 +136,10 @@ export class InMemoryFilesystem implements FilesystemApi {
     this.nodes.delete(id);
   };
 
-  checkUploadEligibility = async (parentId: string): Promise<void> => {
-    const parent = await this.getNode(parentId);
-    if (parent.kind !== 'directory') throw new HttpError(403, 'Not a directory', {});
-  };
-
   beginUpload = async (parentId: string, input: BeginUpload): Promise<UploadSession> => {
     const body = beginUploadSchema.parse(input);
-    await this.checkUploadEligibility(parentId);
+    const parent = await this.getNode(parentId);
+    if (parent.kind !== 'directory' || !this.canWrite(parent)) throw new HttpError(403, 'Forbidden', {});
     if (this.uploadLimitBytes !== undefined && body.size_bytes > this.uploadLimitBytes) throw new HttpError(413, 'File too large', {});
     const children = await this.listChildren(parentId);
     if (children.some((node) => node.name === body.name)) throw new HttpError(409, 'Conflict', { detail: { code: 'filesystem_name_collision' } });
@@ -135,8 +153,6 @@ export class InMemoryFilesystem implements FilesystemApi {
     this.sessions.set(id, { session, parentId, input: body, bytes: undefined, node: undefined });
     return uploadSessionSchema.parse(session);
   };
-
-  getUpload = async (id: string): Promise<UploadSession> => uploadSessionSchema.parse(this.uploadRecord(id).session);
 
   transferUpload = async (session: UploadSession, file: File): Promise<void> => {
     const record = this.uploadRecord(uploadSessionSchema.parse(session).id);
@@ -221,6 +237,6 @@ export class InMemoryFilesApi implements FilesApi {
   readonly filesystem: InMemoryFilesystem;
 
   constructor(rootId: string, nodes: NodeSummary[], uploadLimitBytes?: number, canDelete?: (node: NodeSummary) => boolean, canRead?: (node: NodeSummary) => boolean, canWrite?: (node: NodeSummary) => boolean) {
-    this.filesystem = new InMemoryFilesystem(rootId, nodes, uploadLimitBytes, canDelete, canRead, canWrite);
+    this.filesystem = new InMemoryFilesystem(rootId, nodes, uploadLimitBytes, canDelete, canRead, canWrite, this.sharing.available);
   }
 }

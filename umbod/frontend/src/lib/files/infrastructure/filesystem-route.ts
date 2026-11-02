@@ -1,13 +1,20 @@
 import { HttpError, SchemaValidationError, type Transport } from '$lib/admin/infrastructure/transport';
 import { UploadPhaseError } from '../errors';
 import type { FilesystemApi, UploadTransferPort } from '../api';
-import { updateDescriptionSchema, updateNodeSchema, type UpdateNode, nodeCapabilitiesSchema, type UpdateDescription, breadcrumbsSchema, type Breadcrumbs, fileRevisionSchema, childrenSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, uploadEligibilitySchema, beginUploadSchema, uploadSessionSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
+import { browseResultSchema, type BrowseResult, updateDescriptionSchema, updateNodeSchema, type UpdateNode, nodeCapabilitiesSchema, type UpdateDescription, breadcrumbsSchema, type Breadcrumbs, fileRevisionSchema, childrenSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, beginUploadSchema, uploadSessionSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
 
 export class FilesystemRoute implements FilesystemApi {
   constructor(private readonly transport: Transport, private readonly transfer: UploadTransferPort) {}
 
-  getRoot = (signal?: AbortSignal): Promise<NodeSummary> =>
-    this.transport.request({ method: 'GET', path: '/me/filesystem/root', outputSchema: nodeSummarySchema, signal });
+  browse = async (target: string | null, signal?: AbortSignal): Promise<BrowseResult> => {
+    const id = target === null ? null : nodeIdSchema.parse(target);
+    const result = await this.transport.request({
+      method: 'GET', path: '/me/filesystem/browse' + (id === null ? '' : '?node_id=' + encodeURIComponent(id)),
+      outputSchema: browseResultSchema, signal
+    });
+    if (id !== null && result.node.id !== id) throw new SchemaValidationError('inbound', [{ code: 'custom', path: ['node', 'id'], message: 'Unexpected browse target.' }]);
+    return result;
+  };
 
   getNode = (id: string, signal?: AbortSignal): Promise<NodeSummary> =>
     this.transport.request({ method: 'GET', path: this.nodePath(id), outputSchema: nodeSummarySchema, signal });
@@ -55,19 +62,11 @@ export class FilesystemRoute implements FilesystemApi {
     return this.transport.request({ method: 'DELETE', path: this.nodePath(id), redirect: 'error', conditionalHeaders: { 'If-Match': `"${parsed.data}"` } });
   };
 
-  checkUploadEligibility = (parentId: string, signal?: AbortSignal): Promise<void> =>
-    this.transport.request({
-      method: 'OPTIONS', path: this.nodePath(parentId) + '/uploads', outputSchema: uploadEligibilitySchema, responseBody: 'headers', signal
-    });
-
   beginUpload = (parentId: string, input: BeginUpload): Promise<UploadSession> =>
     this.transport.request({
       method: 'POST', path: this.nodePath(parentId) + '/uploads', body: input,
       inputSchema: beginUploadSchema, outputSchema: uploadSessionSchema, redirect: 'error'
     });
-
-  getUpload = (id: string): Promise<UploadSession> =>
-    this.transport.request({ method: 'GET', path: '/me/filesystem/uploads/' + nodeIdSchema.parse(id), outputSchema: uploadSessionSchema, redirect: 'error' });
 
   transferUpload = async (session: UploadSession, file: File): Promise<void> => {
     const parsed = uploadSessionSchema.parse(session);

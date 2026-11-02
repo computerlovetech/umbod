@@ -141,7 +141,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     audit_recorder = telemetry.audit_recorder
     metrics_recorder = telemetry.metrics_recorder
     invocation_log_sink = telemetry.invocation_log_sink
-    signals = create_mcp_signals(invocation_log_sink, metrics_recorder, audit_recorder)
+    signals = create_mcp_signals(invocation_log_sink, metrics_recorder, audit_recorder, telemetry.application_failures)
     publisher = McpInvocationPublisher(signals)
     middleware: list[Middleware] = [McpProtocolMetricsMiddleware(metrics_recorder, clock=time.monotonic), McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
     if group_permission_runtime_state is not None:
@@ -233,7 +233,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     mcp.add_middleware(FilesystemVisibilityMiddleware(filesystem_visibility))
     filesystem_services = DatabaseFilesystemServiceFactory(
         persistence_runtime.database, filesystem_content, settings.filesystem.upload_max_bytes,
-        filesystem_managed_issuer(settings),
+        filesystem_managed_issuer(settings), settings.endpoints.api_base_url,
     )
     register_filesystem_tools(
         McpObservedToolRegistrar(mcp, publisher), filesystem_callers,
@@ -246,7 +246,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     register_filesystem_resources(mcp, filesystem_callers, filesystem_services)
     await initialize_openapi_discovery(mcp)
     await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, signals, mcp.execution_pipelines, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes)
-    mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.execution_pipelines)
+    mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.execution_pipelines, telemetry.application_failures)
     signals.tool_inventory_observed.send(await read_openapi_tool_inventory(await mcp.openapi_connector_store_factory.create()))
     downstream_permission_policy = UnrestrictedDownstreamToolPermissionPolicy() if group_permission_runtime_state is None else GroupDownstreamToolPermissionPolicy(group_permission_runtime_state)
     await _register_downstream_mcp_provider(mcp, settings, downstream_permission_policy, persistence_runtime.database, invocation_policy, runtime, downstream_client_factory=downstream_client_factory)
@@ -370,8 +370,19 @@ class DynamicPublicMcpDispatcher:
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         path = scope.get('path', '')
         if logger.isEnabledFor(logging.DEBUG):
-            headers = {key.decode('latin-1').lower(): value.decode('latin-1') for (key, value) in scope.get('headers', [])}
-            logger.debug('MCP HTTP request received', extra={'mcp_event': 'http_request', 'mcp_http_method': scope.get('method'), 'mcp_request_path': path, 'mcp_session_id_header': headers.get('mcp-session-id')})
+            method = scope.get('method', '')
+            route_category = 'mcp' if path == _MCP_HTTP_PATH else 'other'
+            if path.startswith('/mcp/proxies/'):
+                route_category = 'proxy'
+            logger.debug(
+                'MCP HTTP request received',
+                extra={
+                    'mcp_event': 'http_request',
+                    'mcp_http_method': method if method in {'DELETE', 'GET', 'HEAD', 'OPTIONS', 'PATCH', 'POST', 'PUT'} else 'OTHER',
+                    'mcp_route_category': route_category,
+                    'mcp_session_present': any(key.lower() == b'mcp-session-id' for key, _ in scope.get('headers', [])),
+                },
+            )
         if path.startswith(_MCP_HTTP_PATH) and not self._health.ready:
             await JSONResponse({'detail': 'Runtime synchronization unavailable'}, status_code=503)(scope, receive, send)
             return

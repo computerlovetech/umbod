@@ -7,7 +7,7 @@ from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 
 from conftest import RuntimeEndpoints
-from test_running_filesystem import FILESYSTEM_TOOLS
+from test_running_filesystem import FILESYSTEM_TOOLS, checked_root_browse
 
 
 @pytest.mark.asyncio
@@ -19,7 +19,7 @@ async def test_local_rest_test_user_respects_policy_while_mcp_requires_verified_
     with httpx.Client(base_url=runtime_endpoints.api_base_url, timeout=30) as rest:
         user = rest.get("/api/me/profile")
         assert user.status_code == 200
-        root = rest.get(base + "/root")
+        root = rest.get(base + "/browse")
         assert root.status_code == 403
         assert root.json()["detail"]["code"] == "filesystem_permission_denied"
         assert root.headers["cache-control"] == "no-store"
@@ -38,16 +38,16 @@ async def test_local_rest_test_user_respects_policy_while_mcp_requires_verified_
         assert configured.status_code == 200, configured.text
         assert set(configured.json()) == {"status", "revision", "groups", "blocked_group_ids"}
         try:
-            root = rest.get(base + "/root")
-            assert root.status_code == 200, root.text
-            created = rest.post(base + "/nodes/" + root.json()["id"] + "/directories", json={
+            root = rest.get(base + "/browse")
+            root_node = checked_root_browse(root)
+            created = rest.post(base + "/nodes/" + root_node["id"] + "/directories", json={
                 "name": "local-test-private-" + uuid4().hex,
                 "metadata": {"content_type": {}, "attributes": {}},
             })
             assert created.status_code == 201, created.text
             child = created.json()
             assert rest.get(base + "/nodes/" + child["id"]).json() == child
-            listing = rest.get(base + "/nodes/" + root.json()["id"] + "/children")
+            listing = rest.get(base + "/nodes/" + root_node["id"] + "/children")
             assert listing.status_code == 200
             assert child["id"] in {node["id"] for node in listing.json()["nodes"]}
             removed = rest.get(base + "/nodes", params={"scope": "owned"})
@@ -67,5 +67,5 @@ async def test_local_rest_test_user_respects_policy_while_mcp_requires_verified_
                 "expected_revision": current.json()["revision"], "groups": [],
             })
             assert revoked.status_code == 200, revoked.text
-        assert rest.get(base + "/root").status_code == 403
+        assert rest.get(base + "/browse").status_code == 403
         assert rest.get(base + "/nodes/" + child["id"]).json() == child

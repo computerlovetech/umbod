@@ -23,6 +23,7 @@ FILESYSTEM = "/api/me/filesystem"
 FILESYSTEM_TOOLS = frozenset({
     "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
     "create_filesystem_file", "create_filesystem_directory", "filesystem_upload",
+    "filesystem_begin_upload", "filesystem_complete_upload",
     "filesystem_delete_file", "filesystem_search_sharing_recipients", "filesystem_share",
     "update_filesystem_node",
 })
@@ -80,6 +81,24 @@ def checked_summary(response: httpx.Response, status: int) -> dict[str, Any]:
         "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision",
     }
     return payload
+
+
+def checked_root_browse(response: httpx.Response) -> dict[str, Any]:
+    assert response.status_code == 200, response.text
+    assert response.headers["cache-control"] == "no-store"
+    payload = response.json()
+    assert set(payload) == {"node", "entries", "breadcrumbs", "capabilities", "truncated"}
+    node = payload["node"]
+    assert set(node) == {
+        "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision",
+    }
+    assert node["parent_id"] == {}
+    assert node["kind"] == "directory"
+    assert payload["breadcrumbs"] == {
+        "items": [{"id": node["id"], "name": node["name"], "kind": "directory"}],
+        "complete": True,
+    }
+    return node
 
 
 def checked_breadcrumbs(
@@ -355,11 +374,12 @@ async def test_cross_worker_discovery_distinguishes_root_creation_from_direct_fi
         assert configured.status_code == 200, configured.text
         access_path = ""
         try:
-            root = checked_summary(alice.get(FILESYSTEM + "/root"), 200)
+            root = checked_root_browse(alice.get(FILESYSTEM + "/browse"))
             async with mcp_client(second_mcp, token) as bob:
                 root_tools = {
                     "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
                     "create_filesystem_file", "create_filesystem_directory", "filesystem_upload",
+                    "filesystem_begin_upload", "filesystem_complete_upload",
                     "update_filesystem_node",
                 }
                 assert await wait_for_filesystem_tools(bob, root_tools, FILESYSTEM_TOOLS - root_tools) == root_tools
@@ -424,9 +444,9 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
     second_mcp = os.environ["UMBOD_TEST_MCP_B_URL"]
     tls = ssl.create_default_context(cafile=os.environ["UMBOD_TEST_PERSONAL_CA"])
     with httpx.Client(base_url=runtime_endpoints.api_base_url, headers={"Authorization": "Bearer " + issuer_bearer}, timeout=30) as alice, httpx.Client(base_url=second_api, headers={"Authorization": "Bearer " + second_bearer}, timeout=30) as bob, httpx.Client(base_url=second_api, headers={"Authorization": "Bearer " + issuer_bearer}, timeout=30) as alice_second, httpx.Client(base_url=os.environ["UMBOD_TEST_PERSONAL_URL"], verify=tls, timeout=30, follow_redirects=False) as identity:
-        assert httpx.get(runtime_endpoints.api_base_url + FILESYSTEM + "/root", timeout=30).status_code == 401
+        assert httpx.get(runtime_endpoints.api_base_url + FILESYSTEM + "/browse", timeout=30).status_code == 401
         policy_url = "/api/admin/filesystem/root-access"
-        assert alice.get(FILESYSTEM + "/root").status_code == 403
+        assert alice.get(FILESYSTEM + "/browse").status_code == 403
         inspected = alice.get(policy_url)
         assert inspected.status_code == 200
         assert inspected.headers["cache-control"] == "no-store"
@@ -441,8 +461,18 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
         assert configured.headers["cache-control"] == "no-store"
         assert set(configured.json()) == {"status", "revision", "groups", "blocked_group_ids"}
         assert configured.json()["status"] == "ready"
-        root = checked_summary(alice.get(FILESYSTEM + "/root"), 200)
-        assert checked_summary(bob.get(FILESYSTEM + "/root"), 200) == root
+        root = checked_root_browse(alice.get(FILESYSTEM + "/browse"))
+        root_listing = alice_second.get(FILESYSTEM + "/browse")
+        assert root_listing.status_code == 200, root_listing.text
+        assert root_listing.headers["cache-control"] == "no-store"
+        assert root_listing.json()["node"] == root
+        root_actions = next(item for item in root_listing.json()["capabilities"] if item["node_id"] == root["id"])
+        assert root_actions == {
+            "node_id": root["id"], "rename": False, "move": False,
+            "edit_description": True, "delete": False, "share": False,
+            "upload": True, "create_directory": True,
+        }
+        assert checked_root_browse(bob.get(FILESYSTEM + "/browse")) == root
         checked_breadcrumbs(alice_second.get(FILESYSTEM + "/nodes/" + root["id"] + "/breadcrumbs"), [root], True)
         alice_token = proxy_token(second_mcp, issuer_bearer, identity)
         bob_token = proxy_token(runtime_endpoints.mcp_url, second_bearer, identity)
@@ -464,9 +494,9 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             "size_bytes": len(uploaded_bytes),
         }
         allowed = alice.options(uploads_path)
-        assert allowed.status_code == 204, allowed.text
-        assert {method.strip() for method in allowed.headers["allow"].split(",")} == {"POST", "OPTIONS"}
-        assert bob.options(uploads_path).status_code == 403
+        assert allowed.status_code == 405, allowed.text
+        assert {method.strip() for method in allowed.headers["allow"].split(",")} == {"POST"}
+        assert bob.options(uploads_path).status_code == 405
         denied_upload = bob.post(uploads_path, json=upload_request)
         assert denied_upload.status_code == 403
         assert denied_upload.json()["detail"]["code"] == "filesystem_permission_denied"
@@ -493,6 +523,26 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
         assert alice.get(FILESYSTEM + "/nodes/" + alice_directory["id"] + "/children").json()["nodes"] == []
         completed = alice.post(upload["complete_url"])
         uploaded = checked_summary(completed, 201)
+        directory_listing = alice_second.get(FILESYSTEM + "/browse", params={"node_id": alice_directory["id"]})
+        assert directory_listing.status_code == 200, directory_listing.text
+        listing = directory_listing.json()
+        assert listing["node"] == alice_directory
+        assert listing["entries"] == [uploaded]
+        assert listing["truncated"] is False
+        assert [item["id"] for item in listing["breadcrumbs"]["items"]] == [root["id"], alice_directory["id"]]
+        assert next(item for item in listing["capabilities"] if item["node_id"] == uploaded["id"]) == {
+            "node_id": uploaded["id"], "rename": True, "move": True,
+            "edit_description": True, "delete": True, "share": True,
+            "upload": False, "create_directory": False,
+        }
+        file_listing = alice_second.get(FILESYSTEM + "/browse", params={"node_id": uploaded["id"]})
+        assert file_listing.status_code == 200, file_listing.text
+        assert file_listing.json()["node"] == uploaded
+        assert file_listing.json()["entries"] == []
+        denied_listing = bob.get(FILESYSTEM + "/browse", params={"node_id": alice_directory["id"]})
+        missing_listing = bob.get(FILESYSTEM + "/browse", params={"node_id": str(uuid4())})
+        assert denied_listing.status_code == missing_listing.status_code == 403
+        assert denied_listing.json() == missing_listing.json()
         assert completed.headers["location"] == FILESYSTEM + "/nodes/" + uploaded["id"]
         assert checked_summary(alice_second.post(upload["complete_url"]), 200) == uploaded
         checked_breadcrumbs(
@@ -657,8 +707,8 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             revoked = alice.put(policy_url, json={"expected_revision": current_policy["revision"], "groups": []})
             assert revoked.status_code == 200, revoked.text
             assert revoked.json()["groups"] == []
-            assert alice.get(FILESYSTEM + "/root").status_code == 403
-            assert bob.get(FILESYSTEM + "/root").status_code == 403
+            assert alice.get(FILESYSTEM + "/browse").status_code == 403
+            assert bob.get(FILESYSTEM + "/browse").status_code == 403
             assert alice_second.get(FILESYSTEM + "/nodes/" + root["id"] + "/breadcrumbs").status_code == 403
             await wait_for_filesystem_tools(bob_mcp, {"get_filesystem_node"}, frozenset({"get_filesystem_root"}))
             revoked_root = await bob_mcp.call_tool("get_filesystem_root", {}, raise_on_error=False)
@@ -686,12 +736,14 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             stale = alice.put(policy_url, json={"expected_revision": current_policy["revision"], "groups": [group]})
             assert stale.status_code == 409
             assert stale.json()["detail"]["code"] == "filesystem_policy_stale"
-            assert alice.get(FILESYSTEM + "/root").status_code == 403
+            assert alice.get(FILESYSTEM + "/browse").status_code == 403
             await check_filesystem_descriptions(alice, alice_second, bob, alice_mcp, alice_directory["id"])
             await check_filesystem_node_updates(alice, alice_second, bob, alice_mcp, alice_directory["id"])
 
 
 @pytest.mark.parametrize("method,suffix,body,status", [
+    ("GET", "/root", {}, 404),
+    ("OPTIONS", "/nodes/{id}/uploads", {}, 405),
     ("GET", "/nodes?scope=owned", {}, 404),
     ("GET", "/nodes?scope=shared", {}, 404),
     ("PUT", "/nodes/{id}/content", {}, 405),
@@ -724,7 +776,7 @@ def test_removed_filesystem_routes_and_missing_node_updates_preserve_root_policy
 
 @pytest.mark.parametrize("path", [
     "/api/me/profile", "/api/admin/openapi.json", "/api/me/catalogue",
-    "/api/me/filesystem/root", "/api/me/openapi.json", "/api/future-protected-route",
+    "/api/me/filesystem/browse", "/api/me/openapi.json", "/api/future-protected-route",
 ])
 def test_signed_rest_boundary_requires_authentication(
     runtime_endpoints: RuntimeEndpoints, path: str,

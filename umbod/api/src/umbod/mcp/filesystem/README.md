@@ -30,8 +30,12 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 - [update.py](./update.py) — Strict top-level revision-checked rename, move and metadata changes with shared REST validation.
 - [upload.py](./upload.py) — One-shot private uploads capped at 10,485,760 decoded bytes or the lower server limit; no chunking or idempotent retries.
 - [upload_models.py](./upload_models.py) — Bounded UTF-8 and canonical padded base64 inputs; results never echo content.
+- [upload_session_models.py](./upload_session_models.py) — Begin/complete inputs, capability-only single PUT instructions and verified publication receipts.
+- [upload_sessions.py](./upload_sessions.py) — Additive begin and idempotent complete tools using the configured public API origin and native resource links.
 
 # Related links
+
+- [Capability upload protocol](../../../../../docs/reference/filesystem-upload-transfers.md) — Larger HTTP transfers without MCP bearer delegation; crashed claims are not recovered.
 
 - [ADR-012](../../../../../project/architecture-records/ADR-012-permission-aware-mcp-tool-visibility.md) — At-least-one-authorized-operation visibility with independent invocation authorization.
 - [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Filesystem ownership and storage boundary.

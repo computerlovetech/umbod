@@ -9,6 +9,7 @@ from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 from mcp import types
 from mcp.shared.exceptions import MCPError
+from pydantic import ValidationError
 from fastmcp.exceptions import ClientError, ToolError
 
 from umbod.core.invocation.failure_evidence import (
@@ -17,7 +18,7 @@ from umbod.core.invocation.failure_evidence import (
     current_invocation_failure,
 )
 
-from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoDownstreamResponse
 
 from umbod.core.connectors.downstream_mcp.models import DiscoveredTool
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import (
@@ -33,7 +34,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models im
 from umbod.core.connectors.downstream_mcp.personal_tools.contract_validation import contract_fingerprint, validate_contract_schema
 
 from ..tool_mapping import bind_tool, map_sdk_tool
-from .http import PersonalHttpTransport
+from .http import PersonalHttpTransport, ResponseHeaderObserver
 from .network import PinnedPublicNetworkBackend, PublicAddressResolver
 from .redaction import contains_secret
 from .operation import OperationState
@@ -43,7 +44,7 @@ from .wire_models import StrictCallToolResult
 def _transport_failure_origin(error: BaseException) -> InvocationFailureOrigin:
     if isinstance(error, BaseExceptionGroup):
         return InvocationFailureOrigin.MCP if all(_transport_failure_origin(nested) == InvocationFailureOrigin.MCP for nested in error.exceptions) else InvocationFailureOrigin.INTERNAL
-    if isinstance(error, (MCPError, ClientError, ToolError, httpx2.HTTPError, TimeoutError, PersonalRuntimeUnavailable, anyio.EndOfStream, anyio.BrokenResourceError, anyio.ClosedResourceError)):
+    if isinstance(error, (MCPError, ClientError, ToolError, ValidationError, httpx2.HTTPError, TimeoutError, PersonalRuntimeUnavailable, anyio.EndOfStream, anyio.BrokenResourceError, anyio.ClosedResourceError)):
         return InvocationFailureOrigin.MCP
     return InvocationFailureOrigin.INTERNAL
 
@@ -102,20 +103,20 @@ class FastMCPPersonalMcpTransport:
         except Exception as error:
             if current_invocation_failure() is None:
                 capture_invocation_exception(error, _transport_failure_origin(error))
-            diagnostic = wire.diagnostic
+            diagnostic = wire.diagnostic if wire.failed else InvocationFailureDiagnostic(execution_mode="personal", stage="transport" if _transport_failure_origin(error) == InvocationFailureOrigin.MCP else "runtime", reason="protocol_rejected" if _transport_failure_origin(error) == InvocationFailureOrigin.MCP else "runtime_failure", downstream_response=wire.response_evidence)
         if wire.authorization_rejected:
-            raise PersonalAuthorizationRejected("Personal MCP unavailable", diagnostic=InvocationFailureDiagnostic(execution_mode="personal", stage="authorization", reason="authorization_rejected")) from None
+            raise PersonalAuthorizationRejected("Personal MCP unavailable", diagnostic=wire.diagnostic) from None
         if wire.failed:
             diagnostic = wire.diagnostic
         elif anyio.current_time() >= wire.deadline:
-            diagnostic = InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="timeout")
+            diagnostic = InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="target_expired" if self._clock() >= target.expires_at else "timeout", downstream_response=wire.response_evidence)
         raise PersonalRuntimeUnavailable("Personal MCP unavailable", diagnostic=diagnostic) from None
 
     def _bridge(self, wire: OperationState) -> PersonalHttpTransport:
         pool = httpcore2.AsyncConnectionPool(
             ssl_context=self._ssl_context, max_connections=2, max_keepalive_connections=0,
             retries=0, http1=True, http2=False,
-            network_backend=PinnedPublicNetworkBackend(self._resolver, self._backend_factory(), wire.check, wire.target.access_token),
+            network_backend=PinnedPublicNetworkBackend(self._resolver, self._backend_factory(), wire.check, wire.target.access_token, lambda: ResponseHeaderObserver(wire)),
         )
         return PersonalHttpTransport(pool, wire)
 
@@ -130,6 +131,8 @@ class FastMCPPersonalMcpTransport:
         return Client(transport, mode="legacy", timeout=budget, init_timeout=budget, cache=False)
 
     async def _session(self, client: Client, bridge: PersonalHttpTransport, wire: OperationState) -> dict[str, object]:
+        primary_failed = False
+        primary_diagnostics: list[InvocationFailureDiagnostic] = []
         try:
             await client.__aenter__()
             inventory = await self._inventory(client, wire)
@@ -147,15 +150,54 @@ class FastMCPPersonalMcpTransport:
                 result = inventory
             wire.check()
             if contains_secret(result, wire.target.access_token.get_secret_value()):
-                wire.fail(None)
+                wire.reject("protocol_rejected")
             return result
+        except BaseException as error:
+            primary_failed = True
+            if isinstance(error, Exception):
+                origin = _transport_failure_origin(error)
+                if current_invocation_failure() is None:
+                    capture_invocation_exception(error, origin)
+                if wire.failed:
+                    diagnostic = wire.diagnostic
+                elif isinstance(error, PersonalRuntimeUnavailable):
+                    diagnostic = error.diagnostic
+                else:
+                    diagnostic = InvocationFailureDiagnostic(
+                        execution_mode="personal",
+                        stage="transport" if origin == InvocationFailureOrigin.MCP else "runtime",
+                        reason="timeout" if isinstance(error, (TimeoutError, httpx2.TimeoutException)) else "protocol_rejected" if origin == InvocationFailureOrigin.MCP else "runtime_failure",
+                        downstream_response=wire.response_evidence,
+                    )
+                primary_diagnostics.append(diagnostic)
+            raise
         finally:
             wire.cleaning_up = True
-            try:
-                with anyio.move_on_after(0.25, shield=True):
-                    await client.close()
-            finally:
-                await bridge.aclose()
+            cleanup_errors: list[Exception] = []
+            for close in (client.close, bridge.aclose):
+                try:
+                    with anyio.move_on_after(0.25, shield=True) as cleanup_scope:
+                        await close()
+                    if cleanup_scope.cancel_called:
+                        raise TimeoutError("Personal MCP cleanup unavailable")
+                except Exception as error:
+                    if not primary_failed and not wire.failed and not cleanup_errors:
+                        cleanup_errors.append(error)
+                        if current_invocation_failure() is None:
+                            capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
+            if primary_diagnostics:
+                wire.diagnostic = primary_diagnostics[0]
+                wire.response_evidence = wire.diagnostic.downstream_response
+                wire.failed = True
+            if cleanup_errors:
+                wire.diagnostic = InvocationFailureDiagnostic(
+                    execution_mode="personal", stage="runtime",
+                    reason="timeout" if isinstance(cleanup_errors[0], TimeoutError) else "runtime_failure",
+                    downstream_response=NoDownstreamResponse(),
+                )
+                wire.response_evidence = wire.diagnostic.downstream_response
+                wire.failed = True
+                raise cleanup_errors[0]
 
     async def _call(self, client: Client, operation: PersonalToolCall) -> dict[str, object]:
         raw = await client.session.send_request(
@@ -172,12 +214,12 @@ class FastMCPPersonalMcpTransport:
             response = await client.session.list_tools(params=params)
             for tool in response.tools:
                 if len(tools) >= 256 or tool.name in names or len(tool.name) > 128:
-                    state.fail(None)
+                    state.reject("protocol_rejected")
                 names.add(tool.name)
                 tools.append(bind_tool(state.target.key.connector_id, map_sdk_tool(tool)))
             if response.next_cursor is None:
                 return PersonalToolInventory(tools=tuple(tools)).model_dump(mode="json")
             if not response.next_cursor or response.next_cursor in state.cursors:
-                state.fail(None)
+                state.reject("protocol_rejected")
             state.expected_cursor = response.next_cursor
-        state.fail(None)
+        state.reject("protocol_rejected")

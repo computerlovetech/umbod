@@ -8,7 +8,7 @@ description: "User filesystem browsing, direct-node group sharing, directory cre
 
 - [state/drag-move-state.svelte.ts](./state/drag-move-state.svelte.ts) — Live internal file drags, cursor-following preview state, authorized folder targets, move feedback and focus recovery.
 - [state/drag-move-state.test.ts](./state/drag-move-state.test.ts) — Transfer validation, move eligibility, cancellation, uncertain outcomes and navigation-race tests.
-- [state/row-editing-state.svelte.ts](./state/row-editing-state.svelte.ts) — Per-row update and description controllers with bounded eligibility checks and retained drafts.
+- [state/row-editing-state.svelte.ts](./state/row-editing-state.svelte.ts) — Per-row editing controllers with browse-seeded eligibility, bounded checks for new rows and retained drafts.
 - [state/row-editing-state.test.ts](./state/row-editing-state.test.ts) — Child targeting, reconciliation, concurrency limits and stale lifecycle tests.
 - [state/node-update-state.svelte.ts](./state/node-update-state.svelte.ts) — Selected-node rename, independent move navigation, authority checks and conditional mutation recovery.
 - [state/node-update-state.test.ts](./state/node-update-state.test.ts) — Revision reconciliation, picker eligibility, navigation fencing and conflict recovery tests.
@@ -17,19 +17,21 @@ description: "User filesystem browsing, direct-node group sharing, directory cre
 - [state/description-state.svelte.ts](./state/description-state.svelte.ts) — Current-node description eligibility, drafts, conditional saves and explicit conflict recovery.
 - [state/description-state.test.ts](./state/description-state.test.ts) — Authoritative reconciliation, creation descriptions, duplicate protection and stale-result tests.
 - [description-api.test.ts](./description-api.test.ts) — Conditional description transport, validation, upload metadata and authority tests.
+- [browse-api.test.ts](./browse-api.test.ts) — Real state and route request-budget, coherent response validation, denied actions and cancellation tests.
+- [state/files-state.svelte.ts](./state/files-state.svelte.ts) — One-response browsing, advisory capability seeding and authoritative concurrent mutation reconciliation.
 - [api.ts](./api.ts) — Filesystem operations and typed recipient-filtered sharing ports.
 - [domain/sharing.ts](./domain/sharing.ts) — Strict group/user grant targets, labelled access views and minimal blocked recipient contracts.
-- [state/sharing-eligibility-state.svelte.ts](./state/sharing-eligibility-state.svelte.ts) — Independent current-node and bounded row authority probes with stale-result fencing.
+- [state/sharing-eligibility-state.svelte.ts](./state/sharing-eligibility-state.svelte.ts) — Browse-seeded sharing eligibility, fresh dialog rechecks and bounded checks for newly created rows.
 - [state/sharing-dialog-state.svelte.ts](./state/sharing-dialog-state.svelte.ts) — Group-filtered drafts and saves, explicit permissions, conflict recovery and operation lifetime.
 - [state/sharing-state.test.ts](./state/sharing-state.test.ts) — Eligibility, mutation, cancellation, self-revocation and stale-result behavior tests.
 - [sharing-api.test.ts](./sharing-api.test.ts) — Mixed recipient preservation, scoped query validation and strong conditional JSON transport tests.
 - [breadcrumbs-api.test.ts](./breadcrumbs-api.test.ts) — Minimal breadcrumb schemas, visibility boundaries and shared HTTP transport tests.
-- [state/navigation-state.svelte.ts](./state/navigation-state.svelte.ts) — Independent path reads, confirmed parent navigation and known-ancestor overflow state.
+- [state/navigation-state.svelte.ts](./state/navigation-state.svelte.ts) — Browse-seeded paths, fresh move navigation, confirmed parents and known-ancestor overflow state.
 - [state/navigation-state.test.ts](./state/navigation-state.test.ts) — Deep links, partial paths, stale responses, disposal, ancestor overflow and read isolation tests.
 - [domain/](./domain/) — Filesystem validation contracts.
 - [errors.ts](./errors.ts) — Safe read, creation and upload failures.
 - [state/deletion-state.svelte.ts](./state/deletion-state.svelte.ts) — File eligibility, confirmation, revision capture and safe deletion reconciliation.
-- [state/row-deletion-state.svelte.ts](./state/row-deletion-state.svelte.ts) — Retained row controllers, incremental bounded eligibility checks and cancellation/error/removal focus recovery.
+- [state/row-deletion-state.svelte.ts](./state/row-deletion-state.svelte.ts) — Browse-seeded row deletion, bounded checks for new rows and cancellation/error/removal focus recovery.
 - [state/row-deletion-state.test.ts](./state/row-deletion-state.test.ts) — Concurrent deletion, upload-to-delete eligibility, reconciliation, navigation safety and focus tests.
 - [state/deletion-state.test.ts](./state/deletion-state.test.ts) — Cancellation, stale responses, duplicate prevention and recovery tests.
 - [deletion-api.test.ts](./deletion-api.test.ts) — Conditional file deletion and eligibility boundary tests.

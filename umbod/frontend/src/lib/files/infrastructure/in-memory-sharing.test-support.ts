@@ -11,6 +11,8 @@ export class InMemoryNodeSharing implements NodeSharingApi {
     this.groups = eligibleSharingGroupsSchema.parse({ groups }).groups;
   };
 
+  available = (id: string): boolean => this.access.has(id);
+
   revoke = (id: string): void => { this.access.delete(id); };
 
   inspectAccess = async (id: string, recipientType?: SharingRecipientType, signal?: AbortSignal): Promise<NodeAccess> => {

@@ -1,3 +1,4 @@
+from umbod.logging import create_application_failure_signal
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
 import json
@@ -6,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from umbod.logging import OpenTelemetryJsonFormatter
 from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.invocation import PermitAllConnectorInvocationPolicy
 from umbod.core.invocation.tools.execution import PreparedToolExecution, ToolExecutionPipeline, ToolExecutionRequest
@@ -145,6 +147,7 @@ async def _execute(
     store: ConnectorStore,
     secret: str,
 ) -> tuple[dict[str, Any], InMemoryMcpToolInvocationLogSink, RecordingAuditSink, ExecutionService, InMemoryMcpMetricsRecorder]:
+    application_failures = create_application_failure_signal()
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
     server = SimpleNamespace(
@@ -159,8 +162,8 @@ async def _execute(
         metrics_recorder=InMemoryMcpMetricsRecorder(),
     )
     execution_services = ExecutionServiceFactory(result)
-    signals = create_mcp_signals(invocation_sink, server.metrics_recorder, McpAuditRecorder(audit_sink, "test"))
-    adapter = OpenApiCodeModeExecutionAdapter(server, SignalToolExecutionPipelineFactory(signals, server.connector_invocation_policy), execution_services)
+    signals = create_mcp_signals(invocation_sink, server.metrics_recorder, McpAuditRecorder(audit_sink, "test", application_failures=application_failures), application_failures=application_failures)
+    adapter = OpenApiCodeModeExecutionAdapter(server, SignalToolExecutionPipelineFactory(signals, server.connector_invocation_policy), execution_services, application_failures=application_failures)
     response = await adapter.execute(
         OpenApiCodeModeInvocation(
             connector_id="weather-id",
@@ -199,15 +202,19 @@ async def test_execute_records_pipeline_failure() -> None:
 
 
 @pytest.mark.asyncio
-async def test_execute_uses_id_when_metadata_lookup_fails() -> None:
+async def test_execute_uses_id_when_metadata_lookup_fails(caplog: pytest.LogCaptureFixture) -> None:
     _, invocation_sink, _, service, _ = await _execute(
         OpenApiCapabilityExecutionResult(status="success", message="done"),
-        ConnectorStore(lookup_error=RuntimeError("lookup failed")),
+        ConnectorStore(lookup_error=RuntimeError("secret-canary")),
         "secret-marker",
     )
 
     assert service.executions == 1
     assert invocation_sink.invocation_records()[0].attributes["mcp.connector.name"] == "weather-id"
+    serialized = OpenTelemetryJsonFormatter("test").format(caplog.records[-1])
+    assert "secret-canary" not in serialized
+    assert json.loads(serialized)["attributes"]["exception.type"] == "RuntimeError"
+    assert json.loads(serialized)["attributes"]["operation"] == "lookup_display_name"
 
 
 @pytest.mark.asyncio

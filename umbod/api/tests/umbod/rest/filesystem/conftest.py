@@ -74,7 +74,7 @@ def filesystem_http(
     app.dependency_overrides[get_connector_api_dependency_factories] = capture_factories
     app.dependency_overrides[get_caller_context] = trusted_test_caller
     with TestClient(root, headers={"Authorization": "Bearer alice"}) as client:
-        assert client.get("/api/me/filesystem/root").status_code == 403
+        assert client.get("/api/me/filesystem/browse").status_code == 403
         factories = captured[-1]
         provisioner = create_root_provisioning(database=factories.persistence_runtime.database)
         client.portal.call(provisioner.provision, RootBootstrapSpec(grants=(

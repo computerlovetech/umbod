@@ -31,7 +31,7 @@ def test_raw_transfer_rejects_before_consuming_request_stream(
         path = f"{BASE}/uploads/{uuid4()}/content"
     elif reason == "revoked":
         policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
-        root_id = client.get(f"{BASE}/root").json()["id"]
+        root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
         client.portal.call(policies.add_grant, AccessGrant(
             node_id=UUID(root_id), principal=Principal(type=PrincipalType.GROUP, issuer="issuer", id="team"),
             permissions={Permission.DISCOVER}, recursive=False,
@@ -70,8 +70,7 @@ def test_removed_upload_routes_are_absent_from_openapi(filesystem_http: Filesyst
     for method, suffix in [("post", "files"), ("get", "upload-policy")]:
         assert client.request(method, f"{BASE}/nodes/{uuid4()}/{suffix}").status_code == 404
     begin = paths["/filesystem/nodes/{parent_id}/uploads"]
-    assert set(begin) == {"post", "options"}
-    assert "204" in begin["options"]["responses"]
+    assert set(begin) == {"post"}
     transfer = paths["/filesystem/uploads/{upload_id}/content"]["put"]
     assert set(transfer["requestBody"]["content"]) == {"application/octet-stream"}
     complete = paths["/filesystem/uploads/{upload_id}/complete"]["post"]

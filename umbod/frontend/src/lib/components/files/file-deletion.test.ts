@@ -41,12 +41,16 @@ describe('file deletion presentation', (): void => {
 
   test('never probes root or folder deletion and keeps denied file rows ineligible', async (): Promise<void> => {
     const { api, files } = fixture();
-    const check = vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockRejectedValue(new HttpError(403, 'Forbidden', {}));
+    const original = api.filesystem.browse;
+    vi.spyOn(api.filesystem, 'browse').mockImplementation(async (target, signal) => {
+      const result = await original(target, signal);
+      return { ...result, capabilities: result.capabilities.map((capability) => ({ ...capability, delete: false })) };
+    });
+    const check = vi.spyOn(api.filesystem, 'checkDeleteEligibility');
     await files.load(rootId);
     expect(check).not.toHaveBeenCalled();
     await files.load(folderId);
-    await vi.waitFor(() => expect(check).toHaveBeenCalledTimes(1));
-    expect(check.mock.calls[0][0]).toBe(fileId);
+    expect(check).not.toHaveBeenCalled();
     expect(files.rowDeletion.controllers.get(fileId)?.available).toBe(false);
   });
 
@@ -57,8 +61,10 @@ describe('file deletion presentation', (): void => {
     const eligibility = deferred<void>();
     vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockReturnValueOnce(eligibility.promise);
     await files.load(fileId);
+    const checking = files.deletion.select(filesystemFixture[2]);
     expect(content()).not.toContain('Delete file');
     eligibility.resolve();
+    await checking;
     await vi.waitFor(() => expect(files.deletion.available).toBe(true));
     expect(content()).toContain('Delete file');
   });
@@ -67,7 +73,8 @@ describe('file deletion presentation', (): void => {
     const { api, files, content } = fixture();
     vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockRejectedValueOnce(new NetworkError(new Error('offline')));
     await files.load(fileId);
-    await vi.waitFor(() => expect(files.deletion.needsReload).toBe(true));
+    await files.deletion.select(filesystemFixture[2]);
+    expect(files.deletion.needsReload).toBe(true);
     const body = content();
     expect(body).toContain('Notes.txt');
     expect(body).toContain('text/plain');

@@ -132,6 +132,14 @@ spec:
             - name: UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH
               value: {{ $.Values.plugins.deploymentConfigurationPath | quote }}
             {{- if eq $name "api" }}
+            {{- if not (hasKey $container.env "UMBOD_TELEMETRY_ANALYTICS_ENABLED") }}
+            - name: UMBOD_TELEMETRY_ANALYTICS_ENABLED
+              value: {{ $.Values.config.telemetryAnalytics.enabled | quote }}
+            {{- end }}
+            {{- if not (hasKey $container.env "UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH") }}
+            - name: UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH
+              value: {{ $.Values.config.telemetryAnalytics.sqlitePath | quote }}
+            {{- end }}
             - name: UMBOD_REST_METRICS_PORT
               value: "8001"
             {{- else }}

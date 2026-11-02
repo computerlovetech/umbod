@@ -18,7 +18,7 @@ from .test_http_contract import BASE
 
 @pytest.fixture
 def upload_path(filesystem_http: FilesystemHttp) -> str:
-    root_id = filesystem_http.client.get(f"{BASE}/root").json()["id"]
+    root_id = filesystem_http.client.get(f"{BASE}/browse").json()["node"]["id"]
     return f"{BASE}/nodes/{root_id}/uploads"
 
 

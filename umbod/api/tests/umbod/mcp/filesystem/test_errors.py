@@ -8,6 +8,7 @@ import pytest
 from fastmcp import Client, FastMCP
 from fastmcp.exceptions import ToolError
 
+from umbod.logging import create_application_failure_signal
 from umbod.core.filesystem.authorization.errors import PermissionDenied
 from umbod.core.filesystem.browsing import FilesystemBrowsing
 from umbod.core.filesystem.creation import FilesystemCreation
@@ -60,13 +61,14 @@ class SpecializedStorageFailure(StorageFailure):
 async def test_expected_domain_failures_do_not_leak_details(
     filesystem_invocation_mcp: FilesystemMcp, error_type: type[Exception], expected: str,
 ) -> None:
+    application_failures = create_application_failure_signal()
     server = FastMCP()
     browsing = Mock(spec=FilesystemBrowsing)
     browsing.get_root = AsyncMock(side_effect=error_type("SECRET backend /private/path"))
     factory = Mock(spec=FilesystemServiceFactory)
     factory.browsing.return_value = browsing
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock()))),
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock(), application_failures=application_failures))),
         filesystem_invocation_mcp.callers, factory, filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
     )
     async with Client(server) as client:
@@ -88,6 +90,7 @@ async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
     filesystem_invocation_mcp: FilesystemMcp, error_type: type[Exception],
     category: str, severity: int,
 ) -> None:
+    application_failures = create_application_failure_signal()
     output = StringIO()
     server = FastMCP()
     browsing = Mock(spec=FilesystemBrowsing)
@@ -97,8 +100,8 @@ async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
     signals = create_mcp_signals(
         StdoutMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter(), output),
         filesystem_invocation_mcp.metrics,
-        McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), output), "test"),
-    )
+        McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), output), "test", application_failures=application_failures),
+     application_failures=application_failures)
     register_filesystem_tools(
         McpObservedToolRegistrar(server, McpInvocationPublisher(signals)),
         filesystem_invocation_mcp.callers, factory, filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
@@ -159,6 +162,7 @@ async def test_unmasked_tools_sanitize_all_operation_stages(
     filesystem_invocation_mcp: FilesystemMcp, stage: str, error_type: type[Exception],
     tool: str, operation: str, arguments: dict[str, Any],
 ) -> None:
+    application_failures = create_application_failure_signal()
     server = FastMCP()
     error = error_type("SECRET backend /private/path")
     callers = Mock(spec=FilesystemCallerCapture)
@@ -182,7 +186,7 @@ async def test_unmasked_tools_sanitize_all_operation_stages(
     if stage == "factory":
         factory_method.side_effect = error
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock()))),
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock(), application_failures=application_failures))),
         callers, factory, filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
     )
     async with Client(server) as client:

@@ -32,6 +32,7 @@ from .test_tools import root_id
 BOOTSTRAP_TOOLS = {
     "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
     "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "update_filesystem_node",
+    "filesystem_begin_upload", "filesystem_complete_upload",
 }
 INSPECT_TOOLS = {"filesystem_browse", "get_filesystem_node"}
 FILE_READ_TOOLS = INSPECT_TOOLS

@@ -14,7 +14,7 @@ description: "User filesystem browsing, accessible node sharing, folder creation
 - [NodeUpdateDialog.svelte](./NodeUpdateDialog.svelte) — Feature-owned native rename and move dialogs with an independent directory picker and explicit reload recovery.
 - [node-update.dom.test.ts](./node-update.dom.test.ts) — Selected actions, root hiding, rename collisions, directory selection and cancellation interactions.
 
-- [files-components.test.ts](./files-components.test.ts) — Navigation and form presentation tests.
+- [files-components.test.ts](./files-components.test.ts) — Coherent browse loading, fail-closed heading and path rendering, navigation and creation form tests.
 - [FilesDescription.svelte](./FilesDescription.svelte) — Read-only current file and folder descriptions, separate from contextual editing actions.
 - [files-description.dom.test.ts](./files-description.dom.test.ts) — Description editing, clear, cancel, pending, denied, conflict and creation input interactions.
 - [FilesContent.svelte](./FilesContent.svelte) — Compact table, pointer-following file previews, contextual actions and separate internal-move and external-upload drops.

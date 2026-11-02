@@ -28,14 +28,11 @@ describe('upload session contract', () => {
     const api = new InMemoryFilesApi(rootId, filesystemFixture);
     const file = new File([new Uint8Array([0, 255, 13, 10])], 'binary');
     const session = await api.filesystem.beginUpload(rootId, { name: 'renamed', metadata: { content_type: 'application/octet-stream', attributes: {} }, size_bytes: file.size });
-    expect((await api.filesystem.getUpload(session.id)).status).toBe('pending');
     await expect(api.filesystem.completeUpload(session)).rejects.toMatchObject({ status: 409 });
     await api.filesystem.transferUpload(session, file);
-    expect((await api.filesystem.getUpload(session.id)).status).toBe('uploaded');
     expect((await api.filesystem.listChildren(rootId)).map((node) => node.name)).toEqual(['Projects']);
     const node = await api.filesystem.completeUpload(session);
     expect(await api.filesystem.completeUpload(session)).toEqual(node);
-    expect((await api.filesystem.getUpload(session.id)).status).toBe('completed');
     expect(await api.filesystem.readContent(node.id)).toEqual(new Uint8Array([0, 255, 13, 10]));
     expect((await api.filesystem.listChildren(rootId)).filter((child) => child.id === node.id)).toHaveLength(1);
   });
@@ -54,13 +51,6 @@ describe('upload session contract', () => {
       expect(init?.body).toBeUndefined();
       expect(new Headers(init?.headers).get('Content-Type')).toBeNull();
     }
-  });
-
-  test.each(['pending', 'uploaded', 'completed'] as const)('inspection accepts %s sessions', async (status): Promise<void> => {
-    const value = { ...session(), status };
-    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json(value));
-    expect(await client(request).filesystem.getUpload(fileId)).toEqual(value);
-    expect(uploadSessionSchema.parse(value).status).toBe(status);
   });
 
   test.each([-1, 1.5, Infinity, Number.MAX_SAFE_INTEGER + 1])('rejects invalid advertised byte count %s', (size_bytes): void => {

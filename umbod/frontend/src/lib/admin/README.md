@@ -6,6 +6,8 @@ description: "Administration contracts, browser clients and feature state for co
 
 # Files
 
+- [Log analytics](./analytics/README.md) — Instance-wide log-count query contracts and feature state.
+
 - [capability-catalogs.ts](./capability-catalogs.ts) — Prompt and resource catalogue contracts.
 - [capability-catalogs.spec.ts](./capability-catalogs.spec.ts) — Catalogue contract tests.
 - [capability-descriptions-api.ts](./capability-descriptions-api.ts) — Capability description HTTP adapter.

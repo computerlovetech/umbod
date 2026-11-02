@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, create_autospec
 import pytest
 from fastmcp.server.auth import AccessToken
 
+from umbod.logging import create_application_failure_signal
 from umbod.core.connectors.openapi.execution import (
     AsyncStreamingHttpClient,
     OpenApiCapabilityExecutionResult,
@@ -84,7 +85,7 @@ async def test_retained_executor_captures_groups_before_awaits_and_isolates_over
     )
     adapter = OpenApiCodeModeExecutionAdapter(
         server, create_autospec(McpToolExecutionPipelineFactory, instance=True), RecordingExecutionServiceFactory()
-    )
+    , application_failures=create_application_failure_signal())
 
     async def invoke(caller: str) -> None:
         current.set(AccessToken(token=caller, client_id="client", scopes=[], claims={"groups": [caller]}))

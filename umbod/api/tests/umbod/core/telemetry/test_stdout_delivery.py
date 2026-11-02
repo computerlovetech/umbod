@@ -49,6 +49,30 @@ def test_stdout_delivery_preserves_payload_without_internal_receipt(
     assert record["attributes"]["telemetry.payload"] == batch.payload
     assert record["resource"] == {"service.name": "ingestion-test"}
     assert "_umbod_stdout_delivery" not in stdout_stream.getvalue()
+    assert "_umbod_telemetry_export" not in stdout_stream.getvalue()
+
+
+@pytest.mark.parametrize("signal", list(TelemetrySignal))
+def test_validated_telemetry_payload_is_not_subject_to_application_metadata_limits(
+    stdout_stream: io.StringIO, sink: TelemetrySink, signal: TelemetrySignal
+) -> None:
+    payload = {"records": [{"nested": {"data": {"value": "x" * 5000}}} for _ in range(70)]}
+    batch = TelemetryExport(signal=signal, payload=payload, item_count=70)
+    sink.export(batch)
+    record = json.loads(stdout_stream.getvalue())
+    assert record["attributes"]["telemetry.payload"] == payload
+    assert record["attributes"]["telemetry.signal"] == signal.value
+
+
+def test_generic_application_metadata_cannot_opt_out_of_limits_with_telemetry_field_names(
+    stdout_stream: io.StringIO,
+) -> None:
+    logging.getLogger("umbod.structured").info(
+        "Application diagnostic",
+        extra={"structured_attributes": {"telemetry.payload": {"value": "x" * 5000}}},
+    )
+    record = json.loads(stdout_stream.getvalue())
+    assert record["attributes"]["telemetry.payload"]["value"] == "[omitted]"
 
 
 def test_handler_level_filtering_is_reported_as_unavailable(

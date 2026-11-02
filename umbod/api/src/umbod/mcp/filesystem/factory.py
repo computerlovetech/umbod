@@ -20,27 +20,38 @@ from .upload_models import MAX_UPLOAD_BYTES
 class DatabaseFilesystemServiceFactory:
     def __init__(
         self, database: Database, content: ContentDriver, max_upload_bytes: int, managed_issuer: str,
+        api_base_url: str,
     ) -> None:
         self._database = database
         self._managed_issuer = managed_issuer
         self._content = content
-        self._max_upload_bytes = min(max_upload_bytes, MAX_UPLOAD_BYTES)
+        self._max_upload_bytes = max_upload_bytes
+        self._api_base_url = api_base_url
 
     def sharing(self) -> FilesystemSharing:
         return create_filesystem_sharing(
             database=self._database, resolver=VerifiedIdentityResolver(), issuer=self._managed_issuer,
         )
 
-    def uploads(self) -> UploadService:
+    def upload_api_origin(self) -> str:
+        return self._api_base_url
+
+    def upload_sessions(self) -> UploadService:
         return create_filesystem_uploads(
             database=self._database, resolver=VerifiedIdentityResolver(),
             content=self._content, max_upload_bytes=self._max_upload_bytes, clock=SystemUploadClock(),
         )
 
+    def uploads(self) -> UploadService:
+        return create_filesystem_uploads(
+            database=self._database, resolver=VerifiedIdentityResolver(),
+            content=self._content, max_upload_bytes=min(self._max_upload_bytes, MAX_UPLOAD_BYTES), clock=SystemUploadClock(),
+        )
+
     def content(self) -> FilesystemContent:
         return ContentService(
             VerifiedIdentityResolver(), create_filesystem_transactions(database=self._database),
-            self._content, self._max_upload_bytes,
+            self._content, min(self._max_upload_bytes, MAX_UPLOAD_BYTES),
         )
 
     def updates(self) -> FilesystemNodeUpdates:

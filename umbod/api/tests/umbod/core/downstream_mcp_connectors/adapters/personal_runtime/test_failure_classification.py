@@ -9,7 +9,7 @@ from .contracts import LOOKUP_FINGERPRINT
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failure,reason", [("expired", "target_expired"), ("deadline", "timeout"), ("wire_policy", "transport_failure"), ("forbidden", "transport_failure"), ("rejected", "authorization_rejected"), ("missing", "contract_mismatch"), ("changed", "contract_mismatch"), ("malformed", "transport_failure")])
+@pytest.mark.parametrize("failure,reason", [("expired", "target_expired"), ("deadline", "timeout"), ("wire_policy", "content_encoding_rejected"), ("forbidden", "http_rejected"), ("rejected", "authorization_rejected"), ("missing", "contract_mismatch"), ("changed", "contract_mismatch"), ("malformed", "protocol_rejected")])
 async def test_transport_failures_use_typed_evidence_not_cancellation_or_content(target: PersonalRuntimeTarget, limits: PersonalRuntimeLimits, network: ScriptedNetwork, failure: str, reason: str) -> None:
     if failure == "expired":
         target = target.model_copy(update={"expires_at": datetime.now(timezone.utc)})

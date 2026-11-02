@@ -5,6 +5,7 @@ from hashlib import sha256
 from inspect import signature
 from typing import Annotated, Optional
 
+from umbod.logging import create_application_failure_signal
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
 from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
@@ -115,6 +116,7 @@ def test_wire_payload_rejects_empty_file() -> None:
 
 @pytest.mark.asyncio
 async def test_safe_arguments_distinguish_files_with_identical_metadata() -> None:
+    application_failures = create_application_failure_signal()
     received_files: list[UploadedFile] = []
 
     def upload(file: UploadedFile) -> dict[str, object]:
@@ -129,7 +131,7 @@ async def test_safe_arguments_distinguish_files_with_identical_metadata() -> Non
     recording_policy = RecordingInvocationPolicy()
     policy: ConnectorInvocationPolicy = recording_policy
     mcp = FastMCP("file-policy-test")
-    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test"))
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test", application_failures=application_failures), application_failures=application_failures)
     await register_connector_tools(
         mcp,
         signals=signals,

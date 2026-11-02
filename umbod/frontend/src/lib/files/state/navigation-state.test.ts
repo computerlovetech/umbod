@@ -44,32 +44,19 @@ describe('authoritative file navigation', () => {
     expect(files.navigation.atRoot).toBe(false);
   });
 
-  test('a stalled navigation read does not delay or erase a usable directory listing', async (): Promise<void> => {
+  test('navigation and entries become visible together after browse completes', async (): Promise<void> => {
     const { api, files } = fixture();
     const pending = deferred<Breadcrumbs>();
     vi.spyOn(api.filesystem, 'getBreadcrumbs').mockReturnValueOnce(pending.promise);
-    await files.load(folderId);
-    expect(files.phase).toBe('ready');
-    expect(files.children.map((node) => node.id)).toEqual([fileId]);
-    expect(files.navigation.phase).toBe('loading');
-    pending.reject(new NetworkError('private failure'));
-    await vi.waitFor(() => expect(files.navigation.phase).toBe('error'));
-    expect(files.phase).toBe('ready');
-    expect(files.children).toHaveLength(1);
-    await files.navigation.reload();
-    expect(files.navigation.phase).toBe('ready');
-  });
-
-  test('breadcrumbs can resolve while directory contents remain stalled', async (): Promise<void> => {
-    const { api, files } = fixture();
-    const pending = deferred<NodeSummary[]>();
-    vi.spyOn(api.filesystem, 'listChildren').mockReturnValueOnce(pending.promise);
     const loading = files.load(folderId);
-    await vi.waitFor(() => expect(files.navigation.phase).toBe('ready'));
     expect(files.phase).toBe('loading');
-    pending.resolve([filesystemFixture[2]]);
+    expect(files.node).toBeUndefined();
+    expect(files.navigation.path).toBeUndefined();
+    pending.resolve({ items: path.items.slice(0, 2), complete: true });
     await loading;
     expect(files.phase).toBe('ready');
+    expect(files.navigation.phase).toBe('ready');
+    expect(files.children.map((node) => node.id)).toEqual([fileId]);
   });
 
   test.each([
@@ -79,43 +66,44 @@ describe('authoritative file navigation', () => {
     { ...path, items: [{ ...path.items[0], name: 'Not the root' }, ...path.items.slice(1)] },
     { ...path, items: [...path.items.slice(0, 2), { ...path.items[2], kind: 'directory' }] },
     { ...path, items: [path.items[2], path.items[1], path.items[2]] }
-  ])('rejects mismatched or corrupt path responses without affecting file details', async (response): Promise<void> => {
+  ])('rejects an incoherent browse path without exposing file details', async (response): Promise<void> => {
     const { api, files } = fixture();
     vi.spyOn(api.filesystem, 'getBreadcrumbs').mockResolvedValueOnce(response as Breadcrumbs);
     await files.load(fileId);
-    expect(files.navigation.phase).toBe('error');
+    expect(files.phase).toBe('error');
     expect(files.navigation.path).toBeUndefined();
     expect(files.navigation.atRoot).toBe(false);
     expect(files.navigation.label(path.items[2])).toBe('Notes.txt');
     expect(files.navigation.href(path.items[2])).toBe('/files?node=' + fileId);
-    expect(files.phase).toBe('ready');
+    expect(files.node).toBeUndefined();
   });
 
   test.each([
     [new AuthenticationRequiredError(), 'sign-in'],
     [new HttpError(403, 'private', {}), 'denied'],
     [new Error('private'), 'error']
-  ])('keeps navigation failure separate from content', async (error, phase): Promise<void> => {
+  ])('browse failure %s never exposes partial content', async (error, phase): Promise<void> => {
     const { api, files } = fixture();
     vi.spyOn(api.filesystem, 'getBreadcrumbs').mockRejectedValueOnce(error);
     await files.load(folderId);
-    expect(files.navigation.phase).toBe(phase);
-    expect(files.phase).toBe('ready');
-    expect(files.children).toHaveLength(1);
+    expect(files.phase).toBe(phase);
+    expect(files.node).toBeUndefined();
+    expect(files.children).toHaveLength(0);
   });
 
-  test.each(['navigate', 'dispose', 'retry'])('late navigation replies cannot survive %s', async (action): Promise<void> => {
+  test.each(['navigate', 'dispose', 'retry'])('late browse replies cannot survive %s', async (action): Promise<void> => {
     const { api, files } = fixture();
-    const pending = deferred<Breadcrumbs>();
-    const read = vi.spyOn(api.filesystem, 'getBreadcrumbs').mockReturnValueOnce(pending.promise);
-    await files.load(fileId);
+    const response = await api.filesystem.browse(fileId);
+    const pending = deferred<typeof response>();
+    const read = vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(pending.promise);
+    const loading = files.load(fileId);
     const signal = read.mock.calls[0][1];
     if (action === 'navigate') await files.load(null);
     else if (action === 'dispose') files.dispose();
-    else await files.navigation.reload();
+    else await files.reload();
     expect(signal?.aborted).toBe(true);
-    pending.resolve({ items: [path.items[2]], complete: false });
-    await Promise.resolve();
+    pending.resolve(response);
+    await loading;
     expect(files.navigation.path).toEqual(action === 'dispose' ? undefined : action === 'navigate' ? { items: [path.items[0]], complete: true } : path);
   });
 });

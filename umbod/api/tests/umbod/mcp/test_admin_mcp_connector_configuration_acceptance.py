@@ -1,3 +1,4 @@
+from umbod.logging import create_application_failure_signal
 from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -331,7 +332,7 @@ async def test_administrator_read_records_one_internal_log_audit_and_metric(
     audit_sink = RecordingAuditSink()
     metrics = RecordingApplicationMetricsRecorder()
     listeners = RecordingMetricsServerFactory()
-    telemetry = McpTelemetryDependencies(invocation_sink, McpAuditRecorder(audit_sink, "test"), metrics, listeners)
+    telemetry = McpTelemetryDependencies(create_application_failure_signal(), invocation_sink, McpAuditRecorder(audit_sink, "test", application_failures=create_application_failure_signal()), metrics, listeners)
     configuration = AdminConnectorConfigurationDsl(
         await create_journey(tmp_path, monkeypatch, administrator(), telemetry)
     )

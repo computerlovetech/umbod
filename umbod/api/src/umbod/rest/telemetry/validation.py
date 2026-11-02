@@ -40,11 +40,7 @@ def parse_export(signal: TelemetrySignal, body: bytes) -> TelemetryExport:
         if not isinstance(payload, dict):
             raise ValueError
         _check_depth(payload, 0)
-        request = _REQUEST_TYPES[signal]()
-        normalized = _normalize_message(payload, request.DESCRIPTOR)
-        ParseDict(
-            normalized, request, ignore_unknown_fields=True, max_recursion_depth=100
-        )
+        request = parse_message(signal, payload)
         return TelemetryExport(
             signal=signal, payload=payload, item_count=_count_items(request)
         )
@@ -57,6 +53,13 @@ def parse_export(signal: TelemetrySignal, body: bytes) -> TelemetryExport:
         TypeError,
     ):
         raise TelemetryHttpError(400, "Invalid OTLP JSON request") from None
+
+
+def parse_message(signal: TelemetrySignal, payload: dict[str, JsonValue]) -> Message:
+    request = _REQUEST_TYPES[signal]()
+    normalized = _normalize_message(payload, request.DESCRIPTOR)
+    ParseDict(normalized, request, ignore_unknown_fields=True, max_recursion_depth=100)
+    return request
 
 
 def _unique_object(pairs: list[tuple[str, JsonValue]]) -> dict[str, JsonValue]:

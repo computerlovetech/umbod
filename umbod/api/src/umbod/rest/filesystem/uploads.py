@@ -40,13 +40,6 @@ def upload_response(request: Request, upload: UploadSession) -> UploadResponse:
     )
 
 
-@router.options("/nodes/{parent_id}/uploads", status_code=204, responses=UPLOAD_RESPONSES)
-async def upload_options(parent_id: UUID, caller: Caller, uploads: Uploads) -> Response:
-    with filesystem_errors():
-        await uploads.authorize_begin(caller, parent_id)
-    return Response(status_code=204, headers={"Allow": "POST, OPTIONS"})
-
-
 @router.post(
     "/nodes/{parent_id}/uploads", response_model=UploadResponse, status_code=201,
     responses=UPLOAD_RESPONSES,

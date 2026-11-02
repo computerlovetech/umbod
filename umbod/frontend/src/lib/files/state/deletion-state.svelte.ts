@@ -35,10 +35,15 @@ export class DeletionState {
     this.deletedParent = undefined;
   };
 
-  select = async (node: NodeSummary): Promise<void> => {
+  select = async (node: NodeSummary, allowed?: boolean): Promise<void> => {
     this.reset();
     if (this.disposed || node.kind !== 'file' || typeof node.parent_id !== 'string') return;
     this.target = node;
+    if (allowed !== undefined) {
+      this.available = allowed && (this.allowEligibilityWhilePending || !this.pending);
+      if (allowed && !this.allowEligibilityWhilePending && this.pending) this.needsReload = true;
+      return;
+    }
     const generation = this.generation;
     this.controller = new AbortController();
     try {

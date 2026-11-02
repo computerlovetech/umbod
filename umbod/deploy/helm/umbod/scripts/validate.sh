@@ -23,6 +23,7 @@ helm lint --strict "${chart_directory}" -f "${chart_directory}/ci/ci-values.yaml
 helm template umbod "${chart_directory}" -f "${chart_directory}/ci/ci-values.yaml" > "${rendered_chart}"
 kubeconform -strict -summary "${rendered_chart}"
 python3 "${chart_directory}/scripts/validate-rendered.py" "${rendered_chart}"
+python3 "${chart_directory}/scripts/validate-analytics.py" "${rendered_chart}" false /app/data/analytics.sqlite3
 helm template umbod "${chart_directory}" > "${plugin_free_chart}"
 if grep -q "connector-plugins" "${plugin_free_chart}"; then
   echo "plugin resources must not render without a plugin image" >&2
@@ -91,4 +92,44 @@ if helm lint --strict "${chart_directory}" --set config.authentication.oidc.issu
 fi
 helm template umbod "${chart_directory}" --set config.authentication.oidc.issuerUrl=https://issuer.example.invalid/ > "${workspace_directory}/issuer-override.yaml"
 grep -q 'value: "https://issuer.example.invalid/"' "${workspace_directory}/issuer-override.yaml"
+for invalid_analytics_setting in \
+  'enabled: "true"' \
+  'sqlitePath: ""' \
+  'sqlitePath: null' \
+  'sqlitePath: ":memory:"' \
+  'sqlitePath: /app/data/:memory:' \
+  'sqlitePath: file:/app/data/analytics.sqlite3' \
+  'sqlitePath: relative/analytics.sqlite3' \
+  'sqlitePath: /outside/analytics.sqlite3' \
+  'sqlitePath: /app/data/' \
+  'sqlitePath: /app/data//analytics.sqlite3' \
+  'sqlitePath: /app/data/../analytics.sqlite3' \
+  'sqlitePath: /app/data/./analytics.sqlite3' \
+  'sqlitePath: /app/data/umbod.sqlite3' \
+  'sqlitePath: /app/data/umbod.sqlite3-wal' \
+  'sqlitePath: /app/data/umbod.sqlite3-shm' \
+  'sqlitePath: /app/data/umbod.sqlite3-journal' \
+  'backend: duckdb'; do
+  printf '%s\n' 'config:' '  telemetryAnalytics:' "    ${invalid_analytics_setting}" > "${workspace_directory}/invalid-analytics.yaml"
+  if helm lint --strict "${chart_directory}" -f "${workspace_directory}/invalid-analytics.yaml" >/dev/null 2>&1; then
+    printf '%s\n' "Unsafe or unsupported analytics setting must fail schema validation: ${invalid_analytics_setting}" >&2
+    exit 1
+  fi
+done
+helm template umbod "${chart_directory}" \
+  --set config.telemetryAnalytics.enabled=true \
+  --set-string config.telemetryAnalytics.sqlitePath=/app/data/analytics/custom.sqlite3 \
+  --set persistence.enabled=true > "${workspace_directory}/analytics-enabled.yaml"
+python3 "${chart_directory}/scripts/validate-analytics.py" "${workspace_directory}/analytics-enabled.yaml" true /app/data/analytics/custom.sqlite3
+kubeconform -strict -summary "${workspace_directory}/analytics-enabled.yaml"
+helm template umbod "${chart_directory}" \
+  --set core.api.env.UMBOD_TELEMETRY_ANALYTICS_ENABLED=true \
+  --set-string core.api.env.UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH=/app/data/overridden.sqlite3 \
+  > "${workspace_directory}/analytics-env-enabled.yaml"
+python3 "${chart_directory}/scripts/validate-analytics.py" "${workspace_directory}/analytics-env-enabled.yaml" true /app/data/overridden.sqlite3
+helm template umbod "${chart_directory}" \
+  --set config.telemetryAnalytics.enabled=true \
+  --set core.api.env.UMBOD_TELEMETRY_ANALYTICS_ENABLED=false \
+  > "${workspace_directory}/analytics-env-disabled.yaml"
+python3 "${chart_directory}/scripts/validate-analytics.py" "${workspace_directory}/analytics-env-disabled.yaml" false /app/data/analytics.sqlite3
 helm package "${chart_directory}" --destination "${workspace_directory}"

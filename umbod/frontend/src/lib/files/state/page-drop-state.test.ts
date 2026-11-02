@@ -109,30 +109,32 @@ describe('page drop auto-upload', () => {
 describe('page drop eligibility', () => {
   test('unknown eligibility blocks drops until the authorized directory eligibility is ready', async (): Promise<void> => {
     const { api, files, upload } = fixture();
-    const eligibility = deferred<void>();
-    vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(eligibility.promise);
+    const response = await api.filesystem.browse(null);
+    const browsing = deferred<typeof response>();
+    vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(browsing.promise);
     const write = vi.spyOn(api.filesystem, 'uploadFile');
     expect(upload.canDrop).toBe(false);
     await upload.drop([file()]);
     upload.rejectDrop('Ignored before loading');
-    await files.load(null);
-    expect(files.uploadAvailability).toBe('loading');
+    const loading = files.load(null);
+    expect(files.uploadAvailability).toBe('hidden');
     expect(upload.canDrop).toBe(false);
     await upload.drop([file()]);
     upload.rejectDrop('Ignored before eligibility');
     expect(upload.open).toBe(false);
     expect(upload.error).toBe('');
     expect(write).not.toHaveBeenCalled();
-    eligibility.resolve(undefined);
-    await vi.waitFor(() => expect(upload.canDrop).toBe(true));
+    browsing.resolve(response);
+    await loading;
+    expect(upload.canDrop).toBe(true);
   });
 
   test.each([new HttpError(403, 'Forbidden', {}), new AuthenticationRequiredError(), new NetworkError('Eligibility unavailable')])('denied or failed eligibility ignores drops and rejections: %s', async (error): Promise<void> => {
     const { api, files, upload } = fixture();
-    vi.spyOn(api.filesystem, 'checkUploadEligibility').mockRejectedValueOnce(error);
+    vi.spyOn(api.filesystem, 'browse').mockRejectedValueOnce(error);
     const write = vi.spyOn(api.filesystem, 'uploadFile');
     await files.load(null);
-    await vi.waitFor(() => expect(files.uploadAvailability).not.toBe('loading'));
+    expect(files.uploadAvailability).toBe('hidden');
     expect(upload.canDrop).toBe(false);
     await upload.drop([file()]);
     upload.rejectDrop('Ignored');
@@ -232,7 +234,7 @@ describe('page drop eligibility', () => {
     upload.rejectDrop('Ignored');
     expect(upload.open).toBe(false);
     expect(write).toHaveBeenCalledTimes(1);
-    vi.spyOn(api.filesystem, 'getRoot').mockRejectedValueOnce(new NetworkError('reload failed'));
+    vi.spyOn(api.filesystem, 'browse').mockRejectedValueOnce(new NetworkError('reload failed'));
     await upload.reload();
     await ready(files);
     expect(upload.canDrop).toBe(false);

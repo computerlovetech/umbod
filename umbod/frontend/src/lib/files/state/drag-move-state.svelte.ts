@@ -9,7 +9,7 @@ export class DragMoveState {
   private hoveredId = $state('');
   private pointerX = $state(0);
   private pointerY = $state(0);
-  private dragImage: HTMLElement | undefined;
+  private dragImage: HTMLImageElement | undefined;
   private notice = $state('');
   private message = $state('');
   private operation = $state<symbol | undefined>(undefined);
@@ -42,7 +42,7 @@ export class DragMoveState {
     return !this.disposed && !this.pending && node?.kind === 'file' && update?.canMove === true && !update.pending && !update.open && !update.needsReload && !this.blocked(id);
   };
 
-  attachDragImage = (element: HTMLElement): (() => void) => {
+  attachDragImage = (element: HTMLImageElement): (() => void) => {
     this.dragImage = element;
     return (): void => { if (this.dragImage === element) this.dragImage = undefined; };
   };

@@ -1,5 +1,7 @@
 config:
   profile: local
+  telemetryAnalytics:
+    enabled: true
   authentication:
     mode: dev
 core:

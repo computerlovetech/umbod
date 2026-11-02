@@ -1,4 +1,5 @@
-from umbod.mcp.listeners.failure import LoggingSignalFailureHandler
+from umbod.core.diagnostics import ApplicationFailure, PublishingSignalFailureHandler
+from umbod.core.signals import SignalPublisher
 from umbod.mcp.listeners.invocation_audit import InvocationAuditReceiver
 from umbod.mcp.listeners.invocation_logging import InvocationLoggingReceiver
 from umbod.mcp.listeners.invocation_metrics import InventoryMetricsReceiver, InvocationMetricsReceiver
@@ -33,7 +34,8 @@ def create_mcp_signals(
     log_sink: McpToolInvocationLogSink,
     metrics_recorder: McpMetricsRecorder,
     audit_recorder: McpAuditRecorder,
+    application_failures: SignalPublisher[ApplicationFailure],
 ) -> McpSignals:
-    signals = McpSignals(LoggingSignalFailureHandler())
+    signals = McpSignals(PublishingSignalFailureHandler(application_failures))
     register_mcp_listeners(signals, log_sink, metrics_recorder, audit_recorder)
     return signals

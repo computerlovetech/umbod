@@ -25,6 +25,41 @@ export const breadcrumbsSchema = z.strictObject({
   items: z.array(breadcrumbItemSchema).nonempty(),
   complete: z.boolean()
 });
+export const browseCapabilitiesSchema = z.strictObject({
+  node_id: nodeIdSchema,
+  rename: z.boolean(),
+  move: z.boolean(),
+  edit_description: z.boolean(),
+  delete: z.boolean(),
+  share: z.boolean(),
+  upload: z.boolean(),
+  create_directory: z.boolean()
+});
+export const browseResultSchema = z.strictObject({
+  node: nodeSummarySchema,
+  breadcrumbs: breadcrumbsSchema,
+  entries: z.array(nodeSummarySchema),
+  capabilities: z.array(browseCapabilitiesSchema),
+  truncated: z.literal(false)
+}).superRefine((result, context) => {
+  const { node, breadcrumbs, entries, capabilities } = result;
+  const last = breadcrumbs.items.at(-1);
+  const ids = [node.id, ...entries.map((entry) => entry.id)];
+  const capabilityIds = new Set(capabilities.map((capability) => capability.node_id));
+  const invalid = last?.id !== node.id || last.name !== node.name || last.kind !== node.kind
+    || new Set(breadcrumbs.items.map((item) => item.id)).size !== breadcrumbs.items.length
+    || breadcrumbs.items.slice(0, -1).some((item) => item.kind !== 'directory')
+    || breadcrumbs.complete && (breadcrumbs.items[0].kind !== 'directory' || breadcrumbs.items[0].name !== '')
+    || node.kind === 'file' && entries.length !== 0
+    || entries.some((entry) => entry.parent_id !== node.id)
+    || new Set(ids).size !== ids.length
+    || capabilityIds.size !== capabilities.length
+    || capabilityIds.size !== ids.length
+    || ids.some((id) => !capabilityIds.has(id));
+  if (invalid) context.addIssue({ code: 'custom', message: 'Inconsistent filesystem browse result.' });
+});
+export type BrowseCapabilities = z.infer<typeof browseCapabilitiesSchema>;
+export type BrowseResult = z.infer<typeof browseResultSchema>;
 export type BreadcrumbItem = z.infer<typeof breadcrumbItemSchema>;
 export type Breadcrumbs = z.infer<typeof breadcrumbsSchema>;
 export const childrenSchema = z.strictObject({ nodes: z.array(nodeSummarySchema) });
@@ -46,9 +81,6 @@ export const updateNodeSchema = z.strictObject({
   }).refine((metadata) => metadata.content_type !== undefined || Object.keys(metadata.attributes ?? {}).length > 0, 'Provide a metadata change.').optional()
 }).refine((input) => input.name !== undefined || input.parent_id !== undefined || input.metadata !== undefined, 'Provide a change.');
 export type UpdateNode = z.infer<typeof updateNodeSchema>;
-export const uploadEligibilitySchema = z.object({
-  allow: z.string().refine((value) => value.split(',').some((method) => method.trim() === 'POST'))
-}).transform(() => undefined);
 export const uploadAuthorizationSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('same_origin') }),
   z.strictObject({ type: z.literal('none') })

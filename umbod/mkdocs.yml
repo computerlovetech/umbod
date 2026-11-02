@@ -46,9 +46,11 @@ nav:
   - Using Umbod:
       - Shared and Personal connectors: using-umbod/connectors.md
       - Files: using-umbod/files.md
+      - Log analytics: using-umbod/log-analytics.md
   - Operations:
       - Service topology: operations/service-topology.md
       - Configuration: operations/configuration.md
+      - Application diagnostics: operations/application-diagnostics.md
       - S3 file-content storage: operations/s3-file-storage.md
       - Admin MCP: operations/admin-mcp.md
   - Connector plugins:
@@ -58,6 +60,8 @@ nav:
       - Helm values: reference/helm-values.md
       - Endpoints and ports: reference/endpoints-and-ports.md
       - Filesystem sharing: reference/filesystem-sharing.md
+      - Filesystem upload transfers: reference/filesystem-upload-transfers.md
+      - Telemetry ingestion: reference/telemetry-ingestion.md
 
 markdown_extensions:
   - admonition

@@ -1,7 +1,7 @@
 import { tick } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import type { FilesApi } from '../api';
-import type { NodeSummary } from '../domain/schemas';
+import type { BrowseCapabilities, NodeSummary } from '../domain/schemas';
 import { DeletionState } from './deletion-state.svelte';
 
 export class RowDeletionState {
@@ -58,12 +58,20 @@ export class RowDeletionState {
     for (const controller of this.controllers.values()) controller.reset();
   };
 
-  select = (nodes: NodeSummary[]): void => {
+  select = (nodes: NodeSummary[], capabilities?: ReadonlyMap<string, BrowseCapabilities>): void => {
     if (this.disposed) return;
     for (const node of nodes) {
       if (node.kind !== 'file' || typeof node.parent_id !== 'string' || this.submittedIds.has(node.id)) continue;
       this.submittedIds.add(node.id);
-      this.queue.push(node);
+      const eligibility = capabilities?.get(node.id);
+      if (eligibility) {
+        let controller = this.controllers.get(node.id);
+        if (!controller) {
+          controller = new DeletionState(this.api, this.refresh, this.reload, this.onDeleted, false, this.operations);
+          this.controllers.set(node.id, controller);
+        }
+        void controller.select(node, eligibility.delete);
+      } else this.queue.push(node);
     }
     this.drain();
   };

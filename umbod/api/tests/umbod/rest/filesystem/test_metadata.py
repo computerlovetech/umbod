@@ -10,7 +10,7 @@ from .test_http_contract import BASE
 @pytest.fixture(params=["file", "directory"])
 def described_node(filesystem_http: FilesystemHttp, request: pytest.FixtureRequest) -> dict[str, object]:
     client = filesystem_http.client
-    root = client.get(f"{BASE}/root").json()["id"]
+    root = client.get(f"{BASE}/browse").json()["node"]["id"]
     if request.param == "file":
         response = upload_file(client, f"{BASE}/nodes/{root}/uploads", "file", b"bytes")
     else:
@@ -96,7 +96,7 @@ def test_combined_rename_move_metadata_and_stale_request(
     filesystem_http: FilesystemHttp, described_node: dict[str, object],
 ) -> None:
     client = filesystem_http.client
-    root = client.get(f"{BASE}/root").json()["id"]
+    root = client.get(f"{BASE}/browse").json()["node"]["id"]
     destination = client.post(f"{BASE}/nodes/{root}/directories", json={
         "name": "destination", "metadata": {"attributes": {}, "content_type": {}},
     }).json()
@@ -122,8 +122,8 @@ def test_root_structural_patch_conflict(
     filesystem_http: FilesystemHttp, change: dict[str, object],
 ) -> None:
     client = filesystem_http.client
-    root = client.get(f"{BASE}/root").json()
+    root = client.get(f"{BASE}/browse").json()["node"]
     patch = {"parent_id": root["id"]} if "parent_id" in change else change
     response = client.patch(f"{BASE}/nodes/{root['id']}", json=patch, headers={"If-Match": f'"{root["revision"]}"'})
     assert response.status_code == 409
-    assert client.get(f"{BASE}/root").json() == root
+    assert client.get(f"{BASE}/browse").json()["node"] == root

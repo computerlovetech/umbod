@@ -1,4 +1,85 @@
 rules:
+  - id: python.diagnostics.publish-side-effects
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Application failure producers publish typed events through an injected SignalPublisher.
+      Put logging in a registered receiver, not the operation; only dispatch-failure infrastructure
+      may use the nonrecursive direct-logging fallback.
+    paths:
+      include:
+        - '**/api/src/umbod/core/diagnostics/**'
+        - '**/api/src/umbod/rest/metrics/middleware.py'
+        - '**/api/src/umbod/mcp/logging/audit/recorder.py'
+        - '**/api/src/umbod/mcp/connectors/openapi/codemode_execution.py'
+    pattern-either:
+      - pattern: import logging
+      - pattern: from logging import $NAME
+      - pattern: import umbod.logging
+      - pattern: from umbod.logging import $NAME
+      - patterns:
+          - pattern: $LOGGER.$METHOD(...)
+          - metavariable-regex:
+              metavariable: $LOGGER
+              regex: '^(logging|logger|log|.*[._]logger)$'
+          - metavariable-regex:
+              metavariable: $METHOD
+              regex: '^(debug|info|warning|error|critical|exception|log)$'
+
+  - id: python.logging.no-raw-exception
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Use the safe application failure event boundary instead of logger.exception or exc_info.
+      Record an allowlisted operation and reason with sanitized exception evidence, not raw exception text.
+    paths:
+      include:
+        - '**/api/src/**'
+        - '**/src/**'
+      exclude:
+        - '**/tests/**'
+        - '**/live_runtime_tests/**'
+        - '**/test_*.py'
+        - '**/*_test.py'
+        - '**/conftest.py'
+    patterns:
+      - pattern-either:
+          - pattern: $LOGGER.exception(...)
+          - pattern: $LOGGER.$METHOD(..., exc_info=$VALUE, ...)
+      - metavariable-regex:
+          metavariable: $LOGGER
+          regex: '^(logging|logger|log|.*[._]logger)$'
+
+  - id: python.logging.no-dynamic-message
+    languages: [python]
+    severity: ERROR
+    message: >-
+      Log messages must be fixed event descriptions. Put approved diagnostic values in typed,
+      allowlisted fields; do not interpolate exceptions, payloads, credentials, or URLs into messages.
+    paths:
+      include:
+        - '**/api/src/**'
+        - '**/src/**'
+      exclude:
+        - '**/tests/**'
+        - '**/live_runtime_tests/**'
+        - '**/test_*.py'
+        - '**/*_test.py'
+        - '**/conftest.py'
+    patterns:
+      - pattern-either:
+          - pattern: $LOGGER.$METHOD(f"...", ...)
+          - pattern: $LOGGER.$METHOD($MESSAGE, $ARGUMENT, ...)
+          - pattern: $LOGGER.$METHOD($MESSAGE.format(...), ...)
+          - pattern: $LOGGER.$METHOD($MESSAGE % $VALUE, ...)
+          - pattern: $LOGGER.$METHOD(str(...), ...)
+      - metavariable-regex:
+          metavariable: $LOGGER
+          regex: '^(logging|logger|log|.*[._]logger)$'
+      - metavariable-regex:
+          metavariable: $METHOD
+          regex: '^(debug|info|warning|error|critical|exception)$'
+
   - id: python.no-parameter-default-values
     languages:
       - python

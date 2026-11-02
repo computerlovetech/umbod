@@ -85,7 +85,7 @@ describe('table row deletion', (): void => {
     expect(files.node?.id).toBe(folderId);
   });
 
-  test('queues upload eligibility behind existing row checks without resetting them or exceeding the limit', async (): Promise<void> => {
+  test('checks only the newly uploaded row without probing or resetting seeded rows', async (): Promise<void> => {
     const extra = Array.from({ length: 5 }, (_, index) => filesystemNode({
       id: `00000000-0000-4000-8000-${String(index + 10).padStart(12, '0')}`,
       kind: 'file', parent_id: folderId, name: `Queued ${index}`
@@ -95,18 +95,18 @@ describe('table row deletion', (): void => {
     const eligibility = deferred<void>();
     const check = vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockReturnValue(eligibility.promise);
     await files.load(folderId);
-    expect(check).toHaveBeenCalledTimes(4);
+    expect(check).not.toHaveBeenCalled();
     const upload = new UploadState(api, files);
     await vi.waitFor(() => expect(upload.available).toBe(true));
     upload.show();
     upload.select([new File(['new'], 'Queued upload.txt', { type: 'text/plain' })]);
     await upload.submit();
     const created = files.children.find((node) => node.name === 'Queued upload.txt')!;
-    expect(check).toHaveBeenCalledTimes(4);
+    expect(check).toHaveBeenCalledTimes(1);
     eligibility.resolve();
     await vi.waitFor(() => expect(files.rowDeletion.controllers.get(created.id)?.available).toBe(true));
-    expect(check).toHaveBeenCalledTimes(7);
-    expect(new Set(check.mock.calls.map(([id]) => id)).size).toBe(7);
+    expect(check).toHaveBeenCalledTimes(1);
+    expect(check.mock.calls[0][0]).toBe(created.id);
   });
 
   test.each([new HttpError(412, 'Changed', {}), new NetworkError(new Error('Lost response'))])('focuses row recovery after %s', async (error): Promise<void> => {
@@ -282,7 +282,7 @@ describe('table row deletion', (): void => {
     expect(files.node?.id).toBe(fileId);
   });
 
-  test('renders listing independently and bounds simultaneous row eligibility checks', async (): Promise<void> => {
+  test('seeds the entire listing without row checks and resets eligibility on navigation', async (): Promise<void> => {
     const nodes = Array.from({ length: 9 }, (_, index) => filesystemNode({ id: `00000000-0000-4000-8000-${String(index + 10).padStart(12, '0')}`, kind: 'file', parent_id: folderId, name: `File ${index}` }));
     const api = new InMemoryFilesApi(rootId, [...filesystemFixture, ...nodes]);
     const files = new FilesState(api);
@@ -291,11 +291,11 @@ describe('table row deletion', (): void => {
     await files.load(folderId);
     expect(files.phase).toBe('ready');
     expect(files.children).toHaveLength(10);
-    expect(check).toHaveBeenCalledTimes(4);
+    expect(check).not.toHaveBeenCalled();
     await files.load(rootId);
     eligibility.resolve();
     await Promise.resolve();
-    expect(check).toHaveBeenCalledTimes(4);
+    expect(check).not.toHaveBeenCalled();
     expect([...files.rowDeletion.controllers.values()].every((row) => !row.available)).toBe(true);
   });
 

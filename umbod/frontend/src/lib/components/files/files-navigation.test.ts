@@ -142,20 +142,21 @@ describe('compact file navigation', () => {
     await loading;
   });
 
-  test.each(['stalled', 'failed'])('navigation renders while directory listing is %s', async (phase): Promise<void> => {
+  test.each(['stalled', 'failed'])('browse navigation remains hidden while response is %s', async (phase): Promise<void> => {
     const { api } = fixture();
     const files = new FilesState(api);
     const pending = deferred<NodeSummary[]>();
     vi.spyOn(api.filesystem, 'listChildren').mockReturnValueOnce(pending.promise);
     const loading = files.load(folderId);
-    await vi.waitFor(() => expect(files.navigation.phase).toBe('ready'));
+    await Promise.resolve();
     if (phase === 'failed') {
       pending.reject(new Error('secret'));
       await loading;
     }
     const document = documentFor(files.navigation);
-    expect(document.querySelector('[aria-current="page"]')?.textContent).toBe('Projects');
-    expect(document.querySelector('.desktop-path a')?.getAttribute('href')).toBe('/files');
+    expect(files.navigation.path).toBeUndefined();
+    expect(document.querySelector('[aria-current="page"]')).toBeNull();
+    expect(document.querySelector('.desktop-path a')).toBeNull();
     if (phase === 'stalled') {
       pending.resolve([]);
       await loading;

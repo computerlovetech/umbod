@@ -5,7 +5,7 @@ import logging
 import time
 import uuid
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 
 import mcp.types as mt
 
@@ -43,7 +43,7 @@ class McpAuditMiddleware(Middleware):
     ) -> None:
         self._recorder = recorder
         self._identity_source = identity_source
-        self._exposure_mode = exposure_mode
+        self._exposure_mode = exposure_mode if exposure_mode in {"flat", "gateway", "codemode"} else "other"
 
     async def on_initialize(
         self,
@@ -54,16 +54,13 @@ class McpAuditMiddleware(Middleware):
         identity = self._identity_source.identity_from_request(context.fastmcp_context)
         self._recorder.record_client_connection(identity, _new_correlation())
         if logger.isEnabledFor(logging.DEBUG):
-            client_info = context.message.params.client_info
             logger.debug(
                 "MCP client initialized",
                 extra={
                     "mcp_event": "initialize",
                     "mcp_exposure_mode": self._exposure_mode,
-                    "mcp_client_name": client_info.name,
-                    "mcp_client_version": client_info.version,
-                    "mcp_authenticated_subject": identity.actor.authenticated_user_id,
-                    **_client_metadata(identity.client.attributes),
+                    "mcp_authenticated": identity.actor.authenticated_user_id is not None,
+                    "mcp_session_present": "session_id" in identity.client.attributes,
                 },
             )
         return result
@@ -77,17 +74,14 @@ class McpAuditMiddleware(Middleware):
         identity = self._identity_source.identity_from_request(context.fastmcp_context)
         self._recorder.record_tool_discovery(identity, _new_correlation())
         if logger.isEnabledFor(logging.DEBUG):
-            tool_names = sorted(tool.name for tool in result)
             logger.debug(
                 "MCP tools listed",
                 extra={
                     "mcp_event": "tools/list",
                     "mcp_exposure_mode": self._exposure_mode,
-                    "mcp_authenticated_subject": identity.actor.authenticated_user_id,
-                    "mcp_tool_count": len(tool_names),
-                    "mcp_tool_names": tool_names,
-                    "mcp_tool_names_hash": _tool_names_hash(tool_names),
-                    **_client_metadata(identity.client.attributes),
+                    "mcp_authenticated": identity.actor.authenticated_user_id is not None,
+                    "mcp_tool_count": len(result),
+                    "mcp_session_present": "session_id" in identity.client.attributes,
                 },
             )
         return result
@@ -149,24 +143,6 @@ class McpAuditMiddleware(Middleware):
                     time.time_ns(),
                 )
             raise
-
-
-def _client_metadata(attributes: Mapping[str, str]) -> dict[str, str]:
-    field_names = {
-        "client_id": "mcp_oauth_client_id",
-        "client_name": "mcp_oauth_client_name",
-        "session_id": "mcp_session_id",
-        "request_id": "mcp_request_id",
-    }
-    return {
-        field_names[key]: value
-        for key, value in attributes.items()
-        if key in field_names and isinstance(value, str)
-    }
-
-
-def _tool_names_hash(tool_names: Sequence[str]) -> str:
-    return hashlib.sha256("\n".join(tool_names).encode("utf-8")).hexdigest()
 
 
 def _new_correlation() -> McpAuditCorrelation:

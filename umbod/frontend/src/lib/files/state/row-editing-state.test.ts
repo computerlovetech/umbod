@@ -128,7 +128,7 @@ describe('table row editing', (): void => {
     }
   });
 
-  test.each(['update', 'description'] as const)('acknowledges an authoritative row reload through %s before queued selection', async (operation): Promise<void> => {
+  test.each(['update', 'description'] as const)('acknowledges an authoritative row reload through %s with seeded eligibility', async (operation): Promise<void> => {
     const earlier = Array.from({ length: 3 }, (_, index) => filesystemNode({ id: `00000000-0000-4000-8000-${String(index + 10).padStart(12, '0')}`, parent_id: folderId }));
     const api = new InMemoryFilesApi(rootId, [...filesystemFixture.slice(0, 2), ...earlier, filesystemFixture[2]]);
     const files = new FilesState(api);
@@ -138,17 +138,12 @@ describe('table row editing', (): void => {
     row.update.changeName('Uncertain.txt');
     await row.update.submit();
     expect(row.update.needsReload).toBe(true);
-    const eligibility = deferred<void>();
-    vi.spyOn(api.filesystem, 'checkUpdateEligibility').mockImplementation(async (id): Promise<void> => {
-      if (earlier.some((node) => node.id === id)) await eligibility.promise;
-    });
-    vi.spyOn(api.filesystem, 'checkDescriptionEligibility').mockImplementation(async (id): Promise<void> => {
-      if (earlier.some((node) => node.id === id)) await eligibility.promise;
-    });
+    const updateEligibility = vi.spyOn(api.filesystem, 'checkUpdateEligibility');
+    const descriptionEligibility = vi.spyOn(api.filesystem, 'checkDescriptionEligibility');
     await row[operation].reload();
-    expect(row.update.canRename).toBe(false);
-    eligibility.resolve();
-    await vi.waitFor(() => expect(row.update.canRename).toBe(true));
+    expect(row.update.canRename).toBe(true);
+    expect(updateEligibility).not.toHaveBeenCalled();
+    expect(descriptionEligibility).not.toHaveBeenCalled();
     expect(row.update.needsReload).toBe(false);
     row.update.showRename();
     row.update.changeName('Recovered.txt');

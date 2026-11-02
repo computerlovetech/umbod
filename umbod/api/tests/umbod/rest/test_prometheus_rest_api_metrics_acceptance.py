@@ -8,6 +8,7 @@ from prometheus_client import CONTENT_TYPE_LATEST
 from prometheus_client.parser import text_string_to_metric_families
 from prometheus_client.samples import Sample
 
+from umbod.logging import create_application_failure_signal
 from umbod.rest.factories import SubApiAppFactory
 from umbod.rest.metrics import (
     AdminRestMetricsMiddleware,
@@ -41,7 +42,7 @@ def metrics_clients(request: pytest.FixtureRequest) -> Iterator[tuple[TestClient
     admin_app = SubApiAppFactory(title="metrics-acceptance", router=router).create()
     admin_app.add_middleware(
         AdminRestMetricsMiddleware, recorder=recorder, routes=tuple(router.routes), mount_path=""
-    )
+    , application_failures=create_application_failure_signal())
     app = FastAPI()
     app.mount("/api/admin", admin_app)
 

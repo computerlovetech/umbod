@@ -19,13 +19,16 @@ export class SharingEligibilityState {
     this.dialog = new SharingDialogState(api, this.revoke, this.recheck);
   }
 
-  available = (id: string): boolean => this.allowed.get(id) === true;
-
-  selectCurrent = (node: NodeSummary): void => {
-    if (this.disposed || this.submitted.has(node.id)) return;
-    this.submitted.add(node.id);
-    void this.check(node.id, this.generation);
+  seed = (capabilities: readonly { node_id: string; share: boolean }[]): void => {
+    if (this.disposed) return;
+    for (const capability of capabilities) {
+      this.revoke(capability.node_id);
+      this.submitted.add(capability.node_id);
+      this.allowed.set(capability.node_id, capability.share);
+    }
   };
+
+  available = (id: string): boolean => this.allowed.get(id) === true;
 
   select = (nodes: readonly NodeSummary[]): void => {
     if (this.disposed) return;

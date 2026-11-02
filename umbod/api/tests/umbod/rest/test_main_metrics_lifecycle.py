@@ -1,6 +1,8 @@
 from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
+from tests.support.application_failures import CapturingApplicationFailures
+from umbod.core.diagnostics import ApplicationFailureKind, NoFailureContext, report_application_failure
 from umbod.rest.authentication.rest_middleware import RestAuthenticationMiddleware
 from umbod.rest.main import create_app
 from umbod.rest.metrics import AdminRestMetricsMiddleware
@@ -166,3 +168,42 @@ def test_embedded_host_can_disable_metrics_without_changing_server_constructor(t
     assert len(servers) == 1
     assert servers[0].start_count == 0
     assert servers[0].stop_count == 0
+
+
+def test_two_rest_apps_have_isolated_application_failure_channels(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    settings = APISettings(admin_authentication={"mode": "simulation"})
+    first = create_app(settings=settings, connector_registrations=[])
+    second = create_app(settings=settings, connector_registrations=[])
+    first_signal = next(
+        middleware.kwargs["application_failures"]
+        for middleware in first.user_middleware
+        if middleware.cls is AdminRestMetricsMiddleware
+    )
+    second_signal = next(
+        middleware.kwargs["application_failures"]
+        for middleware in second.user_middleware
+        if middleware.cls is AdminRestMetricsMiddleware
+    )
+    first_failures = CapturingApplicationFailures()
+    second_failures = CapturingApplicationFailures()
+    first_signal.connect("capture", first_failures.send)
+    second_signal.connect("capture", second_failures.send)
+
+    report_application_failure(
+        first_signal, ApplicationFailureKind.REST_METRICS, RuntimeError("secret"), NoFailureContext(),
+    )
+
+    assert first_signal is not second_signal
+    assert len(first_failures.events) == 1
+    assert second_failures.events == []
+    assert len(caplog.records) == 1
+
+    report_application_failure(
+        second_signal, ApplicationFailureKind.REST_METRICS, RuntimeError("secret"), NoFailureContext(),
+    )
+
+    assert len(first_failures.events) == 1
+    assert len(second_failures.events) == 1
+    assert len(caplog.records) == 2

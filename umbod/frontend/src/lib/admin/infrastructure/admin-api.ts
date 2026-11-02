@@ -1,3 +1,4 @@
+import { AnalyticsRoute } from '../analytics/http-route';
 import { OverviewRoute } from '../overview/http-route';
 import { GroupsRoute } from '../groups/http-route';
 import { FilesystemRoute } from '../filesystem/http-route';
@@ -12,6 +13,7 @@ import { browserTransport, type Transport } from './transport';
 
 
 export class AdminApi {
+  readonly analytics: AnalyticsRoute;
   readonly overview: OverviewRoute;
   readonly groups: GroupsRoute;
   readonly filesystem: FilesystemRoute;
@@ -24,6 +26,7 @@ export class AdminApi {
   readonly openApiConnectors: OpenApiConnectorsApi;
 
   constructor(transport: Transport) {
+    this.analytics = new AnalyticsRoute(transport);
     this.overview = new OverviewRoute(transport);
     this.groups = new GroupsRoute(transport);
     this.filesystem = new FilesystemRoute(transport);

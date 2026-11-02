@@ -1,4 +1,5 @@
 from tests.support.native_tool_states import enabled_native_tool_states
+from umbod.logging import create_application_failure_signal
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
 from tests.persistence_runtime import create_inmemory_runtime
@@ -52,14 +53,15 @@ async def test_gateway_search_is_audit_visible_as_search_tools_invocation() -> N
     assert records[0]['attributes']['mcp.audit.outcome'] == 'success'
 
 async def _audited_gateway() -> tuple[FastMCP, StringIO]:
+    application_failures = create_application_failure_signal()
     configurations = InMemoryConnectorCurrentConfigurationStore()
     await configurations.save_current_configuration('slack', SlackAdminConfiguration(workspace_name='Computerlove', bot_token=SecretStr('xoxb-valid'), default_channel_id='C-PROJECT-ALPHA'))
     publications = ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE)
     await publications.publish_connector('slack')
     stream = StringIO()
-    audit_recorder = McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), stream), 'test')
+    audit_recorder = McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), stream), 'test', application_failures=application_failures)
     mcp = FastMCP(name='test', middleware=[McpAuditMiddleware(audit_recorder, McpAuditIdentityAdapter(), exposure_mode='gateway')])
-    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), audit_recorder)
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), audit_recorder, application_failures=application_failures)
     await register_connector_tools(
         mcp,
         signals=signals,

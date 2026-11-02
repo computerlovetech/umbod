@@ -1,4 +1,9 @@
 from umbod.infrastructure.key_value import create_inmemory_key_value_driver, create_request_cache
+from umbod.infrastructure.telemetry import (
+    create_configured_analytics_runtime,
+    create_disabled_analytics_runtime,
+    create_sqlite_analytics_runtime,
+)
 from umbod.infrastructure.persistence.personal_discovery import PersonalDiscoveryPreparation
 from umbod.infrastructure.persistence.runtime import (
     AppPersistenceRuntime,
@@ -12,6 +17,7 @@ from umbod.infrastructure.filesystem import (
     FilesystemConfig,
     create_access_control_driver,
     create_filesystem_browsing,
+    create_filesystem_explorer,
     create_filesystem_sharing,
     create_filesystem_transactions,
     create_filesystem_creation,
@@ -24,6 +30,9 @@ from umbod.infrastructure.filesystem import (
 )
 
 __all__ = [
+    "create_configured_analytics_runtime",
+    "create_disabled_analytics_runtime",
+    "create_sqlite_analytics_runtime",
     "create_inmemory_key_value_driver",
     "create_request_cache",
     "AppPersistenceRuntime",
@@ -36,6 +45,7 @@ __all__ = [
     "FilesystemConfig",
     "create_access_control_driver",
     "create_filesystem_browsing",
+    "create_filesystem_explorer",
     "create_filesystem_sharing",
     "create_filesystem_transactions",
     "create_filesystem_creation",

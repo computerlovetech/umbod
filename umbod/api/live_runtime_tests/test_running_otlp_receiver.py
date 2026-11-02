@@ -1,17 +1,11 @@
 import gzip
 import json
-import os
 
 import httpx
 import pytest
 from pydantic import JsonValue
 
 from conftest import RuntimeEndpoints
-
-
-@pytest.fixture(scope="session")
-def otlp_bearer_token() -> str:
-    return os.environ["UMBOD_TEST_OTLP_BEARER_TOKEN"]
 
 
 _RUNTIME_SIGNALS: dict[str, tuple[str, str, str, dict[str, JsonValue]]] = {
@@ -51,6 +45,7 @@ _RUNTIME_SIGNALS: dict[str, tuple[str, str, str, dict[str, JsonValue]]] = {
 def _runtime_export(signal: str) -> dict[str, JsonValue]:
     marker: dict[str, JsonValue] = {
         "attributes": [
+            {"key": "service.name", "value": {"stringValue": "umbod-otlp-runtime"}},
             {
                 "key": "test.marker",
                 "value": {

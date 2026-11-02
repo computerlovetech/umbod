@@ -1,6 +1,7 @@
 from tests.support.native_tool_states import enabled_native_tool_states
 from typing import Any
 
+from umbod.logging import create_application_failure_signal
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals.execution import SignalToolExecutionPipelineFactory
 from umbod.mcp.metrics import PrometheusMcpMetricsRecorder
@@ -43,13 +44,14 @@ async def test_codemode_instructs_agents_to_discover_external_capabilities() -> 
 
 @pytest.mark.asyncio
 async def test_codemode_registration_does_not_mutate_unrelated_tools() -> None:
+    application_failures = create_application_failure_signal()
     mcp = FastMCP("codemode-test")
 
     @mcp.tool
     def unrelated_tool() -> dict[str, str]:
         return {"status": "still callable"}
 
-    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test"))
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test", application_failures=application_failures), application_failures=application_failures)
     await register_connector_tools(
         mcp,
         signals=signals,

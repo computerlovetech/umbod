@@ -33,7 +33,6 @@ describe('file deletion port', (): void => {
     await api.filesystem.deleteFile(node.id, node.revision);
     await expect(api.filesystem.completeUpload(session)).rejects.toMatchObject({ status: 403 });
     await expect(api.filesystem.completeUpload(session)).rejects.toMatchObject({ status: 403 });
-    expect(await api.filesystem.getUpload(session.id)).toMatchObject({ id: session.id, status: 'completed' });
     expect((await api.filesystem.listChildren(folderId)).map((child) => child.id)).toEqual([fileId]);
     await expect(api.filesystem.getNode(node.id)).rejects.toMatchObject({ status: 404 });
   });

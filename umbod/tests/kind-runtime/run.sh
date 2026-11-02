@@ -144,6 +144,8 @@ python3 "${script_directory}/bootstrap.py"
 (cd "${app_directory}/api" && uv run --locked pytest live_runtime_tests --ignore=live_runtime_tests/test_running_personal_mcp_execution.py --ignore=live_runtime_tests/test_running_user_profile.py --ignore=live_runtime_tests/test_running_filesystem.py --ignore=live_runtime_tests/test_running_filesystem_uploads.py --ignore=live_runtime_tests/test_running_filesystem_s3.py)
 kubectl --context "${kube_context}" logs deployment/umbod-core --container api \
     | python3 "${script_directory}/check_telemetry_logs.py"
+kubectl --context "${kube_context}" exec -i deployment/umbod-core --container api -- python - \
+    < "${script_directory}/check_analytics.py"
 kubectl --context "${kube_context}" logs deployment/umbod-core --container mcp \
     | python3 "${script_directory}/check_secret_logs.py"
 

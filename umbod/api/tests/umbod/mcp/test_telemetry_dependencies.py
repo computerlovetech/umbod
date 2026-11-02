@@ -1,6 +1,7 @@
 import pytest
 
 from tests.mcp_telemetry_fixtures import RecordingApplicationMetricsRecorder, RecordingAuditSink, RecordingMetricsServerFactory
+from umbod.logging import create_application_failure_signal
 from umbod.mcp.logging import McpAuditRecorder
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
@@ -12,7 +13,7 @@ from umbod.mcp.telemetry import McpTelemetryDependencies
 async def test_telemetry_bundle_accepts_in_memory_metrics_and_fresh_listeners() -> None:
     metrics = RecordingApplicationMetricsRecorder()
     listeners = RecordingMetricsServerFactory()
-    telemetry = McpTelemetryDependencies(InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter()), McpAuditRecorder(RecordingAuditSink(), "test"), metrics, listeners)
+    telemetry = McpTelemetryDependencies(create_application_failure_signal(), InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter()), McpAuditRecorder(RecordingAuditSink(), "test", application_failures=create_application_failure_signal()), metrics, listeners)
     completion = CompletedToolInvocation(scope=InvocationScope.REQUEST, connector_name="internal", tool_name="read", outcome=InvocationOutcome.SUCCESS, duration_seconds=0.125)
     telemetry.metrics_recorder.record_completed_invocation(completion)
     protocol = CompletedProtocolRequest(method=ProtocolMethod.LIST_TOOLS, outcome=ProtocolOutcome.SUCCESS, duration_seconds=0.25)

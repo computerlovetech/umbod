@@ -1,4 +1,5 @@
 from tests.umbod.mcp.downstream_mcp_connectors.discovery_operation_support import personal_discovery_with_policy
+from umbod.logging import create_application_failure_signal
 from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryStores, create_downstream_discovery_runtime
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import McpSignals, SignalToolExecutionPipelineFactory
@@ -460,9 +461,10 @@ async def test_group_permission_filters_listing_and_denies_direct_lookup_and_sta
 
 @pytest.mark.asyncio
 async def test_proxy_records_display_name_failure_without_secret_attributes() -> None:
+    application_failures = create_application_failure_signal()
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
-    signals = create_mcp_signals(invocation_sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, 'test'))
+    signals = create_mcp_signals(invocation_sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, 'test', application_failures=application_failures), application_failures=application_failures)
     (provider, _, _, _, _) = await _provider({'weather': _downstream(is_error=True)}, ProviderOptions({'weather': 'Weather Service'}, signals))
     secret = 'downstream-secret-marker'
     tool_name = (await provider.list_tools())[0].name
@@ -483,9 +485,10 @@ async def test_proxy_records_display_name_failure_without_secret_attributes() ->
 
 @pytest.mark.asyncio
 async def test_proxy_uses_connector_id_when_display_name_is_empty() -> None:
+    application_failures = create_application_failure_signal()
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
-    signals = create_mcp_signals(invocation_sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, 'test'))
+    signals = create_mcp_signals(invocation_sink, InMemoryMcpMetricsRecorder(), McpAuditRecorder(audit_sink, 'test', application_failures=application_failures), application_failures=application_failures)
     (provider, _, _, _, _) = await _provider({'weather': _downstream()}, ProviderOptions({'weather': '   '}, signals))
     tool_name = (await provider.list_tools())[0].name
     public = FastMCP('public')

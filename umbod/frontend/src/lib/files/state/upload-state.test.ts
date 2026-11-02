@@ -27,18 +27,20 @@ function selectedFile(name: string = 'Draft.txt', size: number = 4): File {
 describe('upload selection and validation', () => {
   test('requires loaded eligibility and a directory before opening or submitting', async (): Promise<void> => {
     const { api, files, upload } = fixture();
-    const eligibility = deferred<void>();
-    vi.spyOn(api.filesystem, 'checkUploadEligibility').mockReturnValueOnce(eligibility.promise);
+    const response = await api.filesystem.browse(null);
+    const browsing = deferred<typeof response>();
+    vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(browsing.promise);
     const write = vi.spyOn(api.filesystem, 'uploadFile');
     upload.show();
     expect(upload.open).toBe(false);
-    await files.load(null);
+    const loading = files.load(null);
     upload.show();
     expect(upload.available).toBe(false);
     expect(upload.open).toBe(false);
     expect(upload.canSubmit).toBe(false);
-    eligibility.resolve(undefined);
-    await vi.waitFor(() => expect(upload.available).toBe(true));
+    browsing.resolve(response);
+    await loading;
+    expect(upload.available).toBe(true);
     upload.show();
     upload.select([selectedFile()]);
     expect(upload.canSubmit).toBe(true);
@@ -196,14 +198,14 @@ describe('confirmed and rejected uploads', () => {
     await upload.submit();
     expect(write).toHaveBeenCalledTimes(1);
     if (!(error instanceof AuthenticationRequiredError)) {
-      await files.checkUploadAvailability();
+      await files.reload();
       expect(upload.available).toBe(true);
       expect(upload.canSubmit).toBe(true);
       await upload.submit();
       expect(write).toHaveBeenCalledTimes(2);
       expect(upload.open).toBe(false);
     } else {
-      await files.checkUploadAvailability();
+      await files.reload();
       expect(upload.signInRequired).toBe(true);
       expect(upload.canSubmit).toBe(false);
       await upload.submit();
@@ -440,7 +442,7 @@ describe('pending and uncertain upload lifetimes', () => {
     expect(upload.uncertain).toBe(true);
     await upload.submit();
     expect(write).toHaveBeenCalledTimes(1);
-    vi.spyOn(api.filesystem, 'getRoot').mockRejectedValueOnce(new NetworkError('reload failed'));
+    vi.spyOn(api.filesystem, 'browse').mockRejectedValueOnce(new NetworkError('reload failed'));
     await upload.reload();
     expect(files.phase).toBe('error');
     await openUpload(files, upload);

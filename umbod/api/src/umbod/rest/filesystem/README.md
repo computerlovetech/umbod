@@ -13,11 +13,14 @@ description: "Authenticated filesystem browsing, creation, transfers, typed reci
 - [deletion.py](./deletion.py) — Authorized permanent file DELETE requiring one strong quoted positive numeric If-Match revision.
 - [metadata.py](./metadata.py) — Per-operation node OPTIONS and atomic revision-checked metadata, rename and move PATCH for files and directories.
 - [downloads.py](./downloads.py) — Attachment delivery and storage-neutral download response contract.
-- [uploads.py](./uploads.py) — Authorized OPTIONS, begin, raw PUT, inspection and idempotent completion routes.
+- [uploads.py](./uploads.py) — Authorized begin, raw PUT, session inspection and idempotent completion routes.
+- [upload_transfers.py](./upload_transfers.py) — Capability-only PUT under /api/filesystem; request-local services and no-store success/error responses.
 - [models.py](./models.py) — Strict upload requests, single-transfer responses, metadata and child envelopes.
-- [routes.py](./routes.py) — Browsing, minimal visible breadcrumbs, directory creation and download routes.
+- [routes.py](./routes.py) — Unified folder/file browsing with capabilities, minimal visible breadcrumbs, directory creation and download routes.
 
 # Related links
+
+- [Capability upload protocol](../../../../../docs/reference/filesystem-upload-transfers.md) — Exact public transfer admission, header credentials and operational limitations.
 
 - [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Filesystem storage and ownership boundary.
 - [ADR-009](../../../../../project/architecture-records/ADR-009-transport-neutral-upload-sessions.md) — Accepted upload contract; abandoned sessions and unreferenced bytes have no automatic cleanup guarantee.

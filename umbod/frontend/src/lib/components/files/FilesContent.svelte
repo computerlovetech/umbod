@@ -54,7 +54,7 @@
 
 <svelte:window ondragenter={enterWindow} ondragover={overWindow} ondragleave={leaveWindow} ondrop={dropWindow} onblur={resetDrag} ondrag={state.dragMove.followPointer} ondragend={state.dragMove.cancel} onkeydown={cancelDrag} />
 
-<div class="file-drag-image" aria-hidden="true" {@attach state.dragMove.attachDragImage}></div>
+<img class="file-drag-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" aria-hidden="true" width="1" height="1" draggable="false" decoding="sync" {@attach state.dragMove.attachDragImage} />
 {#if state.dragMove.dragging}
   <div class="file-drag-preview" aria-hidden="true" style:--preview-x={`${state.dragMove.previewX}px`} style:--preview-y={`${state.dragMove.previewY}px`}>
     <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6zM14 3v5h4" /></svg>
@@ -83,7 +83,7 @@
       <NodeShareButton node={state.node} sharing={state.sharing} />
       {#if state.phase === 'ready'}
       {#if upload.available}<Button variant="primary" id="upload-file-button" onclick={upload.show} disabled={upload.open}>Upload file</Button>{/if}
-      <Button variant="primary" id="new-folder-button" onclick={folder.show} disabled={folder.open}>New folder</Button>
+      {#if state.createDirectoryAllowed}<Button variant="primary" id="new-folder-button" onclick={folder.show} disabled={folder.open}>New folder</Button>{/if}
       {/if}
     </div>
   {/if}
@@ -109,9 +109,7 @@
   <FilesDescription state={state.description} />
   {#if state.node.kind === 'directory'}
     {#if !upload.available && upload.error}<p role="alert">{upload.error}</p>{/if}
-    {#if state.uploadAvailability === 'error'}
-      <p class="availability-error">Couldn't check upload availability. <Button variant="quiet" size="compact" onclick={state.checkUploadAvailability}>Retry upload check</Button></p>
-    {:else if state.uploadAvailability === 'sign-in'}
+    {#if state.uploadAvailability === 'sign-in'}
       <p class="availability-error">Sign in to check upload availability. <Button variant="quiet" size="compact" onclick={signIn}>Sign in</Button></p>
     {/if}
     {#if upload.open && upload.available}<FileUploadForm state={upload} destination={state.node.name || 'Files'} {signIn} />{/if}
@@ -130,7 +128,7 @@
               {@const editing = state.rowEditing.controllers.get(item.id)}
               <tr class={['item-row', state.dragMove.isSource(item.id) && 'drag-source', state.dragMove.isTarget(item.id) && 'drop-target']} draggable={state.dragMove.canDrag(item.id)} {@attach state.dragMove.attachRow(item.id)} ondragstart={(event) => state.dragMove.start(item.id, event)} ondragover={(event) => state.dragMove.over(item.id, event)} ondragleave={(event) => state.dragMove.leave(item.id, event)} ondrop={(event) => state.dragMove.drop(item.id, event)}>
                 <td>
-                  <a class="item-name" href={filesHref(item.id)} title={item.name}>
+                  <a class="item-name" href={filesHref(item.id)} title={item.name} draggable="false">
                     <svg role="img" aria-label={item.kind === 'directory' ? 'Folder' : 'File'} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5">
                       {#if item.kind === 'directory'}<path d="M3 6h7l2 3h9v11H3z" />{:else}<path d="M6 3h8l4 4v14H6z M14 3v5h4" />{/if}
                     </svg>

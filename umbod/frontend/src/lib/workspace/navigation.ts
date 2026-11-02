@@ -20,6 +20,7 @@ const dashboardNavigation: readonly WorkspaceNavigationItem[] = [
 const administratorNavigation: readonly WorkspaceNavigationItem[] = [
   ...dashboardNavigation,
   { id: 'overview', label: 'Administration', href: '/admin' },
+  { id: 'analytics', label: 'Log analytics', href: '/admin/analytics' },
   { id: 'connectors', label: 'Connectors', href: '/admin/connectors' },
   { id: 'groups', label: 'Groups', href: '/admin/groups' },
   { id: 'groupPermissions', label: 'Group permissions', href: '/admin/group-permissions/connectors' },

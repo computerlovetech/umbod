@@ -1,4 +1,3 @@
-import json
 import logging
 
 from collections.abc import Mapping
@@ -10,6 +9,12 @@ from fastmcp.server.middleware import AuthMiddleware
 from fastmcp.server.middleware.middleware import CallNext, MiddlewareContext
 
 logger = logging.getLogger(__name__)
+
+_MCP_METHODS = frozenset({
+    "initialize", "ping", "tools/list", "tools/call", "prompts/list", "prompts/get",
+    "resources/list", "resources/read", "resources/templates/list", "resources/subscribe",
+    "resources/unsubscribe", "notifications/initialized",
+})
 
 
 class MCPAuthDebugMiddleware(AuthMiddleware):
@@ -28,34 +33,24 @@ class MCPAuthDebugMiddleware(AuthMiddleware):
     def _log_auth_context(self, context: MiddlewareContext[Any]) -> None:
         provider_token = get_access_token()
         claims = getattr(provider_token, "claims", {}) if provider_token is not None else {}
-        payload = {
-            "mcp_method": context.method,
-            "authorization_bearer_jwt": _authorization_bearer_jwt(),
-            "provider_access_token_jwt": getattr(provider_token, "token", None),
-            "provider_client_id": getattr(provider_token, "client_id", None),
-            "provider_scopes": getattr(provider_token, "scopes", None),
-            "provider_expires_at": getattr(provider_token, "expires_at", None),
-            "provider_resource": getattr(provider_token, "resource", None),
-            "provider_claims": claims if isinstance(claims, Mapping) else {},
-            "permission_group_claim": self._permission_group_claim,
-            "permission_group_claim_value": claims.get(self._permission_group_claim)
-            if isinstance(claims, Mapping)
-            else None,
-        }
         logger.warning(
-            "MCP auth debug context %s",
-            json.dumps(payload, default=str, sort_keys=True),
-            extra=payload,
+            "MCP authentication debug presence",
+            extra={
+                "mcp_method": context.method if context.method in _MCP_METHODS else "other",
+                "authorization_bearer_present": _authorization_bearer_present(),
+                "provider_access_token_present": provider_token is not None,
+                "provider_claims_present": isinstance(claims, Mapping) and bool(claims),
+                "permission_group_claim_present": isinstance(claims, Mapping)
+                and self._permission_group_claim in claims,
+            },
         )
 
 
-def _authorization_bearer_jwt() -> str | None:
+def _authorization_bearer_present() -> bool:
     try:
         request = get_http_request()
     except RuntimeError:
-        return None
+        return False
     authorization = request.headers.get("authorization", "")
     scheme, _, token = authorization.partition(" ")
-    if scheme.lower() != "bearer" or not token.strip():
-        return None
-    return token.strip()
+    return scheme.lower() == "bearer" and bool(token.strip())

@@ -6,7 +6,7 @@ import anyio
 import httpcore2
 import httpx2
 
-from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, DownstreamHttpResponse, NoDownstreamResponse
 from umbod.core.invocation.failure_evidence import (
     InvocationFailureOrigin,
     capture_invocation_exception,
@@ -20,6 +20,46 @@ from .wire_parsing import ProtocolInputValidator, ValidatedProtocolStream
 
 
 _TIMEOUT = InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason="timeout")
+
+
+class ResponseHeaderObserver:
+    def __init__(self, state: OperationState) -> None:
+        self._state = state
+        self._pending = bytearray()
+        self._complete = False
+
+    def __call__(self, chunk: bytes) -> None:
+        if self._complete:
+            return
+        self._pending.extend(chunk[:65536 - len(self._pending)])
+        while not self._complete:
+            end = self._pending.find(b"\r\n\r\n")
+            if end < 0:
+                if len(self._pending) == 65536:
+                    self._pending.clear()
+                    self._complete = True
+                return
+            lines = bytes(self._pending[:end]).split(b"\r\n")
+            del self._pending[:end + 4]
+            status_parts = lines[0].split(b" ", 2)
+            if len(status_parts) < 2 or len(status_parts[1]) != 3 or not status_parts[1].isdigit():
+                self._complete = True
+                self._pending.clear()
+                return
+            status = int(status_parts[1])
+            if not 100 <= status <= 599:
+                self._complete = True
+                self._pending.clear()
+                return
+            self._state.response_evidence = DownstreamHttpResponse(status_code=status)
+            if status < 200 and status != 101:
+                continue
+            self._complete = True
+            self._pending.clear()
+            for line in lines[1:]:
+                name, separator, value = line.partition(b":")
+                if separator and name.lower() == b"content-length" and not value.strip().isdigit():
+                    self._state.reject("invalid_content_length")
 
 
 class ResponseBody(Protocol):
@@ -59,6 +99,16 @@ def safe_core_errors() -> Iterator[None]:
         raise
 
 
+def _http_failure_diagnostic(error: Exception) -> InvocationFailureDiagnostic:
+    if isinstance(error, httpx2.NetworkError):
+        reason = "network_failure"
+    elif isinstance(error, (httpx2.ProtocolError, PersonalRuntimeUnavailable)):
+        reason = "protocol_rejected"
+    else:
+        return InvocationFailureDiagnostic(execution_mode="personal", stage="runtime", reason="runtime_failure")
+    return InvocationFailureDiagnostic(execution_mode="personal", stage="transport", reason=reason)
+
+
 def _capture_http_failure(error: Exception) -> None:
     if current_invocation_failure() is None:
         origin = InvocationFailureOrigin.MCP if isinstance(error, (TimeoutError, httpx2.HTTPError, PersonalRuntimeUnavailable)) else InvocationFailureOrigin.INTERNAL
@@ -84,7 +134,7 @@ class BoundedResponseStream(httpx2.AsyncByteStream):
                 self._state.fail(_TIMEOUT)
             except Exception as error:
                 _capture_http_failure(error)
-                self._state.fail(None)
+                self._state.fail(_http_failure_diagnostic(error))
             self._size += len(chunk)
             self._state.account(len(chunk), self._size)
             yield chunk
@@ -100,6 +150,7 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
         self._state = state
 
     async def handle_async_request(self, request: httpx2.Request) -> httpx2.Response:
+        self._state.response_evidence = NoDownstreamResponse()
         body = await self._request_body(request)
         self._state.authorize(request, body)
         response = await self._send(self._outgoing(request, body))
@@ -107,15 +158,18 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
             return self._response(request, response)
         except Exception as error:
             _capture_http_failure(error)
-            with anyio.move_on_after(0.25, shield=True):
-                await response.aclose()
-        self._state.fail(None)
+            try:
+                with anyio.move_on_after(0.25, shield=True):
+                    await response.aclose()
+            except Exception:
+                pass
+            self._state.fail(_http_failure_diagnostic(error))
 
     async def _request_body(self, request: httpx2.Request) -> bytes:
         body = bytearray()
         async for chunk in request.stream:
             if len(body) + len(chunk) > self._state.limits.maximum_request_bytes:
-                self._state.fail(None)
+                self._state.reject("request_size_exceeded")
             body.extend(chunk)
         return bytes(body)
 
@@ -134,6 +188,7 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
             extensions={"timeout": request.extensions.get("timeout", {})},
         )
     async def _send(self, outgoing: httpcore2.Request) -> httpcore2.Response:
+        self._state.response_evidence = NoDownstreamResponse()
         try:
             with anyio.fail_after(max(0, self._state.deadline - anyio.current_time())), safe_core_errors():
                 return await self._connections.handle_async_request(outgoing)
@@ -142,12 +197,13 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
             self._state.fail(_TIMEOUT)
         except Exception as error:
             _capture_http_failure(error)
-        self._state.fail(None)
+            self._state.fail(_http_failure_diagnostic(error))
 
     def _response(self, request: httpx2.Request, response: httpcore2.Response) -> httpx2.Response:
+        self._state.response_evidence = DownstreamHttpResponse(status_code=response.status)
         if response.status == 401 and request.method != "DELETE" and not self._state.cleaning_up:
             self._state.authorization_rejected = True
-            self._state.fail(None)
+            self._state.fail(InvocationFailureDiagnostic(execution_mode="personal", stage="authorization", reason="authorization_rejected"))
         incoming = self._response_headers(response)
         raw = BoundedResponseStream(response, self._state)
         media_type = incoming.get("content-type", "").partition(";")[0].strip().lower()
@@ -158,6 +214,8 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
         )
 
     def _response_headers(self, response: httpcore2.Response) -> httpx2.Headers:
+        if response.status < 200 or response.status >= 300:
+            self._state.reject("http_rejected")
         incoming = httpx2.Headers(response.headers)
         validator = ProtocolInputValidator(self._state)
         allowed = {"content-type", "content-length", "mcp-session-id", "mcp-protocol-version"}
@@ -166,14 +224,19 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
             validator.text(value)
         self._validate_encoding(permitted)
         encoding = incoming.get("content-encoding", "identity").lower()
-        length = int(incoming.get("content-length", "0"))
-        if (
-            encoding != "identity" or length < 0
-            or length > self._state.limits.maximum_response_bytes
-            or length + self._state.total_bytes > self._state.limits.maximum_total_bytes
-            or response.status < 200 or response.status >= 300
-        ):
-            self._state.fail(None)
+        if encoding != "identity":
+            self._state.reject("content_encoding_rejected")
+        raw_length = incoming.get("content-length", "0")
+        if not raw_length.isascii() or not raw_length.isdecimal():
+            self._state.reject("invalid_content_length")
+        try:
+            length = int(raw_length)
+        except ValueError:
+            self._state.reject("invalid_content_length")
+        if length > self._state.limits.maximum_response_bytes:
+            self._state.reject("response_size_exceeded")
+        if length + self._state.total_bytes > self._state.limits.maximum_total_bytes:
+            self._state.reject("aggregate_size_exceeded")
         return permitted
 
     def _validate_encoding(self, headers: httpx2.Headers) -> None:
@@ -182,7 +245,7 @@ class PersonalHttpTransport(httpx2.AsyncBaseTransport):
         for parameter in parts[1:]:
             name, _, value = parameter.partition("=")
             if name.strip().lower().startswith("charset") and value.strip().strip('"').lower() not in {"utf-8", "utf8"}:
-                self._state.fail(None)
+                self._state.reject("charset_rejected")
         if parts[0].strip().lower() in {"application/json", "text/event-stream"}:
             headers["content-type"] = parts[0].strip().lower() + "; charset=utf-8"
 
