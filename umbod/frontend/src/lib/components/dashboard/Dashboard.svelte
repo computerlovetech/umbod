@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import { workspaceNavigation, workspacePresentation } from '$lib/workspace/navigation';
   import type { WorkspaceApi } from '$lib/workspace/api';
   import { WorkspaceAccessState } from '$lib/workspace/workspace-access-state.svelte';
@@ -72,25 +73,25 @@
       {#if state.catalogueError}
         <div class="feedback" role="alert">
           <span>{state.catalogueError}</span>
-          <button disabled={state.refreshing} onclick={state.loadCatalogue}>Retry</button>
+          <Button variant="secondary" disabled={state.refreshing} onclick={state.loadCatalogue}>Retry</Button>
         </div>
       {/if}
       {#if state.phase === 'sign-in'}
         <p role="alert">Sign in required</p>
-        <button onclick={() => { state.dispose(); signIn(); }}>Sign in</button>
+        <Button onclick={() => { state.dispose(); signIn(); }}>Sign in</Button>
       {:else if state.phase === 'forbidden'}
         <p role="alert">Access unavailable</p>
-        <button onclick={state.loadCatalogue}>Retry</button>
+        <Button variant="secondary" onclick={state.loadCatalogue}>Retry</Button>
       {:else if state.phase === 'error'}
         <p role="alert">Couldn't load connectors</p>
-        <button onclick={state.loadCatalogue}>Retry</button>
+        <Button variant="secondary" onclick={state.loadCatalogue}>Retry</Button>
       {:else if state.connectors.length === 0}
         <p role="status">No connectors available</p>
       {:else}
         {#if state.personalPhase === 'error' || state.personalPhase === 'unavailable'}
           <div class="feedback" role="status">
             <span>{state.personalPhase === 'error' ? "Couldn't load personal access" : 'Personal access unavailable'}</span>
-            <button onclick={state.loadPersonal}>Retry personal access</button>
+            <Button variant="secondary" onclick={state.loadPersonal}>Retry personal access</Button>
           </div>
         {/if}
         <ConnectorWorkspace {state} canManage={workspaceAccess.adminAccess === 'allowed'} />
@@ -112,7 +113,5 @@
   .setup { margin-top: 2rem; }
   .feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
   p { color: var(--admin-muted); line-height: 1.6; }
-  button { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); color: var(--admin-ink); font: inherit; cursor: pointer; padding: 0.6rem 0.9rem; min-height: 2.75rem; }
-  button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
   [role='alert'] { color: var(--admin-danger); }
 </style>

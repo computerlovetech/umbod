@@ -12,8 +12,9 @@ tags:
 
 ## Buttons, fields, and forms
 
-- [Button](src/lib/components/admin/shared/Button.svelte) — Standard action button; use primary, secondary, or danger variants and normal or compact sizing for consistent actions.
-- [LoadingButton](src/lib/components/admin/shared/LoadingButton.svelte) — Async action button with delayed loading feedback; use for pending actions that must prevent repeated clicks.
+- [Button](src/lib/components/admin/shared/Button.svelte) — Native action button with primary, secondary, danger, quiet, compact, and icon-only presentation; forwards native attributes, events, and attachments.
+- [ButtonLink](src/lib/components/admin/shared/ButtonLink.svelte) — Native navigation anchor with canonical action styling; use for action-like links without replacing href semantics.
+- [LoadingButton](src/lib/components/admin/shared/LoadingButton.svelte) — Button with delayed loading feedback, native attribute forwarding, and immediate pending protection; supports the same variants and sizes.
 - [AdminSaveAction](src/lib/components/admin/shared/AdminSaveAction.svelte) — Save button with status feedback; use when a save action needs loading, success, or error presentation.
 - [AdminConfigurationField](src/lib/components/admin/shared/AdminConfigurationField.svelte) — Labelled text, password, or URL field; use for configuration inputs with helper text, validation, or existing-secret handling.
 - [Select](src/lib/components/admin/shared/Select.svelte) — Controlled select or searchable combobox; use for keyboard-accessible choices, with parent-owned options and filtering.
@@ -71,7 +72,7 @@ tags:
 ## Shared styling foundations
 
 - [Theme tokens](src/lib/styles/admin.css) — Shared colours, radii, shadows, and focus styling; use the semantic --admin-* variables across features, not just administration.
-- [Native button/link styling](src/lib/styles/admin.css) — Shared .admin-button styles; use for existing native button or action-link markup, separately from the Button component.
+- [Canonical button styling](src/lib/styles/buttons.css) — Shared visual rules for Button and ButtonLink; use the components for actions and action-like navigation, respectively.
 - [Page typography and back links](src/lib/styles/admin.css) — Shared .admin-title, .admin-lede, and .admin-back-link styles; use for consistent page introductions and back navigation.
 - [Panels and messages](src/lib/styles/admin.css) — Shared .admin-panel and .admin-message variants; use for surfaces and inline feedback, supplying accessibility semantics separately.
 - [Card links](src/lib/styles/admin.css) — Shared .admin-card-link styling; use for navigable cards with consistent borders and hover states.

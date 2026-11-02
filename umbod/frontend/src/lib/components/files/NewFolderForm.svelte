@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { tick } from 'svelte';
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import type { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
   let { state }: { state: NewFolderState } = $props();
 
@@ -16,12 +18,14 @@
   function handleEscape(event: KeyboardEvent): void {
     if (event.key !== 'Escape') return;
     event.preventDefault();
-    cancel();
+    void cancel();
   }
 
-  function cancel(): void {
+  async function cancel(): Promise<void> {
     state.cancel();
-    if (!state.open) document.getElementById('new-folder-button')?.focus();
+    if (state.open) return;
+    await tick();
+    document.getElementById('new-folder-button')?.focus();
   }
 </script>
 
@@ -31,10 +35,10 @@
   <label for="folder-description">Description (optional)</label>
   <textarea id="folder-description" aria-describedby="folder-description-hint" value={state.description} oninput={(event) => state.changeDescription(event.currentTarget.value)} disabled={state.pending} onkeydown={handleEscape} rows="3"></textarea>
   <p id="folder-description-hint">What is here, and when should it be read?</p>
-  <button type="submit" onkeydown={handleEscape} disabled={state.pending || state.uncertain || !state.name.trim()}>{state.pending ? 'Creating…' : 'Create folder'}</button>
-  <button type="button" onkeydown={handleEscape} disabled={state.pending} onclick={cancel}>Cancel</button>
+  <Button variant="primary" type="submit" onkeydown={handleEscape} disabled={state.pending || state.uncertain || !state.name.trim()}>{state.pending ? 'Creating…' : 'Create folder'}</Button>
+  <Button variant="secondary" type="button" onkeydown={handleEscape} disabled={state.pending} onclick={cancel}>Cancel</Button>
   {#if state.error}<p role="alert">{state.error}</p>{/if}
-  {#if state.uncertain}<button type="button" onkeydown={handleEscape} onclick={state.reload}>Reload folder</button>{/if}
+  {#if state.uncertain}<Button variant="secondary" type="button" onkeydown={handleEscape} onclick={state.reload}>Reload folder</Button>{/if}
 </form>
 
 <style>
@@ -42,10 +46,8 @@
   label[for='folder-description'], #folder-description-hint { flex-basis: 100%; }
   #folder-description-hint { margin: 0; color: var(--admin-muted); font-size: 0.9rem; }
   textarea { flex-basis: 100%; resize: vertical; }
-  input, textarea, button { border: 1px solid var(--admin-border); background: var(--admin-panel); color: var(--admin-ink); border-radius: var(--admin-radius); padding: 0.6rem; font: inherit; }
+  input, textarea { border: 1px solid var(--admin-border); background: var(--admin-panel); color: var(--admin-ink); border-radius: var(--admin-radius); padding: 0.6rem; font: inherit; }
   input { min-width: 0; }
-  button { cursor: pointer; }
-  button:disabled { cursor: default; opacity: 0.6; }
   :focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
   [role='alert'] { color: var(--admin-danger); flex-basis: 100%; margin: 0; }
 </style>

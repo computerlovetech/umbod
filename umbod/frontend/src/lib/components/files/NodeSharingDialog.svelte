@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import { nativeDialog } from '$lib/components/shared/dialogs/native-dialog';
   import Form from '$lib/components/admin/shared/Form.svelte';
   import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
@@ -20,9 +21,9 @@
 <dialog aria-labelledby={id + '-title'} aria-modal="true" onclick={backdrop} {@attach nativeDialog(() => { void state.close(); }, () => !state.pending, '[data-dialog-cancel]')}>
   <header>
     <h2 id={id + '-title'}>Share “{state.node?.name || 'Files'}”</h2>
-    <button class="close" type="button" aria-label="Close sharing" data-dialog-cancel disabled={state.pending} onclick={() => { void state.close(); }}>
+    <Button variant="quiet" iconOnly style="flex: none;" type="button" aria-label="Close sharing" data-dialog-cancel disabled={state.pending} onclick={() => { void state.close(); }}>
       <svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
-    </button>
+    </Button>
   </header>
   {#snippet fields()}
     {#if state.phase === 'loading'}
@@ -45,7 +46,7 @@
         </div>
         {#each state.groups as group (group.group_id)}
           <section class="group" aria-label={group.label}>
-            <div class="group-heading"><div><h3>{group.label}</h3>{#if group.label !== group.group_id}<p class="provider-id">{group.group_id}</p>{/if}{#if group.description}<p class="hint">{group.description}</p>{/if}</div><button type="button" class="remove" aria-label={`Remove ${group.label}`} onclick={() => state.remove(group.group_id)}>Remove</button></div>
+            <div class="group-heading"><div><h3>{group.label}</h3>{#if group.label !== group.group_id}<p class="provider-id">{group.group_id}</p>{/if}{#if group.description}<p class="hint">{group.description}</p>{/if}</div><Button variant="quiet" size="compact" type="button" aria-label={`Remove ${group.label}`} onclick={() => state.remove(group.group_id)}>Remove</Button></div>
             <div class="permissions">
               {#each state.permissions as permission (permission.value)}
                 <label class="permission"><input type="checkbox" checked={group.permissions.includes(permission.value)} onchange={(event) => state.changePermission(group.group_id, permission.value, event.currentTarget.checked)} />{permission.label}</label>
@@ -87,10 +88,6 @@
   .permissions { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; margin-top: 0.85rem; }
   .permission { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; }
   input[type='checkbox'] { accent-color: var(--admin-accent); width: 1rem; height: 1rem; }
-  .close, .remove { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-ink); cursor: pointer; font: inherit; }
-  .close { display: grid; place-items: center; flex: none; width: 2rem; height: 2rem; padding: 0; }
-  .remove { font-size: 0.8rem; padding: 0.4rem 0.6rem; }
-  button:disabled { opacity: 0.6; cursor: default; }
   .error { padding: 0.65rem; border-radius: var(--admin-radius); background: var(--admin-danger-bg); color: var(--admin-danger-text); font-size: 0.85rem; }
   :focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }

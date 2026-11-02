@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import { nativeDialog } from '$lib/components/shared/dialogs/native-dialog';
   import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
   import type { NodeUpdateState } from '$lib/files/state/node-update-state.svelte';
@@ -23,18 +24,18 @@
           <li><button type="button" onclick={() => { void state.browse(folder.id); }} disabled={state.pending || state.loading}>Open {folder.name}</button></li>
         {/each}
       </ul>
-      {#if state.folder}<button type="button" onclick={() => { void state.browse(state.folder!.id); }} disabled={state.pending || state.loading}>Retry folder</button>{/if}
+      {#if state.folder}<Button variant="secondary" type="button" onclick={() => { void state.browse(state.folder!.id); }} disabled={state.pending || state.loading}>Retry folder</Button>{/if}
       <label for="move-folder-id">Folder ID</label>
       <input id="move-folder-id" value={state.directFolderId} oninput={(event) => state.changeFolderId(event.currentTarget.value)} disabled={state.pending} />
-      <button type="button" onclick={state.openDirectFolder} disabled={state.pending || state.loading}>Open folder ID</button>
+      <Button variant="secondary" type="button" onclick={state.openDirectFolder} disabled={state.pending || state.loading}>Open folder ID</Button>
     {:else}
       <label for="node-rename">Name</label>
       <input id="node-rename" value={state.draft} oninput={(event) => state.changeName(event.currentTarget.value)} disabled={state.pending || state.needsReload} required />
     {/if}
     {#if state.error}<p role="alert">{state.error}</p>{/if}
-    {#if state.needsReload}<button type="button" onclick={state.reload} disabled={state.pending}>Reload item</button>{/if}
+    {#if state.needsReload}<Button variant="secondary" type="button" onclick={state.reload} disabled={state.pending}>Reload item</Button>{/if}
     <div class="actions">
-      <button type="button" data-dialog-cancel onclick={state.cancel} disabled={state.pending}>Cancel</button>
+      <Button variant="secondary" type="button" data-dialog-cancel onclick={state.cancel} disabled={state.pending}>Cancel</Button>
       <LoadingButton type="submit" loading={state.pending} disabled={!state.canSubmit} label={state.moving ? 'Move here' : 'Rename'} loadingLabel="Saving…" />
     </div>
   </form>

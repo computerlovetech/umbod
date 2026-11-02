@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import { permissions, permissionLabels } from '$lib/admin/filesystem/domain/schemas';
   import FilesystemConfirmationDialog from './FilesystemConfirmationDialog.svelte';
   import AdminSaveAction from '$lib/components/admin/shared/AdminSaveAction.svelte';
@@ -12,15 +13,15 @@
   {#if state.error}
     <div role="alert" class="notice permission-notice error">
       <p>{state.error}</p>
-      {#if !state.saved}<button type="button" onclick={state.ensureLoaded}>Retry</button>
-      {:else if state.blocked}<button type="button" onclick={state.requestReload}>Reload policy</button>{/if}
+      {#if !state.saved}<Button variant="secondary" type="button" onclick={state.ensureLoaded}>Retry</Button>
+      {:else if state.blocked}<Button variant="secondary" type="button" onclick={state.requestReload}>Reload policy</Button>{/if}
     </div>
   {/if}
   {#if state.success}<p role="status" class="notice permission-notice success">{state.success}</p>{/if}
 
   {#if state.saved}
     {#if state.saved.status === 'conflict'}
-      <div role="alert" class="notice permission-notice error"><p>Root policy conflict. Ask an operator to resolve it, then reload.</p><button type="button" onclick={state.requestReload}>Reload policy</button></div>
+      <div role="alert" class="notice permission-notice error"><p>Root policy conflict. Ask an operator to resolve it, then reload.</p><Button variant="secondary" type="button" onclick={state.requestReload}>Reload policy</Button></div>
     {/if}
 
     {#if state.saved.status === 'uninitialized'}<p class="notice permission-notice">Not set up</p>{/if}

@@ -1,5 +1,6 @@
 <script lang="ts">
   import { tick } from 'svelte';
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import type { PersonalConnectionController } from '$lib/personal-connections/state/port';
   import { PersonalAccessViewState } from '$lib/personal-connections/state/access-view-state.svelte';
   import ConnectionActions from './ConnectionActions.svelte';
@@ -51,8 +52,8 @@
       <h5>Disconnect personal access?</h5>
       <p>Remove saved authorization and disable personal access? Any pending sign-in cannot restore it.</p>
       <div class="confirmation-actions">
-        <button class="danger" type="button" disabled={state.cleanupBlocked} onclick={() => act(state.disconnect)}>Confirm disconnect</button>
-        <button type="button" onclick={state.keepAuthorization}>Keep authorization</button>
+        <Button variant="danger" disabled={state.cleanupBlocked} onclick={() => act(state.disconnect)}>Confirm disconnect</Button>
+        <Button variant="secondary" onclick={state.keepAuthorization}>Keep authorization</Button>
       </div>
     </section>
   {/if}
@@ -71,9 +72,6 @@
   .header-status { margin-left: auto; }
   p { line-height: 1.6; }
   .status-description, .connector-description { color: var(--admin-muted); font-size: 0.85rem; margin: 0.75rem 0 0; }
-  button { align-items: center; box-sizing: border-box; background: var(--admin-panel); border: 1px solid var(--admin-border-strong); border-radius: 6px; color: var(--admin-ink); cursor: pointer; display: inline-flex; font: inherit; font-size: 0.85rem; font-weight: 600; gap: 0.5rem; justify-content: center; line-height: 1.4; min-height: 2.75rem; padding: 0.6rem 0.9rem; text-decoration: none; }
-  button:hover:not(:disabled) { background: var(--admin-hover); }
-  button:disabled { opacity: 0.55; cursor: not-allowed; }
   .connection-details { border-top: 1px solid var(--admin-border); font-size: 0.8rem; margin-top: 1rem; padding-top: 0.85rem; }
   summary { color: var(--admin-muted); cursor: pointer; font-weight: 600; width: fit-content; }
   summary:hover { color: var(--admin-accent); }
@@ -82,13 +80,11 @@
   dt { color: var(--admin-muted); }
   dd { margin: 0; text-align: right; }
   .hint { color: var(--admin-muted); font-size: 0.75rem; margin: 0.85rem 0 0; }
-  button:focus-visible, summary:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
+  summary:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
   .confirmation { background: var(--admin-danger-bg); border: 1px solid var(--admin-danger-border); border-radius: var(--admin-radius); color: var(--admin-danger-text); margin-top: 1rem; padding: 1rem; }
   h5 { font-size: 0.85rem; margin: 0; }
   .confirmation p { font-size: 0.8rem; margin: 0.5rem 0 0; }
   .confirmation-actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 0.85rem; }
-  .danger { background: var(--admin-danger); border-color: var(--admin-danger); color: var(--admin-on-action); }
-  .danger:hover:not(:disabled) { background: var(--admin-danger-hover); }
   .feedback, .error { font-size: 0.8rem; margin: 0.85rem 0 0; }
   .feedback { color: var(--admin-muted); }
   .error { color: var(--admin-danger); }

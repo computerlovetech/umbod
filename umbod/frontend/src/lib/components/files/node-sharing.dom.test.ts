@@ -45,8 +45,13 @@ function button(label: string): HTMLButtonElement {
 }
 
 async function open(label = 'Share “Notes.txt”'): Promise<void> {
-  await vi.waitFor(() => expect(Array.from(document.querySelectorAll('button')).some((candidate) => candidate.getAttribute('aria-label') === label)).toBe(true));
+  const name = label.slice('Share '.length);
+  button(`Actions for ${name}`).click();
+  await tick();
+  await vi.waitFor(() => expect(document.querySelector(`button[role="menuitem"][aria-label="${label}"]`)).not.toBeNull());
   button(label).click();
+  await tick();
+  expect(document.querySelector('[role="menu"]')).toBeNull();
   await vi.waitFor(() => expect(document.querySelector('input[role="combobox"]')).not.toBeNull());
   await tick();
 }
@@ -79,17 +84,35 @@ describe('Files group sharing UI', (): void => {
   test('renders authorized current directory, directory/file rows and file details; denied defaults remain hidden', async (): Promise<void> => {
     const { state } = await setup(rootId);
     await vi.waitFor(() => expect(button('Share “Files”')).toBeDefined());
-    expect(button('Share “Projects”').closest('a')).toBeNull();
+    expect(button('Actions for “Projects”').closest('tr')).not.toBeNull();
+    expect(document.querySelector('tbody button[aria-label^="Share"]')).toBeNull();
     await state.load(folderId);
     await tick();
     expect(button('Share “Projects”')).toBeDefined();
-    expect(button('Share “Notes.txt”').closest('tr')).not.toBeNull();
+    expect(button('Actions for “Notes.txt”').closest('tr')).not.toBeNull();
+    expect(document.querySelector('tbody button[aria-label^="Share"]')).toBeNull();
     await state.load(fileId);
     await tick();
     expect(button('Share “Notes.txt”').closest('[aria-label="File details"]')).not.toBeNull();
     state.sharing.reset();
     await tick();
     expect(document.querySelector('button[aria-label^="Share"]')).toBeNull();
+  });
+
+  test('direct sharing action restores focus to its native invoking button', async (): Promise<void> => {
+    const { api } = await setup();
+    const replace = vi.spyOn(api.sharing, 'replaceAccess');
+    const trigger = button('Share “Projects”');
+    trigger.focus();
+    trigger.click();
+    await vi.waitFor(() => expect(document.querySelector('input[role="combobox"]')).not.toBeNull());
+    await tick();
+    expect(document.activeElement).toBe(button('Close sharing'));
+    expect(button('Close sharing').hasAttribute('data-dialog-cancel')).toBe(true);
+    button('Close sharing').click();
+    await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
+    await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
+    expect(replace).not.toHaveBeenCalled();
   });
 
   test('pending and denied inspections never advertise sharing', async (): Promise<void> => {
@@ -199,7 +222,7 @@ describe('Files group sharing UI', (): void => {
   test.each(['Cancel', 'Close sharing', 'escape', 'backdrop'])('dismisses by %s and restores invoking focus without mutation', async (mechanism): Promise<void> => {
     const { api } = await setup();
     const replace = vi.spyOn(api.sharing, 'replaceAccess');
-    const trigger = button('Share “Notes.txt”');
+    const trigger = button('Actions for “Notes.txt”');
     await open();
     const dialog = document.querySelector('dialog')!;
     if (mechanism === 'escape') dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
@@ -250,14 +273,14 @@ describe('Files group sharing UI', (): void => {
     expect(button('Save sharing').disabled).toBe(false);
   });
 
-  test('fallback focus uses Files heading when invoking row disappears', async (): Promise<void> => {
+  test('restores the row menu trigger after sharing is revoked while other actions remain', async (): Promise<void> => {
     const { state } = await setup();
     await open();
     state.sharing.revoke(fileId);
     await tick();
     button('Cancel').click();
     await tick();
-    await vi.waitFor(() => expect(document.activeElement).toBe(document.querySelector('#files-heading')));
+    await vi.waitFor(() => expect(document.activeElement).toBe(button('Actions for “Notes.txt”')));
   });
 
   test('navigation during mutation fences obsolete result, announcement and focus', async (): Promise<void> => {

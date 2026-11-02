@@ -1,4 +1,5 @@
 <script lang="ts">
+  import ButtonLink from '$lib/components/admin/shared/ButtonLink.svelte';
   import { BrowserClipboardWriter } from '$lib/admin/clipboard';
   import type { InstanceConfigurationPageData } from '$lib/admin/instance-configuration';
   import { useToast } from '$lib/components/feedback';
@@ -26,7 +27,7 @@
 {#if state.status === 'failed'}
   <section class="state-card" aria-live="polite">
     <p>{state.message}</p>
-    <a class="admin-button" href="/admin/instance-configuration">{state.retryLabel}</a>
+    <ButtonLink href="/admin/instance-configuration">{state.retryLabel}</ButtonLink>
   </section>
 {:else if state.status === 'empty'}
   <section class="state-card"><p>No non-secret instance configuration entries are available</p></section>

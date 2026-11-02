@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import { filesystemConfirmation } from './confirmation-dialog';
   let { title, description, confirmLabel, oncancel, onconfirm }: {
     title: string;
@@ -13,8 +14,8 @@
   <h2 id="filesystem-confirmation-title">{title}</h2>
   <p id="filesystem-confirmation-description">{description}</p>
   <div class="actions">
-    <button type="button" data-dialog-cancel onclick={(event) => { event.currentTarget.closest('dialog')?.close(); oncancel(); }}>Cancel</button>
-    <button type="button" onclick={(event) => { event.currentTarget.closest('dialog')?.close(); onconfirm(); }}>{confirmLabel}</button>
+    <Button variant="secondary" type="button" data-dialog-cancel onclick={(event) => { event.currentTarget.closest('dialog')?.close(); oncancel(); }}>Cancel</Button>
+    <Button variant="primary" type="button" onclick={(event) => { event.currentTarget.closest('dialog')?.close(); onconfirm(); }}>{confirmLabel}</Button>
   </div>
 </dialog>
 
@@ -24,6 +25,4 @@
   h2 { font-size: 1.25rem; margin-top: 0; }
   p { color: var(--admin-muted); line-height: 1.6; }
   .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 1rem; margin-top: 1rem; }
-  button { cursor: pointer; padding: 0.6rem 0.9rem; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); color: var(--admin-ink); font: inherit; }
-  button:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 2px; }
 </style>

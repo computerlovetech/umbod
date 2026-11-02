@@ -1,5 +1,6 @@
 <script lang="ts">
   import { navigating } from '$app/state';
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import { logoutNavigation, type LogoutNavigation } from '$lib/admin/infrastructure/logout';
   import type { Snippet } from 'svelte';
   import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
@@ -68,7 +69,7 @@
       {:else}
         <p class="account-name">{accountFallback}</p>
       {/if}
-      <button class="logout-button" type="button" disabled={state.loggingOut} onclick={() => state.logout(logout)}>Log out</button>
+      <div class="logout-action"><Button variant="secondary" disabled={state.loggingOut} onclick={() => state.logout(logout)} style="width: 100%">Log out</Button></div>
     </div>
   </aside>
 
@@ -160,21 +161,7 @@
     padding: 12px 8px 0;
   }
 
-  .logout-button {
-    background: transparent;
-    border: 1px solid var(--admin-border);
-    border-radius: var(--admin-radius);
-    color: var(--admin-ink);
-    cursor: pointer;
-    font: inherit;
-    margin-top: 12px;
-    padding: 8px 12px;
-    width: 100%;
-  }
-
-  .logout-button:hover { background: var(--admin-accent-soft); }
-  .logout-button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
-  .logout-button:disabled { cursor: wait; opacity: 0.6; }
+  .logout-action { margin-top: 12px; }
 
   .account-details {
     --account-picture-size: 28px;

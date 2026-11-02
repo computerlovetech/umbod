@@ -57,6 +57,6 @@
 </script>
 
 <svelte:head><title>Files · Umbod</title></svelte:head>
-<WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(access.adminAccess === 'allowed')} activeItem="files" accountIdentity={access.accountIdentity}>
+<WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(access.adminAccess === 'allowed')} activeItem="files" accountIdentity={access.accountIdentity} contentWidth="wide">
   <FilesContent {state} {folder} {upload} {signIn} />
 </WorkspaceShell>

@@ -19,56 +19,35 @@ function fixture(): { api: InMemoryFilesApi; files: FilesState; content: () => s
 }
 
 describe('file deletion presentation', (): void => {
-  test('shows a visible filename-labelled row action only after server eligibility succeeds', async (): Promise<void> => {
-    const { api, files, content } = fixture();
-    const eligibility = deferred<void>();
-    vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockReturnValueOnce(eligibility.promise);
+  test('closed eligible file rows expose only a filename-labelled actions trigger', async (): Promise<void> => {
+    const { files, content } = fixture();
     await files.load(folderId);
-    expect(content()).not.toContain('row-delete');
-    eligibility.resolve();
     await vi.waitFor(() => expect(files.rowDeletion.controllers.get(fileId)?.available).toBe(true));
+    await vi.waitFor(() => expect(files.rowEditing.controllers.get(fileId)?.update.canRename).toBe(true));
     const window = new Window();
     window.document.body.innerHTML = content();
     expect([...window.document.querySelectorAll('th')].map((cell) => cell.textContent)).toEqual(['Name', 'Type', 'Updated', 'Actions']);
-    const button = window.document.querySelector('button.row-delete');
-    expect(button?.textContent?.trim()).toBe('');
-    expect(button?.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
-    expect(button?.getAttribute('aria-label')).toBe('Delete “Notes.txt”');
-    expect(button?.getAttribute('title')).toBe('Delete “Notes.txt”');
-    expect(button?.getAttribute('type')).toBe('button');
-    expect(button?.hasAttribute('hidden')).toBe(false);
-    expect(button?.closest('tr')?.textContent).toContain('Notes.txt');
+    const buttons = window.document.querySelectorAll('tbody button');
+    expect(buttons).toHaveLength(1);
+    const button = buttons[0];
+    expect(button.textContent?.trim()).toBe('');
+    expect(button.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(button.getAttribute('aria-label')).toBe('Actions for “Notes.txt”');
+    expect(button.getAttribute('type')).toBe('button');
+    expect(button.hasAttribute('hidden')).toBe(false);
+    expect(button.closest('tr')?.textContent).toContain('Notes.txt');
+    expect(window.document.querySelector('[role="menu"]')).toBeNull();
   });
 
-  test('keeps the pending icon disabled and announces deletion progress', async (): Promise<void> => {
-    const { api, files, content } = fixture();
-    const deletion = deferred<void>();
-    vi.spyOn(api.filesystem, 'deleteFile').mockReturnValueOnce(deletion.promise);
-    await files.load(folderId);
-    await vi.waitFor(() => expect(files.rowDeletion.controllers.get(fileId)?.available).toBe(true));
-    const controller = files.rowDeletion.controllers.get(fileId)!;
-    controller.show();
-    const pending = controller.confirm();
-    const window = new Window();
-    window.document.body.innerHTML = content();
-    const button = window.document.querySelector('button.row-delete');
-    expect(button?.hasAttribute('disabled')).toBe(true);
-    expect(button?.getAttribute('aria-busy')).toBe('true');
-    expect(button?.getAttribute('title')).toBe('Deleting…');
-    expect(window.document.querySelector('[role="status"].visually-hidden')?.textContent).toBe('Deleting “Notes.txt”…');
-    deletion.resolve();
-    await pending;
-  });
-
-  test('never exposes root, folder or denied file row deletion', async (): Promise<void> => {
-    const { api, files, content } = fixture();
+  test('never probes root or folder deletion and keeps denied file rows ineligible', async (): Promise<void> => {
+    const { api, files } = fixture();
     const check = vi.spyOn(api.filesystem, 'checkDeleteEligibility').mockRejectedValue(new HttpError(403, 'Forbidden', {}));
     await files.load(rootId);
     expect(check).not.toHaveBeenCalled();
-    expect(content()).not.toContain('row-delete');
     await files.load(folderId);
     await vi.waitFor(() => expect(check).toHaveBeenCalledTimes(1));
-    expect(content()).not.toContain('row-delete');
+    expect(check.mock.calls[0][0]).toBe(fileId);
+    expect(files.rowDeletion.controllers.get(fileId)?.available).toBe(false);
   });
 
   test('preserves the details delete action while hiding it during stalled checks', async (): Promise<void> => {
@@ -145,7 +124,7 @@ describe('file deletion presentation', (): void => {
     expect(description?.textContent).toContain('no restore');
     expect(description?.textContent).not.toMatch(/physical|erase|storage|disk/i);
     expect(dialog?.querySelector('[data-dialog-cancel]')?.textContent).toBe('Cancel');
-    expect(dialog?.querySelector('button.danger')?.textContent).toBe('Delete file');
+    expect(dialog?.querySelector('button.admin-shared-button--danger')?.textContent).toBe('Delete file');
     expect([...window.document.querySelectorAll('button')].map((button) => button.textContent)).toEqual(['Cancel', 'Delete file']);
   });
 });

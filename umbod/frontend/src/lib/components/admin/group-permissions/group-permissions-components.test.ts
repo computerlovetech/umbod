@@ -1,4 +1,5 @@
 import { render } from 'svelte/server';
+import { Window } from 'happy-dom';
 import { describe, expect, test } from 'vitest';
 import GroupPermissionsManager from './GroupPermissionsManager.svelte';
 import { GroupPermissionsState, type GroupPermissionsInitialData } from './group-permissions-state.svelte';
@@ -36,8 +37,13 @@ describe('unavailable saved grant presentation', () => {
     expect(body).toContain('Saved grants for unavailable connectors');
     expect(body).toContain('may be unpublished');
     expect(body).toContain('Changes apply only after Save permissions');
-    expect(body).toMatch(/<button[^>]*type="button"[^>]*aria-label="Remove saved grants for unpublished"[^>]*>Remove saved grants<\/button>/);
-    expect(body).toMatch(/<button[^>]*type="button"[^>]*aria-label="Remove saved grants for capability-only"[^>]*>Remove saved grants<\/button>/);
+    const document = new Window().document;
+    document.body.innerHTML = body;
+    for (const connectorId of ['unpublished', 'capability-only']) {
+      const button = document.querySelector(`button[aria-label="Remove saved grants for ${connectorId}"]`);
+      expect(button?.getAttribute('type')).toBe('button');
+      expect(button?.textContent).toBe('Remove saved grants');
+    }
     expect(body).not.toContain('Remove saved grants for available');
     expect(body).not.toContain('Remove saved grants for unknown');
     expect(body).toContain('Available server access');

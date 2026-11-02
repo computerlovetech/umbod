@@ -137,31 +137,6 @@
   color: var(--admin-danger-text);
 }
 
-.admin-button {
-  background: var(--admin-action);
-  border: 1px solid var(--admin-action);
-  border-radius: var(--admin-radius);
-  color: var(--admin-on-action);
-  cursor: pointer;
-  font: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.4;
-  padding: 8px 12px;
-}
-
-.admin-button:hover {
-  background: var(--admin-action-hover);
-  border-color: var(--admin-action-hover);
-}
-
-.admin-button:disabled {
-  background: var(--admin-disabled-bg);
-  border-color: var(--admin-border);
-  color: var(--admin-disabled-text);
-  cursor: not-allowed;
-}
-
 .admin-card-link {
   align-items: center;
   border: 1px solid var(--admin-border);

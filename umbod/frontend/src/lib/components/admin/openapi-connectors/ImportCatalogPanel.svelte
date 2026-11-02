@@ -89,7 +89,7 @@
           placeholder="api.example.com"
           aria-describedby="host-help-file host-error-file"
         />
-        <button type="button" onclick={state.addHost}>Add hostname</button>
+        <Button variant="quiet" size="compact" type="button" onclick={state.addHost}>Add hostname</Button>
       </div>
       <p id="host-help-file" class="help">Add only hosts the imported specification may call.</p>
       {#if state.hostError}
@@ -99,7 +99,7 @@
         <div class="host">
           <input type="hidden" name="approved_hosts" value={hostname} />
           <code>{hostname}</code>
-          <button type="button" aria-label={`Remove ${hostname}`} onclick={() => state.removeHost(hostname)}>Remove</button>
+          <Button variant="quiet" size="compact" type="button" aria-label={`Remove ${hostname}`} onclick={() => state.removeHost(hostname)}>Remove</Button>
         </div>
       {/each}
       <Button class="submit" type="submit" disabled={state.pending || Boolean(state.fileError)}>{state.pending ? 'Importing…' : 'Import file'}</Button>
@@ -135,7 +135,7 @@
           placeholder="api.example.com"
           aria-describedby="host-help-url host-error-url"
         />
-        <button type="button" onclick={state.addHost}>Add hostname</button>
+        <Button variant="quiet" size="compact" type="button" onclick={state.addHost}>Add hostname</Button>
       </div>
       <p id="host-help-url" class="help">Add only hosts the imported specification may call.</p>
       {#if state.hostError}
@@ -145,7 +145,7 @@
         <div class="host">
           <input type="hidden" name="approved_hosts" value={hostname} />
           <code>{hostname}</code>
-          <button type="button" aria-label={`Remove ${hostname}`} onclick={() => state.removeHost(hostname)}>Remove</button>
+          <Button variant="quiet" size="compact" type="button" aria-label={`Remove ${hostname}`} onclick={() => state.removeHost(hostname)}>Remove</Button>
         </div>
       {/each}
       <Button class="submit" type="submit" disabled={state.pending}>{state.pending ? 'Importing…' : 'Import URL'}</Button>
@@ -165,9 +165,7 @@
     margin-bottom: 1rem;
   }
 
-  .modes button,
-  .host-entry button,
-  .host button {
+  .modes button {
     background: var(--admin-panel);
     border: 1px solid var(--admin-border-strong);
     border-radius: 6px;

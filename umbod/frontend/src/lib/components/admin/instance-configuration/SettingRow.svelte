@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import type { PresentedSetting } from './presentation';
   import { formatConfigurationValue, type InstanceConfigurationCopyState } from './instance-configuration-copy-state.svelte';
 
@@ -12,9 +13,9 @@
       <span>{value}</span>
     {/each}
     {#if setting.address}
-      <button class="admin-button" type="button" aria-label={`Copy ${setting.label.toLowerCase()}`} onclick={() => copyState.copyEntry(setting.entry)}>
+      <Button variant="quiet" size="compact" type="button" aria-label={`Copy ${setting.label.toLowerCase()}`} onclick={() => copyState.copyEntry(setting.entry)}>
         {copyState.isCopied(setting.entry) ? 'Copied' : 'Copy address'}
-      </button>
+      </Button>
     {/if}
   </dd>
   <dd class="explanation">{setting.description}</dd>
@@ -25,7 +26,7 @@
       <p><code>{setting.entry.variable}</code></p>
       <p>{setting.entry.description}</p>
       <p class="raw-value"><strong>Raw value</strong> <code>{formatConfigurationValue(setting.entry)}</code></p>
-      <button class="copy-value" type="button" aria-label={`Copy raw value for ${setting.label}`} onclick={() => copyState.copyEntry(setting.entry)}>{copyState.isCopied(setting.entry) ? 'Copied' : 'Copy raw value'}</button>
+      <Button variant="quiet" size="compact" type="button" aria-label={`Copy raw value for ${setting.label}`} onclick={() => copyState.copyEntry(setting.entry)}>{copyState.isCopied(setting.entry) ? 'Copied' : 'Copy raw value'}</Button>
     </details>
   </dd>
 </div>
@@ -43,7 +44,5 @@
   summary { cursor: pointer; width: fit-content; }
   code { font-family: var(--admin-mono); white-space: pre-wrap; overflow-wrap: anywhere; }
   .raw-value code { display: block; min-height: 1.6em; }
-  button { font: inherit; cursor: pointer; }
-  .copy-value { background: var(--admin-soft); color: var(--admin-ink); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 6px 10px; }
-  button:focus-visible, summary:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
+  summary:focus-visible { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
 </style>

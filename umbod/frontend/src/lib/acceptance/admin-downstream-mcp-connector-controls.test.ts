@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { render } from 'svelte/server';
+import { Window } from 'happy-dom';
 import { describe, expect, test, vi } from 'vitest';
 import type { DownstreamMcpConnector, DownstreamMcpTool } from '$lib/admin/downstream-mcp-connectors';
 import { AdminApi } from '$lib/admin/infrastructure/admin-api';
@@ -209,7 +210,11 @@ describe('downstream MCP connector administration', () => {
     expect(token).toContain('id="downstream-mcp-configure-bearer-token"');
     expect(input(setup('create'), 'displayName')).toContain('id="downstream-mcp-create-display-name"');
     const pending = setup('configure', connector, true, 'Check the configuration values.');
-    expect(pending).toMatch(/<button[^>]*disabled[^>]*aria-label="Save connector"[^>]*aria-busy="true"/);
+    const document = new Window().document;
+    document.body.innerHTML = pending;
+    const save = document.querySelector('button[aria-label="Save connector"]');
+    expect(save?.hasAttribute('disabled')).toBe(true);
+    expect(save?.getAttribute('aria-busy')).toBe('true');
     expect(pending).toContain('role="alert"');
     expect(pending).toContain('Check the configuration values.');
     expect(input(pending, 'publicPath')).toContain('aria-invalid="true"');

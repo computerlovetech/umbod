@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import { mount, tick, unmount } from 'svelte';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { NodeSummary } from '$lib/files/domain/schemas';
-import { deferred, fileId, filesystemFixture, rootId } from '$lib/files/fixtures.test-support';
+import { deferred, fileId, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
 import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
 import { FilesState } from '$lib/files/state/files-state.svelte';
 import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
@@ -27,6 +27,13 @@ function button(label: string, scope: ParentNode = document): HTMLButtonElement 
   return found!;
 }
 
+async function openAction(label: string): Promise<void> {
+  document.querySelector<HTMLButtonElement>('.heading-identity button[aria-haspopup="menu"]')!.click();
+  await tick();
+  button(label).click();
+  await tick();
+}
+
 async function setup(id: string | null, writable = true): Promise<InMemoryFilesApi> {
   const api = new InMemoryFilesApi(rootId, filesystemFixture, undefined, undefined, undefined, () => writable);
   const state = new FilesState(api);
@@ -41,6 +48,54 @@ async function setup(id: string | null, writable = true): Promise<InMemoryFilesA
 }
 
 describe('selected node update controls', (): void => {
+  test.each([[folderId, fileId, 'Renamed.txt'], [rootId, folderId, 'Renamed folder']])('renames the row child of %s without changing the parent', async (parentId, childId, name): Promise<void> => {
+    const api = await setup(parentId);
+    await vi.waitFor(() => expect(files?.rowEditing.controllers.get(childId)?.update.canRename).toBe(true));
+    await tick();
+    const heading = document.querySelector('h1');
+    const trigger = document.querySelector<HTMLButtonElement>('tbody button[aria-haspopup="menu"]')!;
+    expect(trigger.closest('td')?.classList.contains('row-actions')).toBe(true);
+    expect(document.querySelector('[aria-label="Description"] button')).toBeNull();
+    trigger.click();
+    await tick();
+    button('Rename').click();
+    await tick();
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    const input = document.querySelector<HTMLInputElement>('#node-rename')!;
+    input.value = name;
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    await tick();
+    button('Rename', document.querySelector('dialog')!).click();
+    await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
+    expect((await api.filesystem.getNode(childId)).name).toBe(name);
+    expect(files?.node?.id).toBe(parentId);
+    expect(document.querySelector('h1')).toBe(heading);
+    expect(document.querySelector('tbody')?.textContent).toContain(name);
+  });
+
+  test('moves a row to another folder and restores focus to the retained heading', async (): Promise<void> => {
+    const api = await setup(folderId);
+    await vi.waitFor(() => expect(files?.rowEditing.controllers.get(fileId)?.update.canMove).toBe(true));
+    await tick();
+    document.querySelector<HTMLButtonElement>('tbody button[aria-haspopup="menu"]')!.click();
+    await tick();
+    button('Move').click();
+    await vi.waitFor(() => expect(files?.rowEditing.controllers.get(fileId)?.update.loading).toBe(false));
+    await tick();
+    const destination = document.querySelector<HTMLInputElement>('#move-folder-id')!;
+    destination.value = rootId;
+    destination.dispatchEvent(new Event('input', { bubbles: true }));
+    await tick();
+    button('Open folder ID').click();
+    await vi.waitFor(() => expect(files?.rowEditing.controllers.get(fileId)?.update.canSubmit).toBe(true));
+    await tick();
+    button('Move here').click();
+    await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
+    expect((await api.filesystem.getNode(fileId)).parent_id).toBe(rootId);
+    expect(document.querySelector('tbody')).toBeNull();
+    expect(document.activeElement).toBe(document.querySelector('h1'));
+  });
+
   test.each([null, fileId])('hides root or unauthorized actions for %s', async (id): Promise<void> => {
     await setup(id, id === null);
     await tick();
@@ -53,8 +108,7 @@ describe('selected node update controls', (): void => {
     const api = await setup(fileId);
     await vi.waitFor(() => expect(files?.update.canRename).toBe(true));
     await tick();
-    button('Rename').click();
-    await tick();
+    await openAction('Rename');
     const input = document.querySelector<HTMLInputElement>('#node-rename')!;
     expect(input.value).toBe('Notes.txt');
     input.value = 'Renamed.txt';
@@ -74,8 +128,7 @@ describe('selected node update controls', (): void => {
     const api = await setup(fileId);
     await vi.waitFor(() => expect(files?.update.canRename).toBe(true));
     await tick();
-    button('Rename').click();
-    await tick();
+    await openAction('Rename');
     const input = document.querySelector<HTMLInputElement>('#node-rename')!;
     input.value = 'Pending.txt';
     input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -105,10 +158,12 @@ describe('selected node update controls', (): void => {
     await vi.waitFor(() => expect(files?.update.canMove).toBe(true));
     await tick();
     const update = vi.spyOn(api.filesystem, 'updateNode');
-    button('Move').click();
+    await openAction('Move');
     await vi.waitFor(() => expect(files?.update.loading).toBe(false));
     await tick();
     expect(button('Move here').disabled).toBe(true);
+    expect(button('Cancel').hasAttribute('data-dialog-cancel')).toBe(true);
+    expect(document.activeElement).toBe(button('Cancel'));
     expect(document.querySelector('[aria-label="Destination folders"]')?.textContent).not.toContain('Notes.txt');
     const id = document.querySelector<HTMLInputElement>('#move-folder-id')!;
     id.value = rootId;

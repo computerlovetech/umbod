@@ -80,11 +80,11 @@ describe('Files user composition', () => {
     expect(body).not.toMatch(/Download|Share|Search|Next page|Create file|New file/);
   });
 
-  test.each([null, folderId])('item rows retain one native navigation link and separate deletion controls in %s', async (selection: string | null): Promise<void> => {
+  test.each([null, folderId])('item rows retain one native navigation link and a separate actions menu in %s', async (selection: string | null): Promise<void> => {
     const { state, folder, upload } = fixture();
     await state.load(selection);
-    for (const item of state.children.filter((item) => item.kind === 'file')) {
-      await vi.waitFor(() => expect(state.rowDeletion.controllers.get(item.id)?.available).toBe(true));
+    for (const item of state.children) {
+      await vi.waitFor(() => expect(state.rowEditing.controllers.get(item.id)?.update.canRename).toBe(true));
     }
     const document = new Window().document;
     document.body.innerHTML = content(state, folder, upload);
@@ -99,11 +99,10 @@ describe('Files user composition', () => {
       expect(row.hasAttribute('tabindex')).toBe(false);
       expect(row.hasAttribute('role')).toBe(false);
       expect(row.hasAttribute('aria-selected')).toBe(false);
-      if (item.kind === 'file') {
-        const deletion = row.querySelector('button.row-delete');
-        expect(deletion?.getAttribute('aria-label')).toBe(`Delete “${item.name}”`);
-        expect(deletion?.closest('a')).toBeNull();
-      }
+      const actions = row.querySelector('button[aria-haspopup="menu"]');
+      expect(actions?.getAttribute('aria-label')).toBe(`Actions for “${item.name}”`);
+      expect(actions?.closest('a')).toBeNull();
+      expect(row.querySelectorAll('button')).toHaveLength(1);
     }
   });
 
@@ -202,9 +201,10 @@ describe('Files user composition', () => {
     const pending = deferred<never>();
     vi.spyOn(api.filesystem, 'createFolder').mockImplementationOnce(() => pending.promise);
     const write = folder.submit();
-    const busy = render(NewFolderForm, { props: { state: folder } }).body;
-    expect(busy).toMatch(/<input[^>]*disabled/);
-    expect(busy).toMatch(/<button[^>]*type="submit"[^>]*disabled/);
+    const document = new Window().document;
+    document.body.innerHTML = render(NewFolderForm, { props: { state: folder } }).body;
+    expect(document.querySelector('input')?.disabled).toBe(true);
+    expect(document.querySelector('button[type="submit"]')?.hasAttribute('disabled')).toBe(true);
     pending.reject(new Error('lost reply'));
     await write;
     expect(render(NewFolderForm, { props: { state: folder } }).body).toContain('Reload folder');

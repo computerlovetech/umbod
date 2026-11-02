@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import { AdminFileUploadState } from './admin-file-upload-state.svelte';
 
   let {
@@ -63,7 +64,7 @@
           <span>{state.selectedFileSize}</span>
         </span>
         <label class="text-action" id={`${id}-button`} for={id}>{replaceText}</label>
-        <button class="text-action remove" type="button" onclick={state.remove}>Remove</button>
+        <Button variant="quiet" size="compact" type="button" onclick={state.remove}>Remove</Button>
       </div>
     {:else}
       <div class="empty-state">
@@ -97,6 +98,5 @@
   .file-details { display: grid; flex: 1; min-width: 0; }
   .file-details strong { color: var(--admin-ink); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .file-details span { color: var(--admin-muted); font-size: 12px; }
-  .remove { background: transparent; border: 0; padding: 0; }
   .error { color: var(--admin-danger-text); font-size: 13px; margin: 0; }
 </style>

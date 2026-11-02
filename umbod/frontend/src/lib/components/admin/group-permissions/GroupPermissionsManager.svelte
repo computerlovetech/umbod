@@ -96,7 +96,7 @@
                     <span>{connector.description}</span>
                   </span>
                   <span class={`group-permissions__tag ${connectorBadgeClass(connector)}`}>{connectorBadgeLabel(connector)}</span>
-                  <button class:group-permissions__button-dark={state.expandedConnectorId === connector.id} class="group-permissions__edit-button" type="button" aria-expanded={state.expandedConnectorId === connector.id} onclick={() => state.toggleConnectorExpansion(connector.id)}>{state.expandedConnectorId === connector.id ? 'Done' : 'Capabilities'}</button>
+                  <Button variant={state.expandedConnectorId === connector.id ? 'primary' : 'secondary'} size="compact" class="group-permissions__edit-button" type="button" aria-expanded={state.expandedConnectorId === connector.id} onclick={() => state.toggleConnectorExpansion(connector.id)}>{state.expandedConnectorId === connector.id ? 'Done' : 'Capabilities'}</Button>
                   <AdminToggle checked={state.connectorIsGranted(connector.id)} disabled={state.saving} ariaLabel={`${connector.displayName} access`} onchange={(event) => state.setConnectorPermission(connector.id, inputChecked(event))} />
                 </div>
 
@@ -170,25 +170,8 @@
     padding: 12px 16px;
   }
 
-  .group-permissions__edit-button {
-    background: var(--admin-panel);
-    border: 1px solid var(--admin-border-strong);
-    border-radius: 6px;
-    color: var(--admin-ink);
-    cursor: pointer;
+  .group-permissions__connector-row :global(.group-permissions__edit-button) {
     flex-shrink: 0;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 700;
-    line-height: 1;
-    min-width: 52px;
-    padding: 6px 10px;
-  }
-
-  .group-permissions__button-dark {
-    background: var(--admin-ink);
-    border-color: var(--admin-ink);
-    color: var(--admin-on-action);
   }
 
   .group-permissions__stats {
@@ -425,16 +408,6 @@
     font-family: var(--admin-mono);
   }
 
-  .group-permissions__edit-button:hover {
-    background: var(--admin-hover);
-    border-color: var(--admin-accent-border);
-  }
-
-  .group-permissions__button-dark:hover {
-    background: var(--admin-action-hover);
-    border-color: var(--admin-action-hover);
-  }
-
   .group-permissions__warning-panel {
     background: var(--admin-warning-bg);
     border: 1px solid var(--admin-warning-border);
@@ -470,7 +443,7 @@
       white-space: normal;
     }
 
-    .group-permissions__edit-button {
+    .group-permissions__connector-row :global(.group-permissions__edit-button) {
       grid-column: 3;
     }
   }

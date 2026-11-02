@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import type { ToastState, ToastVariant } from './toast-state.svelte';
 
   let { state }: { state: ToastState } = $props();
@@ -29,9 +30,9 @@
         <strong>{labels[toast.variant]}</strong>
         <span>{toast.message}</span>
       </div>
-      <button type="button" onclick={() => state.dismiss(toast.id)} aria-label={`Dismiss ${labels[toast.variant].toLowerCase()} notification`}>
+      <Button variant="quiet" size="compact" iconOnly onclick={() => state.dismiss(toast.id)} aria-label={`Dismiss ${labels[toast.variant].toLowerCase()} notification`}>
         <span aria-hidden="true">×</span>
-      </button>
+      </Button>
     </div>
   {/each}
 </div>
@@ -80,20 +81,6 @@
   .toast__content { display: grid; gap: 0.125rem; overflow-wrap: anywhere; }
   .toast__content strong { font-size: 0.875rem; }
   .toast__content span { color: var(--admin-ink); }
-
-  button {
-    padding: 0.125rem 0.375rem;
-    border: 0;
-    border-radius: 0.25rem;
-    color: inherit;
-    background: transparent;
-    cursor: pointer;
-    font-size: 1.25rem;
-    line-height: 1;
-  }
-
-  button:hover { background: rgb(0 0 0 / 8%); }
-  button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
   @keyframes toast-enter {
     from { opacity: 0; transform: translateY(-0.5rem); }

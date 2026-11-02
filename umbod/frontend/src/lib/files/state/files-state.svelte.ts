@@ -4,6 +4,8 @@ import { SharingEligibilityState } from './sharing-eligibility-state.svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { FilesNavigationState } from './navigation-state.svelte';
 import { RowDeletionState } from './row-deletion-state.svelte';
+import { RowEditingState } from './row-editing-state.svelte';
+import { DragMoveState } from './drag-move-state.svelte';
 import { DeletionState } from './deletion-state.svelte';
 import type { FilesApi } from '../api';
 import { nodeIdSchema, type NodeSummary } from '../domain/schemas';
@@ -34,24 +36,34 @@ export class FilesState {
   readonly navigation: FilesNavigationState;
   readonly deletion: DeletionState;
   readonly rowDeletion: RowDeletionState;
+  readonly rowEditing: RowEditingState;
+  readonly dragMove: DragMoveState;
   readonly sharing: SharingEligibilityState;
 
   constructor(private readonly api: FilesApi, openParent?: (id: string) => Promise<void>) {
     this.update = new NodeUpdateState(api.filesystem, this.acceptUpdate, this.reload);
     this.description = new DescriptionState(api.filesystem, this.acceptDescription, this.reload);
+    this.rowEditing = new RowEditingState(api.filesystem, this.acceptUpdate, this.reload);
     this.sharing = new SharingEligibilityState(api.sharing);
     this.navigation = new FilesNavigationState(api.filesystem);
     const deletionOperations = new SvelteMap<string, symbol>();
     this.deletion = new DeletionState(api, openParent ?? ((id) => this.load(id)), this.reload, this.acceptDeleted, true, deletionOperations);
     this.rowDeletion = new RowDeletionState(api, this.reload, this.acceptRowDeleted, deletionOperations);
+    this.dragMove = new DragMoveState(
+      () => this.children,
+      (id) => this.rowEditing.controllers.get(id)?.update,
+      (id) => this.rowEditing.controllers.get(id)?.description.pending === true || this.rowEditing.controllers.get(id)?.description.open === true || this.rowDeletion.controllers.get(id)?.pending === true || !!this.rowDeletion.controllers.get(id)?.confirmation || this.sharing.dialog.open
+    );
   }
 
   load = async (target: string | null): Promise<void> => {
     if (this.disposed) return;
+    this.dragMove.reset();
     this.update.reset();
     this.description.reset();
     this.deletion.reset();
     this.rowDeletion.reset();
+    this.rowEditing.reset();
     this.sharing.reset();
     const generation = ++this.generation;
     this.controller?.abort();
@@ -88,6 +100,7 @@ export class FilesState {
       void this.update.select(node);
       void this.description.select(node);
       this.sharing.select(this.children);
+      this.rowEditing.select(this.children);
       if (node.kind === 'directory') {
         void this.checkUploadAvailability();
         void this.rowDeletion.select(this.children);
@@ -130,6 +143,7 @@ export class FilesState {
       for (const child of this.children) this.rowDeletion.controllers.get(child.id)?.acceptUpdatedNode(child);
       this.sharing.select(this.children);
       this.rowDeletion.select(this.children);
+      this.rowEditing.select(this.children);
     }
     if (this.node?.id !== node.id || this.node.revision > node.revision) return;
     this.node = node;
@@ -185,6 +199,7 @@ export class FilesState {
     if (generation === this.generation && this.phase === 'ready' && this.node?.id === parentId) {
       this.children = [...this.children.filter((child) => child.id !== node.id), node];
       this.rowDeletion.select([node]);
+      this.rowEditing.select([node]);
       this.sharing.select([node]);
       return;
     }
@@ -200,11 +215,13 @@ export class FilesState {
 
   dispose = (): void => {
     this.disposed = true;
+    this.dragMove.dispose();
     this.update.dispose();
     this.description.dispose();
     this.navigation.dispose();
     this.deletion.dispose();
     this.rowDeletion.dispose();
+    this.rowEditing.dispose();
     this.sharing.dispose();
     ++this.generation;
     this.controller?.abort();

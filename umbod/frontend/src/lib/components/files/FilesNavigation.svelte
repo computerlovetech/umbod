@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import type { FilesNavigationState } from '$lib/files/state/navigation-state.svelte';
   import ActionMenu from '$lib/components/shared/ActionMenu.svelte';
 
@@ -49,7 +50,7 @@
       <p role="status">Loading file path…</p>
     {:else}
       <p role="status">{state.phase === 'sign-in' ? 'Sign in to view the file path.' : 'File path unavailable.'}</p>
-      {#if state.phase === 'sign-in'}<button onclick={signIn}>Sign in</button>{:else}<button onclick={state.reload}>Retry file path</button>{/if}
+      {#if state.phase === 'sign-in'}<Button variant="secondary" onclick={signIn}>Sign in</Button>{:else}<Button variant="secondary" onclick={state.reload}>Retry file path</Button>{/if}
     {/if}
   </div>
 {/if}
@@ -69,7 +70,6 @@
   a.name { display: block; line-height: 2.75rem; }
   .mobile-path { display: none; }
   .parent-link { gap: 0.5rem; max-width: 100%; text-decoration: none; }
-  button { background: var(--admin-panel); color: var(--admin-ink); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 0.5rem; font: inherit; cursor: pointer; }
   p { margin: 0; color: var(--admin-muted); }
   :focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
   @media (max-width: 640px) {

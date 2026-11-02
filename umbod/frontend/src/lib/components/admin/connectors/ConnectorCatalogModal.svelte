@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import type { ConnectorListItem } from '$lib/admin/connectors';
   import AdminModalShell from '$lib/components/admin/shared/AdminModalShell.svelte';
   import ConnectorConfigurationForm from './ConnectorConfigurationForm.svelte';
@@ -24,7 +25,7 @@
     {#snippet children()}
       {#if selectedConnector}
         {#if state.mode === 'add'}
-          <button class="back" type="button" onclick={state.clearSelection}>← Available connectors</button>
+          <div class="back"><Button variant="quiet" size="compact" type="button" onclick={state.clearSelection}>← Available connectors</Button></div>
         {/if}
         {#if selectedConnector.configurationFields}
           <ConnectorConfigurationForm
@@ -62,7 +63,7 @@
 
 <style>
   .intro, .empty { color: var(--admin-muted); margin: 1rem 0 0; }
-  .back { background: transparent; border: 0; color: var(--admin-ink); cursor: pointer; font: inherit; margin-top: 1rem; padding: 0; }
+  .back { margin-top: 1rem; }
   ul { display: grid; gap: 0.5rem; list-style: none; margin: 1rem 0 0; overflow: auto; padding: 0; }
   li button { align-items: flex-start; background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: 8px; cursor: pointer; display: flex; gap: 0.6rem; padding: 0.85rem; text-align: left; width: 100%; }
   li button:hover { background: var(--admin-hover); }

@@ -1,4 +1,5 @@
 import { render } from 'svelte/server';
+import { Window } from 'happy-dom';
 import { createRawSnippet } from 'svelte';
 import { describe, expect, test, vi } from 'vitest';
 import AdminShell from './AdminShell.svelte';
@@ -25,7 +26,10 @@ describe('admin shell logout', () => {
       expect(body).not.toContain('class="account-email');
       expect(body).not.toContain('admin-id');
     }
-    expect(shell.body).toContain('Log out</button>');
+    const document = new Window().document;
+    document.body.innerHTML = shell.body;
+    expect(document.querySelector('button')?.textContent).toBe('Log out');
+    expect(document.querySelector('button')?.type).toBe('button');
     expect(shell.body).toContain('aria-label="Workspace sidebar"');
     expect(shell.body).toContain('aria-label="Workspace navigation"');
     expect(shell.body).toContain('href="/dashboard"');
@@ -52,8 +56,10 @@ describe('admin shell logout', () => {
       children: createRawSnippet(() => ({ render: (): string => '<p>Content</p>' })),
       logout: { logout }
     } });
-    expect(body).toContain('type="button"');
-    expect(body).toContain('Log out</button>');
+    const document = new Window().document;
+    document.body.innerHTML = body;
+    expect(document.querySelector('button')?.type).toBe('button');
+    expect(document.querySelector('button')?.textContent).toBe('Log out');
     expect(logout).not.toHaveBeenCalled();
   });
 });

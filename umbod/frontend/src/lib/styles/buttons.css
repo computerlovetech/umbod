@@ -1,0 +1,88 @@
+.admin-shared-button {
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: var(--admin-radius);
+  box-sizing: border-box;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 0.5rem;
+  justify-content: center;
+  line-height: 1.2;
+  min-height: 38px;
+  padding: 9px 14px;
+  text-decoration: none;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s;
+  white-space: nowrap;
+}
+
+.admin-shared-button--compact {
+  min-height: 28px;
+  padding: 5px 9px;
+}
+
+.admin-shared-button--primary {
+  background: var(--admin-action);
+  color: var(--admin-on-action);
+}
+
+.admin-shared-button--secondary {
+  background: var(--admin-panel);
+  border-color: var(--admin-border);
+  color: var(--admin-ink);
+}
+
+.admin-shared-button--danger {
+  background: var(--admin-danger);
+  color: var(--admin-on-action);
+}
+
+.admin-shared-button--quiet {
+  background: transparent;
+  color: var(--admin-ink);
+}
+
+.admin-shared-button--icon {
+  flex-shrink: 0;
+  font-size: 20px;
+  height: 38px;
+  line-height: 1;
+  padding: 0;
+  width: 38px;
+}
+
+.admin-shared-button--icon.admin-shared-button--compact {
+  height: 28px;
+  width: 28px;
+}
+
+.admin-shared-button--primary:not(:disabled):hover {
+  background: var(--admin-action-hover);
+}
+
+.admin-shared-button--secondary:not(:disabled):hover {
+  background: var(--admin-soft);
+  border-color: var(--admin-border-strong);
+}
+
+.admin-shared-button--danger:not(:disabled):hover {
+  background: var(--admin-danger-hover);
+}
+
+.admin-shared-button--quiet:not(:disabled):hover {
+  background: var(--admin-hover);
+}
+
+.admin-shared-button:focus-visible {
+  outline: 3px solid var(--admin-focus);
+  outline-offset: 2px;
+}
+
+.admin-shared-button:disabled {
+  background: var(--admin-disabled-bg);
+  border-color: var(--admin-border);
+  color: var(--admin-disabled-text);
+  cursor: not-allowed;
+}

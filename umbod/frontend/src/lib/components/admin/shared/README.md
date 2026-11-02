@@ -16,8 +16,13 @@ description: Reusable administration presentation and interaction controls.
 # Forms and layout
 
 - [Form](Form.svelte) — Shared form rendering and pending feedback.
-- [Button](Button.svelte) — Shared button presentation.
-- [Modal shell](AdminModalShell.svelte) — Native dialog composition.
+- [Button](Button.svelte) — Native action button with shared variants, sizing, event forwarding, attachments, and DOM references.
+- [Button link](ButtonLink.svelte) — Native action-like navigation using the same visual rules as Button.
+- [Loading button](LoadingButton.svelte) — Button presentation and native integration with delayed feedback and immediate pending protection.
+- [Button styling](../../../styles/buttons.css) — Canonical typography, variants, sizing, focus, hover, and disabled rules.
+- [Button DOM tests](button.dom.test.ts) — Native action semantics, forwarding, references, attachments, and delayed loading feedback.
+- [Button test harness](button.test-support.svelte) — Mounted button, loading button, and link compositions for native behavior checks.
+- [Modal shell](AdminModalShell.svelte) — Modal-styled surface with dismissal; does not provide native dialog focus management.
 - [Configuration field](AdminConfigurationField.svelte) — Configuration input rendering.
 - [Split workspace](AdminSplitWorkspace.svelte) — Shared master-detail layout.
 

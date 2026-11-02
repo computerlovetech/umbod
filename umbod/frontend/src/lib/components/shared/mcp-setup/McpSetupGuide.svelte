@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import CopyableValue from '$lib/components/admin/connectors/CopyableValue.svelte';
   import { BrowserNavigatorClipboardWriter } from '$lib/admin/clipboard';
   import { useToast } from '$lib/components/feedback';
@@ -49,7 +50,7 @@
   <h2 id="setup-title">Help your agent discover connected apps</h2>
   {#if !compact}<p>After connecting, paste this prompt into your agent. It asks your agent to save Umbod discovery guidance in your user-level instructions across projects.</p>{/if}
   <pre><code>{setupPrompt}</code></pre>
-  <button type="button" onclick={state.copySetupPrompt}>{state.copied ? 'Copied' : 'Copy setup prompt'}</button>
+  <div><Button onclick={state.copySetupPrompt}>{state.copied ? 'Copied' : 'Copy setup prompt'}</Button></div>
   <p class="setup-note">Requires an agent that can read MCP resources and edit local instruction files.</p>
 </section>
 
@@ -139,8 +140,6 @@
   .setup-card p { color: var(--admin-muted); font-size: 14px; line-height: 1.55; margin: 0; }
   .setup-card pre { margin: 0; }
   .setup-card .setup-note { font-size: 12px; }
-  .setup-card button { background: var(--admin-accent-strong); border: 0; border-radius: var(--admin-radius); color: var(--admin-panel); cursor: pointer; font: inherit; justify-self: start; padding: 10px 16px; }
-  .setup-card button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
   .connection-card :global(.copyable-value) { background: var(--admin-soft); box-sizing: border-box; max-width: 640px; width: 100%; }
   .step-label { color: var(--admin-accent-strong); font-family: var(--admin-mono); font-size: 11px; font-weight: 500; letter-spacing: .08em; margin: 0 0 5px; text-transform: uppercase; }
   .guides { display: grid; gap: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 18px; }

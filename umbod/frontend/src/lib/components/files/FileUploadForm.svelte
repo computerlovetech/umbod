@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import { tick } from 'svelte';
   import { nativeDialog } from '$lib/components/shared/dialogs/native-dialog';
   import { FileDropState } from '$lib/files/state/file-drop-state.svelte';
@@ -66,7 +67,7 @@
     {#if state.file}
       <div id={id + '-selection'} class="selection">
         <div class="selected-file"><strong>{state.file.name}</strong><span>{formatFileSize(state.file.size)}</span></div>
-        <button type="button" onclick={remove}>Remove file</button>
+        <Button variant="quiet" size="compact" type="button" onclick={remove}>Remove file</Button>
       </div>
       <div class="name-field">
         <label for={id + '-name'}>File name</label>
@@ -86,10 +87,10 @@
     <div class="progress"><progress aria-label="Uploading file"></progress><span>Keep this tab open until the upload is confirmed.</span></div>
   {/if}
   <div class="actions">
-    <button type="submit" class="primary" disabled={!state.canSubmit}>{state.pending ? 'Uploading…' : 'Upload file'}</button>
-    <button type="button" disabled={state.pending} onclick={cancel}>{state.uncertain ? 'Close' : 'Cancel'}</button>
-    {#if state.uncertain}<button type="button" onclick={reloadFolder}>Reload folder</button>{/if}
-    {#if state.signInRequired}<button type="button" onclick={signIn}>Sign in</button>{/if}
+    <Button variant="primary" type="submit" disabled={!state.canSubmit}>{state.pending ? 'Uploading…' : 'Upload file'}</Button>
+    <Button variant="secondary" type="button" disabled={state.pending} onclick={cancel}>{state.uncertain ? 'Close' : 'Cancel'}</Button>
+    {#if state.uncertain}<Button variant="secondary" type="button" onclick={reloadFolder}>Reload folder</Button>{/if}
+    {#if state.signInRequired}<Button variant="secondary" type="button" onclick={signIn}>Sign in</Button>{/if}
   </div>
 </form>
 </dialog>
@@ -118,10 +119,7 @@
   .name-field { display: grid; gap: 0.5rem; }
   .name-field label { font-size: 0.9rem; font-weight: 500; }
   textarea { resize: vertical; }
-  input:not([type='file']), textarea, button { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-ink); font: inherit; padding: 0.6rem 0.9rem; min-width: 0; }
-  button { cursor: pointer; }
-  button:disabled { opacity: 0.6; cursor: default; }
-  .primary { background: var(--admin-accent); color: var(--admin-panel); border-color: var(--admin-accent); }
+  input:not([type='file']), textarea { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-ink); font: inherit; padding: 0.6rem 0.9rem; min-width: 0; }
   .actions { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-top: 1rem; }
   .error { color: var(--admin-danger); margin-top: 1rem; line-height: 1.5; }
   .progress { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }

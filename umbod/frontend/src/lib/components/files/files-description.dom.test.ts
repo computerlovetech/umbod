@@ -40,6 +40,8 @@ async function setup(id: string, denied = false): Promise<{ api: InMemoryFilesAp
 }
 
 async function edit(value: string): Promise<void> {
+  document.querySelector<HTMLButtonElement>('.heading-identity button[aria-haspopup="menu"]')!.click();
+  await tick();
   button('Edit description').click();
   await tick();
   const textarea = document.querySelector<HTMLTextAreaElement>('textarea')!;
@@ -55,6 +57,35 @@ function submit(): void {
 }
 
 describe('filesystem description UI', (): void => {
+  test('edits the row description through its actions menu and restores focus on cancellation', async (): Promise<void> => {
+    const { api, state } = await setup(folderId);
+    await vi.waitFor(() => expect(state.rowEditing.controllers.get(fileId)?.description.available).toBe(true));
+    await tick();
+    const trigger = document.querySelector<HTMLButtonElement>('tbody button[aria-haspopup="menu"]')!;
+    const openEditor = async (): Promise<void> => {
+      trigger.click();
+      await tick();
+      button('Edit description').click();
+      await tick();
+      expect(document.querySelector('[role="menu"]')).toBeNull();
+      expect(document.querySelector('dialog textarea')).not.toBeNull();
+    };
+    await openEditor();
+    button('Cancel').click();
+    await tick();
+    expect(document.activeElement).toBe(trigger);
+    await openEditor();
+    const textarea = document.querySelector<HTMLTextAreaElement>('textarea')!;
+    textarea.value = 'Row guidance';
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    await tick();
+    submit();
+    await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
+    expect(document.querySelector('tbody')?.textContent).toContain('Row guidance');
+    expect((await api.filesystem.getNode(fileId)).metadata.attributes.description).toBe('Row guidance');
+    expect((await api.filesystem.getNode(folderId)).metadata.attributes.description).toBeUndefined();
+  });
+
   test.each([fileId, folderId])('edits, cancels and clears current %s without replacing heading', async (id): Promise<void> => {
     const { api, state } = await setup(id);
     await vi.waitFor(() => expect(state.description.available).toBe(true));

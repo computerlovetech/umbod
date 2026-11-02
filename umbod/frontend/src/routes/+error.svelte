@@ -1,5 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state';
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
   import { logoutNavigation, type LogoutNavigation } from '$lib/admin/infrastructure/logout';
 
@@ -27,19 +28,17 @@
 <section class="error-page admin-page" aria-labelledby="error-heading">
   <h1 id="error-heading" class="admin-title">{accessDenied ? 'Access denied' : 'Page unavailable'}</h1>
   <p class="admin-lede">{message}</p>
-  {#if page.status === 401}
-    <button type="button" onclick={navigateToSignIn}>Sign in again</button>
-  {/if}
-  {#if accessDenied}
-    <button type="button" disabled={loggingOut} onclick={handleLogout}>Log out</button>
-  {/if}
+  <div class="error-actions">
+    {#if page.status === 401}
+      <Button onclick={navigateToSignIn}>Sign in again</Button>
+    {/if}
+    {#if accessDenied}
+      <Button variant="secondary" disabled={loggingOut} onclick={handleLogout}>Log out</Button>
+    {/if}
+  </div>
 </section>
 
 <style>
   .error-page { max-width: 42rem; margin: 0 auto; padding: 64px 24px; }
-  button { margin-top: 24px; padding: 10px 16px; border: 1px solid var(--admin-action); border-radius: var(--admin-radius); background: var(--admin-action); color: var(--admin-on-action); font: inherit; cursor: pointer; }
-  button:hover { background: var(--admin-action-hover); }
-  button + button { margin-left: 12px; }
-  button:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 2px; }
-  button:disabled { cursor: wait; opacity: 0.6; }
+  .error-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
 </style>

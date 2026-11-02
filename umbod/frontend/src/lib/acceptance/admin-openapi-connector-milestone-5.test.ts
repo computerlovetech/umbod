@@ -1,4 +1,5 @@
 import { render } from 'svelte/server';
+import { Window } from 'happy-dom';
 import { describe, expect, test, vi } from 'vitest';
 import type { OpenApiOperationToolUiModel } from '$lib/admin/openapi-connectors';
 import OpenApiOperationCatalog from '$lib/components/admin/openapi-connectors/OpenApiOperationCatalog.svelte';
@@ -38,9 +39,18 @@ describe('OpenAPI connector administration milestone 5', () => {
     expect(body).toContain('Resource identifier');
     expect(body).toContain('operation-20');
     expect(body).not.toContain('operation-21');
-    expect(body).toMatch(/<button type="button" disabled(?:="")?[^>]*>Previous<\/button>/);
+    const document = new Window().document;
+    document.body.innerHTML = body;
+    const pagination = document.querySelector('nav[aria-label="Tool catalog pagination"]');
+    const previous = pagination?.querySelector('button:first-of-type');
+    const next = pagination?.querySelector('button:last-of-type');
+    expect(previous?.textContent).toBe('Previous');
+    expect(previous?.getAttribute('type')).toBe('button');
+    expect(previous?.hasAttribute('disabled')).toBe(true);
     expect(body).toMatch(/<span[^>]*>Page 1 of 3<\/span>/);
-    expect(body).toMatch(/<button type="button"(?![^>]*disabled)[^>]*>Next<\/button>/);
+    expect(next?.textContent).toBe('Next');
+    expect(next?.getAttribute('type')).toBe('button');
+    expect(next?.hasAttribute('disabled')).toBe(false);
   });
 
   test('tool catalog method choices come from imported tool methods', () => {

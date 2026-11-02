@@ -1,4 +1,5 @@
 import { render } from 'svelte/server';
+import { Window } from 'happy-dom';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import ErrorPage from './+error.svelte';
 import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
@@ -17,11 +18,14 @@ describe('root error page', () => {
     const { body } = render(ErrorPage, { props: { logout: { logout } } });
     expect(body).toContain(status === 401 || status === 403 ? 'Access denied' : 'Page unavailable');
     expect(body).not.toContain(state.page.error.message);
-    expect(body.includes('Sign in again</button>')).toBe(status === 401);
+    const document = new Window().document;
+    document.body.innerHTML = body;
+    const actions = [...document.querySelectorAll('button')].map((button) => button.textContent);
+    expect(actions.includes('Sign in again')).toBe(status === 401);
     if (status === 401) expect(body).toContain('Your sign-in was not accepted by the API.');
     if (status === 403) expect(body).toContain('You do not have permission');
     if (status >= 404) expect(body).toContain('This page could not be loaded.');
-    expect(body.includes('Log out</button>')).toBe(status === 401 || status === 403);
+    expect(actions.includes('Log out')).toBe(status === 401 || status === 403);
     expect(logout).not.toHaveBeenCalled();
     expect(assign).not.toHaveBeenCalled();
   });

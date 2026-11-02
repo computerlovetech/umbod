@@ -6,6 +6,10 @@ description: "User filesystem browsing, direct-node group sharing, directory cre
 
 # Files
 
+- [state/drag-move-state.svelte.ts](./state/drag-move-state.svelte.ts) — Live internal file drags, cursor-following preview state, authorized folder targets, move feedback and focus recovery.
+- [state/drag-move-state.test.ts](./state/drag-move-state.test.ts) — Transfer validation, move eligibility, cancellation, uncertain outcomes and navigation-race tests.
+- [state/row-editing-state.svelte.ts](./state/row-editing-state.svelte.ts) — Per-row update and description controllers with bounded eligibility checks and retained drafts.
+- [state/row-editing-state.test.ts](./state/row-editing-state.test.ts) — Child targeting, reconciliation, concurrency limits and stale lifecycle tests.
 - [state/node-update-state.svelte.ts](./state/node-update-state.svelte.ts) — Selected-node rename, independent move navigation, authority checks and conditional mutation recovery.
 - [state/node-update-state.test.ts](./state/node-update-state.test.ts) — Revision reconciliation, picker eligibility, navigation fencing and conflict recovery tests.
 - [update-node-api.test.ts](./update-node-api.test.ts) — Atomic PATCH validation, independent permissions, collisions, cycles and retained content tests.

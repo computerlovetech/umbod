@@ -23,8 +23,7 @@ const mcpPage = readFileSync('src/lib/components/admin/downstream-mcp-connectors
     expect(sharedShell).toContain('role="dialog"');
     expect(sharedShell).toContain('aria-labelledby={titleId}');
     expect(sharedShell).toContain('aria-label="Close"');
-    expect(sharedShell).toContain('.close:focus-visible');
-    expect(sharedShell).toContain('cursor: pointer');
+    expect(sharedShell).toContain('<Button variant="quiet" iconOnly');
   });
 
   test('confirmation dialogs compose the same shared shell', () => {
@@ -72,9 +71,11 @@ const mcpPage = readFileSync('src/lib/components/admin/downstream-mcp-connectors
     expect(mcpPage).toContain('<ConnectorPageHeader');
     expect(connectorPageHeader).toContain('<Button');
     const button = readFileSync('src/lib/components/admin/shared/Button.svelte', 'utf8');
-    expect(button).toContain('cursor: pointer');
-    expect(button).toContain('cursor: not-allowed');
-    expect(button).toContain('.admin-shared-button:focus-visible');
+    const buttonStyles = readFileSync('src/lib/styles/buttons.css', 'utf8');
+    expect(button).toContain("import '$lib/styles/buttons.css'");
+    expect(buttonStyles).toContain('cursor: pointer');
+    expect(buttonStyles).toContain('cursor: not-allowed');
+    expect(buttonStyles).toContain('.admin-shared-button:focus-visible');
     expect(mcpWorkspace).toContain('button:not(:disabled){cursor:pointer}');
     expect(mcpWorkspace).toContain('button:disabled{cursor:not-allowed}');
   });

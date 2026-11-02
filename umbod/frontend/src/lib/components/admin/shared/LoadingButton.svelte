@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { HTMLButtonAttributes, MouseEventHandler } from 'svelte/elements';
+  import type { ComponentProps } from 'svelte';
   import Button from './Button.svelte';
   import DelayedSpinner from './DelayedSpinner.svelte';
   import { DelayedLoadingState } from './delayed-loading-state.svelte';
@@ -8,26 +8,16 @@
     loading,
     delayMs,
     disabled = false,
-    type = 'button',
     label,
     loadingLabel = 'Loading',
-    variant = 'primary',
-    onclick,
-    'data-operation': operation,
-    role,
-    title
-  }: {
+    ref = $bindable(),
+    class: className,
+    ...attributes
+  }: Omit<ComponentProps<typeof Button>, 'children'> & {
     loading: boolean;
     delayMs?: number;
-    disabled?: boolean;
-    type?: 'button' | 'submit';
     label: string;
     loadingLabel?: string;
-    variant?: 'primary' | 'secondary';
-    onclick?: MouseEventHandler<HTMLButtonElement>;
-    'data-operation'?: string;
-    role?: HTMLButtonAttributes['role'];
-    title?: string;
   } = $props();
 
   const state = new DelayedLoadingState();
@@ -40,7 +30,7 @@
   });
 </script>
 
-<Button {variant} {type} data-operation={operation} {role} {title} disabled={disabled || loading} {onclick} aria-busy={loading} aria-label={buttonLabel} class="loading-button">
+<Button {...attributes} bind:ref disabled={disabled || loading} aria-busy={loading} aria-label={buttonLabel} class={['loading-button', className]}>
   <span class="loading-button__content" aria-hidden={state.visible}>{label}</span>
   <span class="loading-button__loading" aria-hidden={!state.visible}>
     <DelayedSpinner active={state.visible} delayMs={0} label={loadingLabel} size="small" inline />
