@@ -6,12 +6,6 @@
       "sourceType": "local",
       "computedHash": "5c5d8656dfdc8c593510f5cad7c8230b1148ff51e74c87611caaef13b791c19e"
     },
-    "agent-skill-management": {
-      "source": "computerlovetech/skills",
-      "sourceType": "github",
-      "skillPath": "agent-skill-management/SKILL.md",
-      "computedHash": "c8df7f2fd908de65304e5f5f6711079899a4895dce636de5a1106d3ada04d07d"
-    },
     "api-client-architecture": {
       "source": "./skills",
       "sourceType": "local",
@@ -77,6 +71,12 @@
       "source": "./skills",
       "sourceType": "local",
       "computedHash": "f25c4ed17fa5a3d83b8e06c920d092be404b93540a6fdb6d2bba6024dea41c18"
+    },
+    "manage-skills": {
+      "source": "computerlovetech/skills",
+      "sourceType": "github",
+      "skillPath": "manage-skills/SKILL.md",
+      "computedHash": "632188bca17d32781cc549e0da34eb240a1ed00f6a41cab2396ef14bd2b51082"
     },
     "ports-adapters-io": {
       "source": "./skills",

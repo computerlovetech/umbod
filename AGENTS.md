@@ -4,7 +4,7 @@ Paths and commands below are relative to the repository root unless a working di
 
 ## Agent Skills
 
-Use the `agent-skill-management` skill when adding, updating, removing, or installing skills.
+Use the `manage-skills` skill when adding, updating, removing, or installing skills.
 
 ## Changelog
 
