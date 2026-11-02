@@ -19,6 +19,16 @@ class AdminAuthorizationPolicy(Model):
     membership_claim: str
     required_membership: str
 
+    def is_authorized(self, claims: JwtClaims) -> bool:
+        membership_value = claims.claims.get(self.membership_claim)
+        if not isinstance(membership_value, list):
+            return False
+        return any(
+            value == self.required_membership
+            for value in membership_value
+            if isinstance(value, str)
+        )
+
 
 class AdminAuthorizationService:
     def __init__(self, jwt_verifier: JwtVerifier, policy: AdminAuthorizationPolicy) -> None:
@@ -29,11 +39,4 @@ class AdminAuthorizationService:
         return self.jwt_verifier.verify(token)
 
     def is_authorized(self, claims: JwtClaims) -> bool:
-        membership_value = claims.claims.get(self.policy.membership_claim)
-        if not isinstance(membership_value, list):
-            return False
-        return any(
-            value == self.policy.required_membership
-            for value in membership_value
-            if isinstance(value, str)
-        )
+        return self.policy.is_authorized(claims)

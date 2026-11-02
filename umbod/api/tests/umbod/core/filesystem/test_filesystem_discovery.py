@@ -61,8 +61,8 @@ def snapshot(
         (NodeKind.FILE, frozenset(), frozenset()),
         (NodeKind.FILE, frozenset({Permission.READ}), frozenset()),
         (NodeKind.FILE, frozenset({Permission.DISCOVER}), frozenset({FilesystemOperation.INSPECT})),
-        (NodeKind.FILE, frozenset(Permission), frozenset({FilesystemOperation.INSPECT, FilesystemOperation.READ, FilesystemOperation.DELETE, FilesystemOperation.SHARE})),
-        (NodeKind.DIRECTORY, frozenset(Permission), frozenset({FilesystemOperation.INSPECT, FilesystemOperation.LIST, FilesystemOperation.CREATE, FilesystemOperation.SHARE})),
+        (NodeKind.FILE, frozenset(Permission), frozenset({FilesystemOperation.INSPECT, FilesystemOperation.READ, FilesystemOperation.DELETE, FilesystemOperation.SHARE, FilesystemOperation.UPDATE_METADATA})),
+        (NodeKind.DIRECTORY, frozenset(Permission), frozenset({FilesystemOperation.INSPECT, FilesystemOperation.LIST, FilesystemOperation.CREATE, FilesystemOperation.SHARE, FilesystemOperation.UPDATE_METADATA})),
     ],
 )
 def test_operations_require_discovery_and_matching_kind(
@@ -93,7 +93,7 @@ def test_owner_has_all_permissions_without_grants() -> None:
     )
     assert permitted_operations(projection, identity()) == frozenset({
         FilesystemOperation.INSPECT, FilesystemOperation.READ,
-        FilesystemOperation.DELETE, FilesystemOperation.SHARE,
+        FilesystemOperation.DELETE, FilesystemOperation.SHARE, FilesystemOperation.UPDATE_METADATA,
     })
 
 

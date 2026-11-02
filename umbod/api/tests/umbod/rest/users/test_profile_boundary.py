@@ -83,11 +83,75 @@ def access(key: rsa.RSAPrivateKey) -> str:
     )
 
 
+@pytest.mark.parametrize("administration", [True, False], ids=["admin", "ordinary"])
+@pytest.mark.parametrize("profile_groups", [["umbod-admins"], ["member"]])
+def test_profile_contract_uses_access_membership_not_profile_groups(
+    client: TestClient,
+    signing_key: rsa.RSAPrivateKey,
+    administration: bool,
+    profile_groups: list[str],
+) -> None:
+    response = client.get(
+        "/api/me/profile",
+        headers={
+            "X-Access": token(signing_key, "api", {
+                "groups": ["umbod-admins"] if administration else ["member"],
+            }),
+            "X-Auth-Request-ID-Token": token(signing_key, "web", {
+                "https://profile.test/name": "Display Name",
+                "mail": "display@example.test",
+                "avatar": "https://avatar.test/image",
+                "groups": profile_groups,
+            }),
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "user": {
+            "id": "admin",
+            "name": "Display Name",
+            "email": "display@example.test",
+            "picture": "https://avatar.test/image",
+        },
+        "capabilities": {"administration": administration},
+    }
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_missing_access_token_requires_authentication_and_prevents_caching(
+    client: TestClient,
+) -> None:
+    response = client.get("/api/me/profile")
+
+    assert response.status_code == 401
+    assert response.headers["Cache-Control"] == "no-store"
+
+
+def test_ordinary_caller_still_cannot_access_administration(
+    client: TestClient, signing_key: rsa.RSAPrivateKey,
+) -> None:
+    response = client.get(
+        "/api/admin/instance-configuration",
+        headers={"X-Access": token(signing_key, "api", {"groups": ["member"]})},
+    )
+
+    assert response.status_code == 403
+
+
+def test_retired_admin_profile_endpoint_does_not_succeed(
+    client: TestClient, signing_key: rsa.RSAPrivateKey,
+) -> None:
+    response = client.get("/api/admin/users", headers={"X-Access": access(signing_key)})
+
+    assert response.status_code == 404
+
+
 def test_valid_id_profile_enriches_access_identity(
     client: TestClient, signing_key: rsa.RSAPrivateKey
 ) -> None:
     response = client.get(
-        "/api/admin/users",
+        "/api/me/profile",
         headers={
             "X-Access": access(signing_key),
             "X-Auth-Request-ID-Token": token(
@@ -102,7 +166,7 @@ def test_valid_id_profile_enriches_access_identity(
         },
     )
     assert response.status_code == 200
-    assert response.json() == {
+    assert response.json()["user"] == {
         "id": "admin",
         "email": "mail@test",
         "name": "Display",
@@ -117,13 +181,16 @@ def test_valid_id_missing_fields_are_neutral_not_access_fields(
     client: TestClient, signing_key: rsa.RSAPrivateKey, profile: dict[str, object]
 ) -> None:
     response = client.get(
-        "/api/admin/users",
+        "/api/me/profile",
         headers={
             "Authorization": "Bearer " + access(signing_key),
             "X-Auth-Request-ID-Token": token(signing_key, "web", profile),
         },
     )
-    assert response.json() == {
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == "no-store"
+    assert response.json()["capabilities"] == {"administration": True}
+    assert response.json()["user"] == {
         "id": "admin",
         "email": None,
         "name": "unknown",
@@ -160,14 +227,14 @@ def test_rejected_profile_falls_back_without_sensitive_logs(
         },
     )
     response = client.get(
-        "/api/admin/users",
+        "/api/me/profile",
         headers={
             "Authorization": "Bearer " + access(signing_key),
             "X-Auth-Request-ID-Token": profile_token,
         },
     )
     assert response.status_code == 200
-    assert response.json()["name"] == "Access"
+    assert response.json()["user"]["name"] == "Access"
     records = [
         record for record in caplog.records if record.name.endswith("users.id_token")
     ]
@@ -182,7 +249,7 @@ def test_wrong_signature_profile_is_ignored(
 ) -> None:
     attacker = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     response = client.get(
-        "/api/admin/users",
+        "/api/me/profile",
         headers={
             "X-Access": access(signing_key),
             "X-Auth-Request-ID-Token": token(
@@ -190,26 +257,26 @@ def test_wrong_signature_profile_is_ignored(
             ),
         },
     )
-    assert response.json()["name"] == "Access"
+    assert response.json()["user"]["name"] == "Access"
 
 
 def test_missing_profile_header_does_not_retry_authorization(
     client: TestClient, signing_key: rsa.RSAPrivateKey
 ) -> None:
     response = client.get(
-        "/api/admin/users",
+        "/api/me/profile",
         headers={
             "X-Access": access(signing_key),
             "Authorization": "Bearer "
             + token(signing_key, "web", {"https://profile.test/name": "Ignored"}),
         },
     )
-    assert response.json()["name"] == "Access"
+    assert response.json()["user"]["name"] == "Access"
 
 
 @pytest.mark.parametrize(
     "access_header,status",
-    [("missing", 401), ("invalid", 401), ("nonadmin", 403), ("id", 401)],
+    [("missing", 401), ("invalid", 401), ("nonadmin", 200), ("id", 401)],
 )
 def test_profile_never_authorizes(
     client: TestClient, signing_key: rsa.RSAPrivateKey, access_header: str, status: int
@@ -224,7 +291,10 @@ def test_profile_never_authorizes(
         headers["X-Access"] = token(signing_key, "api", {"groups": ["member"]})
     if access_header == "id":
         headers["Authorization"] = "Bearer " + id_token
-    assert client.get("/api/admin/users", headers=headers).status_code == status
+    response = client.get("/api/me/profile", headers=headers)
+    assert response.status_code == status
+    if status == 200:
+        assert response.json()["capabilities"] == {"administration": False}
 
 
 @pytest.mark.parametrize("profile_token", ["", "not-a-jwt", "Bearer invalid"])
@@ -232,14 +302,14 @@ def test_present_malformed_profile_is_ignored(
     client: TestClient, signing_key: rsa.RSAPrivateKey, profile_token: str
 ) -> None:
     response = client.get(
-        "/api/admin/users",
+        "/api/me/profile",
         headers={
             "X-Access": access(signing_key),
             "X-Auth-Request-ID-Token": profile_token,
         },
     )
     assert response.status_code == 200
-    assert response.json()["name"] == "Access"
+    assert response.json()["user"]["name"] == "Access"
 
 
 @pytest.mark.parametrize("missing", ["iss", "aud", "exp", "sub"])
@@ -255,7 +325,7 @@ def test_profile_required_claims_cannot_be_omitted(
     }
     claims.pop(missing)
     response = client.get(
-        "/api/admin/users",
+        "/api/me/profile",
         headers={
             "X-Access": access(signing_key),
             "X-Auth-Request-ID-Token": jwt.encode(
@@ -264,20 +334,23 @@ def test_profile_required_claims_cannot_be_omitted(
         },
     )
     assert response.status_code == 200
-    assert response.json()["name"] == "Access"
+    assert response.json()["user"]["name"] == "Access"
 
 
 def test_profile_dependency_does_not_change_user_openapi(
     client: TestClient, signing_key: rsa.RSAPrivateKey
 ) -> None:
     schema = client.get(
-        "/api/admin/openapi.json", headers={"X-Access": access(signing_key)}
+        "/api/me/openapi.json", headers={"X-Access": access(signing_key)}
     ).json()
-    operation = schema["paths"]["/users"]["get"]
+    operation = schema["paths"]["/profile"]["get"]
     assert not operation.get("parameters")
     assert operation["responses"]["200"]["content"]["application/json"]["schema"] == {
-        "$ref": "#/components/schemas/CurrentUserResponse"
+        "$ref": "#/components/schemas/UserProfileResponse"
     }
+    assert set(
+        schema["components"]["schemas"]["UserProfileResponse"]["properties"]
+    ) == {"user", "capabilities"}
     assert set(
         schema["components"]["schemas"]["CurrentUserResponse"]["properties"]
     ) == {"id", "email", "name", "picture"}
@@ -287,7 +360,7 @@ def test_multiple_audiences_with_matching_authorized_party_are_valid(
     client: TestClient, signing_key: rsa.RSAPrivateKey
 ) -> None:
     response = client.get(
-        "/api/admin/users",
+        "/api/me/profile",
         headers={
             "X-Access": access(signing_key),
             "X-Auth-Request-ID-Token": token(
@@ -301,4 +374,4 @@ def test_multiple_audiences_with_matching_authorized_party_are_valid(
             ),
         },
     )
-    assert response.json()["name"] == "Display"
+    assert response.json()["user"]["name"] == "Display"

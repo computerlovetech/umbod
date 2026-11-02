@@ -38,7 +38,7 @@ describe('dashboard presentation', () => {
     const currentUser = vi.fn();
     const body = render(Dashboard, { props: {
       mcpEndpoint: 'https://umbod.test/mcp',
-      createCurrentUserApi: () => ({ currentUser }),
+      createWorkspaceApi: () => ({ profile: { get: currentUser } }),
       createApi: (): DashboardApi => new InMemoryDashboardApi(catalogue),
       createPersonalApi: (): PersonalConnectionsApi => new InMemoryPersonalConnectionsApi([])
     } }).body;

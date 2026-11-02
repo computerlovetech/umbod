@@ -10,6 +10,7 @@ from .models import (
     NodeId,
     NodeKind,
     NodeMetadata,
+    NodeUpdate,
     StorageKey,
 )
 
@@ -33,6 +34,12 @@ class NamespaceDriver(Protocol):
         *,
         content: ContentRef,
         expected_revision: int,
+    ) -> Node: ...
+    async def update_metadata(
+        self, node_id: NodeId, *, metadata: NodeMetadata, expected_revision: int,
+    ) -> Node: ...
+    async def update_details(
+        self, node_id: NodeId, *, details: NodeUpdate, expected_revision: int,
     ) -> Node: ...
     async def delete_node(self, node_id: NodeId, *, expected_revision: int) -> None: ...
 

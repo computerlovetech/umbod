@@ -45,7 +45,7 @@ export class FilesNavigationState {
       const root = path.items[0];
       if (path.complete && (root.kind !== 'directory' || root.name !== '')) throw new Error('Invalid root');
       if (target?.id !== selected.id || target.kind !== selected.kind || new Set(path.items.map((item) => item.id)).size !== path.items.length || path.items.slice(0, -1).some((item) => item.kind !== 'directory')) throw new Error('Invalid path');
-      this.path = path;
+      this.path = { ...path, items: path.items.map((item) => item.id === selected.id ? { ...item, name: selected.name } : item) };
       this.phase = 'ready';
     } catch (error) {
       if (this.disposed || generation !== this.generation) return;

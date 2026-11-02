@@ -1,7 +1,7 @@
-import { SchemaValidationError, type Transport } from '$lib/admin/infrastructure/transport';
+import { HttpError, SchemaValidationError, type Transport } from '$lib/admin/infrastructure/transport';
 import { UploadPhaseError } from '../errors';
 import type { FilesystemApi, UploadTransferPort } from '../api';
-import { breadcrumbsSchema, type Breadcrumbs, deleteEligibilitySchema, fileRevisionSchema, childrenSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, uploadEligibilitySchema, beginUploadSchema, uploadSessionSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
+import { updateDescriptionSchema, updateNodeSchema, type UpdateNode, nodeCapabilitiesSchema, type UpdateDescription, breadcrumbsSchema, type Breadcrumbs, fileRevisionSchema, childrenSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, uploadEligibilitySchema, beginUploadSchema, uploadSessionSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
 
 export class FilesystemRoute implements FilesystemApi {
   constructor(private readonly transport: Transport, private readonly transfer: UploadTransferPort) {}
@@ -28,10 +28,26 @@ export class FilesystemRoute implements FilesystemApi {
       body: input, inputSchema: createFolderSchema, outputSchema: nodeSummarySchema
     });
 
+  checkUpdateEligibility = (id: string, signal?: AbortSignal): Promise<void> =>
+    this.checkNodeMethod(id, 'PATCH', signal);
+
+  checkDescriptionEligibility = (id: string, signal?: AbortSignal): Promise<void> => this.checkUpdateEligibility(id, signal);
+
+  updateDescription = (id: string, revision: number, input: UpdateDescription): Promise<NodeSummary> => {
+    const description = updateDescriptionSchema.safeParse(input);
+    if (!description.success) throw new SchemaValidationError('outbound', description.error.issues);
+    return this.updateNode(id, revision, { metadata: { attributes: { description: description.data.description } } });
+  };
+
+  updateNode = (id: string, revision: number, input: UpdateNode): Promise<NodeSummary> => {
+    const parsed = fileRevisionSchema.safeParse(revision);
+    if (!parsed.success) throw new SchemaValidationError('outbound', parsed.error.issues);
+    return this.transport.request({ method: 'PATCH', path: this.nodePath(id), body: input,
+      inputSchema: updateNodeSchema, outputSchema: nodeSummarySchema, redirect: 'error', conditionalHeaders: { 'If-Match': `"${parsed.data}"` } });
+  };
+
   checkDeleteEligibility = (id: string, signal?: AbortSignal): Promise<void> =>
-    this.transport.request({
-      method: 'OPTIONS', path: this.nodePath(id), outputSchema: deleteEligibilitySchema, responseBody: 'headers', signal
-    });
+    this.checkNodeMethod(id, 'DELETE', signal);
 
   deleteFile = (id: string, revision: number): Promise<void> => {
     const parsed = fileRevisionSchema.safeParse(revision);
@@ -73,7 +89,7 @@ export class FilesystemRoute implements FilesystemApi {
     try {
       session = await this.beginUpload(parentId, {
         name: parsed.data.name,
-        metadata: { content_type: parsed.data.file.type || 'application/octet-stream', attributes: {} },
+        metadata: { content_type: parsed.data.file.type || 'application/octet-stream', attributes: parsed.data.description ? { description: parsed.data.description } : {} },
         size_bytes: parsed.data.file.size
       });
     } catch (cause) {
@@ -90,6 +106,13 @@ export class FilesystemRoute implements FilesystemApi {
       throw new UploadPhaseError('complete', cause);
     }
   };
+
+  private async checkNodeMethod(id: string, method: 'PATCH' | 'DELETE', signal?: AbortSignal): Promise<void> {
+    const methods = await this.transport.request({
+      method: 'OPTIONS', path: this.nodePath(id), outputSchema: nodeCapabilitiesSchema, responseBody: 'headers', signal
+    });
+    if (!methods.includes(method)) throw new HttpError(403, 'Forbidden', { code: 'filesystem_permission_denied' });
+  }
 
   private nodePath(id: string): string {
     return '/me/filesystem/nodes/' + nodeIdSchema.parse(id);

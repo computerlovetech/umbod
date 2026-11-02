@@ -141,7 +141,7 @@ for attempt in $(seq 1 30); do
 done
 
 python3 "${script_directory}/bootstrap.py"
-(cd "${app_directory}/api" && uv run --locked pytest live_runtime_tests --ignore=live_runtime_tests/test_running_personal_mcp_execution.py --ignore=live_runtime_tests/test_running_filesystem.py --ignore=live_runtime_tests/test_running_filesystem_uploads.py --ignore=live_runtime_tests/test_running_filesystem_s3.py)
+(cd "${app_directory}/api" && uv run --locked pytest live_runtime_tests --ignore=live_runtime_tests/test_running_personal_mcp_execution.py --ignore=live_runtime_tests/test_running_user_profile.py --ignore=live_runtime_tests/test_running_filesystem.py --ignore=live_runtime_tests/test_running_filesystem_uploads.py --ignore=live_runtime_tests/test_running_filesystem_s3.py)
 kubectl --context "${kube_context}" logs deployment/umbod-core --container api \
     | python3 "${script_directory}/check_telemetry_logs.py"
 kubectl --context "${kube_context}" logs deployment/umbod-core --container mcp \
@@ -156,7 +156,8 @@ mcp_forward_pid=""
 (cd "${app_directory}/api" && uv run --locked python "${script_directory}/setup_personal_runtime.py" "${host_temporary_directory}")
 IFS= read -r UMBOD_TEST_BEARER_TOKEN < "${host_temporary_directory}/bearer-a"
 IFS= read -r UMBOD_TEST_BEARER_TOKEN_B < "${host_temporary_directory}/bearer-b"
-export UMBOD_TEST_BEARER_TOKEN UMBOD_TEST_BEARER_TOKEN_B
+IFS= read -r UMBOD_TEST_MEMBER_BEARER_TOKEN < "${host_temporary_directory}/bearer-member"
+export UMBOD_TEST_BEARER_TOKEN UMBOD_TEST_BEARER_TOKEN_B UMBOD_TEST_MEMBER_BEARER_TOKEN
 kubectl --context "${kube_context}" port-forward service/umbod-api "${api_port}:8000" --address 127.0.0.1 &
 api_forward_pid=$!
 kubectl --context "${kube_context}" port-forward service/umbod-mcp "${mcp_port}:8011" --address 127.0.0.1 &
@@ -190,7 +191,7 @@ opener.addheaders = [("Authorization", "Bearer " + os.environ["UMBOD_TEST_BEARER
 install_opener(opener)
 runpy.run_path(os.environ["UMBOD_TEST_BOOTSTRAP_PATH"], run_name="__main__")
 ')
-(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_personal_mcp_execution.py live_runtime_tests/test_running_filesystem.py live_runtime_tests/test_running_filesystem_uploads.py live_runtime_tests/test_running_filesystem_s3.py live_runtime_tests/test_running_filesystem_sharing.py live_runtime_tests/test_running_identity_directory.py)
+(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_user_profile.py live_runtime_tests/test_running_personal_mcp_execution.py live_runtime_tests/test_running_filesystem.py live_runtime_tests/test_running_filesystem_uploads.py live_runtime_tests/test_running_filesystem_s3.py live_runtime_tests/test_running_filesystem_sharing.py live_runtime_tests/test_running_identity_directory.py)
 for container_name in api api-b mcp mcp-b; do
     kubectl --context "${kube_context}" logs deployment/umbod-core --container "${container_name}" \
         | python3 "${script_directory}/check_secret_logs.py"

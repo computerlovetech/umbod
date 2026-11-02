@@ -45,7 +45,7 @@ describe('Files user composition', () => {
     const getNode = vi.spyOn(api.filesystem, 'getNode');
     const getChildren = vi.spyOn(api.filesystem, 'listChildren');
     const currentUser = vi.fn(() => deferred<never>().promise);
-    const body = render(FilesPage, { props: { createApi: () => api, createCurrentUserApi: () => ({ currentUser }) } }).body;
+    const body = render(FilesPage, { props: { createApi: () => api, createWorkspaceApi: () => ({ profile: { get: currentUser } }) } }).body;
     expect(body).toContain('aria-label="Workspace navigation"');
     expect(body).toContain('href="/files"');
     expect(body).not.toContain('href="/admin"');

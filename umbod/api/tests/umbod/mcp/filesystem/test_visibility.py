@@ -31,7 +31,7 @@ from .test_tools import root_id
 
 BOOTSTRAP_TOOLS = {
     "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
-    "create_filesystem_file", "create_filesystem_directory", "filesystem_upload",
+    "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "update_filesystem_node",
 }
 INSPECT_TOOLS = {"filesystem_browse", "get_filesystem_node"}
 FILE_READ_TOOLS = INSPECT_TOOLS
@@ -101,7 +101,7 @@ async def test_owned_file_without_root_exposes_file_operations_not_directory_ope
     await filesystem_mcp.runtime.reconcile()
     select_caller(filesystem_mcp, "alice")
     assert await listed_tools(filesystem_mcp) == FILE_READ_TOOLS | {
-        "filesystem_delete_file", "filesystem_share", "filesystem_search_sharing_recipients",
+        "filesystem_delete_file", "filesystem_share", "filesystem_search_sharing_recipients", "update_filesystem_node",
     }
 
 
@@ -177,7 +177,7 @@ async def test_discovery_after_hydration_never_reads_database_or_constructs_serv
 ) -> None:
     forbidden = Mock(side_effect=AssertionError("Discovery performed I/O or service construction"))
     monkeypatch.setattr(filesystem_mcp.database, "read_session", forbidden)
-    for method in ("browsing", "creation", "content", "deletion", "sharing", "uploads"):
+    for method in ("browsing", "creation", "content", "deletion", "updates", "sharing", "uploads"):
         monkeypatch.setattr(filesystem_mcp.services, method, forbidden)
     assert await listed_tools(filesystem_mcp) == BOOTSTRAP_TOOLS
     assert await listed_tools(filesystem_mcp) == BOOTSTRAP_TOOLS
@@ -258,7 +258,7 @@ async def test_http_lookup_enforces_visibility_callback_with_verified_request_id
     server.add_middleware(FilesystemVisibilityMiddleware(visibility))
     register_filesystem_tools(
         McpObservedToolRegistrar(server, Mock(spec=McpInvocationPublisher)),
-        callers, filesystem_mcp.services, visibility,
+        callers, filesystem_mcp.services, visibility, filesystem_mcp.approval,
     )
     app = server.http_app(stateless_http=True)
     async with app.router.lifespan_context(app):

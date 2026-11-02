@@ -33,8 +33,12 @@ def upstream_identity(directory: Path) -> dict[str, Any]:
     public_key = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(key.public_key()))
     public_key.update({"kid": "kind-personal-jwt", "use": "sig", "alg": "RS256"})
     issued = int(time.time())
-    for suffix, subject, name in (("a", "kind-ci", "Kind Alice"), ("b", "kind-ci-b", "Kind Bob")):
-        token = jwt.encode({"sub": subject, "name": name, "email": subject + "@example.invalid", "groups": ["admin"], "iss": "https://identity.personal-runtime.kind.invalid/", "aud": "kind-client", "iat": issued, "exp": issued + 3600}, key, algorithm="RS256", headers={"kid": "kind-personal-jwt"})
+    for suffix, subject, name, groups in (
+        ("a", "kind-ci", "Kind Alice", ["admin"]),
+        ("b", "kind-ci-b", "Kind Bob", ["admin"]),
+        ("member", "kind-member", "Kind Member", ["members"]),
+    ):
+        token = jwt.encode({"sub": subject, "name": name, "email": subject + "@example.invalid", "picture": "https://images.example.invalid/" + subject + ".png", "groups": groups, "iss": "https://identity.personal-runtime.kind.invalid/", "aud": "kind-client", "iat": issued, "exp": issued + 3600}, key, algorithm="RS256", headers={"kid": "kind-personal-jwt"})
         token_path = directory / f"bearer-{suffix}"
         token_path.touch(mode=0o600)
         token_path.write_text(token + "\n")

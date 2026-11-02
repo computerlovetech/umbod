@@ -28,6 +28,9 @@
 <form aria-label="New folder" onsubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}>
   <label for="folder-name">Folder name</label>
   <input id="folder-name" name="name" onkeydown={handleEscape} value={state.name} oninput={(event) => state.changeName(event.currentTarget.value)} disabled={state.pending} required autocomplete="off" {@attach focusInput} />
+  <label for="folder-description">Description (optional)</label>
+  <textarea id="folder-description" aria-describedby="folder-description-hint" value={state.description} oninput={(event) => state.changeDescription(event.currentTarget.value)} disabled={state.pending} onkeydown={handleEscape} rows="3"></textarea>
+  <p id="folder-description-hint">What is here, and when should it be read?</p>
   <button type="submit" onkeydown={handleEscape} disabled={state.pending || state.uncertain || !state.name.trim()}>{state.pending ? 'Creating…' : 'Create folder'}</button>
   <button type="button" onkeydown={handleEscape} disabled={state.pending} onclick={cancel}>Cancel</button>
   {#if state.error}<p role="alert">{state.error}</p>{/if}
@@ -36,7 +39,10 @@
 
 <style>
   form { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; margin: 1rem 0; }
-  input, button { border: 1px solid var(--admin-border); background: var(--admin-panel); color: var(--admin-ink); border-radius: var(--admin-radius); padding: 0.6rem; font: inherit; }
+  label[for='folder-description'], #folder-description-hint { flex-basis: 100%; }
+  #folder-description-hint { margin: 0; color: var(--admin-muted); font-size: 0.9rem; }
+  textarea { flex-basis: 100%; resize: vertical; }
+  input, textarea, button { border: 1px solid var(--admin-border); background: var(--admin-panel); color: var(--admin-ink); border-radius: var(--admin-radius); padding: 0.6rem; font: inherit; }
   input { min-width: 0; }
   button { cursor: pointer; }
   button:disabled { cursor: default; opacity: 0.6; }

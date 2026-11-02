@@ -17,6 +17,7 @@ class FilesystemOperation(StrEnum):
     INSPECT_ROOT = "inspect_root"
     LIST = "list"
     CREATE = "create"
+    UPDATE_METADATA = "update_metadata"
     READ = "read"
     DELETE = "delete"
     SHARE = "share"
@@ -89,6 +90,8 @@ def permitted_operations(
         if Permission.DISCOVER not in permissions:
             continue
         operations.add(FilesystemOperation.INSPECT)
+        if Permission.WRITE in permissions:
+            operations.add(FilesystemOperation.UPDATE_METADATA)
         if node.node_id == ROOT_ID:
             operations.add(FilesystemOperation.INSPECT_ROOT)
         if Permission.SHARE in permissions:

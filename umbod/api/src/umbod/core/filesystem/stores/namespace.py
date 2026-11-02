@@ -14,14 +14,16 @@ from umbod.core.persistence import (
     Unordered,
     UpsertCommand,
 )
-from ..errors import MissingNode, NameCollision, RevisionConflict, WrongNodeKind
-from ..models import ContentRef, Node, NodeId, NodeKind, NodeMetadata, RootParent
+from ..errors import InvalidMove, MissingNode, NameCollision, RevisionConflict, StorageFailure, WrongNodeKind
+from ..models import ContentRef, Node, NodeId, NodeKind, NodeMetadata, NodeUpdate, RootParent
 from ..namespace import (
     ROOT_ID,
     initial_root,
     new_node,
     require_directory,
     updated_node,
+    updated_metadata,
+    updated_details,
     validate_name,
 )
 from .schema import (
@@ -96,6 +98,24 @@ class DatabaseNamespace:
                 node_id, content=content, expected_revision=expected_revision
             )
 
+    async def update_metadata(
+        self, node_id: NodeId, *, metadata: NodeMetadata, expected_revision: int,
+    ) -> Node:
+        async with storage_session(self._database, TransactionMode.SERIALIZED_WRITE) as session:
+            await self._initialize_root(session)
+            return await SessionNamespace(session).update_metadata(
+                node_id, metadata=metadata, expected_revision=expected_revision,
+            )
+
+    async def update_details(
+        self, node_id: NodeId, *, details: NodeUpdate, expected_revision: int,
+    ) -> Node:
+        async with storage_session(self._database, TransactionMode.SERIALIZED_WRITE) as session:
+            await self._initialize_root(session)
+            return await SessionNamespace(session).update_details(
+                node_id, details=details, expected_revision=expected_revision,
+            )
+
     async def delete_node(self, node_id: NodeId, *, expected_revision: int) -> None:
         async with storage_session(self._database, TransactionMode.SERIALIZED_WRITE) as session:
             await SessionNamespace(session).delete_node(node_id, expected_revision=expected_revision)
@@ -104,6 +124,63 @@ class DatabaseNamespace:
 class SessionNamespace:
     def __init__(self, session: DatabaseSession) -> None:
         self._session = session
+
+    async def update_metadata(
+        self, node_id: NodeId, *, metadata: NodeMetadata, expected_revision: int,
+    ) -> Node:
+        node = updated_metadata(await self.get_node(node_id), metadata, expected_revision)
+        await self._session.upsert(
+            NODE_TABLE, UpsertCommand(key=NodeKey(node_id=str(node_id)), row=node_record(node)),
+        )
+        return node.model_copy(deep=True)
+
+    async def update_details(
+        self, node_id: NodeId, *, details: NodeUpdate, expected_revision: int,
+    ) -> Node:
+        previous = await self.get_node(node_id)
+        node = updated_details(previous, details, expected_revision)
+        placement_changed = node.name != previous.name or node.parent_id != previous.parent_id
+        if placement_changed:
+            if isinstance(node.parent_id, RootParent):
+                raise InvalidMove()
+            await self._validate_destination(node_id, node.parent_id)
+            existing = await self._session.find_one(
+                NODE_TABLE,
+                Query(
+                    filter=AllOf((Equals(NODE_PARENT, str(node.parent_id)), Equals(NODE_NAME, node.name))),
+                    projection=AllFields(), ordering=Unordered(),
+                ),
+            )
+            if existing is not None and existing.payload.id != node_id:
+                raise NameCollision(node.name)
+        await self._session.upsert(
+            NODE_TABLE, UpsertCommand(key=NodeKey(node_id=str(node_id)), row=node_record(node)),
+        )
+        if placement_changed:
+            await append_discovery_changed(self._session)
+        return node.model_copy(deep=True)
+
+    async def _validate_destination(self, node_id: NodeId, parent_id: NodeId) -> None:
+        parent = require_directory(await self.get_node(parent_id))
+        visited: set[NodeId] = set()
+        while True:
+            if parent.id == node_id:
+                raise InvalidMove()
+            if parent.id in visited:
+                raise StorageFailure("Invalid filesystem hierarchy")
+            visited.add(parent.id)
+            if parent.id == ROOT_ID:
+                if not isinstance(parent.parent_id, RootParent) or parent.name != "":
+                    raise StorageFailure("Invalid filesystem root")
+                return
+            if isinstance(parent.parent_id, RootParent):
+                raise StorageFailure("Invalid filesystem hierarchy")
+            try:
+                parent = await self.get_node(parent.parent_id)
+            except MissingNode:
+                raise StorageFailure("Invalid filesystem hierarchy") from None
+            if parent.kind != NodeKind.DIRECTORY:
+                raise StorageFailure("Invalid filesystem hierarchy")
 
     async def delete_node(self, node_id: NodeId, *, expected_revision: int) -> None:
         node = await self.get_node(node_id)

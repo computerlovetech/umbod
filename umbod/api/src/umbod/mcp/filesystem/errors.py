@@ -5,6 +5,8 @@ from fastmcp.exceptions import ResourceError, ToolError
 
 from umbod.mcp.tools.errors import ToolAuthorizationDenied
 
+from .approval_state import FileDeletionApprovalDenied
+
 from umbod.core.filesystem.authorization.errors import PermissionDenied
 from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
 from umbod.core.filesystem.content.errors import UploadTooLarge
@@ -12,6 +14,8 @@ from umbod.core.filesystem.uploads.errors import (
     UploadConflict, UploadExpired, UploadLengthMismatch, UploadMediaTypeMismatch,
 )
 from umbod.core.filesystem.errors import (
+    InvalidMove,
+    RootMutation,
     InvalidName,
     MissingNode,
     NameCollision,
@@ -38,6 +42,8 @@ _ERROR_MESSAGES: dict[type[Exception], str] = {
     UploadExpired: "filesystem_upload_expired: Filesystem upload expired",
     UploadLengthMismatch: "filesystem_upload_length_mismatch: Invalid upload length",
     UploadMediaTypeMismatch: "filesystem_upload_media_type_mismatch: Invalid upload content type",
+    InvalidMove: "filesystem_invalid_move: Invalid filesystem destination",
+    RootMutation: "filesystem_root_protected: The filesystem root cannot be renamed or moved",
     InvalidName: "filesystem_invalid_name: Invalid filesystem name",
     NameCollision: "filesystem_name_collision: Filesystem name already exists",
     WrongNodeKind: "filesystem_wrong_node_kind: Invalid filesystem node kind",
@@ -63,6 +69,10 @@ def filesystem_resource_operation() -> Iterator[None]:
 def filesystem_operation() -> Iterator[None]:
     try:
         yield
+    except FileDeletionApprovalDenied:
+        raise ToolAuthorizationDenied(
+            "filesystem_delete_approval_denied: File deletion requires explicit human approval"
+        ) from None
     except (PermissionDenied, MissingNode):
         raise ToolAuthorizationDenied("filesystem_permission_denied: Filesystem access denied") from None
     except Exception as error:

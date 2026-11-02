@@ -3,11 +3,13 @@
   import type { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
   import type { UploadState } from '$lib/files/state/upload-state.svelte';
   import { FileDropState } from '$lib/files/state/file-drop-state.svelte';
+  import NodeUpdateDialog from './NodeUpdateDialog.svelte';
   import NodeShareButton from './NodeShareButton.svelte';
   import NodeSharingDialog from './NodeSharingDialog.svelte';
   import FilesNavigation from './FilesNavigation.svelte';
   import FileDeletionDialog from './FileDeletionDialog.svelte';
   import FileUploadForm from './FileUploadForm.svelte';
+  import FilesDescription from './FilesDescription.svelte';
   import NewFolderForm from './NewFolderForm.svelte';
 
   let { state, folder, upload, signIn }: { state: FilesState; folder: NewFolderState; upload: UploadState; signIn: () => void } = $props();
@@ -80,6 +82,14 @@
     <button onclick={folder.reload}>Retry</button>
   {/if}
 {:else if state.node}
+  <div class="toolbar" aria-label="Item actions">
+    {#if state.update.canRename}<button onclick={state.update.showRename} disabled={state.update.open || state.update.pending}>Rename</button>{/if}
+    {#if state.update.canMove}<button onclick={state.update.showMove} disabled={state.update.open || state.update.pending}>Move</button>{/if}
+    {#if state.update.probeFailed}<button onclick={state.update.checkEligibility}>Retry rename and move check</button>{/if}
+    {#if state.update.needsReload && !state.update.open}<button onclick={state.update.reload}>Reload item</button>{/if}
+  </div>
+  {#if state.update.open}<NodeUpdateDialog state={state.update} />{/if}
+  <FilesDescription state={state.description} {signIn} />
   {#if state.node.kind === 'directory'}
     {#if !upload.available && upload.error}<p role="alert">{upload.error}</p>{/if}
     {#if state.uploadAvailability === 'error'}
@@ -107,6 +117,7 @@
                     </svg>
                     {item.name}
                   </a>
+                  {#if item.metadata.attributes.description}<p class="item-description">{item.metadata.attributes.description}</p>{/if}
                 </td>
                 <td>{item.kind === 'directory' ? 'Folder' : 'File'}</td>
                 <td><time datetime={item.updated_at}>{updatedAt(item.updated_at)}</time></td>
@@ -145,7 +156,7 @@
         <dt>Content type</dt><dd>{typeof state.node.metadata.content_type === 'string' ? state.node.metadata.content_type : 'Not specified'}</dd>
         <dt>Updated</dt><dd><time datetime={state.node.updated_at}>{updatedAt(state.node.updated_at)}</time></dd>
         {#each Object.entries(state.node.metadata.attributes) as [name, value] (name)}
-          <dt>{name}</dt><dd>{value}</dd>
+          {#if name !== 'description'}<dt>{name}</dt><dd>{value}</dd>{/if}
         {/each}
       </dl>
     </section>
@@ -180,6 +191,7 @@
   .row-actions > button { position: relative; z-index: 1; }
   .row-delete { display: inline-flex; align-items: center; justify-content: center; width: 2.75rem; height: 2.75rem; padding: 0; border: 0; background: transparent; color: var(--admin-danger); }
   .row-delete:hover:not(:disabled) { background: color-mix(in srgb, var(--admin-danger) 8%, transparent); }
+  .item-description { margin: 0.4rem 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
   .item-name { display: flex; align-items: center; gap: 0.6rem; }
   .item-name::after { content: ''; position: absolute; inset: 0; cursor: pointer; }
   svg { flex-shrink: 0; }

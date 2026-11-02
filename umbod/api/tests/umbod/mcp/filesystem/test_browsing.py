@@ -27,7 +27,7 @@ async def test_browse_observation_records_only_declared_operation_names(
     publisher = Mock(spec=McpInvocationPublisher)
     register_filesystem_tools(
         McpObservedToolRegistrar(server, publisher), filesystem_invocation_mcp.callers, filesystem_invocation_mcp.services,
-        filesystem_invocation_mcp.visibility,
+        filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
     )
     async with Client(server) as client:
         result = await client.call_tool(TOOL, {"operation": operation, "target": ROOT}, raise_on_error=False)

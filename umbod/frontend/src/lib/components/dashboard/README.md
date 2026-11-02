@@ -10,6 +10,6 @@ description: "User catalogue workspace presentation outside administration."
 - [CatalogueToolCard.svelte](./CatalogueToolCard.svelte) — Dashboard-owned tool card composition.
 - [ConnectorDetail.svelte](./ConnectorDetail.svelte) — User connector detail presentation.
 - [ConnectorWorkspace.svelte](./ConnectorWorkspace.svelte) — Combined connector list and selection.
-- [Dashboard.svelte](./Dashboard.svelte) — Dashboard page composition.
+- [Dashboard.svelte](./Dashboard.svelte) — Dashboard composition with independent neutral profile loading.
 - [dashboard.test.ts](./dashboard.test.ts) — Workspace presentation tests.
 - [tool-catalogue.test.ts](./tool-catalogue.test.ts) — Tool catalogue presentation tests.

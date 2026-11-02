@@ -5,7 +5,7 @@ from typing import Any, TypedDict, Unpack
 
 from fastmcp import FastMCP
 from fastmcp.exceptions import AuthorizationError, ValidationError
-from fastmcp.tools import FunctionTool, ToolResult
+from fastmcp.tools import FunctionTool, InputRequiredToolResult, ToolResult
 from fastmcp.tools.base import Tool
 from pydantic import PrivateAttr
 
@@ -68,6 +68,8 @@ class ObservedFunctionTool(Tool):
         except Exception as error:
             self._publish_failure(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
             raise
+        if isinstance(result, InputRequiredToolResult):
+            return result
         try:
             is_error = self._result_is_error(result)
         except Exception as error:

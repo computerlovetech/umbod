@@ -13,6 +13,7 @@ description: "Storage-independent filesystem operations with separate authorizat
 - [content/](./content/README.md) — Authorized streaming uploads and downloads.
 - [creation/](./creation/README.md) — Authorized node creation.
 - [deletion/](./deletion/README.md) — Authorized permanent single-file removal without byte deletion.
+- [updates/](./updates/README.md) — Atomic authorized rename, move and metadata updates for files and directories.
 - [errors.py](./errors.py) — Namespace and storage failures.
 - [group_policy.py](./group_policy.py) — Shared validated group policies and canonical grant rules.
 - [models.py](./models.py) — Nodes, metadata and access policy.

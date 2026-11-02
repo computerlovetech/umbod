@@ -5,7 +5,7 @@ from fastapi import HTTPException
 
 from umbod.core.filesystem import InvalidName, NameCollision, StorageFailure, WrongNodeKind
 from umbod.core.filesystem.authorization import PermissionDenied
-from umbod.core.filesystem.errors import RevisionConflict
+from umbod.core.filesystem.errors import InvalidMove, RevisionConflict, RootMutation
 from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
 from umbod.core.filesystem.content import UploadTooLarge
 from umbod.core.filesystem.uploads.errors import (
@@ -60,6 +60,16 @@ def filesystem_errors() -> Iterator[None]:
         raise HTTPException(409, detail={
             "code": "filesystem_name_collision",
             "message": "Filesystem name already exists.",
+        }) from None
+    except InvalidMove:
+        raise HTTPException(409, detail={
+            "code": "filesystem_invalid_move",
+            "message": "Invalid filesystem destination.",
+        }) from None
+    except RootMutation:
+        raise HTTPException(409, detail={
+            "code": "filesystem_root_protected",
+            "message": "The filesystem root cannot be renamed or moved.",
         }) from None
     except RevisionConflict:
         raise HTTPException(412, detail={

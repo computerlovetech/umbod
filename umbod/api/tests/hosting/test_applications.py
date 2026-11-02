@@ -67,11 +67,11 @@ def test_explicit_rest_settings_and_verifiers_are_isolated(
         })
         app = create_rest_app(selected_settings, connector_registrations=[], admin_verifier=OwnerVerifier(owner), oauth_service=None)
         with TestClient(app) as client:
-            response = client.get("/api/admin/users", headers={f"X-{owner}": owner})
+            response = client.get("/api/admin/mcp-permissions/groups", headers={f"X-{owner}": owner})
             assert response.status_code == 200
-            assert response.json()["id"] == owner
-            assert client.get("/api/admin/users", headers={f"X-{owner}": "wrong"}).status_code == 401
-            assert client.get("/api/admin/users", headers={"X-other": owner}).status_code == 401
+            assert response.json() == {"groups": []}
+            assert client.get("/api/admin/mcp-permissions/groups", headers={f"X-{owner}": "wrong"}).status_code == 401
+            assert client.get("/api/admin/mcp-permissions/groups", headers={"X-other": owner}).status_code == 401
             assert client.get("/api/system/health").status_code == 200
             assert client.get("/admin/users").status_code == 404
 

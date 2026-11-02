@@ -35,7 +35,7 @@ def test_rest_metrics_recorder_accepts_completed_request_contract() -> None:
 def test_completed_rest_request_is_immutable() -> None:
     request = CompletedRestRequest(
         method="GET",
-        normalized_route="/admin/users",
+        normalized_route="/admin/overview",
         status_class="2xx",
         duration_seconds=0.01,
     )
@@ -49,7 +49,7 @@ def test_completed_rest_request_rejects_non_positive_duration(duration_seconds: 
     with pytest.raises(ValidationError):
         CompletedRestRequest(
             method="GET",
-            normalized_route="/admin/users",
+            normalized_route="/admin/overview",
             status_class="2xx",
             duration_seconds=duration_seconds,
         )
@@ -60,9 +60,9 @@ def test_completed_rest_request_rejects_raw_or_sensitive_fields() -> None:
         CompletedRestRequest.model_validate(
             {
                 "method": "GET",
-                "normalized_route": "/admin/users",
+                "normalized_route": "/admin/overview",
                 "status_class": "2xx",
                 "duration_seconds": 0.01,
-                "raw_path": "/admin/users/private-user?token=secret",
+                "raw_path": "/api/admin/overview?token=secret",
             }
         )

@@ -6,7 +6,7 @@ description: "Browser transport, public runtime configuration and administration
 
 # Files
 
-- [admin-api.ts](./admin-api.ts) — Composite administration client.
+- [admin-api.ts](./admin-api.ts) — Composite administration client; authenticated workspace profiles live in the neutral workspace module.
 - [browser-request.ts](./browser-request.ts) — Client failure presentation.
 - [logout.ts](./logout.ts) — Logout navigation port and adapters.
 - [logout.test.ts](./logout.test.ts) — Logout navigation tests.

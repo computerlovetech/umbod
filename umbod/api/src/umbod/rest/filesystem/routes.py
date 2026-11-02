@@ -14,10 +14,10 @@ from .deps import (
     get_filesystem_content,
 )
 from .deletion import router as deletion_router
+from .metadata import router as metadata_router
 from .downloads import DOWNLOAD_RESPONSES, download_response
 from .errors import filesystem_errors
 from .models import ChildrenResponse, CreateNodeRequest
-from .planned.routes import router as planned_router
 from .uploads import router as uploads_router
 from .sharing import router as sharing_router
 
@@ -74,5 +74,5 @@ async def create_directory(
 
 router.include_router(sharing_router)
 router.include_router(deletion_router)
-router.include_router(planned_router)
+router.include_router(metadata_router)
 router.include_router(uploads_router)

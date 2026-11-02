@@ -55,6 +55,10 @@ export class DeletionState {
     }
   };
 
+  acceptUpdatedNode = (node: NodeSummary): void => {
+    if (!this.disposed && this.target?.id === node.id) this.target = node;
+  };
+
   show = (): void => {
     if (!this.available || this.pending || this.needsReload || !this.target) return;
     this.confirmation = { ...this.target };

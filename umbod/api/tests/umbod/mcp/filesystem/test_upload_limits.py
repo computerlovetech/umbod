@@ -21,7 +21,7 @@ def server_for(filesystem: FilesystemMcp, services: FilesystemServiceFactory) ->
         McpObservedToolRegistrar(server, McpInvocationPublisher(
             create_mcp_signals(Mock(), filesystem.metrics, Mock()),
         )),
-        filesystem.callers, services, filesystem.visibility,
+        filesystem.callers, services, filesystem.visibility, filesystem.approval,
     )
     return server
 
@@ -58,7 +58,7 @@ async def test_upload_sanitizes_failures_at_every_stage(
     register_filesystem_tools(
         McpObservedToolRegistrar(server, McpInvocationPublisher(
             create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock()),
-        )), callers, services, filesystem_invocation_mcp.visibility,
+        )), callers, services, filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
     )
     async with Client(filesystem_invocation_mcp.server) as client:
         parent = await root_id(client)

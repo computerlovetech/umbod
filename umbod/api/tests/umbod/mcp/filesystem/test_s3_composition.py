@@ -13,6 +13,7 @@ from umbod.mcp import public_app
 from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory
 from umbod.mcp.filesystem.caller import CurrentFilesystemCallerCapture
 from umbod.mcp.filesystem.authorization import FilesystemToolVisibility
+from umbod.mcp.filesystem.ports import FilesystemDeletionApproval
 from umbod.mcp.tools import McpObservedToolRegistrar
 
 
@@ -35,9 +36,10 @@ async def test_mcp_composes_s3_once_and_retains_operation_scoped_services(
     def capture_registration(
         registrar: McpObservedToolRegistrar, callers: CurrentFilesystemCallerCapture,
         services: DatabaseFilesystemServiceFactory, visibility: FilesystemToolVisibility,
+        deletion_approval: FilesystemDeletionApproval,
     ) -> None:
         captured.append(services)
-        register_tools(registrar, callers, services, visibility)
+        register_tools(registrar, callers, services, visibility, deletion_approval)
 
     monkeypatch.setattr(public_app, "create_content_driver", fake_content_factory)
     monkeypatch.setattr(public_app, "register_filesystem_tools", capture_registration)

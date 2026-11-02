@@ -12,7 +12,7 @@ description: "Database-neutral namespace and access-policy persistence."
 - [discovery.py](./discovery.py) — Coherent read-only authorization snapshots without root initialization or writer reservations.
 - [discovery_events.py](./discovery_events.py) — Sanitized durable invalidation events appended within namespace and policy transactions.
 - [group_usage.py](./group_usage.py) — Group catalogue usage checks.
-- [namespace.py](./namespace.py) — Namespace persistence and revision-checked single-file removal.
+- [namespace.py](./namespace.py) — Namespace persistence, atomic revision-checked metadata and placement updates, and single-file removal.
 - [schema.py](./schema.py) — Node and access-policy tables.
 - [session.py](./session.py) — Storage failure translation.
 - [sharing.py](./sharing.py) — Serialized sharing, session-bound registered-group IDs and metadata, and non-registering grant writes.

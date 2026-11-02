@@ -1,9 +1,9 @@
 <script lang="ts">
   import { afterNavigate, goto } from '$app/navigation';
   import { onMount } from 'svelte';
-  import { adminApi } from '$lib/admin/infrastructure/admin-api';
+  import { workspaceApi } from '$lib/workspace/infrastructure/workspace-api';
   import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
-  import type { CurrentUserApi } from '$lib/workspace/admin-access';
+  import type { WorkspaceApi } from '$lib/workspace/api';
   import { WorkspaceAccessState } from '$lib/workspace/workspace-access-state.svelte';
   import { workspaceNavigation, workspacePresentation } from '$lib/workspace/navigation';
   import type { FilesApi } from '$lib/files/api';
@@ -16,11 +16,11 @@
 
   let {
     createApi = browserFilesApi,
-    createCurrentUserApi = adminApi,
+    createWorkspaceApi = workspaceApi,
     signIn = navigateToSignIn
   }: {
     createApi?: () => FilesApi;
-    createCurrentUserApi?: () => CurrentUserApi;
+    createWorkspaceApi?: () => WorkspaceApi;
     signIn?: () => void;
   } = $props();
 
@@ -29,7 +29,7 @@
   }
 
   function createAccess(): WorkspaceAccessState {
-    return new WorkspaceAccessState(createCurrentUserApi());
+    return new WorkspaceAccessState(createWorkspaceApi());
   }
 
   const api = createFilesApi();

@@ -6,6 +6,13 @@ description: "User filesystem browsing, direct-node group sharing, directory cre
 
 # Files
 
+- [state/node-update-state.svelte.ts](./state/node-update-state.svelte.ts) — Selected-node rename, independent move navigation, authority checks and conditional mutation recovery.
+- [state/node-update-state.test.ts](./state/node-update-state.test.ts) — Revision reconciliation, picker eligibility, navigation fencing and conflict recovery tests.
+- [update-node-api.test.ts](./update-node-api.test.ts) — Atomic PATCH validation, independent permissions, collisions, cycles and retained content tests.
+
+- [state/description-state.svelte.ts](./state/description-state.svelte.ts) — Current-node description eligibility, drafts, conditional saves and explicit conflict recovery.
+- [state/description-state.test.ts](./state/description-state.test.ts) — Authoritative reconciliation, creation descriptions, duplicate protection and stale-result tests.
+- [description-api.test.ts](./description-api.test.ts) — Conditional description transport, validation, upload metadata and authority tests.
 - [api.ts](./api.ts) — Filesystem operations and typed recipient-filtered sharing ports.
 - [domain/sharing.ts](./domain/sharing.ts) — Strict group/user grant targets, labelled access views and minimal blocked recipient contracts.
 - [state/sharing-eligibility-state.svelte.ts](./state/sharing-eligibility-state.svelte.ts) — Independent current-node and bounded row authority probes with stale-result fencing.

@@ -122,7 +122,7 @@ async def test_each_tool_invocation_captures_exactly_one_current_token(
         McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock()))),
         CurrentFilesystemCallerCapture(server, StaticFilesystemGroupClaimFields("active")),
         filesystem_invocation_mcp.services,
-        filesystem_invocation_mcp.visibility,
+        filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
     )
     assert source.call_count == 0
     async with Client(server) as client:

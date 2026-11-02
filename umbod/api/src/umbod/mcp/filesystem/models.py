@@ -46,6 +46,12 @@ class DeleteFileCommand(BaseModel):
     )
 
 
+class FileDeletionConfirmation(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+
+    value: bool = Field(title="Confirm file deletion")
+
+
 class FileDeletionResult(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 

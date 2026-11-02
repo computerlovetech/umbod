@@ -15,6 +15,9 @@ export class UploadState {
   open = $state(false);
   file = $state.raw<File | undefined>(undefined);
   name = $state('');
+  private descriptionValue = $state('');
+  get description(): string { return this.descriptionValue; }
+  changeDescription = (value: string): void => { if (!this.pending && !this.uncertain) this.descriptionValue = value; };
   error = $state('');
   status = $state('');
   retryable = $state(false);
@@ -22,7 +25,7 @@ export class UploadState {
   uncertain = $state(false);
   signInRequired = $state(false);
   private parentId: string | undefined;
-  private readonly pendingParents = new SvelteMap<string, { file: File; name: string }>();
+  private readonly pendingParents = new SvelteMap<string, { file: File; name: string; description?: string }>();
   private readonly blockedParents = new SvelteSet<string>();
   private disposed = false;
 
@@ -56,6 +59,7 @@ export class UploadState {
   }
 
   navigate = (): void => {
+    this.descriptionValue = '';
     this.open = false;
     this.file = undefined;
     this.name = '';
@@ -77,6 +81,7 @@ export class UploadState {
     if (pending) {
       this.file = pending.file;
       this.name = pending.name;
+      this.descriptionValue = pending.description ?? '';
     }
     this.uncertain = this.blockedParents.has(target.parentId);
     this.retryable = false;
@@ -120,6 +125,7 @@ export class UploadState {
 
   remove = (): void => {
     if (this.pending || this.uncertain) return;
+    this.descriptionValue = '';
     this.file = undefined;
     this.name = '';
     this.error = '';
@@ -129,6 +135,7 @@ export class UploadState {
 
   cancel = (): void => {
     if (this.pending) return;
+    this.descriptionValue = '';
     this.open = false;
     this.file = undefined;
     this.name = '';
@@ -148,7 +155,7 @@ export class UploadState {
   submit = async (): Promise<void> => {
     const target = this.files.creationTarget();
     if (this.disposed || !this.open || !target || this.parentId !== target.parentId || !this.canSubmit || this.pendingParents.has(target.parentId) || this.blockedParents.has(target.parentId)) return;
-    const input = fileUploadSchema.parse({ file: this.file, name: this.name });
+    const input = fileUploadSchema.parse({ file: this.file, name: this.name, ...(this.description ? { description: this.description } : {}) });
     this.pendingParents.set(target.parentId, input);
     this.pending = true;
     this.error = '';
@@ -160,6 +167,7 @@ export class UploadState {
       if (!this.disposed) await this.files.acceptCreated(target.parentId, target.generation, node);
       if (this.disposed || this.parentId !== target.parentId) return;
       this.file = undefined;
+      this.descriptionValue = '';
       this.name = '';
       this.open = false;
       this.status = `${node.name} uploaded.`;

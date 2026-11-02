@@ -11,6 +11,7 @@ import httpx
 import pytest
 from fastmcp import Client
 from fastmcp.client.client import CallToolResult
+from fastmcp.client.transports import StreamableHttpTransport
 from mcp.shared.exceptions import MCPError
 from mcp.types import BlobResourceContents, ResourceLink, TextResourceContents
 
@@ -23,7 +24,21 @@ FILESYSTEM_TOOLS = frozenset({
     "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
     "create_filesystem_file", "create_filesystem_directory", "filesystem_upload",
     "filesystem_delete_file", "filesystem_search_sharing_recipients", "filesystem_share",
+    "update_filesystem_node",
 })
+
+
+class FileDeletionApprovals:
+    def __init__(self) -> None:
+        self.approved: bool = False
+        self.messages: list[str] = []
+        self.count: int = 0
+
+    async def __call__(self, *args: object) -> dict[str, bool]:
+        assert isinstance(args[0], str)
+        self.messages.append(args[0])
+        self.count += 1
+        return {"value": self.approved}
 
 
 async def wait_for_filesystem_tools(
@@ -78,9 +93,154 @@ def checked_breadcrumbs(
     }
 
 
+async def check_filesystem_descriptions(
+    alice: httpx.Client, alice_second: httpx.Client, bob: httpx.Client,
+    alice_mcp: Client[Any], parent_id: str,
+) -> None:
+    for kind in ("file", "directory"):
+        created = tool_payload(await alice_mcp.call_tool("create_filesystem_" + kind, {
+            "parent_id": parent_id,
+            "name": "description-" + uuid4().hex,
+            "metadata": {
+                "content_type": "text/plain",
+                "attributes": {"description": "Reference material. Read before planning.", "label": "retained"},
+            },
+        }))
+        node_path = FILESYSTEM + "/nodes/" + created["id"]
+        before = checked_summary(alice_second.get(node_path), 200)
+        assert before["metadata"]["attributes"]["description"] == "Reference material. Read before planning."
+        eligibility = alice.options(node_path)
+        assert eligibility.status_code == 204, eligibility.text
+        allowed = {method.strip() for method in eligibility.headers["allow"].split(",")}
+        assert allowed == ({"GET", "PATCH", "DELETE", "OPTIONS"} if kind == "file" else {"GET", "PATCH", "OPTIONS"})
+        assert bob.options(node_path).status_code == 403
+        headers = {"If-Match": f'"{before["revision"]}"'}
+        denied = bob.patch(node_path, headers=headers, json={"metadata": {"attributes": {"description": "not allowed"}}})
+        missing = bob.patch(FILESYSTEM + "/nodes/" + str(uuid4()), headers=headers, json={"metadata": {"attributes": {"description": "not allowed"}}})
+        assert denied.status_code == missing.status_code == 403
+        assert denied.json() == missing.json()
+        assert alice.patch(node_path, json={"metadata": {"attributes": {"description": "missing revision"}}}).status_code == 428
+        description = "Release notes.\nRead before publishing 東京."
+        updated_response = alice.patch(node_path, headers=headers, json={"metadata": {
+            "content_type": "text/markdown", "attributes": {"description": description, "release": "ready"},
+        }})
+        updated = checked_summary(updated_response, 200)
+        assert updated_response.headers["etag"] == f'"{updated["revision"]}"'
+        assert updated["revision"] == before["revision"] + 1
+        assert updated["metadata"] == {
+            "content_type": "text/markdown",
+            "attributes": {"description": description, "label": "retained", "release": "ready"},
+        }
+        assert checked_summary(alice_second.get(node_path), 200) == updated
+        assert (updated["name"], updated["parent_id"]) == (before["name"], before["parent_id"])
+        stale = alice_second.patch(node_path, headers=headers, json={"metadata": {"attributes": {"description": "stale overwrite"}}})
+        assert stale.status_code == 412, stale.text
+        listing = await alice_mcp.call_tool("filesystem_browse", {
+            "operation": "ls", "target": {"type": "node", "node_id": parent_id},
+        })
+        listed = tool_payload(listing)["result"]["entries"]
+        assert next(node for node in listed if node["id"] == created["id"])["metadata"]["attributes"]["description"] == description
+        cleared = tool_payload(await alice_mcp.call_tool("update_filesystem_node", {
+            "node_id": created["id"], "expected_revision": updated["revision"],
+            "metadata": {"attributes": {"description": ""}},
+        }))
+        assert cleared["revision"] == updated["revision"] + 1
+        assert cleared["metadata"]["attributes"] == {"label": "retained", "release": "ready"}
+        after = checked_summary(alice_second.get(node_path), 200)
+        assert after["metadata"] == cleared["metadata"]
+        assert after["revision"] == cleared["revision"]
+
+
+async def check_filesystem_node_updates(
+    alice: httpx.Client, alice_second: httpx.Client, bob: httpx.Client,
+    alice_mcp: Client[Any], parent_id: str,
+) -> None:
+    metadata = {"content_type": "text/plain", "attributes": {"team": "retained"}}
+    source = tool_payload(await alice_mcp.call_tool("create_filesystem_directory", {
+        "parent_id": parent_id, "name": "update-source-" + uuid4().hex, "metadata": metadata,
+    }))
+    destination = tool_payload(await alice_mcp.call_tool("create_filesystem_directory", {
+        "parent_id": parent_id, "name": "update-destination-" + uuid4().hex, "metadata": metadata,
+    }))
+    for kind in ("file", "directory"):
+        arguments = {"parent_id": source["id"], "name": "original-" + kind, "metadata": metadata}
+        if kind == "file":
+            created = tool_payload(await alice_mcp.call_tool("filesystem_upload", {
+                **arguments, "content": {"encoding": "utf-8", "text": "Stable bytes after rename and move."},
+            }))
+        else:
+            created = tool_payload(await alice_mcp.call_tool("create_filesystem_directory", arguments))
+        path = FILESYSTEM + "/nodes/" + created["id"]
+        access_path = path + "/access?recipient_type=group"
+        access = alice.get(access_path)
+        assert access.status_code == 200, access.text
+        shared = alice.put(access_path, headers={"If-Match": access.headers["etag"]}, json={
+            "grants": [{"recipient": {"type": "group", "group_id": "admin"}, "permissions": ["discover", "read", "write"]}],
+        })
+        assert shared.status_code == 200, shared.text
+        access_before = shared.json()
+        direct_rename = checked_summary(bob.patch(path, headers={"If-Match": f'"{created["revision"]}"'}, json={"name": "direct-rename-" + kind}), 200)
+        assert direct_rename["parent_id"] == source["id"]
+        denied_move = bob.patch(path, headers={"If-Match": f'"{direct_rename["revision"]}"'}, json={
+            "parent_id": destination["id"], "metadata": {"attributes": {"team": "must not persist"}},
+        })
+        assert denied_move.status_code == 403, denied_move.text
+        assert checked_summary(alice_second.get(path), 200) == direct_rename
+        updated_mcp = tool_payload(await alice_mcp.call_tool("update_filesystem_node", {
+            "node_id": created["id"], "expected_revision": direct_rename["revision"],
+            "name": "moved-" + kind, "parent_id": destination["id"],
+            "metadata": {"attributes": {"description": "Read after moving"}},
+        }))
+        updated = checked_summary(alice_second.get(path), 200)
+        assert updated["id"] == created["id"]
+        assert updated["name"] == "moved-" + kind
+        assert updated["parent_id"] == destination["id"]
+        assert updated["revision"] == direct_rename["revision"] + 1
+        assert updated_mcp["revision"] == updated["revision"]
+        assert updated["metadata"]["attributes"] == {"team": "retained", "description": "Read after moving"}
+        access_after = alice_second.get(access_path)
+        assert access_after.status_code == 200, access_after.text
+        assert {field: value for field, value in access_after.json().items() if field != "revision"} == {
+            field: value for field, value in access_before.items() if field != "revision"
+        }
+        assert checked_summary(bob.get(path), 200) == updated
+        assert created["id"] not in {item["id"] for item in alice.get(FILESYSTEM + "/nodes/" + source["id"] + "/children").json()["nodes"]}
+        inspected = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
+            "operation": "stat", "target": {"type": "node", "node_id": created["id"]},
+        }))["result"]
+        assert inspected["node"]["name"] == updated["name"]
+        assert inspected["breadcrumbs"]["items"][-2]["id"] == destination["id"]
+        stale = alice_second.patch(path, headers={"If-Match": f'"{direct_rename["revision"]}"'}, json={"name": "stale"})
+        assert stale.status_code == 412, stale.text
+        occupied = tool_payload(await alice_mcp.call_tool("create_filesystem_directory", {
+            "parent_id": source["id"], "name": "occupied-" + kind, "metadata": metadata,
+        }))
+        collision = alice.patch(path, headers={"If-Match": f'"{updated["revision"]}"'}, json={
+            "parent_id": source["id"], "name": occupied["name"], "metadata": {"attributes": {"team": "must not persist"}},
+        })
+        assert collision.status_code == 409, collision.text
+        assert collision.json()["detail"]["code"] == "filesystem_name_collision"
+        assert checked_summary(alice_second.get(path), 200) == updated
+        if kind == "file":
+            assert alice_second.get(path + "/content").content == b"Stable bytes after rename and move."
+            contents = await alice_mcp.read_resource(file_resource_uri(created["id"]))
+            assert isinstance(contents[0], TextResourceContents)
+            assert contents[0].text == "Stable bytes after rename and move."
+        else:
+            child = tool_payload(await alice_mcp.call_tool("create_filesystem_directory", {
+                "parent_id": created["id"], "name": "child", "metadata": metadata,
+            }))
+            cycle = alice.patch(path, headers={"If-Match": f'"{updated["revision"]}"'}, json={"parent_id": child["id"], "name": "must-not-rename"})
+            assert cycle.status_code == 409, cycle.text
+            assert cycle.json()["detail"]["code"] == "filesystem_invalid_move"
+            assert checked_summary(alice_second.get(path), 200) == updated
+            assert checked_summary(alice_second.get(FILESYSTEM + "/nodes/" + child["id"]), 200) == {field: child[field] for field in updated}
+
+
 async def check_mcp_file_deletion(
     alice: httpx.Client, alice_second: httpx.Client,
     alice_mcp: Client[Any], bob_mcp: Client[Any], parent_id: str,
+    approvals: FileDeletionApprovals,
 ) -> None:
     parent_path = FILESYSTEM + "/nodes/" + parent_id
     children_before = alice.get(parent_path + "/children").json()["nodes"]
@@ -136,6 +296,22 @@ async def check_mcp_file_deletion(
     }, raise_on_error=False)
     assert directory.is_error
     assert "filesystem_wrong_node_kind" in directory.content[0].text
+    assert approvals.count == 0
+    assert approvals.messages == []
+    unapproved = await alice_mcp.call_tool("filesystem_delete_file", arguments, raise_on_error=False)
+    assert unapproved.is_error
+    assert "filesystem_delete_approval_denied" in unapproved.content[0].text
+    assert approvals.count == 1
+    for worker in (alice, alice_second):
+        assert checked_summary(worker.get(node_path), 200) == node
+        retained = worker.get(node_path + "/content")
+        assert retained.status_code == 200
+        assert retained.content == data
+    retained_contents = await alice_mcp.read_resource(uri)
+    assert len(retained_contents) == 1
+    assert isinstance(retained_contents[0], TextResourceContents)
+    assert retained_contents[0].text == data.decode("utf-8")
+    approvals.approved = True
     assert tool_payload(await alice_mcp.call_tool("filesystem_delete_file", arguments)) == {
         "node_id": node["id"], "deleted": True,
     }
@@ -150,6 +326,9 @@ async def check_mcp_file_deletion(
     repeated = await alice_mcp.call_tool("filesystem_delete_file", arguments, raise_on_error=False)
     assert repeated.is_error
     assert "filesystem_permission_denied" in repeated.content[0].text
+    assert approvals.count == 2
+    assert len(approvals.messages) == 2
+    assert all(node["id"] in message for message in approvals.messages)
 
 
 @pytest.mark.asyncio
@@ -181,6 +360,7 @@ async def test_cross_worker_discovery_distinguishes_root_creation_from_direct_fi
                 root_tools = {
                     "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
                     "create_filesystem_file", "create_filesystem_directory", "filesystem_upload",
+                    "update_filesystem_node",
                 }
                 assert await wait_for_filesystem_tools(bob, root_tools, FILESYSTEM_TOOLS - root_tools) == root_tools
                 folder = checked_summary(alice.post(FILESYSTEM + "/nodes/" + root["id"] + "/directories", json={
@@ -339,7 +519,11 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             "name": "forbidden.bin", "metadata": metadata, "size_bytes": 7,
         })
         assert private_upload.status_code == 403
-        async with mcp_client(second_mcp, alice_token) as alice_mcp, mcp_client(runtime_endpoints.mcp_url, bob_token) as bob_mcp:
+        approvals = FileDeletionApprovals()
+        async with Client(
+            StreamableHttpTransport(second_mcp, headers={"Authorization": "Bearer " + alice_token}),
+            elicitation_handler=approvals,
+        ) as alice_mcp, mcp_client(runtime_endpoints.mcp_url, bob_token) as bob_mcp:
             await wait_for_filesystem_tools(alice_mcp, set(FILESYSTEM_TOOLS))
             await wait_for_filesystem_tools(bob_mcp, {
                 "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file",
@@ -450,7 +634,9 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             assert stale_delete.status_code == 412, stale_delete.text
             assert alice.get(uploaded_path + "/content").content == uploaded_bytes
             directory_path = FILESYSTEM + "/nodes/" + alice_directory["id"]
-            assert alice.options(directory_path).status_code == 409
+            directory_options = alice.options(directory_path)
+            assert directory_options.status_code == 204
+            assert "DELETE" not in {method.strip() for method in directory_options.headers["allow"].split(",")}
             assert alice.delete(directory_path, headers={"If-Match": '"' + str(alice_directory["revision"]) + '"'}).status_code == 409
             removed = alice_second.delete(uploaded_path, headers=delete_headers)
             assert removed.status_code == 204, removed.text
@@ -466,7 +652,7 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             deleted_mcp = await alice_mcp.call_tool("get_filesystem_node", {"node_id": uploaded["id"]}, raise_on_error=False)
             assert deleted_mcp.is_error
             assert "filesystem_permission_denied" in deleted_mcp.content[0].text
-            await check_mcp_file_deletion(alice, alice_second, alice_mcp, bob_mcp, alice_directory["id"])
+            await check_mcp_file_deletion(alice, alice_second, alice_mcp, bob_mcp, alice_directory["id"], approvals)
             current_policy = alice.get(policy_url).json()
             revoked = alice.put(policy_url, json={"expected_revision": current_policy["revision"], "groups": []})
             assert revoked.status_code == 200, revoked.text
@@ -501,16 +687,20 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             assert stale.status_code == 409
             assert stale.json()["detail"]["code"] == "filesystem_policy_stale"
             assert alice.get(FILESYSTEM + "/root").status_code == 403
+            await check_filesystem_descriptions(alice, alice_second, bob, alice_mcp, alice_directory["id"])
+            await check_filesystem_node_updates(alice, alice_second, bob, alice_mcp, alice_directory["id"])
 
 
-@pytest.mark.parametrize("method,suffix,body", [
-    ("GET", "/nodes?scope=owned", {}),
-    ("GET", "/nodes?scope=shared", {}),
-    ("PUT", "/nodes/{id}/content", {}),
-    ("PATCH", "/nodes/{id}", {"name": "renamed"}),
+@pytest.mark.parametrize("method,suffix,body,status", [
+    ("GET", "/nodes?scope=owned", {}, 404),
+    ("GET", "/nodes?scope=shared", {}, 404),
+    ("PUT", "/nodes/{id}/content", {}, 405),
+    ("PATCH", "/nodes/{id}", {"name": "renamed"}, 403),
+    ("PATCH", "/nodes/{id}", {"parent_id": str(uuid4())}, 403),
+    ("PATCH", "/nodes/{id}/description", {"description": "obsolete endpoint"}, 404),
 ])
-def test_planned_filesystem_endpoints_return_explicit_unimplemented_responses(
-    runtime_endpoints: RuntimeEndpoints, method: str, suffix: str, body: dict[str, Any],
+def test_removed_filesystem_routes_and_missing_node_updates_preserve_root_policy(
+    runtime_endpoints: RuntimeEndpoints, method: str, suffix: str, body: dict[str, Any], status: int,
 ) -> None:
     path = FILESYSTEM + suffix.format(id=uuid4())
     with httpx.Client(base_url=runtime_endpoints.api_base_url, headers={
@@ -520,8 +710,7 @@ def test_planned_filesystem_endpoints_return_explicit_unimplemented_responses(
         before = client.get("/api/admin/filesystem/root-access")
         assert before.status_code == 200
         response = client.request(method, path, json=body)
-        assert response.status_code == 501, response.text
-        assert response.json()["detail"]["code"] == "filesystem_not_implemented"
+        assert response.status_code == status, response.text
         assert response.headers["cache-control"] == "no-store"
         after = client.get("/api/admin/filesystem/root-access")
         assert after.status_code == 200
@@ -534,7 +723,7 @@ def test_planned_filesystem_endpoints_return_explicit_unimplemented_responses(
 
 
 @pytest.mark.parametrize("path", [
-    "/api/admin/users", "/api/admin/openapi.json", "/api/me/catalogue",
+    "/api/me/profile", "/api/admin/openapi.json", "/api/me/catalogue",
     "/api/me/filesystem/root", "/api/me/openapi.json", "/api/future-protected-route",
 ])
 def test_signed_rest_boundary_requires_authentication(

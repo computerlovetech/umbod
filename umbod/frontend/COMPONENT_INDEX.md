@@ -79,5 +79,7 @@ tags:
 
 ## Scope and composition
 
+- [Files compositions](src/lib/components/files/README.md) — Feature-owned sharing, rename, move and upload dialogs; excluded from reusable controls because they own files workflows.
+
 - [Component modules](src/lib/components/README.md) — Browse all presentation modules; this index selects reusable building blocks rather than feature screens or actor-owned workflows.
 - [Shared UI boundaries](../project/architecture-records/ADR-007-actor-specific-ui-composition.md) — Use shared presentation for common mechanics; keep actor-specific policy and data loading in feature compositions.

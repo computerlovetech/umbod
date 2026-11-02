@@ -40,8 +40,14 @@ describe('file deletion port', (): void => {
 
   test.each([rootId, folderId])('never deletes directory %s', async (id): Promise<void> => {
     const api = new InMemoryFilesApi(rootId, filesystemFixture);
-    await expect(api.filesystem.checkDeleteEligibility(id)).rejects.toMatchObject({ status: 409 });
+    await expect(api.filesystem.checkDeleteEligibility(id)).rejects.toMatchObject({ status: 403 });
     await expect(api.filesystem.deleteFile(id, 1)).rejects.toMatchObject({ status: 409 });
+  });
+
+  test('denies deletion when the node is not discoverable', async (): Promise<void> => {
+    const api = new InMemoryFilesApi(rootId, filesystemFixture, undefined, () => true, () => false);
+    await expect(api.filesystem.checkDeleteEligibility(fileId)).rejects.toMatchObject({ status: 403 });
+    await expect(api.filesystem.deleteFile(fileId, 99)).rejects.toMatchObject({ status: 403 });
   });
 
   test('rechecks authorization before revealing stale revisions', async (): Promise<void> => {
@@ -67,7 +73,12 @@ describe('file deletion HTTP adapter', (): void => {
     expect(fetch.mock.calls[1][1]?.body).toBeUndefined();
   });
 
-  test.each([undefined, '', 'GET, OPTIONS', 'delete', 'X-DELETE'])('fails closed for Allow %s', async (allow): Promise<void> => {
+  test.each(['GET, OPTIONS', 'GET, PATCH, OPTIONS', 'GET, HEAD, OPTIONS', 'GET, X-DELETE, OPTIONS'])('denies deletion without a retry error for Allow %s', async (allow): Promise<void> => {
+    const api = httpApi(vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(null, { status: 204, headers: { Allow: allow } })));
+    await expect(api.filesystem.checkDeleteEligibility(fileId)).rejects.toMatchObject({ status: 403 });
+  });
+
+  test.each([undefined, '', 'delete', 'X-DELETE'])('fails closed for Allow %s', async (allow): Promise<void> => {
     const api = httpApi(vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(null, { status: 204, headers: allow === undefined ? {} : { Allow: allow } })));
     await expect(api.filesystem.checkDeleteEligibility(fileId)).rejects.toBeInstanceOf(SchemaValidationError);
   });

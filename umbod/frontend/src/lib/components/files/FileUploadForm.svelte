@@ -74,6 +74,11 @@
         <p id={id + '-name-hint'} class="hint">Keep the original name or choose another. Do not use / or \. Existing files are never overwritten.</p>
       </div>
     {/if}
+    <div class="name-field">
+      <label for={id + '-description'}>Description (optional)</label>
+      <textarea id={id + '-description'} aria-describedby={id + '-description-hint'} value={state.description} oninput={(event) => state.changeDescription(event.currentTarget.value)} rows="3"></textarea>
+      <p id={id + '-description-hint'} class="hint">What is here, and when should it be read?</p>
+    </div>
   </fieldset>
   <p class="visually-hidden" role="status" aria-atomic="true">{state.pending ? 'Uploading file…' : state.status}</p>
   {#if state.error}<p id={id + '-error'} class="error" role="alert">{state.error}</p>{/if}
@@ -112,7 +117,8 @@
   .selected-file { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; overflow-wrap: anywhere; }
   .name-field { display: grid; gap: 0.5rem; }
   .name-field label { font-size: 0.9rem; font-weight: 500; }
-  input:not([type='file']), button { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-ink); font: inherit; padding: 0.6rem 0.9rem; min-width: 0; }
+  textarea { resize: vertical; }
+  input:not([type='file']), textarea, button { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-ink); font: inherit; padding: 0.6rem 0.9rem; min-width: 0; }
   button { cursor: pointer; }
   button:disabled { opacity: 0.6; cursor: default; }
   .primary { background: var(--admin-accent); color: var(--admin-panel); border-color: var(--admin-accent); }

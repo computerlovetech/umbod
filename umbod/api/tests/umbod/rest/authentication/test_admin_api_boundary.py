@@ -46,13 +46,14 @@ def bearer_headers() -> dict[str, str]:
 def test_canonical_api_returns_authenticated_identity(
     client: TestClient, bearer_headers: dict[str, str]
 ) -> None:
-    response = client.get("/api/admin/users", headers=bearer_headers)
+    response = client.get("/api/me/profile", headers=bearer_headers)
     assert response.status_code == 200
-    assert response.json()["id"] == "admin-123"
-    assert response.json()["email"] == "admin@example.com"
+    assert response.json()["user"]["id"] == "admin-123"
+    assert response.json()["user"]["email"] == "admin@example.com"
+    assert response.json()["capabilities"] == {"administration": True}
 
 
-@pytest.mark.parametrize("route", ["/users", "/overview", "/docs", "/openapi.json"])
+@pytest.mark.parametrize("route", ["/mcp-permissions/groups", "/overview", "/docs", "/openapi.json"])
 @pytest.mark.parametrize("membership,status", [(None, 401), ("umbod-users", 403)])
 def test_canonical_api_requires_admin_authentication(
     client: TestClient, route: str, membership: str | None, status: int
@@ -81,7 +82,8 @@ def test_openapi_and_docs_use_canonical_mount_prefix(
     response = client.get("/api/admin/openapi.json", headers=bearer_headers)
     assert response.status_code == 200
     assert response.json()["servers"] == [{"url": "/api/admin"}]
-    assert "/users" in response.json()["paths"]
+    assert "/users" not in response.json()["paths"]
+    assert "/profile" not in response.json()["paths"]
     assert "/overview" in response.json()["paths"]
     docs = client.get("/api/admin/docs", headers=bearer_headers)
     assert docs.status_code == 200
@@ -160,7 +162,7 @@ def test_cookie_mutation_accepts_explicit_origin_and_marker(
     assert client.post("/api/admin/mcp-permissions/groups/allowed", headers=headers).status_code == 200
 
 
-@pytest.mark.parametrize("method,route", [("GET", "/users"), ("HEAD", "/openapi.json"), ("OPTIONS", "/users")])
+@pytest.mark.parametrize("method,route", [("GET", "/mcp-permissions/groups"), ("HEAD", "/openapi.json"), ("OPTIONS", "/mcp-permissions/groups")])
 def test_cookie_safe_methods_do_not_require_origin_or_marker(
     client: TestClient, bearer_headers: dict[str, str], method: str, route: str
 ) -> None:
@@ -169,7 +171,7 @@ def test_cookie_safe_methods_do_not_require_origin_or_marker(
 
 
 def test_cross_origin_bearer_preflight_keeps_credentials_disabled(client: TestClient) -> None:
-    response = client.options("/api/admin/users", headers={
+    response = client.options("/api/admin/mcp-permissions/groups", headers={
         "Origin": "https://spa.example.com",
         "Access-Control-Request-Method": "POST",
         "Access-Control-Request-Headers": "Authorization,X-Umbod-Web-Request",

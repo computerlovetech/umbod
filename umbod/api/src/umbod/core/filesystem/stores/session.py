@@ -9,6 +9,8 @@ from ..uploads.errors import UploadSessionError
 from ..administration.errors import PolicyConflict, PolicyRevisionConflict
 from ..errors import (
     ProvisioningConflict,
+    InvalidMove,
+    RootMutation,
     InvalidName,
     MissingNode,
     NameCollision,
@@ -35,6 +37,8 @@ async def storage_session(
         PolicyConflict,
         PolicyRevisionConflict,
         ProvisioningConflict,
+        InvalidMove,
+        RootMutation,
         InvalidName,
         MissingNode,
         NameCollision,

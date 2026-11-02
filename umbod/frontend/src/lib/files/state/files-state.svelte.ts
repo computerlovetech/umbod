@@ -1,3 +1,5 @@
+import { NodeUpdateState } from './node-update-state.svelte';
+import { DescriptionState } from './description-state.svelte';
 import { SharingEligibilityState } from './sharing-eligibility-state.svelte';
 import { SvelteMap } from 'svelte/reactivity';
 import { FilesNavigationState } from './navigation-state.svelte';
@@ -18,6 +20,8 @@ export class FilesState {
   children = $state.raw<NodeSummary[]>([]);
   uploadAvailability = $state<'hidden' | 'loading' | 'allowed' | 'denied' | 'sign-in' | 'error'>('hidden');
   private eligibilityGeneration = 0;
+  private updateSequence = 0;
+  private readonly updatedNodes = new Map<string, { node: NodeSummary; sequence: number }>();
   private readonly confirmedDeletedIds = new Set<string>();
   private target: string | null = null;
   private rootId: string | undefined;
@@ -25,12 +29,16 @@ export class FilesState {
   private controller: AbortController | undefined;
   private disposed = false;
 
+  readonly update: NodeUpdateState;
+  readonly description: DescriptionState;
   readonly navigation: FilesNavigationState;
   readonly deletion: DeletionState;
   readonly rowDeletion: RowDeletionState;
   readonly sharing: SharingEligibilityState;
 
   constructor(private readonly api: FilesApi, openParent?: (id: string) => Promise<void>) {
+    this.update = new NodeUpdateState(api.filesystem, this.acceptUpdate, this.reload);
+    this.description = new DescriptionState(api.filesystem, this.acceptDescription, this.reload);
     this.sharing = new SharingEligibilityState(api.sharing);
     this.navigation = new FilesNavigationState(api.filesystem);
     const deletionOperations = new SvelteMap<string, symbol>();
@@ -40,6 +48,8 @@ export class FilesState {
 
   load = async (target: string | null): Promise<void> => {
     if (this.disposed) return;
+    this.update.reset();
+    this.description.reset();
     this.deletion.reset();
     this.rowDeletion.reset();
     this.sharing.reset();
@@ -54,18 +64,29 @@ export class FilesState {
     this.phase = 'loading';
     this.uploadAvailability = 'hidden';
     try {
-      const node = target === null
+      const loadedNode = target === null
         ? await this.api.filesystem.getRoot(signal)
         : await this.api.filesystem.getNode(nodeIdSchema.parse(target), signal);
       if (this.disposed || generation !== this.generation) return;
+      const known = this.updatedNodes.get(loadedNode.id)?.node;
+      let node = known && known.revision > loadedNode.revision ? known : loadedNode;
       if (target === null) this.rootId = node.id;
       this.node = node;
       this.sharing.selectCurrent(node);
       void this.navigation.select(node);
+      const listingStartSequence = this.updateSequence;
       const children = node.kind === 'directory' ? await this.api.filesystem.listChildren(node.id, signal) : [];
       if (this.disposed || generation !== this.generation) return;
-      this.children = children.filter((child) => !this.confirmedDeletedIds.has(child.id));
+      const latest = this.updatedNodes.get(node.id)?.node;
+      if (latest && latest.revision > node.revision) {
+        node = latest;
+        this.node = latest;
+        void this.navigation.select(latest);
+      }
+      this.children = node.kind === 'directory' ? this.reconcileChildren(node.id, children, listingStartSequence, true) : [];
       this.phase = 'ready';
+      void this.update.select(node);
+      void this.description.select(node);
       this.sharing.select(this.children);
       if (node.kind === 'directory') {
         void this.checkUploadAvailability();
@@ -77,6 +98,48 @@ export class FilesState {
       this.phase = readFailure(error);
     }
   };
+
+  private reconcileChildren = (parentId: string, children: NodeSummary[], listingStartSequence: number, authoritative: boolean): NodeSummary[] => {
+    const merged = new Map(children.map((child) => [child.id, child]));
+    for (const [id, cached] of this.updatedNodes) {
+      const listed = merged.get(id);
+      if (listed) {
+        if (listed.revision > cached.node.revision) this.updatedNodes.set(id, { node: listed, sequence: cached.sequence });
+        else merged.set(id, cached.node);
+      } else if (cached.node.parent_id === parentId) {
+        if (cached.sequence > listingStartSequence) merged.set(id, cached.node);
+        else if (authoritative) this.updatedNodes.delete(id);
+      }
+    }
+    const reconciled = Array.from(merged.values()).filter((child) => child.parent_id === parentId && !this.confirmedDeletedIds.has(child.id));
+    return reconciled.length === children.length && reconciled.every((child, index) => child === children[index]) ? children : reconciled;
+  };
+
+  private acceptUpdate = (node: NodeSummary): void => {
+    if (this.disposed) return;
+    const known = this.updatedNodes.get(node.id)?.node;
+    if (known && known.revision > node.revision) return;
+    const previousSequence = this.updateSequence;
+    this.updatedNodes.set(node.id, { node, sequence: ++this.updateSequence });
+    if (this.phase === 'ready' && this.node?.kind === 'directory') {
+      const previous = this.children;
+      this.children = this.reconcileChildren(this.node.id, previous, previousSequence, false);
+      for (const child of previous) {
+        if (!this.children.some((current) => current.id === child.id)) this.sharing.remove(child.id);
+      }
+      for (const child of this.children) this.rowDeletion.controllers.get(child.id)?.acceptUpdatedNode(child);
+      this.sharing.select(this.children);
+      this.rowDeletion.select(this.children);
+    }
+    if (this.node?.id !== node.id || this.node.revision > node.revision) return;
+    this.node = node;
+    this.description.acceptUpdatedNode(node);
+    this.update.acceptUpdatedNode(node);
+    if (node.kind === 'file') this.deletion.acceptUpdatedNode(node);
+    void this.navigation.select(node);
+  };
+
+  private acceptDescription = (node: NodeSummary): void => { this.acceptUpdate(node); };
 
   private acceptDeleted = (node: NodeSummary): void => {
     if (this.disposed) return;
@@ -137,6 +200,8 @@ export class FilesState {
 
   dispose = (): void => {
     this.disposed = true;
+    this.update.dispose();
+    this.description.dispose();
     this.navigation.dispose();
     this.deletion.dispose();
     this.rowDeletion.dispose();

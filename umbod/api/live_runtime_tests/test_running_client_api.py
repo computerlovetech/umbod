@@ -10,10 +10,15 @@ def test_canonical_api_identity_succeeds_and_legacy_api_is_not_found(
 ) -> None:
     headers = {"Authorization": f"Bearer {runtime_endpoints.bearer_token}"}
     with httpx.Client(base_url=runtime_endpoints.api_base_url, headers=headers) as client:
-        public_response = client.get("/api/admin/users")
+        public_response = client.get("/api/me/profile")
+        retired_response = client.get("/api/admin/users", follow_redirects=False)
         legacy_response = client.get("/admin/users", follow_redirects=False)
     assert public_response.status_code == 200
-    assert public_response.json()["id"]
+    assert public_response.json()["user"]["id"]
+    assert public_response.json()["capabilities"] == {"administration": True}
+    assert public_response.headers["cache-control"] == "no-store"
+    assert retired_response.status_code == 404
+    assert "location" not in retired_response.headers
     assert legacy_response.status_code == 404
     assert "location" not in legacy_response.headers
 

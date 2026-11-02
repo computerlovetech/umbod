@@ -17,12 +17,12 @@ function fixture(): { api: FilesApi; files: FilesState; form: NewFolderState } {
 describe('files reads and authoritative navigation', () => {
   test('root is independent of denied or pending administration lookup', async (): Promise<void> => {
     const { files } = fixture();
-    const access = new WorkspaceAccessState({ currentUser: async () => { throw new HttpError(403, 'Forbidden', {}); } });
+    const access = new WorkspaceAccessState({ profile: { get: async () => { throw new HttpError(403, 'Forbidden', {}); } } });
     await Promise.all([files.load(null), access.load()]);
     expect(files.phase).toBe('ready');
     expect(files.node?.id).toBe(rootId);
     expect(access.adminAccess).toBe('denied');
-    const pending = new WorkspaceAccessState({ currentUser: () => new Promise(() => {}) });
+    const pending = new WorkspaceAccessState({ profile: { get: () => new Promise(() => {}) } });
     void pending.load();
     await files.reload();
     expect(files.phase).toBe('ready');

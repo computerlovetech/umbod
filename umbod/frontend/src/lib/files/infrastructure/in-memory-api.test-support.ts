@@ -1,6 +1,6 @@
 import { InMemoryNodeSharing } from './in-memory-sharing.test-support';
 import type { FilesApi, FilesystemApi } from '../api';
-import { breadcrumbsSchema, type Breadcrumbs, type BreadcrumbItem, fileRevisionSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, beginUploadSchema, uploadSessionSchema, rawUploadSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
+import { updateNodeSchema, type UpdateNode, updateDescriptionSchema, type UpdateDescription, breadcrumbsSchema, type Breadcrumbs, type BreadcrumbItem, fileRevisionSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, beginUploadSchema, uploadSessionSchema, rawUploadSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
 import { UploadPhaseError } from '../errors';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 
@@ -9,7 +9,7 @@ export class InMemoryFilesystem implements FilesystemApi {
   private readonly sessions = new Map<string, { session: UploadSession; parentId: string; input: BeginUpload; bytes: Uint8Array | undefined; node: NodeSummary | undefined }>();
   private readonly content = new Map<string, Uint8Array>();
 
-  constructor(private readonly rootId: string, nodes: NodeSummary[], private readonly uploadLimitBytes?: number, private readonly canDelete: (node: NodeSummary) => boolean = () => true, private readonly canRead: (node: NodeSummary) => boolean = () => true) {
+  constructor(private readonly rootId: string, nodes: NodeSummary[], private readonly uploadLimitBytes?: number, private readonly canDelete: (node: NodeSummary) => boolean = () => true, private readonly canRead: (node: NodeSummary) => boolean = () => true, private readonly canWrite: (node: NodeSummary) => boolean = () => true) {
     nodeIdSchema.parse(rootId);
     for (const node of nodes) this.nodes.set(node.id, nodeSummarySchema.parse(node));
   }
@@ -51,18 +51,65 @@ export class InMemoryFilesystem implements FilesystemApi {
     return Array.from(this.nodes.values()).filter((node) => node.parent_id === parentId && this.canRead(node)).map((node) => nodeSummarySchema.parse(node));
   };
 
+  checkDescriptionEligibility = (id: string, signal?: AbortSignal): Promise<void> => this.checkUpdateEligibility(id, signal);
+
+  checkUpdateEligibility = async (id: string, signal?: AbortSignal): Promise<void> => {
+    signal?.throwIfAborted();
+    const node = this.nodes.get(nodeIdSchema.parse(id));
+    if (!node || !this.canRead(node) || !this.canWrite(node)) throw new HttpError(403, 'Forbidden', {});
+  };
+
+  updateDescription = async (id: string, revision: number, input: UpdateDescription): Promise<NodeSummary> => {
+    const body = updateDescriptionSchema.parse(input);
+    return this.updateNode(id, revision, { metadata: { attributes: { description: body.description } } });
+  };
+
+  updateNode = async (id: string, revision: number, input: UpdateNode): Promise<NodeSummary> => {
+    const body = updateNodeSchema.parse(input);
+    const expected = fileRevisionSchema.parse(revision);
+    await this.checkUpdateEligibility(id);
+    const node = this.nodes.get(id);
+    if (!node || !this.canRead(node) || !this.canWrite(node)) throw new HttpError(403, 'Forbidden', {});
+    if (node.revision !== expected) throw new HttpError(412, 'Stale revision', {});
+    if ((body.name !== undefined || body.parent_id !== undefined) && id === this.rootId) throw new HttpError(409, 'Root cannot change location', {});
+    if (body.parent_id !== undefined) {
+      if (typeof node.parent_id !== 'string') throw new HttpError(409, 'Missing parent', {});
+      await this.checkUpdateEligibility(node.parent_id);
+      await this.checkUpdateEligibility(body.parent_id);
+      if (this.nodes.get(body.parent_id)?.kind !== 'directory') throw new HttpError(409, 'Not a directory', {});
+      let ancestor = this.nodes.get(body.parent_id);
+      const seen = new Set<string>();
+      while (ancestor) {
+        if (ancestor.id === id || seen.has(ancestor.id)) throw new HttpError(409, 'Cycle', {});
+        seen.add(ancestor.id);
+        ancestor = typeof ancestor.parent_id === 'string' ? this.nodes.get(ancestor.parent_id) : undefined;
+      }
+    }
+    if (this.nodes.get(id)?.revision !== expected) throw new HttpError(412, 'Stale revision', {});
+    const name = body.name ?? node.name;
+    const parent_id = body.parent_id ?? node.parent_id;
+    if (Array.from(this.nodes.values()).some((other) => other.id !== id && other.parent_id === parent_id && other.name === name)) throw new HttpError(409, 'Name collision', {});
+    const attributes = { ...node.metadata.attributes };
+    for (const [key, value] of Object.entries(body.metadata?.attributes ?? {})) {
+      if (value) attributes[key] = value;
+      else delete attributes[key];
+    }
+    const updated = nodeSummarySchema.parse({ ...node, name, parent_id, metadata: { content_type: body.metadata?.content_type ?? node.metadata.content_type, attributes }, revision: node.revision + 1, updated_at: new Date().toISOString() });
+    this.nodes.set(id, updated);
+    return nodeSummarySchema.parse(updated);
+  };
+
   checkDeleteEligibility = async (id: string, signal?: AbortSignal): Promise<void> => {
     signal?.throwIfAborted();
     const node = this.nodes.get(nodeIdSchema.parse(id));
-    if (!node || !this.canDelete(node)) throw new HttpError(403, 'Forbidden', {});
-    if (node.kind !== 'file' || id === this.rootId) throw new HttpError(409, 'Not a file', {});
+    if (!node || !this.canRead(node) || !this.canDelete(node) || node.kind !== 'file' || id === this.rootId) throw new HttpError(403, 'Forbidden', {});
   };
 
   deleteFile = async (id: string, revision: number): Promise<void> => {
     const expected = fileRevisionSchema.parse(revision);
-    await this.checkDeleteEligibility(id);
-    const node = this.nodes.get(id);
-    if (!node || !this.canDelete(node)) throw new HttpError(403, 'Forbidden', {});
+    const node = this.nodes.get(nodeIdSchema.parse(id));
+    if (!node || !this.canRead(node) || !this.canDelete(node)) throw new HttpError(403, 'Forbidden', {});
+    if (node.kind !== 'file' || id === this.rootId) throw new HttpError(409, 'Not a file', {});
     if (node.revision !== expected) throw new HttpError(412, 'Stale revision', {});
     this.nodes.delete(id);
   };
@@ -138,7 +185,7 @@ export class InMemoryFilesystem implements FilesystemApi {
     let session: UploadSession;
     try {
       session = await this.beginUpload(parentId, {
-        name: body.name, metadata: { content_type: body.file.type || 'application/octet-stream', attributes: {} }, size_bytes: body.file.size
+        name: body.name, metadata: { content_type: body.file.type || 'application/octet-stream', attributes: body.description ? { description: body.description } : {} }, size_bytes: body.file.size
       });
     } catch (cause) {
       throw new UploadPhaseError('begin', cause);
@@ -173,7 +220,7 @@ export class InMemoryFilesApi implements FilesApi {
   readonly sharing = new InMemoryNodeSharing();
   readonly filesystem: InMemoryFilesystem;
 
-  constructor(rootId: string, nodes: NodeSummary[], uploadLimitBytes?: number, canDelete?: (node: NodeSummary) => boolean, canRead?: (node: NodeSummary) => boolean) {
-    this.filesystem = new InMemoryFilesystem(rootId, nodes, uploadLimitBytes, canDelete, canRead);
+  constructor(rootId: string, nodes: NodeSummary[], uploadLimitBytes?: number, canDelete?: (node: NodeSummary) => boolean, canRead?: (node: NodeSummary) => boolean, canWrite?: (node: NodeSummary) => boolean) {
+    this.filesystem = new InMemoryFilesystem(rootId, nodes, uploadLimitBytes, canDelete, canRead, canWrite);
   }
 }

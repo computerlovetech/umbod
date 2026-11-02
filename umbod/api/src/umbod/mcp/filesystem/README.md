@@ -7,24 +7,27 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 # Files
 
 - [__init__.py](./__init__.py) — Package exports.
+- [approval.py](./approval.py) — Mandatory human deletion confirmation through elicitation or signed, single-use continuations.
+- [approval_state.py](./approval_state.py) — Expiring deletion approval bound to the authenticated caller, client, file and revision.
 - [authorization.py](./authorization.py) — Caller-specific tool and resource-template visibility with independent endpoint-scope restrictions.
 - [browsing.py](./browsing.py) — Observed ls, tree and stat operations through shared core exploration.
 - [browsing_models.py](./browsing_models.py) — Discriminated operation inputs and MCP output schemas with required node sharing metadata.
 - [caller.py](./caller.py) — Invocation caller capture.
 - [claim_fields.py](./claim_fields.py) — Permission claim sources.
-- [deletion.py](./deletion.py) — Revision-checked removal of one file and its policies, never directories or stored bytes.
+- [deletion.py](./deletion.py) — Human-approved, revision-checked removal of one file and its policies, never directories or stored bytes.
 - [errors.py](./errors.py) — Safe public failures preserving authorization-denial classification for invocation and audit telemetry.
 - [factory.py](./factory.py) — Operation-local service composition.
 - [links.py](./links.py) — Canonical current-file URIs and native resource links alongside structured tool results.
 - [models.py](./models.py) — Required authorized/restricted sharing projections, enriched nodes, child envelopes, and deletion contracts.
-- [ports.py](./ports.py) — Caller and service factory contracts.
+- [ports.py](./ports.py) — Caller, service factory and mandatory deletion approval contracts.
 - [resources.py](./resources.py) — Authorized current-file resources with MIME-aware text/blob content, captured revisions, and complete reads capped at 1 MiB.
 - [registration.py](./registration.py) — Observed filesystem tools with explicit output schemas and native file links.
-- [rendering.py](./rendering.py) — Readable filesystem listings with explicit visibility and expansion limits.
+- [rendering.py](./rendering.py) — Readable listings with JSON-escaped untrusted descriptions, explicit visibility and expansion limits.
 - [runtime.py](./runtime.py) — Caller-neutral authorization snapshots hydrated at startup and reconciled through durable events.
 - [sharing.py](./sharing.py) — Invocation-local batch enrichment of returned nodes through core sharing; no policy decisions or discovery queries.
 - [sharing_models.py](./sharing_models.py) — Strict unified recipient-search scopes and sharing inputs with legacy group mutation compatibility.
 - [sharing_tools.py](./sharing_tools.py) — Node-authorized group/user recipient search and idempotent additive direct-node sharing.
+- [update.py](./update.py) — Strict top-level revision-checked rename, move and metadata changes with shared REST validation.
 - [upload.py](./upload.py) — One-shot private uploads capped at 10,485,760 decoded bytes or the lower server limit; no chunking or idempotent retries.
 - [upload_models.py](./upload_models.py) — Bounded UTF-8 and canonical padded base64 inputs; results never echo content.
 

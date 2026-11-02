@@ -22,6 +22,28 @@ from tests.support.filesystem.adapters import AdapterFactory, AdapterPair
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("kind", [NodeKind.FILE, NodeKind.DIRECTORY])
+async def test_metadata_mutation_is_revision_checked_and_shared_between_namespace_instances(
+    adapter_factory: AdapterFactory, kind: NodeKind,
+) -> None:
+    namespace = adapter_factory().namespace
+    other = adapter_factory().namespace
+    root = await namespace.get_root()
+    node = await namespace.create_node(root.id, "described", kind, metadata())
+    changed_metadata = NodeMetadata(content_type="text/plain", attributes={"description": "Read for context", "team": "research"})
+    changed = await namespace.update_metadata(node.id, metadata=changed_metadata, expected_revision=node.revision)
+    assert changed.metadata == changed_metadata
+    assert changed.revision == node.revision + 1
+    assert changed.updated_at >= node.updated_at
+    assert changed.model_dump(exclude={"metadata", "updated_at", "revision"}) == node.model_dump(exclude={"metadata", "updated_at", "revision"})
+    assert await other.get_node(node.id) == changed
+    with pytest.raises(RevisionConflict):
+        await other.update_metadata(node.id, metadata=metadata(), expected_revision=node.revision)
+    assert await namespace.get_node(node.id) == changed
+
+
+
+@pytest.mark.asyncio
 async def test_fresh_namespace_supports_fixed_root_lookup_without_discovery(adapters: AdapterPair) -> None:
     root = await adapters.namespace.get_node(UUID(int=0))
     assert root.id == UUID(int=0)

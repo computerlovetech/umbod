@@ -17,7 +17,7 @@ async def test_local_rest_test_user_respects_policy_while_mcp_requires_verified_
     base = "/api/me/filesystem"
     policy_path = "/api/admin/filesystem/root-access"
     with httpx.Client(base_url=runtime_endpoints.api_base_url, timeout=30) as rest:
-        user = rest.get("/api/admin/users")
+        user = rest.get("/api/me/profile")
         assert user.status_code == 200
         root = rest.get(base + "/root")
         assert root.status_code == 403
@@ -50,9 +50,9 @@ async def test_local_rest_test_user_respects_policy_while_mcp_requires_verified_
             listing = rest.get(base + "/nodes/" + root.json()["id"] + "/children")
             assert listing.status_code == 200
             assert child["id"] in {node["id"] for node in listing.json()["nodes"]}
-            unimplemented = rest.get(base + "/nodes", params={"scope": "owned"})
-            assert unimplemented.status_code == 501
-            assert unimplemented.headers["cache-control"] == "no-store"
+            removed = rest.get(base + "/nodes", params={"scope": "owned"})
+            assert removed.status_code == 404
+            assert removed.headers["cache-control"] == "no-store"
             headers = {"Authorization": "Bearer " + runtime_endpoints.bearer_token}
             client: Client[Any] = Client(StreamableHttpTransport(runtime_endpoints.mcp_url, headers=headers))
             async with client:

@@ -30,9 +30,22 @@ export type Breadcrumbs = z.infer<typeof breadcrumbsSchema>;
 export const childrenSchema = z.strictObject({ nodes: z.array(nodeSummarySchema) });
 export const fileNameSchema = z.string().min(1).refine((name) => name.trim().length > 0 && !name.includes('/') && !name.includes('\\') && !name.includes('\u0000') && name !== '.' && name !== '..', 'Enter a name without path separators.');
 export const fileRevisionSchema = z.number().int().positive().max(Number.MAX_SAFE_INTEGER);
-export const deleteEligibilitySchema = z.object({
-  allow: z.string().refine((value) => value.split(',').some((method) => method.trim() === 'DELETE'))
-}).transform(() => undefined);
+export const nodeCapabilitiesSchema = z.object({
+  allow: z.string().transform((value) => value.split(',').map((method) => method.trim()))
+    .pipe(z.array(z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Z-]+$/)).nonempty())
+    .refine((methods) => methods.includes('OPTIONS'))
+}).transform((headers) => headers.allow);
+export const updateDescriptionSchema = z.strictObject({ description: z.string() });
+export type UpdateDescription = z.infer<typeof updateDescriptionSchema>;
+export const updateNodeSchema = z.strictObject({
+  name: fileNameSchema.optional(),
+  parent_id: nodeIdSchema.optional(),
+  metadata: z.strictObject({
+    attributes: z.record(z.string(), z.string()).optional(),
+    content_type: z.union([z.string(), emptyObjectSchema]).optional()
+  }).refine((metadata) => metadata.content_type !== undefined || Object.keys(metadata.attributes ?? {}).length > 0, 'Provide a metadata change.').optional()
+}).refine((input) => input.name !== undefined || input.parent_id !== undefined || input.metadata !== undefined, 'Provide a change.');
+export type UpdateNode = z.infer<typeof updateNodeSchema>;
 export const uploadEligibilitySchema = z.object({
   allow: z.string().refine((value) => value.split(',').some((method) => method.trim() === 'POST'))
 }).transform(() => undefined);
@@ -67,7 +80,8 @@ export const uploadSessionSchema = z.strictObject({
 export const rawUploadSchema = z.custom<File>((value) => typeof File !== 'undefined' && value instanceof File, 'Select a file.');
 export const fileUploadSchema = z.strictObject({
   file: rawUploadSchema,
-  name: fileNameSchema
+  name: fileNameSchema,
+  description: z.string().optional()
 });
 export const createFolderSchema = z.strictObject({
   name: fileNameSchema,

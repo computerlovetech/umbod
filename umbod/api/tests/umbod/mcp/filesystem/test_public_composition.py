@@ -29,7 +29,7 @@ from umbod.mcp.filesystem.authorization import FilesystemToolVisibility
         "recipient": {"type": "user", "user_id": "observed-user"}, "permissions": ["read"],
     }),
     ("get_filesystem_root", "browsing", "get_root", {}),
-    ("filesystem_delete_file", "deletion", "delete_file", {
+    ("filesystem_delete_file", "deletion", "check_delete_eligibility", {
         "node_id": "00000000-0000-0000-0000-000000000001", "expected_revision": 1,
     }),
 ])

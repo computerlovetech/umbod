@@ -155,7 +155,7 @@ uv run umbod config show --advanced # full resolved config
 
 ## Client architecture
 
-The administration frontend is a static SvelteKit SPA served by nginx, without a Node application server. Browser requests use the same-origin `/api/admin` backend API; local static hosting proxies this prefix, while production Ingress routes it directly to Python. Public runtime addresses are delivered through `/app-config.json`.
+The administration frontend is a static SvelteKit SPA served by nginx, without a Node application server. Browser requests use the same-origin `/api` backend API; local static hosting proxies this prefix, while production Ingress routes it directly to Python. Public runtime addresses are delivered through `/app-config.json`.
 
 Native clients can use the same API with bearer credentials. Production JWT verification requires the configured issuer, audience, and administrator membership. Browser login remains the responsibility of an external authentication gateway; API failures must not be replaced with login HTML. Cookie-bearing writes require a trusted Origin and `X-Umbod-Web-Request: 1`.
 
@@ -164,7 +164,7 @@ Connector setup executes in the backend with compensation on failure. UI validat
 ## Endpoints
 
 - Health: `GET /system/health`; frontend health measures static hosting only.
-- Administration identity: `GET /api/admin/users`.
+- Authenticated profile and UI capabilities: `GET /api/me/profile`, shared by administrators and ordinary users.
 - Authenticated administration contract: `GET /api/admin/openapi.json`.
 - Administration API: `/api/admin` only; legacy `/admin` API requests return 404.
 - MCP card: `GET /.well-known/mcp/server-card.json` on `UMBOD_PUBLIC_MCP_ORIGIN`

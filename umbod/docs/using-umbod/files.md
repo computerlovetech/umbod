@@ -19,6 +19,24 @@ A new file is private to its creator. Directory sharing does not automatically s
 
 The default maximum upload is **10 MiB**, configurable by the operator. An upload session expires after one hour; it is not a resumable upload. A configured byte limit is a per-upload limit, not a user storage quota.
 
+### Descriptions and metadata
+
+Add an optional description when creating a folder or uploading a file, or use **Edit description** on an existing item. Explain what is inside and when it should be read. An empty description clears it.
+
+Descriptions are stored in `metadata.attributes.description` and are visible to callers who can discover the node. Editing requires `discover` and `write` on that node. Descriptions do not grant access and should be treated as untrusted text.
+
+REST clients update metadata through `PATCH /api/me/filesystem/nodes/{id}` with a `metadata` object and the current quoted revision in `If-Match`. Attribute changes merge with existing attributes; unspecified attributes and content type remain unchanged. An explicit `content_type` replaces that metadata value without changing file bytes. MCP clients use `update_filesystem_node` with `node_id`, `expected_revision` and the requested changes, following the same partial update contract. The former description-specific tool has been removed; refresh cached MCP capabilities.
+
+### Rename and move
+
+Open a file or folder and choose **Rename** or **Move**. Renaming requires `discover` and `write` on the item. Moving additionally requires both permissions on the source folder and destination folder. Destination folders need not be visible from the root, but must be accessible directly.
+
+REST node PATCH and MCP `update_filesystem_node` accept `name` for renaming, `parent_id` for moving and `metadata` for descriptive changes. These are separate top-level fields and may be combined in one atomic update with one expected node revision. Omitted fields stay unchanged; empty requests, explicit nulls and unknown fields are rejected. Use the node UUID returned by browsing, not a path, for updates.
+
+A move preserves the item's ID, content, ownership and direct sharing grants. Moving a folder carries its subtree without rewriting descendant IDs or revisions. Permissions do not inherit from either folder, so changing location does not grant or revoke access. Existing UUID-based file resource links remain valid.
+
+The root cannot be renamed or moved, but is a valid destination when authorized. Duplicate sibling names, non-directory destinations and moves into the item itself or its descendants are rejected. A failed combined update leaves every field unchanged. Revision conflicts require reloading the item before retrying.
+
 ### Share with a group
 
 For nodes you may share, open the sharing dialog, search registered groups, choose permissions, and save. Remove a group's grant through the same dialog when access is no longer needed.
@@ -27,7 +45,7 @@ For nodes you may share, open the sharing dialog, search registered groups, choo
 | --- | --- |
 | `discover` | Visibility of the node when browsing |
 | `read` | Read access to the node and file content |
-| `write` | Write operations, including creating children in a directory |
+| `write` | Update metadata, rename, create children, or move with authority on both folders |
 | `delete` | Delete a file; directories and root cannot currently be deleted |
 | `share` | Manage access grants |
 
@@ -51,7 +69,7 @@ Deletion requires permission and confirmation. It removes the file's namespace e
 
 ## Agent access
 
-Filesystem tools and resources are available through Umbod's root MCP endpoint, not connector-scoped endpoints. Tools support browsing, inspecting nodes, uploading, deleting files, and direct group/user sharing. Native MCP resources provide complete-file reads, subject to the caller's filesystem permissions.
+Filesystem tools and resources are available through Umbod's root MCP endpoint, not connector-scoped endpoints. Tools support browsing, inspecting nodes, atomic metadata/rename/move updates, uploading, deleting files, and direct group/user sharing. Native MCP resources provide complete-file reads, subject to the caller's filesystem permissions.
 
 Connecting an agent does not grant it unrestricted file access. Tools and resource reads use Umbod's virtual filesystem and check authorization; they do not browse arbitrary host paths or bootstrap root permissions.
 
@@ -88,7 +106,7 @@ Downloads use authenticated node-content access, attachment disposition, and no-
 ## Current boundaries
 
 - Directory and root deletion are unsupported; deletion currently applies only to files.
-- Rename, move, content replacement, and dedicated owned/shared listings are not implemented; planned REST operations return `501`.
+- Content replacement and dedicated owned/shared listings are unsupported; their placeholder routes have been removed.
 - There is no automatic storage migration, storage quota/accounting, or physical content garbage collection.
 - Failed publication can leave unreferenced content. Expired sessions do not imply automatic cleanup of their stored bytes.
 - The UI, REST clients, and MCP tools share filesystem authorization, but do not yet expose identical controls.

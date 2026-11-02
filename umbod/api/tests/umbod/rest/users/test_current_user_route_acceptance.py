@@ -42,7 +42,7 @@ class FastApiCurrentUserApiBoundary:
         headers = {}
         if request is not None and request.token is not None:
             headers[self.configured_header_name] = request.token
-        response = self.client.get("/api/admin/users", headers=headers)
+        response = self.client.get("/api/me/profile", headers=headers)
         return CurrentUserResponse(status_code=response.status_code, body=response.json())
 
 
@@ -104,7 +104,8 @@ def test_simulation_mode_returns_simulated_user_without_forwarded_token(
     response = current_user_api.get_current_user()
 
     assert response.status_code == 200
-    assert response.body == {
+    assert response.body["capabilities"] == {"administration": True}
+    assert response.body["user"] == {
         "id": "sim-user-123",
         "email": "sim-user@example.com",
         "name": "Simulated User",
@@ -130,7 +131,8 @@ def test_authenticated_caller_retrieves_own_user_details(
     )
 
     assert response.status_code == 200
-    assert response.body == {
+    assert response.body["capabilities"] == {"administration": True}
+    assert response.body["user"] == {
         "id": "user-123",
         "email": "alex@example.com",
         "name": "Alex Morgan",
@@ -168,7 +170,8 @@ def test_authenticated_caller_can_use_authorization_bearer_header(
     )
 
     assert response.status_code == 200
-    assert response.body == {
+    assert response.body["capabilities"] == {"administration": True}
+    assert response.body["user"] == {
         "id": "user-123",
         "email": "alex@example.com",
         "name": "unknown",
@@ -189,7 +192,8 @@ def test_authenticated_caller_without_name_claim_gets_unknown_name(
     )
 
     assert response.status_code == 200
-    assert response.body == {
+    assert response.body["capabilities"] == {"administration": True}
+    assert response.body["user"] == {
         "id": "user-123",
         "email": "alex@example.com",
         "name": "unknown",
@@ -248,7 +252,8 @@ def test_authenticated_caller_without_email_retrieves_nullable_profile(
     })))
 
     assert response.status_code == 200
-    assert response.body == {"id": "user-123", "email": None, "name": "unknown", "picture": None}
+    assert response.body["capabilities"] == {"administration": True}
+    assert response.body["user"] == {"id": "user-123", "email": None, "name": "unknown", "picture": None}
 
 
 def test_authenticated_caller_retrieves_standard_picture_claim(
@@ -270,7 +275,8 @@ def test_authenticated_caller_retrieves_standard_picture_claim(
     )
 
     assert response.status_code == 200
-    assert response.body == {
+    assert response.body["capabilities"] == {"administration": True}
+    assert response.body["user"] == {
         "id": "user-123",
         "email": "alex@example.com",
         "name": "Alex Morgan",
@@ -306,7 +312,8 @@ def test_authenticated_caller_with_non_string_picture_claim_gets_no_picture(
     )
 
     assert response.status_code == 200
-    assert response.body == {
+    assert response.body["capabilities"] == {"administration": True}
+    assert response.body["user"] == {
         "id": "user-123",
         "email": "alex@example.com",
         "name": "Alex Morgan",
@@ -314,7 +321,38 @@ def test_authenticated_caller_with_non_string_picture_claim_gets_no_picture(
     }
 
 
-def test_non_admin_authenticated_caller_cannot_retrieve_current_user_details(
+@pytest.mark.parametrize("authenticated", [True, False])
+def test_disabled_admin_authentication_keeps_profile_authenticated(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    tokens: JwtTokenFactory,
+    authenticated: bool,
+) -> None:
+    api = create_current_user_api(
+        APISettings(admin_authentication={"mode": "disabled"}),
+        tmp_path,
+        monkeypatch,
+    )
+    request = CurrentUserRequest(tokens.trusted_token({
+        "sub": "ordinary-user", "groups": ["member"],
+    })) if authenticated else CurrentUserRequest()
+
+    response = api.get_current_user(request)
+
+    if authenticated:
+        assert response.status_code == 200
+        assert response.body == {
+            "user": {
+                "id": "ordinary-user", "name": "unknown", "email": None, "picture": None,
+            },
+            "capabilities": {"administration": True},
+        }
+    else:
+        assert response.status_code == 401
+        assert response.body == {"detail": "Unauthorized"}
+
+
+def test_non_admin_authenticated_caller_retrieves_profile_without_administration(
     current_user_api: CurrentUserApiBoundary,
     tokens: JwtTokenFactory,
 ) -> None:
@@ -334,5 +372,8 @@ def test_non_admin_authenticated_caller_cannot_retrieve_current_user_details(
         )
     )
 
-    assert response.status_code == 403
-    assert response.body == {"detail": "Forbidden"}
+    assert response.status_code == 200
+    assert response.body == {
+        "user": {"id": "jwt-user-123", "name": "JWT Alex", "email": None, "picture": None},
+        "capabilities": {"administration": False},
+    }

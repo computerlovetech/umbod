@@ -35,7 +35,6 @@ from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback im
     callback_response,
     router as personal_oauth_callback_router,
 )
-from umbod.rest.users.deps import get_access_token_verifier
 from umbod.rest.authentication.csrf_middleware import RestCookieCsrfMiddleware
 from umbod.rest.capability_descriptions import router as capability_description_router
 from umbod.rest.connectors import (
@@ -66,7 +65,7 @@ from umbod.rest.system import router as system_router
 from umbod.rest.system.routes import health
 from umbod.rest.system.schemas import HealthResponse
 from umbod.rest.telemetry import install_telemetry_receiver
-from umbod.rest.users import create_current_user_router
+from umbod.rest.users import create_user_profile_router
 from umbod.rest.users.jwks import (
     CachedSigningKeyResolver,
     DisabledSigningKeyResolver,
@@ -153,7 +152,6 @@ def _mount_admin_app(
     oauth_service: OAuthService | None,
 ) -> tuple[BaseRoute, ...]:
     admin_router = APIRouter()
-    admin_router.include_router(create_current_user_router())
     admin_router.include_router(connector_router)
     admin_router.include_router(capability_description_router)
     admin_router.include_router(mcp_permission_router)
@@ -178,10 +176,6 @@ def _mount_admin_app(
 
     _attach_dependency_factories(admin_app, dependency_factories)
     admin_app.dependency_overrides[get_app_config] = provide_app_config
-    def provide_access_token_verifier() -> JwtVerifier:
-        return verifier_factory.create(settings)
-
-    admin_app.dependency_overrides[get_access_token_verifier] = provide_access_token_verifier
     _attach_admin_authorization(admin_app, settings, verifier_factory)
     @admin_app.middleware("http")
     async def prevent_policy_response_caching(
@@ -202,6 +196,7 @@ def _mount_personal_connections_app(
     dependency_factories: ConnectorApiDependencyFactories,
 ) -> None:
     user_router = APIRouter()
+    user_router.include_router(create_user_profile_router())
     user_router.include_router(user_catalogue_router)
     user_router.include_router(identity_directory_personal_router)
     user_router.include_router(filesystem_router)
@@ -219,6 +214,11 @@ def _mount_personal_connections_app(
         )
 
     _attach_dependency_factories(personal_app, dependency_factories)
+
+    def provide_app_config() -> AppConfig:
+        return settings
+
+    personal_app.dependency_overrides[get_app_config] = provide_app_config
     @personal_app.middleware("http")
     async def prevent_user_response_caching(
         request: Request, call_next: Callable[[Request], Awaitable[Response]],

@@ -26,5 +26,13 @@ class ProvisioningConflict(Exception):
     pass
 
 
+class InvalidMove(Exception):
+    pass
+
+
+class RootMutation(Exception):
+    pass
+
+
 class StorageFailure(Exception):
     pass

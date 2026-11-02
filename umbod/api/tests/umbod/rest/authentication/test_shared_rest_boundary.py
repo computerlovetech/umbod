@@ -92,11 +92,11 @@ def test_supplied_verifiers_are_independent_strict_and_called_once(local_setting
     app = create_app(local_settings, [], admin_verifier=admin, user_verifier=user)
     install_probes(app)
     with TestClient(app) as client:
-        assert client.get("/api/admin/users").status_code == 401
+        assert client.get("/api/admin/mcp-permissions/groups").status_code == 401
         assert client.get("/api/me/probe").status_code == 401
         assert admin.calls == [""] and not user.calls
         admin.calls.clear()
-        assert client.get("/api/admin/users", headers={"Authorization": "Bearer administrator"}).status_code == 200
+        assert client.get("/api/admin/mcp-permissions/groups", headers={"Authorization": "Bearer administrator"}).status_code == 200
         assert admin.calls == ["administrator"]
         response = client.get("/api/me/probe", headers={"Authorization": "Bearer user"})
         assert response.status_code == 200
@@ -153,12 +153,12 @@ def test_simulation_is_not_accepted_without_every_local_condition(
     app = create_app(settings, [])
     install_probes(app)
     with TestClient(app) as client:
-        for path in ("/api/probe", "/api/admin/users", "/api/me/probe"):
+        for path in ("/api/probe", "/api/admin/mcp-permissions/groups", "/api/me/probe"):
             assert client.get(path).status_code == 401
             assert client.get(path, headers={"Authorization": "Bearer forged"}).status_code == 401
 
 
-@pytest.mark.parametrize("path", ["/api/probe", "/api/admin/users", "/api/me/catalogue"])
+@pytest.mark.parametrize("path", ["/api/probe", "/api/admin/mcp-permissions/groups", "/api/me/catalogue"])
 def test_root_cookie_safeguard_precedes_authentication(local_settings: AppConfig, path: str) -> None:
     settings = local_settings.model_copy(update={
         "admin_authentication": local_settings.admin_authentication.model_copy(update={"mode": "jwt"}),

@@ -6,6 +6,9 @@ import type { FilesState } from './files-state.svelte';
 export class NewFolderState {
   open = $state(false);
   name = $state('');
+  private descriptionValue = $state('');
+  get description(): string { return this.descriptionValue; }
+  changeDescription = (value: string): void => { if (!this.pending) this.descriptionValue = value; };
   error = $state('');
   pending = $state(false);
   uncertain = $state(false);
@@ -21,6 +24,7 @@ export class NewFolderState {
     ++this.generation;
     this.open = false;
     this.name = '';
+    this.descriptionValue = '';
     this.error = '';
     this.parentId = undefined;
     this.pending = false;
@@ -55,7 +59,7 @@ export class NewFolderState {
   submit = async (): Promise<void> => {
     const target = this.files.creationTarget();
     if (this.disposed || !this.open || !target || this.parentId !== target.parentId || this.pendingParents.has(target.parentId) || this.blockedParents.has(target.parentId)) return;
-    const parsed = createFolderSchema.safeParse({ name: this.name, metadata: { content_type: {}, attributes: {} } });
+    const parsed = createFolderSchema.safeParse({ name: this.name, metadata: { content_type: {}, attributes: this.description ? { description: this.description } : {} } });
     if (!parsed.success) {
       this.error = 'Enter a folder name without path separators.';
       return;
@@ -69,6 +73,7 @@ export class NewFolderState {
       if (!this.disposed) await this.files.acceptCreated(target.parentId, target.generation, node);
       if (this.disposed || generation !== this.generation) return;
       this.name = '';
+      this.descriptionValue = '';
       this.open = false;
     } catch (error) {
       const failure = folderFailure(error);

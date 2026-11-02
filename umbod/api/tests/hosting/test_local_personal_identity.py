@@ -68,9 +68,10 @@ def test_local_personal_api_uses_configured_identity_only(local_client: TestClie
         "owner": "configured-stable-owner", "namespace": "test:configured",
         "claims": {"iss": "urn:umbod:local", "sub": "configured-stable-owner", "email": "test@example.org", "name": "Configured Test User", "custom-groups": ["configured-administrators"]},
     }
-    admin = local_client.get("/api/admin/users")
-    assert admin.status_code == 200
-    assert admin.json()["id"] == "configured-stable-owner"
+    profile = local_client.get("/api/me/profile", headers=headers)
+    assert profile.status_code == 200
+    assert profile.json()["user"]["id"] == "configured-stable-owner"
+    assert profile.json()["capabilities"] == {"administration": True}
 
 
 def test_supplied_personal_verifier_remains_strict_for_missing_token(local_settings: AppConfig) -> None:
@@ -83,7 +84,10 @@ def test_supplied_admin_verifier_does_not_control_local_personal_identity(local_
     app = create_rest_app(local_settings, connector_registrations=[], admin_verifier=AcceptingVerifier(), oauth_service=None)
     with TestClient(app) as client:
         assert client.get("/api/me/connectors/mcp").status_code == 200
-        assert client.get("/api/admin/users").status_code == 403
+        assert client.get("/api/admin/mcp-permissions/groups").status_code == 403
+        profile = client.get("/api/me/profile")
+        assert profile.status_code == 200
+        assert profile.json()["user"]["id"] == "configured-stable-owner"
 
 
 @pytest.mark.parametrize("section,updates", [

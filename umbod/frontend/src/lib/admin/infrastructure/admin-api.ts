@@ -9,7 +9,6 @@ import { GroupPermissionsApi } from '../group-permissions-api';
 import { HttpInstanceConfigurationRoute } from '../instance-configuration-api';
 import { OpenApiConnectorsApi } from '../openapi-connectors-api';
 import { browserTransport, type Transport } from './transport';
-import { currentUserIdentitySchema, type CurrentUserIdentity } from '$lib/header/accountIdentity';
 
 
 export class AdminApi {
@@ -24,7 +23,7 @@ export class AdminApi {
   readonly downstreamMcpConnectors: DownstreamMcpConnectorsRoute;
   readonly openApiConnectors: OpenApiConnectorsApi;
 
-  constructor(private readonly transport: Transport) {
+  constructor(transport: Transport) {
     this.overview = new OverviewRoute(transport);
     this.groups = new GroupsRoute(transport);
     this.filesystem = new FilesystemRoute(transport);
@@ -35,9 +34,6 @@ export class AdminApi {
     this.instanceConfiguration = new HttpInstanceConfigurationRoute(transport);
     this.downstreamMcpConnectors = new DownstreamMcpConnectorsRoute(transport);
     this.openApiConnectors = new OpenApiConnectorsApi(transport);
-  }
-  currentUser(): Promise<CurrentUserIdentity> {
-    return this.transport.request({ method: 'GET', path: '/admin/users', outputSchema: currentUserIdentitySchema });
   }
 }
 

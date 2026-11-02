@@ -95,6 +95,7 @@ from umbod.mcp.signals import McpInvocationPublisher, McpSignals, McpToolExecuti
 from umbod.mcp.connectors.downstream_mcp.inventory import shared_tool_inventory
 from umbod.mcp.middleware import McpAuditMiddleware
 from umbod.mcp.middleware.protocol_metrics import McpProtocolMetricsMiddleware
+from umbod.mcp.filesystem.approval import McpFilesystemDeletionApproval
 from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesystemServiceFactory, RuntimeFilesystemGroupClaimFields, StaticFilesystemGroupClaimFields, register_filesystem_resources, register_filesystem_tools
 from umbod.core.filesystem.stores.discovery import DatabaseFilesystemAuthorizationReader
 from umbod.mcp.filesystem.authorization import FilesystemToolVisibility, FilesystemVisibilityMiddleware
@@ -237,6 +238,10 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     register_filesystem_tools(
         McpObservedToolRegistrar(mcp, publisher), filesystem_callers,
         filesystem_services, filesystem_visibility,
+        McpFilesystemDeletionApproval(
+            nonce_store=DatabaseApprovalNonceStore(persistence_runtime.database),
+            clock=time.time, random_token=random_approval_token,
+        ),
     )
     register_filesystem_resources(mcp, filesystem_callers, filesystem_services)
     await initialize_openapi_discovery(mcp)

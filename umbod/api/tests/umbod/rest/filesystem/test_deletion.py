@@ -41,7 +41,7 @@ def test_file_etag_options_and_permanent_removal_without_content_io(
     grants = client.portal.call(policies.list_grants, node_id)
     options = client.options(path)
     assert options.status_code == 204 and options.content == b""
-    assert set(options.headers["allow"].split(", ")) == {"GET", "DELETE", "OPTIONS"}
+    assert set(options.headers["allow"].split(", ")) == {"GET", "DELETE", "PATCH", "OPTIONS"}
     assert options.headers["cache-control"] == "no-store"
     assert client.get(path).json() == before.json()
     assert client.portal.call(policies.get_owner, node_id) == owner
@@ -94,7 +94,7 @@ def test_delete_denials_and_missing_nodes_are_indistinguishable(
         principal=Principal(type=PrincipalType.USER, issuer="issuer", id="bob"),
         permissions=permissions, recursive=False,
     ))
-    for method in ("OPTIONS", "DELETE"):
+    for method in ("DELETE",):
         headers = {"Authorization": "Bearer bob", "If-Match": '"999"'}
         denied = client.request(method, f"{BASE}/nodes/{published_file['id']}", headers=headers)
         missing = client.request(method, f"{BASE}/nodes/{uuid4()}", headers=headers)
@@ -135,10 +135,12 @@ def test_authorized_directory_and_root_are_not_deletable(filesystem_http: Filesy
     else:
         node_id = client.post(f"{BASE}/nodes/{root_id}/directories", json=BODY).json()["id"]
     path = f"{BASE}/nodes/{node_id}"
-    for method in ("OPTIONS", "DELETE"):
-        response = client.request(method, path, headers={"If-Match": '"999"'})
-        assert response.status_code == 409
-        assert response.json()["detail"]["code"] == "filesystem_wrong_node_kind"
+    options = client.options(path)
+    assert options.status_code == 204
+    assert set(options.headers["allow"].split(", ")) == {"GET", "OPTIONS", "PATCH"}
+    response = client.delete(path, headers={"If-Match": '"999"'})
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "filesystem_wrong_node_kind"
     assert client.get(path).status_code == 200
 
 

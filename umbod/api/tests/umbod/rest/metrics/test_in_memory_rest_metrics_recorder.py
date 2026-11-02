@@ -16,7 +16,7 @@ def _recorder() -> RestMetricsRecorder:
 
 def _request(
     method: str = "GET",
-    normalized_route: str = "/admin/users",
+    normalized_route: str = "/admin/overview",
     status_class: str = "2xx",
 ) -> CompletedRestRequest:
     return CompletedRestRequest.model_validate(
@@ -54,12 +54,12 @@ def test_completed_requests_aggregate_by_approved_dimensions() -> None:
 
     samples = recorder.metric_samples()
 
-    assert _sample(samples, REQUEST_COUNT_METRIC, "GET", "/admin/users", "2xx").value == 2
-    assert _sample(samples, REQUEST_COUNT_METRIC, "POST", "/admin/users", "2xx").value == 1
+    assert _sample(samples, REQUEST_COUNT_METRIC, "GET", "/admin/overview", "2xx").value == 2
+    assert _sample(samples, REQUEST_COUNT_METRIC, "POST", "/admin/overview", "2xx").value == 1
     assert (
         _sample(samples, REQUEST_COUNT_METRIC, "GET", "/admin/connectors/catalog", "2xx").value == 1
     )
-    assert _sample(samples, REQUEST_COUNT_METRIC, "GET", "/admin/users", "4xx").value == 1
+    assert _sample(samples, REQUEST_COUNT_METRIC, "GET", "/admin/overview", "4xx").value == 1
 
 
 def test_completed_requests_expose_count_and_duration_count_samples() -> None:
@@ -68,8 +68,8 @@ def test_completed_requests_expose_count_and_duration_count_samples() -> None:
 
     samples = recorder.metric_samples()
 
-    assert _sample(samples, REQUEST_COUNT_METRIC, "GET", "/admin/users", "2xx").value == 1
-    assert _sample(samples, REQUEST_DURATION_COUNT_METRIC, "GET", "/admin/users", "2xx").value == 1
+    assert _sample(samples, REQUEST_COUNT_METRIC, "GET", "/admin/overview", "2xx").value == 1
+    assert _sample(samples, REQUEST_DURATION_COUNT_METRIC, "GET", "/admin/overview", "2xx").value == 1
     assert all(set(sample.labels) == {"method", "route", "status_class"} for sample in samples)
 
 

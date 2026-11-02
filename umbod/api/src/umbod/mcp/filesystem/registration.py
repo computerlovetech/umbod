@@ -13,9 +13,10 @@ from .deletion import FilesystemDeleteFileTool
 from .errors import filesystem_operation
 from .links import file_link_result
 from .models import FilesystemChildren, FilesystemNodeMetadata, FilesystemNodeSummary
-from .ports import FilesystemCallerCapture, FilesystemServiceFactory
+from .ports import FilesystemCallerCapture, FilesystemDeletionApproval, FilesystemServiceFactory
 from .sharing import enrich_nodes
 from .sharing_tools import FilesystemSearchSharingRecipientsTool, FilesystemShareTool
+from .update import FilesystemUpdateNodeTool
 from .upload import FilesystemUploadTool
 
 
@@ -24,11 +25,13 @@ def register_filesystem_tools(
     callers: FilesystemCallerCapture,
     services: FilesystemServiceFactory,
     visibility: FilesystemToolVisibility,
+    deletion_approval: FilesystemDeletionApproval,
 ) -> None:
     for tool, operation_names in (
         (FilesystemBrowseTool(callers, services), frozenset({"ls", "tree", "stat"})),
         (FilesystemUploadTool(callers, services), frozenset()),
-        (FilesystemDeleteFileTool(callers, services), frozenset()),
+        (FilesystemUpdateNodeTool(callers, services), frozenset()),
+        (FilesystemDeleteFileTool(callers, services, deletion_approval), frozenset()),
         (FilesystemSearchSharingRecipientsTool(callers, services), frozenset()),
         (FilesystemShareTool(callers, services), frozenset()),
     ):

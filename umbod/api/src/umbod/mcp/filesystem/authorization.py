@@ -26,6 +26,7 @@ FILESYSTEM_TOOL_OPERATIONS: dict[str, FilesystemOperation] = {
     "create_filesystem_file": FilesystemOperation.CREATE,
     "create_filesystem_directory": FilesystemOperation.CREATE,
     "filesystem_upload": FilesystemOperation.CREATE,
+    "update_filesystem_node": FilesystemOperation.UPDATE_METADATA,
     "filesystem_delete_file": FilesystemOperation.DELETE,
     "filesystem_search_sharing_recipients": FilesystemOperation.SHARE,
     "filesystem_share": FilesystemOperation.SHARE,

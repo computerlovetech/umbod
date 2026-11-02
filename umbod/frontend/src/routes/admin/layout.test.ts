@@ -11,7 +11,8 @@ afterEach(() => vi.unstubAllGlobals());
 describe('admin layout loader', () => {
   test.each([null, 'admin@example.test'])('accepts a successful profile with email %s', async (email) => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({
-      id: 'admin-123', email, name: 'unknown', picture: 'https://example.com/admin.png'
+      user: { id: 'admin-123', email, name: 'unknown', picture: 'https://example.com/admin.png' },
+      capabilities: { administration: true }
     }));
     await expect(load({ fetch } as unknown as LayoutLoadEvent)).resolves.toEqual({
       accountIdentity: {
@@ -19,6 +20,25 @@ describe('admin layout loader', () => {
         hiddenValues: { id: 'admin-123' }
       }
     });
+  });
+
+  test.each([{}, { administration: 'true' }])('rejects malformed profile capabilities %j', async (capabilities): Promise<void> => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({
+      user: { id: 'user-123', name: 'Alex', email: null, picture: null }, capabilities
+    }));
+    await expect(load({ fetch } as unknown as LayoutLoadEvent)).rejects.toMatchObject({ name: 'SchemaValidationError', direction: 'inbound' });
+  });
+
+  test('denies a successful ordinary-user profile instead of granting administration', async (): Promise<void> => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({
+      user: { id: 'ordinary-123', name: 'Alex', email: null, picture: null },
+      capabilities: { administration: false }
+    }));
+    await expect(load({ fetch } as unknown as LayoutLoadEvent)).rejects.toMatchObject({
+      status: 403,
+      body: { message: 'You do not have permission to access this administration area. Contact your administrator.' }
+    });
+    expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/me/profile', expect.objectContaining({ method: 'GET' }));
   });
 
   test.each([

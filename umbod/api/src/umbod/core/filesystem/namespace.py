@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from .errors import InvalidName, RevisionConflict, WrongNodeKind
+from .errors import InvalidMove, InvalidName, RevisionConflict, RootMutation, WrongNodeKind
 from .models import (
     ContentRef,
     EmptyContent,
@@ -9,6 +9,7 @@ from .models import (
     NodeId,
     NodeKind,
     NodeMetadata,
+    NodeUpdate,
     RootParent,
     UnspecifiedContentType,
 )
@@ -68,6 +69,31 @@ def new_node(
         updated_at=timestamp,
         revision=1,
     )
+
+
+def updated_metadata(node: Node, metadata: NodeMetadata, expected_revision: int) -> Node:
+    if node.revision != expected_revision:
+        raise RevisionConflict(str(node.id))
+    return node.model_copy(
+        update={
+            "metadata": metadata.model_copy(deep=True),
+            "updated_at": datetime.now(timezone.utc),
+            "revision": node.revision + 1,
+        },
+        deep=True,
+    )
+
+
+def updated_details(node: Node, details: NodeUpdate, expected_revision: int) -> Node:
+    updated = updated_metadata(node, details.metadata, expected_revision)
+    if node.id == ROOT_ID:
+        if details.name != node.name or details.parent_id != node.parent_id:
+            raise RootMutation()
+    else:
+        validate_name(details.name)
+        if isinstance(details.parent_id, RootParent):
+            raise InvalidMove()
+    return updated.model_copy(update={"name": details.name, "parent_id": details.parent_id}, deep=True)
 
 
 def updated_node(node: Node, content: ContentRef, expected_revision: int) -> Node:

@@ -29,13 +29,6 @@ def expected_revision(request: Request) -> int:
     return int(if_match[0][1:-1])
 
 
-@router.options("/nodes/{node_id}", status_code=204, response_class=Response)
-async def check_delete_eligibility(node_id: UUID, caller: Caller, deletion: Deletion) -> Response:
-    with filesystem_errors():
-        await deletion.check_delete_eligibility(caller, node_id)
-    return Response(status_code=204, headers={"Allow": "GET, DELETE, OPTIONS", "Cache-Control": "no-store"})
-
-
 @router.delete(
     "/nodes/{node_id}", status_code=204, response_class=Response,
     summary="Permanently remove one file from the workspace",

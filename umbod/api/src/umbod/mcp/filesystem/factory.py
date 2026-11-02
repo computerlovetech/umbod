@@ -2,6 +2,7 @@ from umbod.core.filesystem.authorization import VerifiedIdentityResolver
 from umbod.core.filesystem.browsing import FilesystemBrowsing
 from umbod.core.filesystem.creation import FilesystemCreation
 from umbod.core.filesystem.content import ContentService, FilesystemContent
+from umbod.core.filesystem.updates import NodeUpdateService, FilesystemNodeUpdates
 from umbod.core.filesystem.deletion import DeletionService, FilesystemDeletion
 from umbod.core.persistence import Database
 from umbod.core.filesystem.ports import ContentDriver
@@ -40,6 +41,11 @@ class DatabaseFilesystemServiceFactory:
         return ContentService(
             VerifiedIdentityResolver(), create_filesystem_transactions(database=self._database),
             self._content, self._max_upload_bytes,
+        )
+
+    def updates(self) -> FilesystemNodeUpdates:
+        return NodeUpdateService(
+            VerifiedIdentityResolver(), create_filesystem_transactions(database=self._database),
         )
 
     def deletion(self) -> FilesystemDeletion:

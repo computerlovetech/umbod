@@ -1,3 +1,6 @@
+import secrets
+import time
+
 from collections.abc import AsyncIterator
 from contextvars import ContextVar
 from contextlib import asynccontextmanager
@@ -7,6 +10,7 @@ from unittest.mock import Mock
 import pytest_asyncio
 from fastmcp import FastMCP
 from fastmcp.server.auth import AuthContext
+from mcp.server.request_state import RequestStateSecurity
 from umbod.mcp.connectors.downstream_mcp.provider import _REQUEST_CONNECTOR_SCOPE
 
 from tests.persistence_runtime import prepared_inmemory_runtime
@@ -18,6 +22,7 @@ from umbod.core.callers import (
     GroupMembership,
     SubjectIdentity,
 )
+from umbod.core.invocation import DatabaseApprovalNonceStore
 from umbod.core.filesystem.models import Permission, Principal, PrincipalType
 from umbod.core.filesystem.provisioning.models import RootBootstrapGrant, RootBootstrapSpec
 from umbod.infrastructure import (
@@ -30,6 +35,7 @@ from umbod.core.filesystem.ports import ContentDriver, ByteStream
 from umbod.core.filesystem.models import ContentRef, StorageKey
 from umbod.core.filesystem.stores.discovery import DatabaseFilesystemAuthorizationReader
 from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory, register_filesystem_resources, register_filesystem_tools
+from umbod.mcp.filesystem.approval import McpFilesystemDeletionApproval
 from umbod.mcp.filesystem.authorization import FilesystemToolVisibility, FilesystemVisibilityMiddleware
 from umbod.mcp.filesystem.runtime import FilesystemDiscoveryRuntime
 from umbod.mcp.metrics.in_memory import InMemoryMcpMetricsRecorder
@@ -84,6 +90,7 @@ class FilesystemMcp:
     database: Database
     runtime: FilesystemDiscoveryRuntime
     visibility: FilesystemToolVisibility
+    approval: McpFilesystemDeletionApproval
 
 
 class InvocationFilesystemToolVisibility(FilesystemToolVisibility):
@@ -100,7 +107,9 @@ async def filesystem_server(filtered: bool) -> AsyncIterator[FilesystemMcp]:
             permissions=frozenset({Permission.DISCOVER, Permission.WRITE}),
         ),))
     )
-    server = FastMCP()
+    server = FastMCP(request_state_security=RequestStateSecurity(
+        keys=[secrets.token_urlsafe(48)], ttl=300.0, audience="filesystem-delete-test",
+    ))
     callers = ScopedCallerCapture()
     callers.current.set(caller_snapshot(
         "alice", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED
@@ -118,15 +127,20 @@ async def filesystem_server(filtered: bool) -> AsyncIterator[FilesystemMcp]:
     visibility = visibility_type(callers, discovery)
     if filtered:
         server.add_middleware(FilesystemVisibilityMiddleware(visibility))
+    approval = McpFilesystemDeletionApproval(
+        nonce_store=DatabaseApprovalNonceStore(runtime.database),
+        clock=time.time, random_token=lambda: secrets.token_urlsafe(24),
+    )
     register_filesystem_tools(
         McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), metrics, Mock()))),
         callers,
         services,
         visibility,
+        approval,
     )
     register_filesystem_resources(server, callers, services)
     try:
-        yield FilesystemMcp(server, callers, metrics, services, content, files, runtime.database, discovery, visibility)
+        yield FilesystemMcp(server, callers, metrics, services, content, files, runtime.database, discovery, visibility, approval)
     finally:
         await runtime.shutdown()
 

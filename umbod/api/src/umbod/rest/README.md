@@ -26,7 +26,7 @@ description: "FastAPI delivery for administration, authenticated users, system e
 - [system/](./system/) — Internal state, events and health.
 - [telemetry/](./telemetry/README.md) — OTLP receiver.
 - [user_catalogue/](./user_catalogue/README.md) — Cross-kind user catalogue.
-- [users/](./users/) — Current-user identity and profile enrichment.
+- [users/](./users/) — Unified authenticated profile, UI capabilities and profile enrichment.
 
 # Related links
 

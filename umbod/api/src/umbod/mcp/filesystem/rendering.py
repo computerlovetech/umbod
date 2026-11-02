@@ -26,7 +26,9 @@ def sharing_label(node: FilesystemNodeSummary) -> str:
 
 def node_label(node: FilesystemNodeSummary) -> str:
     suffix = "/" if node.kind == NodeKind.DIRECTORY else ""
-    return f"{json.dumps(node.name, ensure_ascii=False)}{suffix} [{node.id}] {sharing_label(node)}"
+    description = node.metadata.attributes.get("description", "")
+    description_label = f" description={json.dumps(description)}" if description else ""
+    return f"{json.dumps(node.name, ensure_ascii=False)}{suffix} [{node.id}] {sharing_label(node)}{description_label}"
 
 
 def render_inspection(result: FilesystemNodeInspection) -> str:

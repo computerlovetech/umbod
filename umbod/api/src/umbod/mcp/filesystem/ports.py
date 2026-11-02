@@ -1,13 +1,29 @@
 from collections.abc import Sequence
-from typing import Protocol, runtime_checkable
+from enum import Enum
+from typing import Protocol, Union, runtime_checkable
+
+from fastmcp.tools import InputRequiredToolResult
 
 from umbod.core.callers import CallerSnapshot
-from umbod.core.filesystem.browsing import FilesystemBrowsing
+from umbod.core.filesystem.browsing import FilesystemBrowsing, NodeSummary
 from umbod.core.filesystem.creation import FilesystemCreation
 from umbod.core.filesystem.content import FilesystemContent
+from umbod.core.filesystem.updates import FilesystemNodeUpdates
 from umbod.core.filesystem.deletion import FilesystemDeletion
 from umbod.core.filesystem.uploads import UploadService
 from umbod.core.filesystem.sharing import FilesystemSharing
+
+from .models import DeleteFileCommand
+
+
+class FileDeletionApproval(Enum):
+    APPROVED = "approved"
+
+
+class FilesystemDeletionApproval(Protocol):
+    async def confirm(
+        self, caller: CallerSnapshot, command: DeleteFileCommand, node: NodeSummary,
+    ) -> Union[FileDeletionApproval, InputRequiredToolResult]: ...
 
 
 @runtime_checkable
@@ -31,6 +47,8 @@ class FilesystemServiceFactory(Protocol):
     def creation(self) -> FilesystemCreation: ...
 
     def uploads(self) -> UploadService: ...
+
+    def updates(self) -> FilesystemNodeUpdates: ...
 
     def deletion(self) -> FilesystemDeletion: ...
 

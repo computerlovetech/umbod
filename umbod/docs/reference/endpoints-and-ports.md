@@ -42,7 +42,9 @@ Set `ingress.host`, `ingress.className`, annotations, and TLS values for the tar
 
 ## Administration API clients
 
-- `/api/admin/users` resolves the authenticated identity.
+- `/api/me/profile` returns authenticated identity under `user` and effective UI permissions under `capabilities`, for both ordinary users and administrators.
+- `capabilities.administration` controls administration entry points; identity display does not require administration access.
+- `/api/admin/users` is retired; authenticated administrator requests receive 404.
 - `/api/admin/openapi.json` provides the authenticated administration OpenAPI contract.
 - `/api/admin/connectors/catalog`, `/api/admin/connectors/openapi`, `/api/admin/connectors/mcp`, and `/api/admin/mcp-permissions` expose the shared administration resources.
 - `POST /api/admin/connectors/openapi/setup` creates, imports, and configures an OpenAPI connector in one backend operation, with compensation on failure rather than a guaranteed database transaction.

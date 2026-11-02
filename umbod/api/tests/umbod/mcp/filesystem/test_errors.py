@@ -67,7 +67,7 @@ async def test_expected_domain_failures_do_not_leak_details(
     factory.browsing.return_value = browsing
     register_filesystem_tools(
         McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock()))),
-        filesystem_invocation_mcp.callers, factory, filesystem_invocation_mcp.visibility,
+        filesystem_invocation_mcp.callers, factory, filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
     )
     async with Client(server) as client:
         result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
@@ -101,7 +101,7 @@ async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
     )
     register_filesystem_tools(
         McpObservedToolRegistrar(server, McpInvocationPublisher(signals)),
-        filesystem_invocation_mcp.callers, factory, filesystem_invocation_mcp.visibility,
+        filesystem_invocation_mcp.callers, factory, filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
     )
     set_mcp_invocation_context(McpInvocationContext(
         actor=McpInvocationActor(authenticated_user_id="test-caller"),
@@ -134,7 +134,7 @@ async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
 
 
 TOOL_OPERATIONS = [
-    ("filesystem_delete_file", "delete_file", {
+    ("filesystem_delete_file", "check_delete_eligibility", {
         "node_id": "00000000-0000-0000-0000-000000000001", "expected_revision": 1,
     }),
     ("get_filesystem_root", "get_root", {}),
@@ -164,7 +164,7 @@ async def test_unmasked_tools_sanitize_all_operation_stages(
     callers = Mock(spec=FilesystemCallerCapture)
     callers.capture.return_value = filesystem_invocation_mcp.callers.capture()
     service_type = {
-        "delete_file": FilesystemDeletion,
+        "check_delete_eligibility": FilesystemDeletion,
         "create_file": FilesystemCreation,
         "create_directory": FilesystemCreation,
     }.get(operation, FilesystemBrowsing)
@@ -172,7 +172,7 @@ async def test_unmasked_tools_sanitize_all_operation_stages(
     setattr(service, operation, AsyncMock(side_effect=error))
     factory = Mock(spec=FilesystemServiceFactory)
     factory_method = {
-        "delete_file": factory.deletion,
+        "check_delete_eligibility": factory.deletion,
         "create_file": factory.creation,
         "create_directory": factory.creation,
     }.get(operation, factory.browsing)
@@ -183,7 +183,7 @@ async def test_unmasked_tools_sanitize_all_operation_stages(
         factory_method.side_effect = error
     register_filesystem_tools(
         McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock()))),
-        callers, factory, filesystem_invocation_mcp.visibility,
+        callers, factory, filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
     )
     async with Client(server) as client:
         result = await client.call_tool(tool, arguments, raise_on_error=False)

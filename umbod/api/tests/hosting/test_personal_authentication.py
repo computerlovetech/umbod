@@ -42,10 +42,15 @@ def test_admin_verifier_is_never_inherited_by_personal_api(
     })
     with TestClient(app) as client:
         assert client.get("/api/me/connectors/mcp").status_code == 401
-        assert client.get("/api/admin/users", headers={"Authorization": "Bearer administrator-token"}).status_code == 200
+        assert client.get("/api/admin/mcp-permissions/groups", headers={"Authorization": "Bearer administrator-token"}).status_code == 200
         assert client.get("/api/me/connectors/mcp", headers={"Authorization": "Bearer administrator-token"}).status_code == 401
         assert client.get("/api/me/connectors/mcp", headers={"Authorization": "Bearer " + personal_token}).json() == {"connectors": []}
-        assert client.get("/api/admin/users", headers={"Authorization": "Bearer " + personal_token}).status_code == 401
+        assert client.get("/api/admin/mcp-permissions/groups", headers={"Authorization": "Bearer " + personal_token}).status_code == 401
+        assert client.get("/api/me/profile", headers={"Authorization": "Bearer administrator-token"}).status_code == 401
+        profile = client.get("/api/me/profile", headers={"Authorization": "Bearer " + personal_token})
+        assert profile.status_code == 200
+        assert profile.json()["user"]["id"] == "alice"
+        assert profile.json()["capabilities"] == {"administration": False}
 
 
 def test_personal_authentication_hook_rejects_unknown_keywords() -> None:

@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { workspaceNavigation, workspacePresentation } from '$lib/workspace/navigation';
-  import type { CurrentUserApi } from '$lib/workspace/admin-access';
+  import type { WorkspaceApi } from '$lib/workspace/api';
   import { WorkspaceAccessState } from '$lib/workspace/workspace-access-state.svelte';
-  import { adminApi } from '$lib/admin/infrastructure/admin-api';
+  import { workspaceApi } from '$lib/workspace/infrastructure/workspace-api';
   import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
   import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
   import type { DashboardApi } from '$lib/dashboard/api';
@@ -19,7 +19,7 @@
 
   let {
     mcpEndpoint,
-    createCurrentUserApi = adminApi,
+    createWorkspaceApi = workspaceApi,
     accountIdentity = { kind: 'hidden' },
     createApi = browserDashboardApi,
     createPersonalApi = browserPersonalConnectionsApi,
@@ -27,7 +27,7 @@
     signIn = navigateToSignIn
   }: {
     mcpEndpoint: string;
-    createCurrentUserApi?: () => CurrentUserApi;
+    createWorkspaceApi?: () => WorkspaceApi;
     accountIdentity?: HeaderAccountIdentityState;
     createApi?: () => DashboardApi;
     createPersonalApi?: () => PersonalConnectionsApi;
@@ -40,7 +40,7 @@
   }
 
   function createAccessState(): WorkspaceAccessState {
-    return new WorkspaceAccessState(createCurrentUserApi());
+    return new WorkspaceAccessState(createWorkspaceApi());
   }
 
   const state = createState();

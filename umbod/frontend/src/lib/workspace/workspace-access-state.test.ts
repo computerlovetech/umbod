@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { HttpError } from '$lib/admin/infrastructure/transport';
-import type { CurrentUserIdentity } from '$lib/header/accountIdentity';
+import type { WorkspaceProfile } from './domain/profile';
+import { InMemoryWorkspaceApi } from './in-memory-api.test-support';
 import { DashboardState } from '$lib/dashboard/state/dashboard-state.svelte';
 import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
 import { catalogue } from '$lib/dashboard/test-fixtures';
@@ -8,13 +9,13 @@ import { InMemoryPersonalConnectionsApi } from '$lib/personal-connections/infras
 import { workspaceNavigation } from './navigation';
 import { WorkspaceAccessState } from './workspace-access-state.svelte';
 
-const user: CurrentUserIdentity = { id: 'admin', name: 'Alex', email: null };
+const user: WorkspaceProfile = { user: { id: 'admin', name: 'Alex', email: null, picture: null }, capabilities: { administration: true } };
 
 describe('independent workspace access', () => {
-  test('catalogue becomes usable while current user remains pending and navigation stays unprivileged', async (): Promise<void> => {
-    let complete!: (identity: CurrentUserIdentity) => void;
-    const pending = new Promise<CurrentUserIdentity>((resolve) => { complete = resolve; });
-    const access = new WorkspaceAccessState({ currentUser: (): Promise<CurrentUserIdentity> => pending });
+  test('catalogue becomes usable while profile remains pending and navigation stays unprivileged', async (): Promise<void> => {
+    let complete!: (profile: WorkspaceProfile) => void;
+    const pending = new Promise<WorkspaceProfile>((resolve) => { complete = resolve; });
+    const access = new WorkspaceAccessState({ profile: { get: (): Promise<WorkspaceProfile> => pending } });
     const dashboard = new DashboardState(
       new InMemoryDashboardApi({ ...catalogue, personal_enabled: false }),
       new InMemoryPersonalConnectionsApi([])
@@ -36,17 +37,26 @@ describe('independent workspace access', () => {
   });
 
   test.each([403, 500])('failure %s never reveals administration links', async (status): Promise<void> => {
-    const access = new WorkspaceAccessState({ currentUser: async (): Promise<CurrentUserIdentity> => { throw new HttpError(status, 'Failed', null); } });
+    const access = new WorkspaceAccessState({ profile: { get: async (): Promise<WorkspaceProfile> => { throw new HttpError(status, 'Failed', null); } } });
     await access.load();
     expect(access.adminAccess).toBe(status === 403 ? 'denied' : 'unavailable');
     expect(access.accountIdentity).toEqual({ kind: 'hidden' });
     expect(workspaceNavigation(access.adminAccess === 'allowed')).toHaveLength(2);
   });
 
+  test('ordinary profile keeps visible identity without administration navigation', async (): Promise<void> => {
+    const access = new WorkspaceAccessState(new InMemoryWorkspaceApi({ ...user, capabilities: { administration: false } }));
+    await access.load();
+    expect(access.accountIdentity).toMatchObject({ kind: 'visible', name: 'Alex' });
+    expect(access.adminAccess).toBe('denied');
+    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/files']);
+    access.dispose();
+  });
+
   test('disposed access ignores a late successful response', async (): Promise<void> => {
-    let complete!: (identity: CurrentUserIdentity) => void;
-    const pending = new Promise<CurrentUserIdentity>((resolve) => { complete = resolve; });
-    const access = new WorkspaceAccessState({ currentUser: (): Promise<CurrentUserIdentity> => pending });
+    let complete!: (profile: WorkspaceProfile) => void;
+    const pending = new Promise<WorkspaceProfile>((resolve) => { complete = resolve; });
+    const access = new WorkspaceAccessState({ profile: { get: (): Promise<WorkspaceProfile> => pending } });
     const loading = access.load();
     access.dispose();
     complete(user);

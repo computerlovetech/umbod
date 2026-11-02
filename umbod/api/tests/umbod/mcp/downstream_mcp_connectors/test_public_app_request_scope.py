@@ -157,7 +157,7 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_p
     sharing.search_recipients.assert_not_called()
     proxy_names = {tool['name'] for tool in proxy_response['result']['tools']}
     concurrent_proxy_names = {tool['name'] for tool in concurrent_proxy_response['result']['tools']}
-    expected_root_names = {f'scope_test_{name}' for name in DOWNSTREAM_TOOL_NAMES} | {"filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_search_sharing_recipients", "filesystem_share"}
+    expected_root_names = {f'scope_test_{name}' for name in DOWNSTREAM_TOOL_NAMES} | {"filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_search_sharing_recipients", "filesystem_share", "update_filesystem_node"}
     root_names = {tool['name'] for tool in root_response['result']['tools']}
     refreshed_root_names = {tool['name'] for tool in refreshed_root_response['result']['tools']}
     assert proxy_names == set(DOWNSTREAM_TOOL_NAMES)

@@ -125,7 +125,7 @@ def test_repeated_requests_share_root_lifespan_jwks_cache(
     headers = request_headers(signing_key)
     for _ in range(3):
         assert (
-            client.get("/api/admin/users", headers=headers).json()["name"]
+            client.get("/api/me/profile", headers=headers).json()["user"]["name"]
             == "Profile Name"
         )
     assert fetch_probe.fetch_count == 1
@@ -135,7 +135,7 @@ def test_new_key_identifier_refreshes_shared_cache(
     client: TestClient, fetch_probe: JwksFetchProbe, signing_key: rsa.RSAPrivateKey
 ) -> None:
     headers = request_headers(signing_key)
-    assert client.get("/api/admin/users", headers=headers).status_code == 200
+    assert client.get("/api/me/profile", headers=headers).status_code == 200
     rotated = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     fetch_probe.keys = [
         PyJWK(
@@ -146,8 +146,8 @@ def test_new_key_identifier_refreshes_shared_cache(
         )
     ]
     headers["X-Custom-Profile"] = token(rotated, "web", {"name": "Rotated"}, "rotated")
-    assert client.get("/api/admin/users", headers=headers).json()["name"] == "Rotated"
-    assert client.get("/api/admin/users", headers=headers).json()["name"] == "Rotated"
+    assert client.get("/api/me/profile", headers=headers).json()["user"]["name"] == "Rotated"
+    assert client.get("/api/me/profile", headers=headers).json()["user"]["name"] == "Rotated"
     assert fetch_probe.fetch_count == 2
 
 
@@ -157,7 +157,7 @@ def test_delayed_profile_fetch_does_not_stall_unrelated_request(
     fetch_probe.release.clear()
     with ThreadPoolExecutor(max_workers=2) as executor:
         profile_request = executor.submit(
-            client.get, "/api/admin/users", headers=request_headers(signing_key)
+            client.get, "/api/me/profile", headers=request_headers(signing_key)
         )
         try:
             assert fetch_probe.started.wait(timeout=2)
@@ -187,7 +187,8 @@ def test_debug_and_rejected_profile_logs_never_expose_credentials_or_claims(
             "X-Arbitrary": "unknown-header-secret",
         }
     )
-    assert client.get("/api/admin/users", headers=headers).status_code == 200
+    assert client.get("/api/me/profile", headers=headers).status_code == 200
+    assert client.get("/api/admin/openapi.json", headers=headers).status_code == 200
     records = [
         record for record in caplog.records if record.name.startswith("umbod.rest")
     ]
@@ -237,9 +238,9 @@ def test_malformed_provider_keys_fall_back_without_secret_logs(
         raise error
 
     monkeypatch.setattr(PyJWKClient, "get_signing_keys", malformed_keys)
-    response = client.get("/api/admin/users", headers=request_headers(signing_key))
+    response = client.get("/api/me/profile", headers=request_headers(signing_key))
     assert response.status_code == 200
-    assert response.json()["name"] == "Private Name"
+    assert response.json()["user"]["name"] == "Private Name"
     rejection = next(
         record for record in caplog.records if record.name.endswith("users.id_token")
     )
@@ -263,9 +264,9 @@ def test_ec_provider_key_is_rejected_as_optional_profile(
             }
         )
     ]
-    response = client.get("/api/admin/users", headers=request_headers(signing_key))
+    response = client.get("/api/me/profile", headers=request_headers(signing_key))
     assert response.status_code == 200
-    assert response.json()["name"] == "Private Name"
+    assert response.json()["user"]["name"] == "Private Name"
     rejection = next(
         record for record in caplog.records if record.name.endswith("users.id_token")
     )
@@ -289,7 +290,7 @@ def test_root_lifespan_propagates_shared_resolver_to_requests_and_clears_cache(
     with TestClient(app) as transport:
         assert (
             transport.get(
-                "/api/admin/users", headers=request_headers(signing_key)
+                "/api/me/profile", headers=request_headers(signing_key)
             ).status_code
             == 200
         )
@@ -308,5 +309,5 @@ def test_id_profile_requires_started_root_lifespan(
     with pytest.raises(
         RuntimeError, match="Root lifespan profile signing-key resolver is not running"
     ):
-        TestClient(app).get("/api/admin/users", headers=request_headers(signing_key))
+        TestClient(app).get("/api/me/profile", headers=request_headers(signing_key))
     assert fetch_probe.fetch_count == 0

@@ -13,7 +13,7 @@ from umbod.rest.metrics import (
 def _record_request(
     recorder: RestMetricsRecorder,
     method: str = "GET",
-    route: str = "/admin/users",
+    route: str = "/admin/overview",
     status_class: str = "2xx",
     duration_seconds: float = 0.25,
 ) -> None:
@@ -53,7 +53,7 @@ def test_prometheus_recorder_records_aggregated_count_and_duration_through_proto
     _record_request(recorder, duration_seconds=0.75)
 
     samples = _samples(recorder.prometheus_text())
-    labels = {"method": "GET", "route": "/admin/users", "status_class": "2xx"}
+    labels = {"method": "GET", "route": "/admin/overview", "status_class": "2xx"}
 
     assert (
         _sample(

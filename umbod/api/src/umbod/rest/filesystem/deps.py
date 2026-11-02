@@ -7,6 +7,7 @@ from umbod.core.callers import CallerContext, CallerSnapshot, group_membership_f
 from umbod.core.filesystem import ContentDriver, FilesystemCreation, Principal, PrincipalType
 from umbod.core.filesystem.content import ContentService, FilesystemContent
 from umbod.core.filesystem.deletion import DeletionService, FilesystemDeletion
+from umbod.core.filesystem.updates import NodeUpdateService, FilesystemNodeUpdates
 from umbod.core.filesystem.authorization import (
     FilesystemIdentityResolver, LocalDevelopmentIdentityResolver, VerifiedIdentityResolver,
     PermissionDenied, UnresolvedIdentity,
@@ -126,6 +127,13 @@ def get_filesystem_uploads(
     return create_filesystem_uploads(
         database=database, resolver=resolver, content=content, max_upload_bytes=max_bytes, clock=clock,
     )
+
+
+def get_filesystem_updates(
+    database: Annotated[Database, Depends(get_filesystem_database)],
+    resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
+) -> FilesystemNodeUpdates:
+    return NodeUpdateService(resolver, create_filesystem_transactions(database=database))
 
 
 def get_filesystem_deletion(

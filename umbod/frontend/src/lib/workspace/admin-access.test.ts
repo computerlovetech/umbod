@@ -1,24 +1,17 @@
 import { describe, expect, test } from 'vitest';
 import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
-import { currentUserIdentitySchema, type CurrentUserIdentity } from '$lib/header/accountIdentity';
-import { resolveWorkspaceAccess, type CurrentUserApi } from './admin-access';
+import { workspaceProfileSchema } from './domain/profile';
+import { InMemoryWorkspaceApi } from './in-memory-api.test-support';
+import { resolveWorkspaceAccess } from './admin-access';
+import type { WorkspaceApi } from './api';
 
-const user = currentUserIdentitySchema.parse({ id: 'admin-id', name: 'Alex', email: null });
-
-class InMemoryCurrentUserApi implements CurrentUserApi {
-  constructor(private readonly outcome: CurrentUserIdentity | Error) {}
-
-  async currentUser(): Promise<CurrentUserIdentity> {
-    if (this.outcome instanceof Error) throw this.outcome;
-    return this.outcome;
-  }
-}
+const user = { id: 'admin-id', name: 'Alex', email: null, picture: null };
 
 describe('workspace access presentation', () => {
-  test('validated current user permits administration and preserves identity', async (): Promise<void> => {
-    const api: CurrentUserApi = new InMemoryCurrentUserApi(user);
+  test.each([true, false])('administration capability %s controls navigation without hiding identity', async (administration): Promise<void> => {
+    const api: WorkspaceApi = new InMemoryWorkspaceApi(workspaceProfileSchema.parse({ user, capabilities: { administration } }));
     await expect(resolveWorkspaceAccess(api)).resolves.toEqual({
-      adminAccess: 'allowed',
+      adminAccess: administration ? 'allowed' : 'denied',
       accountIdentity: { kind: 'visible', name: 'Alex', email: null, picture: null, hiddenValues: { id: 'admin-id' } }
     });
   });
@@ -31,7 +24,7 @@ describe('workspace access presentation', () => {
     [new SchemaValidationError('inbound', []), 'unavailable'],
     [new NetworkError(new Error('offline')), 'unavailable']
   ] as const)('fails closed for %s as %s without throwing', async (cause, adminAccess): Promise<void> => {
-    const api: CurrentUserApi = new InMemoryCurrentUserApi(cause);
+    const api: WorkspaceApi = new InMemoryWorkspaceApi(cause);
     await expect(resolveWorkspaceAccess(api)).resolves.toEqual({ adminAccess, accountIdentity: { kind: 'hidden' } });
   });
 });

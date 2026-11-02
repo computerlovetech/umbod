@@ -1,12 +1,13 @@
 import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
-import { resolveWorkspaceAccess, type AdminAccess, type CurrentUserApi } from './admin-access';
+import { resolveWorkspaceAccess, type AdminAccess } from './admin-access';
+import type { WorkspaceApi } from './api';
 
 export class WorkspaceAccessState {
   adminAccess = $state<AdminAccess | 'checking'>('checking');
   accountIdentity = $state<HeaderAccountIdentityState>({ kind: 'hidden' });
   private disposed = false;
 
-  constructor(private readonly api: CurrentUserApi) {}
+  constructor(private readonly api: WorkspaceApi) {}
 
   load = async (): Promise<void> => {
     const result = await resolveWorkspaceAccess(this.api);

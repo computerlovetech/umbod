@@ -35,7 +35,7 @@ def test_local_filesystem_requires_explicit_root_grant_and_retains_private_owner
         assert initial["status"] == "uninitialized"
         assert set(initial) == {"status", "revision", "groups", "blocked_group_ids"}
         assert client.get(BASE + "/root").status_code == 403
-        assert client.get(BASE + "/nodes?scope=owned").status_code == 501
+        assert client.get(BASE + "/nodes?scope=owned").status_code == 404
         initial = client.get(POLICY).json()
         saved = client.put(POLICY, json={
             "expected_revision": initial["revision"], "groups": [{

@@ -1,13 +1,9 @@
 import {
   createHeaderAccountUserInfoBoundary,
-  type CurrentUserIdentity,
   type HeaderAccountIdentityState
 } from '$lib/header/accountIdentity';
+import type { WorkspaceApi } from './api';
 import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
-
-export interface CurrentUserApi {
-  currentUser(): Promise<CurrentUserIdentity>;
-}
 
 export type AdminAccess = 'allowed' | 'denied' | 'sign-in' | 'unavailable';
 
@@ -16,12 +12,12 @@ export interface WorkspaceAccess {
   accountIdentity: HeaderAccountIdentityState;
 }
 
-export async function resolveWorkspaceAccess(api: CurrentUserApi): Promise<WorkspaceAccess> {
+export async function resolveWorkspaceAccess(api: WorkspaceApi): Promise<WorkspaceAccess> {
   try {
-    const user = await api.currentUser();
+    const profile = await api.profile.get();
     return {
-      adminAccess: 'allowed',
-      accountIdentity: createHeaderAccountUserInfoBoundary().viewHeaderAccountIdentity(user)
+      adminAccess: profile.capabilities.administration ? 'allowed' : 'denied',
+      accountIdentity: createHeaderAccountUserInfoBoundary().viewHeaderAccountIdentity(profile.user)
     };
   } catch (cause) {
     if (cause instanceof AuthenticationRequiredError || (cause instanceof HttpError && cause.status === 401)) {
