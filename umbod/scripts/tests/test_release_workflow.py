@@ -41,7 +41,7 @@ def test_release_workflow_verifies_tag_commit_on_main_with_exact_successful_push
 
 def test_release_workflow_uses_verified_commit_for_all_publication_sources(workflow: str) -> None:
     publication = workflow.split("\n  sdk-publish:", 1)[1]
-    assert publication.count("uses: actions/checkout@v6") == 4
+    assert publication.count("uses: useblacksmith/checkout@v1") == 4
     assert publication.count("ref: ${{ needs.plan.outputs.release_sha }}") == 4
     assert "org.opencontainers.image.revision=${{ needs.plan.outputs.release_sha }}" in publication
     assert "github.sha" not in workflow
