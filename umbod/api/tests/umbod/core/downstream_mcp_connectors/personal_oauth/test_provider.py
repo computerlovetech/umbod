@@ -160,7 +160,6 @@ async def test_registration_requests_refresh_when_the_server_supports_it(
     preparation: PreparePersonalOAuth, resource_metadata: dict[str, object], server_metadata: dict[str, object],
     client_metadata: dict[str, object], registered_grants: list[str],
 ) -> None:
-    # MCP SDK authorization servers reject registrations without refresh_token.
     server_metadata["grant_types_supported"] = ["authorization_code", "refresh_token"]
     client_metadata["grant_types"] = registered_grants
     transport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata), response(server_metadata), response(client_metadata)])

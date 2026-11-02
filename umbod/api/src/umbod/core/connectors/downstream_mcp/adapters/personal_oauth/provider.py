@@ -175,7 +175,6 @@ class DiscoveredPersonalOAuthProvider:
 
     async def _register(self, command: PreparePersonalOAuth, server: AuthorizationServer) -> str:
         validated_url(server.registration_endpoint)
-        # MCP SDK authorization servers reject registrations without refresh_token when they support it.
         grant_types = ["authorization_code"] + (
             ["refresh_token"] if "refresh_token" in server.grant_types_supported else []
         )
