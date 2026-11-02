@@ -6,6 +6,12 @@
       "sourceType": "local",
       "computedHash": "5c5d8656dfdc8c593510f5cad7c8230b1148ff51e74c87611caaef13b791c19e"
     },
+    "agent-skill-management": {
+      "source": "computerlovetech/skills",
+      "sourceType": "github",
+      "skillPath": "agent-skill-management/SKILL.md",
+      "computedHash": "c8df7f2fd908de65304e5f5f6711079899a4895dce636de5a1106d3ada04d07d"
+    },
     "api-client-architecture": {
       "source": "./skills",
       "sourceType": "local",
@@ -36,6 +42,12 @@
       "sourceType": "local",
       "computedHash": "e1e940178ed8b1226e6ea1cba7c30f7baaee3b4e600c6052fe22b4ed9a481539"
     },
+    "changelog": {
+      "source": "computerlovetech/skills",
+      "sourceType": "github",
+      "skillPath": "changelog/SKILL.md",
+      "computedHash": "2da9d9bc8d18fd0a14fff94173029d41a7e25bf12577b57132b8be3c3c8a7c39"
+    },
     "choose-design-pattern": {
       "source": "./skills",
       "sourceType": "local",
@@ -64,7 +76,7 @@
     "improve-testability": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "9a18c3850da1d62c7f50ac9504aac2091498832908cb09e6f83354f4ac01f69f"
+      "computedHash": "f25c4ed17fa5a3d83b8e06c920d092be404b93540a6fdb6d2bba6024dea41c18"
     },
     "ports-adapters-io": {
       "source": "./skills",
@@ -84,12 +96,12 @@
     "release-umbod": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "40113387c97b3cbe9934e1a8d58c5376c571c6ddcddb0a9f1b999f885c546e62"
+      "computedHash": "23267586982f88ca4034fb5854bc4d5cec2e8e027072b4225e0515c7b7db0a44"
     },
     "reusable-components": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "5467ee18b4fea24faa22b4e4945aa159be3b8f63d36cf9274f094bb4e1bef383"
+      "computedHash": "a7ec1be95aba02bee438ed592ca419475589cdff59a8dd61c3ace6ec1b8673d5"
     },
     "svelte-docs-best-practices": {
       "source": "./skills",

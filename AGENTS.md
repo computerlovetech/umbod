@@ -4,7 +4,11 @@ Paths and commands below are relative to the repository root unless a working di
 
 ## Agent Skills
 
-Use Vercel's [skills.sh](https://skills.sh/) to install agent skills. Repository skill sources live in `skills/`; edit those, not installed copies in `.agents/skills/`.
+Use the `agent-skill-management` skill when adding, updating, removing, or installing skills.
+
+## Changelog
+
+When a change is notable to Umbod users, add an entry under `## [Unreleased]` in [CHANGELOG.md](CHANGELOG.md) in the same change. Use the `changelog` skill.
 
 ## Release branches
 
