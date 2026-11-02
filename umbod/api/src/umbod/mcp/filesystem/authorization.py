@@ -71,7 +71,11 @@ class FilesystemToolVisibility:
         return self.allows(context.component.name, operations)
 
     def allows(self, name: str, operations: frozenset[FilesystemOperation]) -> bool:
-        return not _REQUEST_CONNECTOR_SCOPE.get() and FILESYSTEM_TOOL_OPERATIONS[name] in operations
+        if _REQUEST_CONNECTOR_SCOPE.get():
+            return False
+        if name == "filesystem_browse":
+            return bool(operations & {FilesystemOperation.INSPECT, FilesystemOperation.HOME})
+        return FILESYSTEM_TOOL_OPERATIONS[name] in operations
 
 
 class FilesystemVisibilityMiddleware(Middleware):

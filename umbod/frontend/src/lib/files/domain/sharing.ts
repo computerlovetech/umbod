@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { nodeIdSchema } from './schemas';
+import { nodeIdSchema, nodeVisibilitySchema } from './schemas';
 
 export const sharingRevisionSchema = z.string().regex(/^[\x21\x23-\x2b\x2d-\x7e]+$/);
 export const sharingPermissionSchema = z.enum(['discover', 'read', 'write', 'delete', 'share']);
@@ -18,6 +18,8 @@ const outboundGrantSchema = z.strictObject({ recipient: sharingRecipientTargetSc
 const inboundGrantSchema = z.strictObject({ recipient: sharingRecipientSchema, permissions: permissionsSchema });
 export const replaceAccessSchema = z.strictObject({ grants: z.array(outboundGrantSchema) }).refine((body) => new Set(body.grants.map(({ recipient }) => JSON.stringify(recipient))).size === body.grants.length);
 export const nodeAccessSchema = z.strictObject({ node_id: nodeIdSchema, revision: sharingRevisionSchema, grants: z.array(inboundGrantSchema), blocked_recipients: z.array(sharingRecipientTargetSchema) });
+export const nodeAccessWriteSchema = nodeAccessSchema.extend({ visible_to: nodeVisibilitySchema });
+export type NodeAccessWrite = z.infer<typeof nodeAccessWriteSchema>;
 export type SharingRecipientType = z.infer<typeof sharingRecipientTypeSchema>;
 export const eligibleSharingGroupsSchema = z.strictObject({ groups: z.array(z.strictObject({ group_id: groupIdSchema, label: z.string(), description: z.string() })) });
 export type SharingPermission = z.infer<typeof sharingPermissionSchema>;

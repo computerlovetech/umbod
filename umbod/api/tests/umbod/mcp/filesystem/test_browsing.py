@@ -1,12 +1,14 @@
 from typing import Any
 from unittest.mock import Mock
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastmcp import Client, FastMCP
 from jsonschema import validate
 
 from umbod.core.callers import AuthenticationProvenance
+from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
+from umbod.infrastructure import create_access_control_driver
 from umbod.mcp.filesystem import register_filesystem_tools
 from umbod.mcp.signals import McpInvocationPublisher
 from umbod.mcp.tools import McpObservedToolRegistrar
@@ -59,11 +61,11 @@ async def test_browse_discovery_declares_operations_without_constructing_service
         descriptor = next(tool for tool in await client.list_tools() if tool.name == TOOL)
     assert descriptor.input_schema["type"] == "object"
     branches = descriptor.input_schema["oneOf"]
-    assert {branch["properties"]["operation"]["const"] for branch in branches} == {"ls", "tree", "stat"}
+    assert {branch["properties"]["operation"]["const"] for branch in branches} == {"ls", "tree", "stat", "home"}
     assert all(branch["additionalProperties"] is False for branch in branches)
-    assert all(branch["properties"]["target"] == {} for branch in branches)
+    assert all(branch["properties"]["target"] == {} for branch in branches if "target" in branch["properties"])
     assert len(descriptor.input_schema["properties"]["target"]["oneOf"]) == 3
-    assert descriptor.annotations.read_only_hint is True
+    assert descriptor.annotations.read_only_hint is False
     assert descriptor.annotations.destructive_hint is False
     assert descriptor.annotations.idempotent_hint is True
     assert descriptor.output_schema["type"] == "object"
@@ -224,3 +226,41 @@ async def test_listing_file_returns_existing_safe_kind_error(filesystem_invocati
             "operation": "ls", "target": {"type": "node", "node_id": node_id},
         }, raise_on_error=False)
     assert result.content[0].text == "filesystem_wrong_node_kind: Invalid filesystem node kind"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["stat", "ls", "tree"])
+@pytest.mark.parametrize("restricted", [False, True], ids=["owner", "restricted"])
+async def test_browse_text_projects_authorized_permissions_and_visibility(
+    filesystem_invocation_mcp: FilesystemMcp, operation: str, restricted: bool,
+) -> None:
+    filesystem = filesystem_invocation_mcp
+    async with Client(filesystem.server) as client:
+        directory = await create_node(client, await root_id(client), "audience", "directory")
+        child = await create_node(client, directory, "child", "file")
+        if restricted:
+            policies = create_access_control_driver(database=filesystem.database)
+            for node_id in (directory, child):
+                await policies.add_grant(AccessGrant(
+                    node_id=UUID(node_id),
+                    principal=Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob"),
+                    permissions={Permission.DISCOVER, Permission.READ, Permission.WRITE}, recursive=False,
+                ))
+            filesystem.callers.current.set(caller_snapshot(
+                "bob", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED,
+            ))
+        result = await client.call_tool(TOOL, {
+            "operation": operation, "target": {"type": "node", "node_id": directory},
+        })
+    rendered = result.content[0].text
+    visible_nodes = 1 if operation == "stat" else 2
+    assert rendered.count('"can_write":true') == visible_nodes
+    if restricted:
+        assert rendered.count('visible_to={"type":"restricted"}') == visible_nodes
+        assert '"owner":' not in rendered
+        assert '"grants":' not in rendered
+        assert '"alice"' not in rendered
+    else:
+        assert rendered.count('visible_to={"type":"available","scope":"direct_node_policy"') == visible_nodes
+        assert rendered.count('"group_members_expanded":false') == visible_nodes
+        assert rendered.count('"grants":[]') == visible_nodes

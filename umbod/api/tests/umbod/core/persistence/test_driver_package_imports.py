@@ -116,6 +116,8 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
         'create_namespace_driver',
         'create_filesystem',
         'create_filesystem_browsing',
+        'create_filesystem_homes',
+        'create_filesystem_access',
         'create_filesystem_explorer',
         'create_filesystem_transactions',
         'create_filesystem_creation',

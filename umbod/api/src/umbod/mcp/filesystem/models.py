@@ -3,7 +3,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from umbod.core.filesystem.browsing import NodeSummary
+from umbod.core.filesystem.access import CallerNodeSummary
 from umbod.core.filesystem.models import NodeMetadata
 from umbod.core.filesystem.sharing import SharingGrantSummary
 
@@ -26,7 +26,7 @@ SharingMetadata = Annotated[
 ]
 
 
-class FilesystemNodeSummary(NodeSummary):
+class FilesystemNodeSummary(CallerNodeSummary):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     sharing: SharingMetadata

@@ -5,7 +5,7 @@ from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ToolAnnotations
 from pydantic import PrivateAttr, ValidationError as ModelValidationError
 
-from umbod.core.filesystem.browsing import NodeSummary
+from umbod.core.filesystem.access import CallerNodeSummary
 from umbod.core.filesystem.content.errors import UploadTooLarge
 from umbod.core.filesystem.ports import ByteStream
 
@@ -34,7 +34,7 @@ class FilesystemUploadTool(Tool):
                 "Use resources/read for current content up to 1 MiB; larger files require an HTTP download."
             ),
             parameters=UploadCommand.model_json_schema(),
-            output_schema=NodeSummary.model_json_schema(),
+            output_schema=CallerNodeSummary.model_json_schema(),
             annotations=ToolAnnotations(
                 readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False,
             ),
@@ -66,4 +66,5 @@ class FilesystemUploadTool(Tool):
                 content_stream(content),
             )
             result = await uploads.complete(caller, session.id)
-            return file_link_result(result.node, [result.node], "File uploaded successfully.")
+            node = (await self._services.access().enrich_nodes(caller, [result.node]))[0]
+            return file_link_result(node, [node], "File uploaded successfully.\n" + node.model_dump_json())

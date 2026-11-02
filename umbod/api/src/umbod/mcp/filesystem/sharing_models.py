@@ -2,6 +2,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, TypeAdapter, field_serializer
 
+from umbod.core.filesystem.access import Visibility
+from umbod.core.filesystem.sharing import ShareNodeResult
 from umbod.core.filesystem import Permission
 from umbod.core.filesystem.sharing import GroupPolicy, ShareNodePolicy, SharingRecipientType
 from umbod.core.identity_directory.user_models import SearchText
@@ -35,8 +37,13 @@ class ShareNodeGroupCommand(GroupPolicy):
     node_id: UUID
 
 
+class CallerShareNodeResult(ShareNodeResult):
+    visible_to: Visibility
+
+
 class LegacyShareNodeGroupResult(ShareNodeGroupCommand):
     changed: bool
+    visible_to: Visibility
 
     @field_serializer("permissions", when_used="json")
     def serialize_permissions(self, permissions: frozenset[Permission]) -> list[str]:

@@ -61,7 +61,7 @@ async def test_advertised_schemas_and_annotations_are_exact(filesystem_invocatio
     share = descriptors[SHARE]
     for schema, canonical, legacy in (
         (share.input_schema, "ShareNodeCommand", "ShareNodeGroupCommand"),
-        (share.output_schema, "ShareNodeResult", "LegacyShareNodeGroupResult"),
+        (share.output_schema, "CallerShareNodeResult", "LegacyShareNodeGroupResult"),
     ):
         assert len(schema["anyOf"]) == 2
         definitions = {branch["title"]: branch for branch in schema["anyOf"]}
@@ -69,7 +69,7 @@ async def test_advertised_schemas_and_annotations_are_exact(filesystem_invocatio
             (canonical, {"node_id", "recipient", "permissions"}),
             (legacy, {"node_id", "group_id", "permissions"}),
         ):
-            expected = fields | ({"changed"} if schema is share.output_schema else set())
+            expected = fields | ({"changed", "visible_to"} if schema is share.output_schema else set())
             assert set(definitions[name]["properties"]) == set(definitions[name]["required"]) == expected
             assert definitions[name]["additionalProperties"] is False
             assert definitions[name]["properties"]["permissions"]["minItems"] == 1
@@ -111,8 +111,8 @@ async def test_additive_union_retry_preserves_other_grants_and_exact_ids(
         second = await client.call_tool(SHARE, {"node_id": node_id, "group_id": group_id, "permissions": ["discover"]})
         retry = await client.call_tool(SHARE, {"node_id": node_id, "group_id": group_id, "permissions": ["discover"]})
         descriptor = next(tool for tool in await client.list_tools() if tool.name == SHARE)
-    assert first.structured_content == {"node_id": node_id, "group_id": group_id, "permissions": ["read"], "changed": True}
-    assert second.structured_content == {"node_id": node_id, "group_id": group_id, "permissions": ["discover", "read"], "changed": True}
+    assert {key: value for key, value in first.structured_content.items() if key != "visible_to"} == {"node_id": node_id, "group_id": group_id, "permissions": ["read"], "changed": True}
+    assert {key: value for key, value in second.structured_content.items() if key != "visible_to"} == {"node_id": node_id, "group_id": group_id, "permissions": ["discover", "read"], "changed": True}
     assert retry.structured_content == {**second.structured_content, "changed": False}
     for result in (first, second, retry):
         validate(result.structured_content, descriptor.output_schema)
@@ -243,7 +243,7 @@ async def test_discovery_has_no_io_and_each_invocation_captures_and_calls_once(
         for _ in range(2):
             response = await client.call_tool(tool, payload)
             if recipient_type != "legacy":
-                assert response.structured_content == authoritative.model_dump(mode="json")
+                assert response.structured_content == {**authoritative.model_dump(mode="json"), "visible_to": {"type": "restricted"}}
     assert filesystem_invocation_mcp.callers.count == captures + 2
     assert factory.call_count == 2
     if tool == LIST:
@@ -381,8 +381,8 @@ async def test_canonical_recipients_union_retry_and_direct_node_access(
         first = await client.call_tool(SHARE, {**command, "permissions": ["read"]})
         second = await client.call_tool(SHARE, {**command, "permissions": ["discover"]})
         retry = await client.call_tool(SHARE, {**command, "permissions": ["discover"]})
-        assert first.structured_content == {**command, "permissions": ["read"], "changed": True}
-        assert second.structured_content == {**command, "permissions": ["discover", "read"], "changed": True}
+        assert {key: value for key, value in first.structured_content.items() if key != "visible_to"} == {**command, "permissions": ["read"], "changed": True}
+        assert {key: value for key, value in second.structured_content.items() if key != "visible_to"} == {**command, "permissions": ["discover", "read"], "changed": True}
         assert retry.structured_content == {**second.structured_content, "changed": False}
         for response in (first, second, retry):
             validate(response.structured_content, descriptor.output_schema)

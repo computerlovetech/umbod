@@ -54,7 +54,7 @@ def test_upload_download_preserves_bytes_and_safe_headers(filesystem_http: Files
     node = uploaded.json()
     assert uploaded.headers["location"] == f"{BASE}/nodes/{node['id']}"
     assert uploaded.headers["cache-control"] == "no-store"
-    assert set(node) == {"id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision"}
+    assert set(node) == {"id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision", "permissions", "visible_to"}
     downloaded = filesystem_http.client.get(content_path(node["id"]))
     assert downloaded.content == payload
     assert downloaded.headers["content-type"] == "application/octet-stream"

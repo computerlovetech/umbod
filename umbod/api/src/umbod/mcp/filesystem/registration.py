@@ -3,7 +3,6 @@ from uuid import UUID
 from fastmcp.tools.base import ToolResult
 from mcp.types import ToolAnnotations
 
-from umbod.core.filesystem.browsing import NodeSummary
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.tools.registration import tool_result_is_error
 
@@ -29,7 +28,7 @@ def register_filesystem_tools(
     deletion_approval: FilesystemDeletionApproval,
 ) -> None:
     for tool, operation_names in (
-        (FilesystemBrowseTool(callers, services), frozenset({"ls", "tree", "stat"})),
+        (FilesystemBrowseTool(callers, services), frozenset({"ls", "tree", "stat", "home"})),
         (FilesystemUploadTool(callers, services), frozenset()),
         (FilesystemBeginUploadTool(callers, services), frozenset()),
         (FilesystemCompleteUploadTool(callers, services), frozenset()),
@@ -45,21 +44,21 @@ def register_filesystem_tools(
         with filesystem_operation():
             snapshot = callers.capture()
             node = await services.browsing().get_root(snapshot)
-            result = (await enrich_nodes(services.sharing(), snapshot, [node]))[0]
+            result = (await enrich_nodes(services.sharing(), snapshot, [node], services.access()))[0]
             return file_link_result(result, [result], result.model_dump_json())
 
     async def get_filesystem_node(node_id: UUID) -> ToolResult:
         with filesystem_operation():
             snapshot = callers.capture()
             node = await services.browsing().get_node(snapshot, node_id)
-            result = (await enrich_nodes(services.sharing(), snapshot, [node]))[0]
+            result = (await enrich_nodes(services.sharing(), snapshot, [node], services.access()))[0]
             return file_link_result(result, [result], result.model_dump_json())
 
     async def list_filesystem_children(parent_id: UUID) -> ToolResult:
         with filesystem_operation():
             snapshot = callers.capture()
             nodes = await services.browsing().list_children(snapshot, parent_id)
-            result = FilesystemChildren(nodes=await enrich_nodes(services.sharing(), snapshot, nodes))
+            result = FilesystemChildren(nodes=await enrich_nodes(services.sharing(), snapshot, nodes, services.access()))
             return file_link_result(result, result.nodes, result.model_dump_json())
 
     async def create_filesystem_file(
@@ -67,22 +66,24 @@ def register_filesystem_tools(
     ) -> ToolResult:
         with filesystem_operation():
             snapshot = callers.capture()
-            result = await services.creation().create_file(snapshot, parent_id, name, metadata)
+            node = await services.creation().create_file(snapshot, parent_id, name, metadata)
+            result = (await enrich_nodes(services.sharing(), snapshot, [node], services.access()))[0]
             return file_link_result(result, [result], result.model_dump_json())
 
     async def create_filesystem_directory(
         parent_id: UUID, name: str, metadata: FilesystemNodeMetadata
-    ) -> NodeSummary:
+    ) -> FilesystemNodeSummary:
         with filesystem_operation():
             snapshot = callers.capture()
-            return await services.creation().create_directory(snapshot, parent_id, name, metadata)
+            node = await services.creation().create_directory(snapshot, parent_id, name, metadata)
+            return (await enrich_nodes(services.sharing(), snapshot, [node], services.access()))[0]
 
     for function, description, readonly, output_model in (
         (get_filesystem_root, "Get the provisioned filesystem root.", True, FilesystemNodeSummary),
         (get_filesystem_node, "Get a filesystem node by UUID with an MCP resource link for files.", True, FilesystemNodeSummary),
         (list_filesystem_children, "List discoverable children with MCP resource links for files.", True, FilesystemChildren),
-        (create_filesystem_file, "Create an empty private filesystem file and return its MCP resource link.", False, NodeSummary),
-        (create_filesystem_directory, "Create an empty private filesystem directory.", False, NodeSummary),
+        (create_filesystem_file, "Create an empty private filesystem file and return its MCP resource link.", False, FilesystemNodeSummary),
+        (create_filesystem_directory, "Create an empty private filesystem directory.", False, FilesystemNodeSummary),
     ):
         tool = registrar.register(
             function, name=function.__name__, description=(

@@ -1,5 +1,6 @@
 import json
 
+from umbod.core.filesystem.access import CallerNodeSummary
 from umbod.core.filesystem.browsing import Breadcrumbs
 from umbod.core.filesystem.models import NodeKind
 
@@ -16,7 +17,7 @@ def visible_location(breadcrumbs: Breadcrumbs) -> str:
 
 def sharing_label(node: FilesystemNodeSummary) -> str:
     if not isinstance(node.sharing, AuthorizedSharingMetadata):
-        return "sharing unavailable (not permitted)"
+        return "sharing unavailable"
     if not node.sharing.grants:
         return "no manageable direct grants"
     return "manageable direct sharing=" + json.dumps(
@@ -24,11 +25,15 @@ def sharing_label(node: FilesystemNodeSummary) -> str:
     )
 
 
+def access_label(node: CallerNodeSummary) -> str:
+    return f"permissions={node.permissions.model_dump_json()} visible_to={node.visible_to.model_dump_json()}"
+
+
 def node_label(node: FilesystemNodeSummary) -> str:
     suffix = "/" if node.kind == NodeKind.DIRECTORY else ""
     description = node.metadata.attributes.get("description", "")
     description_label = f" description={json.dumps(description)}" if description else ""
-    return f"{json.dumps(node.name, ensure_ascii=False)}{suffix} [{node.id}] {sharing_label(node)}{description_label}"
+    return f"{json.dumps(node.name, ensure_ascii=False)}{suffix} [{node.id}] {sharing_label(node)} {access_label(node)}{description_label}"
 
 
 def render_inspection(result: FilesystemNodeInspection) -> str:
@@ -39,6 +44,7 @@ def render_inspection(result: FilesystemNodeInspection) -> str:
         f"created={node.created_at.isoformat()} updated={node.updated_at.isoformat()}",
         f"metadata={node.metadata.model_dump_json()}",
         sharing_label(node),
+        access_label(node),
     ))
 
 

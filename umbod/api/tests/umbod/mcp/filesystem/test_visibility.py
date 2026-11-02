@@ -14,7 +14,7 @@ from starlette.applications import Starlette
 
 from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSnapshot, GroupMembership, UnavailableSubject
 from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
-from umbod.core.filesystem.authorization.discovery import AuthorizationGrant, AuthorizationNode, FilesystemAuthorizationSnapshot
+from umbod.core.filesystem.authorization.discovery import AuthorizationGrant, AuthorizationNode, FilesystemAuthorizationSnapshot, FilesystemOperation
 from umbod.core.filesystem.models import NodeKind, Ownership
 from umbod.infrastructure import create_access_control_driver
 from umbod.mcp.connectors.downstream_mcp.provider import _REQUEST_CONNECTOR_SCOPE
@@ -76,7 +76,7 @@ async def test_no_filesystem_permission_hides_tools_even_for_administrator_group
     filesystem_mcp: FilesystemMcp, groups: tuple[str, ...],
 ) -> None:
     select_caller(filesystem_mcp, "bob", groups)
-    assert await listed_tools(filesystem_mcp) == set()
+    assert await listed_tools(filesystem_mcp) == {"filesystem_browse"}
 
 
 @pytest.mark.asyncio
@@ -135,7 +135,7 @@ async def test_unverified_or_wrong_issuer_cannot_discover_filesystem_tools(
         groups=GroupMembership(group_ids=("writers",)),
     ) if provenance == AuthenticationProvenance.UNAVAILABLE else caller_snapshot("alice", issuer, ("writers",), provenance)
     filesystem_mcp.callers.current.set(snapshot)
-    assert await listed_tools(filesystem_mcp) == set()
+    assert await listed_tools(filesystem_mcp) == ({"filesystem_browse"} if provenance == AuthenticationProvenance.UPSTREAM_VERIFIED else set())
 
 
 @pytest.mark.asyncio
@@ -145,7 +145,7 @@ async def test_concurrent_discovery_does_not_share_callers(filesystem_mcp: Files
         return await listed_tools(filesystem_mcp)
 
     assert await asyncio.gather(discover("alice", ("writers",)), discover("bob", ())) == [
-        BOOTSTRAP_TOOLS, set(),
+        BOOTSTRAP_TOOLS, {"filesystem_browse"},
     ]
 
 
@@ -202,7 +202,7 @@ async def test_revoked_last_witness_rejects_retained_invocation_before_discovery
         with pytest.raises(MCPError, match="filesystem_permission_denied: Filesystem access denied"):
             await client.read_resource(file_resource_uri(node_id))
     await filesystem_mcp.runtime.reconcile()
-    assert await listed_tools(filesystem_mcp) == set()
+    assert await listed_tools(filesystem_mcp) == {"filesystem_browse"}
 
 
 @pytest.mark.asyncio
@@ -223,7 +223,7 @@ async def test_absent_or_unowned_nodes_cannot_supply_visibility_witness(owned: b
     ))
     runtime = FilesystemDiscoveryRuntime(reader)
     await runtime.reconcile()
-    assert await FilesystemToolVisibility(callers, runtime).capture() == frozenset()
+    assert await FilesystemToolVisibility(callers, runtime).capture() == frozenset({FilesystemOperation.HOME})
 
 
 def http_transport(app: Starlette) -> StreamableHttpTransport:

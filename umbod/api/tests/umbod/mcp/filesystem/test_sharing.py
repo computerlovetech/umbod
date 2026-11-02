@@ -143,7 +143,7 @@ async def test_sharing_batch_contains_only_returned_nodes_after_limits_and_visib
     assert [node["sharing"] for node in returned_nodes(variant, result.structured_content)] == [
         {"can_share": False}, {"can_share": True, "grants": []},
     ]
-    assert "sharing unavailable (not permitted)" in result.content[0].text
+    assert "sharing unavailable" in result.content[0].text
     assert "no manageable direct grants" in result.content[0].text
 
 
@@ -210,15 +210,18 @@ async def test_read_sharing_projects_current_exact_recipients_and_protects_other
         "recipient": {"type": "user", "user_id": user_id, "label": 'Bob "Reader"'},
         "permissions": ["read"],
     })
-    assert node["sharing"] == {"can_share": True, "grants": expected_grants}
+    assert node["sharing"] == (
+        {"can_share": False} if node["visible_to"]["type"] == "unavailable"
+        else {"can_share": True, "grants": expected_grants}
+    )
     if variant in {"ls", "tree", "stat"}:
         text = result.content[0].text
         assert json.dumps(label) in text
         assert json.dumps(identifier) in text
         assert json.dumps('Bob "Reader"') in text
         assert user_id in text
-        assert "foreign" not in text
-        assert "recursive" not in text
+        assert '"issuer":"foreign"' in text
+        assert '"recursive":true' in text
 
 
 @pytest.mark.asyncio

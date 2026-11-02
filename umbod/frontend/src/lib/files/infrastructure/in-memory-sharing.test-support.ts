@@ -1,6 +1,6 @@
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { NodeSharingApi } from '../api';
-import { nodeAccessSchema, replaceAccessSchema, eligibleSharingGroupsSchema, sharingRecipientTypeSchema, type SharingRecipientType, type NodeAccess, type ReplaceAccess, type SharingGroup } from '../domain/sharing';
+import { nodeAccessSchema, nodeAccessWriteSchema, replaceAccessSchema, eligibleSharingGroupsSchema, sharingRecipientTypeSchema, type SharingRecipientType, type NodeAccess, type ReplaceAccess, type SharingGroup } from '../domain/sharing';
 
 export class InMemoryNodeSharing implements NodeSharingApi {
   private readonly access = new Map<string, NodeAccess>();
@@ -43,6 +43,9 @@ export class InMemoryNodeSharing implements NodeSharingApi {
     });
     const result = nodeAccessSchema.parse({ ...current, grants: [...current.grants.filter((grant) => grant.recipient.type !== recipientType), ...grants], revision: current.revision + '-next' });
     this.access.set(id, result);
-    return this.inspectAccess(id, recipientType);
+    return nodeAccessWriteSchema.transform(({ node_id, revision, grants, blocked_recipients }) => ({ node_id, revision, grants, blocked_recipients })).parse({
+      ...await this.inspectAccess(id, recipientType),
+      visible_to: { type: 'unavailable' }
+    });
   };
 }

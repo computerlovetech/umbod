@@ -31,6 +31,12 @@ class FilesystemDirectoryTree(DirectoryTree):
     entries: list[FilesystemTreeEntry]
 
 
+class ResolveHome(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    operation: Literal["home"]
+
+
 class BrowseCommand(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
@@ -55,7 +61,7 @@ class InspectNode(BrowseCommand):
 
 
 FilesystemBrowseCommand = Annotated[
-    Union[ListDirectory, ReadTree, InspectNode], Field(discriminator="operation")
+    Union[ListDirectory, ReadTree, InspectNode, ResolveHome], Field(discriminator="operation")
 ]
 
 
@@ -80,8 +86,15 @@ class NodeInspectionResponse(BaseModel):
     result: FilesystemNodeInspection
 
 
+class HomeResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    operation: Literal["home"]
+    result: FilesystemNodeInspection
+
+
 FilesystemBrowseResponse = Annotated[
-    Union[DirectoryListingResponse, DirectoryTreeResponse, NodeInspectionResponse],
+    Union[DirectoryListingResponse, DirectoryTreeResponse, NodeInspectionResponse, HomeResponse],
     Field(discriminator="operation"),
 ]
 
@@ -96,5 +109,6 @@ def browse_input_schema() -> dict[str, Any]:
     schema["properties"] = {"target": definitions["ListDirectory"]["properties"]["target"]}
     for reference in schema["oneOf"]:
         definition = definitions[reference["$ref"].rsplit("/", 1)[1]]
-        definition["properties"]["target"] = {}
+        if "target" in definition["properties"]:
+            definition["properties"]["target"] = {}
     return schema

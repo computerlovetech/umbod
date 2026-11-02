@@ -82,9 +82,12 @@ def test_owner_can_replace_and_revoke_with_authoritative_etag_without_content_ch
     saved = client.put(path, params={"recipient_type": "group"}, json={"grants": grants}, headers={"If-Match": initial.headers["etag"]})
     assert saved.status_code == 200, saved.text
     assert saved.headers["etag"] != initial.headers["etag"]
-    assert saved.json() == client.get(path, params={"recipient_type": "group"}).json()
+    assert {key: value for key, value in saved.json().items() if key != "visible_to"} == client.get(path, params={"recipient_type": "group"}).json()
+    assert saved.json()["visible_to"]["type"] == "available"
     assert set(saved.json()["grants"][0]["permissions"]) == {"discover", "share"}
-    assert client.get(f"{BASE}/nodes/{private_node['id']}").json() == private_node
+    current = client.get(f"{BASE}/nodes/{private_node['id']}").json()
+    assert {key: value for key, value in current.items() if key != "visible_to"} == {key: value for key, value in private_node.items() if key != "visible_to"}
+    assert len(current["visible_to"]["grants"]) == 1
     bob = {"Authorization": "Bearer bob"}
     assert client.get(path, headers=bob).status_code == 200
     revoked = client.put(path, params={"recipient_type": "group"}, json={"grants": []}, headers={**bob, "If-Match": saved.headers["etag"]})
@@ -252,7 +255,7 @@ def test_group_replacement_preserves_foreign_user_and_recursive_grants(
     assert collision.status_code == 422
     revoked = sharing_http.client.put(path, params={"recipient_type": "group"}, json={"grants": []}, headers={"If-Match": initial.headers["etag"]})
     assert revoked.status_code == 200
-    assert revoked.json() == initial.json()
+    assert {key: value for key, value in revoked.json().items() if key != "visible_to"} == initial.json()
     stored = sharing_http.client.portal.call(driver.list_grants, identifier)
     assert len(stored) == len(protected)
     assert all(grant in stored for grant in protected)
@@ -363,7 +366,7 @@ def test_routes_use_sharing_port_and_return_its_authoritative_projection(
     ]}, headers={"If-Match": inspected.headers["etag"]})
     assert saved.status_code == 200
     assert saved.headers["etag"] == '\"after\"'
-    assert saved.json() == service.view.model_dump(mode="json")
+    assert {key: value for key, value in saved.json().items() if key != "visible_to"} == service.view.model_dump(mode="json")
     assert service.scopes == [SharingScope(recipient_types=frozenset(("group", "user")))]
     assert len(service.commands) == 1
     assert service.commands[0].model_dump(mode="json") == {
@@ -453,7 +456,7 @@ def test_replacement_only_removes_selected_type_and_returns_selected_view(
         grant for grant in before.json()["grants"] if grant["recipient"]["type"] != recipient_type
     ]
     assert complete.headers["etag"] == response.headers["etag"]
-    assert sharing_http.client.get(path, params={"recipient_type": recipient_type}).json() == response.json()
+    assert sharing_http.client.get(path, params={"recipient_type": recipient_type}).json() == {key: value for key, value in response.json().items() if key != "visible_to"}
 
 
 def test_user_change_invalidates_group_etag_without_modifying_group_grants(
@@ -650,7 +653,7 @@ def test_user_replacement_preserves_recursive_foreign_and_unobserved_grants(
         headers={"If-Match": before.headers["etag"]},
     )
     assert unchanged.status_code == 200
-    assert unchanged.json() == users.json()
+    assert {key: value for key, value in unchanged.json().items() if key != "visible_to"} == users.json()
     assert unchanged.headers["etag"] == before.headers["etag"]
     stored = sharing_http.client.portal.call(driver.list_grants, identifier)
     assert len(stored) == len(protected)

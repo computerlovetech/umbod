@@ -7,11 +7,12 @@ from umbod.core.persistence import (
     DeleteQuery,
     Equals,
     Query,
+    PersistenceDecodingError,
     TransactionMode,
     Unordered,
     UpsertCommand,
 )
-from ..errors import OwnershipNotFound
+from ..errors import OwnershipNotFound, PolicyDecodingFailure
 from ..models import AccessGrant, NodeId, Ownership, Principal, PrincipalType
 from .schema import (
     GRANT_ISSUER,
@@ -107,14 +108,17 @@ class SessionAccessControl:
         await append_discovery_changed(self._session)
 
     async def list_grants(self, node_id: NodeId) -> list[AccessGrant]:
-        records = await self._session.find_many(
-            GRANT_TABLE,
-            Query(
-                filter=Equals(GRANT_NODE, str(node_id)),
-                projection=AllFields(),
-                ordering=Unordered(),
-            ),
-        )
+        try:
+            records = await self._session.find_many(
+                GRANT_TABLE,
+                Query(
+                    filter=Equals(GRANT_NODE, str(node_id)),
+                    projection=AllFields(),
+                    ordering=Unordered(),
+                ),
+            )
+        except PersistenceDecodingError as error:
+            raise PolicyDecodingFailure("Stored filesystem policy cannot be decoded") from error
         return [record.payload.model_copy(deep=True) for record in records]
 
     async def add_grant(self, grant: AccessGrant) -> None:

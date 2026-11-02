@@ -25,7 +25,7 @@ def test_group_root_creation_and_private_children(filesystem_http: FilesystemHtt
     assert response.status_code == 201
     child = response.json()
     assert child["kind"] == "directory"
-    assert set(child) == {"id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision"}
+    assert set(child) == {"id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision", "permissions", "visible_to"}
     assert child["metadata"] == METADATA
     assert client.get(f"{BASE}/nodes/{child['id']}").json() == child
     assert client.get(f"{BASE}/nodes/{root['id']}/children").json() == {"nodes": [child]}

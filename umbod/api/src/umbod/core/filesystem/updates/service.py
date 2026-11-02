@@ -4,7 +4,9 @@ from ..authorization import (
     FilesystemIdentityResolver, PermissionDenied, ResolvedIdentity, UnresolvedIdentity,
     allows_resolved,
 )
-from ..browsing import NodeSummary
+from ..access import CallerNodeSummary
+from ..access.service import project_node_access
+from ..browsing import summary
 from ..errors import RootMutation, WrongNodeKind
 from ..models import Node, NodeId, NodeKind, NodeMetadata, NodeUpdate, Permission, RootParent, UnchangedContentType
 from ..transactions import FilesystemSession, FilesystemTransactions
@@ -64,7 +66,7 @@ class NodeUpdateService:
 
     async def update_node(
         self, snapshot: CallerSnapshot, node_id: NodeId, patch: NodePatch, *, expected_revision: int,
-    ) -> NodeSummary:
+    ) -> CallerNodeSummary:
         identity = await self._identity(snapshot)
         async with self._transactions.transaction() as session:
             await self._require_write(session, identity, node_id)
@@ -83,4 +85,4 @@ class NodeUpdateService:
             updated = await session.namespace.update_details(
                 node_id, details=details, expected_revision=expected_revision,
             )
-            return NodeSummary.model_validate(updated.model_dump(exclude={"content"}))
+            return await project_node_access(session, identity, summary(updated))

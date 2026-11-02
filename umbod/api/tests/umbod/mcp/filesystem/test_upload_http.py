@@ -39,7 +39,11 @@ async def test_ten_mib_upload_roundtrips_over_http(filesystem_invocation_mcp: Fi
                 "content": content,
             })
     assert not result.get("isError", False)
-    assert result["content"][0]["text"] == "File uploaded successfully."
+    message, metadata = result["content"][0]["text"].split("\n", 1)
+    assert message == "File uploaded successfully."
+    assert json.loads(metadata) == result["structuredContent"]
+    assert result["structuredContent"]["permissions"]["can_write"] is True
+    assert result["structuredContent"]["visible_to"]["grants"] == []
     assert filesystem_invocation_mcp.callers.count == before + 1
     assert filesystem_invocation_mcp.content.put_count == 1
     download = await filesystem_invocation_mcp.files.open_download(

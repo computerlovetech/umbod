@@ -9,7 +9,10 @@ import pytest
 from fastmcp import Client
 
 from conftest import RuntimeEndpoints
-from test_running_filesystem import FILESYSTEM, checked_root_browse, checked_summary, tool_payload, wait_for_filesystem_tools
+from test_running_filesystem import (
+    FILESYSTEM, check_access_metadata, checked_root_browse, checked_summary, node_identity,
+    sharing_write_payload, tool_payload, wait_for_filesystem_tools,
+)
 from test_running_personal_mcp_execution import mcp_client, proxy_token
 from user_sharing_support import assert_mcp_user_target_sharing, assert_rest_recipient_scopes, observed_recipient
 
@@ -31,12 +34,20 @@ def upload_private_file(client: httpx.Client, parent_id: str) -> dict[str, Any]:
 async def assert_mcp_sharing_metadata(
     client: Client[Any], node: dict[str, Any], sharing: dict[str, Any],
 ) -> None:
-    expected = {**node, "sharing": sharing}
-    assert tool_payload(await client.call_tool("get_filesystem_node", {"node_id": node["id"]})) == expected
+    received = tool_payload(await client.call_tool("get_filesystem_node", {"node_id": node["id"]}))
+    assert node_identity(received) == node_identity(node)
+    assert received["sharing"] == sharing
+    check_access_metadata(received)
+    assert received["permissions"]["can_share"] == sharing["can_share"]
+    if sharing["can_share"]:
+        assert received["visible_to"]["type"] == "available"
+        assert len(received["visible_to"]["grants"]) == len(sharing["grants"])
+    else:
+        assert received["visible_to"] == {"type": "restricted"}
     inspected = tool_payload(await client.call_tool("filesystem_browse", {
         "operation": "stat", "target": {"type": "node", "node_id": node["id"]},
     }))
-    assert inspected["result"]["node"] == expected
+    assert inspected["result"]["node"] == received
 
 
 async def assert_mcp_additive_sharing(
@@ -65,11 +76,11 @@ async def assert_mcp_additive_sharing(
     missing_share = await bob.call_tool("filesystem_share", {**arguments, "node_id": str(uuid4())}, raise_on_error=False)
     assert denied_share.is_error and missing_share.is_error
     assert denied_share.content == missing_share.content
-    assert tool_payload(await alice.call_tool("filesystem_share", arguments)) == {**arguments, "changed": True}
-    assert tool_payload(await alice.call_tool("filesystem_share", arguments)) == {**arguments, "changed": False}
+    assert sharing_write_payload(await alice.call_tool("filesystem_share", arguments)) == {**arguments, "changed": True}
+    assert sharing_write_payload(await alice.call_tool("filesystem_share", arguments)) == {**arguments, "changed": False}
     extended = await alice.call_tool("filesystem_share", {**arguments, "permissions": ["discover"]})
-    assert tool_payload(extended) == {**arguments, "permissions": ["discover", "read"], "changed": True}
-    assert tool_payload(await alice.call_tool("filesystem_share", arguments)) == {
+    assert sharing_write_payload(extended) == {**arguments, "permissions": ["discover", "read"], "changed": True}
+    assert sharing_write_payload(await alice.call_tool("filesystem_share", arguments)) == {
         **arguments, "permissions": ["discover", "read"], "changed": False,
     }
 
@@ -142,7 +153,12 @@ async def test_signed_direct_node_group_sharing_and_revocation(runtime_endpoints
             assert shared.headers["etag"] != initial.headers["etag"]
             assert shared.headers["etag"] == '"' + shared.json()["revision"] + '"'
             assert shared.headers["cache-control"] == "no-store"
-            assert checked_summary(bob.get(node_path), 200) == file
+            reader_node = checked_summary(bob.get(node_path), 200)
+            assert node_identity(reader_node) == node_identity(file)
+            assert reader_node["permissions"]["can_read"] is True
+            assert reader_node["permissions"]["can_write"] is False
+            assert reader_node["visible_to"] == {"type": "restricted"}
+            file = checked_summary(alice.get(node_path), 200)
             assert bob.get(node_path + "/content").content == b"direct-node sharing runtime"
             async with mcp_client(runtime_endpoints.mcp_url, alice_token) as alice_mcp, mcp_client(
                 os.environ["UMBOD_TEST_MCP_B_URL"], bob_token,
@@ -262,7 +278,7 @@ async def test_signed_observed_user_and_group_targets_use_existing_sharing_tool(
                     "node_id": file["id"], "recipient": {"type": "group", "group_id": "admin"},
                     "permissions": ["discover", "read"],
                 }
-                assert tool_payload(await alice_mcp.call_tool("filesystem_share", group_command)) == {**group_command, "changed": True}
+                assert sharing_write_payload(await alice_mcp.call_tool("filesystem_share", group_command)) == {**group_command, "changed": True}
                 mixed = tool_payload(await alice_mcp.call_tool("get_filesystem_node", {"node_id": file["id"]}))["sharing"]
                 assert {grant["recipient"]["type"] for grant in mixed["grants"]} == {"group", "user"}
                 stale = alice.put(group_access, json={"grants": []}, headers={"If-Match": initial_groups.headers["etag"]})

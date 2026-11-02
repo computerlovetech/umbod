@@ -32,6 +32,10 @@ from umbod.rest.factories import ConnectorApiDependencyFactories
 
 from umbod.core.filesystem.uploads import SystemUploadClock, UploadClock, UploadService
 
+from umbod.core.filesystem.access import AccessMetadataService
+from umbod.core.filesystem.homes import HomeService
+from umbod.infrastructure import create_filesystem_access, create_filesystem_homes
+
 from .errors import filesystem_errors
 from .models import BrowseNodeQuery
 
@@ -75,6 +79,19 @@ async def require_filesystem_identity(
     with filesystem_errors():
         if isinstance(await resolver.resolve(caller), UnresolvedIdentity):
             raise PermissionDenied()
+
+
+def get_filesystem_homes(
+    database: Annotated[Database, Depends(get_filesystem_database)],
+) -> HomeService:
+    return create_filesystem_homes(database=database)
+
+
+def get_filesystem_access(
+    database: Annotated[Database, Depends(get_filesystem_database)],
+    resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
+) -> AccessMetadataService:
+    return create_filesystem_access(database=database, resolver=resolver)
 
 
 def get_filesystem_browsing(

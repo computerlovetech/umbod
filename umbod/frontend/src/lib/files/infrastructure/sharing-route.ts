@@ -1,7 +1,7 @@
 import { SchemaValidationError, type Transport } from '$lib/admin/infrastructure/transport';
 import type { NodeSharingApi } from '../api';
 import { nodeIdSchema } from '../domain/schemas';
-import { sharingRecipientTypeSchema, type SharingRecipientType, nodeAccessSchema, replaceAccessSchema, sharingRevisionSchema, eligibleSharingGroupsSchema, type NodeAccess, type ReplaceAccess, type SharingGroup } from '../domain/sharing';
+import { sharingRecipientTypeSchema, type SharingRecipientType, nodeAccessSchema, nodeAccessWriteSchema, replaceAccessSchema, sharingRevisionSchema, eligibleSharingGroupsSchema, type NodeAccess, type ReplaceAccess, type SharingGroup } from '../domain/sharing';
 
 export class NodeSharingRoute implements NodeSharingApi {
   constructor(private readonly transport: Transport) {}
@@ -19,7 +19,7 @@ export class NodeSharingRoute implements NodeSharingApi {
     if (!parsed.success) throw new SchemaValidationError('outbound', parsed.error.issues);
     const scope = sharingRecipientTypeSchema.safeParse(recipientType);
     if (!scope.success) throw new SchemaValidationError('outbound', scope.error.issues);
-    return this.transport.request({ method: 'PUT', path: this.accessPath(id, scope.data), body, inputSchema: replaceAccessSchema.refine((input) => input.grants.every((grant) => grant.recipient.type === recipientType)), conditionalHeaders: { 'If-Match': '"' + parsed.data + '"' }, outputSchema: nodeAccessSchema, redirect: 'error' });
+    return this.transport.request({ method: 'PUT', path: this.accessPath(id, scope.data), body, inputSchema: replaceAccessSchema.refine((input) => input.grants.every((grant) => grant.recipient.type === recipientType)), conditionalHeaders: { 'If-Match': '"' + parsed.data + '"' }, outputSchema: nodeAccessWriteSchema.transform(({ node_id, revision, grants, blocked_recipients }) => ({ node_id, revision, grants, blocked_recipients })), redirect: 'error' });
   };
 
   private accessPath(id: string, recipientType: SharingRecipientType | undefined): string {

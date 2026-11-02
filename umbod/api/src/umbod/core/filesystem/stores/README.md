@@ -13,6 +13,7 @@ description: "Database-neutral namespace and access-policy persistence."
 - [discovery_events.py](./discovery_events.py) — Sanitized durable invalidation events appended within namespace and policy transactions.
 - [exploration.py](./exploration.py) — Read-only target, children and ancestry loading with bounded ownership/grant batches; never provisions absent roots.
 - [group_usage.py](./group_usage.py) — Group catalogue usage checks.
+- [homes.py](./homes.py) — Exact issuer/user home bindings and serialized namespace, ownership and binding transactions.
 - [namespace.py](./namespace.py) — Namespace persistence, atomic revision-checked metadata and placement updates, and single-file removal.
 - [schema.py](./schema.py) — Node and access-policy tables.
 - [session.py](./session.py) — Storage failure translation.

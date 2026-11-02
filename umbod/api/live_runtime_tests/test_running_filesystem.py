@@ -73,13 +73,41 @@ def file_resource_link(result: CallToolResult, node_id: str) -> str:
     return str(link.uri)
 
 
+def check_access_metadata(node: dict[str, Any]) -> None:
+    assert set(node["permissions"]) == {"can_discover", "can_read", "can_write", "can_delete", "can_share"}
+    assert all(isinstance(value, bool) for value in node["permissions"].values())
+    assert node["permissions"]["can_discover"] is True
+    visibility = node["visible_to"]
+    assert visibility["type"] in {"available", "restricted", "unavailable"}
+    if visibility["type"] == "available":
+        assert visibility["scope"] == "direct_node_policy"
+        assert visibility["group_members_expanded"] is False
+        assert all(grant["node_id"] == node["id"] for grant in visibility["grants"])
+
+
+def node_identity(node: dict[str, Any]) -> dict[str, Any]:
+    return {key: value for key, value in node.items() if key not in {"permissions", "visible_to", "sharing"}}
+
+
+def sharing_write_payload(result: CallToolResult) -> dict[str, Any]:
+    payload = tool_payload(result)
+    visibility = payload["visible_to"]
+    assert visibility["type"] == "available"
+    assert visibility["scope"] == "direct_node_policy"
+    assert visibility["group_members_expanded"] is False
+    assert all(grant["node_id"] == payload["node_id"] for grant in visibility["grants"])
+    return {key: value for key, value in payload.items() if key != "visible_to"}
+
+
 def checked_summary(response: httpx.Response, status: int) -> dict[str, Any]:
     assert response.status_code == status, response.text
     assert response.headers["cache-control"] == "no-store"
     payload = response.json()
     assert set(payload) == {
         "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision",
+        "permissions", "visible_to",
     }
+    check_access_metadata(payload)
     return payload
 
 
@@ -91,7 +119,9 @@ def checked_root_browse(response: httpx.Response) -> dict[str, Any]:
     node = payload["node"]
     assert set(node) == {
         "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision",
+        "permissions", "visible_to",
     }
+    check_access_metadata(node)
     assert node["parent_id"] == {}
     assert node["kind"] == "directory"
     assert payload["breadcrumbs"] == {
@@ -198,13 +228,19 @@ async def check_filesystem_node_updates(
         })
         assert shared.status_code == 200, shared.text
         access_before = shared.json()
+        assert access_before["visible_to"]["type"] == "available"
         direct_rename = checked_summary(bob.patch(path, headers={"If-Match": f'"{created["revision"]}"'}, json={"name": "direct-rename-" + kind}), 200)
         assert direct_rename["parent_id"] == source["id"]
         denied_move = bob.patch(path, headers={"If-Match": f'"{direct_rename["revision"]}"'}, json={
             "parent_id": destination["id"], "metadata": {"attributes": {"team": "must not persist"}},
         })
         assert denied_move.status_code == 403, denied_move.text
-        assert checked_summary(alice_second.get(path), 200) == direct_rename
+        owner_view = checked_summary(alice_second.get(path), 200)
+        assert node_identity(owner_view) == node_identity(direct_rename)
+        assert direct_rename["permissions"]["can_write"] is True
+        assert direct_rename["permissions"]["can_share"] is False
+        assert direct_rename["visible_to"] == {"type": "restricted"}
+        assert owner_view["visible_to"]["type"] == "available"
         updated_mcp = tool_payload(await alice_mcp.call_tool("update_filesystem_node", {
             "node_id": created["id"], "expected_revision": direct_rename["revision"],
             "name": "moved-" + kind, "parent_id": destination["id"],
@@ -220,9 +256,13 @@ async def check_filesystem_node_updates(
         access_after = alice_second.get(access_path)
         assert access_after.status_code == 200, access_after.text
         assert {field: value for field, value in access_after.json().items() if field != "revision"} == {
-            field: value for field, value in access_before.items() if field != "revision"
+            field: value for field, value in access_before.items() if field not in {"revision", "visible_to"}
         }
-        assert checked_summary(bob.get(path), 200) == updated
+        reader_view = checked_summary(bob.get(path), 200)
+        assert node_identity(reader_view) == node_identity(updated)
+        assert reader_view["permissions"]["can_write"] is True
+        assert reader_view["permissions"]["can_share"] is False
+        assert reader_view["visible_to"] == {"type": "restricted"}
         assert created["id"] not in {item["id"] for item in alice.get(FILESYSTEM + "/nodes/" + source["id"] + "/children").json()["nodes"]}
         inspected = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
             "operation": "stat", "target": {"type": "node", "node_id": created["id"]},
@@ -603,14 +643,18 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
                 node["name"] for node in bob.get(FILESYSTEM + "/nodes/" + root["id"] + "/children").json()["nodes"]
             }
             bob_created = await bob_mcp.call_tool("create_filesystem_file", {"parent_id": root["id"], "name": "bob-" + uuid4().hex, "metadata": metadata})
-            bob_file = tool_payload(bob_created)
+            bob_summary = tool_payload(bob_created)
+            assert bob_summary["sharing"] == {"can_share": True, "grants": []}
+            bob_file = {field: value for field, value in bob_summary.items() if field != "sharing"}
             bob_uri = file_resource_link(bob_created, bob_file["id"])
             assert checked_summary(bob.get(FILESYSTEM + "/nodes/" + bob_file["id"]), 200) == bob_file
             forbidden = alice.get(FILESYSTEM + "/nodes/" + bob_file["id"])
             assert forbidden.status_code == 403
             assert forbidden.json()["detail"]["code"] == "filesystem_permission_denied"
             alice_created = await alice_mcp.call_tool("create_filesystem_file", {"parent_id": alice_directory["id"], "name": "draft", "metadata": metadata})
-            alice_file = tool_payload(alice_created)
+            alice_summary = tool_payload(alice_created)
+            assert alice_summary["sharing"] == {"can_share": True, "grants": []}
+            alice_file = {field: value for field, value in alice_summary.items() if field != "sharing"}
             alice_uri = file_resource_link(alice_created, alice_file["id"])
             assert checked_summary(alice_second.get(FILESYSTEM + "/nodes/" + alice_file["id"]), 200) == alice_file
             child_response = alice.get(FILESYSTEM + "/nodes/" + alice_directory["id"] + "/children")

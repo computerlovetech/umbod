@@ -26,6 +26,10 @@ from umbod.core.filesystem.stores.administration import DatabaseRootPolicyTransa
 from umbod.core.filesystem.sharing import FilesystemSharing, SharingService
 from umbod.core.filesystem.stores.sharing import DatabaseSharingTransactions
 
+from umbod.core.filesystem.homes import HomeService
+from umbod.core.filesystem.access import AccessMetadataService
+from umbod.core.filesystem.stores.homes import DatabaseHomeTransactions
+
 from .config import (
     ContentConfig,
     FilesystemConfig,
@@ -33,6 +37,16 @@ from .config import (
     LocalContentConfig,
     S3ContentConfig,
 )
+
+
+def create_filesystem_homes(*, database: Database) -> HomeService:
+    return HomeService(DatabaseHomeTransactions(database))
+
+
+def create_filesystem_access(
+    *, database: Database, resolver: FilesystemIdentityResolver,
+) -> AccessMetadataService:
+    return AccessMetadataService(resolver, create_filesystem_transactions(database=database))
 
 
 def create_filesystem_browsing(

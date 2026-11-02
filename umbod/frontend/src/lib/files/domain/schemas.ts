@@ -6,12 +6,43 @@ export const metadataSchema = z.object({
   content_type: z.union([z.string(), emptyObjectSchema]),
   attributes: z.record(z.string(), z.string())
 });
+export const nodePermissionsSchema = z.strictObject({
+  can_discover: z.boolean(),
+  can_read: z.boolean(),
+  can_write: z.boolean(),
+  can_delete: z.boolean(),
+  can_share: z.boolean()
+});
+export const nodePrincipalSchema = z.strictObject({
+  type: z.enum(['user', 'group', 'system']),
+  issuer: z.string(),
+  id: z.string()
+});
+export const nodeGrantSchema = z.strictObject({
+  node_id: nodeIdSchema,
+  principal: nodePrincipalSchema,
+  permissions: z.array(z.enum(['discover', 'read', 'write', 'delete', 'share'])),
+  recursive: z.boolean()
+});
+export const nodeVisibilitySchema = z.discriminatedUnion('type', [
+  z.strictObject({
+    type: z.literal('available'),
+    scope: z.literal('direct_node_policy'),
+    owner: nodePrincipalSchema,
+    grants: z.array(nodeGrantSchema),
+    group_members_expanded: z.literal(false)
+  }),
+  z.strictObject({ type: z.literal('restricted') }),
+  z.strictObject({ type: z.literal('unavailable') })
+]);
 export const nodeSummarySchema = z.strictObject({
   id: nodeIdSchema,
   parent_id: z.union([nodeIdSchema, emptyObjectSchema]),
   name: z.string(),
   kind: z.enum(['directory', 'file']),
   metadata: metadataSchema,
+  permissions: nodePermissionsSchema,
+  visible_to: nodeVisibilitySchema,
   created_at: z.iso.datetime({ offset: true, local: true }),
   updated_at: z.iso.datetime({ offset: true, local: true }),
   revision: z.number().int().min(1)

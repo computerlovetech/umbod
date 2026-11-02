@@ -4,10 +4,11 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, Request, Response
 
 from umbod.core.callers import CallerSnapshot
-from umbod.core.filesystem.browsing import NodeSummary
+from umbod.core.filesystem.access import CallerNodeSummary
 from umbod.core.filesystem.uploads import UploadService, UploadSession
 
 from .deps import get_filesystem_caller, get_filesystem_uploads, require_filesystem_identity
+from .access import Access
 from .errors import filesystem_errors
 from .models import (
     BeginUploadRequest, SameOriginAuthorization, SingleUploadTransfer, UploadResponse,
@@ -80,15 +81,16 @@ async def put_upload_content(
 
 
 @router.post(
-    "/uploads/{upload_id}/complete", response_model=NodeSummary, status_code=201,
-    responses={**UPLOAD_RESPONSES, 200: {"model": NodeSummary, "description": "Already completed."}},
+    "/uploads/{upload_id}/complete", response_model=CallerNodeSummary, status_code=201,
+    responses={**UPLOAD_RESPONSES, 200: {"model": CallerNodeSummary, "description": "Already completed."}},
 )
 async def complete_upload(
-    upload_id: UUID, request: Request, response: Response, caller: Caller, uploads: Uploads,
-) -> NodeSummary:
+    upload_id: UUID, request: Request, response: Response, caller: Caller, uploads: Uploads, access: Access,
+) -> CallerNodeSummary:
     with filesystem_errors():
         result = await uploads.complete(caller, upload_id)
     response.status_code = 201 if result.created else 200
     base = request.url.path.split("/filesystem", 1)[0] + "/filesystem/nodes/"
     response.headers["Location"] = base + str(result.node.id)
-    return result.node
+    with filesystem_errors():
+        return (await access.enrich_nodes(caller, [result.node]))[0]

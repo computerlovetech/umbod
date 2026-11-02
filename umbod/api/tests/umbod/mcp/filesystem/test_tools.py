@@ -39,11 +39,11 @@ async def test_observed_tools_publish_safe_schemas(filesystem_invocation_mcp: Fi
     assert schema["properties"]["parent_id"]["format"] == "uuid"
     for name, tool in descriptors.items():
         mutation = name.startswith("create_") or name in {
-            "filesystem_upload", "filesystem_delete_file", "filesystem_share", "update_filesystem_node",
+            "filesystem_browse", "filesystem_upload", "filesystem_delete_file", "filesystem_share", "update_filesystem_node",
             "filesystem_begin_upload", "filesystem_complete_upload",
         }
         assert tool.annotations.read_only_hint == (not mutation)
-        assert tool.annotations.idempotent_hint == (not mutation or name in {"filesystem_share", "filesystem_complete_upload"})
+        assert tool.annotations.idempotent_hint == (not mutation or name in {"filesystem_browse", "filesystem_share", "filesystem_complete_upload"})
     assert "content" not in descriptors[CREATE].output_schema["properties"]
     assert "owner" not in descriptors[CREATE].output_schema["properties"]
 
@@ -78,7 +78,7 @@ async def test_creation_is_observed_and_projects_no_storage_keys(
         root = await root_id(client)
         result = await client.call_tool(tool, {"parent_id": root, "name": "empty", "metadata": METADATA})
         assert set(result.structured_content) == {
-            "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision"
+            "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision", "sharing", "permissions", "visible_to"
         }
     assert any(sample.labels["tool_name"] == tool and sample.labels["outcome"] == "success"
                for sample in filesystem_invocation_mcp.metrics.metric_samples())

@@ -12,6 +12,8 @@ description: Byte-preserving uploads coordinated by MCP and transferred over HTT
 
 ## Coordination and transfer
 
+When the user has not chosen a destination, resolve their personal home through the `home` operation of `filesystem_browse` and use its returned node UUID. Inspect caller permissions and distinguish direct policy visibility from manageable sharing. The [homes and permissions reference](filesystem-homes-and-permissions.md) describes safe agent destination selection.
+
 The client computes the local file's exact byte size and, preferably, its SHA-256 programmatically. Begin accepts the existing parent UUID, filename, metadata, declared size, and an optional lowercase hexadecimal `expected_sha256`. It returns an upload identifier, transfer deadline, and raw HTTP PUT instructions. The public API origin must be configured to an address reachable by the client.
 
 The client streams the original file with the returned headers, without redirect following, cookies, or MCP bearer credentials. File bytes do not belong in either MCP tool call. HTTP uploads use the configured filesystem upload limit; the existing inline tool retains its separate 10 MiB ceiling.
@@ -34,7 +36,7 @@ Only one transfer can claim a session at a time. Failed or interrupted transfers
 
 Actual streamed length is enforced independently of HTTP headers. SHA-256 is computed while streaming and retained with the staged content. An expected-checksum mismatch prevents publication and permits another transfer attempt before expiry. Completion does not reread file bytes.
 
-Completion is idempotent while the published file exists, including after the transfer capability expires. A retry returns the persisted receipt and file identity; it cannot restore a deleted file. Legacy sessions without a verified receipt remain compatible with their existing completion interfaces, but the new completion tool does not invent a checksum for them.
+Completion is idempotent while the published file exists, including after the transfer capability expires. A retry returns the persisted receipt and file identity with current permission and visibility metadata; it cannot restore a deleted file. Legacy sessions without a verified receipt remain compatible with their existing completion interfaces, but the new completion tool does not invent a checksum for them.
 
 ## Deployment admission
 

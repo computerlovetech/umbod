@@ -18,6 +18,7 @@ from typing import Any, AsyncIterator
 from unittest.mock import AsyncMock, Mock
 
 from umbod.core.filesystem.browsing import FilesystemBrowsing, NodeSummary
+from umbod.core.filesystem.access import AccessMetadataService, CallerNodeSummary, CallerPermissions, RestrictedVisibility
 from umbod.core.filesystem.models import NodeKind, NodeMetadata, RootParent, Permission, Principal, PrincipalType
 from umbod.core.filesystem.provisioning.models import RootBootstrapGrant, RootBootstrapSpec
 from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSnapshot, DeclaredIssuer, GroupMembership, SubjectIdentity
@@ -124,6 +125,15 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_p
         created_at=datetime(2026, 1, 1, tzinfo=UTC),
         updated_at=datetime(2026, 1, 1, tzinfo=UTC), revision=1,
     ))
+    access = Mock(spec=AccessMetadataService)
+    access.enrich_nodes = AsyncMock(return_value=[CallerNodeSummary(
+        **browsing.get_root.return_value.model_dump(),
+        permissions=CallerPermissions(
+            can_discover=True, can_read=False, can_write=True, can_delete=False, can_share=False,
+        ),
+        visible_to=RestrictedVisibility(type='restricted'),
+    )])
+    monkeypatch.setattr(DatabaseFilesystemServiceFactory, 'access', Mock(return_value=access))
     sharing = Mock(spec=FilesystemSharing)
     sharing.summarize_nodes = AsyncMock(return_value=NodeSharingSummaries(nodes=(
         RestrictedNodeSharingSummary(node_id=browsing.get_root.return_value.id, can_share=False),
@@ -149,6 +159,9 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_p
             forbidden_response = await _post(client, PUBLIC_PATH, _request(7, 'tools/call', {'name': 'get_filesystem_root', 'arguments': {}}))
             forbidden_search = await _post(client, PUBLIC_PATH, _request(8, 'tools/call', {'name': 'filesystem_search_sharing_recipients', 'arguments': {'node_id': '00000000-0000-0000-0000-000000000001', 'query': 'Observed'}}))
     service_factory.assert_called_once_with()
+    access.enrich_nodes.assert_awaited_once_with(
+        browsing.get_root.call_args.args[0], [browsing.get_root.return_value],
+    )
     sharing.summarize_nodes.assert_awaited_once_with(
         browsing.get_root.call_args.args[0], (browsing.get_root.return_value.id,),
     )

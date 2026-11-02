@@ -6,6 +6,8 @@ from .config import (
     FilesystemConfig,
 )
 from .factory import (
+    create_filesystem_homes,
+    create_filesystem_access,
     create_filesystem_browsing,
     create_filesystem_explorer,
     create_filesystem_sharing,
@@ -21,6 +23,8 @@ from .factory import (
 )
 
 __all__ = [
+    "create_filesystem_homes",
+    "create_filesystem_access",
     "create_filesystem_browsing",
     "create_filesystem_explorer",
     "create_filesystem_sharing",

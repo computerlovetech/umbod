@@ -5,7 +5,7 @@ from typing import Any
 import httpx
 from fastmcp import Client
 
-from test_running_filesystem import tool_payload
+from test_running_filesystem import sharing_write_payload, tool_payload
 
 
 async def observed_recipient(client: Client[Any], node_id: str, name: str) -> dict[str, str]:
@@ -27,8 +27,8 @@ async def assert_mcp_user_target_sharing(
 ) -> None:
     target = {"type": "user", "user_id": recipient["user_id"]}
     command = {"node_id": node_id, "recipient": target, "permissions": ["discover", "read"]}
-    assert tool_payload(await alice.call_tool("filesystem_share", command)) == {**command, "changed": True}
-    assert tool_payload(await alice.call_tool("filesystem_share", command)) == {**command, "changed": False}
+    assert sharing_write_payload(await alice.call_tool("filesystem_share", command)) == {**command, "changed": True}
+    assert sharing_write_payload(await alice.call_tool("filesystem_share", command)) == {**command, "changed": False}
     inspected = tool_payload(await alice.call_tool("get_filesystem_node", {"node_id": node_id}))
     assert inspected["sharing"] == {
         "can_share": True,
@@ -37,6 +37,8 @@ async def assert_mcp_user_target_sharing(
     received = tool_payload(await bob.call_tool("get_filesystem_node", {"node_id": node_id}))
     assert received["id"] == node_id
     assert received["sharing"] == {"can_share": False}
+    assert received["permissions"]["can_write"] is False
+    assert received["visible_to"] == {"type": "restricted"}
 
 
 def assert_rest_recipient_scopes(

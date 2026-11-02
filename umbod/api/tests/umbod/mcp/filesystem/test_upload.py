@@ -1,4 +1,5 @@
 import base64
+import json
 from typing import Any
 from uuid import UUID
 
@@ -40,9 +41,13 @@ async def test_upload_publishes_readable_private_content(
         result = await upload(client, parent, content)
     assert not result.is_error
     assert filesystem_invocation_mcp.callers.count == before + 1
-    assert result.content[0].text == "File uploaded successfully."
+    success, rendered = result.content[0].text.split("\n", 1)
+    assert success == "File uploaded successfully."
+    assert json.loads(rendered) == result.structured_content
+    assert json.loads(rendered)["permissions"]["can_write"] is True
+    assert json.loads(rendered)["visible_to"]["type"] == "available"
     assert set(result.structured_content) == {
-        "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision",
+        "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision", "permissions", "visible_to",
     }
     download = await filesystem_invocation_mcp.files.open_download(
         filesystem_invocation_mcp.callers.current.get(), UUID(result.structured_content["id"]),

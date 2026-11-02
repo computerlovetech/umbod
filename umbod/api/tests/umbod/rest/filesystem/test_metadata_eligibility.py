@@ -49,7 +49,9 @@ def test_options_reports_each_operation_independently(
     expected = methods - {"DELETE"} if editable_node["kind"] == "directory" else methods
     assert set(response.headers["allow"].split(", ")) == expected
     assert response.headers["cache-control"] == "no-store"
-    assert client.get(f"{BASE}/nodes/{node_id}").json() == editable_node
+    current = client.get(f"{BASE}/nodes/{node_id}").json()
+    assert {key: value for key, value in current.items() if key != "visible_to"} == {key: value for key, value in editable_node.items() if key != "visible_to"}
+    assert set(current["visible_to"]["grants"][0]["permissions"]) == {permission.value for permission in permissions}
 
 
 def test_owner_options_includes_all_applicable_operations(

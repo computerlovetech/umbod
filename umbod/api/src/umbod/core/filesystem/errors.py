@@ -36,3 +36,7 @@ class RootMutation(Exception):
 
 class StorageFailure(Exception):
     pass
+
+
+class PolicyDecodingFailure(StorageFailure):
+    pass

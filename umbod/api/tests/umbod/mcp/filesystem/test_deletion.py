@@ -107,7 +107,8 @@ async def test_stale_revision_preserves_node_and_policy(filesystem_invocation_mc
         after = await client.call_tool("get_filesystem_node", {"node_id": node_id})
     assert result.is_error
     assert result.content[0].text == "filesystem_revision_conflict: Filesystem revision conflict"
-    assert before.structured_content == after.structured_content
+    assert {key: value for key, value in before.structured_content.items() if key != "visible_to"} == {key: value for key, value in after.structured_content.items() if key != "visible_to"}
+    assert after.structured_content["visible_to"]["grants"] == [grant.model_dump(mode="json")]
     assert await policies.get_owner(UUID(node_id)) == owner
     assert await policies.list_grants(UUID(node_id)) == [grant]
     assert any(sample.labels["tool_name"] == TOOL and sample.labels["outcome"] == "failure"

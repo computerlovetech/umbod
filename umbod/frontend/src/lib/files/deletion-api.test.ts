@@ -56,7 +56,10 @@ describe('file deletion port', (): void => {
     allowed = false;
     await expect(api.filesystem.checkDeleteEligibility(fileId)).rejects.toMatchObject({ status: 403 });
     await expect(api.filesystem.deleteFile(fileId, 2)).rejects.toMatchObject({ status: 403 });
-    expect(await api.filesystem.getNode(fileId)).toEqual(filesystemFixture[2]);
+    expect(await api.filesystem.getNode(fileId)).toEqual({
+      ...filesystemFixture[2],
+      permissions: { ...filesystemFixture[2].permissions, can_delete: false }
+    });
   });
 });
 

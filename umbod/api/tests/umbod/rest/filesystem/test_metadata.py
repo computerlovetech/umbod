@@ -1,3 +1,4 @@
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -127,3 +128,76 @@ def test_root_structural_patch_conflict(
     response = client.patch(f"{BASE}/nodes/{root['id']}", json=patch, headers={"If-Match": f'"{root["revision"]}"'})
     assert response.status_code == 409
     assert client.get(f"{BASE}/browse").json()["node"] == root
+
+
+def test_patch_returns_success_snapshot_despite_grant_revocation_after_commit(
+    filesystem_http: FilesystemHttp, described_node: dict[str, object],
+) -> None:
+    from uuid import UUID
+
+    from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
+    from umbod.core.filesystem.authorization import VerifiedIdentityResolver
+    from umbod.core.filesystem.updates import FilesystemNodeUpdates, NodeUpdateService
+    from umbod.infrastructure import create_access_control_driver, create_filesystem_transactions
+    from umbod.rest.filesystem.deps import get_filesystem_updates
+    from tests.support.filesystem.access_snapshots import RevokeAfterCommitTransactions
+
+    database = filesystem_http.factories.persistence_runtime.database
+    node_id = UUID(str(described_node["id"]))
+    principal = Principal(type=PrincipalType.USER, issuer="issuer", id="bob")
+    policies = create_access_control_driver(database=database)
+    filesystem_http.client.portal.call(policies.add_grant, AccessGrant(
+        node_id=node_id, principal=principal, permissions={Permission.DISCOVER, Permission.WRITE}, recursive=False,
+    ))
+    updates = NodeUpdateService(VerifiedIdentityResolver(), RevokeAfterCommitTransactions(
+        create_filesystem_transactions(database=database), policies, node_id, principal,
+    ))
+
+    def provide_updates() -> FilesystemNodeUpdates:
+        return updates
+
+    filesystem_http.app.dependency_overrides[get_filesystem_updates] = provide_updates
+    path = f"{BASE}/nodes/{node_id}"
+    response = filesystem_http.client.patch(
+        path, json={"name": "committed"},
+        headers={"Authorization": "Bearer bob", "If-Match": f'"{described_node["revision"]}"'},
+    )
+    assert response.status_code == 200
+    assert response.json()["name"] == "committed"
+    assert response.json()["revision"] == described_node["revision"] + 1
+    assert response.json()["permissions"]["can_write"] is True
+    assert response.json()["visible_to"] == {"type": "restricted"}
+    assert response.headers["etag"] == f'"{described_node["revision"] + 1}"'
+    assert filesystem_http.client.get(path, headers={"Authorization": "Bearer bob"}).status_code == 403
+
+
+def test_owner_patch_with_sqlite_corrupt_policy_returns_committed_unavailable_snapshot(
+    filesystem_http: FilesystemHttp, tmp_path: Path,
+) -> None:
+    from uuid import UUID
+
+    from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
+    from umbod.infrastructure import create_access_control_driver
+    from tests.support.filesystem.access_snapshots import corrupt_stored_grant
+
+    client = filesystem_http.client
+    home = client.post(BASE + "/home").json()
+    grant = AccessGrant(
+        node_id=UUID(home["id"]), principal=Principal(type=PrincipalType.USER, issuer="issuer", id="bob"),
+        permissions={Permission.DISCOVER, Permission.WRITE}, recursive=False,
+    )
+    policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
+    client.portal.call(policies.add_grant, grant)
+    corrupt_stored_grant(tmp_path / "filesystem.sqlite", grant)
+    path = f"{BASE}/nodes/{home['id']}"
+    inspected = client.get(path)
+    assert inspected.status_code == 200
+    assert inspected.json()["visible_to"] == {"type": "unavailable"}
+    response = client.patch(path, json={"name": "renamed"}, headers={"If-Match": f'"{home["revision"]}"'})
+    assert response.status_code == 200
+    assert response.json()["name"] == "renamed"
+    assert response.json()["revision"] == home["revision"] + 1
+    assert response.json()["permissions"]["can_write"] is True
+    assert response.json()["permissions"]["can_share"] is True
+    assert response.json()["visible_to"] == {"type": "unavailable"}
+    assert client.get(path).json() == response.json()

@@ -13,6 +13,7 @@ FILESYSTEM_DISCOVERY_CHANGED = "filesystem.discovery_changed"
 
 
 class FilesystemOperation(StrEnum):
+    HOME = "home"
     INSPECT = "inspect"
     INSPECT_ROOT = "inspect_root"
     LIST = "list"
@@ -81,7 +82,7 @@ def permitted_operations(
     for grant in snapshot.grants:
         grants.setdefault(grant.node_id, []).append(grant)
     principals = identity.principals
-    operations: set[FilesystemOperation] = set()
+    operations: set[FilesystemOperation] = {FilesystemOperation.HOME}
     for node in snapshot.nodes:
         permissions = effective_permissions(
             principals, node.node_id, ownerships.get(node.node_id, ()),

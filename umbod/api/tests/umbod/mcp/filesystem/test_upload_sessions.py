@@ -1,4 +1,5 @@
 import hashlib
+import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID
@@ -11,9 +12,9 @@ from mcp.types import ResourceLink
 from tests.persistence_runtime import prepared_sqlite_runtime
 from umbod.config import AppConfig
 from umbod.core.callers import AuthenticationProvenance
-from umbod.core.filesystem import ByteStream, Permission, Principal, PrincipalType, RootBootstrapGrant, RootBootstrapSpec
+from umbod.core.filesystem import AccessGrant, ByteStream, Permission, Principal, PrincipalType, RootBootstrapGrant, RootBootstrapSpec
 from umbod.core.filesystem.namespace import ROOT_ID
-from umbod.infrastructure import LocalContentConfig, create_content_driver, create_root_provisioning
+from umbod.infrastructure import LocalContentConfig, create_content_driver, create_root_provisioning, create_access_control_driver
 from umbod.mcp.filesystem.factory import DatabaseFilesystemServiceFactory
 from umbod.mcp.filesystem.upload_sessions import FilesystemBeginUploadTool, FilesystemCompleteUploadTool
 from umbod.rest.main import create_app
@@ -47,7 +48,24 @@ async def test_begin_complete_resource_link_and_owner_isolation(filesystem_invoc
         assert retry.structured_content == complete.structured_content
         assert complete.structured_content["sha256"] == hashlib.sha256(b"x").hexdigest()
         assert complete.structured_content["size_bytes"] == 1
+        rendered = json.loads(complete.content[0].text)
+        assert rendered == complete.structured_content
+        assert rendered["node"]["permissions"]["can_write"] is True
+        assert rendered["node"]["visible_to"]["type"] == "available"
         assert "sharing" in complete.structured_content["node"]
+        assert complete.structured_content["node"]["visible_to"]["grants"] == []
+        policies = create_access_control_driver(database=filesystem.database)
+        grant = AccessGrant(
+            node_id=UUID(complete.structured_content["node"]["id"]),
+            principal=Principal(type=PrincipalType.USER, issuer="foreign", id="unregistered"),
+            permissions={Permission.READ}, recursive=True,
+        )
+        await policies.add_grant(grant)
+        current = await client.call_tool("filesystem_complete_upload", {"upload_id": data["upload_id"]})
+        assert current.structured_content["node"]["visible_to"]["grants"] == [grant.model_dump(mode="json")]
+        assert current.structured_content["node"]["sharing"]["grants"] == []
+        assert current.structured_content["node"]["id"] == complete.structured_content["node"]["id"]
+        assert current.structured_content["sha256"] == complete.structured_content["sha256"]
         assert any(isinstance(block, ResourceLink) for block in complete.content)
         filesystem.callers.current.set(caller_snapshot(
             "bob", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED,

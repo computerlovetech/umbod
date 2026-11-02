@@ -5,7 +5,7 @@ import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/p
 import { FilesApi } from './infrastructure/files-api';
 import { InMemoryNodeSharing } from './infrastructure/in-memory-sharing.test-support';
 import { fileId } from './fixtures.test-support';
-import { nodeAccessSchema, replaceAccessSchema, type NodeAccess, type ReplaceAccess, type SharingRecipientType } from './domain/sharing';
+import { nodeAccessSchema, nodeAccessWriteSchema, replaceAccessSchema, type NodeAccessWrite, type NodeAccess, type ReplaceAccess, type SharingRecipientType } from './domain/sharing';
 
 const configuration = new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' });
 const view: NodeAccess = { node_id: fileId, revision: 'opaque-abc123', grants: [{ recipient: { type: 'group', group_id: ' Team A ', label: 'Team A' }, permissions: ['discover', 'share'] }], blocked_recipients: [{ type: 'group', group_id: 'blocked' }] };
@@ -48,7 +48,7 @@ describe('node sharing adapters', (): void => {
 
   test('HTTP writes user targets without labels and rejects invalid or missing scope before transport', async (): Promise<void> => {
     const result: NodeAccess = { ...view, grants: [{ recipient: { type: 'user', user_id: 'user-a', label: 'Person A' }, permissions: ['read'] }], blocked_recipients: [] };
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json(result));
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ ...result, visible_to: { type: 'unavailable' } }));
     const api = new FilesApi(browserTransport({ fetch, configuration }));
     for (const invalid of [undefined, '', 'other', 'group&recipient_type=user']) {
       expect(() => api.sharing.replaceAccess(fileId, view.revision, { grants: [] }, invalid as SharingRecipientType)).toThrow(SchemaValidationError);
@@ -86,7 +86,7 @@ describe('node sharing adapters', (): void => {
   });
 
   test('HTTP sends only groups with strong opaque conditional JSON and reads the node-scoped catalogue', async (): Promise<void> => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(Response.json(view)).mockResolvedValueOnce(Response.json({ groups: [{ group_id: ' Team A ', label: 'Friendly', description: 'Exact provider group' }] })).mockResolvedValueOnce(Response.json({ ...view, revision: 'new-hash' }));
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(Response.json(view)).mockResolvedValueOnce(Response.json({ groups: [{ group_id: ' Team A ', label: 'Friendly', description: 'Exact provider group' }] })).mockResolvedValueOnce(Response.json({ ...view, revision: 'new-hash', visible_to: { type: 'unavailable' } }));
     const api = new FilesApi(browserTransport({ fetch, configuration }));
     const signal = new AbortController().signal;
     expect(await api.sharing.inspectAccess(fileId, 'group', signal)).toEqual(view);
@@ -96,6 +96,34 @@ describe('node sharing adapters', (): void => {
     expect(fetch.mock.calls[1][0]).toBe('/api/me/filesystem/nodes/' + fileId + '/access/eligible-groups');
     expect(fetch.mock.calls[2][0]).toBe('/api/me/filesystem/nodes/' + fileId + '/access?recipient_type=group');
     expect(fetch.mock.calls[2][1]).toMatchObject({ redirect: 'error', method: 'PUT', headers: { 'If-Match': '"opaque-abc123"', 'content-type': 'application/json' }, body: JSON.stringify({ grants: [{ recipient: { type: 'group', group_id: ' Team A ' }, permissions: ['discover', 'share'] }] }) });
+  });
+
+  test.each([
+    { type: 'restricted' },
+    { type: 'unavailable' },
+    { type: 'available', scope: 'direct_node_policy', owner: { type: 'user', issuer: 'https://identity.test', id: 'owner' }, grants: [], group_members_expanded: false }
+  ] satisfies NodeAccessWrite['visible_to'][])('validates write visibility without changing the read port contract %j', async (visible_to): Promise<void> => {
+    const response = { ...view, visible_to };
+    expect(nodeAccessWriteSchema.parse(response)).toEqual(response);
+    expect(nodeAccessSchema.safeParse(response).success).toBe(false);
+    const fetch = vi.fn<typeof globalThis.fetch>().mockImplementation(async (): Promise<Response> => Response.json(response));
+    const api = new FilesApi(browserTransport({ fetch, configuration }));
+    expect(await api.sharing.replaceAccess(fileId, view.revision, { grants: [] }, 'group')).toEqual(view);
+    await expect(api.sharing.inspectAccess(fileId)).rejects.toMatchObject({ direction: 'inbound' });
+  });
+
+  test.each([
+    view,
+    { ...view, visible_to: null },
+    { ...view, visible_to: { type: 'unknown' } },
+    { ...view, visible_to: { type: 'restricted', grants: [] } },
+    { ...view, visible_to: { type: 'available', scope: 'direct_node_policy', owner: { type: 'user', issuer: 'issuer', id: 'owner' }, grants: [], group_members_expanded: true } },
+    { ...view, visible_to: { type: 'unavailable' }, unexpected: true }
+  ])('rejects missing or malformed write visibility and unknown fields %j', async (response): Promise<void> => {
+    expect(nodeAccessWriteSchema.safeParse(response).success).toBe(false);
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json(response));
+    const api = new FilesApi(browserTransport({ fetch, configuration }));
+    await expect(api.sharing.replaceAccess(fileId, view.revision, { grants: [] }, 'group')).rejects.toMatchObject({ direction: 'inbound' });
   });
 
   test.each(['*', 'W/"opaque"', '"one", "two"', '"bad\r\nvalue"', '"bad\u0000value"', '"bad\u007fvalue"', '""', 'unquoted', '"unterminated'])('blocks malformed If-Match %j before any fetch for JSON and absent bodies', async (tag): Promise<void> => {

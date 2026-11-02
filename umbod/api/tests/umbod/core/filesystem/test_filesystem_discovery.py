@@ -61,14 +61,14 @@ def snapshot(
         (NodeKind.FILE, frozenset(), frozenset()),
         (NodeKind.FILE, frozenset({Permission.READ}), frozenset()),
         (NodeKind.FILE, frozenset({Permission.DISCOVER}), frozenset({FilesystemOperation.INSPECT})),
-        (NodeKind.FILE, frozenset(Permission), frozenset({FilesystemOperation.INSPECT, FilesystemOperation.READ, FilesystemOperation.DELETE, FilesystemOperation.SHARE, FilesystemOperation.UPDATE_METADATA})),
+        (NodeKind.FILE, frozenset(Permission), frozenset({FilesystemOperation.HOME, FilesystemOperation.INSPECT, FilesystemOperation.READ, FilesystemOperation.DELETE, FilesystemOperation.SHARE, FilesystemOperation.UPDATE_METADATA})),
         (NodeKind.DIRECTORY, frozenset(Permission), frozenset({FilesystemOperation.INSPECT, FilesystemOperation.LIST, FilesystemOperation.CREATE, FilesystemOperation.SHARE, FilesystemOperation.UPDATE_METADATA})),
     ],
 )
 def test_operations_require_discovery_and_matching_kind(
     kind: NodeKind, permissions: frozenset[Permission], expected: frozenset[FilesystemOperation]
 ) -> None:
-    assert permitted_operations(snapshot(uuid4(), kind, permissions), identity()) == expected
+    assert permitted_operations(snapshot(uuid4(), kind, permissions), identity()) == expected | {FilesystemOperation.HOME}
 
 
 def test_only_canonical_root_authorizes_inspect_root() -> None:
@@ -81,7 +81,7 @@ def test_missing_nodes_and_unowned_nodes_are_denied(absent: str) -> None:
     projection = snapshot(uuid4(), NodeKind.FILE, frozenset(Permission))
     values = projection.model_dump()
     values[absent] = ()
-    assert not permitted_operations(FilesystemAuthorizationSnapshot.model_validate(values), identity())
+    assert permitted_operations(FilesystemAuthorizationSnapshot.model_validate(values), identity()) == {FilesystemOperation.HOME}
 
 
 def test_owner_has_all_permissions_without_grants() -> None:
@@ -92,7 +92,7 @@ def test_owner_has_all_permissions_without_grants() -> None:
         grants=(),
     )
     assert permitted_operations(projection, identity()) == frozenset({
-        FilesystemOperation.INSPECT, FilesystemOperation.READ,
+        FilesystemOperation.HOME, FilesystemOperation.INSPECT, FilesystemOperation.READ,
         FilesystemOperation.DELETE, FilesystemOperation.SHARE, FilesystemOperation.UPDATE_METADATA,
     })
 
@@ -129,7 +129,7 @@ def test_unrelated_grants_cannot_supply_required_permission(component: str) -> N
             permissions=frozenset({Permission.READ}), recursive=True,
         ),),
     )
-    assert permitted_operations(projection, identity()) == frozenset({FilesystemOperation.INSPECT})
+    assert permitted_operations(projection, identity()) == frozenset({FilesystemOperation.HOME, FilesystemOperation.INSPECT})
 
 
 def test_snapshot_is_deeply_immutable_and_rejects_duplicate_nodes() -> None:

@@ -13,7 +13,7 @@ from .errors import filesystem_operation
 from .links import file_link_result
 from .models import FilesystemNodeSummary
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
-from .sharing import enrich_nodes
+from .sharing import enrich_projected_nodes
 
 
 class UpdateNodeCommand(NodeChanges):
@@ -33,7 +33,8 @@ class FilesystemUpdateNodeTool(Tool):
                 "Omitted fields, bytes, ownership and grants are preserved. Requires discover and write on the item; "
                 "moving also requires discover and write on both current and destination directories. "
                 "Root metadata may change, but root cannot be renamed or moved. "
-                "An empty attributes.description clears the description. Returns current file resource links."
+                "An empty attributes.description clears the description. Returns current file resource links. "
+                "Permissions and visibility reflect the committed update transaction; later policy changes require fresh inspection."
             ),
             parameters=UpdateNodeCommand.model_json_schema(),
             output_schema=FilesystemNodeSummary.model_json_schema(),
@@ -54,5 +55,5 @@ class FilesystemUpdateNodeTool(Tool):
             node = await self._services.updates().update_node(
                 caller, command.node_id, command.to_core_patch(), expected_revision=command.expected_revision,
             )
-            result = (await enrich_nodes(self._services.sharing(), caller, [node]))[0]
+            result = (await enrich_projected_nodes(self._services.sharing(), caller, [node]))[0]
             return file_link_result(result, [result], result.model_dump_json())

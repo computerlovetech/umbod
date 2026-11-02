@@ -11,7 +11,12 @@ from umbod.core.filesystem.sharing import (
     ShareNodePolicy, SharingRecipientType, SharingScope,
 )
 
-from .deps import get_filesystem_caller, get_filesystem_sharing
+from umbod.core.filesystem.access import Visibility, RestrictedVisibility
+from umbod.core.filesystem.authorization import PermissionDenied
+from umbod.core.filesystem.browsing import FilesystemBrowsing
+
+from .access import Access
+from .deps import get_filesystem_caller, get_filesystem_sharing, get_filesystem_browsing
 from .errors import filesystem_errors
 
 router = APIRouter()
@@ -22,6 +27,10 @@ RECIPIENT_QUERY = {
     "name": "recipient_type", "in": "query",
     "schema": {"type": "string", "enum": ["group", "user"]},
 }
+
+
+class NodePolicyWriteView(NodePolicyView):
+    visible_to: Visibility
 
 
 class ReplaceNodeAccessRequest(BaseModel):
@@ -93,7 +102,7 @@ async def inspect_access(
 
 
 @router.put(
-    "/nodes/{node_id}/access", response_model=NodePolicyView,
+    "/nodes/{node_id}/access", response_model=NodePolicyWriteView,
     openapi_extra={"parameters": [{
         **RECIPIENT_QUERY, "required": True,
         "description": "Replace only this recipient type; preserve all other and protected grants.",
@@ -112,7 +121,8 @@ async def replace_access(
     node_id: UUID, body: ReplaceNodeAccessRequest, caller: Caller, sharing: Sharing,
     response: Response, revision: Annotated[str, Depends(expected_sharing_revision)],
     recipient_type: Annotated[SharingRecipientType, Depends(required_recipient_type)],
-) -> NodePolicyView:
+    access: Access, browsing: Annotated[FilesystemBrowsing, Depends(get_filesystem_browsing)],
+) -> NodePolicyWriteView:
     try:
         command = ReplaceNodePolicy(
             expected_revision=revision, recipient_type=recipient_type, grants=body.grants,
@@ -124,5 +134,11 @@ async def replace_access(
         }]) from None
     with filesystem_errors():
         view = await sharing.replace(caller, node_id, command)
+        try:
+            node = await browsing.get_node(caller, node_id)
+            visible_to = (await access.enrich_nodes(caller, [node]))[0].visible_to
+        except PermissionDenied:
+            visible_to = RestrictedVisibility(type="restricted")
+        view = NodePolicyWriteView(**view.model_dump(), visible_to=visible_to)
     response.headers["ETag"] = f'"{view.revision}"'
     return view

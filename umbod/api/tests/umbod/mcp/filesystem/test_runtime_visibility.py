@@ -5,7 +5,7 @@ import pytest
 
 from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages
 from umbod.core.filesystem import Principal, PrincipalType
-from umbod.core.filesystem.authorization import FilesystemAuthorizationReader
+from umbod.core.filesystem.authorization import FilesystemAuthorizationReader, FilesystemOperation
 from umbod.core.filesystem.namespace import ROOT_ID
 from umbod.infrastructure import create_access_control_driver
 from umbod.mcp.filesystem.authorization import FilesystemToolVisibility
@@ -27,13 +27,13 @@ async def test_failed_or_cancelled_refresh_hides_populated_runtime_until_recover
     reader.read = AsyncMock(side_effect=[snapshot, failure, snapshot])
     runtime = FilesystemDiscoveryRuntime(reader)
     visibility = FilesystemToolVisibility(filesystem_mcp.callers, runtime)
-    assert await visibility.capture() == frozenset()
+    assert await visibility.capture() == frozenset({FilesystemOperation.HOME})
     await runtime.reconcile()
     permitted = await visibility.capture()
     assert permitted
     with pytest.raises(type(failure)):
         await runtime.reconcile()
-    assert await visibility.capture() == frozenset()
+    assert await visibility.capture() == frozenset({FilesystemOperation.HOME})
     await runtime.reconcile()
     assert await visibility.capture() == permitted
 
@@ -59,7 +59,7 @@ async def test_committed_policy_event_refreshes_public_discovery_through_databas
     await revoke_bootstrap(filesystem_mcp)
     assert await listed_tools(filesystem_mcp) == BOOTSTRAP_TOOLS
     assert await synchronizer.poll_once()
-    assert await listed_tools(filesystem_mcp) == set()
+    assert await listed_tools(filesystem_mcp) == {"filesystem_browse"}
     assert health.ready
 
 
@@ -85,4 +85,4 @@ async def test_real_policy_change_during_bootstrap_hydration_is_replayed_before_
     await synchronizer.bootstrap()
     assert reconciliations == 2
     assert health.ready
-    assert await listed_tools(filesystem_mcp) == set()
+    assert await listed_tools(filesystem_mcp) == {"filesystem_browse"}

@@ -18,6 +18,8 @@ from .browsing_models import (
     FilesystemNodeInspection,
     FilesystemTreeEntry,
     InspectNode,
+    ResolveHome,
+    HomeResponse,
     NodeInspectionResponse,
     ReadTree,
     browse_input_schema,
@@ -38,6 +40,10 @@ class FilesystemBrowseTool(Tool):
             name="filesystem_browse",
             description=(
                 "Browse the remote Umbod filesystem, not the server host. "
+                "For an upload it to Umbod request, use targetless operation home to resolve the safe default. "
+                "Home idempotently provisions your private home; use returned node.id as upload parent. "
+                "Inspect permissions.can_write and visible_to, begin an original-byte upload, transfer and complete it, "
+                "then report the receipt and visibility. Never invent paths, UUIDs or hashes. "
                 "Declare ls for immediate entries, tree for a bounded recursive overview, "
                 "or stat for node details. Target root, an absolute path, or a node UUID. "
                 "No working directory or shell execution. Only discoverable nodes are returned; "
@@ -49,7 +55,7 @@ class FilesystemBrowseTool(Tool):
             parameters=browse_input_schema(),
             output_schema={"type": "object", **BROWSE_RESPONSE.json_schema()},
             annotations=ToolAnnotations(
-                readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=False,
+                readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False,
             ),
         )
         self._callers = callers
@@ -63,9 +69,16 @@ class FilesystemBrowseTool(Tool):
         with filesystem_operation():
             caller = self._callers.capture()
             explorer = BrowsingExplorer(self._services.browsing())
-            if isinstance(command, InspectNode):
+            if isinstance(command, ResolveHome):
+                node = await self._services.homes().get_or_provision(caller)
+                nodes = await enrich_nodes(self._services.sharing(), caller, [node], self._services.access())
+                breadcrumbs = await self._services.browsing().get_breadcrumbs(caller, node.id)
+                inspection = FilesystemNodeInspection(node=nodes[0], breadcrumbs=breadcrumbs)
+                response = HomeResponse(operation="home", result=inspection)
+                rendered = render_inspection(inspection)
+            elif isinstance(command, InspectNode):
                 inspection = await explorer.inspect_node(caller, command.target)
-                nodes = await enrich_nodes(self._services.sharing(), caller, [inspection.node])
+                nodes = await enrich_nodes(self._services.sharing(), caller, [inspection.node], self._services.access())
                 inspection = FilesystemNodeInspection(node=nodes[0], breadcrumbs=inspection.breadcrumbs)
                 response = NodeInspectionResponse(operation="stat", result=inspection)
                 rendered = render_inspection(inspection)
@@ -74,7 +87,7 @@ class FilesystemBrowseTool(Tool):
                     caller, command.target, TreeLimits(depth=command.depth, max_entries=command.max_entries),
                 )
                 nodes = await enrich_nodes(
-                    self._services.sharing(), caller, [tree.node, *(entry.node for entry in tree.entries)],
+                    self._services.sharing(), caller, [tree.node, *(entry.node for entry in tree.entries)], self._services.access(),
                 )
                 tree = FilesystemDirectoryTree(
                     node=nodes[0], breadcrumbs=tree.breadcrumbs, expansion=tree.expansion,
@@ -89,7 +102,7 @@ class FilesystemBrowseTool(Tool):
                     caller, command.target, ListingLimits(max_entries=command.max_entries),
                 )
                 nodes = await enrich_nodes(
-                    self._services.sharing(), caller, [listing.node, *listing.entries],
+                    self._services.sharing(), caller, [listing.node, *listing.entries], self._services.access(),
                 )
                 listing = FilesystemDirectoryListing(
                     node=nodes[0], breadcrumbs=listing.breadcrumbs,

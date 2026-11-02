@@ -6,8 +6,10 @@ from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ToolAnnotations
 from pydantic import PrivateAttr, TypeAdapter
 
+from umbod.core.filesystem.access import RestrictedVisibility
+from umbod.core.filesystem.authorization import PermissionDenied
 from umbod.core.filesystem.sharing import (
-    GroupSharingTarget, ShareNodePolicy, ShareNodeResult, SharingRecipientSearchQuery,
+    GroupSharingTarget, ShareNodePolicy, SharingRecipientSearchQuery,
     SharingRecipientSearchResult, SharingScope,
 )
 
@@ -15,7 +17,7 @@ from .errors import filesystem_operation
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
 from .sharing_models import (
     SEARCH_RECIPIENTS_COMMAND, SHARE_COMMAND, FilteredSearchSharingRecipientsCommand,
-    LegacyShareNodeGroupResult, ShareNodeGroupCommand,
+    LegacyShareNodeGroupResult, ShareNodeGroupCommand, CallerShareNodeResult,
 )
 
 
@@ -85,7 +87,7 @@ class FilesystemShareTool(Tool):
                 "Legacy top-level group_id requests retain their original response shape."
             ),
             parameters={"type": "object", **SHARE_COMMAND.json_schema()},
-            output_schema={"type": "object", **TypeAdapter(ShareNodeResult | LegacyShareNodeGroupResult).json_schema()},
+            output_schema={"type": "object", **TypeAdapter(CallerShareNodeResult | LegacyShareNodeGroupResult).json_schema()},
             annotations=ToolAnnotations(
                 readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False,
             ),
@@ -106,10 +108,16 @@ class FilesystemShareTool(Tool):
             )
             policy = ShareNodePolicy(recipient=recipient, permissions=command.permissions)
             result = await self._services.sharing().share(snapshot, command.node_id, policy)
+            try:
+                node = await self._services.browsing().get_node(snapshot, command.node_id)
+                visible_to = (await self._services.access().enrich_nodes(snapshot, [node]))[0].visible_to
+            except PermissionDenied:
+                visible_to = RestrictedVisibility(type="restricted")
+            result = CallerShareNodeResult(**result.model_dump(), visible_to=visible_to)
             if isinstance(command, ShareNodeGroupCommand):
                 result = LegacyShareNodeGroupResult(
                     node_id=result.node_id, group_id=command.group_id,
-                    permissions=result.permissions, changed=result.changed,
+                    permissions=result.permissions, changed=result.changed, visible_to=visible_to,
                 )
             return ToolResult(
                 content=result.model_dump_json(),

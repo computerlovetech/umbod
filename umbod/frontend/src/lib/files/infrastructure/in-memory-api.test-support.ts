@@ -1,3 +1,4 @@
+import { filesystemNode } from '../fixtures.test-support';
 import { InMemoryNodeSharing } from './in-memory-sharing.test-support';
 import type { FilesApi, FilesystemApi } from '../api';
 import { browseResultSchema, type BrowseResult, updateNodeSchema, type UpdateNode, updateDescriptionSchema, type UpdateDescription, breadcrumbsSchema, type Breadcrumbs, type BreadcrumbItem, fileRevisionSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, beginUploadSchema, uploadSessionSchema, rawUploadSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
@@ -43,7 +44,7 @@ export class InMemoryFilesystem implements FilesystemApi {
     const node = this.nodes.get(nodeIdSchema.parse(id));
     if (!node) throw new HttpError(404, 'Not found', {});
     if (!this.canRead(node)) throw new HttpError(403, 'Forbidden', {});
-    return nodeSummarySchema.parse(node);
+    return this.summarize(node);
   };
 
   getBreadcrumbs = async (id: string, signal?: AbortSignal): Promise<Breadcrumbs> => {
@@ -70,7 +71,7 @@ export class InMemoryFilesystem implements FilesystemApi {
     const parent = await this.getNode(parentId, signal);
     signal?.throwIfAborted();
     if (parent.kind !== 'directory') throw new HttpError(400, 'Not a directory', {});
-    return Array.from(this.nodes.values()).filter((node) => node.parent_id === parentId && this.canRead(node)).map((node) => nodeSummarySchema.parse(node));
+    return Array.from(this.nodes.values()).filter((node) => node.parent_id === parentId && this.canRead(node)).map((node) => this.summarize(node));
   };
 
   checkDescriptionEligibility = (id: string, signal?: AbortSignal): Promise<void> => this.checkUpdateEligibility(id, signal);
@@ -118,7 +119,7 @@ export class InMemoryFilesystem implements FilesystemApi {
     }
     const updated = nodeSummarySchema.parse({ ...node, name, parent_id, metadata: { content_type: body.metadata?.content_type ?? node.metadata.content_type, attributes }, revision: node.revision + 1, updated_at: new Date().toISOString() });
     this.nodes.set(id, updated);
-    return nodeSummarySchema.parse(updated);
+    return this.summarize(updated);
   };
 
   checkDeleteEligibility = async (id: string, signal?: AbortSignal): Promise<void> => {
@@ -166,13 +167,13 @@ export class InMemoryFilesystem implements FilesystemApi {
     const record = this.uploadRecord(uploadSessionSchema.parse(session).id);
     if (record.node) {
       if (!this.nodes.has(record.node.id)) throw new HttpError(403, 'Forbidden', {});
-      return nodeSummarySchema.parse(record.node);
+      return this.summarize(record.node);
     }
     if (record.bytes === undefined) throw new HttpError(409, 'Content missing', {});
     const children = await this.listChildren(record.parentId);
     if (children.some((node) => node.name === record.input.name)) throw new HttpError(409, 'Conflict', { detail: { code: 'filesystem_name_collision' } });
     const timestamp = new Date().toISOString();
-    const node = nodeSummarySchema.parse({
+    const node = filesystemNode({
       id: crypto.randomUUID(), parent_id: record.parentId, name: record.input.name, kind: 'file',
       metadata: record.input.metadata, created_at: timestamp, updated_at: timestamp, revision: 1
     });
@@ -180,7 +181,7 @@ export class InMemoryFilesystem implements FilesystemApi {
     this.content.set(node.id, record.bytes);
     record.node = node;
     record.session = { ...record.session, status: 'completed' };
-    return nodeSummarySchema.parse(node);
+    return this.summarize(node);
   };
 
   readContent = async (id: string): Promise<Uint8Array> => {
@@ -223,13 +224,26 @@ export class InMemoryFilesystem implements FilesystemApi {
     const children = await this.listChildren(parentId);
     if (children.some((node) => node.name === body.name)) throw new HttpError(409, 'Conflict', { detail: { code: 'filesystem_name_collision' } });
     const timestamp = new Date().toISOString();
-    const node = nodeSummarySchema.parse({
+    const node = filesystemNode({
       id: crypto.randomUUID(), parent_id: parentId, name: body.name, kind: 'directory',
       metadata: body.metadata, created_at: timestamp, updated_at: timestamp, revision: 1
     });
     this.nodes.set(node.id, node);
-    return nodeSummarySchema.parse(node);
+    return this.summarize(node);
   };
+
+  private summarize(node: NodeSummary): NodeSummary {
+    return nodeSummarySchema.parse({
+      ...node,
+      permissions: {
+        can_discover: this.canRead(node),
+        can_read: this.canRead(node),
+        can_write: this.canWrite(node),
+        can_delete: this.canDelete(node),
+        can_share: this.canShare(node.id)
+      }
+    });
+  }
 }
 
 export class InMemoryFilesApi implements FilesApi {

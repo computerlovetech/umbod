@@ -117,7 +117,7 @@ class FilesystemCompleteUploadTool(Tool):
             result = await self._services.upload_sessions().complete_verified(caller, command.upload_id)
             if not isinstance(result.receipt, VerifiedReceipt):
                 raise UploadReceiptUnavailable()
-            node = (await enrich_nodes(self._services.sharing(), caller, [result.node]))[0]
+            node = (await enrich_nodes(self._services.sharing(), caller, [result.node], self._services.access()))[0]
             response = CompleteUploadResult(
                 node=node, size_bytes=result.receipt.size_bytes, sha256=result.receipt.sha256,
             )

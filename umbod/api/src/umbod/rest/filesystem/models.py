@@ -6,7 +6,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from umbod.core.filesystem import NodeMetadata
-from umbod.core.filesystem.browsing import NodeSummary
+from umbod.core.filesystem.access import CallerNodeSummary
 
 
 HTTP_TOKEN = re.compile(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+")
@@ -93,4 +93,4 @@ class UploadResponse(BaseModel):
 class ChildrenResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    nodes: list[NodeSummary]
+    nodes: list[CallerNodeSummary]

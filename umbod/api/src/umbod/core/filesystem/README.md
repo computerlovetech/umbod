@@ -7,6 +7,8 @@ description: "Storage-independent filesystem operations with separate authorizat
 # Files
 
 - [__init__.py](./__init__.py) — Public module exports.
+- [access/](./access/README.md) — Fresh caller rights and direct policy visibility independent of manageable sharing.
+- [homes/](./homes/README.md) — Stable private caller homes without root discovery or write grants.
 - [administration/](./administration/README.md) — Trusted root group policy editing.
 - [authorization/](./authorization/README.md) — Identity resolution and permission decisions.
 - [browsing/](./browsing/README.md) — Caller-aware summaries, bounded exploration and transaction-consistent visible breadcrumbs.

@@ -185,3 +185,37 @@ async def test_root_cannot_be_renamed_or_moved(filesystem_invocation_mcp: Filesy
             assert result.is_error
         current = await client.call_tool("get_filesystem_node", {"node_id": root})
         assert current.structured_content["revision"] == 1
+
+
+@pytest.mark.asyncio
+async def test_update_returns_committed_access_snapshot_after_writer_grant_revocation(
+    filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from umbod.core.filesystem import Principal, PrincipalType
+    from umbod.core.filesystem.authorization import VerifiedIdentityResolver
+    from umbod.core.filesystem.updates import NodeUpdateService
+    from umbod.infrastructure import create_access_control_driver, create_filesystem_transactions
+    from tests.support.filesystem.access_snapshots import RevokeAfterCommitTransactions
+
+    filesystem = filesystem_invocation_mcp
+    node_id = await private_node(filesystem, "directory")
+    await grant(filesystem, node_id, "bob", {Permission.DISCOVER, Permission.WRITE})
+    policies = create_access_control_driver(database=filesystem.database)
+    transactions = RevokeAfterCommitTransactions(
+        create_filesystem_transactions(database=filesystem.database), policies, node_id,
+        Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob"),
+    )
+    updates = NodeUpdateService(VerifiedIdentityResolver(), transactions)
+    monkeypatch.setattr(filesystem.services, "updates", lambda: updates)
+    select_caller(filesystem, "bob")
+    async with Client(filesystem.server) as client:
+        result = await client.call_tool(TOOL, {
+            "node_id": str(node_id), "expected_revision": 1, "name": "committed",
+        })
+        assert result.structured_content["name"] == "committed"
+        assert result.structured_content["revision"] == 2
+        assert result.structured_content["permissions"]["can_write"] is True
+        assert result.structured_content["visible_to"] == {"type": "restricted"}
+        assert result.structured_content["sharing"] == {"can_share": False}
+        denied = await client.call_tool("get_filesystem_node", {"node_id": str(node_id)}, raise_on_error=False)
+        assert denied.is_error

@@ -5,7 +5,8 @@ from fastapi import APIRouter, Depends, Response
 
 from umbod.core.callers import CallerSnapshot
 from umbod.core.filesystem.authorization import PermissionDenied
-from umbod.core.filesystem.browsing import FilesystemBrowsing, NodeSummary
+from umbod.core.filesystem.browsing import FilesystemBrowsing
+from umbod.core.filesystem.access import CallerNodeSummary
 from umbod.core.filesystem.deletion import FilesystemDeletion
 from umbod.core.filesystem.errors import WrongNodeKind
 from umbod.core.filesystem.updates import FilesystemNodeUpdates, NodeChanges
@@ -46,8 +47,9 @@ async def check_node_eligibility(
 
 
 @router.patch(
-    "/nodes/{node_id}", response_model=NodeSummary,
+    "/nodes/{node_id}", response_model=CallerNodeSummary,
     summary="Update file or directory name, parent or metadata without changing content",
+    description="Permissions and visibility reflect policy inside the update transaction; later changes require fresh inspection.",
     openapi_extra={"parameters": [{
         "name": "If-Match", "in": "header", "required": True,
         "description": "One strong quoted positive numeric revision of up to 19 digits.",
@@ -63,7 +65,7 @@ async def update_node(
     node_id: UUID, body: NodeChanges, caller: Caller,
     updates: Updates, response: Response,
     revision: Annotated[int, Depends(expected_revision)],
-) -> NodeSummary:
+) -> CallerNodeSummary:
     with filesystem_errors():
         node = await updates.update_node(
             caller, node_id, body.to_core_patch(), expected_revision=revision,

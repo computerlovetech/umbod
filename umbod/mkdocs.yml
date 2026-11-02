@@ -60,6 +60,7 @@ nav:
       - Helm values: reference/helm-values.md
       - Endpoints and ports: reference/endpoints-and-ports.md
       - Filesystem sharing: reference/filesystem-sharing.md
+      - Filesystem homes and permissions: reference/filesystem-homes-and-permissions.md
       - Filesystem upload transfers: reference/filesystem-upload-transfers.md
       - Telemetry ingestion: reference/telemetry-ingestion.md
 
