@@ -28,7 +28,7 @@ from .test_tools import root_id
 from .test_upload import upload
 
 TOOL = "filesystem_delete_file"
-DENIED = "filesystem_permission_denied: Filesystem access denied"
+DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."
 
 
 async def approve_deletion(*args: object) -> dict[str, bool]:
@@ -106,7 +106,7 @@ async def test_stale_revision_preserves_node_and_policy(filesystem_invocation_mc
         result = await client.call_tool(TOOL, {"node_id": node_id, "expected_revision": 2}, raise_on_error=False)
         after = await client.call_tool("get_filesystem_node", {"node_id": node_id})
     assert result.is_error
-    assert result.content[0].text == "filesystem_revision_conflict: Filesystem revision conflict"
+    assert result.content[0].text == "filesystem_revision_conflict: Filesystem revision conflict. Read the current node, review its changes, and retry with its current revision."
     assert {key: value for key, value in before.structured_content.items() if key != "visible_to"} == {key: value for key, value in after.structured_content.items() if key != "visible_to"}
     assert after.structured_content["visible_to"]["grants"] == [grant.model_dump(mode="json")]
     assert await policies.get_owner(UUID(node_id)) == owner
@@ -128,7 +128,8 @@ async def test_missing_and_unauthorized_nodes_have_identical_safe_errors(
         denied = await client.call_tool(TOOL, {"node_id": node_id, "expected_revision": revision}, raise_on_error=False)
         missing = await client.call_tool(TOOL, {"node_id": str(uuid4()), "expected_revision": revision}, raise_on_error=False)
     assert denied.is_error and missing.is_error
-    assert denied.content == missing.content
+    assert denied.content[:1] == missing.content[:1]
+    assert denied.meta["computerlove.tech/umbod"]["guidance"] == missing.meta["computerlove.tech/umbod"]["guidance"]
     assert denied.content[0].text == DENIED
 
 
@@ -145,7 +146,7 @@ async def test_authorized_directory_and_root_are_rejected(filesystem_invocation_
         result = await client.call_tool(TOOL, {"node_id": node_id, "expected_revision": 999}, raise_on_error=False)
         preserved = await client.call_tool("get_filesystem_node", {"node_id": node_id})
     assert result.is_error
-    assert result.content[0].text == "filesystem_wrong_node_kind: Invalid filesystem node kind"
+    assert result.content[0].text == "filesystem_wrong_node_kind: Invalid filesystem node kind. Inspect the node and select the file or directory required by this operation."
     assert preserved.structured_content["id"] == node_id
 
 
@@ -165,7 +166,7 @@ async def test_delete_rejects_invalid_arguments_without_capturing_identity(
     async with Client(filesystem_invocation_mcp.server, elicitation_handler=approve_deletion) as client:
         result = await client.call_tool(TOOL, arguments, raise_on_error=False)
     assert result.is_error
-    assert result.content[0].text == "filesystem_invalid_delete: Invalid file deletion arguments"
+    assert result.content[0].text.startswith("filesystem_invalid_delete: Invalid file deletion arguments. ")
     assert filesystem_invocation_mcp.callers.count == captures
 
 
@@ -176,7 +177,7 @@ async def test_maximum_revision_is_validated_without_coercion(filesystem_invocat
         result = await client.call_tool(TOOL, {
             "node_id": node_id, "expected_revision": 9_999_999_999_999_999_999,
         }, raise_on_error=False)
-    assert result.content[0].text == "filesystem_revision_conflict: Filesystem revision conflict"
+    assert result.content[0].text == "filesystem_revision_conflict: Filesystem revision conflict. Read the current node, review its changes, and retry with its current revision."
 
 
 @pytest.mark.asyncio

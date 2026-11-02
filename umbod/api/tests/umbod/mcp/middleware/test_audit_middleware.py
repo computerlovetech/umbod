@@ -192,20 +192,26 @@ async def test_debug_output_keeps_privacy_and_does_not_change_audit_identity(
 
 
 @pytest.mark.asyncio
-async def test_on_call_tool_success_sets_invocation_context_without_audit() -> None:
+async def test_on_call_tool_success_restores_invocation_context_without_audit() -> None:
     sink = RecordingSink()
     message = mt.CallToolRequestParams(name="slack_post")
 
+    previous = current_mcp_invocation_context()
+
+    async def inspect_context(context: MiddlewareContext[object]) -> str:
+        invocation = current_mcp_invocation_context()
+        assert invocation is not None
+        assert invocation.actor.authenticated_user_id == "user@example.com"
+        assert invocation.server_name == "umbod"
+        return "ok"
+
     result = await _middleware(sink).on_call_tool(
-        _context("tools/call", message), CallNextStub("ok", None)
+        _context("tools/call", message), inspect_context
     )
 
     assert result == "ok"
     assert sink.events == []
-    context = current_mcp_invocation_context()
-    assert context is not None
-    assert context.actor.authenticated_user_id == "user@example.com"
-    assert context.server_name == "umbod"
+    assert current_mcp_invocation_context() is previous
 
 
 @pytest.mark.asyncio

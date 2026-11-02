@@ -21,10 +21,12 @@ def register_administrator_connector_configuration_tools(
         name="read_connector_configuration",
         description="Read the configurable state of an existing connector.",
         auth=authorization,
+        builtin_response=True,
     )
     registrar.register(
         tools.upsert_connector_configuration,
         name="upsert_connector_configuration",
         description="Apply a partial desired configuration to an existing connector.",
         auth=authorization,
+        builtin_response=True,
     )

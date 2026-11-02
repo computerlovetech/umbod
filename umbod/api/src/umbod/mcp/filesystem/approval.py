@@ -2,9 +2,11 @@ import json
 from collections.abc import Callable
 from typing import Union
 
+from fastmcp.exceptions import AuthorizationError
 from fastmcp.server.context import Context
 from fastmcp.server.dependencies import get_access_token, get_context
 from fastmcp.tools import InputRequiredToolResult
+from mcp.shared.exceptions import MCPError
 from mcp.types import ElicitRequest, ElicitRequestFormParams, ElicitResult, InputRequiredResult
 
 from umbod.core.callers import CallerSnapshot
@@ -51,6 +53,8 @@ class McpFilesystemDeletionApproval:
             ):
                 raise FileDeletionApprovalDenied("File deletion approval denied")
             return FileDeletionApproval.APPROVED
+        except (MCPError, AuthorizationError):
+            raise
         except Exception:
             raise FileDeletionApprovalDenied("File deletion approval denied") from None
 

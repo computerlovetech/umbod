@@ -1,6 +1,8 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from umbod.http_metadata import HttpMetadataMiddleware
+
 from fastmcp import FastMCP
 from fastmcp.server.auth.middleware import RequireAuthMiddleware
 from fastmcp.server.http import StarletteWithLifespan, StreamableHTTPASGIApp
@@ -45,4 +47,5 @@ def create_mcp_http_app(
             yield
 
     app.router.lifespan_context = lifespan
+    app.middleware_stack = HttpMetadataMiddleware(app.build_middleware_stack())
     return app

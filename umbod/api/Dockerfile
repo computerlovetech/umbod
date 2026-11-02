@@ -4,6 +4,9 @@ WORKDIR /workspace
 
 ENV UV_PROJECT_ENVIRONMENT=/app/.venv
 
+ARG UMBOD_RELEASE=development
+ARG UMBOD_REVISION=unknown
+
 COPY umbod/api/pyproject.toml umbod/api/uv.lock umbod/api/
 COPY packages/umbod-sdk/pyproject.toml packages/umbod-sdk/README.md packages/umbod-sdk/
 RUN uv sync --project umbod/api --frozen --no-default-groups --group shared --group api --group mcp --no-install-project --no-install-local
@@ -11,6 +14,7 @@ RUN uv sync --project umbod/api --frozen --no-default-groups --group shared --gr
 COPY umbod/api/README.md umbod/api/
 COPY umbod/api/src umbod/api/src
 COPY packages/umbod-sdk/src packages/umbod-sdk/src
+RUN python -c 'import pathlib, sys; pathlib.Path("umbod/api/src/umbod/build_identity.py").write_text("from typing import Final\n\nUMBOD_RELEASE: Final[str] = " + repr(sys.argv[1]) + "\nUMBOD_REVISION: Final[str] = " + repr(sys.argv[2]) + "\n")' "$UMBOD_RELEASE" "$UMBOD_REVISION"
 RUN uv sync --project umbod/api --frozen --no-default-groups --group shared --group api --group mcp --no-editable --compile-bytecode
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes binutils \

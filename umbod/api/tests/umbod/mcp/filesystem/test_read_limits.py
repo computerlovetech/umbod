@@ -21,10 +21,10 @@ from umbod.mcp.filesystem.resources import FilesystemFileResource, MAX_READ_BYTE
 from .conftest import caller_snapshot
 
 
-TOO_LARGE = "filesystem_read_too_large: Filesystem file exceeds read limit"
-INVALID_ENCODING = "filesystem_read_invalid_encoding: File is not valid UTF-8"
-STORAGE_FAILURE = "filesystem_storage_failure: Filesystem storage unavailable"
-OPERATION_FAILED = "filesystem_operation_failed: Filesystem operation failed"
+TOO_LARGE = "filesystem_read_too_large: Filesystem file exceeds read limit. Use an authorized HTTP download instead of resources/read."
+INVALID_ENCODING = "filesystem_read_invalid_encoding: File is not valid UTF-8. Use an authorized HTTP download to retrieve the original bytes."
+STORAGE_FAILURE = "filesystem_storage_failure: Filesystem storage unavailable. A write may have completed; check the destination before retrying. If this persists, contact the administrator with the request ID and server version."
+OPERATION_FAILED = "filesystem_operation_failed: Filesystem operation failed. A write may have completed; check the destination before retrying. If this persists, contact the administrator with the request ID and server version."
 
 
 class OrdinaryByteStream:

@@ -8,7 +8,7 @@ description: "Neutral invocation and inventory signals separating execution from
 
 - [__init__.py](./__init__.py) — Package exports.
 - [channels.py](./channels.py) — Typed signal channels.
-- [context.py](./context.py) — Invocation context.
+- [context.py](./context.py) — Scoped invocation correlation with token-based restoration for nested calls and failures.
 - [diagnostics.py](./diagnostics.py) — Invocation-local failure diagnostics.
 - [events.py](./events.py) — Invocation and inventory facts.
 - [execution.py](./execution.py) — Execution pipeline composition.

@@ -1,3 +1,6 @@
+from umbod.build_identity import UMBOD_RELEASE
+from umbod.http_metadata import HttpMetadataMiddleware
+from starlette.types import ASGIApp
 from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
 from umbod.core.capabilities.descriptions.factories import (
     ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory as InfrastructureConnectorCapabilityDescriptionOverrideStoreFactory,
@@ -134,13 +137,18 @@ class DownstreamMcpHealthStoreFactory(Protocol):
     def create(self) -> ConnectorHealthStore: ...
 
 
+class HttpMetadataFastAPI(FastAPI):
+    def build_middleware_stack(self) -> ASGIApp:
+        return HttpMetadataMiddleware(super().build_middleware_stack())
+
+
 class RootApiAppFactory:
     def __init__(self, settings: APISettings) -> None:
         self.settings = settings
 
     def create(self) -> FastAPI:
-        app = FastAPI(
-            title="umbod-api", docs_url=None, openapi_url=None, redoc_url=None
+        app = HttpMetadataFastAPI(
+            title="umbod-api", version=UMBOD_RELEASE, docs_url=None, openapi_url=None, redoc_url=None
         )
         self._add_middleware(app)
         return app
@@ -152,7 +160,7 @@ class RootApiAppFactory:
             allow_credentials=False,
             allow_methods=["*"],
             allow_headers=["*"],
-            expose_headers=["Allow", "ETag"],
+            expose_headers=["Allow", "ETag", "X-Umbod-Version", "X-Umbod-Revision", "X-Request-ID"],
         )
 
 
@@ -168,8 +176,9 @@ class LifespanRootApiAppFactory(RootApiAppFactory):
         self.lifespan = lifespan
 
     def create(self) -> FastAPI:
-        app = FastAPI(
+        app = HttpMetadataFastAPI(
             title="umbod-api",
+            version=UMBOD_RELEASE,
             docs_url=None,
             openapi_url=None,
             redoc_url=None,
@@ -187,7 +196,7 @@ class SubApiAppFactory:
     def create(self) -> FastAPI:
         sub_app = FastAPI(
             title=self.title,
-            version="0.0.1",
+            version=UMBOD_RELEASE,
             docs_url="/docs",
             openapi_url="/openapi.json",
             root_path_in_servers=False,

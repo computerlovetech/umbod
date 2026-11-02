@@ -15,7 +15,7 @@ from umbod.core.filesystem.errors import StorageFailure
 from umbod.core.filesystem.ports import ByteStream
 from umbod.mcp.connectors.downstream_mcp.provider import _REQUEST_CONNECTOR_SCOPE
 
-from .errors import InvalidReadEncoding, ReadTooLarge, filesystem_resource_operation
+from .errors import FILESYSTEM_ACCESS_DENIED, InvalidReadEncoding, ReadTooLarge, filesystem_resource_operation
 from .links import FILE_RESOURCE_TEMPLATE, file_resource_uri
 from .ports import ClosableByteStream, FilesystemCallerCapture, FilesystemServiceFactory
 
@@ -25,7 +25,7 @@ MAX_READ_BYTES = 1_048_576
 
 def ensure_resource_scope() -> None:
     if _REQUEST_CONNECTOR_SCOPE.get():
-        raise ResourceError("filesystem_permission_denied: Filesystem access denied")
+        raise ResourceError(FILESYSTEM_ACCESS_DENIED)
 
 
 async def close_stream(stream: ByteStream) -> None:

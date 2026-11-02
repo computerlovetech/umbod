@@ -172,10 +172,11 @@ jobs:
         env:
           SDK_VERSION: ${{ needs.plan.outputs.sdk_version }}
           IMAGE_VERSION: ${{ needs.plan.outputs.image_version }}
+          RELEASE_SHA: ${{ needs.plan.outputs.release_sha }}
         shell: bash
         run: |
           set -euo pipefail
-          docker build --file "${{ matrix.file }}" --build-arg "UMBOD_RELEASE=${IMAGE_VERSION}" --tag umbod-sdk-release-check .
+          docker build --file "${{ matrix.file }}" --build-arg "UMBOD_RELEASE=${IMAGE_VERSION}" --build-arg "UMBOD_REVISION=${RELEASE_SHA}" --tag umbod-sdk-release-check .
           actual="$(docker run --rm --entrypoint python umbod-sdk-release-check -c 'from importlib.metadata import version; print(version("umbod"))')"
           [[ "${actual}" == "${SDK_VERSION}" ]] || { echo "Image SDK version ${actual} differs from ${SDK_VERSION}" >&2; exit 1; }
       - uses: docker/build-push-action@v7.1.0
@@ -185,7 +186,9 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ${{ matrix.image }}:${{ needs.plan.outputs.image_version }}
-          build-args: ${{ matrix.name == 'connector-builder' && format('UMBOD_RELEASE={0}', needs.plan.outputs.image_version) || '' }}
+          build-args: |
+            ${{ matrix.name != 'frontend' && format('UMBOD_RELEASE={0}', needs.plan.outputs.image_version) || '' }}
+            ${{ matrix.name != 'frontend' && format('UMBOD_REVISION={0}', needs.plan.outputs.release_sha) || '' }}
           labels: |
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ needs.plan.outputs.release_sha }}

@@ -39,7 +39,7 @@ async def test_invalid_search_never_captures_or_constructs_service(
     captures = filesystem_invocation_mcp.callers.count
     async with Client(filesystem_invocation_mcp.server) as client:
         result = await client.call_tool(LIST, {"node_id": str(uuid4()), "query": "name", **patch}, raise_on_error=False)
-    assert result.content[0].text == "filesystem_invalid_sharing: Invalid filesystem sharing arguments"
+    assert result.content[0].text.startswith("filesystem_invalid_sharing: Invalid filesystem sharing arguments. ")
     assert result.structured_content is None
     assert filesystem_invocation_mcp.callers.count == captures
     factory.assert_not_called()

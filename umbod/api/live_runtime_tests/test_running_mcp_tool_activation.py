@@ -81,6 +81,12 @@ async def _set_admin_activation(
             },
         },
     )
+    metadata = result.meta["computerlove.tech/umbod"]
+    assert metadata["schema_version"] == 1
+    assert metadata["guidance"]["outcome"] == "success"
+    assert metadata["guidance"]["operation_state"] == "completed"
+    assert metadata["guidance"]["recovery"]["retry"] == "not_needed"
+    assert metadata["guidance"]["error"] is None
     assert any(
         capability["capability_key"] == OPERATION_NAME
         and capability["activation_status"] == status

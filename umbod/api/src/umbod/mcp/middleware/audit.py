@@ -13,6 +13,7 @@ from fastmcp.exceptions import AuthorizationError
 from fastmcp.server.middleware.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import Tool, ToolResult
 
+from umbod.http_metadata import current_request_id
 from umbod.mcp.logging import (
     McpAuditCorrelation,
     McpAuditIdentitySource,
@@ -22,6 +23,7 @@ from umbod.mcp.signals import (
     McpInvocationCorrelation,
     McpToolIdentity,
     set_mcp_invocation_context,
+    reset_mcp_invocation_context,
 )
 from umbod.mcp.logging.audit.event import (
     McpAuditFailure,
@@ -92,7 +94,7 @@ class McpAuditMiddleware(Middleware):
         call_next: CallNext[mt.CallToolRequestParams, ToolResult],
     ) -> ToolResult:
         correlation = _new_correlation()
-        set_mcp_invocation_context(
+        token = set_mcp_invocation_context(
             McpInvocationContext(
                 actor=self._identity_source.invocation_actor(context.fastmcp_context),
                 correlation=McpInvocationCorrelation(
@@ -143,10 +145,12 @@ class McpAuditMiddleware(Middleware):
                     time.time_ns(),
                 )
             raise
+        finally:
+            reset_mcp_invocation_context(token)
 
 
 def _new_correlation() -> McpAuditCorrelation:
-    return McpAuditCorrelation(trace_id=uuid.uuid4().hex, span_id=None)
+    return McpAuditCorrelation(trace_id=current_request_id() or uuid.uuid4().hex, span_id=None)
 
 
 def _tool_identity(message: mt.CallToolRequestParams) -> McpToolIdentity:

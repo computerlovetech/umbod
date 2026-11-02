@@ -14,7 +14,7 @@ from umbod.core.invocation.tools.execution import ToolExecutionContext, ToolExec
 from umbod.mcp.connectors.native.approval import ModernConnectorApprovalRequired
 from umbod.mcp.signals.channels import McpSignals
 from umbod.mcp.signals.events import McpToolIdentity, McpToolInvocationFailureCategory
-from umbod.mcp.signals.lifecycle import McpToolInvocationLifecycle
+from umbod.mcp.signals.lifecycle import McpToolInvocationLifecycle, UnavailableToolInvocationLifecycle
 from umbod.mcp.signals.diagnostics import invocation_failure
 from umbod.mcp.signals.publisher import McpInvocationPublisher
 from umbod.core.invocation.tools.execution import ToolExecutionPipeline, create_tool_execution_pipeline
@@ -32,7 +32,7 @@ class ConnectorInvocationSignalInterceptor:
         self._publisher = McpInvocationPublisher(signals)
         self._result_is_error = result_is_error
 
-    async def before_tool_preparation(self, request: ToolExecutionRequest) -> object:
+    async def before_tool_preparation(self, request: ToolExecutionRequest) -> McpToolInvocationLifecycle | UnavailableToolInvocationLifecycle:
         identity = request.identity
         connector_identity = McpToolIdentity(
             tool_name=request.public_tool_name,
@@ -46,10 +46,12 @@ class ConnectorInvocationSignalInterceptor:
         return None
 
     async def after_tool_execution(self, request: ToolExecutionRequest, outcome: ToolExecutionOutcome, state: object) -> None:
+        if not isinstance(state, (McpToolInvocationLifecycle, UnavailableToolInvocationLifecycle)):
+            raise TypeError("Invalid connector invocation lifecycle state")
+        if isinstance(state, UnavailableToolInvocationLifecycle):
+            return
         if isinstance(outcome, ToolExecutionFailed) and isinstance(outcome.error, (ModernConnectorApprovalRequired, asyncio.CancelledError)):
             return
-        if state is not None and not isinstance(state, McpToolInvocationLifecycle):
-            raise TypeError("Invalid connector invocation lifecycle state")
         if isinstance(outcome, ToolExecutionFailed):
             evidence = current_invocation_failure() or exception_evidence(outcome.error, InvocationFailureOrigin.INTERNAL)
             self._publisher.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, invocation_failure.get(), evidence)

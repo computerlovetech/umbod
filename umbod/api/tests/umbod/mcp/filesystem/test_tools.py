@@ -65,7 +65,8 @@ async def test_bootstrap_group_can_create_private_nodes_and_filter_children(
         assert listed.structured_content == {"nodes": []}
         denied = await client.call_tool("get_filesystem_node", {"node_id": child_id}, raise_on_error=False)
         missing = await client.call_tool("get_filesystem_node", {"node_id": str(uuid4())}, raise_on_error=False)
-        assert denied.content == missing.content
+        assert denied.content[:1] == missing.content[:1]
+        assert denied.meta["computerlove.tech/umbod"]["guidance"] == missing.meta["computerlove.tech/umbod"]["guidance"]
         assert "filesystem_permission_denied" in denied.content[0].text
 
 
@@ -132,10 +133,10 @@ async def test_filesystem_invalid_names_and_collisions_have_fixed_errors(filesys
     async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         invalid = await client.call_tool(CREATE, {"parent_id": root, "name": "../sensitive", "metadata": METADATA}, raise_on_error=False)
-        assert invalid.content[0].text == "filesystem_invalid_name: Invalid filesystem name"
+        assert invalid.content[0].text == "filesystem_invalid_name: Invalid filesystem name. Use a nonempty UTF-8 name other than . or .., without slashes, backslashes, or null characters."
         await client.call_tool(CREATE, {"parent_id": root, "name": "duplicate", "metadata": METADATA})
         collision = await client.call_tool(CREATE, {"parent_id": root, "name": "duplicate", "metadata": METADATA}, raise_on_error=False)
-        assert collision.content[0].text == "filesystem_name_collision: Filesystem name already exists"
+        assert collision.content[0].text == "filesystem_name_collision: Filesystem name already exists. Inspect the existing node before retrying, or choose a different name."
 
 
 @pytest.mark.asyncio

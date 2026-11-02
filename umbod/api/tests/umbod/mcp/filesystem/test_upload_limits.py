@@ -34,7 +34,7 @@ async def test_lower_configured_limit_rejects_without_storage(filesystem_invocat
     async with Client(server_for(filesystem_invocation_mcp, services)) as client:
         result = await upload(client, await root_id(client), {"encoding": "utf-8", "text": "four"})
     assert result.is_error
-    assert result.content[0].text == "filesystem_upload_too_large: Filesystem upload too large"
+    assert result.content[0].text == "filesystem_upload_too_large: Filesystem upload too large. Use filesystem_begin_upload for files above the 10 MiB inline limit; the configured server limit still applies."
     assert filesystem_invocation_mcp.content.put_count == 0
 
 
@@ -68,7 +68,7 @@ async def test_upload_sanitizes_failures_at_every_stage(
     async with Client(server) as client:
         result = await upload(client, parent, {"encoding": "utf-8", "text": "SECRET"})
     assert result.is_error
-    assert result.content[0].text == "filesystem_operation_failed: Filesystem operation failed"
+    assert result.content[0].text == "filesystem_operation_failed: Filesystem operation failed."
 
 
 @pytest.mark.asyncio
@@ -78,6 +78,6 @@ async def test_decoded_cap_is_checked_before_constructing_upload_service(filesys
     async with Client(server_for(filesystem_invocation_mcp, services)) as client:
         result = await upload(client, await root_id(client), {"encoding": "utf-8", "text": "é" * CAP})
     assert result.is_error
-    assert result.content[0].text == "filesystem_upload_too_large: Filesystem upload too large"
+    assert result.content[0].text == "filesystem_upload_too_large: Filesystem upload too large. Use filesystem_begin_upload for files above the 10 MiB inline limit; the configured server limit still applies."
     services.uploads.assert_not_called()
     assert filesystem_invocation_mcp.content.put_count == 0

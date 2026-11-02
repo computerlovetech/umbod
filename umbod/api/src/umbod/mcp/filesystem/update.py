@@ -1,13 +1,14 @@
-import json
 from typing import Any
 from uuid import UUID
 
-from fastmcp.exceptions import ValidationError
 from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ToolAnnotations
-from pydantic import Field, PrivateAttr, ValidationError as ModelValidationError
+from pydantic import Field, PrivateAttr
 
 from umbod.core.filesystem.updates import NodeChanges
+
+from .argument_errors import argument_json
+from umbod.mcp.responses.progress import operation_completed
 
 from .errors import filesystem_operation
 from .links import file_link_result
@@ -46,14 +47,12 @@ class FilesystemUpdateNodeTool(Tool):
         self._services = services
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
-        try:
-            command = UpdateNodeCommand.model_validate_json(json.dumps(arguments))
-        except ModelValidationError as error:
-            raise ValidationError(str(error)) from None
+        command = UpdateNodeCommand.model_validate_json(argument_json(arguments, allow_nan=True))
         with filesystem_operation():
             caller = self._callers.capture()
             node = await self._services.updates().update_node(
                 caller, command.node_id, command.to_core_patch(), expected_revision=command.expected_revision,
             )
+            operation_completed()
             result = (await enrich_projected_nodes(self._services.sharing(), caller, [node]))[0]
             return file_link_result(result, [result], result.model_dump_json())

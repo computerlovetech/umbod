@@ -1,7 +1,5 @@
 from typing import Literal
 
-from fastmcp.exceptions import ToolError
-
 from umbod.core.administrator.connector_configuration import (
     AdministratorConnectorConfiguration,
     ConfigurationRejected,
@@ -11,7 +9,9 @@ from umbod.core.administrator.connector_configuration import (
     ReadConnectorConfiguration,
     UpsertConnectorConfiguration,
 )
+from umbod.mcp.administrator.errors import configuration_rejection_error
 from umbod.mcp.administrator.principal import current_administrator_principal
+from umbod.mcp.responses.progress import operation_completed, operation_started
 
 
 class AdministratorConnectorConfigurationTools:
@@ -26,17 +26,18 @@ class AdministratorConnectorConfigurationTools:
     async def read_connector_configuration(
         self, connector_kind: Literal["native", "openapi", "downstream_mcp"], connector_id: str
     ) -> ConnectorConfigurableState:
-        result = await self._configuration.read(
-            ReadConnectorConfiguration(
-                principal=current_administrator_principal(self._membership_claim),
-                connector=ConnectorReference(
-                    connector_kind=connector_kind,
-                    connector_id=connector_id,
-                ),
-            )
+        request = ReadConnectorConfiguration(
+            principal=current_administrator_principal(self._membership_claim),
+            connector=ConnectorReference(
+                connector_kind=connector_kind,
+                connector_id=connector_id,
+            ),
         )
+        operation_started()
+        result = await self._configuration.read(request)
         if isinstance(result, ConfigurationRejected):
-            raise ToolError(result.error.message)
+            raise configuration_rejection_error(result)
+        operation_completed()
         return result.state
 
     async def upsert_connector_configuration(
@@ -45,16 +46,17 @@ class AdministratorConnectorConfigurationTools:
         connector_id: str,
         desired_state: ConnectorDesiredState,
     ) -> ConnectorConfigurableState:
-        result = await self._configuration.upsert(
-            UpsertConnectorConfiguration(
-                principal=current_administrator_principal(self._membership_claim),
-                connector=ConnectorReference(
-                    connector_kind=connector_kind,
-                    connector_id=connector_id,
-                ),
-                desired_state=desired_state,
-            )
+        request = UpsertConnectorConfiguration(
+            principal=current_administrator_principal(self._membership_claim),
+            connector=ConnectorReference(
+                connector_kind=connector_kind,
+                connector_id=connector_id,
+            ),
+            desired_state=desired_state,
         )
+        operation_started()
+        result = await self._configuration.upsert(request)
         if isinstance(result, ConfigurationRejected):
-            raise ToolError(result.error.message)
+            raise configuration_rejection_error(result)
+        operation_completed()
         return result.state

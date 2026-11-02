@@ -678,7 +678,8 @@ async def test_unknown_permission_target_is_rejected_before_any_write(
     after = await configuration.read()
 
     assert result.is_error is True
-    assert "missingTool" in str(result)
+    assert result.meta["computerlove.tech/umbod"]["guidance"]["error"]["code"] == "capability_not_found"
+    assert "missingTool" not in str(result)
     assert after.structured_content == before.structured_content
 
 
@@ -702,9 +703,8 @@ async def test_stale_description_revision_reports_conflict_without_write(
     after = await configuration.read()
 
     assert result.is_error is True
-    assert "capability_description" in str(result)
-    assert "expected revision 0" in str(result)
-    assert "current revision 1" in str(result)
+    assert result.meta["computerlove.tech/umbod"]["guidance"]["error"]["code"] == "revision_conflict"
+    assert result.meta["computerlove.tech/umbod"]["guidance"]["recovery"]["retry"] == "inspect_before_retry"
     assert after.structured_content == before.structured_content
 
 
@@ -751,10 +751,12 @@ async def test_unknown_activation_targets_are_rejected_before_any_write(
     )
 
     assert unknown_capability.is_error is True
-    assert "missingTool" in str(unknown_capability)
+    assert unknown_capability.meta["computerlove.tech/umbod"]["guidance"]["error"]["code"] == "capability_not_found"
+    assert "missingTool" not in str(unknown_capability)
     assert after.structured_content == before.structured_content
     assert unknown_connector_result.is_error is True
-    assert "unknown-connector" in str(unknown_connector_result)
+    assert unknown_connector_result.meta["computerlove.tech/umbod"]["guidance"]["error"]["code"] == "connector_not_found"
+    assert "unknown-connector" not in str(unknown_connector_result)
 
 
 @pytest.mark.asyncio
@@ -852,9 +854,15 @@ async def test_combined_stale_request_rolls_back_every_configuration_dimension(
     after = await configuration.read()
 
     assert rejected.is_error is True
-    assert "tool/listItems/invocation_policy" in str(rejected)
-    assert "expected revision 0" in str(rejected)
-    assert "current revision 1" in str(rejected)
+    assert rejected.meta["computerlove.tech/umbod"]["guidance"]["error"]["code"] == "revision_conflict"
+    assert rejected.meta["computerlove.tech/umbod"]["guidance"]["operation_state"] == "unknown"
+    assert rejected.meta["computerlove.tech/umbod"]["guidance"]["recovery"]["retry"] == "inspect_before_retry"
+    instructions = rejected.meta["computerlove.tech/umbod"]["guidance"]["recovery"]["instructions"]
+    assert any("read_connector_configuration" in instruction for instruction in instructions)
+    for instruction in instructions:
+        assert instruction in rejected.content[1].text
+    assert "unknown" in rejected.content[1].text
+    assert "inspect_before_retry" in rejected.content[1].text
     assert after.structured_content == before.structured_content
 
 
@@ -869,7 +877,11 @@ async def test_malformed_desired_state_is_rejected_at_mcp_tool_boundary(
         {"operations": "this must be an array of structured declarations"}
     )
     assert result.is_error is True
-    assert "validation" in str(result).lower()
+    details = result.meta["computerlove.tech/umbod"]
+    assert details["guidance"]["error"]["code"] == "invalid_arguments"
+    assert details["guidance"]["operation_state"] == "not_started"
+    assert details["guidance"]["recovery"]["retry"] == "after_correction"
+    assert details["guidance"]["error"]["issues"][0]["field"] == "desired_state.operations"
 
 
 @pytest.mark.asyncio
@@ -896,6 +908,63 @@ async def test_unauthorized_caller_cannot_discover_administration_tools(
         )
     )
     assert {READ_TOOL, UPSERT_TOOL}.isdisjoint(await configuration.available_tools())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", [READ_TOOL, UPSERT_TOOL])
+async def test_builtin_administration_success_metadata_preserves_declared_schemas(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool: str,
+) -> None:
+    journey = await create_journey(tmp_path, monkeypatch, administrator())
+    arguments: dict[str, Any] = {
+        "connector_kind": journey.connector.connector_kind,
+        "connector_id": journey.connector.connector_id,
+    }
+    if tool == UPSERT_TOOL:
+        arguments["desired_state"] = {"operations": []}
+    async with journey.client() as client:
+        before = next(item for item in await client.list_tools() if item.name == tool)
+        result = await client.call_tool(tool, arguments)
+        after = next(item for item in await client.list_tools() if item.name == tool)
+    metadata = result.meta["computerlove.tech/umbod"]
+    assert metadata["schema_version"] == 1
+    assert metadata["guidance"]["outcome"] == "success"
+    assert metadata["guidance"]["operation_state"] == "completed"
+    assert metadata["guidance"]["recovery"]["retry"] == "not_needed"
+    assert metadata["guidance"]["error"] is None
+    assert metadata["guidance"]["recovery"]["instructions"] == []
+    assert metadata["guidance"]["notices"] == []
+    assert metadata["guidance"]["extensions"] == {}
+    assert metadata["extensions"] == {}
+    assert result.structured_content["connector"]["connector_id"] == journey.connector.connector_id
+    assert before.input_schema == after.input_schema
+    assert before.output_schema == after.output_schema
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", [READ_TOOL, UPSERT_TOOL])
+@pytest.mark.parametrize("connector_id,connector_kind,field", [
+    ("", "native", "connector_id"),
+    ("SECRET_ID", "SECRET_KIND", "connector_kind"),
+])
+async def test_builtin_administration_invalid_arguments_have_safe_field_diagnostics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool: str,
+    connector_id: str, connector_kind: str, field: str,
+) -> None:
+    journey = await create_journey(tmp_path, monkeypatch, administrator())
+    arguments: dict[str, Any] = {"connector_kind": connector_kind, "connector_id": connector_id}
+    if tool == UPSERT_TOOL:
+        arguments["desired_state"] = {"operations": []}
+    async with journey.client() as client:
+        result = await client.call_tool(tool, arguments, raise_on_error=False)
+    metadata = result.meta["computerlove.tech/umbod"]
+    assert result.is_error
+    assert metadata["guidance"]["outcome"] == "failure"
+    assert metadata["guidance"]["operation_state"] == "not_started"
+    assert metadata["guidance"]["recovery"]["retry"] == "after_correction"
+    assert metadata["guidance"]["error"]["code"] == "invalid_arguments"
+    assert field in {issue["field"] for issue in metadata["guidance"]["error"]["issues"]}
+    assert "SECRET" not in repr(result)
 
 
 @pytest.mark.asyncio

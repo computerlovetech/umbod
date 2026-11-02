@@ -1,13 +1,15 @@
 import asyncio
+from unittest.mock import Mock
 
 import pytest
 
 from umbod.core.capabilities import CapabilityIdentity
 from umbod.core.invocation.failure_evidence import InvocationFailureOrigin
-from umbod.core.invocation.tools.execution import ToolExecutionFailed, ToolExecutionInterceptor, ToolExecutionRequest, ToolExecutionSucceeded
+from umbod.core.invocation.tools.execution import ToolExecutionFailed, ToolExecutionInterceptor, ToolExecutionOutcome, ToolExecutionRequest, ToolExecutionSucceeded
 from tests.support.signals import InMemorySignalFailureHandler
 from umbod.mcp.signals import McpSignals, McpToolInvocationCompleted, McpToolInvocationFailed
 from umbod.mcp.signals.execution import ConnectorInvocationSignalInterceptor
+from umbod.mcp.signals.lifecycle import McpToolInvocationLifecycle, UnavailableToolInvocationLifecycle
 
 
 @pytest.fixture
@@ -69,4 +71,47 @@ async def test_cancellation_does_not_publish_completion(execution_request: ToolE
     interceptor: ToolExecutionInterceptor = ConnectorInvocationSignalInterceptor("name", signals, classifier)
     state = await interceptor.before_tool_preparation(execution_request)
     await interceptor.after_tool_execution(execution_request, ToolExecutionFailed(asyncio.CancelledError()), state)
+    assert events == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("outcome", [ToolExecutionSucceeded(object()), ToolExecutionFailed(RuntimeError("failed"))])
+async def test_unavailable_lifecycle_does_not_publish_completion(
+    execution_request: ToolExecutionRequest, outcome: ToolExecutionOutcome,
+) -> None:
+    signals = McpSignals(InMemorySignalFailureHandler())
+    events: list[McpToolInvocationCompleted] = []
+    signals.invocation_completed.connect("capture", events.append)
+    classifier = Mock(return_value=False)
+    interceptor = ConnectorInvocationSignalInterceptor("name", signals, classifier)
+
+    await interceptor.after_tool_execution(execution_request, outcome, UnavailableToolInvocationLifecycle())
+
+    assert events == []
+    classifier.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("state", [None, object(), "invalid"])
+async def test_invalid_lifecycle_state_is_rejected(execution_request: ToolExecutionRequest, state: object) -> None:
+    interceptor = ConnectorInvocationSignalInterceptor("name", McpSignals(InMemorySignalFailureHandler()), Mock())
+
+    with pytest.raises(TypeError, match="Invalid connector invocation lifecycle state"):
+        await interceptor.after_tool_execution(execution_request, ToolExecutionSucceeded(object()), state)
+
+
+@pytest.mark.asyncio
+async def test_start_failure_returns_unavailable_connector_state(
+    execution_request: ToolExecutionRequest, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    signals = McpSignals(InMemorySignalFailureHandler())
+    events: list[McpToolInvocationCompleted] = []
+    signals.invocation_completed.connect("capture", events.append)
+    monkeypatch.setattr(McpToolInvocationLifecycle, "start", Mock(side_effect=RuntimeError("private-start-token")))
+    interceptor = ConnectorInvocationSignalInterceptor("name", signals, Mock(return_value=False))
+
+    state = await interceptor.before_tool_preparation(execution_request)
+    await interceptor.after_tool_execution(execution_request, ToolExecutionSucceeded(object()), state)
+
+    assert isinstance(state, UnavailableToolInvocationLifecycle)
     assert events == []

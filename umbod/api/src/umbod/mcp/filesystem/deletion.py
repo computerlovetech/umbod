@@ -1,7 +1,5 @@
-import json
 from typing import Any
 
-from fastmcp.exceptions import ValidationError
 from fastmcp.tools import InputRequiredToolResult
 from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ToolAnnotations
@@ -10,7 +8,10 @@ from pydantic import PrivateAttr
 from umbod.core.filesystem.errors import RevisionConflict
 
 from .approval_state import FileDeletionApprovalDenied
-from .errors import filesystem_operation
+from .argument_errors import argument_json
+from umbod.mcp.responses.progress import operation_completed, operation_started
+
+from .errors import filesystem_preflight
 from .models import DeleteFileCommand, FileDeletionResult
 from .ports import (
     FileDeletionApproval, FilesystemCallerCapture, FilesystemDeletionApproval, FilesystemServiceFactory,
@@ -47,11 +48,8 @@ class FilesystemDeleteFileTool(Tool):
         self._approval = approval
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
-        try:
-            command = DeleteFileCommand.model_validate_json(json.dumps(arguments, allow_nan=False))
-        except (TypeError, ValueError):
-            raise ValidationError("filesystem_invalid_delete: Invalid file deletion arguments") from None
-        with filesystem_operation():
+        command = DeleteFileCommand.model_validate_json(argument_json(arguments, allow_nan=False))
+        with filesystem_preflight():
             caller = self._callers.capture()
             deletion = self._services.deletion()
             await deletion.check_delete_eligibility(caller, command.node_id)
@@ -66,9 +64,11 @@ class FilesystemDeleteFileTool(Tool):
             current_caller = self._callers.capture()
             if current_caller.caller != caller.caller:
                 raise FileDeletionApprovalDenied()
+            operation_started()
             await deletion.delete_file(
                 current_caller, command.node_id, expected_revision=command.expected_revision,
             )
+            operation_completed()
             result = FileDeletionResult(node_id=command.node_id, deleted=True)
             return ToolResult(
                 content="File deleted successfully.",

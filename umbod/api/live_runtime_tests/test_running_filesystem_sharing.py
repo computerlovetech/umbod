@@ -67,15 +67,15 @@ async def assert_mcp_additive_sharing(
     arguments = {"node_id": node_id, "group_id": "admin", "permissions": ["read"]}
     unknown = await alice.call_tool("filesystem_share", {**arguments, "group_id": "unregistered-" + uuid4().hex}, raise_on_error=False)
     assert unknown.is_error
-    assert unknown.content[0].text == "filesystem_invalid_sharing_policy: Invalid filesystem sharing policy"
+    assert unknown.content[0].text == "filesystem_invalid_sharing_policy: Invalid filesystem sharing policy. Select valid recipients and permissions, then retry."
     denied_groups = await bob.call_tool("filesystem_search_sharing_recipients", search, raise_on_error=False)
     missing_groups = await bob.call_tool("filesystem_search_sharing_recipients", {**search, "node_id": str(uuid4())}, raise_on_error=False)
     assert denied_groups.is_error and missing_groups.is_error
-    assert denied_groups.content == missing_groups.content
+    assert denied_groups.content[0] == missing_groups.content[0]
     denied_share = await bob.call_tool("filesystem_share", arguments, raise_on_error=False)
     missing_share = await bob.call_tool("filesystem_share", {**arguments, "node_id": str(uuid4())}, raise_on_error=False)
     assert denied_share.is_error and missing_share.is_error
-    assert denied_share.content == missing_share.content
+    assert denied_share.content[0] == missing_share.content[0]
     assert sharing_write_payload(await alice.call_tool("filesystem_share", arguments)) == {**arguments, "changed": True}
     assert sharing_write_payload(await alice.call_tool("filesystem_share", arguments)) == {**arguments, "changed": False}
     extended = await alice.call_tool("filesystem_share", {**arguments, "permissions": ["discover"]})

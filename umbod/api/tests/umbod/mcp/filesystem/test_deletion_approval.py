@@ -165,6 +165,18 @@ async def test_denied_approval_preserves_namespace_owner_and_direct_grants(
                 TOOL, {"node_id": node_id, "expected_revision": 1}, raise_on_error=False,
             )
             assert result.is_error
+            if response != "no-handler":
+                guidance = result.meta["computerlove.tech/umbod"]["guidance"]
+                assert guidance["outcome"] == "failure"
+                assert guidance["operation_state"] == "not_started"
+                assert guidance["error"]["code"] == "filesystem_delete_approval_denied"
+                assert guidance["recovery"]["retry"] == "never"
+                assert "Do not retry this operation." in result.content[1].text
+                assert "After decline or cancellation, stop." in result.content[1].text
+                assert "Obtain the required permission" not in result.content[1].text
+                assert guidance["recovery"]["instructions"]
+                for instruction in guidance["recovery"]["instructions"]:
+                    assert instruction in result.content[1].text
     assert await namespace.get_node(UUID(node_id)) == before
     assert await policies.get_owner(UUID(node_id)) == owner
     assert await policies.list_grants(UUID(node_id)) == [grant]
@@ -193,7 +205,9 @@ async def test_stateless_legacy_http_cannot_delete_without_backchannel(
             })
             result = rpc_result(response)
     assert result["isError"]
-    assert "filesystem_delete_approval_denied" in result["content"][0]["text"]
+    assert "Cannot send 'elicitation/create'" in result["content"][0]["text"]
+    assert "no back-channel for server-initiated requests" in result["content"][0]["text"]
+    assert "schema_version" not in result.get("_meta", {}).get("computerlove.tech/umbod", {})
     assert await namespace.get_node(UUID(node_id)) == before
     assert await policies.get_owner(UUID(node_id)) == owner
     assert await policies.list_grants(UUID(node_id)) == [grant]
@@ -277,7 +291,7 @@ async def test_permission_revoked_during_approval_prevents_final_delete(
         )
     assert callbacks == [True]
     assert result.is_error
-    assert result.content[0].text == "filesystem_permission_denied: Filesystem access denied"
+    assert result.content[0].text == "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."
     assert await namespace.get_node(UUID(node_id)) == before
     assert await policies.get_owner(UUID(node_id)) == owner
     assert await policies.list_grants(UUID(node_id)) == []
@@ -306,7 +320,7 @@ async def test_revision_changed_during_approval_prevents_final_delete(
             TOOL, {"node_id": node_id, "expected_revision": 1}, raise_on_error=False,
         )
     assert result.is_error
-    assert result.content[0].text == "filesystem_revision_conflict: Filesystem revision conflict"
+    assert result.content[0].text == "filesystem_revision_conflict: Filesystem revision conflict. Read the current node, review its changes, and retry with its current revision."
     assert (await namespace.get_node(UUID(node_id))).revision == 2
     assert await policies.get_owner(UUID(node_id)) == owner
     assert await policies.list_grants(UUID(node_id)) == [grant]

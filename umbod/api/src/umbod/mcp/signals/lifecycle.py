@@ -1,5 +1,6 @@
 import time
 import uuid
+from dataclasses import dataclass
 
 from umbod.mcp.signals.context import current_mcp_invocation_context
 from umbod.mcp.signals.events import (
@@ -12,6 +13,11 @@ from umbod.mcp.signals.events import (
     McpToolInvocationStarted,
     McpToolInvocationSucceeded,
 )
+
+
+@dataclass(frozen=True)
+class UnavailableToolInvocationLifecycle:
+    pass
 
 
 class McpToolInvocationLifecycle:

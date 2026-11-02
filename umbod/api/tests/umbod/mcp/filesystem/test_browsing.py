@@ -168,7 +168,7 @@ async def test_independently_accessible_directory_by_id_preserves_partial_locati
     assert result.structured_content["result"]["breadcrumbs"]["complete"] is False
     assert '".../private"' in result.content[0].text
     assert denied.is_error
-    assert denied.content[0].text == "filesystem_permission_denied: Filesystem access denied"
+    assert denied.content[0].text == "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."
 
 
 @pytest.mark.asyncio
@@ -187,7 +187,8 @@ async def test_browse_filters_other_owners_and_hides_path_existence(filesystem_i
             "operation": "stat", "target": {"type": "path", "path": "/missing"},
         }, raise_on_error=False)
     assert listing.structured_content["result"]["entries"] == []
-    assert hidden.content == missing.content
+    assert hidden.content[:1] == missing.content[:1]
+    assert hidden.meta["computerlove.tech/umbod"]["guidance"] == missing.meta["computerlove.tech/umbod"]["guidance"]
 
 
 @pytest.mark.asyncio
@@ -225,7 +226,7 @@ async def test_listing_file_returns_existing_safe_kind_error(filesystem_invocati
         result = await client.call_tool(TOOL, {
             "operation": "ls", "target": {"type": "node", "node_id": node_id},
         }, raise_on_error=False)
-    assert result.content[0].text == "filesystem_wrong_node_kind: Invalid filesystem node kind"
+    assert result.content[0].text == "filesystem_wrong_node_kind: Invalid filesystem node kind. Inspect the node and select the file or directory required by this operation."
 
 
 @pytest.mark.asyncio

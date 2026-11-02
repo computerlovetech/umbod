@@ -1,6 +1,5 @@
 from typing import Any
 
-from fastmcp.exceptions import ValidationError
 from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ToolAnnotations
 from pydantic import PrivateAttr, ValidationError as ModelValidationError
@@ -8,6 +7,9 @@ from pydantic import PrivateAttr, ValidationError as ModelValidationError
 from umbod.core.filesystem.access import CallerNodeSummary
 from umbod.core.filesystem.content.errors import UploadTooLarge
 from umbod.core.filesystem.ports import ByteStream
+
+from .argument_errors import invalid_content_error
+from umbod.mcp.responses.progress import operation_completed
 
 from .errors import filesystem_operation
 from .links import file_link_result
@@ -46,8 +48,12 @@ class FilesystemUploadTool(Tool):
         try:
             command = UploadCommand.model_validate(arguments)
             content = command.content.decode()
-        except (ModelValidationError, ValueError, UnicodeError):
-            raise ValidationError("filesystem_invalid_upload: Invalid upload arguments") from None
+        except ModelValidationError:
+            raise
+        except UnicodeError:
+            raise invalid_content_error("utf-8") from None
+        except ValueError:
+            raise invalid_content_error("base64") from None
         except UploadTooLarge:
             with filesystem_operation():
                 raise
@@ -66,5 +72,6 @@ class FilesystemUploadTool(Tool):
                 content_stream(content),
             )
             result = await uploads.complete(caller, session.id)
+            operation_completed()
             node = (await self._services.access().enrich_nodes(caller, [result.node]))[0]
             return file_link_result(node, [node], "File uploaded successfully.\n" + node.model_dump_json())

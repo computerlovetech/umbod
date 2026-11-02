@@ -72,7 +72,7 @@ async def test_oversize_is_rejected_before_storage(
             "parent_id": await root_id(client),
         })
     assert result.is_error
-    assert result.content[0].text == "filesystem_upload_too_large: Filesystem upload too large"
+    assert result.content[0].text == "filesystem_upload_too_large: Filesystem upload too large. Use filesystem_begin_upload for files above the 10 MiB inline limit; the configured server limit still applies."
     assert filesystem_invocation_mcp.content.put_count == 0
     assert listed.structured_content == {"nodes": []}
 
@@ -154,7 +154,7 @@ async def test_upload_collision_has_safe_error(filesystem_invocation_mcp: Filesy
         assert not (await upload(client, parent, {"encoding": "utf-8", "text": "one"})).is_error
         result = await upload(client, parent, {"encoding": "utf-8", "text": "two"})
     assert result.is_error
-    assert result.content[0].text == "filesystem_name_collision: Filesystem name already exists"
+    assert result.content[0].text == "filesystem_name_collision: Filesystem name already exists. Inspect the existing node before retrying, or choose a different name."
 
 
 @pytest.mark.asyncio

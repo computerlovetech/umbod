@@ -32,7 +32,7 @@ from .test_tools import root_id
 
 LIST = "filesystem_search_sharing_recipients"
 SHARE = "filesystem_share"
-DENIED = "filesystem_permission_denied: Filesystem access denied"
+DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."
 
 
 def arguments(tool: str, node_id: str) -> dict[str, Any]:
@@ -151,7 +151,7 @@ async def test_eligible_groups_use_current_metadata_and_exclude_protected_collis
     assert json.loads(result.content[0].text) == result.structured_content
     assert json.dumps(label) in result.content[0].text
     for failure in (blocked, unknown):
-        assert failure.content[0].text == "filesystem_invalid_sharing_policy: Invalid filesystem sharing policy"
+        assert failure.content[0].text == "filesystem_invalid_sharing_policy: Invalid filesystem sharing policy. Select valid recipients and permissions, then retry."
         assert failure.structured_content is None
 
 
@@ -167,7 +167,7 @@ async def test_invalid_arguments_rejected_before_caller_capture(
     captures = filesystem_invocation_mcp.callers.count
     async with Client(filesystem_invocation_mcp.server) as client:
         result = await client.call_tool(tool, {**arguments(tool, str(uuid4())), **patch}, raise_on_error=False)
-    assert result.content[0].text == "filesystem_invalid_sharing: Invalid filesystem sharing arguments"
+    assert result.content[0].text.startswith("filesystem_invalid_sharing: Invalid filesystem sharing arguments. ")
     assert result.structured_content is None
     assert filesystem_invocation_mcp.callers.count == captures
 
@@ -185,7 +185,7 @@ async def test_share_requires_explicit_nonempty_valid_permissions_and_group(
     captures = filesystem_invocation_mcp.callers.count
     async with Client(filesystem_invocation_mcp.server) as client:
         result = await client.call_tool(SHARE, payload, raise_on_error=False)
-    assert result.content[0].text == "filesystem_invalid_sharing: Invalid filesystem sharing arguments"
+    assert result.content[0].text.startswith("filesystem_invalid_sharing: Invalid filesystem sharing arguments. ")
     assert filesystem_invocation_mcp.callers.count == captures
 
 
@@ -208,7 +208,8 @@ async def test_missing_and_private_nodes_are_indistinguishable_without_direct_au
         filesystem_invocation_mcp.callers.current.set(caller_snapshot(subject, issuer, memberships, provenance))
         private = await client.call_tool(tool, arguments(tool, node_id), raise_on_error=False)
         missing = await client.call_tool(tool, arguments(tool, str(uuid4())), raise_on_error=False)
-    assert private.content == missing.content
+    assert private.content[:1] == missing.content[:1]
+    assert private.meta["computerlove.tech/umbod"]["guidance"] == missing.meta["computerlove.tech/umbod"]["guidance"]
     assert private.content[0].text == DENIED
 
 
@@ -263,9 +264,9 @@ async def test_discovery_has_no_io_and_each_invocation_captures_and_calls_once(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool", [LIST, SHARE])
 @pytest.mark.parametrize("error_type,expected", [
-    (InvalidSharingPolicy, "filesystem_invalid_sharing_policy: Invalid filesystem sharing policy"),
-    (SharingPolicyUnavailable, "filesystem_policy_unavailable: Filesystem sharing configuration unavailable"),
-    (RuntimeError, "filesystem_operation_failed: Filesystem operation failed"),
+    (InvalidSharingPolicy, "filesystem_invalid_sharing_policy: Invalid filesystem sharing policy. Select valid recipients and permissions, then retry."),
+    (SharingPolicyUnavailable, "filesystem_policy_unavailable: Filesystem sharing configuration unavailable. Ask an administrator to check the sharing configuration."),
+    (RuntimeError, "filesystem_operation_failed: Filesystem operation failed."),
 ])
 async def test_failures_are_sanitized_and_observed(
     filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
@@ -420,7 +421,7 @@ async def test_malformed_recipient_never_captures_or_invokes_core(
         with pytest.raises(SchemaValidationError):
             validate(payload, descriptor.input_schema)
         result = await client.call_tool(SHARE, payload, raise_on_error=False)
-    assert result.content[0].text == "filesystem_invalid_sharing: Invalid filesystem sharing arguments"
+    assert result.content[0].text.startswith("filesystem_invalid_sharing: Invalid filesystem sharing arguments. ")
     assert filesystem_invocation_mcp.callers.count == captures
     factory.assert_not_called()
 
@@ -441,5 +442,5 @@ async def test_canonical_request_rejects_mixed_legacy_fields_and_authority(
             "node_id": str(uuid4()), "recipient": {"type": "user", "user_id": "observed"},
             "permissions": ["read"], **patch,
         }, raise_on_error=False)
-    assert response.content[0].text == "filesystem_invalid_sharing: Invalid filesystem sharing arguments"
+    assert response.content[0].text.startswith("filesystem_invalid_sharing: Invalid filesystem sharing arguments. ")
     assert filesystem_invocation_mcp.callers.count == captures

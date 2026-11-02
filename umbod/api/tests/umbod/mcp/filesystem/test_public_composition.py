@@ -55,7 +55,7 @@ async def test_public_composition_sanitizes_unexpected_filesystem_failures(
         async with Client(server) as client:
             result = await client.call_tool(tool, arguments, raise_on_error=False)
         assert result.is_error
-        assert result.content[0].text == "filesystem_operation_failed: Filesystem operation failed"
+        assert result.content[0].text == "filesystem_operation_failed: Filesystem operation failed."
         assert "SECRET" not in result.content[0].text
         assert "/private/path" not in result.content[0].text
     finally:
@@ -79,7 +79,7 @@ async def test_public_resource_composition_sanitizes_every_read_stage(
         monkeypatch.setattr(DatabaseFilesystemServiceFactory, "content", Mock(return_value=service))
     try:
         async with Client(server) as client:
-            with pytest.raises(MCPError, match="filesystem_operation_failed: Filesystem operation failed") as error:
+            with pytest.raises(MCPError, match="filesystem_operation_failed: Filesystem operation failed.") as error:
                 await client.read_resource("umbod://filesystem/files/00000000-0000-0000-0000-000000000001")
         assert "SECRET" not in str(error.value)
         assert "/private/path" not in str(error.value)

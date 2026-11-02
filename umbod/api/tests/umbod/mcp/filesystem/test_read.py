@@ -26,7 +26,7 @@ from .test_browsing import create_node
 from .test_tools import root_id
 
 
-DENIED = "filesystem_permission_denied: Filesystem access denied"
+DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions. Creating files requires discover and write on the parent directory; filesystem_browse with operation home resolves your private upload destination."
 
 
 async def publish(client: Client, payload: bytes, mime_type: object) -> dict[str, object]:
@@ -86,7 +86,7 @@ async def test_template_only_no_read_tool_or_file_enumeration(filesystem_mcp: Fi
 async def test_invalid_text_has_safe_resource_error(filesystem_invocation_mcp: FilesystemMcp) -> None:
     async with Client(filesystem_invocation_mcp.server) as client:
         published = await publish(client, b"\xffSECRET", "text/plain")
-        with pytest.raises(MCPError, match="filesystem_read_invalid_encoding: File is not valid UTF-8") as error:
+        with pytest.raises(MCPError, match="filesystem_read_invalid_encoding: File is not valid UTF-8. Use an authorized HTTP download to retrieve the original bytes.") as error:
             await client.read_resource(file_resource_uri(UUID(published["id"])))
     assert "base64" not in str(error.value)
     assert "SECRET" not in str(error.value)

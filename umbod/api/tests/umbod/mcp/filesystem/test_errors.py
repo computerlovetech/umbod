@@ -42,21 +42,21 @@ class SpecializedStorageFailure(StorageFailure):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("error_type,expected", [
-    (InvalidSharingPolicy, "filesystem_invalid_sharing_policy: Invalid filesystem sharing policy"),
-    (SharingPolicyUnavailable, "filesystem_policy_unavailable: Filesystem sharing configuration unavailable"),
-    (UploadTooLarge, "filesystem_upload_too_large: Filesystem upload too large"),
-    (UploadConflict, "filesystem_upload_conflict: Filesystem upload conflict"),
-    (UploadExpired, "filesystem_upload_expired: Filesystem upload expired"),
-    (UploadLengthMismatch, "filesystem_upload_length_mismatch: Invalid upload length"),
-    (UploadMediaTypeMismatch, "filesystem_upload_media_type_mismatch: Invalid upload content type"),
-    (PermissionDenied, "filesystem_permission_denied: Filesystem access denied"),
-    (MissingNode, "filesystem_permission_denied: Filesystem access denied"),
-    (InvalidName, "filesystem_invalid_name: Invalid filesystem name"),
-    (NameCollision, "filesystem_name_collision: Filesystem name already exists"),
-    (RevisionConflict, "filesystem_revision_conflict: Filesystem revision conflict"),
-    (WrongNodeKind, "filesystem_wrong_node_kind: Invalid filesystem node kind"),
-    (StorageFailure, "filesystem_storage_failure: Filesystem storage unavailable"),
-    (SpecializedStorageFailure, "filesystem_storage_failure: Filesystem storage unavailable"),
+    (InvalidSharingPolicy, "filesystem_invalid_sharing_policy: Invalid filesystem sharing policy. Select valid recipients and permissions, then retry."),
+    (SharingPolicyUnavailable, "filesystem_policy_unavailable: Filesystem sharing configuration unavailable. Ask an administrator to check the sharing configuration."),
+    (UploadTooLarge, "filesystem_upload_too_large: Filesystem upload too large. Use filesystem_begin_upload for files above the 10 MiB inline limit; the configured server limit still applies."),
+    (UploadConflict, "filesystem_upload_conflict: Filesystem upload conflict."),
+    (UploadExpired, "filesystem_upload_expired: Filesystem upload expired."),
+    (UploadLengthMismatch, "filesystem_upload_length_mismatch: Invalid upload length."),
+    (UploadMediaTypeMismatch, "filesystem_upload_media_type_mismatch: Invalid upload content type. Send the Content-Type specified by the upload transfer instructions."),
+    (PermissionDenied, "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."),
+    (MissingNode, "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."),
+    (InvalidName, "filesystem_invalid_name: Invalid filesystem name. Use a nonempty UTF-8 name other than . or .., without slashes, backslashes, or null characters."),
+    (NameCollision, "filesystem_name_collision: Filesystem name already exists. Inspect the existing node before retrying, or choose a different name."),
+    (RevisionConflict, "filesystem_revision_conflict: Filesystem revision conflict. Read the current node, review its changes, and retry with its current revision."),
+    (WrongNodeKind, "filesystem_wrong_node_kind: Invalid filesystem node kind. Inspect the node and select the file or directory required by this operation."),
+    (StorageFailure, "filesystem_storage_failure: Filesystem storage unavailable."),
+    (SpecializedStorageFailure, "filesystem_storage_failure: Filesystem storage unavailable."),
 ])
 async def test_expected_domain_failures_do_not_leak_details(
     filesystem_invocation_mcp: FilesystemMcp, error_type: type[Exception], expected: str,
@@ -75,6 +75,12 @@ async def test_expected_domain_failures_do_not_leak_details(
         result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
     assert result.is_error
     assert result.content[0].text == expected
+    assert "SECRET" not in repr(result)
+    assert "/private/path" not in repr(result)
+    guidance = result.meta["computerlove.tech/umbod"]["guidance"]
+    assert guidance["recovery"]["instructions"]
+    for instruction in guidance["recovery"]["instructions"]:
+        assert instruction in result.content[1].text
     assert any(sample.labels["outcome"] == "failure" for sample in filesystem_invocation_mcp.metrics.metric_samples())
 
 
@@ -127,8 +133,8 @@ async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
         assert record["severity_number"] == severity
     invocation = next(record for record in records if record["body"] == "mcp tool invocation completed")
     if category == "authorization":
-        assert result.content[0].text == "filesystem_permission_denied: Filesystem access denied"
-        assert invocation["attributes"]["exception.type"] == "ToolAuthorizationDenied"
+        assert result.content[0].text == "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."
+        assert invocation["attributes"]["exception.type"] == "BuiltinToolAuthorizationDenied"
     assert invocation["attributes"]["mcp.failure.origin"] == "internal"
     assert "exception.stacktrace" in invocation["attributes"]
     assert "SECRET" not in output.getvalue()
@@ -192,7 +198,13 @@ async def test_unmasked_tools_sanitize_all_operation_stages(
     async with Client(server) as client:
         result = await client.call_tool(tool, arguments, raise_on_error=False)
     assert result.is_error
-    assert result.content[0].text == "filesystem_operation_failed: Filesystem operation failed"
+    assert result.content[0].text == "filesystem_operation_failed: Filesystem operation failed."
+    guidance = result.meta["computerlove.tech/umbod"]["guidance"]
+    assert guidance["operation_state"] == ("not_started" if tool == "filesystem_delete_file" else "unknown")
+    assert guidance["recovery"]["retry"] == "inspect_before_retry"
+    assert guidance["recovery"]["instructions"]
+    for instruction in guidance["recovery"]["instructions"]:
+        assert instruction in result.content[1].text
     assert "SECRET" not in result.content[0].text
     assert "/private/path" not in result.content[0].text
 

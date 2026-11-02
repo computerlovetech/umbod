@@ -1,13 +1,14 @@
 from typing import Any
 from urllib.parse import urlsplit
 
-from fastmcp.exceptions import ValidationError
 from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ToolAnnotations
-from pydantic import PrivateAttr, ValidationError as ModelValidationError
+from pydantic import PrivateAttr
 
 from umbod.core.filesystem.uploads.errors import UploadReceiptUnavailable
 from umbod.core.filesystem.uploads.models import ExpectedChecksum, NoExpectedChecksum, VerifiedReceipt
+
+from umbod.mcp.responses.progress import operation_completed
 
 from .errors import filesystem_operation
 from .links import file_link_result
@@ -47,7 +48,10 @@ class FilesystemBeginUploadTool(Tool):
                 "Transfer raw bytes once via the returned capability-only HTTP PUT, then call "
                 "filesystem_complete_upload. Never send MCP bearer credentials or follow redirects. "
                 "Compute local file size and SHA256 programmatically; do not reproduce file bytes in model output. "
-                "Not idempotent. Failed transfers may retry; a process crash during transfer leaves a conflict."
+                "Beginning is not idempotent. After a lost or uncertain transfer response, inspect session progress "
+                "with an authenticated HTTP GET to /api/filesystem/uploads/{upload_id} before replaying. "
+                "Complete a staged upload with the same upload ID; capability expiry does not imply session expiry. "
+                "A process crash during transfer leaves a conflict."
             ),
             parameters=BeginUploadCommand.model_json_schema(),
             output_schema=BeginUploadResult.model_json_schema(),
@@ -59,10 +63,7 @@ class FilesystemBeginUploadTool(Tool):
         self._services = services
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
-        try:
-            command = BeginUploadCommand.model_validate(arguments)
-        except ModelValidationError:
-            raise ValidationError("filesystem_invalid_upload: Invalid upload arguments") from None
+        command = BeginUploadCommand.model_validate(arguments)
         with filesystem_operation():
             origin = validated_api_origin(self._services.upload_api_origin())
             expected = NoExpectedChecksum() if command.expected_sha256 == "" else ExpectedChecksum(
@@ -72,6 +73,7 @@ class FilesystemBeginUploadTool(Tool):
                 self._callers.capture(), command.parent_id, command.name, command.metadata,
                 command.size_bytes, expected,
             )
+            operation_completed()
             content_type = command.metadata.content_type
             response = BeginUploadResult(
                 upload_id=result.session.id, expires_at=result.expires_at,
@@ -96,7 +98,11 @@ class FilesystemCompleteUploadTool(Tool):
             description=(
                 "Publish a staged private file using the current authenticated caller. "
                 "Returns node metadata, verified byte count and SHA256, and a native MCP resource link. "
-                "Retries return the persisted receipt and file identity; deleted files are not restored."
+                "Replay a known completed upload with the same upload ID to retrieve its persisted verified receipt "
+                "and file identity. Deleted files are not restored; deleted or legacy-unverified receipts cannot "
+                "provide a verified completion result. Inspect session progress before replaying an uncertain "
+                "transfer or beginning another upload. Capability expiry does not imply session expiry; "
+                "complete an already staged upload with the same ID."
             ),
             parameters=CompleteUploadCommand.model_json_schema(),
             output_schema=CompleteUploadResult.model_json_schema(),
@@ -108,13 +114,11 @@ class FilesystemCompleteUploadTool(Tool):
         self._services = services
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
-        try:
-            command = CompleteUploadCommand.model_validate(arguments)
-        except ModelValidationError:
-            raise ValidationError("filesystem_invalid_upload: Invalid upload arguments") from None
+        command = CompleteUploadCommand.model_validate(arguments)
         with filesystem_operation():
             caller = self._callers.capture()
             result = await self._services.upload_sessions().complete_verified(caller, command.upload_id)
+            operation_completed()
             if not isinstance(result.receipt, VerifiedReceipt):
                 raise UploadReceiptUnavailable()
             node = (await enrich_nodes(self._services.sharing(), caller, [result.node], self._services.access()))[0]

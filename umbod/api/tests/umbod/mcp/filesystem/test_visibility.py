@@ -199,7 +199,7 @@ async def test_revoked_last_witness_rejects_retained_invocation_before_discovery
     )
     assert await listed_tools(filesystem_mcp) == FILE_READ_TOOLS
     async with Client(filesystem_mcp.server) as client:
-        with pytest.raises(MCPError, match="filesystem_permission_denied: Filesystem access denied"):
+        with pytest.raises(MCPError, match="filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."):
             await client.read_resource(file_resource_uri(node_id))
     await filesystem_mcp.runtime.reconcile()
     assert await listed_tools(filesystem_mcp) == {"filesystem_browse"}

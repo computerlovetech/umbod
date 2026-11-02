@@ -1,13 +1,13 @@
-import json
 from typing import Any
 
-from fastmcp.exceptions import ValidationError
 from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ToolAnnotations
-from pydantic import PrivateAttr, ValidationError as ModelValidationError
+from pydantic import PrivateAttr
 
 from umbod.core.filesystem.browsing.exploration import BrowsingExplorer, ListingLimits, TreeLimits
+from umbod.mcp.responses.progress import operation_completed
 
+from .argument_errors import argument_json
 from .browsing_models import (
     BROWSE_COMMAND,
     BROWSE_RESPONSE,
@@ -62,15 +62,13 @@ class FilesystemBrowseTool(Tool):
         self._services = services
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
-        try:
-            command = BROWSE_COMMAND.validate_json(json.dumps(arguments))
-        except ModelValidationError as error:
-            raise ValidationError(str(error)) from None
+        command = BROWSE_COMMAND.validate_json(argument_json(arguments, allow_nan=True))
         with filesystem_operation():
             caller = self._callers.capture()
             explorer = BrowsingExplorer(self._services.browsing())
             if isinstance(command, ResolveHome):
                 node = await self._services.homes().get_or_provision(caller)
+                operation_completed()
                 nodes = await enrich_nodes(self._services.sharing(), caller, [node], self._services.access())
                 breadcrumbs = await self._services.browsing().get_breadcrumbs(caller, node.id)
                 inspection = FilesystemNodeInspection(node=nodes[0], breadcrumbs=breadcrumbs)
@@ -78,6 +76,7 @@ class FilesystemBrowseTool(Tool):
                 rendered = render_inspection(inspection)
             elif isinstance(command, InspectNode):
                 inspection = await explorer.inspect_node(caller, command.target)
+                operation_completed()
                 nodes = await enrich_nodes(self._services.sharing(), caller, [inspection.node], self._services.access())
                 inspection = FilesystemNodeInspection(node=nodes[0], breadcrumbs=inspection.breadcrumbs)
                 response = NodeInspectionResponse(operation="stat", result=inspection)
@@ -86,6 +85,7 @@ class FilesystemBrowseTool(Tool):
                 tree = await explorer.read_tree(
                     caller, command.target, TreeLimits(depth=command.depth, max_entries=command.max_entries),
                 )
+                operation_completed()
                 nodes = await enrich_nodes(
                     self._services.sharing(), caller, [tree.node, *(entry.node for entry in tree.entries)], self._services.access(),
                 )
@@ -101,6 +101,7 @@ class FilesystemBrowseTool(Tool):
                 listing = await explorer.list_directory(
                     caller, command.target, ListingLimits(max_entries=command.max_entries),
                 )
+                operation_completed()
                 nodes = await enrich_nodes(
                     self._services.sharing(), caller, [listing.node, *listing.entries], self._services.access(),
                 )

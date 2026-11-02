@@ -240,7 +240,7 @@ async def test_incomplete_or_failed_sharing_is_sanitized_not_restricted(
         monkeypatch.setattr(filesystem_invocation_mcp.services, "sharing", lambda: sharing)
         result = await client.call_tool("filesystem_browse", {"operation": "stat", "target": {"type": "root"}}, raise_on_error=False)
     assert result.is_error
-    assert result.content[0].text == "filesystem_operation_failed: Filesystem operation failed"
+    assert result.content[0].text == "filesystem_operation_failed: Filesystem operation failed."
     assert result.structured_content is None
 
 

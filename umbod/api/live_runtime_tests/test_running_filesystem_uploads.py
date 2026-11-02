@@ -322,3 +322,99 @@ async def test_upload_checksum_mismatch_can_retry_without_publishing_bad_content
         assert anonymous.put(transfer["url"], content=b"abc", headers=transfer["headers"]).status_code == 204
     receipt = tool_payload(await runtime.client.call_tool("filesystem_complete_upload", {"upload_id": begun["upload_id"]}))
     assert receipt["sha256"] == hashlib.sha256(b"abc").hexdigest()
+
+
+@pytest.mark.asyncio
+async def test_write_errors_explain_recovery_and_include_server_identity(
+    native_upload_runtime: NativeUploadRuntime,
+) -> None:
+    runtime = native_upload_runtime
+    arguments = {
+        "parent_id": runtime.directory_id,
+        "name": "diagnostic-file",
+        "metadata": {"content_type": "text/plain", "attributes": {}},
+        "content": {"encoding": "utf-8", "text": "private-content-sentinel"},
+    }
+    created = await runtime.client.call_tool("filesystem_upload", arguments)
+    denied = await runtime.other_client.call_tool("filesystem_upload", arguments, raise_on_error=False)
+    node = tool_payload(created)
+    response = runtime.api.get(FILESYSTEM + "/nodes/" + node["id"])
+    assert response.status_code == 200
+    success_metadata = created.meta["computerlove.tech/umbod"]
+    failure_metadata = denied.meta["computerlove.tech/umbod"]
+    assert success_metadata["server_version"] == response.headers["X-Umbod-Version"]
+    assert failure_metadata["server_version"] == success_metadata["server_version"]
+    assert failure_metadata["server_revision"] == response.headers["X-Umbod-Revision"]
+    assert success_metadata["schema_version"] == failure_metadata["schema_version"] == 1
+    assert success_metadata["guidance"]["outcome"] == "success"
+    assert success_metadata["guidance"]["operation_state"] == "completed"
+    assert success_metadata["guidance"]["recovery"]["retry"] == "not_needed"
+    assert success_metadata["guidance"]["error"] is None
+    assert success_metadata["guidance"]["recovery"]["instructions"] == []
+    assert success_metadata["guidance"]["notices"] == []
+    assert success_metadata["guidance"]["extensions"] == {}
+    assert success_metadata["extensions"] == {}
+    assert failure_metadata["guidance"]["outcome"] == "failure"
+    assert failure_metadata["guidance"]["operation_state"] == "unknown"
+    assert failure_metadata["guidance"]["recovery"]["retry"] == "inspect_before_retry"
+    assert failure_metadata["guidance"]["error"]["code"] == "filesystem_permission_denied"
+    assert denied.is_error
+    assert "discover and write on the parent directory" in denied.content[1].text
+    assert "filesystem_browse operation home" in denied.content[1].text
+    assert failure_metadata["request_id"] != success_metadata["request_id"]
+    assert failure_metadata["request_id"] in denied.content[-1].text
+    guidance = failure_metadata["guidance"]
+    assert guidance["recovery"]["instructions"]
+    for instruction in guidance["recovery"]["instructions"]:
+        assert instruction in denied.content[1].text
+    for value in (guidance["outcome"], guidance["operation_state"], guidance["recovery"]["retry"]):
+        assert value in denied.content[1].text
+    assert "private-content-sentinel" not in " ".join(block.text for block in denied.content)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool,patch,field", [
+    ("filesystem_browse", {"operation": "stat", "target": {"type": "path", "path": "SECRET_PATH"}}, "target.path"),
+    ("update_filesystem_node", {
+        "expected_revision": 1, "metadata": {"attributes": {"SECRET_KEY": {"nested": "SECRET_VALUE"}}},
+    }, "metadata.attributes"),
+    ("filesystem_begin_upload", {
+        "name": "private", "metadata": {"content_type": {}, "attributes": {}},
+        "size_bytes": 0, "expected_sha256": "SECRET_HASH",
+    }, "expected_sha256"),
+    ("create_filesystem_file", {
+        "name": "private", "metadata": {"content_type": {}, "attributes": {"SECRET_KEY": {"nested": "SECRET_VALUE"}}},
+    }, "metadata.attributes"),
+])
+async def test_argument_errors_identify_fields_without_echoing_values(
+    native_upload_runtime: NativeUploadRuntime, tool: str, patch: dict[str, object], field: str,
+) -> None:
+    runtime = native_upload_runtime
+    await wait_for_filesystem_tools(runtime.client, {tool})
+    identifiers = {
+        "filesystem_browse": {},
+        "update_filesystem_node": {"node_id": runtime.directory_id},
+        "filesystem_begin_upload": {"parent_id": runtime.directory_id},
+        "create_filesystem_file": {"parent_id": runtime.directory_id},
+    }[tool]
+    result = await runtime.client.call_tool(tool, {**identifiers, **patch}, raise_on_error=False)
+    assert result.is_error
+    assert field in result.content[0].text
+    metadata = result.meta["computerlove.tech/umbod"]
+    assert metadata["schema_version"] == 1
+    assert metadata["guidance"]["outcome"] == "failure"
+    assert metadata["guidance"]["operation_state"] == "not_started"
+    assert metadata["guidance"]["recovery"]["retry"] == "after_correction"
+    assert field in {issue["field"] for issue in metadata["guidance"]["error"]["issues"]}
+    assert metadata["guidance"]["recovery"]["instructions"]
+    for issue in metadata["guidance"]["error"]["issues"]:
+        assert issue["field"] in result.content[0].text
+        assert issue["correction"] in result.content[0].text
+    for instruction in metadata["guidance"]["recovery"]["instructions"]:
+        assert instruction in result.content[1].text
+    assert "SECRET" not in repr(result)
+    assert result.meta["computerlove.tech/umbod"]["request_id"] in result.content[-1].text
+    children = tool_payload(await runtime.client.call_tool("list_filesystem_children", {
+        "parent_id": runtime.directory_id,
+    }))
+    assert children["nodes"] == []

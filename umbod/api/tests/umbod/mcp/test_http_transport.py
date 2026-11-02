@@ -12,6 +12,7 @@ from starlette.applications import Starlette
 from starlette.responses import PlainTextResponse
 from starlette.routing import Mount, Route
 
+from umbod.build_identity import UMBOD_RELEASE, UMBOD_REVISION
 from umbod.mcp.http_transport import (
     MAX_MCP_REQUEST_BODY_BYTES,
     configure_request_body_limit,
@@ -63,6 +64,9 @@ async def test_oversize_http_body_is_rejected_without_tool_invocation(chunked: b
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://localhost") as client:
             response = await client.post("/mcp", headers=HEADERS, content=chunks() if chunked else body)
     assert response.status_code == 413
+    assert response.headers["X-Umbod-Version"] == UMBOD_RELEASE
+    assert response.headers["X-Umbod-Revision"] == UMBOD_REVISION
+    assert len(response.headers["X-Request-ID"]) == 32
     assert response.text == "Request body too large"
     assert ("content-length" not in response.request.headers) is chunked
     assert invocations == []
@@ -78,6 +82,8 @@ async def test_authentication_is_preserved(token: str, expected: int) -> None:
             response = await client.post("/mcp", json=INITIALIZE,
                                          headers={**HEADERS, "authorization": f"Bearer {token}"})
     assert response.status_code == expected
+    assert response.headers["X-Umbod-Version"] == UMBOD_RELEASE
+    assert len(response.headers["X-Request-ID"]) == 32
     if expected == 200:
         assert rpc_result(response)["serverInfo"]["name"] == server.name
     else:

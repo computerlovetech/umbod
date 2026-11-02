@@ -1,7 +1,5 @@
-import json
 from typing import Any
 
-from fastmcp.exceptions import ValidationError
 from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ToolAnnotations
 from pydantic import PrivateAttr, TypeAdapter
@@ -12,6 +10,9 @@ from umbod.core.filesystem.sharing import (
     GroupSharingTarget, ShareNodePolicy, SharingRecipientSearchQuery,
     SharingRecipientSearchResult, SharingScope,
 )
+
+from .argument_errors import argument_json
+from umbod.mcp.responses.progress import operation_completed
 
 from .errors import filesystem_operation
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
@@ -47,10 +48,7 @@ class FilesystemSearchSharingRecipientsTool(Tool):
         self._services = services
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
-        try:
-            command = SEARCH_RECIPIENTS_COMMAND.validate_json(json.dumps(arguments, allow_nan=False))
-        except (TypeError, ValueError):
-            raise ValidationError("filesystem_invalid_sharing: Invalid filesystem sharing arguments") from None
+        command = SEARCH_RECIPIENTS_COMMAND.validate_json(argument_json(arguments, allow_nan=False))
         with filesystem_operation():
             snapshot = self._callers.capture()
             recipient_types = (
@@ -62,6 +60,7 @@ class FilesystemSearchSharingRecipientsTool(Tool):
                 query=command.query, scope=SharingScope(recipient_types=recipient_types),
             )
             result = await self._services.sharing().search_recipients(snapshot, command.node_id, query)
+            operation_completed()
             return ToolResult(
                 content=result.model_dump_json(),
                 structured_content=result.model_dump(mode="json"),
@@ -96,10 +95,7 @@ class FilesystemShareTool(Tool):
         self._services = services
 
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
-        try:
-            command = SHARE_COMMAND.validate_json(json.dumps(arguments, allow_nan=False))
-        except (TypeError, ValueError):
-            raise ValidationError("filesystem_invalid_sharing: Invalid filesystem sharing arguments") from None
+        command = SHARE_COMMAND.validate_json(argument_json(arguments, allow_nan=False))
         with filesystem_operation():
             snapshot = self._callers.capture()
             recipient = (
@@ -108,6 +104,7 @@ class FilesystemShareTool(Tool):
             )
             policy = ShareNodePolicy(recipient=recipient, permissions=command.permissions)
             result = await self._services.sharing().share(snapshot, command.node_id, policy)
+            operation_completed()
             try:
                 node = await self._services.browsing().get_node(snapshot, command.node_id)
                 visible_to = (await self._services.access().enrich_nodes(snapshot, [node]))[0].visible_to

@@ -46,6 +46,7 @@ Never write an ADR unless explicitly asked to do so by the user.
 - [ADR-011: State Ownership and Rendering Boundaries](umbod/project/architecture-records/ADR-011-state-ownership-and-rendering-boundaries.md) — Read before changing UI state, derived values, component event handling, or state lifetimes.
 - [ADR-012: Show Only MCP Tools With an Authorized Operation](umbod/project/architecture-records/ADR-012-permission-aware-mcp-tool-visibility.md) (Proposed) — Read for caller-specific tool visibility and partially authorized tools.
 - [ADR-013: Signal-Owned Application Logging and Side Effects](umbod/project/architecture-records/ADR-013-signal-owned-application-logging.md) — Read before adding application logs, diagnostic events, observational side effects, or signal failure handling.
+- [ADR-014: Built-In MCP Responses With Explicit Agent Guidance](umbod/project/architecture-records/ADR-014-built-in-mcp-response-guidance.md) — Read before creating built-in MCP tools or changing response DTOs, content/metadata separation, extensions, or confirmation and elicitation.
 
 ## Where to start by task
 

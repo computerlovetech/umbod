@@ -37,6 +37,8 @@ from contextlib import AsyncExitStack, asynccontextmanager, suppress
 from functools import partial
 from pathlib import Path
 from typing import Literal
+from umbod.build_identity import UMBOD_RELEASE
+from umbod.http_metadata import HttpMetadataStarlette
 from fastmcp import FastMCP
 from pydantic import TypeAdapter
 from fastmcp.server.middleware import AuthMiddleware, Middleware
@@ -93,7 +95,7 @@ from umbod.mcp.logging import McpAuditIdentityAdapter
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import McpInvocationPublisher, McpSignals, McpToolExecutionPipelineFactory, SignalToolExecutionPipelineFactory
 from umbod.mcp.connectors.downstream_mcp.inventory import shared_tool_inventory
-from umbod.mcp.middleware import McpAuditMiddleware
+from umbod.mcp.middleware import McpAuditMiddleware, McpResponseMetadataMiddleware
 from umbod.mcp.middleware.protocol_metrics import McpProtocolMetricsMiddleware
 from umbod.mcp.filesystem.approval import McpFilesystemDeletionApproval
 from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesystemServiceFactory, RuntimeFilesystemGroupClaimFields, StaticFilesystemGroupClaimFields, register_filesystem_resources, register_filesystem_tools
@@ -143,7 +145,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     invocation_log_sink = telemetry.invocation_log_sink
     signals = create_mcp_signals(invocation_log_sink, metrics_recorder, audit_recorder, telemetry.application_failures)
     publisher = McpInvocationPublisher(signals)
-    middleware: list[Middleware] = [McpProtocolMetricsMiddleware(metrics_recorder, clock=time.monotonic), McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
+    middleware: list[Middleware] = [McpResponseMetadataMiddleware(), McpProtocolMetricsMiddleware(metrics_recorder, clock=time.monotonic), McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
     if group_permission_runtime_state is not None:
         auth_check = personal_tool_permission_check(connector_tool_permission_check(group_permission_runtime_state))
         if settings.mcp.auth_debug_enabled:
@@ -155,7 +157,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
         if settings.admin_authentication.environment == 'production':
             raise ValueError('Connector approval state key is required in production')
         approval_state_key = secrets.token_urlsafe(48)
-    mcp = FastMCP(name=settings.runtime.app_name, auth=auth_provider, middleware=middleware, request_state_security=RequestStateSecurity(keys=[approval_state_key], ttl=300.0, audience=f'{settings.runtime.app_name}:connector-approval'))
+    mcp = FastMCP(name=settings.runtime.app_name, version=UMBOD_RELEASE, auth=auth_provider, middleware=middleware, request_state_security=RequestStateSecurity(keys=[approval_state_key], ttl=300.0, audience=f'{settings.runtime.app_name}:connector-approval'))
     invocation_policy_store = DatabaseConnectorInvocationPolicyStore(persistence_runtime.database)
     invocation_policy = McpConnectorInvocationApprovalPolicy(StoredConnectorInvocationPolicy(invocation_policy_store), nonce_store=DatabaseApprovalNonceStore(persistence_runtime.database), state_codec=ApprovalStateCodec(clock=time.time, random_token=random_approval_token, ttl_seconds=APPROVAL_TTL_SECONDS), caller_capture=CurrentInvocationApprovalCallerCapture())
     mcp.connector_invocation_policy = invocation_policy
@@ -420,8 +422,8 @@ async def build_starlette_app(context: PublicAppRuntimeContext) -> Starlette:
             return await health_response(request)
         return JSONResponse({'status': 'unavailable', 'runtime_synchronization_failed': health.failed, 'runtime_last_applied_sequence': health.last_applied_sequence}, status_code=503)
 
-    server_card: dict[str, object] = {'$schema': 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json', 'name': 'tech.computerlove/umbod', 'title': 'Umbod MCP', 'version': '0.0.1', 'description': 'Umbod MCP server for connector-backed tools.', 'remotes': [{'type': 'streamable-http', 'url': remote_url, 'supportedProtocolVersions': ['2025-06-18']}]}
-    return Starlette(routes=[Route(_HEALTH_ROUTE, runtime_health_response, methods=['GET']), Route('/.well-known/mcp/server-card.json', lambda _request: JSONResponse(server_card, headers=_CORS_HEADERS), methods=['GET']), Route(_LOGO_ROUTE, lambda _request: FileResponse(_LOGO_FILE, media_type='image/png'), methods=['GET']), Mount('/', app=DynamicPublicMcpDispatcher(context.http_app, context.mcp.downstream_mcp_discovery_runtime, health))], lifespan=_create_public_http_lifespan(context))
+    server_card: dict[str, object] = {'$schema': 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json', 'name': 'tech.computerlove/umbod', 'title': 'Umbod MCP', 'version': UMBOD_RELEASE, 'description': 'Umbod MCP server for connector-backed tools.', 'remotes': [{'type': 'streamable-http', 'url': remote_url, 'supportedProtocolVersions': ['2025-06-18']}]}
+    return HttpMetadataStarlette(routes=[Route(_HEALTH_ROUTE, runtime_health_response, methods=['GET']), Route('/.well-known/mcp/server-card.json', lambda _request: JSONResponse(server_card, headers=_CORS_HEADERS), methods=['GET']), Route(_LOGO_ROUTE, lambda _request: FileResponse(_LOGO_FILE, media_type='image/png'), methods=['GET']), Mount('/', app=DynamicPublicMcpDispatcher(context.http_app, context.mcp.downstream_mcp_discovery_runtime, health))], lifespan=_create_public_http_lifespan(context))
 
 async def create_production_app() -> Starlette:
     from umbod.hosting import create_mcp_app

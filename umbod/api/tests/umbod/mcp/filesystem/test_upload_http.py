@@ -65,6 +65,6 @@ async def test_oversize_decoded_upload_reaches_safe_tool_error_over_http(filesys
                 "content": {"encoding": "base64", "data": base64.b64encode(b"x" * (CAP + 1)).decode()},
             })
     assert result["isError"]
-    assert result["content"][0]["text"] == "filesystem_upload_too_large: Filesystem upload too large"
+    assert result["content"][0]["text"] == "filesystem_upload_too_large: Filesystem upload too large. Use filesystem_begin_upload for files above the 10 MiB inline limit; the configured server limit still applies."
     assert filesystem_invocation_mcp.callers.count == before
     assert filesystem_invocation_mcp.content.put_count == 0

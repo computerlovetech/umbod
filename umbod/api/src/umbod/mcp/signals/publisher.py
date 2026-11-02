@@ -5,7 +5,7 @@ from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
 from umbod.core.invocation.failure_evidence import InvocationFailureEvidence
 from umbod.mcp.signals.channels import McpSignals
 from umbod.mcp.signals.events import McpToolIdentity, McpToolInvocationFailureCategory, ToolInventoryObserved
-from umbod.mcp.signals.lifecycle import McpToolInvocationLifecycle
+from umbod.mcp.signals.lifecycle import McpToolInvocationLifecycle, UnavailableToolInvocationLifecycle
 
 
 class McpInvocationPublisher:
@@ -19,15 +19,15 @@ class McpInvocationPublisher:
     def tool_registered(self, identity: McpToolIdentity) -> None:
         self._signals.tool_inventory_observed.send(ToolInventoryObserved((identity,)))
 
-    def start(self, identity: McpToolIdentity) -> McpToolInvocationLifecycle | None:
+    def start(self, identity: McpToolIdentity) -> McpToolInvocationLifecycle | UnavailableToolInvocationLifecycle:
         try:
             return McpToolInvocationLifecycle.start(identity)
         except Exception as error:
             self._signals.report_failure("MCP tool invocation lifecycle start failed", error)
-            return None
+            return UnavailableToolInvocationLifecycle()
 
-    def succeeded(self, lifecycle: McpToolInvocationLifecycle | None) -> None:
-        if lifecycle is None or lifecycle in self._completed:
+    def succeeded(self, lifecycle: McpToolInvocationLifecycle | UnavailableToolInvocationLifecycle) -> None:
+        if isinstance(lifecycle, UnavailableToolInvocationLifecycle) or lifecycle in self._completed:
             return
         self._completed.add(lifecycle)
         try:
@@ -37,8 +37,8 @@ class McpInvocationPublisher:
             return
         self._signals.invocation_completed.send(completed)
 
-    def failed(self, lifecycle: McpToolInvocationLifecycle | None, category: McpToolInvocationFailureCategory, diagnostic: InvocationFailureDiagnostic | None, evidence: InvocationFailureEvidence) -> None:
-        if lifecycle is None or lifecycle in self._completed:
+    def failed(self, lifecycle: McpToolInvocationLifecycle | UnavailableToolInvocationLifecycle, category: McpToolInvocationFailureCategory, diagnostic: InvocationFailureDiagnostic | None, evidence: InvocationFailureEvidence) -> None:
+        if isinstance(lifecycle, UnavailableToolInvocationLifecycle) or lifecycle in self._completed:
             return
         self._completed.add(lifecycle)
         try:

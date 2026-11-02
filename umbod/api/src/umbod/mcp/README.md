@@ -26,12 +26,13 @@ description: "MCP application composition, capability exposure, authentication a
 - [proxies.py](./proxies.py) — Deferred runtime bindings.
 - [http_transport.py](./http_transport.py) — Startup-scoped compatibility adapter for bounded HTTP bodies, preserving FastMCP authentication and sessions.
 - [public_app.py](./public_app.py) — Application assembly and lifespan.
+- [responses/](./responses/README.md) — Built-in outcome metadata, safe argument issues, and explicit operation progress.
 - [runtime_adapters.py](./runtime_adapters.py) — Explicit production construction for injected invocation adapters.
 - [runtime_options.py](./runtime_options.py) — Runtime composition options.
 - [settings.py](./settings.py) — MCP settings.
 - [signals/](./signals/README.md) — Neutral execution events.
 - [telemetry/](./telemetry/README.md) — Required application telemetry and listener composition.
-- [tools/](./tools/) — Observed internal tool registration and typed authorization denials.
+- [tools/](./tools/) — Observed tool registration, successful-output contract validation, and safe authorization/response failures.
 
 # Architecture
 

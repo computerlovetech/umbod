@@ -9,19 +9,20 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 - [__init__.py](./__init__.py) — Package exports.
 - [approval.py](./approval.py) — Mandatory human deletion confirmation through elicitation or signed, single-use continuations.
 - [approval_state.py](./approval_state.py) — Expiring deletion approval bound to the authenticated caller, client, file and revision.
+- [argument_errors.py](./argument_errors.py) — Bounded field-level argument guidance derived from declared schemas, without submitted values or dynamic keys.
 - [authorization.py](./authorization.py) — Caller-specific tool and resource-template visibility with independent endpoint-scope restrictions.
 - [browsing.py](./browsing.py) — Observed home, ls, tree and stat operations with caller permissions and direct policy visibility.
 - [browsing_models.py](./browsing_models.py) — Discriminated operation inputs and MCP output schemas with required node sharing metadata.
 - [caller.py](./caller.py) — Invocation caller capture.
 - [claim_fields.py](./claim_fields.py) — Permission claim sources.
 - [deletion.py](./deletion.py) — Human-approved, revision-checked removal of one file and its policies, never directories or stored bytes.
-- [errors.py](./errors.py) — Safe public failures preserving authorization-denial classification for invocation and audit telemetry.
+- [errors.py](./errors.py) — Safe public failures with recovery guidance and authorization-denial classification, without hidden-node disclosure.
 - [factory.py](./factory.py) — Operation-local service composition.
 - [links.py](./links.py) — Canonical current-file URIs and native resource links alongside structured tool results.
 - [models.py](./models.py) — Required authorized/restricted sharing projections, enriched nodes, child envelopes, and deletion contracts.
 - [ports.py](./ports.py) — Caller, service factory and mandatory deletion approval contracts.
 - [resources.py](./resources.py) — Authorized current-file resources with MIME-aware text/blob content, captured revisions, and complete reads capped at 1 MiB.
-- [registration.py](./registration.py) — Observed filesystem tools with explicit output schemas and native file links.
+- [registration.py](./registration.py) — Built-in response metadata, explicit output schemas, observed filesystem tools, and native file links.
 - [rendering.py](./rendering.py) — Readable listings with JSON-escaped untrusted descriptions, explicit visibility and expansion limits.
 - [runtime.py](./runtime.py) — Caller-neutral authorization snapshots hydrated at startup and reconciled through durable events.
 - [sharing.py](./sharing.py) — Invocation-local core access and manageable-sharing enrichment for full node results.

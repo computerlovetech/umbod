@@ -28,6 +28,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [permissions](./permissions/README.md) — Group grants and runtime access.
 - [persistence](./persistence/README.md) — Database ports and read plans.
 - [publishing](./publishing/README.md) — Connector publication.
+- [responses](./responses/README.md) — Immutable tool outcome metadata, recovery guidance, and transport-neutral construction.
 - [signals](./signals/README.md) — Application-local signals.
 - [telemetry](./telemetry/README.md) — Telemetry exports, sink ports and analytical read contracts.
 - [user_catalogue](./user_catalogue/README.md) — Caller-visible connector catalogue.
