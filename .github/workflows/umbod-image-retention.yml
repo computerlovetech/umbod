@@ -21,7 +21,7 @@ jobs:
   remove-expired-main-images:
     name: Remove expired main image versions
     if: github.repository == 'computerlovetech/umbod'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
