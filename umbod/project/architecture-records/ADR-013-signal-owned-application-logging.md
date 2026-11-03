@@ -47,5 +47,5 @@ The existing invocation pattern, signal-isolation regressions, serialized-output
 - [Signal module](../../api/src/umbod/core/signals/README.md) and [safe diagnostic publication](../../api/src/umbod/core/diagnostics/README.md)
 - [Logging receiver and channel composition](../../api/src/umbod/logging.py)
 - [Diagnostic field contract and investigation guide](../../docs/operations/application-diagnostics.md)
-- [Signal and privacy regressions](../../api/tests/umbod/test_application_failure_signals.py) and [MCP receiver-failure regressions](../../api/tests/umbod/mcp/signals/test_application_failures.py)
+- [Signal and privacy regressions](../../api/tests/umbod/core/diagnostics/test_application_failure_signals.py) and [MCP receiver-failure regressions](../../api/tests/umbod/mcp/signals/test_application_failures.py)
 - [Shared production design guards](../../../.semgrep/production-design.yml)

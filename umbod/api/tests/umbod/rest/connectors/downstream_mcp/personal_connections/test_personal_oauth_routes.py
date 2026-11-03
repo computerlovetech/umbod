@@ -1,0 +1,370 @@
+import base64
+import hashlib
+import json
+import re
+from collections.abc import Iterator
+from dataclasses import dataclass
+from pathlib import Path
+from urllib.parse import urlencode
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from httpx import Response
+from pydantic import SecretStr
+
+from umbod.config import AppConfig
+from umbod.core.connectors.downstream_mcp.personal_connections.models import Authorized
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericBinding, IssuerBinding, issuer_callback_uri, issuer_route_key
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
+    ExchangePersonalOAuth, PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported,
+    PreparePersonalOAuth, PreparedPersonalOAuth,
+)
+from umbod.rest.main import create_app
+from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback import (
+    CALLBACK_PATH, CALLBACK_QUERY_KEY, PersonalOAuthQueryRedactionMiddleware,
+)
+from starlette.types import Message, Receive, Scope, Send
+from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_dependencies import get_personal_oauth_provider
+
+from .test_personal_connection_routes import ForbiddenProbe, UserVerifier, _create_connector
+from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_connector_probe
+
+
+class FakeOAuthProvider:
+    def __init__(self) -> None:
+        self.preparations: list[PreparePersonalOAuth] = []
+        self.exchanges: list[ExchangePersonalOAuth] = []
+        self.fail_exchange = False
+        self.bound_callback = False
+        self.preparation_failures: list[Exception] = []
+
+    async def prepare(self, command: PreparePersonalOAuth) -> PreparedPersonalOAuth:
+        self.preparations.append(command)
+        if self.preparation_failures:
+            raise self.preparation_failures.pop()
+        return PreparedPersonalOAuth(
+            authorization_url=SecretStr("https://issuer.example/authorize?" + urlencode({
+                "state": command.state.get_secret_value(),
+            })), context=SecretStr("private-provider-context"),
+            callback_binding=IssuerBinding(
+                kind="issuer", expected_issuer="https://issuer.example",
+                issuer_key=issuer_route_key("https://issuer.example"),
+                redirect_uri=issuer_callback_uri(command.redirect_uri, "https://issuer.example"),
+            ) if self.bound_callback else GenericBinding(kind="generic", expected_issuer="https://issuer.example"),
+        )
+
+    async def exchange(self, command: ExchangePersonalOAuth) -> Authorized:
+        self.exchanges.append(command)
+        if self.fail_exchange:
+            raise ValueError("secret-code secret-state private-provider-context")
+        return Authorized(authorization=SecretStr("private-token"))
+
+
+@dataclass(frozen=True)
+class OAuthApi:
+    client: TestClient
+    settings: AppConfig
+    provider: FakeOAuthProvider
+    connector_id: str
+    admin_headers: dict[str, str]
+    app: FastAPI
+
+    @property
+    def url(self) -> str:
+        return f"/api/me/connectors/mcp/{self.connector_id}/oauth/attempts"
+
+    def start(self) -> dict[str, str]:
+        response = self.client.post(self.url, headers={"X-Access": "alice"}, json={})
+        response.raise_for_status()
+        return response.json()
+
+    def callback(self) -> str:
+        return CALLBACK_PATH + "?" + urlencode({
+            "state": self.provider.preparations[-1].state.get_secret_value(),
+            "code": "secret-code", "iss": "https://issuer.example",
+        })
+
+
+@pytest.fixture
+def oauth_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[OAuthApi]:
+    deployment = tmp_path / "deployment.json"
+    deployment.write_text('{"connectors": []}', encoding="utf-8")
+    monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
+    settings = AppConfig(
+        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "oauth.sqlite3")},
+        connector_security={"configuration_secret": "test-personal-oauth-encryption-key"},
+        rest={"metrics_enabled": False},
+        endpoints={"site_base_url": "http://localhost:3010/", "api_base_url": "http://localhost:18010"},
+        admin_authentication={
+            "mode": "jwt", "environment": "development", "required_membership": "admins",
+            "membership_claim": "groups", "jwt_header_name": "X-Access",
+        },
+        mcp={"permission_group_claim": "groups"},
+        personal_connections={"enabled": True, "oauth_enabled": True, "identity_namespace": "test:oauth-api"},
+    )
+    app = create_app(settings, [], user_verifier=UserVerifier())
+    provider = FakeOAuthProvider()
+    for route in app.routes:
+        child = getattr(route, "app", None)
+        if isinstance(child, FastAPI):
+            child.dependency_overrides[get_personal_oauth_provider] = lambda: provider
+    admin_app = next(route.app for route in app.routes if getattr(route, "path", "") == "/api/admin")
+    admin_app.dependency_overrides[get_downstream_connector_probe] = ForbiddenProbe
+    admin_headers = {"X-Access": json.dumps({"signature": "trusted", "claims": {"sub": "admin", "groups": ["admins"]}})}
+    with TestClient(app) as client:
+        connector_id = _create_connector(client, admin_headers, "oauth-personal")
+        client.put(f"/api/admin/connectors/mcp/{connector_id}/publication", headers=admin_headers).raise_for_status()
+        client.put("/api/admin/mcp-permissions/groups/team/permissions", headers=admin_headers, json={
+            "connectors": [{"connector_id": connector_id, "permission_status": "enabled"}],
+        }).raise_for_status()
+        client.put(f"/api/me/connectors/mcp/{connector_id}/enablement", headers={"X-Access": "alice"}, json={"enabled": True}).raise_for_status()
+        yield OAuthApi(client, settings, provider, connector_id, admin_headers, app)
+
+
+@pytest.mark.parametrize("body", [{"owner": "secret-canary"}, {"scope": "secret-canary"}, {"return_url": "secret-canary"}, [], None])
+def test_start_requires_strict_empty_object(oauth_api: OAuthApi, body: object) -> None:
+    response = oauth_api.client.post(oauth_api.url, headers={"X-Access": "alice"}, json=body)
+    assert response.status_code == 422
+    assert "secret-canary" not in response.text
+    assert not oauth_api.provider.preparations
+
+
+@pytest.mark.parametrize("body,status", [(b"{" + b" " * 1024 + b"}", 413), (b"{\"secret-canary\":", 422), (b"", 422)])
+def test_start_bounds_and_sanitizes_raw_body(oauth_api: OAuthApi, body: bytes, status: int) -> None:
+    response = oauth_api.client.post(oauth_api.url, headers={"X-Access": "alice", "Content-Type": "application/json"}, content=body)
+    assert response.status_code == status
+    assert "secret-canary" not in response.text
+    assert not oauth_api.provider.preparations
+
+
+@pytest.mark.parametrize("failure,status,code", [
+    (PersonalOAuthProviderUnsupported("secret-provider-detail"), 422, "personal_oauth_provider_unsupported"),
+    (PersonalOAuthProviderFailure("secret-provider-detail"), 502, "personal_oauth_provider_failure"),
+    (ValueError("secret-provider-detail"), 502, "personal_oauth_provider_failure"),
+])
+def test_start_sanitizes_provider_failures(oauth_api: OAuthApi, failure: Exception, status: int, code: str) -> None:
+    oauth_api.provider.preparation_failures.append(failure)
+    response = oauth_api.client.post(oauth_api.url, headers={"X-Access": "alice"}, json={})
+    assert response.status_code == status
+    assert response.json() == {"detail": {"code": code}}
+    assert "secret-provider-detail" not in response.text
+
+
+def test_simultaneous_active_start_conflicts_without_second_registration(oauth_api: OAuthApi) -> None:
+    oauth_api.start()
+    assert oauth_api.client.post(oauth_api.url, headers={"X-Access": "alice"}, json={}).status_code == 409
+    assert len(oauth_api.provider.preparations) == 1
+
+
+def test_start_requires_authentication_and_cookie_csrf(oauth_api: OAuthApi) -> None:
+    assert oauth_api.client.post(oauth_api.url, json={}).status_code == 401
+    assert oauth_api.client.post(oauth_api.url, headers={"X-Access": "alice", "Cookie": "session=fixture"}, json={}).status_code == 403
+    assert not oauth_api.provider.preparations
+
+
+def test_oauth_policy_disabled_hides_routes_and_callback(oauth_api: OAuthApi) -> None:
+    settings = AppConfig.model_validate({
+        **oauth_api.settings.model_dump(),
+        "personal_connections": {**oauth_api.settings.personal_connections.model_dump(), "oauth_enabled": False},
+    })
+    app = create_app(settings, [], user_verifier=UserVerifier())
+    with TestClient(app) as client:
+        assert client.post(oauth_api.url, headers={"X-Access": "alice"}, json={}).status_code == 404
+        assert client.get(CALLBACK_PATH + "?state=secret-state&error=denied").status_code == 404
+
+
+def test_attempt_status_and_cancel_are_owner_scoped_after_withdrawal(oauth_api: OAuthApi) -> None:
+    attempt = oauth_api.start()
+    url = oauth_api.url + "/" + attempt["attempt_id"]
+    for method in (oauth_api.client.get, oauth_api.client.delete):
+        assert method(url, headers={"X-Access": "bob"}).status_code == 404
+    oauth_api.client.delete(f"/api/admin/connectors/mcp/{oauth_api.connector_id}/publication", headers=oauth_api.admin_headers).raise_for_status()
+    status = oauth_api.client.get(url, headers={"X-Access": "alice"})
+    assert status.json() == {key: value for key, value in attempt.items() if key != "authorization_url"}
+    assert oauth_api.client.delete(url, headers={"X-Access": "alice"}).json()["status"] == "cancelled"
+    assert oauth_api.client.get(oauth_api.callback()).status_code == 400
+    assert not oauth_api.provider.exchanges
+
+
+def assert_safe_callback_page(response: Response) -> None:
+    assert response.headers["content-type"] == "text/html; charset=utf-8"
+    assert response.headers["cache-control"] == "no-store"
+    assert response.headers["referrer-policy"] == "no-referrer"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert "location" not in response.headers
+    assert response.text.startswith('<!doctype html><html lang="en">')
+    assert '<a href="http://localhost:3010/dashboard" rel="noopener noreferrer">Return to Umbod</a>' in response.text
+    assert response.text.count("href=") == 1
+    assert "window.opener = null" in response.text
+    policy = response.headers["content-security-policy"]
+    directives = dict(directive.strip().split(" ", 1) for directive in policy.split(";"))
+    assert directives.keys() == {"default-src", "frame-ancestors", "base-uri", "form-action", "script-src", "style-src"}
+    for directive in ("default-src", "frame-ancestors", "base-uri", "form-action"):
+        assert directives[directive] == "'none'"
+    for tag, directive in (("script", "script-src"), ("style", "style-src")):
+        elements = re.findall(f"<{tag}>(.*?)</{tag}>", response.text, flags=re.DOTALL)
+        assert len(elements) == 1
+        digest = base64.b64encode(hashlib.sha256(elements[0].encode("utf-8")).digest()).decode("ascii")
+        assert directives[directive] == f"'sha256-{digest}'"
+
+
+def test_callback_is_public_secret_free_and_exchanges_once(oauth_api: OAuthApi) -> None:
+    attempt = oauth_api.start()
+    response = oauth_api.client.get(oauth_api.callback())
+    assert response.status_code == 200
+    assert_safe_callback_page(response)
+    assert "<h1>Sign-in complete</h1>" in response.text
+    assert "Authorization processed. Tools will be loaded in your dashboard." in response.text
+    assert "If it stays open" in response.text
+    assert "window.close()" in response.text
+    assert "setTimeout(" in response.text
+    for secret in (
+        "secret-code", oauth_api.provider.preparations[-1].state.get_secret_value(),
+        "https://issuer.example", "private-provider-context", "private-token",
+        attempt["attempt_id"], oauth_api.connector_id,
+    ):
+        assert secret not in response.text
+        assert secret not in str(response.headers)
+    assert oauth_api.client.get(oauth_api.callback()).status_code == 400
+    assert len(oauth_api.provider.exchanges) == 1
+    status = oauth_api.client.get(oauth_api.url + "/" + attempt["attempt_id"], headers={"X-Access": "alice"})
+    assert status.json()["status"] == "completed"
+    selection = oauth_api.client.get(f"/api/me/connectors/mcp/{oauth_api.connector_id}", headers={"X-Access": "alice"}).json()
+    assert selection["has_authorization"] is True
+    assert selection["runtime_available"] is False
+
+
+@pytest.mark.parametrize("suffix", ["&state=duplicate", "&return_url=https://evil.example", "&scope=unexpected", "&error=secret-canary", "&code=duplicate", "&iss=https://issuer.example"])
+def test_callback_rejects_ambiguous_unknown_or_scoped_responses(oauth_api: OAuthApi, suffix: str) -> None:
+    oauth_api.start()
+    response = oauth_api.client.get(oauth_api.callback() + suffix)
+    assert response.status_code == 400
+    assert response.headers["cache-control"] == "no-store"
+    assert_safe_callback_page(response)
+    assert "<h1>Sign-in could not be completed</h1>" in response.text
+    assert "Return to the dashboard" in response.text
+    assert "window.close" not in response.text
+    for secret in ("secret-canary", "secret-code", "https://evil.example", "https://issuer.example"):
+        assert secret not in response.text
+        assert secret not in str(response.headers)
+    assert not oauth_api.provider.exchanges
+
+
+@pytest.mark.parametrize("outcome", ("success", "provider_failure", "invalid_path"))
+def test_callback_return_destination_uses_trusted_site_not_request_headers(
+    oauth_api: OAuthApi, outcome: str,
+) -> None:
+    oauth_api.start()
+    oauth_api.provider.fail_exchange = outcome == "provider_failure"
+    path = oauth_api.callback() if outcome != "invalid_path" else CALLBACK_PATH + "/unknown?return_url=https://evil.example"
+    response = oauth_api.client.get(path, headers={
+        "Host": "attacker.example",
+        "X-Forwarded-Host": "forwarded-attacker.example",
+        "X-Forwarded-Proto": "https",
+    })
+    assert response.status_code == (200 if outcome == "success" else 400)
+    assert_safe_callback_page(response)
+    for untrusted in ("attacker.example", "forwarded-attacker.example", "evil.example", "localhost:18010"):
+        assert untrusted not in response.text
+        assert untrusted not in str(response.headers)
+
+
+@pytest.mark.parametrize("issuer_query", ("", "&iss="))
+def test_callback_without_nonempty_issuer_never_reaches_exchange(oauth_api: OAuthApi, issuer_query: str) -> None:
+    oauth_api.start()
+    state = oauth_api.provider.preparations[-1].state.get_secret_value()
+    response = oauth_api.client.get(CALLBACK_PATH + "?" + urlencode({"state": state, "code": "secret-code"}) + issuer_query)
+    assert response.status_code == 400
+    assert not oauth_api.provider.exchanges
+
+
+def test_provider_exception_is_not_echoed_and_code_is_not_retried(oauth_api: OAuthApi) -> None:
+    attempt = oauth_api.start()
+    oauth_api.provider.fail_exchange = True
+    response = oauth_api.client.get(oauth_api.callback())
+    assert response.status_code == 400
+    assert_safe_callback_page(response)
+    assert "<h1>Sign-in could not be completed</h1>" in response.text
+    assert "Return to the dashboard and check the existing sign-in attempt." in response.text
+    assert "Cancel it or wait for expiry before trying again." in response.text
+    assert "window.close" not in response.text
+    assert "setTimeout" not in response.text
+    assert "secret-code" not in response.text
+    assert "secret-state" not in response.text
+    assert "private-provider-context" not in response.text
+    assert oauth_api.client.get(oauth_api.callback()).status_code == 400
+    assert len(oauth_api.provider.exchanges) == 1
+    assert oauth_api.client.get(oauth_api.url + "/" + attempt["attempt_id"], headers={"X-Access": "alice"}).json()["status"] == "failed"
+
+
+def test_callback_after_new_application_uses_only_durable_context(oauth_api: OAuthApi) -> None:
+    attempt = oauth_api.start()
+    replacement_provider = FakeOAuthProvider()
+    replacement_app = create_app(oauth_api.settings, [], user_verifier=UserVerifier())
+    for route in replacement_app.routes:
+        child = getattr(route, "app", None)
+        if isinstance(child, FastAPI):
+            child.dependency_overrides[get_personal_oauth_provider] = lambda: replacement_provider
+    with TestClient(replacement_app) as client:
+        assert client.get(oauth_api.callback()).status_code == 200
+        assert client.get(oauth_api.url + "/" + attempt["attempt_id"], headers={"X-Access": "alice"}).json()["status"] == "completed"
+    assert not replacement_provider.preparations
+    assert len(replacement_provider.exchanges) == 1
+    assert replacement_provider.exchanges[0].attempt.prepared.context.get_secret_value() == "private-provider-context"
+
+
+@pytest.mark.parametrize("suffix", ["/", "/../docs", "/../openapi.json", "/unknown"])
+def test_noncanonical_callbacks_do_not_redirect_or_expose_documentation(
+    oauth_api: OAuthApi, suffix: str,
+) -> None:
+    response = oauth_api.client.get(
+        CALLBACK_PATH + suffix, params={"state": "secret-canary", "error": "secret-canary"},
+        follow_redirects=False,
+    )
+    assert response.status_code == 400
+    assert "location" not in response.headers
+    assert "no-store" in response.headers["cache-control"]
+    assert "secret-canary" not in response.text
+
+
+@pytest.fixture
+def anyio_backend() -> str:
+    return "asyncio"
+
+
+@pytest.mark.anyio
+@pytest.mark.parametrize("query", [b"state=secret-state&code=secret-code&iss=https%3A%2F%2Fissuer.example", b"state=secret-state&code=secret-code&state=duplicate", b"unknown=secret-code"])
+@pytest.mark.parametrize("path,root_path", [
+    (CALLBACK_PATH, ""),
+    (CALLBACK_PATH + "/", ""),
+    (CALLBACK_PATH + "/issuer/" + "a" * 64, ""),
+    (CALLBACK_PATH + "/issuer/%61" + "a" * 63, ""),
+    (CALLBACK_PATH + "/issuer/" + "a" * 64 + "/extra", ""),
+    (CALLBACK_PATH.rsplit("/", 1)[0] + "/unknown", ""),
+    (CALLBACK_PATH.rsplit("/", 1)[0], ""),
+    ("/embedded" + CALLBACK_PATH, "/embedded"),
+    ("/embedded" + CALLBACK_PATH + "/", "/embedded"),
+    (CALLBACK_PATH, "/embedded"),
+])
+async def test_redaction_changes_original_scope_before_downstream_errors(
+    query: bytes, path: str, root_path: str,
+) -> None:
+    original: Scope = {"type": "http", "path": path, "root_path": root_path, "query_string": query}
+
+    async def failing_application(scope: Scope, receive: Receive, send: Send) -> None:
+        assert scope is original
+        assert scope["query_string"] == b""
+        assert CALLBACK_QUERY_KEY in scope["state"]
+        raise RuntimeError("routing failure")
+
+    async def receive() -> Message:
+        return {"type": "http.request", "body": b""}
+
+    async def send(message: Message) -> None:
+        return None
+
+    middleware = PersonalOAuthQueryRedactionMiddleware(failing_application)
+    with pytest.raises(RuntimeError, match="routing failure"):
+        await middleware(original, receive, send)
+    assert original["query_string"] == b""

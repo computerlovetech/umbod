@@ -6,11 +6,11 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from tests.persistence_runtime import create_inmemory_runtime
-from tests.umbod.core.downstream_mcp_connectors.adapters.test_oauth_service import MemoryHost
+from tests.umbod.core.connectors.downstream_mcp.adapters.test_oauth_service import MemoryHost
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
 from umbod.core.connectors.downstream_mcp.oauth.ports import OAuthConnection
 from umbod.core.connectors.downstream_mcp.oauth.service import OAuthService
-from tests.umbod.core.downstream_mcp_connectors.adapters.oauth_fakes import MemoryDiscovery, ScriptedSessionFactory
+from tests.umbod.core.connectors.downstream_mcp.adapters.oauth_fakes import MemoryDiscovery, ScriptedSessionFactory
 from umbod.core.connectors.downstream_mcp.stores import (
     CONNECTOR_DEFINITION_TABLE,
     ConnectorDefinitionStore,

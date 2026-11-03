@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from starlette.routing import Mount
 from pydantic import SecretStr
 
-from tests.umbod.rest.downstream_mcp_connectors.personal_connections.test_personal_connection_routes import (
+from tests.umbod.rest.connectors.downstream_mcp.personal_connections.test_personal_connection_routes import (
     PersonalApi,
     personal_api as personal_api,
 )

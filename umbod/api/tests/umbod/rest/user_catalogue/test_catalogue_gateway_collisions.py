@@ -18,9 +18,9 @@ from starlette.routing import Mount
 
 from tests.persistence_runtime import create_inmemory_runtime, prepared_inmemory_runtime
 from tests.support.connector_plugins import TestConnectorAdminConfiguration as NativeConfiguration, TestConnectorPlugin
-from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, runtime_case as runtime_case
-from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import execution_case
-from tests.umbod.mcp.downstream_mcp_connectors.test_personal_execution_pipeline import InvocationLog, provider_for
+from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, runtime_case as runtime_case
+from tests.umbod.mcp.connectors.downstream_mcp.personal_runtime_support import execution_case
+from tests.umbod.mcp.connectors.downstream_mcp.test_personal_execution_pipeline import InvocationLog, provider_for
 from umbod.config import AppConfig
 from umbod.core.activation import ActivationStatus, CapabilityRef
 from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore

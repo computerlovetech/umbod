@@ -4,8 +4,8 @@ from fastapi.testclient import TestClient
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
 from umbod.core.connectors.downstream_mcp.oauth.service import OAuthService
-from tests.umbod.core.downstream_mcp_connectors.adapters.oauth_fakes import MemoryDiscovery, ScriptedSessionFactory
-from tests.umbod.core.downstream_mcp_connectors.adapters.test_oauth_service import (
+from tests.umbod.core.connectors.downstream_mcp.adapters.oauth_fakes import MemoryDiscovery, ScriptedSessionFactory
+from tests.umbod.core.connectors.downstream_mcp.adapters.test_oauth_service import (
     MemoryHost,
 )
 

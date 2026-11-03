@@ -12,15 +12,19 @@ description: Backend behavior, adapter and architecture tests with shared runtim
 - [mcp_telemetry_fixtures.py](./mcp_telemetry_fixtures.py) — Typed recording telemetry and listener test adapters.
 - [persistence_runtime.py](./persistence_runtime.py) — In-memory runtimes for business tests and explicit SQLite runtimes for adapter integration.
 - [test_persistence_fixtures.py](./test_persistence_fixtures.py) — Fixture isolation checks.
-- [connectors](./connectors/) — Connector plugin fixtures.
-- [core](./umbod/core/) — Core behavior and contract tests.
+- [cli](./umbod/cli/) — CLI behavior tests aligned with the source CLI package.
+- [config](./umbod/config/) — Runtime configuration tests.
+- [core](./umbod/core/) — Core behavior and contract tests aligned with source modules.
+- [Core connectors](./umbod/core/connectors/) — Native, downstream MCP and OpenAPI connector domain tests.
 - [deployment](./deployment/) — Deployment contracts.
-- [hosting](./hosting/) — Hosting composition checks.
+- [hosting](./umbod/hosting/) — Service composition and lifecycle checks.
 - [infrastructure](./umbod/infrastructure/) — Infrastructure checks.
-- [mcp](./umbod/mcp/) — MCP behavior and contract tests.
+- [mcp](./umbod/mcp/) — MCP behavior and contract tests selected by this directory.
+- [MCP connectors](./umbod/mcp/connectors/) — Connector transport tests grouped by source provider module.
 - [Sharing discovery tests](./umbod/mcp/filesystem/test_recipient_search.py) — Strict unified search, node authority, directory privacy, and fixed result limits.
 - [messaging](./messaging/) — Shared messaging tests.
-- [rest](./umbod/rest/) — REST behavior and contract tests.
+- [rest](./umbod/rest/) — REST behavior and contract tests selected by this directory.
+- [REST connectors](./umbod/rest/connectors/) — Connector route tests grouped by source provider module.
 - [REST filesystem fixtures](./umbod/rest/filesystem/conftest.py) — Minimal route composition and explicit full-application integration fixtures.
 - [MCP filesystem fixtures](./umbod/mcp/filesystem/conftest.py) — Fresh service state separated from optional server, tool and resource registration.
 - [support](./support/README.md) — Test-only adapters and acceptance drivers.
@@ -28,7 +32,7 @@ description: Backend behavior, adapter and architecture tests with shared runtim
 
 # Verification
 
-- [Repository verification instructions](../../../AGENTS.md#tests-and-static-checks) — Capped parallel suites, isolated test resources, and serial live-runtime checks.
+- [Repository verification instructions](../../../AGENTS.md#tests-and-static-checks) — Directory-targeted module suites, automatic worker selection, and live-runtime checks.
 - [Shared Semgrep rules](../../../.semgrep.yml) — Cross-cutting checks retained for source and test code.
 - [Production design rules](../../../.semgrep/production-design.yml) — Source-only design checks that exclude test files and support trees.
 - [Test correctness rules](../../../.semgrep/test-correctness.yml) — Mutable-default checks and contextual patching and empty-container fallback warnings.
