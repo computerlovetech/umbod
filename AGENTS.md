@@ -68,10 +68,12 @@ Run the checks applicable to the changed area.
 
 ### Tests and static checks
 
-- Backend suite: `cd umbod/api && uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal`. To select MCP tests, append `-k mcp`; for API tests, append `-k "not mcp"`.
-- Serial execution/debugging: `cd umbod/api && uv run --locked pytest tests -q -n 0`. Use serial execution for small focused selections to avoid worker startup overhead. Parallel execution is explicit, not a global pytest default; keep Kind/live-runtime tests serial. Do not use uncapped `-n auto` or launch several full-suite runs concurrently.
-- Python lint: `cd umbod/api && uv run ruff check .`
-- Frontend tests, types, and Svelte checks: `cd umbod/frontend && bun run test && bun run check`
+- MCP: `cd umbod/api && uv run --locked pytest tests/umbod/mcp -q -n auto --dist=worksteal`
+- REST: `cd umbod/api && uv run --locked pytest tests/umbod/rest -q -n auto --dist=worksteal`
+- Core: `cd umbod/api && uv run --locked pytest tests/umbod/core -q -n auto --dist=worksteal`
+- Infrastructure: `cd umbod/api && uv run --locked pytest tests/umbod/infrastructure -q -n auto --dist=worksteal`
+- Frontend: `cd umbod/frontend && bun run test && bun run check`
+- Python lint: `cd umbod/api && uv run --locked ruff check .`
 
 ### Frontend UI
 

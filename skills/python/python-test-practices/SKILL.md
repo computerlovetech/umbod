@@ -12,27 +12,21 @@ description: >-
 
 Follow these practices when writing or changing Python tests in this repository (and similar projects using pytest).
 
-## 1. Organize tests by functionality
+## 1. Mirror source-module ownership
 
-Split tests into **separate modules** by what they exercise (feature, layer, or subsystem), not one giant file.
+The test tree must mirror the source package tree. Within the API, paths below `src/` map to the same package paths below `tests/`. Preserve module boundaries such as REST, MCP, core, infrastructure, configuration, hosting and CLI.
 
-**Do:** mirror the test folder layout to the source module layout.
+- Place tests beside the source module they verify in the mirrored test tree. Classify by the behavior and owning public interface, not incidental imports, transport names in a filename, or the fixture used.
+- Keep deeper test directories aligned with the owning source submodule. Do not maintain parallel legacy trees or mix unrelated module tests at the test root.
+- Keep module-specific integration and architecture tests within their owning module. Use explicit cross-module or deployment contract locations only when no single source module owns the behavior.
+- Keep shared test-only adapters and acceptance drivers in `tests/support/`. Scope fixtures to their consumers and keep root fixtures limited to genuinely suite-wide needs.
+- Select focused tests by directory paths, not `-k` name matching. In particular, excluding MCP-named tests does not select REST tests.
+- Run the smallest relevant module or submodule suite during development. Changes to shared core, configuration or infrastructure also require affected consumer and integration checks; directory ownership alone does not establish impact.
+- Keep the complete backend suite in CI as the safety net for cross-module regressions.
+- When moving tests, preserve assertions, parametrization and integration boundaries. Update imports, fixture discovery, filesystem-relative lookups, documentation, workflows and architecture-scan paths.
+- Verify collection before and after a restructuring, accounting for path changes. No test cases should disappear or be duplicated.
 
-For the `api/` package that means:
-
-- source: `api/src/agent_backend/agent/tools/...`
-- test:   `api/tests/agent/tools/...`
-
-```text
-tests/
-  test_api_events.py           # HTTP event listing routes
-  test_http_api_client_crud.py # CLI HTTP client against ASGI
-  test_instance_service.py     # service layer
-  stores/
-    test_stores.py             # store implementations
-```
-
-**Avoid:** dumping unrelated scenarios into a single `test_everything.py`.
+Split unrelated behaviors into separate modules rather than growing a catch-all test file.
 
 ---
 
@@ -223,7 +217,7 @@ Treat low latency as a design constraint, not a reason to weaken assertions, iso
 - Profile the measured hot path before choosing a fix. Inspect application construction, provisioning, tool registration, database preparation and repeated subprocess work rather than assuming storage is responsible.
 - Distinguish elapsed suite time from accumulated worker time. Nested fixture timings can overlap; never add them together as promised wall-clock savings.
 - Inspect collection/startup, worker balance and the interval after the last test report. Do not attribute shutdown delays to coverage without evidence.
-- Run focused checks serially to avoid worker startup overhead. Use the repository's capped parallel command for broad suites, and keep Kind/live-runtime tests serial. Do not run competing full suites while benchmarking or increase workers blindly.
+- Run focused checks serially to avoid worker startup overhead. Use the repository's automatic worker selection for broad suites, and keep Kind/live-runtime tests serial. Do not run competing full suites while benchmarking or increase workers blindly.
 - Report the command, pass/skip counts, elapsed time, coverage mode and worker count. Label local measurements as local; do not claim CI gains until measured there.
 - Keep one-off profiling instrumentation and reports outside committed application and test code unless reusable tooling was requested.
 
@@ -239,7 +233,9 @@ Application CLI behavior, process isolation, architecture contracts and genuine 
 
 ## Quick checklist
 
-- [ ] New tests live in a file that matches the feature or layer under test, mirroring the source module layout.
+- [ ] Test paths mirror the owning source module; focused pytest commands select directories, not names.
+- [ ] Shared-module changes include affected consumer checks; the complete suite remains in CI.
+- [ ] Test moves preserve collected cases, fixtures, assertions and path-based contracts.
 - [ ] Test and class names state intent without reading the body.
 - [ ] One primary behavior per test; helpers/fixtures hold shared setup.
 - [ ] Every test, fixture, and helper has type-annotated parameters and return type.

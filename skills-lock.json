@@ -79,7 +79,8 @@
     "python-test-practices": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "659d59ae6a237b611927889577617c8975697b14465526a5b7aaee80e0a16753"
+      "computedHash": "48f1370ce75169ea49bf4565d586b56342304d9108e5bcae2a582a338c4a8389",
+      "installMode": "copy"
     },
     "release-umbod": {
       "source": "./skills",
