@@ -19,9 +19,8 @@ function setup(): { source: InMemoryLogCounts; state: AnalyticsState } {
 describe('log-count query state', () => {
   it('snapshots ranges and filters, keeps drafts, and distinguishes zero, blank and missing groups', async (): Promise<void> => {
     const { source, state } = setup();
-    state.draft.addFilter('source');
-    state.draft.setInput('source', ' exact ');
-    state.draft.addFilter('source');
+    state.draft.selectFilter('source', '');
+    state.draft.selectFilter('source', ' exact ');
     await state.run();
     expect(source.queries[0]).toMatchObject({ time_range: { start: '2026-10-31T11:00:00.000Z', end: '2026-10-31T12:00:00.000Z' }, filters: [{ dimension: 'source', values: ['', ' exact '] }] });
     expect(state.total).toBe(3);
@@ -80,7 +79,7 @@ describe('log-count query state', () => {
     expect(state.validation).not.toBe('');
   });
 
-  it('rejects reversed ranges, invalid offsets, invalid dates and unadded values', async (): Promise<void> => {
+  it('rejects reversed ranges, invalid offsets and invalid dates', async (): Promise<void> => {
     const { source, state } = setup();
     state.draft.setPreset('custom');
     state.draft.setStart('2026-10-31T10:00');
@@ -94,9 +93,6 @@ describe('log-count query state', () => {
     state.draft.setStart('2026-02-30T01:00');
     await state.run();
     expect(state.validation).toContain('valid custom dates');
-    state.draft.setInput('source', 'unadded');
-    await state.run();
-    expect(state.validation).toContain('Add or clear');
     expect(source.queries).toHaveLength(0);
   });
 

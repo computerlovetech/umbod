@@ -17,8 +17,11 @@ from umbod.hosting.api_server import (
     serve_api,
     validate_listener_ports,
 )
-from umbod.core.telemetry.analytics import TelemetryAnalyticsRuntime
-from umbod.infrastructure.telemetry.composition import DisabledTelemetryAnalyticsRuntime
+from umbod.core.telemetry.analytics import (
+    TelemetryAnalyticsReader,
+    TelemetryAnalyticsRuntime,
+    TelemetryAnalyticsWriter,
+)
 
 
 @pytest.mark.asyncio
@@ -29,7 +32,7 @@ async def test_startup_failure_signals_shutdown_before_entering_runtime_cleanup(
     cleanup_started = asyncio.Event()
     cleanup_allowed = asyncio.Event()
 
-    class FailingStartupRuntime(DisabledTelemetryAnalyticsRuntime):
+    class FailingStartupRuntime:
         async def ensure_ready(self) -> None:
             raise RuntimeError("startup failed")
 
@@ -37,6 +40,12 @@ async def test_startup_failure_signals_shutdown_before_entering_runtime_cleanup(
             assert stopping.is_set()
             cleanup_started.set()
             await cleanup_allowed.wait()
+
+        def create_reader(self) -> TelemetryAnalyticsReader:
+            raise AssertionError("Startup failure must not create an analytics reader")
+
+        def create_writer(self) -> TelemetryAnalyticsWriter:
+            raise AssertionError("Startup failure must not create an analytics writer")
 
     runtime = FailingStartupRuntime()
 

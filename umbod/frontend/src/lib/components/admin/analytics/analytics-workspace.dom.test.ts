@@ -39,31 +39,102 @@ function render(): InMemoryLogCounts {
   return source;
 }
 
+async function chooseObservedValue(label: string): Promise<void> {
+  const field = document.querySelector<HTMLInputElement>('input[role="combobox"]');
+  field?.focus();
+  field?.click();
+  await tick();
+  const option = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((entry) => entry.textContent?.includes(label));
+  expect(option).toBeDefined();
+  option?.click();
+  await tick();
+}
+
 describe('analytics query interaction', () => {
-  it('shows the page title without the telemetry eyebrow', (): void => {
+  it('starts with compact controls and keeps advanced settings and help collapsed', (): void => {
     render();
     expect(document.querySelector('h1')?.textContent).toBe('Log analytics');
-    expect(document.body.textContent).not.toContain('Instance-wide telemetry');
+    expect(document.querySelector<HTMLDetailsElement>('details.advanced')?.open).toBe(false);
+    expect(document.querySelector<HTMLDetailsElement>('details.about')?.open).toBe(false);
+    expect(document.querySelector('[aria-label="Add a filter"]')).toBeNull();
+    expect(document.querySelectorAll('input[type="text"]')).toHaveLength(0);
+    expect(button('+ Add filter').getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('adds exact and blank filter values, submits, and keeps result context separate from edits', async (): Promise<void> => {
+  it('shows validation even when an invalid advanced field is collapsed', async (): Promise<void> => {
     const source = render();
-    input('analytics-filter-source', ' exact value ');
-    button('Add Source value').click();
+    input('analytics-limit', '0');
+    button('Run query').click();
     await tick();
-    button('Add Source value').click();
-    await tick();
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain('whole-number group limit');
+    expect(source.queries).toHaveLength(0);
+  });
+
+  it('chooses observed values without typing exact matches and keeps submitted results separate from edits', async (): Promise<void> => {
+    const source = render();
+    source.response = { rows: [
+      { groups: [{ dimension: 'source', value: { kind: 'present', value: ' exact value ' } }], count: 3, bucket: { kind: 'none' } },
+      { groups: [{ dimension: 'source', value: { kind: 'present', value: '' } }], count: 4, bucket: { kind: 'none' } }
+    ] };
+    button('+ Add filter').click();
+    await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>('input[role="combobox"]')?.disabled).toBe(false));
+    await chooseObservedValue('exact value');
+    await chooseObservedValue('Empty value');
+    expect(document.querySelector('[aria-label="Selected filters"]')?.textContent).toContain('Source:');
+    source.response = { rows: [
+      { groups: [{ dimension: 'severity', value: { kind: 'missing' } }], count: 0, bucket: { kind: 'none' } },
+      { groups: [{ dimension: 'severity', value: { kind: 'present', value: '' } }], count: 7, bucket: { kind: 'none' } }
+    ] };
     button('Run query').click();
     await vi.waitFor(() => expect(document.querySelector('table')).not.toBeNull());
-    expect(source.queries[0].filters).toEqual([{ dimension: 'source', values: [' exact value ', ''] }]);
+    expect(source.queries[1].filters).toEqual([{ dimension: 'source', values: [' exact value ', ''] }]);
     expect(document.querySelector('tbody')?.textContent).toContain('Missing attribute');
     expect(document.querySelector('tbody')?.textContent).toContain('Empty string');
     expect(document.querySelector('tbody')?.textContent).toContain('0');
     input('analytics-limit', '20');
     await tick();
-    expect(document.body.textContent).toContain('Draft changed — run query to apply.');
+    expect(document.body.textContent).toContain('Filters or settings changed. Run query to update results.');
     expect(document.body.textContent).toContain('Maximum 100 groups');
+    expect(source.queries).toHaveLength(2);
+    button('Remove Source value " exact value "').click();
+    await tick();
+    expect(document.querySelector('[aria-label="Selected filters"]')?.textContent).not.toContain('exact value');
+  });
+
+  it('searches and selects observed values with the keyboard', async (): Promise<void> => {
+    const source = render();
+    source.response = { rows: [
+      { groups: [{ dimension: 'source', value: { kind: 'present', value: 'worker' } }], count: 2, bucket: { kind: 'none' } },
+      { groups: [{ dimension: 'source', value: { kind: 'present', value: 'api' } }], count: 3, bucket: { kind: 'none' } }
+    ] };
+    button('+ Add filter').click();
+    await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>('input[role="combobox"]')?.disabled).toBe(false));
+    const field = document.querySelector<HTMLInputElement>('input[role="combobox"]')!;
+    field.focus();
+    field.value = 'WORK';
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+    await tick();
+    expect([...document.querySelectorAll('[role="option"]')].map((option) => option.textContent?.trim())).toEqual(['worker (2)']);
+    field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await tick();
+    expect(document.querySelector('[aria-label="Selected filters"]')?.textContent).toContain('worker');
     expect(source.queries).toHaveLength(1);
+  });
+
+  it('shows recoverable value-loading failures without submitting the main query', async (): Promise<void> => {
+    const source = render();
+    source.failure = new HttpError(422, 'Too many groups', {});
+    button('+ Add filter').click();
+    await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('narrower time range'));
+    expect(document.querySelector('table')).toBeNull();
+    source.failure = undefined;
+    source.response = { rows: [] };
+    button('Retry values').click();
+    await vi.waitFor(() => expect(document.querySelector('[role="alert"]')).toBeNull());
+    const field = document.querySelector<HTMLInputElement>('input[role="combobox"]')!;
+    field.focus();
+    await tick();
+    expect(document.body.textContent).toContain('No unselected values in this time range.');
   });
 
   it('provides keyboard-focusable results content with a native link back to the query', async (): Promise<void> => {
@@ -87,19 +158,12 @@ describe('analytics query interaction', () => {
     button('Run query').click();
     await vi.waitFor(() => expect(source.queries).toHaveLength(1));
     expect(source.queries[0].group_by).toEqual(['source', 'severity']);
-    await vi.waitFor(() => expect([...document.querySelectorAll('tbody td')].map((cell) => cell.textContent)).toEqual(['"api"', '"INFO"', '12']));
+    await vi.waitFor(() => expect([...document.querySelectorAll('tbody td')].map((cell) => cell.textContent)).toEqual(['api', 'INFO', '12']));
   });
 
-  it('requires unadded text to be added and permits retry after service failure', async (): Promise<void> => {
+  it('permits retry after service failure', async (): Promise<void> => {
     const source = render();
-    input('analytics-filter-tool_name', 'tools.search');
-    button('Run query').click();
-    await tick();
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain('Add or clear');
-    expect(source.queries).toHaveLength(0);
-    button('Add Tool name value').click();
     source.failure = new HttpError(503, 'Unavailable', {});
-    await tick();
     button('Run query').click();
     await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('disabled'));
     source.failure = undefined;

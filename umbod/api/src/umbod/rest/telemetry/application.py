@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from umbod.config.telemetry import TelemetryAppConfig
 from umbod.core.telemetry.analytics import TelemetryAnalyticsRuntime, TelemetryAnalyticsUnavailable
-from umbod.infrastructure.telemetry import create_configured_analytics_runtime
+from umbod.infrastructure import create_configured_analytics_runtime
 from umbod.logging import flush_logging
 from umbod.rest.telemetry.composition import install_analytics_dependencies, install_telemetry_receiver
 

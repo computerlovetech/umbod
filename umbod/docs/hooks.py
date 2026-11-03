@@ -19,6 +19,7 @@ VALUE_SECTIONS = {
     "config": ("Application configuration", "Set the runtime profile, logging, authentication, authorization, public origins, features, and analytics backend."),
     "plugins": ("Connector plugins", "Configure available connectors and their deployment image and resources."),
     "core": ("Core API and MCP workloads", "Configure the shared core image and the API and MCP containers."),
+    "telemetry": ("Private telemetry collector", "Configure the private collector listener, service port, and bearer-token secret."),
     "frontend": ("Frontend workload", "Configure the web frontend image, replicas, environment, and resources."),
     "persistence": ("Persistent storage", "Configure the optional persistent volume claim used for SQLite data."),
     "services": ("Kubernetes services", "Set the service ports exposed for the API, MCP, and frontend workloads."),

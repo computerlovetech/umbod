@@ -24,7 +24,7 @@ from umbod.core.telemetry.analytics import (
     TelemetryAnalyticsWriter,
     TimeRange,
 )
-from umbod.infrastructure.telemetry import create_configured_analytics_runtime
+from umbod.infrastructure import create_configured_analytics_runtime
 from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationError
 from umbod.rest.main import create_app_with_analytics_runtime
 from umbod.rest.telemetry.application import create_receiver_app

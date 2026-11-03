@@ -3,12 +3,13 @@ import { dimensions, logCountQuerySchema, type Dimension, type LogCountQuery } f
 export const dimensionLabels: Record<Dimension, string> = {
   source: 'Source', event_name: 'Event name', severity: 'Severity', session_id: 'Session ID', tool_name: 'Tool name'
 };
+export const dimensionOptions = dimensions.map((dimension) => ({ value: dimension, label: dimensionLabels[dimension] }));
 export const rangeOptions = [
   { value: 'hour', label: 'Last hour' }, { value: 'day', label: 'Last 24 hours' },
   { value: 'week', label: 'Last 7 days' }, { value: 'custom', label: 'Custom range' }
 ];
 export const bucketOptions = [
-  { value: 'none', label: 'No time buckets' }, { value: 'minute', label: 'Minute' },
+  { value: 'none', label: 'Total for range' }, { value: 'minute', label: 'Minute' },
   { value: 'hour', label: 'Hour' }, { value: 'day', label: 'Day' }
 ];
 export type RangePreset = 'hour' | 'day' | 'week' | 'custom';
@@ -23,7 +24,6 @@ export class QueryDraft {
   private limitValue = $state('100');
   private grouping = $state.raw<readonly Dimension[]>(['severity']);
   private filterValues = $state.raw<Record<Dimension, readonly string[]>>({ source: [], event_name: [], severity: [], session_id: [], tool_name: [] });
-  private entries = $state.raw<Record<Dimension, string>>({ source: '', event_name: '', severity: '', session_id: '', tool_name: '' });
 
   get preset(): RangePreset { return this.presetValue; }
   get start(): string { return this.startValue; }
@@ -33,7 +33,6 @@ export class QueryDraft {
   get limit(): string { return this.limitValue; }
   get groupBy(): readonly Dimension[] { return this.grouping; }
   get filters(): Readonly<Record<Dimension, readonly string[]>> { return this.filterValues; }
-  get inputs(): Readonly<Record<Dimension, string>> { return this.entries; }
   get fingerprint(): string {
     return JSON.stringify([this.preset, this.start, this.end, this.offset, this.bucket, this.limit, this.groupBy, this.filters]);
   }
@@ -43,11 +42,8 @@ export class QueryDraft {
   setOffset(value: string): void { this.offsetValue = value; }
   setBucket(value: string): void { if (bucketOptions.some((option) => option.value === value)) this.bucketValue = value as BucketWidth; }
   setLimit(value: string): void { this.limitValue = value; }
-  setInput(dimension: Dimension, value: string): void { this.entries = { ...this.entries, [dimension]: value }; }
-  addFilter(dimension: Dimension): void {
-    const value = this.entries[dimension];
+  selectFilter(dimension: Dimension, value: string): void {
     if (!this.filterValues[dimension].includes(value)) this.filterValues = { ...this.filterValues, [dimension]: [...this.filterValues[dimension], value] };
-    this.entries = { ...this.entries, [dimension]: '' };
   }
   removeFilter(dimension: Dimension, value: string): void {
     this.filterValues = { ...this.filterValues, [dimension]: this.filterValues[dimension].filter((entry) => entry !== value) };
@@ -63,13 +59,18 @@ export class QueryDraft {
     [next[index], next[target]] = [next[target], next[index]];
     this.grouping = next;
   }
-  resolve(now: Date): LogCountQuery {
+  resolveTimeRange(now: Date): LogCountQuery['time_range'] {
     const durations = { hour: 3600000, day: 86400000, week: 604800000 };
     const time_range = this.presetValue === 'custom'
       ? { start: this.customInstant(this.start), end: this.customInstant(this.end) }
       : { start: new Date(now.getTime() - durations[this.presetValue]).toISOString(), end: now.toISOString() };
+    const result = logCountQuerySchema.shape.time_range.safeParse(time_range);
+    if (!result.success) throw new Error('Choose a valid range with start before end.');
+    return result.data;
+  }
+  resolve(now: Date): LogCountQuery {
     const result = logCountQuerySchema.safeParse({
-      time_range,
+      time_range: this.resolveTimeRange(now),
       filters: dimensions.filter((dimension) => this.filters[dimension].length > 0).map((dimension) => ({ dimension, values: [...this.filters[dimension]] })),
       group_by: [...this.groupBy],
       bucketing: this.bucket === 'none' ? { kind: 'none' } : { kind: 'fixed', width: this.bucket },

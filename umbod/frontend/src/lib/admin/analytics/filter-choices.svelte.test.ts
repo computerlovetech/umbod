@@ -1,0 +1,225 @@
+import { describe, expect, it } from 'vitest';
+import { AnalyticsState } from './analytics-state.svelte';
+import { AuthenticationRequiredError, HttpError } from '../infrastructure/transport';
+import type { Dimension, LogCountQuery, LogCountResponse } from './domain/schemas';
+import type { LogCountSource } from './port';
+
+function values(dimension: Dimension = 'source'): LogCountResponse {
+  return { rows: [
+    { groups: [{ dimension, value: { kind: 'missing' } }], count: 8, bucket: { kind: 'none' } },
+    ...['', ' Alpha ', 'alpha', 'Beta'].map((value, index) => ({ groups: [{ dimension, value: { kind: 'present' as const, value } }], count: index + 1, bucket: { kind: 'none' as const } }))
+  ] };
+}
+
+class Source implements LogCountSource {
+  readonly queries: LogCountQuery[] = [];
+  readonly signals: Array<AbortSignal | undefined> = [];
+  response = values();
+  failure: Error | undefined;
+  handler: (() => Promise<LogCountResponse>) | undefined;
+
+  async query(query: LogCountQuery, signal?: AbortSignal): Promise<LogCountResponse> {
+    this.queries.push(query);
+    this.signals.push(signal);
+    if (this.failure) throw this.failure;
+    return this.handler ? this.handler() : this.response;
+  }
+}
+
+function setup(): { source: Source; state: AnalyticsState } {
+  const source = new Source();
+  return { source, state: new AnalyticsState(source, () => new Date('2026-10-31T12:00:00Z')) };
+}
+
+function deferred(): { promise: Promise<LogCountResponse>; resolve: (response: LogCountResponse) => void; reject: (error: Error) => void } {
+  let resolve!: (response: LogCountResponse) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<LogCountResponse>((complete, fail) => { resolve = complete; reject = fail; });
+  return { promise, resolve, reject };
+}
+
+describe('existing filter choices', () => {
+  it('discovers unfiltered values for one dimension and preserves exact blank, whitespace and case', async (): Promise<void> => {
+    const { source, state } = setup();
+    state.draft.selectFilter('severity', 'INFO');
+    state.draft.setBucket('hour');
+    state.draft.setLimit('2');
+    await state.choices.show();
+    expect(state.choices.dimension).toBe('source');
+    expect(source.queries[0]).toEqual({ time_range: { start: '2026-10-31T11:00:00.000Z', end: '2026-10-31T12:00:00.000Z' }, filters: [], group_by: ['source'], bucketing: { kind: 'none' }, max_groups: 1000 });
+    expect(state.choices.options).toEqual([
+      { value: '""', label: 'Empty value (1)' }, { value: '" Alpha "', label: ' Alpha  (2)' },
+      { value: '"alpha"', label: 'alpha (3)' }, { value: '"Beta"', label: 'Beta (4)' }
+    ]);
+    state.choices.setSearch('EMPTY');
+    expect(state.choices.options).toEqual([{ value: '""', label: 'Empty value (1)' }]);
+    const choose = state.choices.choose;
+    choose('""');
+    choose('" Alpha "');
+    choose('"alpha"');
+    choose('"alpha"');
+    choose('not json');
+    expect(state.draft.filters.source).toEqual(['', ' Alpha ', 'alpha']);
+    expect(state.choices.options).toEqual([{ value: '"Beta"', label: 'Beta (4)' }]);
+  });
+
+  it.each(['', '0', '1001', '1.5'])('discovers values independently of invalid main-query limit %s', async (limit: string): Promise<void> => {
+    const { source, state } = setup();
+    state.draft.setLimit(limit);
+    await state.choices.show();
+    expect(state.choices.error).toBe('');
+    expect(state.choices.options).toHaveLength(4);
+    expect(source.queries[0].max_groups).toBe(1000);
+  });
+
+  it('requires a valid time range before making a discovery request', async (): Promise<void> => {
+    const { source, state } = setup();
+    state.draft.setPreset('custom');
+    await state.choices.show();
+    expect(state.choices.error).toContain('valid time range');
+    expect(state.choices.pending).toBe('');
+    expect(source.queries).toHaveLength(0);
+    state.draft.setStart('2026-10-31T10:00');
+    state.draft.setEnd('2026-10-31T11:00');
+    await state.choices.refresh();
+    expect(state.choices.options).toHaveLength(4);
+  });
+
+  it('searches locally without case folding selected values and resets search on choice and dimension change', async (): Promise<void> => {
+    const { source, state } = setup();
+    await state.choices.show();
+    const search = state.choices.setSearch;
+    search('ALP');
+    expect(state.choices.options).toHaveLength(2);
+    state.choices.choose('"alpha"');
+    expect(state.choices.search).toBe('');
+    search('unknown');
+    expect(state.choices.emptyMessage).toContain('No matching');
+    expect(source.queries).toHaveLength(1);
+    await state.choices.setDimension('invalid');
+    expect(state.choices.dimension).toBe('source');
+    source.response = values('tool_name');
+    await state.choices.setDimension('tool_name');
+    expect(state.choices.search).toBe('');
+    expect(source.queries[1].group_by).toEqual(['tool_name']);
+    expect(state.choices.options).toHaveLength(4);
+  });
+
+  it('distinguishes no present attributes from an empty value', async (): Promise<void> => {
+    const { source, state } = setup();
+    source.response = { rows: [values().rows[0], { groups: [], count: 4, bucket: { kind: 'none' } }] };
+    await state.choices.show();
+    expect(state.choices.options).toEqual([]);
+    expect(state.choices.emptyMessage).toContain('No unselected');
+  });
+
+  it.each([
+    [new HttpError(422, 'Limit', { detail: 'unsafe partial values' }), 'narrower time range'],
+    [new Error('offline'), 'try again'],
+    [new HttpError(503, 'Unavailable', {}), 'try again']
+  ])('clears old options on failure and supports refresh', async (failure: Error, message: string): Promise<void> => {
+    const { source, state } = setup();
+    await state.choices.show();
+    source.failure = failure;
+    await state.choices.refresh();
+    expect(state.choices.options).toEqual([]);
+    expect(state.choices.error).toContain(message);
+    expect(state.choices.pending).toBe('');
+    source.failure = undefined;
+    await state.choices.refresh();
+    expect(state.choices.error).toBe('');
+    expect(state.choices.options).toHaveLength(4);
+  });
+
+  it('uses time configuration rather than the clock, buckets, groups, limits or filters for freshness', async (): Promise<void> => {
+    const source = new Source();
+    let clock = new Date('2026-10-31T12:00:00Z');
+    const state = new AnalyticsState(source, () => clock);
+    await state.choices.show();
+    clock = new Date('2026-11-01T12:00:00Z');
+    state.draft.setBucket('day');
+    state.draft.setLimit('1');
+    state.draft.toggleGroup('source');
+    state.draft.selectFilter('severity', 'INFO');
+    expect(state.choices.stale).toBe(false);
+    for (const update of [() => state.draft.setPreset('day'), () => state.draft.setStart('2026-10-30T00:00'), () => state.draft.setEnd('2026-10-31T00:00'), () => state.draft.setOffset('+01:00')]) {
+      update();
+      expect(state.choices.stale).toBe(true);
+      expect(state.choices.options).toEqual([]);
+      expect(state.choices.emptyMessage).toContain('Refresh');
+      state.choices.choose('"alpha"');
+      expect(state.draft.filters.source).toEqual([]);
+      await state.choices.refresh();
+      expect(state.choices.stale).toBe(false);
+    }
+  });
+
+  it.each(['close', 'dispose', 'dimension', 'refresh'] as const)('fences late responses after %s', async (action): Promise<void> => {
+    const { source, state } = setup();
+    const late = deferred();
+    source.handler = () => late.promise;
+    const loading = state.choices.show();
+    expect(state.choices.pending).not.toBe('');
+    source.handler = undefined;
+    source.response = { rows: [] };
+    if (action === 'close') state.choices.close();
+    if (action === 'dispose') state.dispose();
+    if (action === 'dimension') await state.choices.setDimension('severity');
+    if (action === 'refresh') await state.choices.refresh();
+    expect(source.signals[0]?.aborted).toBe(true);
+    late.resolve(values());
+    await loading;
+    expect(state.choices.options).toEqual([]);
+    expect(state.choices.pending).toBe('');
+  });
+
+  it('hides responses when time changes during discovery until explicitly refreshed', async (): Promise<void> => {
+    const { source, state } = setup();
+    const late = deferred();
+    source.handler = () => late.promise;
+    const loading = state.choices.show();
+    state.draft.setPreset('week');
+    late.resolve(values());
+    await loading;
+    expect(state.choices.stale).toBe(true);
+    expect(state.choices.options).toEqual([]);
+  });
+
+  it.each([new AuthenticationRequiredError(), new HttpError(401, 'Unauthorized', {}), new HttpError(403, 'Forbidden', {})])('revokes analytics access and fences a concurrent result', async (failure: Error): Promise<void> => {
+    const { source, state } = setup();
+    await state.run();
+    expect(state.result).toBeDefined();
+    const late = deferred();
+    source.handler = () => late.promise;
+    const running = state.run();
+    source.failure = failure;
+    await state.choices.show();
+    expect(state.accessLost).toBe(true);
+    expect(state.result).toBeUndefined();
+    expect(state.pending).toBe(false);
+    expect(state.choices.pending).toBe('');
+    expect(source.signals[1]?.aborted).toBe(true);
+    late.resolve(values());
+    await running;
+    expect(state.result).toBeUndefined();
+    expect(state.error).toContain('Administration access');
+    await state.run();
+    await state.choices.show();
+    expect(source.queries).toHaveLength(3);
+  });
+
+  it('query access loss aborts discovery and ignores its late failure', async (): Promise<void> => {
+    const { source, state } = setup();
+    const late = deferred();
+    source.handler = () => late.promise;
+    const loading = state.choices.show();
+    source.failure = new AuthenticationRequiredError();
+    await state.run();
+    late.reject(new Error('late'));
+    await loading;
+    expect(state.choices.error).toBe('');
+    expect(state.choices.pending).toBe('');
+    expect(state.choices.open).toBe(false);
+    expect(source.signals[0]?.aborted).toBe(true);
+  });
+});
