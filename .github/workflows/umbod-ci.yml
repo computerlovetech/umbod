@@ -33,14 +33,14 @@ jobs:
   changes:
     needs: harness-linting
     name: Detect Kind-relevant changes
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
       pull-requests: read
     outputs:
       kind: ${{ steps.filter.outputs.kind }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
 
       - id: filter
         uses: dorny/paths-filter@v3
@@ -64,12 +64,12 @@ jobs:
   docs:
     needs: harness-linting
     name: umbod Documentation Build
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
       run:
         working-directory: umbod
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
 
       - uses: astral-sh/setup-uv@v7
         with:
@@ -85,12 +85,12 @@ jobs:
   sdk-tests:
     needs: harness-linting
     name: Umbod SDK Tests and Installed Wheel
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
       run:
         working-directory: packages/umbod-sdk
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
       - uses: astral-sh/setup-uv@v7
       - name: Test SDK
         run: uv run --locked pytest tests -q --cov --cov-report=xml:coverage.xml
@@ -121,12 +121,12 @@ jobs:
   backend-tests:
     needs: harness-linting
     name: umbod Backend Tests
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
       run:
         working-directory: umbod/api
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
 
       - uses: astral-sh/setup-uv@v7
         with:
@@ -164,9 +164,9 @@ jobs:
   core:
     name: umbod Core Docker Build
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
 
       - uses: astral-sh/setup-uv@v7
 
@@ -185,9 +185,9 @@ jobs:
   connector-builder:
     needs: harness-linting
     name: umbod Connector Builder Image
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
 
       - name: Build image
         run: |
@@ -206,9 +206,9 @@ jobs:
   frontend:
     name: umbod Frontend Docker Build
     needs: changes
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
 
       - uses: oven-sh/setup-bun@v2
 
@@ -251,12 +251,12 @@ jobs:
   helm:
     needs: harness-linting
     name: umbod Helm Chart
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
       run:
         working-directory: umbod
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
 
       - uses: azure/setup-helm@v4.3.0
         with:
@@ -285,7 +285,7 @@ jobs:
   helm-kubernetes-schema:
     needs: harness-linting
     name: umbod Helm Chart (Kubernetes ${{ matrix.kubernetes-version }})
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     strategy:
       fail-fast: false
       matrix:
@@ -298,7 +298,7 @@ jobs:
       run:
         working-directory: umbod
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
 
       - uses: azure/setup-helm@v4.3.0
         with:
@@ -319,12 +319,12 @@ jobs:
     name: umbod Helm Chart Kind Install
     needs: [changes, core, frontend]
     if: needs.changes.outputs.kind == 'true'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
       run:
         working-directory: umbod
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
 
       - uses: azure/setup-helm@v4.3.0
         with:
@@ -342,7 +342,7 @@ jobs:
     name: umbod CI
     needs: [harness-linting, changes, docs, sdk-tests, backend-tests, core, connector-builder, frontend, helm, helm-kubernetes-schema, helm-kind-install]
     if: always()
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: umbod-ci
     steps:
       - name: Fail if any required job failed
@@ -373,7 +373,7 @@ jobs:
         github.ref == 'refs/heads/main' &&
         github.repository == 'computerlovetech/umbod'
       }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
       packages: write
@@ -385,12 +385,13 @@ jobs:
           - {name: core, image: ghcr.io/computerlovetech/umbod, context: ., file: umbod/api/Dockerfile, cache: umbod-release}
           - {name: frontend, image: ghcr.io/computerlovetech/umbod-frontend, context: umbod/frontend, file: umbod/frontend/Dockerfile, cache: umbod-frontend-release}
     steps:
-      - uses: actions/checkout@v6
+      - uses: useblacksmith/checkout@v1
       - uses: docker/setup-qemu-action@v4
-      - uses: docker/setup-buildx-action@v4
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
       - uses: docker/login-action@v3
         with: {registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}"}
-      - uses: docker/build-push-action@v7.1.0
+      - uses: useblacksmith/build-push-action@v2
         with:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
@@ -402,8 +403,6 @@ jobs:
             org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=main-${{ github.sha }}
-          cache-from: type=gha,scope=${{ matrix.cache }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.cache }}
       - name: Verify published manifest
         run: docker buildx imagetools inspect "${{ matrix.image }}:main-${{ github.sha }}"
 
@@ -418,11 +417,12 @@ jobs:
         github.ref == 'refs/heads/main' &&
         github.repository == 'computerlovetech/umbod'
       }}
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       packages: write
     steps:
-      - uses: docker/setup-buildx-action@v4
+      - name: Setup Blacksmith Builder
+        uses: useblacksmith/setup-docker-builder@v1
       - uses: docker/login-action@v3
         with: {registry: ghcr.io, username: "${{ github.actor }}", password: "${{ secrets.GITHUB_TOKEN }}"}
       - name: Promote and verify image manifests
