@@ -2,20 +2,27 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from prometheus_client import CollectorRegistry
 from fastapi.responses import JSONResponse
 
 from umbod.config.telemetry import TelemetryAppConfig
 from umbod.core.telemetry.analytics import TelemetryAnalyticsRuntime, TelemetryAnalyticsUnavailable
 from umbod.infrastructure import create_configured_analytics_runtime
 from umbod.logging import flush_logging
-from umbod.rest.telemetry.composition import install_analytics_dependencies, install_telemetry_receiver
+from umbod.rest.telemetry.composition import install_analytics_dependencies, install_telemetry_receiver_with_registry
 
 
 def create_receiver_app(
     settings: TelemetryAppConfig, runtime: TelemetryAnalyticsRuntime,
 ) -> FastAPI:
+    return create_receiver_app_with_registry(settings, runtime, CollectorRegistry())
+
+
+def create_receiver_app_with_registry(
+    settings: TelemetryAppConfig, runtime: TelemetryAnalyticsRuntime, registry: CollectorRegistry,
+) -> FastAPI:
     app = FastAPI(title="Umbod telemetry", docs_url=None, redoc_url=None)
-    install_telemetry_receiver(app, settings)
+    install_telemetry_receiver_with_registry(app, settings, registry)
     install_analytics_dependencies(app, runtime)
 
     @app.get("/health")

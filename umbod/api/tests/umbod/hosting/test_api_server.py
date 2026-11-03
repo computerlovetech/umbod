@@ -277,6 +277,15 @@ def test_api_command_serves_private_collector_and_shared_analytics(
             )
             assert exported.status_code == 200, exported.text
             assert _count(origins[0]) == 1
+            metrics = httpx.get(f"http://127.0.0.1:{rest_metrics}/metrics", timeout=3)
+            assert metrics.status_code == 200
+            assert 'umbod_rest_requests_total{method="POST",route="/admin/telemetry/log-counts",status_class="2xx"} 1.0' in metrics.text
+            assert 'umbod_collector_requests_total{method="POST",route="/v1/logs",status_class="2xx"} 1.0' in metrics.text
+            assert 'umbod_collector_requests_total{method="POST",route="/v1/logs",status_class="4xx"} 1.0' in metrics.text
+            assert 'umbod_collector_request_duration_seconds_count{method="POST",route="/v1/logs",status_class="2xx"} 1.0' in metrics.text
+            assert "umbod_collector_log_records_accepted_total 1.0" in metrics.text
+            assert 'route="/ready"' not in metrics.text
+            assert "listener-test-token" not in metrics.text
             serving_pids = {row.split(",")[0] for row in pids.read_text().splitlines()}
             assert len(serving_pids) == 1
             assert {

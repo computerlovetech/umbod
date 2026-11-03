@@ -26,8 +26,10 @@ from umbod.core.telemetry.analytics import (
 )
 from umbod.infrastructure import create_configured_analytics_runtime
 from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationError
-from umbod.rest.main import create_app_with_analytics_runtime
-from umbod.rest.telemetry.application import create_receiver_app
+from umbod.rest.main import create_app_with_shared_metrics
+from umbod.rest.metrics import PrometheusRestMetricsRecorder
+from umbod.rest.metrics.http_server import create_rest_metrics_app
+from umbod.rest.telemetry.application import create_receiver_app_with_registry
 from umbod.rest.telemetry.dependencies import get_analytics_writer, get_telemetry_sink
 
 BASE = "/api/admin/telemetry/log-counts"
@@ -84,6 +86,7 @@ class Applications:
     collector_app: FastAPI
     runtime: RecordingRuntime
     sink: RecordingSink
+    metrics: PrometheusRestMetricsRecorder
 
 
 @pytest.fixture
@@ -112,6 +115,7 @@ def configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppConfig:
 async def _applications(configuration: AppConfig) -> AsyncIterator[Applications]:
     runtime = RecordingRuntime(create_configured_analytics_runtime(configuration))
     sink = RecordingSink()
+    metrics = PrometheusRestMetricsRecorder()
 
     def provide_sink() -> TelemetrySink:
         return sink
@@ -119,14 +123,14 @@ async def _applications(configuration: AppConfig) -> AsyncIterator[Applications]
     async with AsyncExitStack() as stack:
         stack.push_async_callback(runtime.shutdown)
         await runtime.ensure_ready()
-        api = create_app_with_analytics_runtime(
-            runtime, settings=configuration, connector_registrations=(), admin_verifier=AdminVerifier(),
+        api = create_app_with_shared_metrics(
+            runtime, metrics, settings=configuration, connector_registrations=(), admin_verifier=AdminVerifier(),
         )
-        collector = create_receiver_app(TelemetryAppConfig(
+        collector = create_receiver_app_with_registry(TelemetryAppConfig(
             runtime=configuration.runtime,
             otlp_receiver=configuration.otlp_receiver,
             telemetry_analytics=configuration.telemetry_analytics,
-        ), runtime)
+        ), runtime, metrics.registry)
         collector.dependency_overrides[get_telemetry_sink] = provide_sink
         await stack.enter_async_context(api.router.lifespan_context(api))
         await stack.enter_async_context(collector.router.lifespan_context(collector))
@@ -138,7 +142,7 @@ async def _applications(configuration: AppConfig) -> AsyncIterator[Applications]
             transport=ASGITransport(app=collector), base_url="http://collector",
             headers={"Authorization": "Bearer analytics-ingestion"},
         ))
-        yield Applications(api_client, collector_client, collector, runtime, sink)
+        yield Applications(api_client, collector_client, collector, runtime, sink, metrics)
 
 
 @pytest.fixture
@@ -185,6 +189,22 @@ async def test_accepted_logs_are_queryable_through_admin_api_and_persist_after_r
         count = await restarted.api.post(BASE, json=_query_body(query))
         assert count.status_code == 200
         assert count.json()["rows"][0]["count"] == 1
+
+
+async def test_collector_and_rest_metrics_share_existing_exposition(
+    configuration: AppConfig, query: LogCountQuery,
+) -> None:
+    async with _applications(configuration) as apps:
+        assert (await apps.collector.post("/v1/logs", json=_payload())).status_code == 200
+        assert (await apps.api.post(BASE, json=_query_body(query))).status_code == 200
+        async with AsyncClient(
+            transport=ASGITransport(app=create_rest_metrics_app(apps.metrics)), base_url="http://metrics",
+        ) as metrics_client:
+            response = await metrics_client.get("/metrics")
+        assert response.status_code == 200
+        assert 'umbod_rest_requests_total{method="POST",route="/admin/telemetry/log-counts",status_class="2xx"} 1.0' in response.text
+        assert 'umbod_collector_requests_total{method="POST",route="/v1/logs",status_class="2xx"} 1.0' in response.text
+        assert "umbod_collector_log_records_accepted_total 1.0" in response.text
 
 
 async def test_shared_runtime_lifetime_is_owned_only_by_host(configuration: AppConfig) -> None:

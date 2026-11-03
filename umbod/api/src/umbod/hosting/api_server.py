@@ -17,8 +17,9 @@ from umbod.hosting.listeners import (
 )
 from umbod.infrastructure import create_configured_analytics_runtime
 from umbod.logging import configure_logging
-from umbod.rest.main import create_app_with_analytics_runtime
-from umbod.rest.telemetry.application import create_receiver_app
+from umbod.rest.main import create_app_with_shared_metrics
+from umbod.rest.metrics import PrometheusRestMetricsRecorder
+from umbod.rest.telemetry.application import create_receiver_app_with_registry
 
 
 class ProcessShutdownDeadline:
@@ -68,7 +69,10 @@ async def serve_api(
             await runtime.ensure_ready()
         if shutdown_requested.is_set():
             return
-        api = create_app_with_analytics_runtime(runtime, settings=settings)
+        metrics_recorder = PrometheusRestMetricsRecorder()
+        api = create_app_with_shared_metrics(
+            runtime, metrics_recorder, settings=settings,
+        )
         listeners = [
             HttpListener(
                 name="api",
@@ -84,7 +88,7 @@ async def serve_api(
                 otlp_receiver=settings.otlp_receiver,
                 telemetry_analytics=settings.telemetry_analytics,
             )
-            collector = create_receiver_app(collector_settings, runtime)
+            collector = create_receiver_app_with_registry(collector_settings, runtime, metrics_recorder.registry)
             listeners.append(
                 HttpListener(
                     name="collector",

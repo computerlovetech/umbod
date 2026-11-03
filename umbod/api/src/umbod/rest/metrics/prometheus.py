@@ -26,6 +26,10 @@ class PrometheusRestMetricsRecorder:
             registry=self._registry,
         )
 
+    @property
+    def registry(self) -> CollectorRegistry:
+        return self._registry
+
     def record_completed_request(self, request: CompletedRestRequest) -> None:
         labels = {
             "method": request.method,

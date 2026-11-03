@@ -351,16 +351,26 @@ def create_app(*args: Any, **kwargs: Any) -> FastAPI:
     app_settings = create_app_arguments.settings or load_server_app_config(".env")
     return _create_application(
         create_app_arguments, app_settings,
-        create_configured_analytics_runtime(app_settings), True,
+        create_configured_analytics_runtime(app_settings), True, PrometheusRestMetricsRecorder(),
     )
 
 
 def create_app_with_analytics_runtime(
     analytics_runtime: TelemetryAnalyticsRuntime, *args: Any, **kwargs: Any,
 ) -> FastAPI:
+    return create_app_with_shared_metrics(
+        analytics_runtime, PrometheusRestMetricsRecorder(), *args, **kwargs,
+    )
+
+
+def create_app_with_shared_metrics(
+    analytics_runtime: TelemetryAnalyticsRuntime,
+    metrics_recorder: PrometheusRestMetricsRecorder,
+    *args: Any, **kwargs: Any,
+) -> FastAPI:
     create_app_arguments = _resolve_create_app_arguments(*args, **kwargs)
     app_settings = create_app_arguments.settings or load_server_app_config(".env")
-    return _create_application(create_app_arguments, app_settings, analytics_runtime, False)
+    return _create_application(create_app_arguments, app_settings, analytics_runtime, False, metrics_recorder)
 
 
 def _create_application(
@@ -368,6 +378,7 @@ def _create_application(
     app_settings: APISettings,
     analytics_runtime: TelemetryAnalyticsRuntime,
     manage_analytics: bool,
+    metrics_recorder: PrometheusRestMetricsRecorder,
 ) -> FastAPI:
     app_settings.validate_rest_authentication()
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(
@@ -377,7 +388,6 @@ def _create_application(
         app_settings, persistence_runtime, create_app_arguments.connector_registrations
     )
     dependency_factories.validate_startup()
-    metrics_recorder = PrometheusRestMetricsRecorder()
     metrics_server = RestMetricsHttpServer(
         metrics_recorder, app_settings.rest.metrics_port
     )
