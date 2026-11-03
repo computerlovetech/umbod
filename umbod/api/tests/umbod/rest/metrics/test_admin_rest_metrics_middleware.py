@@ -129,10 +129,15 @@ def test_metrics_failure_publishes_without_logging(caplog: pytest.LogCaptureFixt
     failures = CapturingApplicationFailures()
     app = create_test_app(FailingRecorder(), application_failures=failures)
 
-    response = TestClient(app).get("/items/private-id?token=secret-canary")
+    with caplog.at_level("DEBUG", logger="umbod"):
+        response = TestClient(app).get("/items/private-id?token=secret-canary")
 
     assert response.status_code == 200
-    assert caplog.records == []
+    assert [
+        record
+        for record in caplog.records
+        if record.name == "umbod" or record.name.startswith("umbod.")
+    ] == []
     assert len(failures.events) == 1
     event = failures.events[0]
     attributes = dict(event.attributes)
