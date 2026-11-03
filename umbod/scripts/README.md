@@ -1,15 +1,16 @@
 ---
 type: Software Module
 title: Repository scripts
-description: Source README validation, release version and metadata checks, and SDK version stamping.
+description: Backend pytest runner, README validation, release metadata checks and SDK version stamping.
 ---
 
 # Files
 
 - [README skill checks](../../skills/development/write-module-readme/SKILL.md) — Skill-owned README validation and post-edit checks.
+- [run_tests.py](./run_tests.py) — Directory-targeted backend pytest runner with automatic workers, optional slow-phase reports and argument forwarding.
 - [release_versions.py](./release_versions.py) — Release version conversion and committed metadata validation.
 - [stamp_sdk_version.py](./stamp_sdk_version.py) — SDK build-workspace stamping.
-- [tests](./tests/) — README checks, version and release workflow contracts.
+- [tests](./tests/) — Pytest runner, README checks, version and release workflow contracts.
 
 # Operations
 

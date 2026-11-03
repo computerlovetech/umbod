@@ -68,10 +68,8 @@ Run the checks applicable to the changed area.
 
 ### Tests and static checks
 
-- MCP: `cd umbod/api && uv run --locked pytest tests/umbod/mcp -q -n auto --dist=worksteal`
-- REST: `cd umbod/api && uv run --locked pytest tests/umbod/rest -q -n auto --dist=worksteal`
-- Core: `cd umbod/api && uv run --locked pytest tests/umbod/core -q -n auto --dist=worksteal`
-- Infrastructure: `cd umbod/api && uv run --locked pytest tests/umbod/infrastructure -q -n auto --dist=worksteal`
+- Python tests: `uv run umbod/scripts/run_tests.py <module>`. Modules: `all`, `cli`, `config`, `core`, `hosting`, `infrastructure`, `mcp`, `rest`, `messaging`, `deployment`. See `uv run umbod/scripts/run_tests.py --help` for defaults and pytest arguments.
+- Analyse test timings: `uv run umbod/scripts/run_tests.py core --analyse`.
 - Frontend: `cd umbod/frontend && bun run test && bun run check`
 - Python lint: `cd umbod/api && uv run --locked ruff check .`
 
