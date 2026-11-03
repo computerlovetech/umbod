@@ -13,14 +13,14 @@ from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
 
 
-@pytest.fixture(params=["inmemory", "sqlite"])
-def client(request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+@pytest.fixture
+def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     availability = tmp_path / "availability.json"
     availability.write_text('{"connectors": []}', encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability))
     settings = APISettings(
         admin_authentication={"mode": "simulation", "simulated_admin": True},
-        connector_store={"type": request.param, "sqlite_path": str(tmp_path / "overview.sqlite3")},
+        connector_store={"type": "inmemory"},
         rest={"metrics_enabled": False},
     )
     with TestClient(

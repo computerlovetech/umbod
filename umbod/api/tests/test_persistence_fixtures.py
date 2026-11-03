@@ -23,6 +23,16 @@ def test_database_is_not_created_by_configuration_isolation(
     )
 
 
+def test_configuration_isolation_reuses_worker_directory_without_requesting_tmp_path(
+    isolated_connector_store_database: Path,
+    isolated_connector_store_directory: Path,
+    request: pytest.FixtureRequest,
+) -> None:
+    assert isolated_connector_store_database.parent == isolated_connector_store_directory
+    assert "tmp_path" not in request.fixturenames
+    assert not isolated_connector_store_database.exists()
+
+
 def test_runtime_construction_does_not_prepare_the_isolated_database(
     isolated_connector_store_database: Path,
 ) -> None:

@@ -21,7 +21,7 @@ def local_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppConfig
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
     return AppConfig(
         rest={"metrics_enabled": False},
-        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "rest.sqlite")},
+        connector_store={"type": "inmemory"},
         runtime={"profile": "local", "auth": "dev"},
         admin_authentication={
             "mode": "simulation", "environment": "development", "simulated_admin": True,

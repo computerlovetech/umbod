@@ -48,10 +48,9 @@ async def test_accepted_refresh_transition_emits_notification(runtime_case: Runt
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", OPERATIONS)
+@pytest.mark.parametrize("runtime_case", ["sqlite"], indirect=True)
 async def test_refresh_event_failure_restores_state_including_uncertainty(runtime_case: RuntimeCase, refresh_store: PersonalRefreshStore, tmp_path: Path, operation: str) -> None:
     path = tmp_path / "runtime.sqlite3"
-    if not path.exists():
-        pytest.skip("SQLite trigger regression")
     run = await mutation(runtime_case, refresh_store, operation)
     before = await snapshot(runtime_case.database)
     previous_events = await events(runtime_case.database)

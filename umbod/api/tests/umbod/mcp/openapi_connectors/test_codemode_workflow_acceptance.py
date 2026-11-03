@@ -3,9 +3,9 @@ from umbod.mcp.connectors.openapi.discovery_runtime import reconcile_openapi_dis
 from umbod.core.activation import CAPABILITY_ACTIVATION_STATE_TABLE
 from umbod.core.connectors.openapi.stores import CATALOG_OPERATION_TABLE, CATALOG_SOURCE_TABLE, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, OpenApiConnectorStoreService
 from umbod.core.permissions.factories import create_group_permission_store
-from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
-from tests.persistence_runtime import prepared_sqlite_runtime
-from tests.persistence_runtime import prepared_persistence_runtime
+from umbod.core.persistence import PersistenceRuntime
+from umbod.rest.dependencies import get_connector_api_dependency_factories
+from umbod.rest.factories import ConnectorApiDependencyFactories
 import json
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from pathlib import Path
@@ -13,7 +13,9 @@ from typing import Any, AsyncIterator
 import httpx
 import jwt
 import pytest
+from fastapi import Request
 from fastapi.testclient import TestClient
+from starlette.routing import Mount
 from fastmcp import Client, FastMCP
 from fastmcp.server.auth.auth import AccessToken
 from mcp.server.auth.middleware.auth_context import AuthenticatedUser, auth_context_var
@@ -74,22 +76,18 @@ class NoopPermissionNotifier:
 def _document() -> dict[str, Any]:
     return {'openapi': '3.1.0', 'info': {'title': 'Inventory', 'version': '1'}, 'servers': [{'url': 'https://api.example.test'}], 'components': {'schemas': {'ItemUpdate': {'type': 'object', 'description': 'Fields used to update an inventory item.', 'properties': {'title': {'type': 'string', 'description': 'New inventory item title.', 'enum': ['Draft', 'Published']}, 'metadata': {'$ref': '#/components/schemas/ItemMetadata'}}, 'required': ['title'], 'additionalProperties': False}, 'ItemMetadata': {'type': 'object', 'properties': {'source': {'type': 'string', 'description': 'System that supplied the item.'}}, 'required': ['source'], 'additionalProperties': False}}}, 'paths': {'/items/{item_id}': {'get': {'operationId': 'getItem', 'summary': 'Get inventory item', 'parameters': [{'name': 'item_id', 'in': 'path', 'required': True, 'schema': {'type': 'string'}}, {'name': 'filter', 'in': 'query', 'schema': {'type': 'string'}}, {'name': 'X-Trace', 'in': 'header', 'schema': {'type': 'string'}}], 'requestBody': {'content': {'application/json': {'schema': {'$ref': '#/components/schemas/ItemUpdate'}}}}, 'responses': {'200': {'description': 'OK'}}}}}}
 
-def _settings(database_path: Path, exposure_mode: str, token: str) -> AppConfig:
-    return AppConfig(connector_store={'type': 'sqlite', 'sqlite_path': str(database_path)}, openapi_connectors={'json_import_max_bytes': 4096}, mcp=McpConfig(connector_tool_exposure_mode=exposure_mode, auth_mode='single_test_user', test_bearer_token=token, permission_group_claim='groups'), admin_authentication={'mode': 'simulation', 'simulated_admin': True})
+def _settings(exposure_mode: str, token: str) -> AppConfig:
+    return AppConfig(connector_store={'type': 'inmemory'}, openapi_connectors={'json_import_max_bytes': 4096}, mcp=McpConfig(connector_tool_exposure_mode=exposure_mode, auth_mode='single_test_user', test_bearer_token=token, permission_group_claim='groups'), admin_authentication={'mode': 'simulation', 'simulated_admin': True})
 
 def _unused_connector_operation() -> dict[str, object]:
     return {'unused': True}
 
-async def _build(settings: AppConfig, factory: RecordingOutboundHttpClientFactory) -> FastMCP:
-    persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
-    await persistence_runtime.readiness.ensure_ready()
+async def _build(settings: AppConfig, factory: RecordingOutboundHttpClientFactory, persistence_runtime: PersistenceRuntime) -> FastMCP:
     default_runtime = await create_default_mcp_connector_runtime(settings, persistence_runtime)
     runtime = ConnectorRuntime(connector_registrations=({'id': 'acceptance', 'display_name': 'Acceptance', 'description': 'Acceptance boundary'},), connector_configuration_store=default_runtime.connector_configuration_store, connector_publishing_store=default_runtime.connector_publishing_store, connector_tool_mappings=(ConcreteConnectorToolMapping('acceptance', 'unused', 'Unused', _unused_connector_operation, {}),))
     return await build_mcp_with_openapi_adapters(settings, MCPAuthProviderFactory().create(settings), runtime, (), OpenApiRuntimeAdapters(factory), persistence_runtime, telemetry=create_configured_mcp_telemetry(settings), downstream_client_factory=await create_configured_downstream_client_factory(settings, persistence_runtime.database))
 
-async def _build_default(settings: AppConfig) -> FastMCP:
-    persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
-    await persistence_runtime.readiness.ensure_ready()
+async def _build_default(settings: AppConfig, persistence_runtime: PersistenceRuntime) -> FastMCP:
     default_runtime = await create_default_mcp_connector_runtime(settings, persistence_runtime)
     runtime = ConnectorRuntime(connector_registrations=({'id': 'acceptance', 'display_name': 'Acceptance', 'description': 'Acceptance boundary'},), connector_configuration_store=default_runtime.connector_configuration_store, connector_publishing_store=default_runtime.connector_publishing_store, connector_tool_mappings=(ConcreteConnectorToolMapping('acceptance', 'unused', 'Unused', _unused_connector_operation, {}),))
     return await build_mcp(settings, MCPAuthProviderFactory().create(settings), runtime, persistence_runtime)
@@ -112,11 +110,20 @@ def connector_availability(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(path))
 
 @pytest.mark.asyncio
-async def test_admin_to_codemode_execution_enforces_live_sqlite_state(tmp_path: Path) -> None:
-    database_path = tmp_path / 'shared.sqlite3'
+async def test_admin_to_codemode_execution_enforces_live_state() -> None:
     token = jwt.encode({'sub': 'engineer@example.test', 'email': 'engineer@example.test', 'groups': ['engineering']}, key='', algorithm='none')
-    settings = _settings(database_path, 'codemode', token)
-    admin = TestClient(create_app(settings=APISettings.model_validate(settings.model_dump()), connector_registrations=[]))
+    settings = _settings('codemode', token)
+    app = create_app(settings=APISettings.model_validate(settings.model_dump()), connector_registrations=[])
+    admin_app = next(route.app for route in app.routes if isinstance(route, Mount) and route.path == '/api/admin')
+    captured: list[ConnectorApiDependencyFactories] = []
+
+    def capture_factories(request: Request) -> ConnectorApiDependencyFactories:
+        factories = get_connector_api_dependency_factories(request)
+        captured.append(factories)
+        return factories
+
+    admin_app.dependency_overrides[get_connector_api_dependency_factories] = capture_factories
+    admin = TestClient(app)
     connector_response = admin.post('/api/admin/connectors/openapi', json={'display_name': 'Inventory', 'capability_description': 'Manage inventory resources'})
     assert connector_response.status_code == 201
     connector_id = connector_response.json()['connector_id']
@@ -128,14 +135,14 @@ async def test_admin_to_codemode_execution_enforces_live_sqlite_state(tmp_path: 
     enabled_activation = {'tools': [{'tool_id': 'getItem', 'activation_status': 'enabled'}]}
     disabled_activation = {'tools': [{'tool_id': 'getItem', 'activation_status': 'disabled'}]}
     assert admin.put(activation_path, json=enabled_activation).status_code == 200
-    database = (await prepared_sqlite_runtime(database_path)).database
+    persistence_runtime = captured[0].persistence_runtime
+    database = persistence_runtime.database
     permission_store = await create_group_permission_store(database)
-    permissions = GroupPermissionManagementService(permission_store, CapabilityPermissionCatalog(StoreBackedOpenApiCapabilityCatalog(OpenApiConnectorStoreService((await prepared_persistence_runtime(AppConfig(connector_store={'type': 'sqlite', 'sqlite_path': str(database_path)}).connector_store)).database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)), 'openapi', UnrestrictedCapabilityPublication(), UnrestrictedCapabilityActivation(), UnrestrictedCapabilityReadiness(), validate_connector_availability=False, validate_tool_availability=False, include_connector_without_tools=False), NoopPermissionNotifier())
+    permissions = GroupPermissionManagementService(permission_store, CapabilityPermissionCatalog(StoreBackedOpenApiCapabilityCatalog(OpenApiConnectorStoreService(database, CONNECTOR_TABLE, CURRENT_CATALOG_HEADER_TABLE, CATALOG_SOURCE_TABLE, CATALOG_OPERATION_TABLE, CAPABILITY_ACTIVATION_STATE_TABLE)), 'openapi', UnrestrictedCapabilityPublication(), UnrestrictedCapabilityActivation(), UnrestrictedCapabilityReadiness(), validate_connector_availability=False, validate_tool_availability=False, include_connector_without_tools=False), NoopPermissionNotifier())
     operation = ConnectorToolRef(connector_id, 'getItem')
     assert (await permissions.save_group_permissions(SaveGroupPermissionsRequest(group_id='engineering', connector_ids=(), capabilities=(operation.as_capability(),)))).status == 'applied'
-    await prepared_sqlite_runtime(database_path)
     outbound_factory = RecordingOutboundHttpClientFactory()
-    mcp = await _build(settings, outbound_factory)
+    mcp = await _build(settings, outbound_factory, persistence_runtime)
     auth_context_var.set(AuthenticatedUser(_access_token(token)))
     async with Client(mcp) as client:
         tools = await client.list_tools()
@@ -229,5 +236,5 @@ async def test_admin_to_codemode_execution_enforces_live_sqlite_state(tmp_path: 
         assert revoked_execution.structured_content['final_value']['code'] == 'capability_unavailable'
         assert len(outbound_factory.client.requests) == 1
     for mode in ('flat', 'gateway'):
-        mode_names = await _tool_names(await _build_default(_settings(database_path, mode, token)), token)
+        mode_names = await _tool_names(await _build_default(_settings(mode, token), persistence_runtime), token)
         assert not {'search_openapi_capabilities', 'describe_openapi_capability', 'execute_openapi_capability'}.intersection(mode_names)

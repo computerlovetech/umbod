@@ -5,9 +5,9 @@ from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
 from umbod.core.activation import CapabilityRef, create_capability_activation_store
 from umbod.core.connectors.downstream_mcp.stores import CONNECTOR_CREDENTIAL_TABLE, CONNECTOR_DEFINITION_TABLE, ConnectorDefinitionStoreService, EncryptedCredentialStoreService, TOOL_CATALOG_TABLE, ToolCatalogStoreService
-from tests.persistence_runtime import create_inmemory_runtime, create_sqlite_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
+from umbod.core.persistence import Database
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any
 import pytest
 from umbod.config import ConnectorStoreConfig
@@ -57,12 +57,10 @@ class DownstreamInvocationRecorder:
     async def _templated_resource(self, task_id: str) -> str:
         return f'task {task_id}'
 
-async def _persist_downstream_state(database_path: str, input_schema: dict[str, Any] | None=None) -> None:
-    await prepared_sqlite_runtime(database_path)
-    await ConnectorDefinitionStoreService(create_sqlite_runtime(database_path).database, CONNECTOR_DEFINITION_TABLE).save(SaveConnectorDefinition(definition=NoAuthConnectorDefinition(connector_id=CONNECTOR_ID, display_name='Vikunja', tool_name_prefix='Vikunja', endpoint_url='https://vikunja.example.test/mcp')))
-    await EncryptedCredentialStoreService(create_sqlite_runtime(database_path).database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('test-secret')).save(SaveCredential(credential=NoAuthCredentialState(connector_id=CONNECTOR_ID)))
-    await ToolCatalogStoreService(create_sqlite_runtime(database_path).database, TOOL_CATALOG_TABLE).replace(ReplaceToolCatalog(snapshot=ToolCatalogSnapshot(connector_id=CONNECTOR_ID, discovered_at=datetime(2026, 1, 1, tzinfo=UTC), prompts=(DiscoveredPrompt(name='task_prompt', title='Task prompt', description='Summarize a project', arguments=(PromptArgument(name='project', required=True),)),), resources=(DiscoveredResource(name='fixed', title='Fixed tasks', uri='data://vikunja/fixed', description='Fixed tasks'),), resource_templates=(DiscoveredResourceTemplate(name='task', title='Task', uri_template='data://vikunja/{task_id}', description='Task by identifier'),), tools=(DiscoveredToolWithOutputSchema(identity=ToolIdentity(connector_id=CONNECTOR_ID, downstream_name=OPERATION_NAME), title='List Vikunja tasks', description='List tasks from a Vikunja project.', input_schema={'type': 'object', 'properties': {'project_id': {'type': 'integer'}}, 'required': ['project_id']} if input_schema is None else input_schema, output_schema={'type': 'object'}),))))
-    database = (await prepared_sqlite_runtime(database_path)).database
+async def _persist_downstream_state(database: Database, input_schema: dict[str, Any] | None=None) -> None:
+    await ConnectorDefinitionStoreService(database, CONNECTOR_DEFINITION_TABLE).save(SaveConnectorDefinition(definition=NoAuthConnectorDefinition(connector_id=CONNECTOR_ID, display_name='Vikunja', tool_name_prefix='Vikunja', endpoint_url='https://vikunja.example.test/mcp')))
+    await EncryptedCredentialStoreService(database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('test-secret')).save(SaveCredential(credential=NoAuthCredentialState(connector_id=CONNECTOR_ID)))
+    await ToolCatalogStoreService(database, TOOL_CATALOG_TABLE).replace(ReplaceToolCatalog(snapshot=ToolCatalogSnapshot(connector_id=CONNECTOR_ID, discovered_at=datetime(2026, 1, 1, tzinfo=UTC), prompts=(DiscoveredPrompt(name='task_prompt', title='Task prompt', description='Summarize a project', arguments=(PromptArgument(name='project', required=True),)),), resources=(DiscoveredResource(name='fixed', title='Fixed tasks', uri='data://vikunja/fixed', description='Fixed tasks'),), resource_templates=(DiscoveredResourceTemplate(name='task', title='Task', uri_template='data://vikunja/{task_id}', description='Task by identifier'),), tools=(DiscoveredToolWithOutputSchema(identity=ToolIdentity(connector_id=CONNECTOR_ID, downstream_name=OPERATION_NAME), title='List Vikunja tasks', description='List tasks from a Vikunja project.', input_schema={'type': 'object', 'properties': {'project_id': {'type': 'integer'}}, 'required': ['project_id']} if input_schema is None else input_schema, output_schema={'type': 'object'}),))))
     publishing_store = await create_connector_publishing_store(database)
     await publishing_store.publish_connector(CONNECTOR_ID)
     activation_store = await create_capability_activation_store(database)
@@ -71,20 +69,18 @@ async def _persist_downstream_state(database_path: str, input_schema: dict[str, 
     await activation_store.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=CONNECTOR_ID, capability_kind="resource", capability_key="data://vikunja/fixed"), ActivationStatus.ENABLED)
     await activation_store.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id=CONNECTOR_ID, capability_kind="resource_template", capability_key="data://vikunja/{task_id}"), ActivationStatus.ENABLED)
 
-async def _build_public_mcp(tmp_path: Path, exposure_mode: str, input_schema: dict[str, Any] | None=None) -> tuple[FastMCP, DownstreamInvocationRecorder]:
-    database_path = str(tmp_path / f'{exposure_mode}.sqlite3')
-    await _persist_downstream_state(database_path, input_schema)
+async def _build_public_mcp(exposure_mode: str, input_schema: dict[str, Any] | None=None) -> tuple[FastMCP, DownstreamInvocationRecorder]:
+    persistence_runtime = await prepared_inmemory_runtime()
+    await _persist_downstream_state(persistence_runtime.database, input_schema)
     recorder = DownstreamInvocationRecorder()
-    settings = MCPAppSettings(mcp=MCPSettings(connector_tool_exposure_mode=exposure_mode, downstream_discovery_enabled=False, _env_file=None), connector_store=ConnectorStoreConfig(type='sqlite', sqlite_path=database_path), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
-    connector_runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
-    persistence_runtime = await prepared_sqlite_runtime(database_path)
+    settings = MCPAppSettings(mcp=MCPSettings(connector_tool_exposure_mode=exposure_mode, downstream_discovery_enabled=False, _env_file=None), connector_store=ConnectorStoreConfig(type='inmemory'), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
+    connector_runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(persistence_runtime.database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
     return (await build_mcp_with_openapi_adapters(settings, MCPAuthProviderFactory().create(settings), connector_runtime, (None, None), create_configured_openapi_runtime_adapters(settings), persistence_runtime, telemetry=create_configured_mcp_telemetry(settings), downstream_client_factory=recorder), recorder)
 
 @pytest.mark.asyncio
-async def test_persisted_downstream_catalog_preserves_empty_input_schema(tmp_path: Path) -> None:
-    database_path = str(tmp_path / "empty-schema.sqlite3")
-    await _persist_downstream_state(database_path, {})
-    runtime = await prepared_sqlite_runtime(database_path)
+async def test_persisted_downstream_catalog_preserves_empty_input_schema() -> None:
+    runtime = await prepared_inmemory_runtime()
+    await _persist_downstream_state(runtime.database, {})
     catalog = await ToolCatalogStoreService(runtime.database, TOOL_CATALOG_TABLE).get(
         ConnectorIdQuery(connector_id=CONNECTOR_ID)
     )
@@ -94,8 +90,8 @@ async def test_persisted_downstream_catalog_preserves_empty_input_schema(tmp_pat
 
 
 @pytest.mark.asyncio
-async def test_flat_exposes_and_invokes_persisted_downstream_proxy_directly(tmp_path: Path) -> None:
-    (mcp, recorder) = await _build_public_mcp(tmp_path, 'flat')
+async def test_flat_exposes_and_invokes_persisted_downstream_proxy_directly() -> None:
+    (mcp, recorder) = await _build_public_mcp('flat')
     async with Client(mcp) as client:
         names = [tool.name for tool in await client.list_tools()]
         assert recorder.created_connector_ids == []
@@ -109,8 +105,8 @@ async def test_flat_exposes_and_invokes_persisted_downstream_proxy_directly(tmp_
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('exposure_mode', ['flat', 'gateway', 'codemode'])
-async def test_all_exposure_modes_expose_native_capabilities_without_leaking_gateway_tools(tmp_path: Path, exposure_mode: str) -> None:
-    (mcp, _) = await _build_public_mcp(tmp_path, exposure_mode)
+async def test_all_exposure_modes_expose_native_capabilities_without_leaking_gateway_tools(exposure_mode: str) -> None:
+    (mcp, _) = await _build_public_mcp(exposure_mode)
     async with Client(mcp) as client:
         tool_names = [tool.name for tool in await client.list_tools()]
         prompts = await client.list_prompts()
@@ -128,9 +124,9 @@ async def test_all_exposure_modes_expose_native_capabilities_without_leaking_gat
     assert (PROXY_TOOL_NAME in tool_names) is (exposure_mode == 'flat')
 
 @pytest.mark.asyncio
-async def test_flat_preserves_referenced_object_field_descriptions_for_mcp_clients(tmp_path: Path) -> None:
+async def test_flat_preserves_referenced_object_field_descriptions_for_mcp_clients() -> None:
     input_schema = {'type': 'object', 'properties': {'draft': {'$ref': '#/$defs/UpdateVikunjaTaskDraft'}}, 'required': ['draft'], '$defs': {'UpdateVikunjaTaskDraft': {'type': 'object', 'properties': {'task_id': {'type': 'integer', 'description': 'Numeric Vikunja task ID to update.'}, 'title': {'anyOf': [{'type': 'string'}, {'type': 'null'}], 'description': 'New nonempty task title. Omit to leave unchanged.'}}, 'required': ['task_id']}}}
-    (mcp, _) = await _build_public_mcp(tmp_path, 'flat', input_schema)
+    (mcp, _) = await _build_public_mcp('flat', input_schema)
     async with Client(mcp) as client:
         tools = await client.list_tools()
     proxy_tool = next((tool for tool in tools if tool.name == PROXY_TOOL_NAME))
@@ -140,8 +136,8 @@ async def test_flat_preserves_referenced_object_field_descriptions_for_mcp_clien
     assert draft_schema['properties']['title']['description'] == 'New nonempty task title. Omit to leave unchanged.'
 
 @pytest.mark.asyncio
-async def test_gateway_discovers_and_executes_persisted_downstream_proxy(tmp_path: Path) -> None:
-    (mcp, recorder) = await _build_public_mcp(tmp_path, 'gateway')
+async def test_gateway_discovers_and_executes_persisted_downstream_proxy() -> None:
+    (mcp, recorder) = await _build_public_mcp('gateway')
     async with Client(mcp) as client:
         names = [tool.name for tool in await client.list_tools()]
         search = await client.call_tool('search_tools', {'query': 'Vikunja tasks', 'connector_ids': ['unknown', CONNECTOR_ID]})
@@ -157,8 +153,8 @@ async def test_gateway_discovers_and_executes_persisted_downstream_proxy(tmp_pat
     assert recorder.arguments == [{'project_id': 7}]
 
 @pytest.mark.asyncio
-async def test_codemode_discovers_and_executes_persisted_downstream_proxy_from_code(tmp_path: Path) -> None:
-    (mcp, recorder) = await _build_public_mcp(tmp_path, 'codemode')
+async def test_codemode_discovers_and_executes_persisted_downstream_proxy_from_code() -> None:
+    (mcp, recorder) = await _build_public_mcp('codemode')
     async with Client(mcp) as client:
         names = [tool.name for tool in await client.list_tools()]
         search = await client.call_tool('search_tools', {'query': 'Vikunja tasks'})

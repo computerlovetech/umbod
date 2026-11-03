@@ -63,6 +63,18 @@ def test_upload_download_preserves_bytes_and_safe_headers(filesystem_http: Files
     assert downloaded.headers["content-disposition"].startswith("attachment;")
 
 
+def test_full_app_upload_transfer_and_download(filesystem_full_http: FilesystemHttp) -> None:
+    client = filesystem_full_http.client
+    root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
+    uploaded = upload_file(client, f"{BASE}/nodes/{root_id}/uploads", "full-app.bin", b"full-app-payload")
+    assert uploaded.status_code == 201
+    assert uploaded.headers["cache-control"] == "no-store"
+    downloaded = client.get(content_path(uploaded.json()["id"]))
+    assert downloaded.status_code == 200
+    assert downloaded.content == b"full-app-payload"
+    assert downloaded.headers["cache-control"] == "no-store"
+
+
 def test_unicode_name_uses_safe_utf8_attachment_filename(filesystem_http: FilesystemHttp, upload_path: str) -> None:
     filename = 'résumé-東京-"notes".bin'
     uploaded = upload_file(filesystem_http.client, upload_path, filename, b"unicode")

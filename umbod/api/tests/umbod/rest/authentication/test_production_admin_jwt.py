@@ -16,7 +16,7 @@ from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def signing_key() -> rsa.RSAPrivateKey:
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 

@@ -1,5 +1,6 @@
 import asyncio
 import json
+from dataclasses import dataclass
 from io import StringIO
 from typing import Any
 from unittest.mock import AsyncMock, Mock
@@ -21,7 +22,10 @@ from umbod.core.filesystem.uploads.errors import (
 from umbod.core.filesystem.errors import InvalidName, MissingNode, NameCollision, RevisionConflict, StorageFailure, WrongNodeKind
 from umbod.mcp.filesystem import register_filesystem_tools
 from umbod.mcp.filesystem.errors import filesystem_operation
-from umbod.mcp.filesystem.ports import FilesystemCallerCapture, FilesystemServiceFactory
+from umbod.mcp.filesystem.ports import FilesystemCallerCapture, FilesystemDeletionApproval, FilesystemServiceFactory
+from umbod.mcp.filesystem.authorization import FilesystemToolVisibility
+from umbod.mcp.metrics.in_memory import InMemoryMcpMetricsRecorder
+from umbod.core.callers import AuthenticationProvenance
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter
@@ -33,7 +37,28 @@ from umbod.mcp.signals import (
     McpInvocationActor, McpInvocationContext, McpInvocationCorrelation,
     McpInvocationPublisher, set_mcp_invocation_context,
 )
-from .conftest import FilesystemMcp
+from .conftest import ScopedCallerCapture, caller_snapshot
+
+
+@dataclass
+class FilesystemErrorContext:
+    callers: ScopedCallerCapture
+    metrics: InMemoryMcpMetricsRecorder
+    visibility: FilesystemToolVisibility
+    approval: FilesystemDeletionApproval
+
+
+@pytest.fixture
+def filesystem_error_context() -> FilesystemErrorContext:
+    callers = ScopedCallerCapture()
+    callers.current.set(caller_snapshot(
+        "alice", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED,
+    ))
+    visibility = Mock(spec=FilesystemToolVisibility)
+    visibility.authorize = AsyncMock(return_value=True)
+    return FilesystemErrorContext(
+        callers, InMemoryMcpMetricsRecorder(), visibility, Mock(spec=FilesystemDeletionApproval),
+    )
 
 
 class SpecializedStorageFailure(StorageFailure):
@@ -59,7 +84,7 @@ class SpecializedStorageFailure(StorageFailure):
     (SpecializedStorageFailure, "filesystem_storage_failure: Filesystem storage unavailable."),
 ])
 async def test_expected_domain_failures_do_not_leak_details(
-    filesystem_invocation_mcp: FilesystemMcp, error_type: type[Exception], expected: str,
+    filesystem_error_context: FilesystemErrorContext, error_type: type[Exception], expected: str,
 ) -> None:
     application_failures = create_application_failure_signal()
     server = FastMCP()
@@ -68,8 +93,8 @@ async def test_expected_domain_failures_do_not_leak_details(
     factory = Mock(spec=FilesystemServiceFactory)
     factory.browsing.return_value = browsing
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock(), application_failures=application_failures))),
-        filesystem_invocation_mcp.callers, factory, filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_error_context.metrics, Mock(), application_failures=application_failures))),
+        filesystem_error_context.callers, factory, filesystem_error_context.visibility, filesystem_error_context.approval,
     )
     async with Client(server) as client:
         result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
@@ -81,7 +106,7 @@ async def test_expected_domain_failures_do_not_leak_details(
     assert guidance["recovery"]["instructions"]
     for instruction in guidance["recovery"]["instructions"]:
         assert instruction in result.content[1].text
-    assert any(sample.labels["outcome"] == "failure" for sample in filesystem_invocation_mcp.metrics.metric_samples())
+    assert any(sample.labels["outcome"] == "failure" for sample in filesystem_error_context.metrics.metric_samples())
 
 
 @pytest.mark.asyncio
@@ -93,7 +118,7 @@ async def test_expected_domain_failures_do_not_leak_details(
     (ToolError, "unexpected_error", 17),
 ])
 async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
-    filesystem_invocation_mcp: FilesystemMcp, error_type: type[Exception],
+    filesystem_error_context: FilesystemErrorContext, error_type: type[Exception],
     category: str, severity: int,
 ) -> None:
     application_failures = create_application_failure_signal()
@@ -105,12 +130,12 @@ async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
     factory.browsing.return_value = browsing
     signals = create_mcp_signals(
         StdoutMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter(), output),
-        filesystem_invocation_mcp.metrics,
+        filesystem_error_context.metrics,
         McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), output), "test", application_failures=application_failures),
      application_failures=application_failures)
     register_filesystem_tools(
         McpObservedToolRegistrar(server, McpInvocationPublisher(signals)),
-        filesystem_invocation_mcp.callers, factory, filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
+        filesystem_error_context.callers, factory, filesystem_error_context.visibility, filesystem_error_context.approval,
     )
     set_mcp_invocation_context(McpInvocationContext(
         actor=McpInvocationActor(authenticated_user_id="test-caller"),
@@ -139,7 +164,7 @@ async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
     assert "exception.stacktrace" in invocation["attributes"]
     assert "SECRET" not in output.getvalue()
     assert "/private/path" not in output.getvalue()
-    assert any(sample.labels["outcome"] == "failure" for sample in filesystem_invocation_mcp.metrics.metric_samples())
+    assert any(sample.labels["outcome"] == "failure" for sample in filesystem_error_context.metrics.metric_samples())
 
 
 TOOL_OPERATIONS = [
@@ -165,14 +190,14 @@ TOOL_OPERATIONS = [
 @pytest.mark.parametrize("error_type", [RuntimeError, ToolError])
 @pytest.mark.parametrize("tool,operation,arguments", TOOL_OPERATIONS)
 async def test_unmasked_tools_sanitize_all_operation_stages(
-    filesystem_invocation_mcp: FilesystemMcp, stage: str, error_type: type[Exception],
+    filesystem_error_context: FilesystemErrorContext, stage: str, error_type: type[Exception],
     tool: str, operation: str, arguments: dict[str, Any],
 ) -> None:
     application_failures = create_application_failure_signal()
     server = FastMCP()
     error = error_type("SECRET backend /private/path")
     callers = Mock(spec=FilesystemCallerCapture)
-    callers.capture.return_value = filesystem_invocation_mcp.callers.capture()
+    callers.capture.return_value = filesystem_error_context.callers.capture()
     service_type = {
         "check_delete_eligibility": FilesystemDeletion,
         "create_file": FilesystemCreation,
@@ -192,8 +217,8 @@ async def test_unmasked_tools_sanitize_all_operation_stages(
     if stage == "factory":
         factory_method.side_effect = error
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_invocation_mcp.metrics, Mock(), application_failures=application_failures))),
-        callers, factory, filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), filesystem_error_context.metrics, Mock(), application_failures=application_failures))),
+        callers, factory, filesystem_error_context.visibility, filesystem_error_context.approval,
     )
     async with Client(server) as client:
         result = await client.call_tool(tool, arguments, raise_on_error=False)

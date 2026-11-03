@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import Generator
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 
@@ -23,13 +24,18 @@ def installed_test_connector_plugins(monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(module, 'load_connector_plugins', load_test_plugins)
 
 
+@pytest.fixture(scope="session")
+def isolated_connector_store_directory(tmp_path_factory: pytest.TempPathFactory) -> Path:
+    return tmp_path_factory.mktemp("connector-store")
+
+
 @pytest.fixture(autouse=True)
 def isolated_connector_store_database(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
+    isolated_connector_store_directory: Path,
     request: pytest.FixtureRequest,
 ) -> Generator[Path, None, None]:
-    database_path = tmp_path / 'umbod.sqlite3'
+    database_path = isolated_connector_store_directory / f"{uuid4().hex}.sqlite3"
     if request.node.name in {
         'test_sqlite_path_derived_from_data_dir',
         'test_connector_store_defaults_to_inmemory',

@@ -14,8 +14,9 @@ import pytest
 from fastapi.testclient import TestClient
 from fastmcp import Client, FastMCP
 from fastmcp.exceptions import ToolError
+from starlette.routing import Mount
 
-from tests.persistence_runtime import create_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import create_inmemory_runtime, prepared_inmemory_runtime
 from tests.support.connector_plugins import TestConnectorAdminConfiguration as NativeConfiguration, TestConnectorPlugin
 from tests.umbod.core.downstream_mcp_connectors.test_personal_runtime_authorizations import RuntimeCase, runtime_case as runtime_case
 from tests.umbod.mcp.downstream_mcp_connectors.personal_runtime_support import execution_case
@@ -33,6 +34,8 @@ from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
 from umbod.mcp.connectors.native.tools import RuntimeConnectorToolRegistry, register_connector_tools
 from umbod.mcp.connectors.native.tools.infrastructure.authorization import UnrestrictedConnectorTools
 from umbod.mcp.logging import create_default_mcp_tool_invocation_log_sink
+from umbod.rest.dependencies import get_connector_api_dependency_factories
+from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.main import create_app
 
 
@@ -90,25 +93,36 @@ async def test_catalogue_gateway_collision_suppresses_unrelated_tools_but_preser
     settings = AppConfig(
         rest={"metrics_enabled": False}, mcp={"connector_tool_exposure_mode": mode},
         connector_security={"configuration_secret": "catalogue-collision-secret"},
-        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "catalogue.sqlite")},
+        connector_store={"type": "inmemory"},
         admin_authentication={"mode": "simulation", "simulated_admin": True},
     )
-    runtime = await prepared_sqlite_runtime(tmp_path / "catalogue.sqlite")
-    stores = await create_downstream_mcp_stores("catalogue-collision-secret", runtime.database)
-    await _shared_collision(stores, datetime.now(timezone.utc))
-    await runtime.shutdown()
-    with TestClient(create_app(settings, _registrations())) as client:
-        _prepare_http(client, publish_alpha)
-        response = client.get("/api/me/catalogue")
-        response.raise_for_status()
-        capabilities = [capability for connector in response.json()["connectors"] for capability in connector["capabilities"]]
-        assert any(capability["kind"] == "prompt" for capability in capabilities)
-        tools = [capability for capability in capabilities if capability["kind"] == "tool"]
-        if mode == "flat":
-            healthy = next(connector for connector in response.json()["connectors"] if connector["connector_id"] == "healthy")
-            assert any(capability["kind"] == "tool" for capability in healthy["capabilities"])
-        else:
-            assert tools == []
+    runtime = await prepared_inmemory_runtime()
+    factories = ConnectorApiDependencyFactories.from_settings(settings, runtime, _registrations())
+
+    def application_factories() -> ConnectorApiDependencyFactories:
+        return factories
+
+    app = create_app(settings, _registrations())
+    for route in app.routes:
+        if isinstance(route, Mount) and route.path in ("/api/admin", "/api/me"):
+            route.app.dependency_overrides[get_connector_api_dependency_factories] = application_factories
+    try:
+        stores = await create_downstream_mcp_stores("catalogue-collision-secret", runtime.database)
+        await _shared_collision(stores, datetime.now(timezone.utc))
+        with TestClient(app) as client:
+            _prepare_http(client, publish_alpha)
+            response = client.get("/api/me/catalogue")
+            response.raise_for_status()
+            capabilities = [capability for connector in response.json()["connectors"] for capability in connector["capabilities"]]
+            assert any(capability["kind"] == "prompt" for capability in capabilities)
+            tools = [capability for capability in capabilities if capability["kind"] == "tool"]
+            if mode == "flat":
+                healthy = next(connector for connector in response.json()["connectors"] if connector["connector_id"] == "healthy")
+                assert any(capability["kind"] == "tool" for capability in healthy["capabilities"])
+            else:
+                assert tools == []
+    finally:
+        await runtime.shutdown()
 
 
 @pytest.mark.asyncio

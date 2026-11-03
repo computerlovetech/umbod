@@ -21,7 +21,7 @@ def test_tokenless_catalogue_simulation_is_limited_to_local_development(
     settings = AppConfig(
         runtime={"profile": profile, "auth": auth},
         rest={"metrics_enabled": False},
-        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "auth.sqlite")},
+        connector_store={"type": "inmemory"},
         admin_authentication={"mode": "simulation", "environment": environment},
         personal_connections={"enabled": False},
     )

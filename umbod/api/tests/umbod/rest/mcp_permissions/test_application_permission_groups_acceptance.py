@@ -370,9 +370,8 @@ def _visible_group_ids(registry: PermissionGroupListing) -> tuple[str, ...]:
 def dsl(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    prepared_connector_store_database: Path,
 ) -> ApplicationPermissionGroupsDsl:
-    driver = _create_admin_driver(tmp_path, monkeypatch, prepared_connector_store_database)
+    driver = _create_admin_driver(tmp_path, monkeypatch)
     return ApplicationPermissionGroupsDsl(
         registry=PermissionGroupAdminPorts(
             listing=driver, reader=driver, registration=driver, deletion=driver
@@ -462,17 +461,14 @@ def test_application_layer_group_deletion_does_not_affect_identity_provider_grou
 
 
 def _create_admin_driver(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, database_path: Path
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> FastApiPermissionGroupDriver:
     client = _create_client(
         tmp_path,
         monkeypatch,
         APISettings(
             admin_authentication={"mode": "simulation", "simulated_admin": True},
-            connector_store={
-                "type": "sqlite",
-                "sqlite_path": str(database_path),
-            },
+            connector_store={"type": "inmemory"},
         ),
     )
     _provision_assignable_test_connector(client)
@@ -494,10 +490,7 @@ def _create_non_admin_driver(
                     "membership_claim": "groups",
                     "required_membership": "umbod-admins",
                 },
-                connector_store={
-                    "type": "sqlite",
-                    "sqlite_path": str(tmp_path / "non-admin.sqlite3"),
-                },
+                connector_store={"type": "inmemory"},
             ),
         )
     )

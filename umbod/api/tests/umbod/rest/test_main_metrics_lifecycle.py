@@ -74,12 +74,10 @@ def test_rest_app_composes_one_shared_metrics_recorder_and_server(
 
 
 def test_rest_metrics_server_starts_and_stops_once(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     server = RecordingMetricsServer(object(), 8001)
-    settings = APISettings(
-        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "api.sqlite3")}
-    )
+    settings = APISettings(connector_store={"type": "inmemory"})
 
     def create_server(recorder: object, port: int) -> RecordingMetricsServer:
         return server
@@ -96,12 +94,10 @@ def test_rest_metrics_server_starts_and_stops_once(
 
 
 def test_rest_metrics_server_is_cleaned_up_when_startup_fails(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     server = FailingMetricsServer(object(), 8001)
-    settings = APISettings(
-        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "api.sqlite3")}
-    )
+    settings = APISettings(connector_store={"type": "inmemory"})
 
     def create_server(recorder: object, port: int) -> RecordingMetricsServer:
         return server
@@ -153,7 +149,7 @@ def test_admin_metrics_middleware_wraps_authentication(
     assert metrics_index < authentication_index
 
 
-def test_embedded_host_can_disable_metrics_without_changing_server_constructor(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_embedded_host_can_disable_metrics_without_changing_server_constructor(monkeypatch: pytest.MonkeyPatch) -> None:
     servers: list[RecordingMetricsServer] = []
 
     def create_server(recorder: object, port: int) -> RecordingMetricsServer:
@@ -162,7 +158,7 @@ def test_embedded_host_can_disable_metrics_without_changing_server_constructor(t
         return server
 
     monkeypatch.setattr('umbod.rest.main.RestMetricsHttpServer', create_server)
-    settings = APISettings(admin_authentication={'mode': 'simulation'}, connector_store={'type': 'sqlite', 'sqlite_path': str(tmp_path / 'embedded.sqlite3')}, rest={'metrics_enabled': False})
+    settings = APISettings(admin_authentication={'mode': 'simulation'}, connector_store={'type': 'inmemory'}, rest={'metrics_enabled': False})
     with TestClient(create_app(settings=settings, connector_registrations=[])) as client:
         assert client.get('/api/system/health').status_code == 200
     assert len(servers) == 1

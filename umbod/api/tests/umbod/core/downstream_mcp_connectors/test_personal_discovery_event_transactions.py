@@ -93,10 +93,9 @@ async def test_personal_mutations_publish_only_sanitized_connector_notification(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", OPERATIONS)
+@pytest.mark.parametrize("runtime_case", ["sqlite"], indirect=True)
 async def test_event_failure_restores_personal_mutation(runtime_case: RuntimeCase, tmp_path: Path, operation: str) -> None:
     path = tmp_path / "runtime.sqlite3"
-    if not path.exists():
-        pytest.skip("SQLite trigger regression")
     run = await mutation(runtime_case, operation)
     before = await snapshot(runtime_case.database)
     previous_events = await events(runtime_case.database)

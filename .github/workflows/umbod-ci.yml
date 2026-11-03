@@ -137,7 +137,7 @@ jobs:
         run: uv sync --locked
 
       - name: Run complete backend test suite
-        run: uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal --cov --cov-report=xml:coverage.xml
+        run: uv run --locked pytest tests -q -n auto --maxprocesses=4 --dist=worksteal --cov --cov-report=xml:coverage.xml --durations=30 --durations-min=0.1
 
       - name: Save backend coverage report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

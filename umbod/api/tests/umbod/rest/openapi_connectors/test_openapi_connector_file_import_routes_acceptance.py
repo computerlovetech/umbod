@@ -17,9 +17,9 @@ def connector_availability(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(path))
 
 
-def _settings(database_path: Path, import_limit: int = 10_485_760) -> APISettings:
+def _settings(import_limit: int = 10_485_760) -> APISettings:
     return APISettings(
-        connector_store={"type": "sqlite", "sqlite_path": str(database_path)},
+        connector_store={"type": "inmemory"},
         openapi_connectors={"json_import_max_bytes": import_limit},
         admin_authentication={"mode": "simulation", "simulated_admin": True},
     )
@@ -74,8 +74,11 @@ def _has_current_catalog(client: TestClient, connector_id: str) -> bool:
 def test_file_import_replaces_current_catalog_with_document_and_multiple_hosts(
     tmp_path: Path,
 ) -> None:
-    database_path = tmp_path / "api.sqlite3"
-    client = TestClient(create_app(settings=_settings(database_path), connector_registrations=[]))
+    settings = APISettings(
+        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "api.sqlite3")},
+        admin_authentication={"mode": "simulation", "simulated_admin": True},
+    )
+    client = TestClient(create_app(settings=settings, connector_registrations=[]))
     connector_id = _create(client)
     document = _document()
     document["info"]["description"] = "upload-body-token-canary"
@@ -94,7 +97,7 @@ def test_file_import_replaces_current_catalog_with_document_and_multiple_hosts(
     assert _has_current_catalog(client, connector_id)
 
     recreated = TestClient(
-        create_app(settings=_settings(database_path), connector_registrations=[])
+        create_app(settings=settings, connector_registrations=[])
     )
     assert _has_current_catalog(recreated, connector_id)
     tools = recreated.get(f"/api/admin/connectors/openapi/{connector_id}/tools")
@@ -113,11 +116,9 @@ def test_file_import_replaces_current_catalog_with_document_and_multiple_hosts(
     ]
 
 
-def test_file_import_normalizes_deduplicates_and_ignores_blank_approved_hosts(
-    tmp_path: Path,
-) -> None:
+def test_file_import_normalizes_deduplicates_and_ignores_blank_approved_hosts() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector_id = _create(client)
 
@@ -132,9 +133,9 @@ def test_file_import_normalizes_deduplicates_and_ignores_blank_approved_hosts(
     assert response.json()["approved_hosts"] == ["api.example.com", "cdn.example.com"]
 
 
-def test_file_import_rejects_all_blank_approved_hosts(tmp_path: Path) -> None:
+def test_file_import_rejects_all_blank_approved_hosts() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector_id = _create(client)
 
@@ -149,11 +150,9 @@ def test_file_import_rejects_all_blank_approved_hosts(tmp_path: Path) -> None:
     assert response.json()["detail"]["message"] == "Approved hosts must contain exact hostnames"
 
 
-def test_tool_catalog_exposes_flattened_operation_parameters_and_request_body(
-    tmp_path: Path,
-) -> None:
+def test_tool_catalog_exposes_flattened_operation_parameters_and_request_body() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector_id = _create(client)
     document = _document()
@@ -202,9 +201,9 @@ def test_tool_catalog_exposes_flattened_operation_parameters_and_request_body(
     }
 
 
-def test_file_import_accepts_case_insensitive_json_extension(tmp_path: Path) -> None:
+def test_file_import_accepts_case_insensitive_json_extension() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector_id = _create(client)
 
@@ -215,10 +214,10 @@ def test_file_import_accepts_case_insensitive_json_extension(tmp_path: Path) -> 
 
 @pytest.mark.parametrize("filename", ["", "spec.yaml", "spec.json.txt"])
 def test_file_import_rejects_invalid_filename_without_catalog(
-    tmp_path: Path, filename: str
+    filename: str
 ) -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector_id = _create(client)
 
@@ -231,10 +230,10 @@ def test_file_import_rejects_invalid_filename_without_catalog(
 
 @pytest.mark.parametrize("media_type", ["text/yaml", "application/octet-stream"])
 def test_file_import_rejects_wrong_media_type_without_catalog(
-    tmp_path: Path, media_type: str
+    media_type: str
 ) -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector_id = _create(client)
 
@@ -247,11 +246,11 @@ def test_file_import_rejects_wrong_media_type_without_catalog(
     assert not _has_current_catalog(client, connector_id)
 
 
-def test_file_import_accepts_exact_byte_limit_and_rejects_one_byte_over(tmp_path: Path) -> None:
+def test_file_import_accepts_exact_byte_limit_and_rejects_one_byte_over() -> None:
     content = json.dumps(_document()).encode()
     client = TestClient(
         create_app(
-            settings=_settings(tmp_path / "api.sqlite3", len(content)), connector_registrations=[]
+            settings=_settings(len(content)), connector_registrations=[]
         )
     )
     connector_id = _create(client)
@@ -278,10 +277,10 @@ def test_file_import_accepts_exact_byte_limit_and_rejects_one_byte_over(tmp_path
     ],
 )
 def test_file_import_rejects_invalid_json_without_catalog(
-    tmp_path: Path, content: bytes, code: str
+    content: bytes, code: str
 ) -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector_id = _create(client)
 
@@ -292,9 +291,9 @@ def test_file_import_rejects_invalid_json_without_catalog(
     assert not _has_current_catalog(client, connector_id)
 
 
-def test_file_import_maps_semantic_validation_issues_without_catalog(tmp_path: Path) -> None:
+def test_file_import_maps_semantic_validation_issues_without_catalog() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector_id = _create(client)
 
@@ -305,9 +304,9 @@ def test_file_import_maps_semantic_validation_issues_without_catalog(tmp_path: P
     assert not _has_current_catalog(client, connector_id)
 
 
-def test_file_import_unknown_connector_returns_404(tmp_path: Path) -> None:
+def test_file_import_unknown_connector_returns_404() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
 
     response = _upload(client, "missing", json.dumps(_document()).encode())
@@ -315,9 +314,9 @@ def test_file_import_unknown_connector_returns_404(tmp_path: Path) -> None:
     assert response.status_code == 404
 
 
-def test_tool_catalog_selects_first_declared_json_success_output_schema(tmp_path: Path) -> None:
+def test_tool_catalog_selects_first_declared_json_success_output_schema() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector_id = _create(client)
     document = _document()
@@ -344,9 +343,9 @@ def test_tool_catalog_selects_first_declared_json_success_output_schema(tmp_path
     assert tool["output_schema"] == {}
 
 
-def test_tool_catalog_uses_declared_json_default_output_schema(tmp_path: Path) -> None:
+def test_tool_catalog_uses_declared_json_default_output_schema() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector_id = _create(client)
     document = _document()

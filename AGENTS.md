@@ -87,6 +87,5 @@ Run the checks applicable to the changed area.
 
 - Run all shared app Semgrep rules with `cd umbod && uv run semgrep scan --config ../.semgrep.yml --config ../.semgrep/production-design.yml --config ../.semgrep/test-correctness.yml --no-rewrite-rule-ids .`.
 - `.semgrep.yml` contains cross-cutting rules. `.semgrep/production-design.yml` targets source code and excludes test paths; `.semgrep/test-correctness.yml` targets test files and support trees. Scope is path-based, not class-name-based.
-- Verify rule behavior and scope with `cd umbod/api && uv run --locked pytest tests/test_semgrep_test_practices.py -q -n 0`.
 - After each Semgrep run, resolve the reported issues, including pre-existing findings, and rerun the scan to verify the fixes.
 - Keep shared rules in the root `.semgrep.yml` and `.semgrep/` directory. Do not add app-local Semgrep configs without an explicitly documented exception.

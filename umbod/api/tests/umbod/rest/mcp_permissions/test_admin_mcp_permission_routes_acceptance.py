@@ -1,7 +1,6 @@
-from tests.persistence_runtime import prepared_sqlite_runtime
+from umbod.config import InMemoryConnectorStoreConfig, PersistenceConfig, SQLiteConnectorStoreConfig
 import json
 from pathlib import Path
-import anyio
 import pytest
 from fastapi.testclient import TestClient
 from umbod.rest.main import create_app
@@ -51,11 +50,11 @@ class FastApiAdminMcpPermissionApi:
 
 @pytest.fixture
 def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FastApiAdminMcpPermissionApi:
-    return _create_api(tmp_path, monkeypatch, True)
+    return _create_api(tmp_path, monkeypatch, True, InMemoryConnectorStoreConfig())
 
 @pytest.fixture
 def unassignable_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FastApiAdminMcpPermissionApi:
-    return _create_api(tmp_path, monkeypatch, False)
+    return _create_api(tmp_path, monkeypatch, False, InMemoryConnectorStoreConfig())
 
 def test_openapi_exposes_only_aggregate_group_permission_mutations(api: FastApiAdminMcpPermissionApi) -> None:
     response = api.client.get('/api/admin/openapi.json')
@@ -187,7 +186,7 @@ def test_diff_update_openapi_permissions_can_revoke_and_grant_tools(tmp_path: Pa
     availability_path = tmp_path / 'connector-availability.json'
     availability_path.write_text('{"connectors": []}', encoding='utf-8')
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
-    settings = APISettings(admin_authentication={'mode': 'simulation', 'simulated_admin': True}, connector_store={'type': 'sqlite', 'sqlite_path': str(tmp_path / 'openapi.sqlite3')})
+    settings = APISettings(admin_authentication={'mode': 'simulation', 'simulated_admin': True}, connector_store={'type': 'inmemory'})
     api = FastApiAdminMcpPermissionApi(TestClient(create_app(settings=settings, connector_registrations=[])))
     created = api.client.post('/api/admin/connectors/openapi', json={'display_name': 'Inventory', 'capability_description': 'Manage inventory resources'})
     connector_id = str(created.json()['connector_id'])
@@ -216,14 +215,15 @@ def test_non_admin_cannot_manage_permissions(tmp_path: Path, monkeypatch: pytest
     availability_path = tmp_path / 'connector-availability.json'
     availability_path.write_text(json.dumps({'connectors': [{'id': 'test'}]}), encoding='utf-8')
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
-    settings = APISettings(admin_authentication={'mode': 'jwt', 'jwt_header_name': 'X-Forwarded-Access-Token', 'jwks_url': 'https://identity.example.com/.well-known/jwks.json', 'membership_claim': 'groups', 'required_membership': 'umbod-admins'}, connector_store={'type': 'sqlite', 'sqlite_path': str(tmp_path / 'umbod.sqlite3')})
+    settings = APISettings(admin_authentication={'mode': 'jwt', 'jwt_header_name': 'X-Forwarded-Access-Token', 'jwks_url': 'https://identity.example.com/.well-known/jwks.json', 'membership_claim': 'groups', 'required_membership': 'umbod-admins'}, connector_store={'type': 'inmemory'})
     response = TestClient(create_app(settings=settings, connector_registrations=[TestConnectorPlugin.registration()])).get('/api/admin/mcp-permissions/groups')
     assert response.status_code == 401
 
 def test_permissions_persist_through_recreated_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    first_api = _create_api(tmp_path, monkeypatch, True)
+    store_config = SQLiteConnectorStoreConfig(sqlite_path=str(tmp_path / 'umbod.sqlite3'))
+    first_api = _create_api(tmp_path, monkeypatch, True, store_config)
     first_api.grant_tool('engineering', 'test', 'echo')
-    second_api = _create_api(tmp_path, monkeypatch, True)
+    second_api = _create_api(tmp_path, monkeypatch, True, store_config)
     assert second_api.get_group('engineering') == {'group_id': 'engineering', 'connector_ids': [], 'capabilities': [{'connector_id': 'test', 'capability_kind': 'tool', 'capability_key': 'echo'}]}
 
 def test_runtime_can_read_current_group_permissions(api: FastApiAdminMcpPermissionApi) -> None:
@@ -257,13 +257,11 @@ def test_admin_diff_update_publishes_permission_change_events(api: FastApiAdminM
     assert status_code == 200
     assert [stream_event['event']['metadata'] for stream_event in events] == DIFF_UPDATE_PERMISSION_CHANGE_METADATA
 
-def _create_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, provision_assignable_test_connector: bool) -> FastApiAdminMcpPermissionApi:
+def _create_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, provision_assignable_test_connector: bool, store_config: PersistenceConfig) -> FastApiAdminMcpPermissionApi:
     availability_path = tmp_path / 'connector-availability.json'
     availability_path.write_text(json.dumps({'connectors': [{'id': 'test'}]}), encoding='utf-8')
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
-    database_path = tmp_path / 'umbod.sqlite3'
-    settings = APISettings(admin_authentication={'mode': 'simulation', 'simulated_admin': True}, connector_store={'type': 'sqlite', 'sqlite_path': str(database_path)})
-    anyio.run(prepared_sqlite_runtime, database_path)
+    settings = APISettings(admin_authentication={'mode': 'simulation', 'simulated_admin': True}, connector_store=store_config)
     api = FastApiAdminMcpPermissionApi(TestClient(create_app(settings=settings, connector_registrations=[TestConnectorPlugin.registration()])))
     if provision_assignable_test_connector:
         _provision_assignable_test_connector(api)

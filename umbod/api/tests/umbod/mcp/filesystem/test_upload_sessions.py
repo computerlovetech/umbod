@@ -6,10 +6,11 @@ from uuid import UUID
 
 import httpx
 import pytest
+from fastapi import Request
 from fastmcp import Client, FastMCP
+from starlette.routing import Mount
 from mcp.types import ResourceLink
 
-from tests.persistence_runtime import prepared_sqlite_runtime
 from umbod.config import AppConfig
 from umbod.core.callers import AuthenticationProvenance
 from umbod.core.filesystem import AccessGrant, ByteStream, Permission, Principal, PrincipalType, RootBootstrapGrant, RootBootstrapSpec
@@ -18,6 +19,8 @@ from umbod.infrastructure import LocalContentConfig, create_content_driver, crea
 from umbod.mcp.filesystem.factory import DatabaseFilesystemServiceFactory
 from umbod.mcp.filesystem.upload_sessions import FilesystemBeginUploadTool, FilesystemCompleteUploadTool
 from umbod.rest.main import create_app
+from umbod.rest.dependencies import get_connector_api_dependency_factories
+from umbod.rest.factories import ConnectorApiDependencyFactories
 
 from .conftest import FilesystemMcp, ScopedCallerCapture, caller_snapshot
 from .test_tools import METADATA, root_id
@@ -81,22 +84,33 @@ async def byte_stream(payload: bytes) -> ByteStream:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("payload", [b"", b"\x00\xff\xfe", b"x" * (10_485_760 + 1)], ids=["empty", "binary", "above-inline-cap"])
-async def test_shared_sqlite_local_storage_mcp_begin_capability_only_rest_put_mcp_complete(
+async def test_shared_inmemory_local_storage_mcp_begin_capability_only_rest_put_mcp_complete(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, payload: bytes,
 ) -> None:
     deployment = tmp_path / "deployment.json"
     deployment.write_text('{"connectors": []}')
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
-    database_path = tmp_path / "shared.sqlite"
     content_config = LocalContentConfig(type="local", directory=tmp_path / "content")
     settings = AppConfig(
         rest={"metrics_enabled": False}, runtime={"profile": "test"},
-        connector_store={"type": "sqlite", "sqlite_path": str(database_path)},
+        connector_store={"type": "inmemory"},
         filesystem={"content": {"type": "local", "directory": str(content_config.directory)}, "upload_max_bytes": 20_971_520},
     )
     app = create_app(settings, [])
-    runtime = await prepared_sqlite_runtime(database_path)
-    try:
+    transfer_app = next(route.app for route in app.routes if isinstance(route, Mount) and route.path == "/api/filesystem")
+    captured: list[ConnectorApiDependencyFactories] = []
+
+    def capture_factories(request: Request) -> ConnectorApiDependencyFactories:
+        factories = get_connector_api_dependency_factories(request)
+        captured.append(factories)
+        return factories
+
+    transfer_app.dependency_overrides[get_connector_api_dependency_factories] = capture_factories
+    async with app.router.lifespan_context(app), httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://localhost", follow_redirects=False,
+    ) as rest:
+        await rest.put(f"/api/filesystem/uploads/{UUID(int=0)}/transfer", content=b"")
+        runtime = captured[0].persistence_runtime
         await create_root_provisioning(database=runtime.database).provision(RootBootstrapSpec(grants=(
             RootBootstrapGrant(
                 principal=Principal(type=PrincipalType.USER, issuer="https://issuer", id="alice"),
@@ -111,33 +125,28 @@ async def test_shared_sqlite_local_storage_mcp_begin_capability_only_rest_put_mc
         server = FastMCP()
         server.add_tool(FilesystemBeginUploadTool(callers, services))
         server.add_tool(FilesystemCompleteUploadTool(callers, services))
-        async with app.router.lifespan_context(app):
-            async with Client(server) as mcp, httpx.AsyncClient(
-                transport=httpx.ASGITransport(app), base_url="http://localhost", follow_redirects=False,
-            ) as rest:
-                begin = await mcp.call_tool("filesystem_begin_upload", {
-                    "parent_id": str(ROOT_ID), "name": "shared", "metadata": METADATA,
-                    "size_bytes": len(payload), "expected_sha256": hashlib.sha256(payload).hexdigest(),
-                })
-                transfer = begin.structured_content["transfer"]
-                url = transfer["url"]
-                missing = await rest.put(url, content=b"forbidden")
-                wrong = await rest.put(url, headers={"X-Umbod-Upload-Token": "x" * 43}, content=b"forbidden")
-                assert missing.status_code == wrong.status_code == 403
-                assert missing.json() == wrong.json()
-                assert missing.headers["cache-control"] == "no-store"
-                assert (await rest.get(url, headers=transfer["headers"])).status_code == 401
-                complete_path = f"/api/me/filesystem/uploads/{begin.structured_content['upload_id']}/complete"
-                assert (await rest.post(complete_path, headers=transfer["headers"])).status_code == 401
-                response = await rest.put(url, headers=transfer["headers"], content=payload)
-                assert response.status_code == 204, response.text
-                assert response.headers["cache-control"] == "no-store"
-                assert (await rest.put(url, headers=transfer["headers"], content=payload)).status_code == 409
-                complete = await mcp.call_tool("filesystem_complete_upload", {"upload_id": begin.structured_content["upload_id"]})
-                retry = await mcp.call_tool("filesystem_complete_upload", {"upload_id": begin.structured_content["upload_id"]})
-                assert retry.structured_content == complete.structured_content
-                assert complete.structured_content["size_bytes"] == len(payload)
-                assert complete.structured_content["sha256"] == hashlib.sha256(payload).hexdigest()
-                assert any(isinstance(block, ResourceLink) for block in complete.content)
-    finally:
-        await runtime.shutdown()
+        async with Client(server) as mcp:
+            begin = await mcp.call_tool("filesystem_begin_upload", {
+                "parent_id": str(ROOT_ID), "name": "shared", "metadata": METADATA,
+                "size_bytes": len(payload), "expected_sha256": hashlib.sha256(payload).hexdigest(),
+            })
+            transfer = begin.structured_content["transfer"]
+            url = transfer["url"]
+            missing = await rest.put(url, content=b"forbidden")
+            wrong = await rest.put(url, headers={"X-Umbod-Upload-Token": "x" * 43}, content=b"forbidden")
+            assert missing.status_code == wrong.status_code == 403
+            assert missing.json() == wrong.json()
+            assert missing.headers["cache-control"] == "no-store"
+            assert (await rest.get(url, headers=transfer["headers"])).status_code == 401
+            complete_path = f"/api/me/filesystem/uploads/{begin.structured_content['upload_id']}/complete"
+            assert (await rest.post(complete_path, headers=transfer["headers"])).status_code == 401
+            response = await rest.put(url, headers=transfer["headers"], content=payload)
+            assert response.status_code == 204, response.text
+            assert response.headers["cache-control"] == "no-store"
+            assert (await rest.put(url, headers=transfer["headers"], content=payload)).status_code == 409
+            complete = await mcp.call_tool("filesystem_complete_upload", {"upload_id": begin.structured_content["upload_id"]})
+            retry = await mcp.call_tool("filesystem_complete_upload", {"upload_id": begin.structured_content["upload_id"]})
+            assert retry.structured_content == complete.structured_content
+            assert complete.structured_content["size_bytes"] == len(payload)
+            assert complete.structured_content["sha256"] == hashlib.sha256(payload).hexdigest()
+            assert any(isinstance(block, ResourceLink) for block in complete.content)

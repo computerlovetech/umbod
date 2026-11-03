@@ -6,6 +6,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from umbod.config import SQLiteConnectorStoreConfig
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
 
@@ -17,13 +18,19 @@ def connector_availability(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(path))
 
 
-def _settings(database_path: Path, *limits: int) -> APISettings:
+def _settings(*limits: int) -> APISettings:
     import_limit = limits[0] if limits else 10_485_760
     return APISettings(
-        connector_store={"type": "sqlite", "sqlite_path": str(database_path)},
+        connector_store={"type": "inmemory"},
         openapi_connectors={"json_import_max_bytes": import_limit},
         admin_authentication={"mode": "simulation", "simulated_admin": True},
     )
+
+
+def _sqlite_settings(database_path: Path) -> APISettings:
+    return _settings().model_copy(update={
+        "connector_store": SQLiteConnectorStoreConfig(sqlite_path=str(database_path)),
+    })
 
 
 def _document(*operation_ids: str) -> dict[str, Any]:
@@ -100,9 +107,9 @@ def _create(client: TestClient, *display_names: str) -> dict[str, Any]:
     return response.json()
 
 
-def test_openapi_exposes_only_batch_tool_activation(tmp_path: Path) -> None:
+def test_openapi_exposes_only_batch_tool_activation() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
 
     response = client.get("/api/admin/openapi.json")
@@ -114,9 +121,9 @@ def test_openapi_exposes_only_batch_tool_activation(tmp_path: Path) -> None:
     assert "/connectors/openapi/{connector_id}/tools/invocation-policy" not in paths
 
 
-def test_create_rejects_invalid_tool_name_prefix(tmp_path: Path) -> None:
+def test_create_rejects_invalid_tool_name_prefix() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
 
     response = client.post(
@@ -139,7 +146,7 @@ def _publication_status(client: TestClient, connector_id: str) -> str:
 
 def test_configuration_routes_mask_encrypt_and_preserve_bearer_token(tmp_path: Path) -> None:
     database_path = tmp_path / "api.sqlite3"
-    client = TestClient(create_app(settings=_settings(database_path), connector_registrations=[]))
+    client = TestClient(create_app(settings=_sqlite_settings(database_path), connector_registrations=[]))
     connector = _create(client)
     path = f"/api/admin/connectors/openapi/{connector['connector_id']}/configuration"
 
@@ -167,9 +174,9 @@ def test_configuration_routes_mask_encrypt_and_preserve_bearer_token(tmp_path: P
     assert "private-token" not in str(rows[0][0])
 
 
-def test_configuration_routes_return_not_found_without_leaking_input(tmp_path: Path) -> None:
+def test_configuration_routes_return_not_found_without_leaking_input() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
 
     response = client.put(
@@ -181,9 +188,9 @@ def test_configuration_routes_return_not_found_without_leaking_input(tmp_path: P
     assert "must-not-leak" not in response.text
 
 
-def test_admin_can_create_list_and_get_connector(tmp_path: Path) -> None:
+def test_admin_can_create_list_and_get_connector() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
 
     second = _create(client, "Second")
@@ -218,9 +225,9 @@ def test_admin_can_create_list_and_get_connector(tmp_path: Path) -> None:
     }
 
 
-def test_created_connector_starts_unconfigured_and_import_moves_to_draft(tmp_path: Path) -> None:
+def test_created_connector_starts_unconfigured_and_import_moves_to_draft() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector = _create(client)
     assert connector["publication_status"] == "unconfigured"
@@ -236,10 +243,9 @@ def test_created_connector_starts_unconfigured_and_import_moves_to_draft(tmp_pat
 
 
 def test_json_import_normalizes_deduplicates_and_ignores_blank_approved_hosts(
-    tmp_path: Path,
 ) -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector = _create(client)
 
@@ -261,9 +267,9 @@ def test_json_import_normalizes_deduplicates_and_ignores_blank_approved_hosts(
     assert response.json()["approved_hosts"] == ["api.example.com", "cdn.example.com"]
 
 
-def test_json_import_rejects_all_blank_approved_hosts(tmp_path: Path) -> None:
+def test_json_import_rejects_all_blank_approved_hosts() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector = _create(client)
 
@@ -276,9 +282,9 @@ def test_json_import_rejects_all_blank_approved_hosts(tmp_path: Path) -> None:
     assert response.json()["detail"]["message"] == "Approved hosts must contain exact hostnames"
 
 
-def test_admin_can_import_publish_and_activate_connector(tmp_path: Path) -> None:
+def test_admin_can_import_publish_and_activate_connector() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector = _create(client)
     connector_id = connector["connector_id"]
@@ -293,8 +299,8 @@ def test_admin_can_import_publish_and_activate_connector(tmp_path: Path) -> None
     assert _publication_status(client, connector_id) == "published"
 
 
-def test_openapi_activation_route_supports_partial_combined_and_revision_updates(tmp_path: Path) -> None:
-    client = TestClient(create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[]))
+def test_openapi_activation_route_supports_partial_combined_and_revision_updates() -> None:
+    client = TestClient(create_app(settings=_settings(), connector_registrations=[]))
     connector_id = _create(client)["connector_id"]
     _import_current_catalog(client, connector_id)
     path = f"/api/admin/connectors/openapi/{connector_id}/tools/activation"
@@ -308,8 +314,8 @@ def test_openapi_activation_route_supports_partial_combined_and_revision_updates
     assert combined.json()["tools"] == [{"tool_id": "listItems", "activation_status": "disabled", "invocation_mode": "direct", "policy_revision": 2}]
 
 
-def test_openapi_activation_route_handles_noop_conflict_and_unknown_atomically(tmp_path: Path) -> None:
-    client = TestClient(create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[]))
+def test_openapi_activation_route_handles_noop_conflict_and_unknown_atomically() -> None:
+    client = TestClient(create_app(settings=_settings(), connector_registrations=[]))
     connector_id = _create(client)["connector_id"]
     _import_current_catalog(client, connector_id)
     path = f"/api/admin/connectors/openapi/{connector_id}/tools/activation"
@@ -326,8 +332,8 @@ def test_openapi_activation_route_handles_noop_conflict_and_unknown_atomically(t
 
 
 @pytest.mark.parametrize("item", [{"tool_id": "listItems"}, {"tool_id": "listItems", "invocation_mode": "ask"}, {"tool_id": "listItems", "expected_policy_revision": 0}, {"tool_id": "listItems", "invocation_mode": "ask", "expected_policy_revision": -1}])
-def test_openapi_activation_route_rejects_malformed_partial_items(tmp_path: Path, item: dict[str, Any]) -> None:
-    client = TestClient(create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[]))
+def test_openapi_activation_route_rejects_malformed_partial_items(item: dict[str, Any]) -> None:
+    client = TestClient(create_app(settings=_settings(), connector_registrations=[]))
     connector_id = _create(client)["connector_id"]
     _import_current_catalog(client, connector_id)
     path = f"/api/admin/connectors/openapi/{connector_id}/tools/activation"
@@ -338,10 +344,9 @@ def test_openapi_activation_route_rejects_malformed_partial_items(tmp_path: Path
 
 
 def test_openapi_connector_assignability_follows_publication_and_tool_activation(
-    tmp_path: Path,
 ) -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     with client:
         connector = _create(client)
@@ -376,9 +381,9 @@ def test_openapi_connector_assignability_follows_publication_and_tool_activation
         assert _assignable_targets(client) == {"connectors": [], "capabilities": []}
 
 
-def test_invalid_candidate_returns_structured_issues(tmp_path: Path) -> None:
+def test_invalid_candidate_returns_structured_issues() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     connector = _create(client)
 
@@ -393,16 +398,16 @@ def test_invalid_candidate_returns_structured_issues(tmp_path: Path) -> None:
     assert set(issues[0]) == {"code", "location", "message"}
 
 
-def test_unknown_connector_returns_404(tmp_path: Path) -> None:
+def test_unknown_connector_returns_404() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     assert client.get("/api/admin/connectors/openapi/missing").status_code == 404
 
 
-def test_unknown_connector_import_returns_404(tmp_path: Path) -> None:
+def test_unknown_connector_import_returns_404() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     response = client.post(
         "/api/admin/connectors/openapi/missing/imports",
@@ -411,16 +416,16 @@ def test_unknown_connector_import_returns_404(tmp_path: Path) -> None:
     assert response.status_code == 404
 
 
-def test_malformed_request_returns_422(tmp_path: Path) -> None:
+def test_malformed_request_returns_422() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3"), connector_registrations=[])
+        create_app(settings=_settings(), connector_registrations=[])
     )
     assert client.post("/api/admin/connectors/openapi", json={}).status_code == 422
 
 
-def test_json_import_rejects_request_over_configured_limit(tmp_path: Path) -> None:
+def test_json_import_rejects_request_over_configured_limit() -> None:
     client = TestClient(
-        create_app(settings=_settings(tmp_path / "api.sqlite3", 100), connector_registrations=[])
+        create_app(settings=_settings(100), connector_registrations=[])
     )
     connector = _create(client)
     response = client.post(
@@ -433,7 +438,7 @@ def test_json_import_rejects_request_over_configured_limit(tmp_path: Path) -> No
 
 
 def test_connectors_persist_across_app_recreation(tmp_path: Path) -> None:
-    settings = _settings(tmp_path / "api.sqlite3")
+    settings = _sqlite_settings(tmp_path / "api.sqlite3")
     first_client = TestClient(create_app(settings=settings, connector_registrations=[]))
     connector = _create(first_client)
 
@@ -445,9 +450,9 @@ def test_connectors_persist_across_app_recreation(tmp_path: Path) -> None:
     )
 
 
-def test_openapi_connector_routes_are_admin_protected(tmp_path: Path) -> None:
+def test_openapi_connector_routes_are_admin_protected() -> None:
     settings = APISettings(
-        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "api.sqlite3")},
+        connector_store={"type": "inmemory"},
         admin_authentication={
             "mode": "jwt",
             "jwks_url": "https://identity.example/.well-known/jwks.json",

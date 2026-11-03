@@ -15,7 +15,8 @@ from umbod.core.activation import CAPABILITY_ACTIVATION_STATE_TABLE, create_capa
 from umbod.core.activation.stores.service import CapabilityActivationStoreService
 from umbod.core.connectors.downstream_mcp.management import DownstreamConnectorUnitOfWorkService, InMemoryDownstreamConnectorUnitOfWork, utc_clock
 from umbod.core.connectors.downstream_mcp.stores import CONNECTOR_CREDENTIAL_TABLE, CONNECTOR_DEFINITION_TABLE, CONNECTOR_HEALTH_TABLE, ConnectorDefinitionStoreService, ConnectorHealthStoreService, EncryptedCredentialStoreService, TOOL_CATALOG_TABLE, ToolCatalogStoreService
-from tests.persistence_runtime import create_inmemory_runtime, create_sqlite_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import create_inmemory_runtime, prepared_inmemory_runtime, prepared_sqlite_runtime
+from umbod.core.persistence import Database
 import asyncio
 from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
@@ -77,17 +78,24 @@ async def _inmemory(_: Path, fault: Callable[[str], None]) -> AggregateHarness:
     events = DatabaseEventStream(create_inmemory_runtime().database)
     return Harness(InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activations, publishing, fault, personal, configurations, personal_policies, personal_access, events), definitions, credentials, catalogs, health, publishing, activations, personal, events)
 
-async def _sqlite(path: Path, fault: Callable[[str], None]) -> AggregateHarness:
-    definitions = ConnectorDefinitionStoreService(create_sqlite_runtime(path).database, CONNECTOR_DEFINITION_TABLE)
-    credentials = EncryptedCredentialStoreService(create_sqlite_runtime(path).database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('unit-of-work-secret'))
-    catalogs = ToolCatalogStoreService(create_sqlite_runtime(path).database, TOOL_CATALOG_TABLE)
-    health = ConnectorHealthStoreService(create_sqlite_runtime(path).database, CONNECTOR_HEALTH_TABLE)
-    database = (await prepared_sqlite_runtime(path)).database
+async def _database_harness(database: Database, fault: Callable[[str], None]) -> AggregateHarness:
+    definitions = ConnectorDefinitionStoreService(database, CONNECTOR_DEFINITION_TABLE)
+    credentials = EncryptedCredentialStoreService(database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('unit-of-work-secret'))
+    catalogs = ToolCatalogStoreService(database, TOOL_CATALOG_TABLE)
+    health = ConnectorHealthStoreService(database, CONNECTOR_HEALTH_TABLE)
     activations = await create_capability_activation_store(database)
     publishing = await create_connector_publishing_store(database)
-    return Harness(DownstreamConnectorUnitOfWorkService(create_sqlite_runtime(path).database, AuthenticatedTextCipher('unit-of-work-secret'), fault, utc_clock), definitions, credentials, catalogs, health, publishing, activations, EncryptedPersonalConnectionStore(database, AuthenticatedTextCipher('unit-of-work-secret')), DatabaseEventStream(database))
+    return Harness(DownstreamConnectorUnitOfWorkService(database, AuthenticatedTextCipher('unit-of-work-secret'), fault, utc_clock), definitions, credentials, catalogs, health, publishing, activations, EncryptedPersonalConnectionStore(database, AuthenticatedTextCipher('unit-of-work-secret')), DatabaseEventStream(database))
 
-@pytest.mark.parametrize('factory', (_inmemory, _sqlite), ids=('inmemory', 'sqlite'))
+
+async def _database_inmemory(_: Path, fault: Callable[[str], None]) -> AggregateHarness:
+    return await _database_harness((await prepared_inmemory_runtime()).database, fault)
+
+
+async def _sqlite(path: Path, fault: Callable[[str], None]) -> AggregateHarness:
+    return await _database_harness((await prepared_sqlite_runtime(path)).database, fault)
+
+@pytest.mark.parametrize("factory", (_inmemory, _database_inmemory, _sqlite), ids=("detached-inmemory", "database-inmemory", "sqlite"))
 @pytest.mark.asyncio
 async def test_atomic_create_persists_complete_aggregate(tmp_path: Path, factory: Callable[[Path, Callable[[str], None]], Awaitable[AggregateHarness]]) -> None:
     database_path = tmp_path / 'aggregate.sqlite3'
@@ -101,7 +109,7 @@ async def test_atomic_create_persists_complete_aggregate(tmp_path: Path, factory
     assert isinstance(await harness.catalogs.get(query), ToolCatalogFound)
     assert (await harness.health.get(query)).found is True
 
-@pytest.mark.parametrize('factory', (_inmemory, _sqlite), ids=('inmemory', 'sqlite'))
+@pytest.mark.parametrize("factory", (_inmemory, _database_inmemory, _sqlite), ids=("detached-inmemory", "database-inmemory", "sqlite"))
 @pytest.mark.parametrize('failed_phase', ('definition', 'credential', 'catalog', 'health', 'activation', 'event'))
 @pytest.mark.asyncio
 async def test_create_failure_at_each_phase_rolls_back_all_state(tmp_path: Path, factory: Callable[[Path, Callable[[str], None]], Awaitable[AggregateHarness]], failed_phase: str) -> None:
@@ -119,7 +127,7 @@ async def test_create_failure_at_each_phase_rolls_back_all_state(tmp_path: Path,
     assert (await harness.catalogs.get(query)).found is False
     assert (await harness.health.get(query)).found is False
 
-@pytest.mark.parametrize("factory", (_inmemory, _sqlite), ids=("inmemory", "sqlite"))
+@pytest.mark.parametrize("factory", (_inmemory, _database_inmemory, _sqlite), ids=("detached-inmemory", "database-inmemory", "sqlite"))
 @pytest.mark.parametrize("failed_phase", ("none", "credential", "definition", "publication"))
 @pytest.mark.asyncio
 async def test_connector_deletion_personal_cleanup_is_atomic(
@@ -175,7 +183,7 @@ async def test_sqlite_concurrent_prefix_updates_commit_only_one_conflicting_clai
     assert {stored_alpha.definition.tool_name_prefix, stored_beta.definition.tool_name_prefix} in ({'Shared', 'Alpha'}, {'Shared', 'Beta'})
 
 
-@pytest.mark.parametrize("factory", (_inmemory, _sqlite), ids=("inmemory", "sqlite"))
+@pytest.mark.parametrize("factory", (_inmemory, _database_inmemory, _sqlite), ids=("detached-inmemory", "database-inmemory", "sqlite"))
 @pytest.mark.parametrize("interruption", ("discovery_failure", "authorization_invalidation"))
 @pytest.mark.asyncio
 async def test_reconnect_preserves_tool_choices(
@@ -222,7 +230,7 @@ async def test_reconnect_preserves_tool_choices(
         assert await harness.activations.get_status(added) == ActivationStatus.DISABLED
 
 
-@pytest.mark.parametrize("factory", (_inmemory, _sqlite), ids=("inmemory", "sqlite"))
+@pytest.mark.parametrize("factory", (_inmemory, _database_inmemory, _sqlite), ids=("detached-inmemory", "database-inmemory", "sqlite"))
 @pytest.mark.parametrize("personal", (False, True), ids=("shared", "personal"))
 @pytest.mark.asyncio
 async def test_unpublished_create_and_delete_publish_discovery_events(
@@ -248,7 +256,7 @@ async def test_unpublished_create_and_delete_publish_discovery_events(
     assert all(entry.event.metadata == {"connector_kind": "downstream_mcp", "connector_id": "alpha"} for entry in events)
 
 
-@pytest.mark.parametrize("factory", (_inmemory, _sqlite), ids=("inmemory", "sqlite"))
+@pytest.mark.parametrize("factory", (_inmemory, _database_inmemory, _sqlite), ids=("detached-inmemory", "database-inmemory", "sqlite"))
 @pytest.mark.asyncio
 async def test_delete_event_failure_restores_unpublished_definition(
     tmp_path: Path,
@@ -270,7 +278,7 @@ async def test_delete_event_failure_restores_unpublished_definition(
     assert len(await harness.events.list_after(0, 100)) == 1
 
 
-@pytest.mark.parametrize("factory", (_inmemory, _sqlite), ids=("inmemory", "sqlite"))
+@pytest.mark.parametrize("factory", (_inmemory, _database_inmemory, _sqlite), ids=("detached-inmemory", "database-inmemory", "sqlite"))
 @pytest.mark.asyncio
 async def test_stale_discovery_does_not_restore_deleted_connector(
     tmp_path: Path,
@@ -294,7 +302,7 @@ async def test_stale_discovery_does_not_restore_deleted_connector(
     assert len(await harness.events.list_after(0, 100)) == 2
 
 
-@pytest.mark.parametrize("factory", (_inmemory, _sqlite), ids=("inmemory", "sqlite"))
+@pytest.mark.parametrize("factory", (_inmemory, _database_inmemory, _sqlite), ids=("detached-inmemory", "database-inmemory", "sqlite"))
 @pytest.mark.asyncio
 async def test_catalog_generation_rejects_a_later_commit_even_when_content_is_identical(
     tmp_path: Path,

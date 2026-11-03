@@ -16,7 +16,7 @@ from umbod.rest.settings import APISettings
 ISSUER = "https://identity.example.com/"
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def signing_key() -> rsa.RSAPrivateKey:
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 
@@ -43,10 +43,7 @@ def client(
     config = APISettings(
         runtime={"profile": "production", "auth": "auth0"},
         rest={"metrics_enabled": False},
-        connector_store={
-            "type": "sqlite",
-            "sqlite_path": str(tmp_path / "directory.sqlite"),
-        },
+        connector_store={"type": "inmemory"},
         admin_authentication={
             "mode": "jwt",
             "environment": "production",

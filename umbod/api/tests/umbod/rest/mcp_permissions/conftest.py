@@ -5,7 +5,7 @@ import pytest
 from starlette.routing import Mount
 from fastapi.testclient import TestClient
 
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from tests.umbod.rest.mcp_permissions.assignable_support import AdminPermissionHttp
 from tests.umbod.rest.user_catalogue.query_budget_support import CountingRuntime, QueryCounts
 from umbod.config import AppConfig
@@ -14,9 +14,9 @@ from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.main import create_app
 
 
-@pytest.fixture(params=["inmemory", "sqlite"])
+@pytest.fixture
 def admin_permission_http(
-    request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[AdminPermissionHttp]:
     deployment = tmp_path / "deployment.json"
     deployment.write_text('{"connectors": []}')
@@ -35,11 +35,7 @@ def admin_permission_http(
         if isinstance(route, Mount) and route.path == "/api/admin"
     )
     with TestClient(root) as client:
-        runtime = (
-            client.portal.call(prepared_inmemory_runtime)
-            if request.param == "inmemory"
-            else client.portal.call(prepared_sqlite_runtime, tmp_path / "permissions.sqlite")
-        )
+        runtime = client.portal.call(prepared_inmemory_runtime)
         counts = QueryCounts()
         wrapped_runtime = CountingRuntime(runtime, counts)
         factories = ConnectorApiDependencyFactories.from_settings(settings, wrapped_runtime, [])

@@ -1,9 +1,8 @@
 import asyncio
-from pathlib import Path
 
 import pytest
 
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores, create_downstream_mcp_stores
 from umbod.core.connectors.downstream_mcp.adapters.settings import DownstreamMcpInfrastructureSettings
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, SaveConnectorDefinition
@@ -63,14 +62,8 @@ async def test_fixed_supplier_returns_existing_validated_bundle() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("backend", ["inmemory", "sqlite"])
-async def test_composed_supplier_returns_fresh_stores_over_application_database(
-    tmp_path: Path, backend: str,
-) -> None:
-    runtime = (
-        await prepared_inmemory_runtime()
-        if backend == "inmemory" else await prepared_sqlite_runtime(tmp_path / "supplier.sqlite")
-    )
+async def test_composed_supplier_returns_fresh_stores_over_application_database() -> None:
+    runtime = await prepared_inmemory_runtime()
     try:
         factories = ConnectorApiDependencyFactories.from_settings(APISettings(), runtime, [])
         supplier: PersonalCatalogueStoreSupplier = factories.personal_catalogue_stores

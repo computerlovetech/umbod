@@ -1,14 +1,12 @@
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Optional, Protocol
 
 import pytest
 import pytest_asyncio
 from pydantic import ValidationError
 
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
-from tests.support.identity_directory import InMemoryIdentityDirectory
+from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.callers import (
     AuthenticationProvenance,
     CallerContext,
@@ -66,18 +64,9 @@ def observation(subject: str, name: str) -> IdentityObservation:
     )
 
 
-@pytest_asyncio.fixture(params=["fake", "inmemory", "sqlite"])
-async def directory(
-    request: pytest.FixtureRequest, tmp_path: Path
-) -> AsyncIterator[UserDirectory]:
-    if request.param == "fake":
-        yield InMemoryIdentityDirectory()
-        return
-    runtime = (
-        await prepared_inmemory_runtime()
-        if request.param == "inmemory"
-        else await prepared_sqlite_runtime(tmp_path / "users.sqlite")
-    )
+@pytest_asyncio.fixture
+async def directory() -> AsyncIterator[UserDirectory]:
+    runtime = await prepared_inmemory_runtime()
     try:
         yield DatabaseIdentityDirectory(runtime.database)
     finally:

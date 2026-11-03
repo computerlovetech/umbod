@@ -1,10 +1,9 @@
 from datetime import UTC, datetime
-from pathlib import Path
 from unittest.mock import create_autospec
 
 import pytest
 
-from tests.persistence_runtime import prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.proxies import Model
 from umbod.core.administrator.connector_configuration import ConnectorReference
 from umbod.core.administrator.connector_configuration.catalog import ConnectorConfigurationCatalog
@@ -76,9 +75,9 @@ async def test_administrator_catalog_includes_unavailable_registered_native_capa
 @pytest.mark.asyncio
 @pytest.mark.parametrize("snapshot_present", [True, False])
 async def test_administrator_catalog_reads_only_requested_persisted_downstream_snapshot(
-    tmp_path: Path, snapshot_present: bool,
+    snapshot_present: bool,
 ) -> None:
-    runtime = await prepared_sqlite_runtime(tmp_path / "catalog.sqlite")
+    runtime = await prepared_inmemory_runtime()
     stores = await create_downstream_mcp_stores("test-secret", runtime.database)
     for identifier in ("inventory", "other"):
         await stores.definitions.save(SaveConnectorDefinition(definition=NoAuthConnectorDefinition(

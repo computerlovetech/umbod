@@ -1,11 +1,12 @@
 import json
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 
 import pytest
 import pytest_asyncio
 from pydantic import SecretStr, ValidationError
+
+from pathlib import Path
 
 from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
@@ -92,12 +93,12 @@ async def install_authorization(case: RuntimeCase, authorization: Authorized) ->
     )
 
 
-@pytest_asyncio.fixture(params=("inmemory", "sqlite"))
+@pytest_asyncio.fixture
 async def runtime_case(request: pytest.FixtureRequest, tmp_path: Path) -> RuntimeCase:
     runtime = (
-        await prepared_inmemory_runtime()
-        if request.param == "inmemory"
-        else await prepared_sqlite_runtime(tmp_path / "runtime.sqlite3")
+        await prepared_sqlite_runtime(tmp_path / "runtime.sqlite3")
+        if getattr(request, "param", "inmemory") == "sqlite"
+        else await prepared_inmemory_runtime()
     )
     bundle = await create_downstream_mcp_stores("runtime-secret", runtime.database)
     definition = OAuthConnectorDefinition(

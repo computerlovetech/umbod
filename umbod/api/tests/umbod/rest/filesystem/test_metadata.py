@@ -171,8 +171,9 @@ def test_patch_returns_success_snapshot_despite_grant_revocation_after_commit(
     assert filesystem_http.client.get(path, headers={"Authorization": "Bearer bob"}).status_code == 403
 
 
+@pytest.mark.parametrize("filesystem_persistence_config", ["sqlite"], indirect=True)
 def test_owner_patch_with_sqlite_corrupt_policy_returns_committed_unavailable_snapshot(
-    filesystem_http: FilesystemHttp, tmp_path: Path,
+    filesystem_http: FilesystemHttp,
 ) -> None:
     from uuid import UUID
 
@@ -188,7 +189,8 @@ def test_owner_patch_with_sqlite_corrupt_policy_returns_committed_unavailable_sn
     )
     policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
     client.portal.call(policies.add_grant, grant)
-    corrupt_stored_grant(tmp_path / "filesystem.sqlite", grant)
+    assert filesystem_http.factories.settings.connector_store.type == "sqlite"
+    corrupt_stored_grant(Path(filesystem_http.factories.settings.connector_store.sqlite_path), grant)
     path = f"{BASE}/nodes/{home['id']}"
     inspected = client.get(path)
     assert inspected.status_code == 200

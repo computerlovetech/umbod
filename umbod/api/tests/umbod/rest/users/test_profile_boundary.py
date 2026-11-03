@@ -17,7 +17,7 @@ ISSUER = "https://identity.example.test/"
 KEY_ID = "profile-boundary-signing-key"
 
 
-@pytest.fixture
+@pytest.fixture(scope="module")
 def signing_key() -> rsa.RSAPrivateKey:
     return rsa.generate_private_key(public_exponent=65537, key_size=2048)
 

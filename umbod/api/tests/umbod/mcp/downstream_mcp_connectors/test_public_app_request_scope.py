@@ -7,13 +7,12 @@ from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
 from umbod.core.invocation.tools.database_configuration_mutation import DatabaseConnectorToolConfigurationMutationAdapter
 from umbod.core.activation import CapabilityRef, create_capability_activation_store
 from umbod.core.connectors.downstream_mcp.stores import CONNECTOR_CREDENTIAL_TABLE, CONNECTOR_DEFINITION_TABLE, ConnectorDefinitionStoreService, EncryptedCredentialStoreService, TOOL_CATALOG_TABLE, ToolCatalogStoreService
-from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
-from tests.persistence_runtime import create_inmemory_runtime, create_sqlite_runtime, prepared_sqlite_runtime
+from umbod.core.persistence import Database
+from tests.persistence_runtime import prepared_inmemory_runtime
 import asyncio
 import json
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import Any, AsyncIterator
 from unittest.mock import AsyncMock, Mock
 
@@ -62,13 +61,11 @@ class InMemoryServerClientFactory:
     def create(self, command: DiscoverDownstreamTools) -> Client:
         return Client(self._server)
 
-async def _persist_catalog(database_path: str) -> None:
-    await prepared_sqlite_runtime(database_path)
-    await ConnectorDefinitionStoreService(create_sqlite_runtime(database_path).database, CONNECTOR_DEFINITION_TABLE).save(SaveConnectorDefinition(definition=NoAuthConnectorDefinition(connector_id=CONNECTOR_ID, display_name='Scope test', tool_name_prefix='scope_test', endpoint_url='https://scope.example.test/mcp', public_path=PUBLIC_PATH)))
-    await EncryptedCredentialStoreService(create_sqlite_runtime(database_path).database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('test-secret')).save(SaveCredential(credential=NoAuthCredentialState(connector_id=CONNECTOR_ID)))
+async def _persist_catalog(database: Database) -> None:
+    await ConnectorDefinitionStoreService(database, CONNECTOR_DEFINITION_TABLE).save(SaveConnectorDefinition(definition=NoAuthConnectorDefinition(connector_id=CONNECTOR_ID, display_name='Scope test', tool_name_prefix='scope_test', endpoint_url='https://scope.example.test/mcp', public_path=PUBLIC_PATH)))
+    await EncryptedCredentialStoreService(database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('test-secret')).save(SaveCredential(credential=NoAuthCredentialState(connector_id=CONNECTOR_ID)))
     tools = tuple((DiscoveredToolWithOutputSchema(identity=ToolIdentity(connector_id=CONNECTOR_ID, downstream_name=name), title=name, description=f'Downstream {name}', input_schema={'type': 'object', 'properties': {}}, output_schema={'type': 'object'}) for name in DOWNSTREAM_TOOL_NAMES))
-    await ToolCatalogStoreService(create_sqlite_runtime(database_path).database, TOOL_CATALOG_TABLE).replace(ReplaceToolCatalog(snapshot=ToolCatalogSnapshot(connector_id=CONNECTOR_ID, discovered_at=datetime(2026, 1, 1, tzinfo=UTC), tools=tools)))
-    database = (await prepared_sqlite_runtime(database_path)).database
+    await ToolCatalogStoreService(database, TOOL_CATALOG_TABLE).replace(ReplaceToolCatalog(snapshot=ToolCatalogSnapshot(connector_id=CONNECTOR_ID, discovered_at=datetime(2026, 1, 1, tzinfo=UTC), tools=tools)))
     publishing_store = await create_connector_publishing_store(database)
     await publishing_store.publish_connector(CONNECTOR_ID)
     activation_store = await create_capability_activation_store(database)
@@ -93,13 +90,11 @@ async def _post(client: httpx.AsyncClient, path: str, payload: dict[str, Any]) -
     return parsed
 
 @pytest.mark.asyncio
-async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    database_path = str(tmp_path / 'request-scope.sqlite3')
-    await _persist_catalog(database_path)
-    settings = MCPAppSettings(mcp=MCPSettings(metrics_enabled=False, connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, stateless_http=True, _env_file=None), connector_store=ConnectorStoreConfig(type='sqlite', sqlite_path=database_path), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
-    runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
-    persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
-    await persistence_runtime.readiness.ensure_ready()
+async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(monkeypatch: pytest.MonkeyPatch) -> None:
+    persistence_runtime = await prepared_inmemory_runtime()
+    await _persist_catalog(persistence_runtime.database)
+    settings = MCPAppSettings(mcp=MCPSettings(metrics_enabled=False, connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, stateless_http=True, _env_file=None), connector_store=ConnectorStoreConfig(type='inmemory'), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
+    runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(persistence_runtime.database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
     config = PublicAppConfig(settings=settings, telemetry=create_configured_mcp_telemetry(settings), connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=True, api_base_url=None, persistence_runtime=persistence_runtime)
     context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     principal = Principal(type=PrincipalType.USER, issuer='https://issuer', id='scope-user')
@@ -253,13 +248,11 @@ class DownstreamApprovalHarness:
             return await client.call_tool('scope_test_search_tools', {})
 
 @pytest_asyncio.fixture
-async def downstream_approval_harness(tmp_path: Path) -> AsyncIterator[DownstreamApprovalHarness]:
-    database_path = str(tmp_path / 'approval-roundtrip.sqlite3')
-    await _persist_catalog(database_path)
-    settings = MCPAppSettings(mcp=MCPSettings(connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, stateless_http=False, _env_file=None), connector_store=ConnectorStoreConfig(type='sqlite', sqlite_path=database_path), connector_security={'configuration_secret': 'test-secret', 'approval_state_key': 'acceptance-approval-state-key-with-sufficient-entropy'}, _env_file=None)
-    runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
-    persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
-    await persistence_runtime.readiness.ensure_ready()
+async def downstream_approval_harness() -> AsyncIterator[DownstreamApprovalHarness]:
+    persistence_runtime = await prepared_inmemory_runtime()
+    await _persist_catalog(persistence_runtime.database)
+    settings = MCPAppSettings(mcp=MCPSettings(connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, stateless_http=False, _env_file=None), connector_store=ConnectorStoreConfig(type='inmemory'), connector_security={'configuration_secret': 'test-secret', 'approval_state_key': 'acceptance-approval-state-key-with-sufficient-entropy'}, _env_file=None)
+    runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(persistence_runtime.database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
     mutation_adapter = DatabaseConnectorToolConfigurationMutationAdapter(persistence_runtime.database)
     ask_result = await mutation_adapter.apply(ConnectorToolConfigurationMutation(connector_kind='downstream_mcp', connector_id=CONNECTOR_ID, policy_changes=(ConnectorToolInvocationPolicyChange(operation_name='search_tools', mode='ask', expected_revision=0),)))
     recorder = ExecutionRecorder()
@@ -302,16 +295,14 @@ async def test_persisted_ask_changed_to_direct_executes_once_without_elicitation
 
 
 @pytest.mark.asyncio
-async def test_separate_runtime_contexts_keep_injected_execution_factories_isolated(tmp_path: Path) -> None:
-    database_path = str(tmp_path / 'isolated-contexts.sqlite3')
-    await _persist_catalog(database_path)
-    settings = MCPAppSettings(mcp=MCPSettings(metrics_enabled=False, connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, _env_file=None), connector_store=ConnectorStoreConfig(type='sqlite', sqlite_path=database_path), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
+async def test_separate_runtime_contexts_keep_injected_execution_factories_isolated() -> None:
+    settings = MCPAppSettings(mcp=MCPSettings(metrics_enabled=False, connector_tool_exposure_mode='flat', downstream_discovery_enabled=False, _env_file=None), connector_store=ConnectorStoreConfig(type='inmemory'), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
     recorders = (ExecutionRecorder(), ExecutionRecorder())
     contexts: list[PublicAppRuntimeContext] = []
     try:
         for recorder in recorders:
-            persistence = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
-            await persistence.readiness.ensure_ready()
+            persistence = await prepared_inmemory_runtime()
+            await _persist_catalog(persistence.database)
             runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(persistence.database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
             downstream = FastMCP('isolated-downstream')
             downstream.tool(name='search_tools')(recorder.search_tools)

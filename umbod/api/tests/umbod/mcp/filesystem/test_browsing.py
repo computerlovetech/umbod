@@ -13,7 +13,7 @@ from umbod.mcp.filesystem import register_filesystem_tools
 from umbod.mcp.signals import McpInvocationPublisher
 from umbod.mcp.tools import McpObservedToolRegistrar
 
-from .conftest import FilesystemMcp, caller_snapshot
+from .conftest import FilesystemMcp, FilesystemState, caller_snapshot
 from .test_tools import METADATA, root_id
 
 TOOL = "filesystem_browse"
@@ -23,13 +23,13 @@ ROOT = {"type": "root"}
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["ls", "tree", "stat", "unknown"])
 async def test_browse_observation_records_only_declared_operation_names(
-    filesystem_invocation_mcp: FilesystemMcp, operation: str,
+    filesystem_state: FilesystemState, operation: str,
 ) -> None:
     server = FastMCP()
     publisher = Mock(spec=McpInvocationPublisher)
     register_filesystem_tools(
-        McpObservedToolRegistrar(server, publisher), filesystem_invocation_mcp.callers, filesystem_invocation_mcp.services,
-        filesystem_invocation_mcp.visibility, filesystem_invocation_mcp.approval,
+        McpObservedToolRegistrar(server, publisher), filesystem_state.callers, filesystem_state.services,
+        filesystem_state.visibility, filesystem_state.approval,
     )
     async with Client(server) as client:
         result = await client.call_tool(TOOL, {"operation": operation, "target": ROOT}, raise_on_error=False)

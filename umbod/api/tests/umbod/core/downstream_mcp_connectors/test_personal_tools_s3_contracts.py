@@ -336,6 +336,7 @@ async def test_aggregate_delete_fault_restores_policy_and_owner_observation(runt
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("runtime_case", ["sqlite"], indirect=True)
 async def test_observations_survive_worker_recreation(runtime_case: RuntimeCase, tmp_path: Path) -> None:
     from tests.persistence_runtime import prepared_sqlite_runtime
 
@@ -343,7 +344,7 @@ async def test_observations_survive_worker_recreation(runtime_case: RuntimeCase,
     await enable_tool(runtime_case, "read")
     await save_matches(runtime_case, policy)
     path = tmp_path / "runtime.sqlite3"
-    database = (await prepared_sqlite_runtime(path)).database if path.exists() else runtime_case.database
+    database = (await prepared_sqlite_runtime(path)).database
     recreated = await create_downstream_mcp_stores("runtime-secret", database)
     assert len(await read_available(recreated, runtime_case.query)) == 1
 
@@ -395,11 +396,9 @@ async def test_personal_publication_checks_approved_names_but_allows_catalogue_f
 
 
 @pytest.mark.asyncio
-async def test_detached_inmemory_unit_of_work_snapshots_personal_tool_stores(runtime_case: RuntimeCase, tmp_path: Path) -> None:
+async def test_detached_inmemory_unit_of_work_snapshots_personal_tool_stores(runtime_case: RuntimeCase) -> None:
     from umbod.core.connectors.downstream_mcp.management import InMemoryDownstreamConnectorUnitOfWork
 
-    if (tmp_path / "runtime.sqlite3").exists():
-        pytest.skip("Detached unit of work is an in-memory adapter")
     bundle = runtime_case.bundle
     policy = await replace_policy(runtime_case, (approved_tool("read"),))
     await enable_tool(runtime_case, "read")

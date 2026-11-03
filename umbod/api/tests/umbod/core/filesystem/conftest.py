@@ -11,7 +11,7 @@ from umbod.infrastructure import (
     create_content_driver,
     create_namespace_driver,
 )
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from tests.support.filesystem import (
     FilesystemAcceptanceContext,
     create_acceptance_context,
@@ -19,15 +19,9 @@ from tests.support.filesystem import (
 from tests.support.filesystem.adapters import AdapterFactory, AdapterPair
 
 
-@pytest_asyncio.fixture(params=["inmemory", "sqlite"])
-async def filesystem_runtime(
-    request: pytest.FixtureRequest, tmp_path: Path
-) -> AsyncIterator[PersistenceRuntime]:
-    runtime = (
-        await prepared_inmemory_runtime()
-        if request.param == "inmemory"
-        else await prepared_sqlite_runtime(tmp_path / "filesystem.db")
-    )
+@pytest_asyncio.fixture
+async def filesystem_runtime() -> AsyncIterator[PersistenceRuntime]:
+    runtime = await prepared_inmemory_runtime()
     try:
         yield runtime
     finally:

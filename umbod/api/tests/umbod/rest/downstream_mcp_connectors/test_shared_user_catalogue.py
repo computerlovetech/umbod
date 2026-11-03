@@ -1,15 +1,10 @@
-from pathlib import Path
-
-import pytest
-
 from test_routes_acceptance import (
     _downstream_client_with_tool, connector_availability as connector_availability,
 )
 
 
-@pytest.mark.asyncio
-async def test_shared_downstream_catalogue_uses_explicit_grants_and_current_activation(tmp_path: Path) -> None:
-    client, connector_id = await _downstream_client_with_tool(tmp_path)
+def test_shared_downstream_catalogue_uses_explicit_grants_and_current_activation() -> None:
+    client, connector_id = _downstream_client_with_tool()
     with client:
         url = f"/api/admin/connectors/mcp/{connector_id}"
         client.put(url + "/publication").raise_for_status()

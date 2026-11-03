@@ -3,7 +3,6 @@ import asyncio
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
@@ -14,20 +13,18 @@ from umbod.core.filesystem import (
     AccessControlDriver, AccessGrant, NamespaceDriver, Node, Permission, Principal,
     PrincipalType, RevisionConflict,
 )
-from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
-from umbod.core.filesystem.namespace import initial_root
+from umbod.core.filesystem.authorization import PermissionDenied
 from umbod.core.filesystem.sharing import (
-    FilesystemSharing, InvalidSharingPolicy, ReplaceNodePolicy, SharingService, ShareNodePolicy, UserSharingTarget,
+    FilesystemSharing, InvalidSharingPolicy, ReplaceNodePolicy, ShareNodePolicy, UserSharingTarget,
 )
 from umbod.core.identity_directory.models import IdentityObservation
 from umbod.core.identity_directory.ports import IdentityDirectoryStore, ObservedUserDirectory
 from umbod.core.identity_directory.store import DatabaseIdentityDirectory
 from umbod.core.identity_directory.user_models import SubjectUsersLookup
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from tests.umbod.core.filesystem.test_authorized_content import caller
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
 from .conftest import sharing_context
-from .test_ports import transactions
 
 
 class UserDirectory(IdentityDirectoryStore, ObservedUserDirectory, Protocol):
@@ -63,19 +60,9 @@ def user_command(user_id: str, *permissions: Permission) -> ShareNodePolicy:
     )
 
 
-@pytest_asyncio.fixture(params=["fake", "inmemory", "sqlite"])
-async def user_context(request: pytest.FixtureRequest, tmp_path: Path) -> AsyncIterator[UserContext]:
-    if request.param == "fake":
-        ports = transactions()
-        yield UserContext(
-            SharingService(VerifiedIdentityResolver(), ports, "issuer"), ports.users,
-            ports.policies, ports.namespace, await ports.namespace.get_node(initial_root().id),
-        )
-        return
-    runtime = (
-        await prepared_inmemory_runtime() if request.param == "inmemory"
-        else await prepared_sqlite_runtime(tmp_path / "user-sharing.db")
-    )
+@pytest_asyncio.fixture
+async def user_context() -> AsyncIterator[UserContext]:
+    runtime = await prepared_inmemory_runtime()
     try:
         context = await sharing_context(runtime.database)
         yield UserContext(

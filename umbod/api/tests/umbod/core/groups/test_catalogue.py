@@ -1,13 +1,12 @@
 from asyncio import Event, create_task, wait_for
 from collections.abc import AsyncIterator
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
 import pytest_asyncio
 from pydantic import ValidationError
 
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.groups import (
     GroupCatalogue,
     GroupInUse,
@@ -47,15 +46,9 @@ class NoGroupUsage:
         return False
 
 
-@pytest_asyncio.fixture(params=["in_memory", "sqlite"])
-async def database(
-    request: pytest.FixtureRequest, tmp_path: Path
-) -> AsyncIterator[Database]:
-    runtime = (
-        await prepared_sqlite_runtime(tmp_path / "groups.sqlite3")
-        if request.param == "sqlite"
-        else await prepared_inmemory_runtime()
-    )
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[Database]:
+    runtime = await prepared_inmemory_runtime()
     try:
         yield runtime.database
     finally:

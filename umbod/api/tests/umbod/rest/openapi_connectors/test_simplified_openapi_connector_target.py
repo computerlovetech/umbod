@@ -26,10 +26,10 @@ def connector_availability(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> Iterator[TestClient]:
+def client() -> Iterator[TestClient]:
     settings = APISettings(
         rest={"metrics_enabled": False},
-        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "api.sqlite3")},
+        connector_store={"type": "inmemory"},
         admin_authentication={"mode": "simulation", "simulated_admin": True},
     )
     with TestClient(create_app(settings=settings, connector_registrations=[])) as test_client:

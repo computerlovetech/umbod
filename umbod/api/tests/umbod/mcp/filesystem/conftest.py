@@ -3,7 +3,6 @@ import time
 
 from collections.abc import AsyncIterator
 from contextvars import ContextVar
-from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from unittest.mock import Mock
 
@@ -81,8 +80,7 @@ class RecordingContent:
 
 
 @dataclass
-class FilesystemMcp:
-    server: FastMCP
+class FilesystemState:
     callers: ScopedCallerCapture
     metrics: InMemoryMcpMetricsRecorder
     services: DatabaseFilesystemServiceFactory
@@ -94,14 +92,18 @@ class FilesystemMcp:
     approval: McpFilesystemDeletionApproval
 
 
+@dataclass
+class FilesystemMcp(FilesystemState):
+    server: FastMCP
+
+
 class InvocationFilesystemToolVisibility(FilesystemToolVisibility):
     async def authorize(self, context: AuthContext) -> bool:
         return not _REQUEST_CONNECTOR_SCOPE.get()
 
 
-@asynccontextmanager
-async def filesystem_server(filtered: bool) -> AsyncIterator[FilesystemMcp]:
-    application_failures = create_application_failure_signal()
+@pytest_asyncio.fixture
+async def filesystem_state() -> AsyncIterator[FilesystemState]:
     runtime = await prepared_inmemory_runtime()
     await create_root_provisioning(database=runtime.database).provision(
         RootBootstrapSpec(grants=(RootBootstrapGrant(
@@ -109,9 +111,6 @@ async def filesystem_server(filtered: bool) -> AsyncIterator[FilesystemMcp]:
             permissions=frozenset({Permission.DISCOVER, Permission.WRITE}),
         ),))
     )
-    server = FastMCP(request_state_security=RequestStateSecurity(
-        keys=[secrets.token_urlsafe(48)], ttl=300.0, audience="filesystem-delete-test",
-    ))
     callers = ScopedCallerCapture()
     callers.current.set(caller_snapshot(
         "alice", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED
@@ -125,35 +124,42 @@ async def filesystem_server(filtered: bool) -> AsyncIterator[FilesystemMcp]:
     )
     discovery = FilesystemDiscoveryRuntime(DatabaseFilesystemAuthorizationReader(runtime.database))
     await discovery.reconcile()
-    visibility_type = FilesystemToolVisibility if filtered else InvocationFilesystemToolVisibility
-    visibility = visibility_type(callers, discovery)
-    if filtered:
-        server.add_middleware(FilesystemVisibilityMiddleware(visibility))
+    visibility = InvocationFilesystemToolVisibility(callers, discovery)
     approval = McpFilesystemDeletionApproval(
         nonce_store=DatabaseApprovalNonceStore(runtime.database),
         clock=time.time, random_token=lambda: secrets.token_urlsafe(24),
     )
-    register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), metrics, Mock(), application_failures=application_failures))),
-        callers,
-        services,
-        visibility,
-        approval,
-    )
-    register_filesystem_resources(server, callers, services)
     try:
-        yield FilesystemMcp(server, callers, metrics, services, content, files, runtime.database, discovery, visibility, approval)
+        yield FilesystemState(callers, metrics, services, content, files, runtime.database, discovery, visibility, approval)
     finally:
         await runtime.shutdown()
 
 
-@pytest_asyncio.fixture
-async def filesystem_mcp() -> AsyncIterator[FilesystemMcp]:
-    async with filesystem_server(filtered=True) as filesystem:
-        yield filesystem
+def create_filesystem_server(state: FilesystemState, filtered: bool) -> FilesystemMcp:
+    application_failures = create_application_failure_signal()
+    server = FastMCP(request_state_security=RequestStateSecurity(
+        keys=[secrets.token_urlsafe(48)], ttl=300.0, audience="filesystem-delete-test",
+    ))
+    visibility = FilesystemToolVisibility(state.callers, state.runtime) if filtered else state.visibility
+    if filtered:
+        server.add_middleware(FilesystemVisibilityMiddleware(visibility))
+    register_filesystem_tools(
+        McpObservedToolRegistrar(server, McpInvocationPublisher(create_mcp_signals(Mock(), state.metrics, Mock(), application_failures=application_failures))),
+        state.callers, state.services, visibility, state.approval,
+    )
+    register_filesystem_resources(server, state.callers, state.services)
+    return FilesystemMcp(
+        callers=state.callers, metrics=state.metrics, services=state.services, content=state.content,
+        files=state.files, database=state.database, runtime=state.runtime, visibility=visibility,
+        approval=state.approval, server=server,
+    )
 
 
 @pytest_asyncio.fixture
-async def filesystem_invocation_mcp() -> AsyncIterator[FilesystemMcp]:
-    async with filesystem_server(filtered=False) as filesystem:
-        yield filesystem
+async def filesystem_mcp(filesystem_state: FilesystemState) -> FilesystemMcp:
+    return create_filesystem_server(filesystem_state, filtered=True)
+
+
+@pytest_asyncio.fixture
+async def filesystem_invocation_mcp(filesystem_state: FilesystemState) -> FilesystemMcp:
+    return create_filesystem_server(filesystem_state, filtered=False)

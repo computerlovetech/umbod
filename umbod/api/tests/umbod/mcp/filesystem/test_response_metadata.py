@@ -13,15 +13,15 @@ from umbod.mcp.responses.adapter import RESPONSE_METADATA_KEY
 from umbod.mcp.signals import McpInvocationPublisher, McpSignals
 from umbod.mcp.tools import McpObservedToolRegistrar
 
-from .conftest import FilesystemMcp
+from .conftest import FilesystemState
 
 
 @pytest.mark.parametrize("tool_name", ["create_filesystem_file", "create_filesystem_directory"])
 @pytest.mark.asyncio
 async def test_legacy_create_enrichment_failure_reports_completed_without_duplicate_write(
-    filesystem_invocation_mcp: FilesystemMcp, tool_name: str,
+    filesystem_state: FilesystemState, tool_name: str,
 ) -> None:
-    filesystem = filesystem_invocation_mcp
+    filesystem = filesystem_state
     caller = filesystem.callers.capture()
     browsing = filesystem.services.browsing()
     root = await browsing.get_root(caller)
@@ -67,9 +67,9 @@ async def test_legacy_create_enrichment_failure_reports_completed_without_duplic
 
 @pytest.mark.asyncio
 async def test_home_enrichment_failure_retains_completed_provisioning(
-    filesystem_invocation_mcp: FilesystemMcp,
+    filesystem_state: FilesystemState,
 ) -> None:
-    filesystem = filesystem_invocation_mcp
+    filesystem = filesystem_state
     homes = filesystem.services.homes()
     provisioning = AsyncMock(wraps=homes.get_or_provision)
     sharing = Mock(spec=FilesystemSharing)

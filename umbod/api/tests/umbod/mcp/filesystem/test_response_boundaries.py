@@ -24,7 +24,7 @@ from umbod.mcp.signals import McpInvocationPublisher, McpSignals
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.tools.errors import BuiltinToolError
 
-from .conftest import FilesystemMcp
+from .conftest import FilesystemMcp, FilesystemState
 from .test_approval import ApprovalContext
 from .test_browsing import create_node
 from .test_tools import root_id
@@ -41,9 +41,9 @@ from .test_tools import root_id
     ("filesystem_search_sharing_recipients", ""),
 ])
 async def test_primary_read_completion_survives_enrichment_or_serialization_failure(
-    filesystem_invocation_mcp: FilesystemMcp, tool_name: str, operation: str,
+    filesystem_state: FilesystemState, tool_name: str, operation: str,
 ) -> None:
-    filesystem = filesystem_invocation_mcp
+    filesystem = filesystem_state
     browsing = filesystem.services.browsing()
     root = await browsing.get_root(filesystem.callers.capture())
     sharing = Mock(spec=FilesystemSharing)

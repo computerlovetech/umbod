@@ -4,9 +4,12 @@ from urllib.parse import quote
 from uuid import uuid4
 
 import pytest
+from fastapi import FastAPI, Request
 from fastapi.testclient import TestClient
+from starlette.routing import Mount
 
-from tests.persistence_runtime import prepared_sqlite_runtime
+from umbod.rest.dependencies import get_connector_api_dependency_factories
+from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.core.filesystem.models import AccessGrant, Principal, PrincipalType
 from umbod.core.filesystem.stores.access_control import DatabaseAccessControl
 from umbod.rest.main import create_app
@@ -25,13 +28,10 @@ def connector_availability(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.fixture
-def client(tmp_path: Path) -> Iterator[TestClient]:
+def client() -> Iterator[TestClient]:
     settings = APISettings(
         admin_authentication={"mode": "simulation", "simulated_admin": True},
-        connector_store={
-            "type": "sqlite",
-            "sqlite_path": str(tmp_path / "groups.sqlite3"),
-        },
+        connector_store={"type": "inmemory"},
         rest={"metrics_enabled": False},
     )
     with TestClient(
@@ -112,46 +112,57 @@ def test_body_deletion_and_query_permissions_preserve_exact_identifiers(
     assert client.get("/api/admin/groups").json() == {"groups": []}
 
 
-@pytest.mark.asyncio
-async def test_observed_empty_identifier_supports_query_reads_and_body_deletion(
-    client: TestClient, tmp_path: Path
+def test_observed_empty_identifier_supports_query_reads_and_body_deletion(
+    client: TestClient,
 ) -> None:
-    runtime = await prepared_sqlite_runtime(tmp_path / "groups.sqlite3")
-    policies = DatabaseAccessControl(runtime.database)
+    root = client.app
+    if not isinstance(root, FastAPI):
+        raise TypeError("Expected a FastAPI application")
+    admin = next(
+        route.app for route in root.routes
+        if isinstance(route, Mount) and route.path == "/api/admin"
+    )
+    access_controls: list[DatabaseAccessControl] = []
+
+    def capture_access_control(request: Request) -> ConnectorApiDependencyFactories:
+        factories = get_connector_api_dependency_factories(request)
+        access_controls.append(DatabaseAccessControl(factories.persistence_runtime.database))
+        return factories
+
+    admin.dependency_overrides[get_connector_api_dependency_factories] = capture_access_control
+    client.get("/api/admin/groups").raise_for_status()
+    policies = access_controls[0]
     grant = AccessGrant(
         node_id=uuid4(),
         principal=Principal(type=PrincipalType.GROUP, issuer="", id=""),
         permissions=set(),
         recursive=False,
     )
-    try:
-        await policies.add_grant(grant)
-        assert client.get("/api/admin/groups").json() == {"groups": [group_record("")]}
-        detail = client.get(
-            "/api/admin/mcp-permissions/group-permissions", params={"group_id": ""}
-        )
-        assert detail.status_code == 200
-        assert detail.json() == {
-            "group_id": "",
-            "connector_ids": [],
-            "capabilities": [],
-        }
-        assert (
-            client.request(
-                "DELETE", "/api/admin/groups", json={"group_id": ""}
-            ).status_code
-            == 409
-        )
-        await policies.remove_grant(grant.node_id, grant.principal)
-        assert (
-            client.request(
-                "DELETE", "/api/admin/groups", json={"group_id": ""}
-            ).status_code
-            == 204
-        )
-        assert client.get("/api/admin/groups").json() == {"groups": []}
-    finally:
-        await runtime.shutdown()
+    client.portal.call(policies.add_grant, grant)
+    assert client.get("/api/admin/groups").json() == {"groups": [group_record("")]}
+    detail = client.get(
+        "/api/admin/mcp-permissions/group-permissions", params={"group_id": ""}
+    )
+    assert detail.status_code == 200
+    assert detail.json() == {
+        "group_id": "",
+        "connector_ids": [],
+        "capabilities": [],
+    }
+    assert (
+        client.request(
+            "DELETE", "/api/admin/groups", json={"group_id": ""}
+        ).status_code
+        == 409
+    )
+    client.portal.call(policies.remove_grant, grant.node_id, grant.principal)
+    assert (
+        client.request(
+            "DELETE", "/api/admin/groups", json={"group_id": ""}
+        ).status_code
+        == 204
+    )
+    assert client.get("/api/admin/groups").json() == {"groups": []}
 
 
 @pytest.mark.parametrize("body_route", [False, True])
@@ -308,7 +319,7 @@ def test_cookie_mutations_require_origin_and_marker(
     assert response.status_code == 403
 
 
-def test_unauthenticated_group_routes_reject_requests(tmp_path: Path) -> None:
+def test_unauthenticated_group_routes_reject_requests() -> None:
     settings = APISettings(
         admin_authentication={
             "mode": "jwt",
@@ -316,10 +327,7 @@ def test_unauthenticated_group_routes_reject_requests(tmp_path: Path) -> None:
             "membership_claim": "groups",
             "required_membership": "admin",
         },
-        connector_store={
-            "type": "sqlite",
-            "sqlite_path": str(tmp_path / "auth.sqlite3"),
-        },
+        connector_store={"type": "inmemory"},
         rest={"metrics_enabled": False},
     )
     with TestClient(

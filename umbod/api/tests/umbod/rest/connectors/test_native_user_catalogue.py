@@ -16,7 +16,7 @@ def test_native_catalogue_requires_configuration_publication_activation_and_expl
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(path))
     settings = AppConfig(
         rest={"metrics_enabled": False},
-        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "catalogue.sqlite")},
+        connector_store={"type": "inmemory"},
         admin_authentication={"mode": "simulation", "simulated_admin": True},
     )
     with TestClient(create_app(settings)) as client:

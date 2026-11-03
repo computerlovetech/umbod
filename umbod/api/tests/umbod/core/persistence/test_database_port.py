@@ -268,11 +268,14 @@ def test_neutral_table_identity_accepts_backend_reserved_identifier() -> None:
 
 
 @pytest.mark.asyncio
-async def test_typed_transaction_rolls_back_on_failure(database: Database) -> None:
+@pytest.mark.parametrize("mode", tuple(TransactionMode))
+async def test_typed_transaction_rolls_back_on_failure(
+    database: Database, mode: TransactionMode,
+) -> None:
     table, _, _, _ = make_table()
     await database.ensure_schema((table,))
     with pytest.raises(RuntimeError):
-        async with database.session(mode=TransactionMode.READ_WRITE) as session:
+        async with database.session(mode=mode) as session:
             await session.insert(table, InsertCommand(row=make_row("a")))
             raise RuntimeError("rollback")
     async with database.session(mode=TransactionMode.READ_WRITE) as session:
@@ -281,12 +284,15 @@ async def test_typed_transaction_rolls_back_on_failure(database: Database) -> No
 
 
 @pytest.mark.asyncio
-async def test_typed_transaction_rolls_back_on_cancellation(database: Database) -> None:
+@pytest.mark.parametrize("mode", tuple(TransactionMode))
+async def test_typed_transaction_rolls_back_on_cancellation(
+    database: Database, mode: TransactionMode,
+) -> None:
     table, _, _, _ = make_table()
     await database.ensure_schema((table,))
 
     async def cancelled_transaction() -> None:
-        async with database.session(mode=TransactionMode.READ_WRITE) as session:
+        async with database.session(mode=mode) as session:
             await session.insert(table, InsertCommand(row=make_row("a")))
             asyncio.current_task().cancel()
             await asyncio.sleep(0)

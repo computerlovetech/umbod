@@ -41,6 +41,10 @@ def sharing_http(filesystem_http: FilesystemHttp) -> FilesystemHttp:
 
 @pytest.fixture
 def private_node(sharing_http: FilesystemHttp) -> dict[str, object]:
+    return create_private_node(sharing_http)
+
+
+def create_private_node(sharing_http: FilesystemHttp) -> dict[str, object]:
     root = sharing_http.client.get(BASE + "/browse").json()["node"]
     response = sharing_http.client.post(f"{BASE}/nodes/{root['id']}/directories", json=BODY)
     assert response.status_code == 201
@@ -262,8 +266,13 @@ def test_group_replacement_preserves_foreign_user_and_recursive_grants(
 
 
 def test_nonadmin_owner_can_select_registered_groups_without_admin_catalogue_access(
-    sharing_http: FilesystemHttp, private_node: dict[str, object], monkeypatch: pytest.MonkeyPatch,
+    filesystem_full_http: FilesystemHttp, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    sharing_http = filesystem_full_http
+    sharing_http.factories.settings.oidc.issuer_url = "issuer"
+    sharing_http.factories.settings.admin_authentication.mode = "jwt"
+    private_node = create_private_node(sharing_http)
+
     def reject_admin_token(self: SimulatedJwtVerifier, token: str) -> JwtClaims:
         raise JwtVerificationError()
 

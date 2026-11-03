@@ -36,10 +36,13 @@ async def test_schema_preparation_is_idempotent_for_multiple_tables(database: Da
 
 
 @pytest.mark.asyncio
-async def test_read_write_session_commits_on_normal_exit(database: Database) -> None:
+@pytest.mark.parametrize("mode", tuple(TransactionMode))
+async def test_write_session_commits_on_normal_exit(
+    database: Database, mode: TransactionMode,
+) -> None:
     contract_table, _, _, _ = table()
     await database.ensure_schema((contract_table,))
-    async with database.session(mode=TransactionMode.READ_WRITE) as session:
+    async with database.session(mode=mode) as session:
         await session.insert(contract_table, InsertCommand(row=row("committed")))
     async with database.session(mode=TransactionMode.READ_WRITE) as session:
         stored = await session.find_one(

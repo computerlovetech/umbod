@@ -2,8 +2,11 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
+from fastapi.testclient import TestClient
+from starlette.routing import Mount
 
 from umbod.rest.authentication.deps import get_caller_context
+from umbod.rest.filesystem.deps import get_filesystem_database
 
 from .conftest import FilesystemHttp
 
@@ -142,3 +145,45 @@ def test_creation_domain_errors_and_cookie_csrf(filesystem_http: FilesystemHttp)
     invalid = client.post(path, **creation_payload("directories", {**BODY, "name": "a/b"}))
     assert invalid.status_code == 422
     assert invalid.json()["detail"]["code"] == "filesystem_invalid_name"
+
+
+def test_full_app_mounts_filesystem_with_authentication_csrf_and_openapi(
+    filesystem_full_http: FilesystemHttp,
+) -> None:
+    client = filesystem_full_http.client
+    mounts = {route.path for route in filesystem_full_http.root.routes if isinstance(route, Mount)}
+    assert {"/api/me", "/api/admin", "/api/filesystem", "/system"} <= mounts
+    schema = client.get("/api/me/openapi.json").json()
+    assert schema["servers"] == [{"url": "/api/me"}]
+    assert "/filesystem/browse" in schema["paths"]
+    assert "/uploads/{upload_id}/transfer" in client.get("/api/filesystem/openapi.json").json()["paths"]
+    unauthenticated = client.get(BASE + "/browse", headers={"Authorization": ""})
+    assert unauthenticated.status_code == 401
+    assert unauthenticated.headers["cache-control"] == "no-store"
+    blocked = client.post(BASE + f"/nodes/{uuid4()}/directories", json=BODY, headers={
+        "Authorization": "", "Cookie": "session=present",
+    })
+    assert blocked.status_code == 403
+    assert blocked.headers["cache-control"] == "no-store"
+    del filesystem_full_http.app.dependency_overrides[get_caller_context]
+    assert client.get(BASE + "/browse").status_code == 403
+
+
+def test_full_app_filesystem_sanitizes_unexpected_storage_errors(
+    filesystem_full_http: FilesystemHttp,
+) -> None:
+    def fail_database() -> None:
+        raise RuntimeError("private database credentials")
+
+    filesystem_full_http.app.dependency_overrides[get_filesystem_database] = fail_database
+    client = TestClient(
+        filesystem_full_http.root, raise_server_exceptions=False,
+        headers={"Authorization": "Bearer alice"},
+    )
+    try:
+        response = client.get(BASE + "/browse")
+    finally:
+        client.close()
+    assert response.status_code == 500
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json() == {"detail": {"code": "internal_server_error", "message": "Request failed."}}

@@ -159,6 +159,7 @@ async def authorize_owner(stores: DownstreamMcpStores, key: PersonalConnectionKe
 
 
 @pytest.mark.parametrize("revocation", ["enablement", "authorization"])
+@pytest.mark.parametrize("personal_api", ["sqlite"], indirect=True)
 def test_owner_revocation_is_visible_on_next_catalogue_without_cross_caller_metadata(
     personal_api: PersonalApi, recorded_stores: list[DownstreamMcpStores], revocation: str,
 ) -> None:

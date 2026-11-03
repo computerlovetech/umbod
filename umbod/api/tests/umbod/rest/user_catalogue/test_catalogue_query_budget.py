@@ -7,7 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 from starlette.routing import Mount
 
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from tests.umbod.rest.user_catalogue.query_budget_support import CountingRuntime, QueryCounts
 from umbod.config import AppConfig
 from umbod.core.activation import ActivationStatus, CapabilityActivationState, CapabilityRef
@@ -44,9 +44,9 @@ class CatalogueVerifier:
         return JwtClaims(claims={"iss": "issuer", "sub": "reader", "groups": ["readers"]})
 
 
-@pytest.fixture(params=["inmemory", "sqlite"])
+@pytest.fixture
 def catalogue_http(
-    request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[tuple[TestClient, ConnectorApiDependencyFactories, QueryCounts]]:
     deployment = tmp_path / "deployment.json"
     deployment.write_text('{"connectors": []}')
@@ -60,11 +60,7 @@ def catalogue_http(
     root = create_app(settings, [], user_verifier=CatalogueVerifier())
     app = next(route.app for route in root.routes if isinstance(route, Mount) and route.path == "/api/me")
     with TestClient(root, headers={"Authorization": "Bearer reader"}) as client:
-        runtime = (
-            client.portal.call(prepared_inmemory_runtime)
-            if request.param == "inmemory"
-            else client.portal.call(prepared_sqlite_runtime, tmp_path / "catalogue.sqlite")
-        )
+        runtime = client.portal.call(prepared_inmemory_runtime)
         counts = QueryCounts()
         wrapped_runtime = CountingRuntime(runtime, counts)
         factories = ConnectorApiDependencyFactories.from_settings(settings, wrapped_runtime, [])

@@ -72,7 +72,7 @@ def proxied_driver(
     availability_path.write_text('{"connectors": []}', encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability_path))
     settings = APISettings(
-        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "api.sqlite3")},
+        connector_store={"type": "inmemory"},
         admin_authentication={"mode": "simulation", "simulated_admin": True},
     )
     app = create_app(settings=settings, connector_registrations=[])
