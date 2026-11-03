@@ -128,3 +128,30 @@ with sqlite3.connect(application_path.as_uri() + "?mode=ro", uri=True) as connec
     assert connection.execute("SELECT name FROM sqlite_master WHERE name = ?", ("analytics_logs",)).fetchall() == []
 '
 helm --kube-context "${kube_context}" test "${release_name}" --logs --timeout 2m
+kubectl --context "${kube_context}" exec -i "${core_pod}" --container api -- python - http://127.0.0.1:8000 disabled < "${script_directory}/verify-otlp.py"
+kubectl --context "${kube_context}" create secret generic umbod-collector-ci \
+    --from-literal="collector-token=$(python3 -c 'import secrets; import sys; sys.stdout.write(secrets.token_urlsafe(48))')"
+helm --kube-context "${kube_context}" upgrade "${release_name}" "${chart_directory}" \
+    --values "${chart_directory}/ci/kind-values.yaml" \
+    --set telemetry.enabled=true \
+    --set telemetry.port=14318 \
+    --set telemetry.servicePort=14319 \
+    --set telemetry.bearerTokenSecret.name=umbod-collector-ci \
+    --set telemetry.bearerTokenSecret.key=collector-token \
+    --set config.authorization.adminMembershipClaim=groups \
+    --set persistence.enabled=true \
+    --wait --timeout 5m
+core_pod="$(kubectl --context "${kube_context}" get pods \
+    --selector "app.kubernetes.io/instance=${release_name},app.kubernetes.io/component=core" \
+    --output jsonpath='{.items[0].metadata.name}')"
+collector_url="http://${release_name}-telemetry:14319"
+kubectl --context "${kube_context}" exec -i "${core_pod}" --container api -- python - http://127.0.0.1:8000 "${collector_url}" < "${script_directory}/verify-otlp.py"
+kubectl --context "${kube_context}" exec "${core_pod}" --container mcp -- python -c 'import os; assert "UMBOD_OTLP_BEARER_TOKEN" not in os.environ'
+kubectl --context "${kube_context}" exec "${core_pod}" --container api -- python -c 'from pathlib import Path; Path("/app/data/cohost-marker").touch()'
+kubectl --context "${kube_context}" delete pod "${core_pod}" --wait=true
+kubectl --context "${kube_context}" rollout status deployment "${release_name}-core" --timeout=3m
+core_pod="$(kubectl --context "${kube_context}" get pods \
+    --selector "app.kubernetes.io/instance=${release_name},app.kubernetes.io/component=core" \
+    --output jsonpath='{.items[0].metadata.name}')"
+kubectl --context "${kube_context}" exec "${core_pod}" --container api -- python -c 'from pathlib import Path; assert Path("/app/data/cohost-marker").is_file()'
+kubectl --context "${kube_context}" exec -i "${core_pod}" --container api -- python - http://127.0.0.1:8000 "${collector_url}" < "${script_directory}/verify-otlp.py"

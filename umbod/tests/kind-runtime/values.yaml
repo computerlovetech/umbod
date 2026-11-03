@@ -1,13 +1,17 @@
 core:
   api:
     env:
-      UMBOD_OTLP_ENABLED: "true"
       UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES: "11534336"
       UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE: "test:kind-personal-catalogue"
   mcp:
     env:
       UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES: "11534336"
       UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE: "test:kind-personal-catalogue"
+telemetry:
+  enabled: true
+  bearerTokenSecret:
+    name: umbod-collector-ci
+    key: token
 config:
   telemetryAnalytics:
     enabled: true

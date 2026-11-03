@@ -132,4 +132,5 @@ helm template umbod "${chart_directory}" \
   --set core.api.env.UMBOD_TELEMETRY_ANALYTICS_ENABLED=false \
   > "${workspace_directory}/analytics-env-disabled.yaml"
 python3 "${chart_directory}/scripts/validate-analytics.py" "${workspace_directory}/analytics-env-disabled.yaml" false /app/data/analytics.sqlite3
+python3 "${chart_directory}/scripts/validate-telemetry.py" "${chart_directory}"
 helm package "${chart_directory}" --destination "${workspace_directory}"

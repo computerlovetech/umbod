@@ -79,6 +79,14 @@ core:
         cpu: 500m
         memory: 512Mi
 
+telemetry:
+  enabled: false
+  port: 4318
+  servicePort: 4318
+  bearerTokenSecret:
+    name: ""
+    key: UMBOD_OTLP_BEARER_TOKEN
+
 frontend:
   apiBaseUrl: /api
   replicaCount: 1

@@ -21,6 +21,9 @@ Open the administration interface at [http://localhost:3000](http://localhost:30
 | `umbod-frontend` | 3000 |
 | `umbod-api` | 8000 |
 | `umbod-mcp` | 8011 |
+| `umbod-telemetry` (when `telemetry.enabled=true`) | 4318 |
+
+The optional telemetry Service targets the private collector listener in the existing API container, not a separate Deployment. Docker Compose forwards this listener only on `127.0.0.1:14318` to container port `4318`; public REST remains on host port `18010`.
 
 The core Pod also declares API metrics port `8001` and MCP metrics port `8012`. These metrics ports are internal workload ports and are not exposed by the chart's Services.
 
@@ -36,7 +39,7 @@ When `ingress.enabled=true`, the chart routes three configurable paths:
 
 The `/api` prefix is retained: administration requests reach `/api/admin`, not `/admin` through an Ingress rewrite. The frontend SPA uses this same-origin address by default. Local frontend Service port-forwards proxy `/api` to the API Service.
 
-The chart additionally routes `/v1` unchanged to the API Service for OTLP JSON logs, metrics, and traces. `/api/v1/*` is not rewritten to the receiver. See [telemetry ingestion](telemetry-ingestion.md) for authentication, limits, and client compatibility.
+The chart never adds a public `/v1` ingestion route. Public REST excludes `/v1/*` and `/api/v1/*`. When `telemetry.enabled=true`, authenticated OTLP HTTP JSON and protobuf logs, metrics, and traces use the private collector ClusterIP Service. `telemetry.port` and `telemetry.servicePort` independently configure its listener and Service ports. See [telemetry ingestion](telemetry-ingestion.md) for authentication, limits, and client compatibility.
 
 Set `ingress.host`, `ingress.className`, annotations, and TLS values for the target cluster. Set `config.publicOrigins.site`, `config.publicOrigins.api`, and `config.publicOrigins.mcp` to the corresponding browser- and client-visible origins.
 

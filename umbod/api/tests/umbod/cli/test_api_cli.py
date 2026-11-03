@@ -28,7 +28,7 @@ def _run(
     def record_invocation(*args: object, **kwargs: object) -> None:
         invocation.update(kwargs)
 
-    monkeypatch.setattr("umbod.cli.api.uvicorn.run", record_invocation)
+    monkeypatch.setattr("umbod.cli.api.run_api_server", record_invocation)
 
     ServeCommand()(host="0.0.0.0", port=cli_port, reload=False)
     return invocation

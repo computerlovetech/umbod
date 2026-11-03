@@ -664,6 +664,18 @@ wheels = [
 ]
 
 [[package]]
+name = "googleapis-common-protos"
+version = "1.76.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/62/b6/bc095b23a3e0d978e75c8c18cabe4c11f791837410670e4486f0d539bfba/googleapis_common_protos-1.76.0.tar.gz", hash = "sha256:71db0e44a1d4c2dd024ebad44ca67129cc1e2892e4861df466764749d5ef8642", size = 156250, upload-time = "2026-10-22T23:43:36.263Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/05/6d/78dc67a9e779e594b49bf62604034d3a6aa428a55afc729cafda4b7333e1/googleapis_common_protos-1.76.0-py3-none-any.whl", hash = "sha256:59e13344a9f3651aa201a03e2bee815a3bf43a4baf1f9ff8a9b62a840ce25fac", size = 307707, upload-time = "2026-10-22T23:43:10.445Z" },
+]
+
+[[package]]
 name = "griffelib"
 version = "2.0.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1862,6 +1874,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "fastmcp", extra = ["apps", "code-mode"] },
     { name = "fastmcp-slim", extra = ["client"] },
+    { name = "googleapis-common-protos" },
     { name = "httpcore" },
     { name = "httpcore2" },
     { name = "httpx" },
@@ -1886,6 +1899,7 @@ dependencies = [
 api = [
     { name = "fastapi" },
     { name = "fastmcp-slim", extra = ["client"] },
+    { name = "googleapis-common-protos" },
     { name = "opentelemetry-proto" },
     { name = "prometheus-client" },
     { name = "protobuf" },
@@ -1915,6 +1929,11 @@ shared = [
     { name = "typer" },
     { name = "uvicorn", extra = ["standard"] },
 ]
+telemetry-serialization = [
+    { name = "googleapis-common-protos" },
+    { name = "opentelemetry-proto" },
+    { name = "protobuf" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -1923,6 +1942,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "fastmcp", extras = ["apps", "code-mode"], specifier = "==4.0.10" },
     { name = "fastmcp-slim", extras = ["client"], specifier = "==4.0.10" },
+    { name = "googleapis-common-protos", specifier = ">=1.72.0,<2" },
     { name = "httpcore", specifier = "==1.0.9" },
     { name = "httpcore2", specifier = "==2.10.0" },
     { name = "httpx", specifier = ">=0.28.1" },
@@ -1947,6 +1967,7 @@ requires-dist = [
 api = [
     { name = "fastapi", specifier = ">=0.141.1" },
     { name = "fastmcp-slim", extras = ["client"], specifier = "==4.0.10" },
+    { name = "googleapis-common-protos", specifier = ">=1.72.0,<2" },
     { name = "opentelemetry-proto", specifier = ">=1.40.0,<2" },
     { name = "prometheus-client", specifier = ">=0.26.0" },
     { name = "protobuf", specifier = ">=6.33.0,<8" },
@@ -1975,6 +1996,11 @@ shared = [
     { name = "pyjwt", extras = ["crypto"], specifier = ">=2.10.1" },
     { name = "typer", specifier = ">=0.25.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.46.0" },
+]
+telemetry-serialization = [
+    { name = "googleapis-common-protos", specifier = ">=1.72.0,<2" },
+    { name = "opentelemetry-proto", specifier = ">=1.40.0,<2" },
+    { name = "protobuf", specifier = ">=6.33.0,<8" },
 ]
 
 [[package]]

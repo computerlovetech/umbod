@@ -67,7 +67,6 @@ from umbod.rest.settings import APISettings
 from umbod.rest.system import router as system_router
 from umbod.rest.system.routes import health
 from umbod.rest.system.schemas import HealthResponse
-from umbod.rest.telemetry import install_telemetry_receiver
 from umbod.rest.telemetry_analytics import router as telemetry_analytics_router
 from umbod.rest.telemetry.composition import install_analytics_dependencies
 from umbod.rest.users import create_user_profile_router
@@ -290,7 +289,7 @@ def _create_lifespan(
     analytics_runtime: TelemetryAnalyticsRuntime,
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[dict[str, SigningKeyResolver]]]:
 
-    return _create_configured_lifespan(metrics_server, persistence_runtime, settings, True, analytics_runtime)
+    return _create_configured_lifespan(metrics_server, persistence_runtime, settings, True, analytics_runtime, True)
 
 
 def _create_configured_lifespan(
@@ -299,6 +298,7 @@ def _create_configured_lifespan(
     settings: APISettings,
     metrics_enabled: bool,
     analytics_runtime: TelemetryAnalyticsRuntime,
+    manage_analytics: bool,
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[dict[str, SigningKeyResolver]]]:
 
     @asynccontextmanager
@@ -317,7 +317,8 @@ def _create_configured_lifespan(
         )
         try:
             await persistence_runtime.readiness.ensure_ready()
-            await analytics_runtime.ensure_ready()
+            if manage_analytics:
+                await analytics_runtime.ensure_ready()
             if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled:
                 downstream_settings = downstream_mcp_infrastructure_settings_from_app_config(settings)
                 await PersonalDiscoveryPreparation(persistence_runtime.database, AuthenticatedTextCipher(downstream_settings.credential_secret)).prepare()
@@ -337,7 +338,8 @@ def _create_configured_lifespan(
         finally:
             resolver.clear()
             try:
-                await analytics_runtime.shutdown()
+                if manage_analytics:
+                    await analytics_runtime.shutdown()
             finally:
                 await persistence_runtime.shutdown()
 
@@ -347,11 +349,30 @@ def _create_configured_lifespan(
 def create_app(*args: Any, **kwargs: Any) -> FastAPI:
     create_app_arguments = _resolve_create_app_arguments(*args, **kwargs)
     app_settings = create_app_arguments.settings or load_server_app_config(".env")
+    return _create_application(
+        create_app_arguments, app_settings,
+        create_configured_analytics_runtime(app_settings), True,
+    )
+
+
+def create_app_with_analytics_runtime(
+    analytics_runtime: TelemetryAnalyticsRuntime, *args: Any, **kwargs: Any,
+) -> FastAPI:
+    create_app_arguments = _resolve_create_app_arguments(*args, **kwargs)
+    app_settings = create_app_arguments.settings or load_server_app_config(".env")
+    return _create_application(create_app_arguments, app_settings, analytics_runtime, False)
+
+
+def _create_application(
+    create_app_arguments: _CreateAppArguments,
+    app_settings: APISettings,
+    analytics_runtime: TelemetryAnalyticsRuntime,
+    manage_analytics: bool,
+) -> FastAPI:
     app_settings.validate_rest_authentication()
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(
         app_settings.connector_store
     ).create()
-    analytics_runtime = create_configured_analytics_runtime(app_settings)
     dependency_factories = ConnectorApiDependencyFactories.from_settings(
         app_settings, persistence_runtime, create_app_arguments.connector_registrations
     )
@@ -362,7 +383,7 @@ def create_app(*args: Any, **kwargs: Any) -> FastAPI:
     )
     app = LifespanRootApiAppFactory(
         app_settings,
-        lifespan=_create_configured_lifespan(metrics_server, persistence_runtime, app_settings, app_settings.rest.metrics_enabled, analytics_runtime),
+        lifespan=_create_configured_lifespan(metrics_server, persistence_runtime, app_settings, app_settings.rest.metrics_enabled, analytics_runtime, manage_analytics),
     ).create()
     verifier_factory = (
         SuppliedJwtVerifierFactory(create_app_arguments.admin_verifier)
@@ -380,8 +401,6 @@ def create_app(*args: Any, **kwargs: Any) -> FastAPI:
     app.mount("/api/filesystem", transfer_app)
     _mount_personal_oauth_callback_app(app, app_settings, dependency_factories)
     _mount_system_app(app, dependency_factories)
-    install_telemetry_receiver(app, app_settings)
-    install_analytics_dependencies(app, analytics_runtime)
     app.user_middleware.extend([
         Middleware(
             AdminRestMetricsMiddleware, recorder=metrics_recorder, routes=admin_routes,

@@ -55,6 +55,8 @@ class RestConfig(ConfigModel):
 
 
 class OtlpReceiverConfig(ConfigModel):
+    host: str = "0.0.0.0"
+    port: int = Field(default=4318, gt=0, le=65535)
     enabled: bool = False
     bearer_token: str = Field(default="", repr=False)
     allow_unauthenticated: bool = False

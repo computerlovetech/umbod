@@ -78,8 +78,8 @@ def main() -> None:
     pod["containers"].append(secondary)
     secondary_api = copy.deepcopy(next(container for container in pod["containers"] if container["name"] == "api"))
     secondary_api["name"] = "api-b"
-    secondary_api["env"] = [entry for entry in secondary_api["env"] if entry["name"] not in ("UMBOD_REST_PORT", "UMBOD_REST_METRICS_PORT", "PORT")]
-    secondary_api["env"].extend([{"name": "UMBOD_REST_PORT", "value": "8015"}, {"name": "UMBOD_REST_METRICS_PORT", "value": "8016"}])
+    secondary_api["env"] = [entry for entry in secondary_api["env"] if entry["name"] not in ("UMBOD_REST_PORT", "UMBOD_REST_METRICS_PORT", "PORT") and not entry["name"].startswith("UMBOD_OTLP_")]
+    secondary_api["env"].extend([{"name": "UMBOD_REST_PORT", "value": "8015"}, {"name": "UMBOD_REST_METRICS_PORT", "value": "8016"}, {"name": "UMBOD_OTLP_ENABLED", "value": "false"}])
     secondary_api["ports"] = [{"name": "http-api-b", "containerPort": 8015}, {"name": "metrics-api-b", "containerPort": 8016}]
     for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
         secondary_api[probe]["httpGet"]["port"] = "http-api-b"

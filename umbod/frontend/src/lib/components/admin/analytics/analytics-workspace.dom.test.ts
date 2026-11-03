@@ -40,6 +40,12 @@ function render(): InMemoryLogCounts {
 }
 
 describe('analytics query interaction', () => {
+  it('shows the page title without the telemetry eyebrow', (): void => {
+    render();
+    expect(document.querySelector('h1')?.textContent).toBe('Log analytics');
+    expect(document.body.textContent).not.toContain('Instance-wide telemetry');
+  });
+
   it('adds exact and blank filter values, submits, and keeps result context separate from edits', async (): Promise<void> => {
     const source = render();
     input('analytics-filter-source', ' exact value ');

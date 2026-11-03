@@ -35,6 +35,8 @@ class OperatorSettings(BaseSettings):
     personal_connections_identity_namespace: str = ""
     telemetry_analytics_enabled: bool = False
     telemetry_analytics_sqlite_path: str = defaults.TELEMETRY_ANALYTICS_SQLITE_PATH
+    otlp_host: str = "0.0.0.0"
+    otlp_port: int = Field(default=4318, gt=0, le=65535)
     otlp_enabled: bool = False
     otlp_bearer_token: str = Field(default="", repr=False)
     otlp_allow_unauthenticated: bool = False

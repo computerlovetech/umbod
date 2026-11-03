@@ -229,6 +229,8 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
             port=operator.rest_port, metrics_port=operator.rest_metrics_port
         ),
         otlp_receiver=OtlpReceiverConfig(
+            host=operator.otlp_host,
+            port=operator.otlp_port,
             enabled=operator.otlp_enabled,
             bearer_token=operator.otlp_bearer_token,
             allow_unauthenticated=operator.otlp_allow_unauthenticated,

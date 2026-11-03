@@ -18,6 +18,7 @@ description: "Operator settings, validation and conversion into runtime applicat
 - [secret_derivation.py](./secret_derivation.py) — Secret derivation.
 - [server_settings.py](./server_settings.py) — Server root-secret preflight.
 - [validate.py](./validate.py) — Cross-field validation.
+- [telemetry.py](./telemetry.py) — Collector-only settings and security validation independent of REST and MCP configuration.
 
 # Related documentation
 

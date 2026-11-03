@@ -226,7 +226,7 @@ def test_unsupported_media_type_returns_415(
         content=b"protobuf",
         headers={
             "Authorization": "Bearer ingestion-secret",
-            "Content-Type": "application/x-protobuf",
+            "Content-Type": "application/octet-stream",
         },
     )
     assert response.status_code == 415
@@ -310,7 +310,7 @@ def test_oversized_payload_returns_413(config: AppConfig, sink: RecordingSink) -
     assert not sink.batches
 
 
-def test_receiver_is_mounted_on_root_application(
+def test_receiver_is_not_mounted_on_public_application(
     config: AppConfig, tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     deployment = tmp_path / "connector-availability.json"
@@ -318,4 +318,4 @@ def test_receiver_is_mounted_on_root_application(
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
     app = create_app(settings=config, connector_registrations=())
     response = TestClient(app).post("/v1/logs", json={})
-    assert response.status_code == 401
+    assert response.status_code == 404

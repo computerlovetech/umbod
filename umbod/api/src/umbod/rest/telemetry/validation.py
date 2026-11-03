@@ -4,8 +4,8 @@ import math
 import re
 
 from google.protobuf.descriptor import Descriptor, FieldDescriptor
-from google.protobuf.json_format import ParseDict, ParseError
-from google.protobuf.message import Message
+from google.protobuf.json_format import MessageToDict, ParseDict, ParseError
+from google.protobuf.message import DecodeError, Message
 from opentelemetry.proto.collector.logs.v1.logs_service_pb2 import (
     ExportLogsServiceRequest,
 )
@@ -53,6 +53,36 @@ def parse_export(signal: TelemetrySignal, body: bytes) -> TelemetryExport:
         TypeError,
     ):
         raise TelemetryHttpError(400, "Invalid OTLP JSON request") from None
+
+
+def parse_protobuf_export(signal: TelemetrySignal, body: bytes) -> TelemetryExport:
+    try:
+        request = _REQUEST_TYPES[signal]()
+        request.ParseFromString(body)
+        payload = MessageToDict(request, use_integers_for_enums=True)
+        _restore_hex_ids(payload, request.DESCRIPTOR)
+        _check_depth(payload, 0)
+        _normalize_message(payload, request.DESCRIPTOR)
+        return TelemetryExport(
+            signal=signal, payload=payload, item_count=_count_items(request)
+        )
+    except (DecodeError, ValueError, RecursionError, ValidationError, TypeError):
+        raise TelemetryHttpError(400, "Invalid OTLP protobuf request") from None
+
+
+def _restore_hex_ids(payload: dict[str, JsonValue], descriptor: Descriptor) -> None:
+    for field in descriptor.fields:
+        if field.json_name not in payload:
+            continue
+        value = payload[field.json_name]
+        if field.type == FieldDescriptor.TYPE_BYTES and field.json_name in _ID_LENGTHS:
+            if isinstance(value, str):
+                payload[field.json_name] = base64.b64decode(value).hex()
+        elif field.type == FieldDescriptor.TYPE_MESSAGE:
+            children = value if field.is_repeated and isinstance(value, list) else [value]
+            for child in children:
+                if isinstance(child, dict):
+                    _restore_hex_ids(child, field.message_type)
 
 
 def parse_message(signal: TelemetrySignal, payload: dict[str, JsonValue]) -> Message:

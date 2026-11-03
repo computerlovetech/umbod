@@ -12,13 +12,14 @@ from scripts.run_tests import main
 class RecordingRunner:
     def __init__(self, exit_code: int) -> None:
         self.exit_code = exit_code
-        self.calls: list[tuple[tuple[str, ...], Path, bool]] = []
+        self.calls: list[tuple[tuple[str, ...], Path, bool, bool, bool]] = []
 
     def __call__(
         self, command: Sequence[str], *, cwd: Path, check: bool,
-    ) -> subprocess.CompletedProcess[bytes]:
-        self.calls.append((tuple(command), cwd, check))
-        return subprocess.CompletedProcess(command, self.exit_code)
+        capture_output: bool, text: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        self.calls.append((tuple(command), cwd, check, capture_output, text))
+        return subprocess.CompletedProcess(command, self.exit_code, stdout="", stderr="")
 
 
 @pytest.mark.parametrize(("module", "target"), [
@@ -40,6 +41,8 @@ def test_module_selects_directory_with_automatic_workers(module: str, target: st
         ("uv", "run", "--locked", "pytest", target, "-q", "-n", "auto", "--dist=worksteal"),
         Path(__file__).resolve().parents[2] / "api",
         False,
+        True,
+        True,
     )]
 
 
@@ -110,7 +113,8 @@ def test_help_does_not_launch_a_process(capsys: pytest.CaptureFixture[str]) -> N
 def test_missing_uv_reports_an_actionable_error(capsys: pytest.CaptureFixture[str]) -> None:
     def missing_uv(
         command: Sequence[str], *, cwd: Path, check: bool,
-    ) -> subprocess.CompletedProcess[bytes]:
+        capture_output: bool, text: bool,
+    ) -> subprocess.CompletedProcess[str]:
         raise FileNotFoundError
 
     with pytest.raises(SystemExit) as error:
@@ -119,10 +123,66 @@ def test_missing_uv_reports_an_actionable_error(capsys: pytest.CaptureFixture[st
     assert "uv is required" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize("exit_code", [0, 1])
+def test_output_is_emitted_only_after_process_completion(
+    exit_code: int, capsys: pytest.CaptureFixture[str],
+) -> None:
+    def completed_runner(
+        command: Sequence[str], *, cwd: Path, check: bool,
+        capture_output: bool, text: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        assert capture_output is True
+        assert text is True
+        captured = capsys.readouterr()
+        assert captured.out == ""
+        assert captured.err == ""
+        return subprocess.CompletedProcess(
+            command, exit_code, stdout="test result\n", stderr="test diagnostic\n",
+        )
+
+    assert main(["all"], completed_runner) == exit_code
+    captured = capsys.readouterr()
+    assert captured.out == "test result\n"
+    assert captured.err == "test diagnostic\n"
+
+
+@pytest.mark.parametrize(("exit_code", "report"), [
+    (0, "8 passed in 0.12s\n"),
+    (1, (
+        "=================================== FAILURES ===================================\n"
+        "test_failure\n"
+        "........\n"
+        "E   AssertionError: expected value\n"
+        "1 failed, 7 passed in 0.12s\n"
+    )),
+])
+@pytest.mark.parametrize("progress", [
+    "................................ [ 50%]\n........ [100%]\n",
+    ".FEsxXR [100%]\n",
+    "........\n",
+    "\x1b[32m........\x1b[0m\x1b[32m [100%]\x1b[0m\n",
+])
+def test_progress_is_omitted_but_results_and_failure_details_are_preserved(
+    progress: str, exit_code: int, report: str, capsys: pytest.CaptureFixture[str],
+) -> None:
+
+    def completed_runner(
+        command: Sequence[str], *, cwd: Path, check: bool,
+        capture_output: bool, text: bool,
+    ) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(command, exit_code, stdout=progress + report, stderr="diagnostic\n")
+
+    assert main(["all"], completed_runner) == exit_code
+    captured = capsys.readouterr()
+    assert captured.out == report
+    assert captured.err == "diagnostic\n"
+
+
 def test_keyboard_interrupt_returns_interrupt_exit_code() -> None:
     def interrupted(
         command: Sequence[str], *, cwd: Path, check: bool,
-    ) -> subprocess.CompletedProcess[bytes]:
+        capture_output: bool, text: bool,
+    ) -> subprocess.CompletedProcess[str]:
         raise KeyboardInterrupt
 
     assert main(["all"], interrupted) == 130

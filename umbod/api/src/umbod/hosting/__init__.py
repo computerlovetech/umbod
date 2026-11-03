@@ -1,4 +1,6 @@
 from umbod.hosting.applications import create_mcp_app, create_rest_app
+from umbod.config.telemetry import TelemetryAppConfig
+from umbod.rest.telemetry.application import create_telemetry_app
 from umbod.hosting.contracts import (
     AccessToken,
     AppConfig,
@@ -27,6 +29,8 @@ __all__ = [
     "McpToolInvocationLogSink",
     "OAuthService",
     "TokenVerifier",
+    "TelemetryAppConfig",
+    "create_telemetry_app",
     "create_mcp_app",
     "create_rest_app"
 ]

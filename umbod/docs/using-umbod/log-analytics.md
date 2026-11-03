@@ -8,7 +8,7 @@ description: Count ingested telemetry logs with administrator-owned filters, gro
 
 Administrators can open **Log analytics** in workspace navigation or visit `/admin/analytics`. Queries cover the whole instance, including unowned exports; ordinary users cannot access this page or its API.
 
-This explorer counts accepted OTLP log records, not application stdout, metrics, traces, tokens or costs. Historical stdout is not imported. The independent analytics backend and the authenticated log receiver must both be configured before new client exports can appear. See [telemetry ingestion](../reference/telemetry-ingestion.md).
+This explorer counts accepted OTLP log records, not application stdout, metrics, traces, tokens or costs. Historical stdout is not imported. The analytics backend and authenticated private collector must both be enabled before new client exports can appear. The API host shares one analytics runtime between collector writes and administrator queries; an external `umbod telemetry serve` deployment owns separate storage whose history is not automatically visible here. See [telemetry ingestion](../reference/telemetry-ingestion.md).
 
 ## Build a query
 
@@ -34,6 +34,6 @@ An empty result can mean no clients have exported logs, ingestion is disabled, o
 
 Development Docker Compose enables analytics by default and stores `/app/data/analytics.sqlite3` on the existing named data volume. An explicit `UMBOD_TELEMETRY_ANALYTICS_ENABLED=false` still opts out. Application and Helm defaults remain disabled.
 
-Compose forwards `UMBOD_OTLP_ENABLED`, `UMBOD_OTLP_BEARER_TOKEN` and `UMBOD_OTLP_MAX_REQUEST_BYTES` to the API. Ingestion stays disabled until explicitly enabled with a dedicated credential; analytics enablement does not silently permit unauthenticated exports. Configure clients for authenticated OTLP/HTTP JSON exports to `/v1/logs` on the API origin. Local Compose exposes this at `http://localhost:18010/v1/logs`, not the frontend port 3010.
+Compose forwards `UMBOD_OTLP_ENABLED`, `UMBOD_OTLP_BEARER_TOKEN` and `UMBOD_OTLP_MAX_REQUEST_BYTES` to the API. Ingestion stays disabled until explicitly enabled with a dedicated credential; analytics enablement does not silently permit unauthenticated exports. Configure clients for authenticated OTLP/HTTP JSON or protobuf exports to `/v1/logs` on the private collector origin. Local Compose forwards this only at `http://127.0.0.1:14318/v1/logs`, not public REST port 18010 or frontend port 3010.
 
 Analytics has its own schema, connections and lifecycle, separate from the application database. The two files share the mounted volume, not a database runtime. Do not delete or replace the application database to reset analytics. Retention and deduplication are not implemented. Protect the volume and exported stdout according to the data collected; see [deployment configuration](../operations/configuration.md#analytics-backend).

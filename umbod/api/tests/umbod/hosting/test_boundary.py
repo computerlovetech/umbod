@@ -11,7 +11,7 @@ def test_public_exports_and_explicit_keyword_only_signatures() -> None:
         "InMemoryGroupConnectorToolPermissions", "JwtClaims", "JwtVerificationError",
         "JwtVerifier", "MCPAuthProvider", "McpToolInvocationEvent",
         "McpToolInvocationLogSink", "OAuthService", "TokenVerifier",
-        "create_mcp_app", "create_rest_app",
+        "create_mcp_app", "create_rest_app", "create_telemetry_app", "TelemetryAppConfig",
     }
     assert set(hosting.__all__) == expected_exports
     for name in expected_exports:

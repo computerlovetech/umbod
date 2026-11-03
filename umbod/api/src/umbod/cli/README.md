@@ -12,6 +12,7 @@ description: "Service startup, configuration inspection and connector validation
 - [connectors.py](./connectors.py) — Connector validation commands.
 - [main.py](./main.py) — Command registration.
 - [mcp.py](./mcp.py) — MCP service commands.
+- [telemetry.py](./telemetry.py) — Standalone Uvicorn telemetry receiver command.
 
 # Context not available from the code
 

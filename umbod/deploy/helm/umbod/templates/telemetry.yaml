@@ -1,0 +1,19 @@
+{{- if .Values.telemetry.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "umbod.fullname" . }}-telemetry
+  labels:
+    {{- include "umbod.labels" . | nindent 4 }}
+    app.kubernetes.io/component: telemetry
+spec:
+  type: ClusterIP
+  ports:
+    - name: otlp-http
+      port: {{ .Values.telemetry.servicePort }}
+      targetPort: otlp-http
+      protocol: TCP
+  selector:
+    {{- include "umbod.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+{{- end }}

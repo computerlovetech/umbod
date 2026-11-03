@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -25,7 +26,21 @@ TEST_MODULES: dict[str, str] = {
 class ProcessRunner(Protocol):
     def __call__(
         self, command: Sequence[str], *, cwd: Path, check: bool,
-    ) -> subprocess.CompletedProcess[bytes]: ...
+        capture_output: bool, text: bool,
+    ) -> subprocess.CompletedProcess[str]: ...
+
+
+def result_output(output: str) -> str:
+    retained_lines: list[str] = []
+    report_started = False
+    for line in output.splitlines(keepends=True):
+        plain_line = re.sub(r"\x1b\[[0-9;]*m", "", line).rstrip("\r\n")
+        if plain_line.startswith("==="):
+            report_started = True
+        if not report_started and re.fullmatch(r"[.FEfsxXR]+(?:[ \t]+\[[ \t]*\d+%\])?[ \t]*", plain_line):
+            continue
+        retained_lines.append(line)
+    return "".join(retained_lines)
 
 
 def main(arguments: Sequence[str], runner: ProcessRunner = subprocess.run) -> int:
@@ -39,6 +54,7 @@ def main(arguments: Sequence[str], runner: ProcessRunner = subprocess.run) -> in
             "workers (-n auto), and work-stealing (--dist=worksteal).\n"
             "Tests run from umbod/api regardless of the caller's working directory.\n"
             "Coverage is off unless --cov is supplied.\n"
+            "Output is buffered until the test process finishes; progress lines are omitted.\n"
             "Additional pytest arguments follow the module; paths are relative to umbod/api.\n"
             "Arguments after -- are forwarded unchanged to pytest.\n"
             "Analysis shows the 10 slowest setup, call, or teardown phases taking at\n"
@@ -61,7 +77,13 @@ def main(arguments: Sequence[str], runner: ProcessRunner = subprocess.run) -> in
         "-q", "-n", "auto", "--dist=worksteal", *analysis_args, *pytest_args,
     ]
     try:
-        return runner(command, cwd=Path(__file__).resolve().parents[1] / "api", check=False).returncode
+        result = runner(
+            command, cwd=Path(__file__).resolve().parents[1] / "api", check=False,
+            capture_output=True, text=True,
+        )
+        sys.stdout.write(result_output(result.stdout))
+        sys.stderr.write(result.stderr)
+        return result.returncode
     except FileNotFoundError:
         parser.exit(127, "uv is required but was not found on PATH.\n")
     except KeyboardInterrupt:

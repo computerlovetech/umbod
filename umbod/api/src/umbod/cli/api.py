@@ -2,9 +2,9 @@ from inspect import Parameter, Signature
 from typing import Annotated, Any, Optional
 
 import typer
-import uvicorn
 
 from umbod.config import load_server_app_config
+from umbod.hosting.api_server import run_api_server, validate_listener_ports
 from umbod.logging import configure_logging
 
 app = typer.Typer(help="REST API server commands.", no_args_is_help=True)
@@ -48,17 +48,25 @@ class ServeCommand:
         except ValueError as error:
             typer.echo(str(error), err=True)
             raise typer.Exit(code=1) from None
-        configure_logging(settings.runtime.app_name, settings.runtime.log_level)
-        configured_port = settings.rest.port if kwargs["port"] is None else int(kwargs["port"])
-        uvicorn.run(
-            "umbod.hosting.rest_service:create_app",
-            host=str(kwargs["host"]),
-            port=configured_port,
-            reload=bool(kwargs["reload"]),
-            log_level=settings.runtime.log_level,
-            log_config=None,
-            factory=True,
+        configured_port = (
+            settings.rest.port if kwargs["port"] is None else int(kwargs["port"])
         )
+        try:
+            validate_listener_ports(settings, configured_port)
+        except ValueError as error:
+            typer.echo(str(error), err=True)
+            raise typer.Exit(code=1) from None
+        configure_logging(settings.runtime.app_name, settings.runtime.log_level)
+        try:
+            run_api_server(
+                settings,
+                host=str(kwargs["host"]),
+                port=configured_port,
+                reload=bool(kwargs["reload"]),
+            )
+        except (OSError, RuntimeError) as _error:
+            typer.echo("Unable to run Umbod HTTP listeners.", err=True)
+            raise typer.Exit(code=1) from None
 
 
 app.command("serve")(ServeCommand())

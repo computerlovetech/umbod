@@ -1,6 +1,6 @@
 # Service topology
 
-The Helm chart deploys Umbod as a core Pod and a frontend Pod. The core Pod runs the API and MCP containers with shared SQLite storage.
+By default, the Helm chart deploys Umbod as a core Pod and a frontend Pod. The core Pod runs the API and MCP containers with shared SQLite storage. Optional `telemetry.enabled` adds a private collector listener to the existing API process and a ClusterIP Service targeting it.
 
 ```mermaid
 flowchart LR
@@ -26,12 +26,19 @@ flowchart LR
 | `frontend` | Static SvelteKit SPA assets, public runtime configuration, and local API routing; no Node runtime | 3000 |
 | `api` | REST API, configuration, administration, and persistence | 8000 |
 | `mcp` | MCP endpoint and agent-facing tools | 8011 |
+| `telemetry` (optional) | Collector-only OTLP HTTP endpoints in the API process | 4318 |
 
 The API exposes metrics in the core Pod on port `8001`. The MCP container exposes metrics on port `8012`.
 
 ## Workloads and storage
 
 The chart runs API and MCP as containers in one fixed, single-replica core Deployment. Both containers mount the same data volume at `/app/data`. The frontend runs in a separate Deployment.
+
+`umbod api serve` runs public REST and the optional private collector in one process and event loop. The host creates and readies one shared analytics runtime for collector writes and administrator reads, then closes it after both listener lifespans drain. The parent enters each ASGI lifespan and forwards yielded state. Both enabled primary listeners must start before readiness succeeds; startup failure or an unexpected exit stops siblings. The separate embedded Prometheus listener remains signal-free, with host-owned shutdown handling. Development `--reload` adds a Uvicorn ChangeReload watcher; one serving child PID owns both HTTP ports. A failed child waits for the next edit under standard reloader behavior.
+
+Helm controls collector listener and Service ports and the dedicated bearer Secret reference. That key is injected only into API, not MCP. There is no separate collector Deployment, image, PVC, or analytics configuration. `config.telemetryAnalytics` configures the shared runtime and core persistence controls its separate SQLite file on the data volume. See [telemetry ingestion](../reference/telemetry-ingestion.md#helm-collector-deployment).
+
+For external deployments, `umbod telemetry serve` remains an independent collector-only process with its own analytics lifecycle. Its separate SQLite history is not automatically visible to REST administrator queries.
 
 Without persistence, the chart uses an ephemeral `emptyDir` volume. With `persistence.enabled=true`, it mounts a ReadWriteOnce PersistentVolumeClaim. Umbod does not migrate SQLite schemas or persisted documents between incompatible versions.
 
@@ -41,6 +48,8 @@ The filesystem keeps namespace, ownership, and access grants in the application 
 
 - Browsers load static assets from the frontend Service and make requests to `/api/admin` directly. Production Ingress routes `/api` to the Python API without stripping the prefix.
 - Local frontend port-forwards and Docker Compose use an nginx API proxy so browser requests remain same-origin. This proxy performs no application operations.
+- OTLP clients reach `/v1/*` only through the private collector listener, exposed by the collector ClusterIP Service when `telemetry.enabled=true`. Public REST and Ingress do not expose ingestion.
+- Compose forwards the collector only on `127.0.0.1:14318` to container port 4318. Bind addresses select interfaces, not authorization. Private Tailscale exposure requires separately configured Serve and ACLs, not Funnel; Umbod does not configure Tailscale.
 - Native clients use `/api/admin` with bearer credentials. The Python API does not mount legacy `/admin` routes.
 - The Python API owns authorization, persistence, and connector setup. Browser route guards are not an authorization boundary.
 - Shared installations supply an external authentication gateway for browser login and credential forwarding. The chart does not install this gateway. API failures must remain JSON responses rather than redirects to login HTML.

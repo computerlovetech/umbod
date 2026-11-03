@@ -134,17 +134,132 @@
           "$ref": "#/definitions/image"
         },
         "api": {
-          "$ref": "#/definitions/coreWorkload"
+          "allOf": [
+            {
+              "$ref": "#/definitions/coreWorkload"
+            },
+            {
+              "properties": {
+                "env": {
+                  "propertyNames": {
+                    "not": {
+                      "enum": [
+                        "UMBOD_OTLP_ENABLED",
+                        "UMBOD_OTLP_HOST",
+                        "UMBOD_OTLP_PORT",
+                        "UMBOD_OTLP_BEARER_TOKEN",
+                        "UMBOD_REST_METRICS_PORT",
+                        "UMBOD_MCP_METRICS_PORT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
         },
         "mcp": {
-          "$ref": "#/definitions/coreWorkload"
+          "allOf": [
+            {
+              "$ref": "#/definitions/coreWorkload"
+            },
+            {
+              "properties": {
+                "env": {
+                  "propertyNames": {
+                    "not": {
+                      "enum": [
+                        "UMBOD_OTLP_ENABLED",
+                        "UMBOD_OTLP_HOST",
+                        "UMBOD_OTLP_PORT",
+                        "UMBOD_OTLP_BEARER_TOKEN",
+                        "UMBOD_REST_METRICS_PORT",
+                        "UMBOD_MCP_METRICS_PORT"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          ]
         }
       }
+    },
+    "telemetry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "port",
+        "servicePort",
+        "bearerTokenSecret"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "servicePort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "bearerTokenSecret": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "key"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "pattern": "^$|^[a-z0-9]([-a-z0-9.]*[a-z0-9])?$"
+            },
+            "key": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9._-]+$"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "bearerTokenSecret": {
+                "properties": {
+                  "name": {
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
     },
     "frontend": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["apiBaseUrl", "replicaCount", "image", "port", "resources"],
+      "required": [
+        "apiBaseUrl",
+        "replicaCount",
+        "image",
+        "port",
+        "resources"
+      ],
       "properties": {
         "apiBaseUrl": {
           "type": "string",
@@ -252,15 +367,16 @@
           ],
           "properties": {
             "frontend": {
-              "type": "string"
+              "const": "/"
             },
             "api": {
               "const": "/api"
             },
             "mcp": {
-              "type": "string"
+              "const": "/mcp"
             }
-          }
+          },
+          "additionalProperties": false
         }
       }
     },
@@ -288,7 +404,10 @@
         "telemetryAnalytics": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["enabled", "sqlitePath"],
+          "required": [
+            "enabled",
+            "sqlitePath"
+          ],
           "properties": {
             "enabled": {
               "type": "boolean"
@@ -298,15 +417,31 @@
               "minLength": 1,
               "pattern": "^/app/data/[^/\\s]+(/[^/\\s]+)*$",
               "allOf": [
-                {"not": {"pattern": "(^|/)\\.\\.?(/|$)"}},
-                {"not": {"pattern": ":[Mm][Ee][Mm][Oo][Rr][Yy]:"}},
-                {"not": {"pattern": "[\\x00-\\x1f\\x7f]"}},
-                {"not": {"enum": [
-                  "/app/data/umbod.sqlite3",
-                  "/app/data/umbod.sqlite3-wal",
-                  "/app/data/umbod.sqlite3-shm",
-                  "/app/data/umbod.sqlite3-journal"
-                ]}}
+                {
+                  "not": {
+                    "pattern": "(^|/)\\.\\.?(/|$)"
+                  }
+                },
+                {
+                  "not": {
+                    "pattern": ":[Mm][Ee][Mm][Oo][Rr][Yy]:"
+                  }
+                },
+                {
+                  "not": {
+                    "pattern": "[\\x00-\\x1f\\x7f]"
+                  }
+                },
+                {
+                  "not": {
+                    "enum": [
+                      "/app/data/umbod.sqlite3",
+                      "/app/data/umbod.sqlite3-wal",
+                      "/app/data/umbod.sqlite3-shm",
+                      "/app/data/umbod.sqlite3-journal"
+                    ]
+                  }
+                }
               ]
             }
           }

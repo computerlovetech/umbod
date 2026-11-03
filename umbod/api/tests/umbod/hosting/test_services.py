@@ -141,17 +141,17 @@ asyncio.run(verify())
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_rest_cli_uses_hosting_factory(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_rest_cli_uses_supervised_api_host(monkeypatch: pytest.MonkeyPatch) -> None:
     from umbod.cli import api
 
     run = Mock()
     monkeypatch.setattr(api, "load_server_app_config", Mock(return_value=AppConfig()))
     monkeypatch.setattr(api, "configure_logging", Mock())
-    monkeypatch.setattr(api.uvicorn, "run", run)
+    monkeypatch.setattr(api, "run_api_server", run)
     result = CliRunner().invoke(api.app, [])
     assert result.exit_code == 0, result.output
-    assert run.call_args.args == ("umbod.hosting.rest_service:create_app",)
-    assert run.call_args.kwargs["factory"] is True
+    assert run.call_args.args == (AppConfig(),)
+    assert run.call_args.kwargs == {"host": "0.0.0.0", "port": 8000, "reload": False}
 
 
 def test_legacy_rest_factory_accepts_positional_and_keyword_settings(

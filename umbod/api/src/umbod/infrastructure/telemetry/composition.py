@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from umbod.config.app import AppConfig
+from umbod.config.telemetry import TelemetryAppConfig
 from umbod.core.telemetry.analytics import (
     LogCountQuery,
     LogCountResult,
@@ -32,11 +33,11 @@ class DisabledTelemetryAnalyticsRuntime:
         raise TelemetryAnalyticsUnavailable("Telemetry analytics is disabled")
 
 
-def create_configured_analytics_runtime(config: AppConfig) -> TelemetryAnalyticsRuntime:
+def create_configured_analytics_runtime(config: AppConfig | TelemetryAppConfig) -> TelemetryAnalyticsRuntime:
     if not config.telemetry_analytics.enabled:
         return create_disabled_analytics_runtime()
     protected_paths: tuple[Path, ...] = ()
-    if config.connector_store.type == "sqlite":
+    if isinstance(config, AppConfig) and config.connector_store.type == "sqlite":
         application_path = config.connector_store.sqlite_path
         if application_path == ":memory:":
             protected_paths = ()

@@ -1,12 +1,27 @@
 import asyncio
+from collections.abc import Iterator
+from contextlib import contextmanager
 
 from prometheus_client import CONTENT_TYPE_LATEST
 from starlette.applications import Starlette
 from starlette.responses import Response
 from starlette.routing import Route
-from uvicorn import Config, Server
+from uvicorn import Config, Server as UvicornServer
 
 from umbod.rest.metrics.recorder import RestMetricsExposer
+
+
+class Server(UvicornServer):
+    @contextmanager
+    def capture_signals(self) -> Iterator[None]:
+        yield
+
+
+async def _serve_metrics(server: UvicornServer) -> None:
+    try:
+        await server.serve()
+    except SystemExit:
+        raise RuntimeError("REST metrics listener startup failed") from None
 
 
 class RestMetricsHttpServer:
@@ -28,18 +43,19 @@ class RestMetricsHttpServer:
                 log_config=None,
             )
         )
-        task = asyncio.create_task(server.serve())
+        task = asyncio.create_task(_serve_metrics(server))
         self._server = server
         self._task = task
         try:
             while not server.started:
                 if task.done():
                     await task
-                    raise RuntimeError("REST metrics HTTP server stopped before startup")
+                    raise RuntimeError(
+                        "REST metrics HTTP server stopped before startup"
+                    )
                 await asyncio.sleep(0)
         except BaseException:
-            self._server = None
-            self._task = None
+            await self.stop()
             raise
 
     async def stop(self) -> None:
@@ -49,9 +65,19 @@ class RestMetricsHttpServer:
         server = self._server
         if server is not None:
             server.should_exit = True
+            if not server.started:
+                task.cancel()
         try:
-            await task
+            done, pending = await asyncio.wait([task], timeout=10)
+            if pending:
+                task.cancel()
+                raise TimeoutError("REST metrics listener shutdown timed out")
+            if task in done and not task.cancelled():
+                task.result()
         finally:
+            if server is not None:
+                for transport in getattr(server, "servers", []):
+                    transport.close()
             self._server = None
             self._task = None
 

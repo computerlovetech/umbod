@@ -58,10 +58,7 @@ def validate_ingress(ingress: str) -> None:
         "browser /api ingress must route unchanged to Python, not the static frontend",
     )
     require("rewrite-target" not in ingress and "strip-prefix" not in ingress, "Ingress must retain API and MCP prefixes")
-    require(
-        re.search(r"- path: /v1\n(?:(?!          - path:).)*?name: [a-z0-9-]+-api", ingress, re.DOTALL) is not None,
-        "OTLP ingress /v1 must route unchanged to the API Service",
-    )
+    require("- path: /v1" not in ingress, "public ingress must not expose OTLP")
     mcp_service_name = re.search(r"name: ([a-z0-9-]+-mcp)", ingress)
     require(mcp_service_name is not None, "Ingress must route to the MCP Service")
     for path in (

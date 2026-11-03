@@ -27,6 +27,7 @@ dependencies = [
     "uvicorn[standard]>=0.46.0",
     "opentelemetry-proto>=1.40.0,<2",
     "protobuf>=6.33.0,<8",
+    "googleapis-common-protos>=1.72.0,<2",
     "aiobotocore>=3,<4",
 ]
 
@@ -63,12 +64,16 @@ shared = [
     "typer>=0.25.1",
     "uvicorn[standard]>=0.46.0",
 ]
+telemetry-serialization = [
+    "opentelemetry-proto>=1.40.0,<2",
+    "protobuf>=6.33.0,<8",
+    "googleapis-common-protos>=1.72.0,<2",
+]
 api = [
+    { include-group = "telemetry-serialization" },
     "fastapi>=0.141.1",
     "fastmcp-slim[client]==4.0.10",
-    "opentelemetry-proto>=1.40.0,<2",
     "prometheus-client>=0.26.0",
-    "protobuf>=6.33.0,<8",
     "python-multipart>=0.0.29",
 ]
 mcp = [

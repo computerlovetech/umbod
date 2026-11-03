@@ -1,7 +1,7 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI
 
 from umbod.config import AppConfig, OtlpReceiverConfig
+from umbod.config.telemetry import TelemetryAppConfig
 from umbod.core.telemetry.analytics import (
     TelemetryAnalyticsReader,
     TelemetryAnalyticsRuntime,
@@ -14,28 +14,11 @@ from umbod.rest.telemetry.dependencies import (
     get_receiver_config,
 )
 from umbod.rest.telemetry.errors import TelemetryHttpError
+from umbod.rest.telemetry.responses import telemetry_error_response
 from umbod.rest.telemetry.routes import router
 
-_STATUS_CODES = {400: 3, 401: 16, 413: 8, 415: 3, 503: 14}
 
-
-async def telemetry_error_response(
-    request: Request, exception: Exception
-) -> JSONResponse:
-    if not isinstance(exception, TelemetryHttpError):
-        raise exception
-    headers = {"WWW-Authenticate": "Bearer"} if exception.status_code == 401 else {}
-    return JSONResponse(
-        status_code=exception.status_code,
-        content={
-            "code": _STATUS_CODES[exception.status_code],
-            "message": exception.message,
-        },
-        headers=headers,
-    )
-
-
-def install_telemetry_receiver(app: FastAPI, config: AppConfig) -> None:
+def install_telemetry_receiver(app: FastAPI, config: AppConfig | TelemetryAppConfig) -> None:
     if config.otlp_receiver.allow_unauthenticated and config.runtime.profile != "local":
         raise ValueError("Unauthenticated telemetry ingestion is only allowed locally")
 

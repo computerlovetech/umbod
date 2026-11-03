@@ -3,6 +3,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from umbod.config import AppConfig, OtlpReceiverConfig, TelemetryAnalyticsConfig
+from umbod.config.telemetry import TelemetryAppConfig
+from umbod.rest.telemetry.application import create_telemetry_app
 from umbod.core.telemetry import TelemetryExport, TelemetrySink
 from umbod.rest.main import create_app
 from umbod.rest.telemetry.dependencies import get_telemetry_sink
@@ -27,7 +29,7 @@ class AcceptingTelemetrySink:
         return None
 
 
-def test_mounted_admin_reader_queries_ingested_records_after_restart(
+def test_admin_reader_queries_private_collector_records_after_restart(
     configuration: AppConfig, query_body: dict[str, object], tmp_path: Path,
 ) -> None:
     settings = configuration.model_copy(update={
@@ -44,13 +46,17 @@ def test_mounted_admin_reader_queries_ingested_records_after_restart(
             "attributes": [{"key": "tool.name", "value": {"stringValue": "shell"}}],
         }]}],
     }]}
-    root = create_app(settings, (), admin_verifier=AnalyticsVerifier())
+    collector = create_telemetry_app(TelemetryAppConfig(
+        runtime=settings.runtime,
+        otlp_receiver=settings.otlp_receiver,
+        telemetry_analytics=settings.telemetry_analytics,
+    ))
 
     def provide_sink() -> TelemetrySink:
         return AcceptingTelemetrySink()
 
-    root.dependency_overrides[get_telemetry_sink] = provide_sink
-    with TestClient(root) as client:
+    collector.dependency_overrides[get_telemetry_sink] = provide_sink
+    with TestClient(collector) as client:
         exported = client.post("/v1/logs", json=payload, headers={"Authorization": "Bearer analytics-ingestion"})
         assert exported.status_code == 200
     restarted = create_app(settings, (), admin_verifier=AnalyticsVerifier())

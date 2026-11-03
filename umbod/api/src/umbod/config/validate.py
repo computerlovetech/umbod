@@ -100,6 +100,8 @@ def validate_operator(operator: OperatorSettings, auth_recipe: str) -> None:
         ("UMBOD_MCP_PORT", operator.mcp_port),
         ("UMBOD_MCP_METRICS_PORT", operator.mcp_metrics_port),
     )
+    if operator.otlp_enabled:
+        ports += (("UMBOD_OTLP_PORT", operator.otlp_port),)
     for index, (name, port) in enumerate(ports):
         for other_name, other_port in ports[index + 1 :]:
             if port == other_port:

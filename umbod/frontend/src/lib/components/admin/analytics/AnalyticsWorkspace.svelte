@@ -13,7 +13,6 @@
 </script>
 
 <header>
-  <p class="eyebrow">Instance-wide telemetry</p>
   <h1 class="admin-title">Log analytics</h1>
   <p class="admin-lede">Count ingested telemetry logs across your instance. Filter exact values, combine dimensions, and explore activity over time.</p>
   <p class="hint">Includes accepted OTLP log exports, not application stdout, metrics, or traces. Configure clients to export logs to this instance’s authenticated /v1/logs receiver.</p>
@@ -103,7 +102,6 @@
 
 <style>
   header { margin-bottom: 1.5rem; }
-  .eyebrow { color: var(--admin-muted); font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; margin: 0 0 .5rem; }
   .query, .results { padding: 1.5rem; margin-bottom: 1.25rem; display: grid; gap: 1rem; }
   .section-heading, .actions, .failure { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
   h2 { font-size: 1.05rem; margin: 0; }

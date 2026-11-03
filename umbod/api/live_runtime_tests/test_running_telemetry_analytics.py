@@ -21,7 +21,7 @@ def analytics_source(runtime_endpoints: RuntimeEndpoints, otlp_bearer_token: str
         ]}],
     }]}
     response = httpx.post(
-        f"{runtime_endpoints.api_base_url}/v1/logs", json=payload,
+        f"{runtime_endpoints.otlp_base_url}/v1/logs", json=payload,
         headers={"Authorization": f"Bearer {otlp_bearer_token}"}, timeout=10,
     )
     response.raise_for_status()
