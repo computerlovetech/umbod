@@ -5,13 +5,16 @@ import pytest
 from umbod.core.persistence import (
     AllFields,
     Database,
+    Equals,
+    Fields,
     InsertCommand,
     NoFilter,
     Query,
     TransactionMode,
     Unordered,
+    UpsertCommand,
 )
-from tests.umbod.core.persistence.contract_support import ScalarRow, scalar_table
+from tests.umbod.core.persistence.contract_support import ScalarKey, ScalarRow, ScalarValuesResult, scalar_table
 
 
 @pytest.mark.parametrize("number", [-(2**63), 2**63 - 1])
@@ -33,6 +36,33 @@ async def test_portable_scalar_values_round_trip(
         await session.insert(contract_table, InsertCommand(row=expected))
         stored = await session.find_one(contract_table, Query(NoFilter(), AllFields(), Unordered()))
     assert stored == expected
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+@pytest.mark.asyncio
+async def test_upsert_insert_and_conflict_update_preserve_typed_scalar_projection(
+    database: Database, enabled: bool,
+) -> None:
+    contract_table = scalar_table()
+    initial = ScalarRow(
+        record_id="updated", number=7, enabled=enabled, optional_text="2026-01-01T00:00:00+00:00",
+    )
+    updated = initial.model_copy(update={
+        "number": 42, "enabled": not enabled, "optional_text": "2026-01-02T00:00:00+00:00",
+    })
+    key = ScalarKey(record_id=initial.record_id)
+    target = Equals(contract_table.key_codec.fields[0], initial.record_id)
+    projection = Fields(ScalarValuesResult, contract_table.row_codec.fields[1:3])
+    await database.ensure_schema((contract_table,))
+
+    for expected in (initial, updated):
+        async with database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
+            await session.upsert(contract_table, UpsertCommand(key=key, row=expected))
+        async with database.read_session() as session:
+            assert await session.find_many(contract_table, Query(NoFilter(), AllFields(), Unordered())) == (expected,)
+            assert await session.find_one(contract_table, Query(target, projection, Unordered())) == ScalarValuesResult(
+                number=expected.number, enabled=expected.enabled,
+            )
 
 
 @pytest.mark.parametrize("number", [-(2**63) - 1, 2**63])

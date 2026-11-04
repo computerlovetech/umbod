@@ -97,6 +97,14 @@ class ScalarRow(BaseModel):
 class ScalarKey(BaseModel):
     model_config = ConfigDict(frozen=True)
     record_id: str
+
+
+class ScalarValuesResult(BaseModel):
+    model_config = ConfigDict(frozen=True, strict=True)
+    number: int
+    enabled: bool
+
+
 DatabaseFactory = Callable[[Path], Database]
 
 

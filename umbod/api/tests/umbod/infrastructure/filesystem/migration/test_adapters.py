@@ -13,7 +13,7 @@ from umbod.infrastructure.filesystem.s3.edge import S3Client
 from tests.umbod.infrastructure.filesystem.test_s3_content import (
     FakeBackend, FakeClient, collect, configuration,
 )
-from tests.umbod.infrastructure.filesystem.migration.test_service import KEY, MemoryStore
+from tests.umbod.infrastructure.filesystem.migration.test_filesystem_migration_service import KEY, MemoryStore
 
 
 @pytest.mark.asyncio
