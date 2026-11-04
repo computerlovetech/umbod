@@ -2,15 +2,14 @@
 name: python-test-practices
 description: >-
   Guides writing and organizing pytest-based Python tests with clear names,
-  minimal fixtures, parametrization, edge-case coverage, and low runtime latency.
+  minimal fixtures, parametrization, edge-case coverage, and efficient setup.
   Use when adding or refactoring tests, improving test layout or fixture reuse,
-  profiling slow suites, or when the user mentions pytest, fixtures, test
-  performance, or test quality.
+  or when the user mentions pytest, fixtures, test design, or test quality.
 ---
 
 # Python test practices (pytest)
 
-Follow these practices when writing or changing Python tests in this repository (and similar projects using pytest).
+Follow these practices when writing or changing Python tests in this repository (and similar projects using pytest). This skill covers test design and organization, not test execution, runner configuration or benchmarking.
 
 ## 1. Mirror source-module ownership
 
@@ -20,11 +19,8 @@ The test tree must mirror the source package tree. Within the API, paths below `
 - Keep deeper test directories aligned with the owning source submodule. Do not maintain parallel legacy trees or mix unrelated module tests at the test root.
 - Keep module-specific integration and architecture tests within their owning module. Use explicit cross-module or deployment contract locations only when no single source module owns the behavior.
 - Keep shared test-only adapters and acceptance drivers in `tests/support/`. Scope fixtures to their consumers and keep root fixtures limited to genuinely suite-wide needs.
-- Select focused tests by directory paths, not `-k` name matching. In particular, excluding MCP-named tests does not select REST tests.
-- Run the smallest relevant module or submodule suite during development. Changes to shared core, configuration or infrastructure also require affected consumer and integration checks; directory ownership alone does not establish impact.
-- Keep the complete backend suite in CI as the safety net for cross-module regressions.
 - When moving tests, preserve assertions, parametrization and integration boundaries. Update imports, fixture discovery, filesystem-relative lookups, documentation, workflows and architecture-scan paths.
-- Verify collection before and after a restructuring, accounting for path changes. No test cases should disappear or be duplicated.
+- Preserve test cases during restructuring; path changes must not silently remove or duplicate coverage.
 
 Split unrelated behaviors into separate modules rather than growing a catch-all test file.
 
@@ -117,7 +113,8 @@ Do not broaden mutable fixture scope merely because setup is slow. Split reusabl
 For units that depend on external I/O, use existing in-memory implementations or protocol-compatible fakes instead of real integrations. Business-logic tests should use the repository's in-memory persistence runtime, not SQLite or a new imitation of an existing adapter.
 
 - Reuse existing adapters and fakes first. When none fits, write a small fake implementing the collaborator's protocol/ABC.
-- Verify substitutable persistence implementations through the same parameterized contract tests. Do not duplicate business scenarios per backend.
+- Establish in-memory/SQLite parity once through shared database-adapter contract tests. Services and higher-level adapters depending on that database port should rely on the verified contract and run their backend-independent scenarios only against the existing in-memory runtime.
+- Do not parameterize business-logic, service, repository or transport tests over in-memory and SQLite merely to repeat database parity coverage. Parameterize domain inputs and meaningful application configurations instead.
 - Retain explicit SQLite durability, migrations, encryption, concurrency, corruption and integration checks. Never bypass production durability requirements to make a fixture faster.
 - Prefer fakes (stateful, behavior-preserving) over ad-hoc mocks when the test exercises interaction over many calls.
 - Keep fakes in the test tree, next to the tests that use them, or in `conftest.py` when shared.
@@ -192,7 +189,7 @@ def test_validate_slug_rejects_invalid_values(raw: str, expected_fragment: str) 
 
 Keep parameter matrices tied to actual behavior. Avoid unnecessary Cartesian products and parent fixtures that multiply unrelated tests. Preserve meaningful boundaries, security cases, required backend contracts and supported configuration variants; do not sample away coverage merely to improve timings.
 
-**Also use parametrize to verify equivalent behavior across substitutable implementations** (for example, an in-memory store vs. a SQLite-backed store) so one test body exercises both, rather than copy-pasting the scenario per implementation.
+**Use backend parametrization only at the database-adapter contract boundary to establish substitutability.** The following round-trip scenario belongs to that contract suite, not to each service or higher-level adapter that uses persistence. Once the in-memory and SQLite database adapters pass the shared contract, run backend-independent consumer tests with in-memory persistence only. Keep separate SQLite tests only when their assertions require actual SQLite behavior, such as durable restart, SQL corruption, migrations, locking or encryption at rest.
 
 ```python
 @pytest.mark.parametrize(
@@ -208,24 +205,9 @@ def test_store_roundtrips_entity(store_factory: Callable[[], EntityStore]) -> No
 
 ---
 
-## 9. Measure runtime before optimizing
+## 9. Keep test responsibilities at the correct boundary
 
-Treat low latency as a design constraint, not a reason to weaken assertions, isolation, coverage or production guarantees.
-
-- Establish a baseline using the relevant suite, including its normal coverage and worker configuration. After changes, rerun the same selection and settings, and account for changed test counts.
-- Use pytest durations to distinguish setup, calls and teardown. Slowest individual tests are not enough: aggregate fixture time and invocation counts to find inexpensive setup repeated hundreds of times.
-- Profile the measured hot path before choosing a fix. Inspect application construction, provisioning, tool registration, database preparation and repeated subprocess work rather than assuming storage is responsible.
-- Distinguish elapsed suite time from accumulated worker time. Nested fixture timings can overlap; never add them together as promised wall-clock savings.
-- Inspect collection/startup, worker balance and the interval after the last test report. Do not attribute shutdown delays to coverage without evidence.
-- Run focused checks serially to avoid worker startup overhead. Use the repository's automatic worker selection for broad suites, and keep Kind/live-runtime tests serial. Do not run competing full suites while benchmarking or increase workers blindly.
-- Report the command, pass/skip counts, elapsed time, coverage mode and worker count. Label local measurements as local; do not claim CI gains until measured there.
-- Keep one-off profiling instrumentation and reports outside committed application and test code unless reusable tooling was requested.
-
----
-
-## 10. Keep verification at the correct boundary
-
-Keep standalone linting and static-analysis rule validation outside the default application pytest suite. Run these tools through their dedicated CLI or CI checks, not incidental pytest subprocess wrappers.
+Do not embed standalone linting or static-analysis rule validation in application pytest tests through subprocess wrappers.
 
 Application CLI behavior, process isolation, architecture contracts and genuine integration boundaries may still require subprocess tests. Preserve those checks; do not replace them with mocks solely to reduce runtime.
 
@@ -233,8 +215,7 @@ Application CLI behavior, process isolation, architecture contracts and genuine 
 
 ## Quick checklist
 
-- [ ] Test paths mirror the owning source module; focused pytest commands select directories, not names.
-- [ ] Shared-module changes include affected consumer checks; the complete suite remains in CI.
+- [ ] Test paths mirror the owning source module.
 - [ ] Test moves preserve collected cases, fixtures, assertions and path-based contracts.
 - [ ] Test and class names state intent without reading the body.
 - [ ] One primary behavior per test; helpers/fixtures hold shared setup.
@@ -246,9 +227,6 @@ Application CLI behavior, process isolation, architecture contracts and genuine 
 - [ ] Business logic uses existing in-memory implementations; shared parameterized contracts and backend-specific integration checks remain intact.
 - [ ] Narrow route fixtures reuse real composition helpers, with explicit full-application security and wiring coverage.
 - [ ] Happy path plus at least one edge or error path where risk warrants it.
-- [ ] Repetitive scenarios — including equivalent behavior across substitutable implementations — use `parametrize` instead of copy-paste.
+- [ ] Repetitive domain inputs use `parametrize` instead of copy-paste; backend parametrization is confined to database-adapter parity contracts, not repeated across consumer business scenarios.
 - [ ] Parameter matrices cover meaningful differences without multiplying unrelated scenarios.
-- [ ] Runtime changes have comparable before/after measurements; aggregate fixture costs are not presented as wall-clock savings.
 - [ ] Standalone static-analysis tools are not executed as part of the application pytest suite.
-
-After substantive test changes, run the relevant focused pytest target serially, then the applicable broader checks using the repository's documented commands. Preserve normal coverage during performance comparisons.

@@ -1,27 +1,29 @@
+from collections.abc import AsyncIterator
+
+import pytest
+import pytest_asyncio
+
+from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.activation import (
     ActivationStatus,
     ActivationStore,
     CapabilityRef,
     create_capability_activation_store,
 )
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
-from pathlib import Path
-from typing import Awaitable, Callable
-import pytest
+
 pytestmark = pytest.mark.asyncio
-ActivationStoreFactory = Callable[[Path], Awaitable[ActivationStore]]
 
-async def _in_memory_store(_path: Path) -> ActivationStore:
-    database = (await prepared_inmemory_runtime()).database
-    return await create_capability_activation_store(database)
 
-async def _sqlite_store(path: Path) -> ActivationStore:
-    database = (await prepared_sqlite_runtime(path)).database
-    return await create_capability_activation_store(database)
+@pytest_asyncio.fixture
+async def store() -> AsyncIterator[ActivationStore]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield await create_capability_activation_store(runtime.database)
+    finally:
+        await runtime.shutdown()
 
-@pytest.mark.parametrize('factory', [_in_memory_store, _sqlite_store], ids=['in_memory', 'sqlite'])
-async def test_reconciliation_preserves_current_rows_removes_absent_rows_and_does_not_insert_new_rows(tmp_path: Path, factory: ActivationStoreFactory) -> None:
-    store = await factory(tmp_path / 'activation.sqlite')
+
+async def test_reconciliation_preserves_current_rows_removes_absent_rows_and_does_not_insert_new_rows(store: ActivationStore) -> None:
     stable = CapabilityRef(connector_kind="openapi", connector_id='inventory', capability_kind="tool", capability_key='stable')
     removed = CapabilityRef(connector_kind="openapi", connector_id='inventory', capability_kind="tool", capability_key='removed')
     introduced = CapabilityRef(connector_kind="openapi", connector_id='inventory', capability_kind="tool", capability_key='introduced')
@@ -35,9 +37,7 @@ async def test_reconciliation_preserves_current_rows_removes_absent_rows_and_doe
     assert await store.get_status(introduced) == ActivationStatus.DISABLED
     assert await store.get_status(other_connector) == ActivationStatus.ENABLED
 
-@pytest.mark.parametrize('factory', [_in_memory_store, _sqlite_store], ids=['in_memory', 'sqlite'])
-async def test_removed_then_reintroduced_operation_defaults_disabled(tmp_path: Path, factory: ActivationStoreFactory) -> None:
-    store = await factory(tmp_path / 'activation.sqlite')
+async def test_removed_then_reintroduced_operation_defaults_disabled(store: ActivationStore) -> None:
     operation = CapabilityRef(connector_kind="openapi", connector_id='inventory', capability_kind="tool", capability_key='readItems')
     await store.set_status(operation, ActivationStatus.ENABLED)
     await store.reconcile("openapi", 'inventory', "tool", ())

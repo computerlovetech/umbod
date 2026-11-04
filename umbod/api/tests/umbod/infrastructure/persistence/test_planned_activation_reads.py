@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 from typing import cast
 from unittest.mock import AsyncMock
 
@@ -22,7 +23,7 @@ async def test_activation_batch_uses_compound_primary_key_without_table_scan() -
     compiler = SQLiteCompiler(SQLiteValueMapper())
     schema = compiler.create_table(CAPABILITY_ACTIVATION_STATE_TABLE)
     select = compiler.select(table, query, limit_one=False)
-    with sqlite3.connect(":memory:") as connection:
+    with closing(sqlite3.connect(":memory:")) as connection, connection:
         connection.execute(schema.statement, schema.parameters)
         explanation = connection.execute(
             "EXPLAIN QUERY PLAN " + select.statement, select.parameters,

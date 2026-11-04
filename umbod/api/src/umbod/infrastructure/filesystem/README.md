@@ -12,6 +12,7 @@ description: "Filesystem composition and concrete content storage over the appli
 - [inmemory.py](./inmemory.py) — Application-retained content storage with immutable publication and concurrent async reads/writes.
 - [io.py](./io.py) — Cancellation-safe host I/O.
 - [local_content.py](./local_content.py) — Concurrent local content storage through immutable object publication.
+- [migration/](./migration/README.md) — Verified immutable local-to-S3 migration and dry-run planning.
 - [objects.py](./objects.py) — Trusted content directory operations.
 - [keys.py](./keys.py) — Canonical logical content key validation without host filesystem dependencies.
 - [s3_content.py](./s3_content.py) — Immutable S3 byte storage with bounded multipart writes and operation-scoped clients.

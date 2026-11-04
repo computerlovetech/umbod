@@ -29,7 +29,7 @@ The chart has **no dedicated `filesystem` or `s3` values block**. Pass non-secre
 
 A prefix must be relative, with no leading/trailing slash, empty path segments, or dot segments. Endpoints must not contain credentials, query strings, or fragments. S3-compatible services may require `path` addressing.
 
-Remove any explicit `UMBOD_FILESYSTEM_CONTENT_DIRECTORY` setting when choosing S3: that setting is local-only. Nondefault S3 settings with the local backend also fail configuration validation.
+Keep `UMBOD_FILESYSTEM_CONTENT_DIRECTORY` if already configured: S3 ignores it during normal operation, and the migration CLI can use it to locate the old local content. Nondefault S3 settings with the local backend still fail configuration validation.
 
 Set these chart values alongside the two environment maps:
 
@@ -79,11 +79,36 @@ After upgrading, check that both backend containers start successfully without c
 
 Storage authentication can be lazy: healthy startup alone does not prove bucket access. A successful round trip exercises database publication and content storage together. Avoid logging credentials, authorization headers, or file content while diagnosing failures.
 
+## Migrate existing local content
+
+Use `umbod migrate files-to-s3` from an image containing the migration command. This is an offline, non-destructive content copy, not a database migration or an automatic configuration cutover.
+
+1. Record the current local content directory. Its default is `filesystem-content` beneath `UMBOD_DATA_DIR`; preserve any existing directory override.
+2. Stop **all** API/MCP services and other file writers. Keep them stopped through inventory, copying, verification, and cutover. The command cannot enforce this externally; `--offline` acknowledges that responsibility.
+3. Back up the application database and local content together. Run a temporary migration container using an image containing the CLI, the same original storage volume, and the deployment's required configuration/secrets. Set `UMBOD_FILESYSTEM_CONTENT_BACKEND=s3` and the destination S3 settings **for this container only**. Do not start API/MCP services yet. The existing `UMBOD_FILESYSTEM_CONTENT_DIRECTORY` can remain configured.
+4. Optionally run `umbod migrate files-to-s3 --offline --dry-run` to inspect the inventory without writing S3 objects. The source defaults to `UMBOD_FILESYSTEM_CONTENT_DIRECTORY`, or `filesystem-content` beneath `UMBOD_DATA_DIR` if unset. Use `--source` to override it. Confirm that the resolved source is the complete original directory and that the destination bucket/prefix are correct.
+5. Run `umbod migrate files-to-s3 --offline` and require exit status zero. Keep any `--source` override identical to the dry run. Each new object is read back and verified by size and SHA-256; existing objects are skipped only when identical. Conflicting content fails without overwriting. Failed or interrupted runs can be rerun with the same source and destination; completed objects are verified again.
+6. Configure **both** API and MCP to use that exact S3 destination, restart them, and verify existing files and a new upload using the deployment checks above. Retain the source and backups until your retention policy permits separate cleanup.
+
+### Coolify operating order
+
+1. Prepare the migration-capable image, bucket and credentials before the outage.
+2. Stop both API and MCP in Coolify and prevent automatic restarts/deployments. Back up their persistent data.
+3. From the server terminal, run the temporary migration container described above with the **existing Coolify volume** and S3 configuration. Do not create a new Compose project/empty volume. No shell inside the application image is required; invoke the `umbod` executable directly.
+4. After migration succeeds, set the same S3 backend, bucket, region, endpoint, prefix, addressing style and credentials for **both** services in Coolify. Keep the local directory setting if present. The migration command copies content; it does not update Coolify settings or switch running services.
+5. Redeploy/start both services. Read an existing file, upload and read a new one, and confirm ownership/sharing before reopening access.
+
+Retain the database volume: S3 replaces file contents, not the database. Retain the old local files and backups until separate cleanup is approved.
+
+The inventory includes every canonical immutable object in the local directory, including unreferenced objects and staged upload content. It ignores `.content-` temporary files, rejects invalid entries and symlinks, and does not infer completeness from database references. Check that the mounted source is the correct, complete deployment directory. Logical content keys, database records, ownership and grants remain unchanged. The command neither deletes local content nor changes deployment configuration. Dry runs still require S3 read access and stopped writers. No bucket listing or object deletion permissions are needed; S3 HEAD checks use the object read permission. AWS may return 403 rather than 404 for absent keys without `s3:ListBucket`; if that occurs, grant appropriately scoped listing permission for migration preflight. Permission errors are never treated as missing content.
+
+Do not resume writes against local storage after cutover and expect S3 to stay synchronized. Rolling back after new S3-only uploads requires a separately planned reverse migration; this command only copies local content to S3.
+
 ## Operational boundaries
 
 - **Transfers pass through Umbod.** S3 is a backend driver; there are no direct browser-to-S3 uploads, presigned URLs, or client-managed multipart/resumable transfers.
 - **Back up metadata and content together.** Without persistence, replacing the core Pod loses namespace and permission records even if the bucket survives.
-- **No automatic migration or fallback.** Switching backend, bucket, or prefix on a populated deployment requires a separately planned migration preserving logical content keys. Merely changing values makes existing content unavailable.
+- **No automatic migration or fallback.** Use the offline migration procedure above for local-to-S3 cutover. Other backend, bucket or prefix changes require a separate migration. Merely changing values makes existing content unavailable.
 - **No automatic physical cleanup.** Publication happens after content storage; failures can leave unreferenced immutable objects. File deletion removes namespace/policy records, not the stored object. Multipart abort is best effort, so process termination can leave incomplete parts. Lifecycle cleanup of multipart uploads does not reclaim completed orphan objects.
 - **Limits remain separate.** The default filesystem limit is 10 MiB. MCP upload and read tools have their own limits. The frontend nginx proxy caps request bodies at 12 MiB; raising the application limit also requires corresponding proxy/gateway changes. Direct API ingress bypasses that frontend proxy but may impose its own limits.
 

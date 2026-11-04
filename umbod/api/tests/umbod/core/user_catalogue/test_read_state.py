@@ -1,4 +1,3 @@
-from pathlib import Path
 from typing import cast
 from unittest.mock import AsyncMock
 
@@ -6,7 +5,7 @@ import pytest
 import pytest_asyncio
 from pydantic import BaseModel
 
-from tests.umbod.core.persistence.contract_support import DATABASE_ADAPTERS, DatabaseAdapter
+from tests.persistence_runtime import create_inmemory_runtime
 from umbod.core.activation.domain import ActivationStatus, CapabilityRef
 from umbod.core.activation.stores.schema import (
     CAPABILITY_ACTIVATION_STATE_CONNECTOR_ID,
@@ -42,9 +41,9 @@ from umbod.core.user_catalogue.read_state import CatalogueReadState, plan_catalo
 pytestmark = pytest.mark.asyncio
 
 
-@pytest_asyncio.fixture(params=DATABASE_ADAPTERS, ids=lambda adapter: cast(DatabaseAdapter, adapter).name)
-async def database(request: pytest.FixtureRequest, tmp_path: Path) -> Database:
-    database = cast(DatabaseAdapter, request.param).factory(tmp_path)
+@pytest_asyncio.fixture
+async def database() -> Database:
+    database = create_inmemory_runtime().database
     await database.ensure_schema(cast(tuple[Table[BaseModel, BaseModel], ...], (
         PUBLICATION_STATE_TABLE,
         CAPABILITY_ACTIVATION_STATE_TABLE,

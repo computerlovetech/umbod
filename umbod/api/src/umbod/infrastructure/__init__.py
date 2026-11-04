@@ -9,6 +9,7 @@ from umbod.infrastructure.persistence.runtime import (
     AppPersistenceRuntime,
     ConfiguredPersistenceRuntimeProvider,
 )
+from umbod.infrastructure.filesystem.migration import migrate_local_content
 from umbod.infrastructure.filesystem import (
     ContentConfig,
     InMemoryContentConfig,
@@ -32,6 +33,7 @@ from umbod.infrastructure.filesystem import (
 )
 
 __all__ = [
+    "migrate_local_content",
     "create_configured_analytics_runtime",
     "create_disabled_analytics_runtime",
     "create_sqlite_analytics_runtime",

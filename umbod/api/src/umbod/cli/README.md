@@ -1,7 +1,7 @@
 ---
 type: Software Module
 title: "Command-line interface"
-description: "Service startup, configuration inspection and connector validation commands."
+description: "Service startup, configuration inspection, connector validation and offline migration commands."
 ---
 
 # Files
@@ -12,9 +12,11 @@ description: "Service startup, configuration inspection and connector validation
 - [connectors.py](./connectors.py) — Connector validation commands.
 - [main.py](./main.py) — Command registration.
 - [mcp.py](./mcp.py) — MCP service commands.
+- [migrate.py](./migrate.py) — Offline, verified local-to-S3 file-content migration.
 - [telemetry.py](./telemetry.py) — Standalone Uvicorn telemetry receiver command.
 
-# Context not available from the code
+# Related knowledge
 
 - [Hosting boundary](../hosting/README.md) — Supported service composition.
+- [S3 operations](../../../../docs/operations/s3-file-storage.md) — Storage configuration and offline migration procedure.
 - [ADR-003](../../../../project/architecture-records/ADR-003-umbod-specific-connector-cli.md) — Umbod-specific CLI ownership versus SDK authoring tools.

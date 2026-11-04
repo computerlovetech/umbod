@@ -98,6 +98,7 @@ def test_infrastructure_package_exports_public_kernel() -> None:
 
 def test_infrastructure_public_surface_is_composition_only() -> None:
     assert set(infrastructure.__all__) == {
+        'migrate_local_content',
         'AppPersistenceRuntime',
         'ConfiguredPersistenceRuntimeProvider',
         'PersonalDiscoveryPreparation',

@@ -1,3 +1,4 @@
+import asyncio
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,19 +7,26 @@ from typing import cast
 from pydantic import BaseModel, ConfigDict
 
 from umbod.core.persistence import (
+    AllFields,
     BooleanCodec,
     ColumnType,
     Database,
     Field,
     IntegerCodec,
+    InsertCommand,
     JsonTupleCodec,
     JsonValueCodec,
     KeyCodec,
+    NoFilter,
     PydanticJsonCodec,
+    Query,
     RowCodec,
     Table,
     TableIdentity,
     TextCodec,
+    TransactionMode,
+    Unordered,
+    UpsertCommand,
 )
 from tests.persistence_runtime import create_inmemory_runtime, create_sqlite_runtime
 
@@ -110,6 +118,59 @@ DATABASE_ADAPTERS = (
     DatabaseAdapter('inmemory', _inmemory),
     DatabaseAdapter('sqlite', _sqlite),
 )
+
+
+async def serialized_claim_observations(
+    first_database: Database, second_database: Database,
+) -> tuple[str, ...]:
+    contract_table, _, _, _ = table("serialized_claims")
+    await first_database.ensure_schema((contract_table,))
+    async with first_database.session(mode=TransactionMode.READ_WRITE) as session:
+        await session.insert(contract_table, InsertCommand(row=row("shared", "available")))
+    first_read = asyncio.Event()
+    contender_started = asyncio.Event()
+    contender_read = asyncio.Event()
+
+    async def claim(database: Database, first: bool) -> str:
+        if not first:
+            await first_read.wait()
+            contender_started.set()
+        async with database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
+            existing = await session.find_one(
+                contract_table, Query(NoFilter(), AllFields(), Unordered()),
+            )
+            if existing is None:
+                raise AssertionError("Seeded claim row is missing")
+            if first:
+                first_read.set()
+                await contender_started.wait()
+                try:
+                    await asyncio.wait_for(contender_read.wait(), timeout=0.1)
+                except TimeoutError:
+                    pass
+            else:
+                contender_read.set()
+            if existing.payload == "available":
+                await session.upsert(
+                    contract_table,
+                    UpsertCommand(
+                        key=SampleKey(owner_id="owner", record_id="shared"),
+                        row=row("shared", "claimed"),
+                    ),
+                )
+            return existing.payload
+
+    tasks = (
+        asyncio.create_task(claim(first_database, True)),
+        asyncio.create_task(claim(second_database, False)),
+    )
+    try:
+        return tuple(await asyncio.wait_for(asyncio.gather(*tasks), timeout=10))
+    finally:
+        for task in tasks:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
 def table(name: str='typed_samples') -> tuple[Table[SampleRow, SampleKey], Field[SampleRow, str], Field[SampleRow, str], Field[SampleRow, str]]:
     identity = TableIdentity(name)

@@ -1,9 +1,12 @@
+from collections.abc import AsyncIterator
+
 from umbod.core.callers import GroupMembership
 from umbod.core.permissions.factories import create_group_permission_store
 from umbod.core.permissions.stores.service import GroupPermissionStoreService
-from tests.persistence_runtime import prepared_sqlite_runtime
-from pathlib import Path
+from tests.persistence_runtime import prepared_inmemory_runtime
+from umbod.core.persistence import Database
 import pytest
+import pytest_asyncio
 from umbod.core.permissions import AssignablePermissionCatalog, AssignablePermissionTargets, ConnectorToolPermission, ConnectorToolRef, GroupPermissionManagementService, InMemoryGroupConnectorToolPermissions, NoopPermissionChangeNotifier, SaveGroupPermissionsRequest, ToolPermissionUpdate, UpdateGroupPermissionsRequest
 from umbod.mcp.live_permission_updates import GroupPermissionStateReloader
 
@@ -39,11 +42,18 @@ def _new_runtime(store: GroupPermissionStoreService) -> tuple[InMemoryGroupConne
     reloader = GroupPermissionStateReloader(permission_reader=store, runtime_permissions=runtime_permissions)
     return (runtime_permissions, reloader)
 
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[Database]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
+
+
 @pytest.mark.asyncio
-async def test_persisted_permissions_are_visible_to_runtime_after_restart(tmp_path: Path) -> None:
-    sqlite_path = tmp_path / 'permissions.sqlite3'
+async def test_persisted_permissions_are_visible_to_runtime_after_store_recreation(database: Database) -> None:
     tool = ConnectorToolRef('github', 'list_repositories')
-    database = (await prepared_sqlite_runtime(sqlite_path)).database
     store = await create_group_permission_store(database)
     await _management(store).save_group_permissions(SaveGroupPermissionsRequest(group_id='engineering', connector_ids=(), capabilities=(tool.as_capability(),)))
     reopened_store = await create_group_permission_store(database)
@@ -52,8 +62,7 @@ async def test_persisted_permissions_are_visible_to_runtime_after_restart(tmp_pa
     assert runtime_permissions.allowed_tools(GroupMembership(group_ids=('engineering',))) == {ConnectorToolPermission('github', 'list_repositories')}
 
 @pytest.mark.asyncio
-async def test_revoked_permission_is_hidden_from_runtime_after_reload(tmp_path: Path) -> None:
-    database = (await prepared_sqlite_runtime(tmp_path / 'permissions.sqlite3')).database
+async def test_revoked_permission_is_hidden_from_runtime_after_reload(database: Database) -> None:
     store = await create_group_permission_store(database)
     management = _management(store)
     tool = ConnectorToolRef('github', 'create_issue')

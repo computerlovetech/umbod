@@ -106,14 +106,21 @@ class AttemptCase:
     query: PersonalOAuthAttemptQuery
 
 
-@pytest_asyncio.fixture(params=("inmemory", "sqlite"))
-async def case(request: pytest.FixtureRequest, tmp_path: Path) -> AttemptCase:
-    runtime = (
-        await prepared_inmemory_runtime()
-        if request.param == "inmemory"
-        else await prepared_sqlite_runtime(tmp_path / "oauth.sqlite3")
-    )
-    bundle = await create_downstream_mcp_stores("test-secret", runtime.database)
+@pytest_asyncio.fixture
+async def case(request: pytest.FixtureRequest) -> AsyncIterator[AttemptCase]:
+    if getattr(request, "param", "inmemory") == "sqlite":
+        directory: Path = request.getfixturevalue("tmp_path")
+        runtime = await prepared_sqlite_runtime(directory / "oauth.sqlite3")
+    else:
+        runtime = await prepared_inmemory_runtime()
+    try:
+        yield await initialized_attempt_case(runtime.database)
+    finally:
+        await runtime.shutdown()
+
+
+async def initialized_attempt_case(database: Database) -> AttemptCase:
+    bundle = await create_downstream_mcp_stores("test-secret", database)
     definition = OAuthConnectorDefinition(
         connector_id="personal",
         display_name="Personal",
@@ -122,7 +129,7 @@ async def case(request: pytest.FixtureRequest, tmp_path: Path) -> AttemptCase:
     )
     await bundle.definitions.save(SaveConnectorDefinition(definition=definition))
     await bundle.publishing.publish_connector(definition.connector_id)
-    async with runtime.database.session(
+    async with database.session(
         mode=TransactionMode.SERIALIZED_WRITE
     ) as session:
         await session.upsert(
@@ -170,11 +177,11 @@ async def case(request: pytest.FixtureRequest, tmp_path: Path) -> AttemptCase:
     )
     clock = ControlledClock(now=now)
     return AttemptCase(
-        database=runtime.database,
+        database=database,
         clock=clock,
         bundle=bundle,
         store=EncryptedPersonalOAuthAttemptStore(
-            runtime.database, AuthenticatedTextCipher("test-secret"), clock
+            database, AuthenticatedTextCipher("test-secret"), clock
         ),
         command=command,
         query=PersonalOAuthAttemptQuery(key=key, attempt_id=attempt_id, now=now),
@@ -233,23 +240,25 @@ async def test_attempt_survives_adapter_recreation_and_completes_atomically(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("case", ("sqlite",), indirect=True)
 async def test_sqlite_attempt_finishes_through_recreated_database_runtime(
     case: AttemptCase, tmp_path: Path
 ) -> None:
     database_path = tmp_path / "oauth.sqlite3"
-    if not database_path.exists():
-        pytest.skip("SQLite-specific process-independent persistence contract")
     await pending(case)
     runtime = await prepared_sqlite_runtime(database_path)
-    restored = await create_downstream_mcp_stores("test-secret", runtime.database)
-    attempt = await restored.personal_oauth_attempts.claim(claim_command(case))
-    assert attempt.preparation == case.command.preparation
-    assert (
-        await restored.personal_oauth_attempts.complete(completion(case))
-    ).status == "completed"
-    state = await case.bundle.personal_connections.get(case.query.key)
-    assert isinstance(state, PersonalConnection)
-    assert state.authorization == completion(case).authorization
+    try:
+        restored = await create_downstream_mcp_stores("test-secret", runtime.database)
+        attempt = await restored.personal_oauth_attempts.claim(claim_command(case))
+        assert attempt.preparation == case.command.preparation
+        assert (
+            await restored.personal_oauth_attempts.complete(completion(case))
+        ).status == "completed"
+        state = await case.bundle.personal_connections.get(case.query.key)
+        assert isinstance(state, PersonalConnection)
+        assert state.authorization == completion(case).authorization
+    finally:
+        await runtime.shutdown()
 
 
 @pytest.mark.asyncio

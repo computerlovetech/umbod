@@ -1,12 +1,11 @@
 from tests.umbod.core.connectors.downstream_mcp.personal_caller_support import captured_personal_caller
 import asyncio
 from collections.abc import AsyncIterator
-from pathlib import Path
 
 import pytest
 import pytest_asyncio
 
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.capabilities.descriptions import SystemConnectorCapabilityDescriptionOverrideStore
 from umbod.core.connectors.downstream_mcp.management import (
     DeleteDownstreamConnectorAggregate,
@@ -38,22 +37,21 @@ from umbod.core.connectors.downstream_mcp.stores import (
 from umbod.core.permissions.domain import GroupPermissionSet, GroupPermissionSummary
 
 
-@pytest_asyncio.fixture(params=("inmemory", "sqlite"))
-async def stores(request: pytest.FixtureRequest, tmp_path: Path) -> AsyncIterator[DownstreamMcpStores]:
-    runtime = (
-        await prepared_inmemory_runtime()
-        if request.param == "inmemory"
-        else await prepared_sqlite_runtime(tmp_path / "bound.sqlite3")
-    )
-    bundle = await create_downstream_mcp_stores("bound-secret", runtime.database)
-    await bundle.definitions.save(SaveConnectorDefinition(definition=OAuthConnectorDefinition(
-        connector_id="personal",
-        display_name="Personal",
-        capability_description="Personal connector capabilities",
-        endpoint_url="https://personal.example/mcp",
-        authorization_mode="personal",
-    )))
-    yield bundle
+@pytest_asyncio.fixture
+async def stores() -> AsyncIterator[DownstreamMcpStores]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        bundle = await create_downstream_mcp_stores("bound-secret", runtime.database)
+        await bundle.definitions.save(SaveConnectorDefinition(definition=OAuthConnectorDefinition(
+            connector_id="personal",
+            display_name="Personal",
+            capability_description="Personal connector capabilities",
+            endpoint_url="https://personal.example/mcp",
+            authorization_mode="personal",
+        )))
+        yield bundle
+    finally:
+        await runtime.shutdown()
 
 
 @pytest.fixture

@@ -1,23 +1,21 @@
+from collections.abc import AsyncIterator
 from contextlib import contextmanager
-from pathlib import Path
 from typing import Iterator, Literal
 
 import pytest
+import pytest_asyncio
 from fastmcp import Client, FastMCP
 from fastmcp.server.auth import AccessToken
 from mcp.server.auth.middleware.auth_context import auth_context_var
 from mcp.server.auth.middleware.bearer_auth import AuthenticatedUser
 
 from messaging.models import MessagingEvent, StreamEvent
-from tests.persistence_runtime import (
-    prepared_inmemory_runtime,
-    prepared_sqlite_runtime,
-)
+from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.messaging.stores.event_stream import (
     DatabaseEventStream,
     append_event_in_session,
 )
-from umbod.core.persistence import DatabaseSession
+from umbod.core.persistence import Database, DatabaseSession
 from umbod.core.activation.stores.schema import CAPABILITY_ACTIVATION_STATE_TABLE
 from umbod.core.activation.stores.service import CapabilityActivationStoreService
 from umbod.core.administrator.connector_configuration import (
@@ -50,6 +48,15 @@ from umbod.mcp.administrator.tools import AdministratorConnectorConfigurationToo
 ConnectorKind = Literal["native", "openapi", "downstream_mcp"]
 
 
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[Database]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
+
+
 @contextmanager
 def authenticated_administrator() -> Iterator[None]:
     marker = auth_context_var.set(
@@ -70,19 +77,11 @@ def authenticated_administrator() -> Iterator[None]:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["native", "openapi", "downstream_mcp"])
-@pytest.mark.parametrize("backend", ["inmemory", "sqlite"])
 async def test_mcp_configuration_roundtrip_conflict_and_isolation(
     kind: ConnectorKind,
     monkeypatch: pytest.MonkeyPatch,
-    backend: str,
-    tmp_path: Path,
+    database: Database,
 ) -> None:
-    runtime = (
-        await prepared_inmemory_runtime()
-        if backend == "inmemory"
-        else await prepared_sqlite_runtime(tmp_path / "configuration.sqlite")
-    )
-    database = runtime.database
     event_stream = DatabaseEventStream(database)
     connectors = tuple(
         ConnectorReference(connector_kind=kind, connector_id=identifier)

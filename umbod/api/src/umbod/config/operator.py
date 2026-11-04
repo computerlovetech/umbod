@@ -72,10 +72,7 @@ class OperatorSettings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_filesystem_backend_settings(self) -> "OperatorSettings":
-        if self.filesystem_content_backend == "s3":
-            if self.filesystem_content_directory is not None:
-                raise ValueError("S3 content backend cannot use a local content directory")
-        elif (
+        if self.filesystem_content_backend == "local" and (
             self.filesystem_s3_bucket
             or self.filesystem_s3_endpoint_url
             or self.filesystem_s3_prefix

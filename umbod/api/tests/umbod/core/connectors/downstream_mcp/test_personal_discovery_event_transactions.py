@@ -1,5 +1,6 @@
 import sqlite3
 from collections.abc import Awaitable, Callable
+from contextlib import closing
 from pathlib import Path
 
 import pytest
@@ -40,7 +41,7 @@ async def snapshot(database: Database) -> tuple[object, ...]:
 
 
 def reject_events(path: Path) -> None:
-    with sqlite3.connect(path) as connection:
+    with closing(sqlite3.connect(path)) as connection, connection:
         connection.execute("CREATE TRIGGER reject_discovery_event BEFORE INSERT ON messaging_events WHEN NEW.event_type = 'connector.discovery.changed' BEGIN SELECT RAISE(ABORT, 'event append failed'); END")
 
 

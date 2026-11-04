@@ -2,14 +2,13 @@ from umbod.core.connectors.downstream_mcp.personal_connections import Unavailabl
 from tests.umbod.core.connectors.downstream_mcp.personal_caller_support import captured_personal_caller
 import asyncio
 from collections.abc import AsyncIterator
-from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 import pytest_asyncio
 from pydantic import SecretStr
 
-from tests.persistence_runtime import prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.personal_connections import (
     Authorized,
@@ -31,17 +30,18 @@ from umbod.core.connectors.downstream_mcp.stores.personal_connections import (
 )
 
 
-@pytest_asyncio.fixture(params=("inmemory", "sqlite"))
-async def store(
-    request: pytest.FixtureRequest, tmp_path: Path
-) -> AsyncIterator[PersonalConnectionStore]:
-    if request.param == "inmemory":
+@pytest_asyncio.fixture(params=("detached", "database"))
+async def store(request: pytest.FixtureRequest) -> AsyncIterator[PersonalConnectionStore]:
+    if request.param == "detached":
         yield InMemoryPersonalConnectionStore()
     else:
-        runtime = await prepared_sqlite_runtime(tmp_path / "personal.sqlite3")
-        yield EncryptedPersonalConnectionStore(
-            runtime.database, AuthenticatedTextCipher("personal-secret")
-        )
+        runtime = await prepared_inmemory_runtime()
+        try:
+            yield EncryptedPersonalConnectionStore(
+                runtime.database, AuthenticatedTextCipher("personal-secret")
+            )
+        finally:
+            await runtime.shutdown()
 
 
 def _key(

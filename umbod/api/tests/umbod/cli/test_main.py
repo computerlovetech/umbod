@@ -7,7 +7,7 @@ from umbod.cli.main import app
 def test_supported_command_groups_exclude_retired_filesystem_command() -> None:
     command = get_command(app)
 
-    assert set(command.commands) == {"api", "config", "connectors", "mcp", "telemetry"}
+    assert set(command.commands) == {"api", "config", "connectors", "mcp", "migrate", "telemetry"}
 
 
 def test_retired_filesystem_command_is_rejected() -> None:

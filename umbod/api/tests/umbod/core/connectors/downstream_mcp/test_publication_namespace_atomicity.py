@@ -1,17 +1,16 @@
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
 
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from tests.umbod.core.connectors.downstream_mcp.test_unit_of_work_contract import (
     AggregateHarness,
     Harness,
     _inmemory,
     _published_prefix_command,
-    _sqlite,
 )
 from umbod.core.activation import ActivationStatus, CapabilityRef
 from umbod.core.capabilities.tools.names import PublicToolIdentity, PublicToolNameConflictError, PublicToolNameValidator
@@ -32,22 +31,34 @@ from umbod.core.connectors.downstream_mcp.models import ConnectorHealthy, OAuthC
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolPolicyInvalid, ReplacePersonalToolPolicy
 from umbod.core.connectors.downstream_mcp.publishing.service import DownstreamConnectorPublisher
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, SaveConnectorDefinition, ToolCatalogFound, create_downstream_mcp_stores
+from umbod.core.messaging.stores.event_stream import DatabaseEventStream
+from umbod.core.persistence import Database
 
 
-async def _database_inmemory(path: Path, fault: Callable[[str], None]) -> AggregateHarness:
+async def _database_inmemory(database: Database) -> AggregateHarness:
+    stores = await create_downstream_mcp_stores("namespace-secret", database)
+    return Harness(stores.unit_of_work, stores.definitions, stores.credentials, stores.catalogs, stores.health, stores.publishing, stores.activations, stores.personal_connections, DatabaseEventStream(database))
+
+
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[Database]:
     runtime = await prepared_inmemory_runtime()
-    from umbod.core.messaging.stores.event_stream import DatabaseEventStream
+    try:
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
 
-    stores = await create_downstream_mcp_stores("namespace-secret", runtime.database)
-    return Harness(stores.unit_of_work, stores.definitions, stores.credentials, stores.catalogs, stores.health, stores.publishing, stores.activations, stores.personal_connections, DatabaseEventStream(runtime.database))
 
-
-@pytest_asyncio.fixture(params=(_inmemory, _database_inmemory, _sqlite), ids=("detached", "inmemory", "sqlite"))
-async def aggregate(request: pytest.FixtureRequest, tmp_path: Path) -> AggregateHarness:
-    factory: Callable[[Path, Callable[[str], None]], Awaitable[AggregateHarness]] = request.param
-    path = tmp_path / "namespace.sqlite3"
-    await prepared_sqlite_runtime(path)
-    return await factory(path, lambda phase: None)
+@pytest_asyncio.fixture(params=("detached", "database"))
+async def aggregate(request: pytest.FixtureRequest) -> AsyncIterator[AggregateHarness]:
+    if request.param == "detached":
+        yield await _inmemory(Path(), lambda phase: None)
+    else:
+        runtime = await prepared_inmemory_runtime()
+        try:
+            yield await _database_inmemory(runtime.database)
+        finally:
+            await runtime.shutdown()
 
 
 def _publish(connector_id: str, native: tuple[PublicToolIdentity, ...]) -> PublishDownstreamConnectorAggregate:
@@ -175,11 +186,9 @@ async def test_repeated_and_concurrent_publication_emits_only_one_event(aggregat
     assert len([entry for entry in persisted if entry.event.event_type == "connector.publication.changed"]) == 1
 
 
-@pytest.mark.parametrize("adapter", ("inmemory", "sqlite"))
 @pytest.mark.asyncio
-async def test_personal_policy_publication_and_prefix_race_preserves_unique_published_namespace(tmp_path: Path, adapter: str) -> None:
-    runtime = await prepared_inmemory_runtime() if adapter == "inmemory" else await prepared_sqlite_runtime(tmp_path / "race.sqlite3")
-    bundle = await create_downstream_mcp_stores("namespace-secret", runtime.database)
+async def test_personal_policy_publication_and_prefix_race_preserves_unique_published_namespace(database: Database) -> None:
+    bundle = await create_downstream_mcp_stores("namespace-secret", database)
     personal = OAuthConnectorDefinition(connector_id="personal", display_name="Personal", tool_name_prefix="Shared", endpoint_url="https://personal.test/mcp", authorization_mode="personal")
     await bundle.definitions.save(SaveConnectorDefinition(definition=personal))
     initial = _published_prefix_command("personal", "Shared").catalog.snapshot.tools[0]
@@ -208,12 +217,10 @@ async def test_personal_policy_publication_and_prefix_race_preserves_unique_publ
     PublicToolNameValidator().validate_unique(tuple(identities))
 
 
-@pytest.mark.parametrize("adapter", ("inmemory", "sqlite"))
 @pytest.mark.parametrize("policy_first", (True, False))
 @pytest.mark.asyncio
-async def test_personal_tool_replacement_and_published_prefix_change_serialize_namespace_claims(tmp_path: Path, adapter: str, policy_first: bool) -> None:
-    runtime = await prepared_inmemory_runtime() if adapter == "inmemory" else await prepared_sqlite_runtime(tmp_path / "policy-prefix.sqlite3")
-    bundle = await create_downstream_mcp_stores("namespace-secret", runtime.database)
+async def test_personal_tool_replacement_and_published_prefix_change_serialize_namespace_claims(database: Database, policy_first: bool) -> None:
+    bundle = await create_downstream_mcp_stores("namespace-secret", database)
     personal = OAuthConnectorDefinition(connector_id="personal", display_name="Personal", tool_name_prefix="Shared", endpoint_url="https://personal.test/mcp", authorization_mode="personal")
     await bundle.definitions.save(SaveConnectorDefinition(definition=personal))
     tool = _published_prefix_command("personal", "Shared").catalog.snapshot.tools[0]
@@ -235,11 +242,9 @@ async def test_personal_tool_replacement_and_published_prefix_change_serialize_n
     assert await bundle.publishing.is_published("alpha")
 
 
-@pytest.mark.parametrize("adapter", ("inmemory", "sqlite"))
 @pytest.mark.asyncio
-async def test_unchanged_personal_policy_with_intact_projection_ignores_colliding_drafts(tmp_path: Path, adapter: str) -> None:
-    runtime = await prepared_inmemory_runtime() if adapter == "inmemory" else await prepared_sqlite_runtime(tmp_path / "noop.sqlite3")
-    bundle = await create_downstream_mcp_stores("namespace-secret", runtime.database)
+async def test_unchanged_personal_policy_with_intact_projection_ignores_colliding_drafts(database: Database) -> None:
+    bundle = await create_downstream_mcp_stores("namespace-secret", database)
     await bundle.definitions.save(SaveConnectorDefinition(definition=OAuthConnectorDefinition(connector_id="personal", display_name="Personal", endpoint_url="https://personal.test/mcp", authorization_mode="personal")))
     tool = _published_prefix_command("personal", "Personal").catalog.snapshot.tools[0]
     policy = (await bundle.personal_tool_policies.replace(ReplacePersonalToolPolicy(connector_id="personal", expected_revision="unconfigured", tools=(tool,), native_identities=()))).policy

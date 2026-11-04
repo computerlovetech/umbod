@@ -1,7 +1,7 @@
-from collections.abc import Awaitable, Callable
-from pathlib import Path
+from collections.abc import AsyncIterator
 
 import pytest
+import pytest_asyncio
 
 from umbod.core.activation import (
     ActivationStatus,
@@ -9,9 +9,8 @@ from umbod.core.activation import (
     CapabilityRef,
     create_capability_activation_store,
 )
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
-
-ActivationStoreFactory = Callable[[Path], Awaitable[ActivationStore]]
+from tests.persistence_runtime import prepared_inmemory_runtime
+from umbod.core.persistence import Database
 
 
 def _ref(
@@ -29,34 +28,27 @@ def _ref(
     )
 
 
-async def _in_memory_activation_store(_tmp_path: Path) -> ActivationStore:
-    database = (await prepared_inmemory_runtime()).database
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[Database]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
+
+
+@pytest_asyncio.fixture
+async def store(database: Database) -> ActivationStore:
     return await create_capability_activation_store(database)
-
-
-async def _sqlite_activation_store(tmp_path: Path) -> ActivationStore:
-    database = (await prepared_sqlite_runtime(tmp_path / "connectors.sqlite")).database
-    return await create_capability_activation_store(database)
-
-
-@pytest.fixture(params=[_in_memory_activation_store, _sqlite_activation_store])
-def activation_store_factory(request: pytest.FixtureRequest) -> ActivationStoreFactory:
-    return request.param
 
 
 @pytest.mark.asyncio
-async def test_missing_capability_is_disabled_by_default(
-    activation_store_factory: ActivationStoreFactory, tmp_path: Path
-) -> None:
-    store = await activation_store_factory(tmp_path)
+async def test_missing_capability_is_disabled_by_default(store: ActivationStore) -> None:
     assert await store.get_status(_ref("github", "search_issues")) == ActivationStatus.DISABLED
 
 
 @pytest.mark.asyncio
-async def test_set_status_roundtrips_enabled_and_disabled(
-    activation_store_factory: ActivationStoreFactory, tmp_path: Path
-) -> None:
-    store = await activation_store_factory(tmp_path)
+async def test_set_status_roundtrips_enabled_and_disabled(store: ActivationStore) -> None:
     ref = _ref("github", "search_issues")
     await store.set_status(ref, ActivationStatus.ENABLED)
     assert await store.get_status(ref) == ActivationStatus.ENABLED
@@ -65,10 +57,7 @@ async def test_set_status_roundtrips_enabled_and_disabled(
 
 
 @pytest.mark.asyncio
-async def test_statuses_are_scoped_by_kind_connector_and_key(
-    activation_store_factory: ActivationStoreFactory, tmp_path: Path
-) -> None:
-    store = await activation_store_factory(tmp_path)
+async def test_statuses_are_scoped_by_kind_connector_and_key(store: ActivationStore) -> None:
     enabled = _ref("github", "search_issues")
     other_connector = _ref("gitlab", "search_issues")
     other_key = _ref("github", "create_issue")
@@ -83,10 +72,7 @@ async def test_statuses_are_scoped_by_kind_connector_and_key(
 
 
 @pytest.mark.asyncio
-async def test_reconcile_removes_stale_keys_for_kind(
-    activation_store_factory: ActivationStoreFactory, tmp_path: Path
-) -> None:
-    store = await activation_store_factory(tmp_path)
+async def test_reconcile_removes_stale_keys_for_kind(store: ActivationStore) -> None:
     keep = _ref("github", "search_issues")
     drop = _ref("github", "create_issue")
     prompt = _ref("github", "search_issues", capability_kind="prompt")
@@ -100,9 +86,7 @@ async def test_reconcile_removes_stale_keys_for_kind(
 
 
 @pytest.mark.asyncio
-async def test_sqlite_store_instances_share_persisted_activation_state(tmp_path: Path) -> None:
-    database_path = str(tmp_path / "connectors.sqlite")
-    database = (await prepared_sqlite_runtime(database_path)).database
+async def test_store_instances_share_activation_state(database: Database) -> None:
     writer = await create_capability_activation_store(database)
     reader = await create_capability_activation_store(database)
     ref = _ref("github", "search_issues")

@@ -104,7 +104,10 @@ class S3Content:
         return f"{self._config.prefix}/{key}" if self._config.prefix else key
 
     async def put(self, data: ByteStream) -> ContentRef:
-        key = uuid4().hex
+        return await self.put_at(uuid4().hex, data)
+
+    async def put_at(self, key: StorageKey, data: ByteStream) -> ContentRef:
+        validate_key(key)
         try:
             async with client_scope(self._provider) as client:
                 return await self._put(client, key, data)

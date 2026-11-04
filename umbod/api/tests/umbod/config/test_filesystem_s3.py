@@ -143,13 +143,20 @@ def test_s3_backend_requires_bucket_without_changing_local_defaults(
         build_app_config(OperatorSettings(_env_file=None))
 
 
-def test_s3_backend_rejects_explicit_local_directory(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_s3_backend_ignores_retained_local_directory(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("UMBOD_FILESYSTEM_CONTENT_BACKEND", "s3")
     monkeypatch.setenv("UMBOD_FILESYSTEM_CONTENT_DIRECTORY", "/content")
     monkeypatch.setenv("UMBOD_FILESYSTEM_S3_BUCKET", "umbod-content")
 
-    with pytest.raises(ValidationError, match="local content directory"):
-        OperatorSettings(_env_file=None)
+    operator = OperatorSettings(_env_file=None)
+    content = build_app_config(operator).filesystem.content
+
+    assert operator.filesystem_content_directory == "/content"
+    assert content.type == "s3"
+    assert content.model_dump() == {
+        "type": "s3", "bucket": "umbod-content", "region": "us-east-1",
+        "endpoint_url": "", "prefix": "", "addressing_style": "auto",
+    }
 
 
 def test_unknown_backend_does_not_fall_back_to_local(monkeypatch: pytest.MonkeyPatch) -> None:

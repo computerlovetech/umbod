@@ -20,10 +20,9 @@ async def test_oauth_direct_connection_completion_emits_one_notification(case: A
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("case", ("sqlite",), indirect=True)
 async def test_oauth_completion_event_failure_restores_connection_and_attempt(case: AttemptCase, tmp_path: Path) -> None:
     path = tmp_path / "oauth.sqlite3"
-    if not path.exists():
-        pytest.skip("SQLite trigger regression")
     await pending(case)
     await case.store.claim(claim_command(case))
     before = await snapshot(case.database)

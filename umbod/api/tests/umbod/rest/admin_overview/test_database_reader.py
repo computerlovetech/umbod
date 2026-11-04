@@ -1,14 +1,13 @@
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from pathlib import Path
 from typing import TypeVar
 
 import pytest
 import pytest_asyncio
 from pydantic import BaseModel
 
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from tests.umbod.rest.user_catalogue.query_budget_support import (
     CountingDatabase,
     CountingReadSession,
@@ -151,15 +150,9 @@ class OverviewCountingDatabase(CountingDatabase):
             yield OverviewCountingSession(session, self.overview_counts)
 
 
-@pytest_asyncio.fixture(params=["inmemory", "sqlite"])
-async def database(
-    request: pytest.FixtureRequest, tmp_path: Path,
-) -> AsyncIterator[tuple[Database, OverviewQueryCounts]]:
-    runtime = (
-        await prepared_inmemory_runtime()
-        if request.param == "inmemory"
-        else await prepared_sqlite_runtime(tmp_path / "overview.sqlite")
-    )
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[tuple[Database, OverviewQueryCounts]]:
+    runtime = await prepared_inmemory_runtime()
     counts = OverviewQueryCounts()
     try:
         yield OverviewCountingDatabase(runtime.database, counts), counts

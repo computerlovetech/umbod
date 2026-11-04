@@ -3,11 +3,10 @@ from pathlib import Path
 
 import pytest
 
-from tests.persistence_runtime import prepared_sqlite_runtime
 from tests.umbod.core.connectors.downstream_mcp.test_unit_of_work_contract import (
     AggregateHarness,
+    _database_inmemory,
     _inmemory,
-    _sqlite,
 )
 from umbod.core.connectors.downstream_mcp.connection import DownstreamMcpConnectionConfiguration
 from umbod.core.connectors.downstream_mcp.errors import (
@@ -68,7 +67,7 @@ def command() -> CreatePersonalOAuthConnectorDefinition:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("factory", (_inmemory, _sqlite), ids=("inmemory", "sqlite"))
+@pytest.mark.parametrize("factory", (_inmemory, _database_inmemory), ids=("detached-inmemory", "database-inmemory"))
 @pytest.mark.parametrize("phase", ("definition", "credential", "catalog", "health", "activation", "publication", "personal_oauth_configuration", "personal_oauth_configuration_saved"))
 async def test_personal_creation_failure_is_atomic(
     tmp_path: Path,
@@ -79,9 +78,7 @@ async def test_personal_creation_failure_is_atomic(
         if current == phase:
             raise RuntimeError("injected failure")
 
-    path = tmp_path / "personal.sqlite3"
-    await prepared_sqlite_runtime(path)
-    harness = await factory(path, fault)
+    harness = await factory(tmp_path, fault)
     with pytest.raises(RuntimeError, match="injected failure"):
         await creator(harness, "personal").create_personal_oauth(command())
     query = ConnectorIdQuery(connector_id="personal")
