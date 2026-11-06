@@ -1,4 +1,4 @@
-import { discoveryErrorSchema, oauthInitiationErrorSchema, renewalErrorSchema } from '../domain/schemas';
+import { discoveryErrorSchema, oauthInitiationErrorSchema, oauthScopeMismatchErrorSchema, renewalErrorSchema, type OAuthScopeMismatch } from '../domain/schemas';
 import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
 
 export function requiresSignIn(error: unknown): boolean {
@@ -25,6 +25,27 @@ export function safeRenewalError(error: unknown): string {
   return `${messages[parsed.data.detail.code]} ${instruction}`;
 }
 
+export type ScopeMismatchAudience = 'administrator' | 'user';
+
+const quotedScopes = (scopes: readonly string[]): string => scopes.map((scope) => `“${scope}”`).join(', ');
+
+export function scopeMismatch(error: unknown): OAuthScopeMismatch | null {
+  if (!(error instanceof HttpError) || error.status !== 422) return null;
+  const parsed = oauthScopeMismatchErrorSchema.safeParse(error.body);
+  return parsed.success ? parsed.data.detail : null;
+}
+
+export function scopeMismatchExplanation(mismatch: OAuthScopeMismatch, connectorName: string, audience: ScopeMismatchAudience): string {
+  if (audience === 'user') {
+    return 'Could not start sign-in because this MCP server’s scope settings prevent sign-in. Ask an administrator to update its Requested scopes setting.';
+  }
+  const returned = mismatch.returned_scopes.length ? `scope ${quotedScopes(mismatch.returned_scopes)}` : 'no scopes';
+  const configured = mismatch.configured_scopes.length
+    ? `but Umbod requested ${quotedScopes(mismatch.configured_scopes)}`
+    : 'but no scopes were configured in Umbod';
+  return `Could not start sign-in. “${connectorName}” returned ${returned} during client registration, ${configured}. Update this connector’s Requested scopes setting to match the scopes it needs.`;
+}
+
 export function safeActionError(error: unknown): string {
   if (error instanceof NetworkError) return 'The outcome is unknown. Check authorization status before taking another action. Do not repeat a sign-in request automatically.';
   if (error instanceof HttpError && error.status === 409 && discoveryErrorSchema.safeParse(error.body).success) {
@@ -32,6 +53,8 @@ export function safeActionError(error: unknown): string {
   }
   if (error instanceof HttpError && error.status === 409) return 'Another operation is in progress. Check the known sign-in attempt or authorization status. No attempt was replaced; unknown attempts cannot be cancelled or restarted here.';
   if (isUnavailable(error)) return 'This MCP server or operation is unavailable.';
+  const mismatch = scopeMismatch(error);
+  if (mismatch) return scopeMismatchExplanation(mismatch, '', 'user');
   if (error instanceof HttpError && error.status === 422) {
     const parsed = oauthInitiationErrorSchema.safeParse(error.body);
     if (parsed.success) {

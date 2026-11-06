@@ -5,8 +5,16 @@
   import { PersonalAccessViewState } from '$lib/personal-connections/state/access-view-state.svelte';
   import ConnectionActions from './ConnectionActions.svelte';
   import ConnectionStatusBadge from './ConnectionStatusBadge.svelte';
+  import { scopeMismatchExplanation } from '$lib/personal-connections/state/errors';
 
-  let { state, embedded = false }: { state: PersonalConnectionController; embedded?: boolean } = $props();
+  // `manageHref` is only provided to administrators; it selects the administrator explanation.
+  let { state, embedded = false, manageHref }: { state: PersonalConnectionController; embedded?: boolean; manageHref?: string } = $props();
+  const administratorScopeMismatch = $derived(state.scopeMismatch && manageHref
+    ? {
+        message: scopeMismatchExplanation(state.scopeMismatch, state.selection.display_name, 'administrator'),
+        href: `${manageHref}#personal-policy-${encodeURIComponent(state.selection.connector_id)}-scopes`
+      }
+    : null);
   const headingId = $props.id();
   const view = new PersonalAccessViewState(() => state);
 
@@ -59,7 +67,13 @@
   {/if}
   {#if state.message}<p class="feedback" role="status">{state.message}</p>{/if}
   {#if state.healthRefreshError}<p class="feedback" role="status">{state.healthRefreshError}</p>{/if}
-  {#if state.error}<p class="error" role="alert">{state.error}</p>{/if}
+  {#if state.error}
+    {#if administratorScopeMismatch}
+      <p class="error" role="alert">{administratorScopeMismatch.message} <a href={administratorScopeMismatch.href}>Open Requested scopes setting</a></p>
+    {:else}
+      <p class="error" role="alert">{state.error}</p>
+    {/if}
+  {/if}
 </svelte:element>
 
 <style>
@@ -88,4 +102,5 @@
   .feedback, .error { font-size: 0.8rem; margin: 0.85rem 0 0; }
   .feedback { color: var(--admin-muted); }
   .error { color: var(--admin-danger); }
+  .error a { color: inherit; font-weight: 600; text-decoration: underline; }
 </style>

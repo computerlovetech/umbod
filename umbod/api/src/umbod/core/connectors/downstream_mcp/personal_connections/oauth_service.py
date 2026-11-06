@@ -23,6 +23,9 @@ from ..personal_oauth_configuration import (
 from .inventory_models import PersonalConnectorQuery, PersonalConnectorUnavailable
 from .inventory_ports import PersonalConnectorInventory
 from .models import PersonalConnection, PersonalConnectionKey
+from umbod.core.signals import SignalPublisher
+
+from .oauth_diagnostics import PersonalOAuthScopeMismatchObserved
 from .oauth_models import (
     ClaimPersonalOAuthAttempt,
     CompletePersonalOAuthAttempt,
@@ -34,6 +37,7 @@ from .oauth_models import (
     PersonalOAuthConflict,
     PersonalOAuthProviderFailure,
     PersonalOAuthProviderUnsupported,
+    PersonalOAuthScopeMismatch,
     PersonalOAuthStartResult,
     PersonalOAuthUnavailable,
     PreparePersonalOAuth,
@@ -57,8 +61,11 @@ class PersonalOAuthService:
         redirect_uri: str,
         clock: Callable[[], datetime],
         configurations: PersonalOAuthConfigurationStore,
+        *,
+        diagnostics: SignalPublisher[PersonalOAuthScopeMismatchObserved],
     ) -> None:
         self._caller = caller
+        self._diagnostics = diagnostics
         self._inventory = inventory
         self._definitions = definitions
         self._connections = connections
@@ -127,6 +134,11 @@ class PersonalOAuthService:
             await asyncio.shield(self._attempts.abort_preparation(PersonalOAuthAttemptQuery(
                 key=key, attempt_id=attempt_id, now=self._clock(),
             )))
+            if isinstance(error, PersonalOAuthScopeMismatch):
+                self._diagnostics.send(PersonalOAuthScopeMismatchObserved(
+                    connector_id=connector_id, step=error.step,
+                    configured_scopes=error.configured_scopes, returned_scopes=error.returned_scopes,
+                ))
             if isinstance(error, (PersonalOAuthProviderUnsupported, PersonalOAuthProviderFailure,
                                   PersonalOAuthUnavailable, PersonalOAuthConflict, asyncio.CancelledError)):
                 raise

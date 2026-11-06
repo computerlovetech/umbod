@@ -11,6 +11,7 @@ description: "Owner-scoped downstream MCP selection, authorization and discovery
 - [dependencies.py](./dependencies.py) — Verified owner and inventory dependencies.
 - [oauth_callback.py](./oauth_callback.py) — State-bound public callback.
 - [oauth_dependencies.py](./oauth_dependencies.py) — Authorization and callback composition.
+- [oauth_diagnostics.py](./oauth_diagnostics.py) — Scope mismatch warning receiver and signal.
 - [oauth_routes.py](./oauth_routes.py) — Authorization attempt routes.
 - [oauth_schemas.py](./oauth_schemas.py) — Authorization transport models.
 - [refresh_dependencies.py](./refresh_dependencies.py) — Refresh service composition.

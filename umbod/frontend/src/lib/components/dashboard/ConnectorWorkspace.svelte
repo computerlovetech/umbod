@@ -47,7 +47,7 @@
         {#snippet personalActions()}
           {@const card = state.personalCard(connector.connector_id)}
           {#if card}
-            <ConnectionCard state={card} embedded />
+            <ConnectionCard state={card} embedded manageHref={managementHref(connector)} />
           {:else}
             <p role="status">{state.personalPhase === 'loading' ? 'Loading personal access…' : 'Personal access unavailable'}</p>
           {/if}

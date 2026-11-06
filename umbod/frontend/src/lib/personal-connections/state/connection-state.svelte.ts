@@ -3,8 +3,8 @@ import type { AttemptScheduler } from '../attempt-scheduler';
 import { browserAttemptScheduler } from '../infrastructure/browser-attempt-scheduler';
 import type { AuthorizationBrowser, AuthorizationWindow } from '../authorization-browser';
 import type { PersonalConnectionController } from './port';
-import { isTerminalAttempt, type AuthorizationHealth, type Attempt, type Selection, type StartAttempt } from '../domain/schemas';
-import { isUnavailable, requiresSignIn, safeActionError, safeRenewalError } from './errors';
+import { isTerminalAttempt, type AuthorizationHealth, type Attempt, type OAuthScopeMismatch, type Selection, type StartAttempt } from '../domain/schemas';
+import { isUnavailable, requiresSignIn, safeActionError, safeRenewalError, scopeMismatch } from './errors';
 
 const authorizationWindowUnavailableMessage = 'Could not open the sign-in window. Allow popups for Umbod, then choose Continue sign-in in the actions menu.';
 
@@ -19,6 +19,7 @@ export class ConnectionState implements PersonalConnectionController {
   needsRefresh = $state(false);
   message = $state('');
   error = $state('');
+  scopeMismatch: OAuthScopeMismatch | null = $state.raw<OAuthScopeMismatch | null>(null);
   health: AuthorizationHealth | null = $state.raw<AuthorizationHealth | null>(null);
   healthPhase = $state<'loading' | 'ready' | 'unavailable'>('loading');
   healthCheckedAt = $state('');
@@ -62,6 +63,7 @@ export class ConnectionState implements PersonalConnectionController {
     this.needsRefresh = false;
     this.message = '';
     this.error = '';
+    this.scopeMismatch = null;
     this.selection = { ...this.selection, connector_id: '', display_name: '', capability_description: '', enabled: false, has_authorization: false, runtime_available: false };
   };
 
@@ -173,6 +175,7 @@ export class ConnectionState implements PersonalConnectionController {
         if (requiresSignIn(error)) this.authenticationLost();
         else {
           this.error = safeRenewalError(error);
+          this.scopeMismatch = null;
           this.needsRefresh = true;
         }
       } finally {
@@ -189,6 +192,7 @@ export class ConnectionState implements PersonalConnectionController {
       if (this.current(revision) && !this.error) {
         this.needsRefresh = true;
         this.error = "Couldn't refresh connectors. Check authorization status to refresh the dashboard.";
+        this.scopeMismatch = null;
       }
     }
   };
@@ -204,6 +208,7 @@ export class ConnectionState implements PersonalConnectionController {
       }
       this.needsRefresh = true;
       this.error = "Couldn't refresh personal access. Check authorization status before another action.";
+      this.scopeMismatch = null;
     }
     if (!this.current(revision)) return;
     this.message = message;
@@ -251,6 +256,7 @@ export class ConnectionState implements PersonalConnectionController {
       return;
     }
     this.error = safeActionError(error);
+    this.scopeMismatch = scopeMismatch(error);
     this.needsRefresh = true;
   };
 
@@ -264,6 +270,7 @@ export class ConnectionState implements PersonalConnectionController {
     this.renewing = false;
     this.readingDetails = false;
     this.error = '';
+    this.scopeMismatch = null;
     this.message = '';
     try {
       await operation(revision);
@@ -365,6 +372,7 @@ export class ConnectionState implements PersonalConnectionController {
     if (this.checksRemaining <= 0 || this.scheduler.now() >= this.monitoringDeadline) {
       this.monitoring = false;
       this.error = 'Automatic sign-in checks paused. Check sign-in status to continue.';
+      this.scopeMismatch = null;
       return;
     }
     this.stopScheduledCheck = this.scheduler.schedule(async (): Promise<void> => {
@@ -372,6 +380,7 @@ export class ConnectionState implements PersonalConnectionController {
       if (this.scheduler.now() >= this.monitoringDeadline) {
         this.monitoring = false;
         this.error = 'Automatic sign-in checks paused. Check sign-in status to continue.';
+        this.scopeMismatch = null;
         return;
       }
       if (this.busy || this.checking || this.statusRead) this.scheduleCheck();
@@ -408,6 +417,7 @@ export class ConnectionState implements PersonalConnectionController {
     if (!this.authorizationOpened) {
       this.closeAuthorizationWindow();
       this.error = authorizationWindowUnavailableMessage;
+      this.scopeMismatch = null;
     } else if (this.error === authorizationWindowUnavailableMessage) this.error = '';
   };
 
@@ -420,6 +430,7 @@ export class ConnectionState implements PersonalConnectionController {
     const revision = ++this.revision;
     this.checking = true;
     this.error = '';
+    this.scopeMismatch = null;
     try {
       const read = this.api.authorization.get(this.selection.connector_id, attempt.attempt_id);
       this.statusRead = read.then((): void => {}, (): void => {});
@@ -433,11 +444,13 @@ export class ConnectionState implements PersonalConnectionController {
           this.stopMonitoring();
           this.needsRefresh = true;
           this.error = 'Sign-in status is unavailable. Check authorization status before continuing.';
+          this.scopeMismatch = null;
           try { await this.readDetails(revision); } catch {}
           await this.notifyChanged(revision);
         } else {
           this.readFailures++;
           this.error = 'Could not check sign-in. Check sign-in status to try again.';
+          this.scopeMismatch = null;
         }
       }
     } finally {
@@ -471,6 +484,7 @@ export class ConnectionState implements PersonalConnectionController {
       if (!this.current(revision)) return;
       if (!allowed) {
         this.error = 'Could not verify your account. Refresh the dashboard before continuing sign-in.';
+        this.scopeMismatch = null;
         return;
       }
     }
@@ -488,6 +502,7 @@ export class ConnectionState implements PersonalConnectionController {
         this.needsRefresh = true;
         this.toolsRecovery = true;
         this.error = 'Could not verify your account. Refresh the dashboard before loading tools.';
+        this.scopeMismatch = null;
         return;
       }
       this.message = 'Authorization saved.';
@@ -500,6 +515,7 @@ export class ConnectionState implements PersonalConnectionController {
         this.needsRefresh = true;
         this.toolsRecovery = true;
         this.error = 'Authorization saved. Retry loading tools to check access and continue.';
+        this.scopeMismatch = null;
       }
     } finally {
       if (this.current(revision)) this.readingDetails = false;
@@ -548,6 +564,7 @@ export class ConnectionState implements PersonalConnectionController {
         this.needsRefresh = true;
         this.toolsRecovery = true;
         this.error = 'Could not load tools. Retry loading tools to check access and try again.';
+        this.scopeMismatch = null;
       }
     } finally {
       if (this.current(revision)) this.loadingTools = false;

@@ -8,7 +8,9 @@ from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback impor
 from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from umbod.core.connectors.downstream_mcp.personal_connections.development_identity import local_personal_identity_enabled
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.factory import configured_personal_oauth_provider
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_diagnostics import PersonalOAuthScopeMismatchObserved
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthProvider
+from umbod.core.signals import SignalPublisher
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_service import PersonalOAuthCallbackService, PersonalOAuthService
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
@@ -38,6 +40,10 @@ async def get_personal_oauth_provider(
         yield provider
 
 
+def get_personal_oauth_diagnostics_publisher() -> SignalPublisher[PersonalOAuthScopeMismatchObserved]:
+    raise RuntimeError("Personal OAuth diagnostics are not installed")
+
+
 def oauth_clock() -> datetime:
     return datetime.now(UTC)
 
@@ -47,13 +53,16 @@ async def get_personal_oauth_service(
     inventory: Annotated[PersonalConnectorInventory, Depends(get_personal_connector_inventory)],
     stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     provider: Annotated[PersonalOAuthProvider, Depends(get_personal_oauth_provider)],
+    diagnostics: Annotated[
+        SignalPublisher[PersonalOAuthScopeMismatchObserved], Depends(get_personal_oauth_diagnostics_publisher),
+    ],
     factories: Factories,
 ) -> PersonalOAuthService:
     return PersonalOAuthService(
         caller, inventory, stores.definitions, stores.personal_connections,
         stores.personal_oauth_attempts, provider,
         factories.settings.endpoints.api_base_url.rstrip("/") + "/api/oauth/downstream-mcp/callback",
-        oauth_clock, stores.personal_oauth_configurations,
+        oauth_clock, stores.personal_oauth_configurations, diagnostics=diagnostics,
     )
 
 

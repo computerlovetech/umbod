@@ -22,6 +22,7 @@ description: "Owner-scoped connection lifecycle, identity, authorization and ref
 - [inventory.py](./inventory.py) — User selection operations.
 - [models.py](./models.py) — Ownership keys and lifecycle state.
 - [oauth_callback_models.py](./oauth_callback_models.py) — Callback route bindings.
+- [oauth_diagnostics.py](./oauth_diagnostics.py) — Sanitized scope mismatch events.
 - [oauth_models.py](./oauth_models.py) — Durable authorization attempts.
 - [oauth_ports.py](./oauth_ports.py) — Attempt and provider contracts.
 - [oauth_service.py](./oauth_service.py) — Authorization orchestration.

@@ -42,6 +42,15 @@ export const oauthInitiationErrorSchema = z.object({
     code: z.enum(['personal_oauth_provider_unsupported', 'personal_oauth_invalid_request'])
   })
 });
+const oauthScopeSchema = z.string().regex(/^[\x21\x23-\x5b\x5d-\x7e]{1,256}$/);
+export const oauthScopeMismatchSchema = z.object({
+  code: z.literal('personal_oauth_scope_mismatch'),
+  step: z.literal('registration'),
+  configured_scopes: z.array(oauthScopeSchema).max(64),
+  returned_scopes: z.array(oauthScopeSchema).max(64)
+});
+export const oauthScopeMismatchErrorSchema = z.object({ detail: oauthScopeMismatchSchema });
+export type OAuthScopeMismatch = z.infer<typeof oauthScopeMismatchSchema>;
 export const discoveryErrorSchema = z.object({
   detail: z.object({ code: z.literal('personal_tool_discovery_unavailable') }).strict()
 }).strict();

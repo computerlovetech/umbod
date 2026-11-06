@@ -1,4 +1,4 @@
-import type { Attempt, AuthorizationHealth, Selection } from '../domain/schemas';
+import type { Attempt, AuthorizationHealth, OAuthScopeMismatch, Selection } from '../domain/schemas';
 
 export interface PersonalConnectionController {
   readonly selection: Selection;
@@ -15,6 +15,8 @@ export interface PersonalConnectionController {
   readonly needsRefresh: boolean;
   readonly message: string;
   readonly error: string;
+  /** Structured scope-configuration failure behind `error`, for audience-specific explanations. */
+  readonly scopeMismatch: OAuthScopeMismatch | null;
   readonly health: AuthorizationHealth | null;
   readonly healthPhase: 'loading' | 'ready' | 'unavailable';
   readonly healthCheckedAt: string;

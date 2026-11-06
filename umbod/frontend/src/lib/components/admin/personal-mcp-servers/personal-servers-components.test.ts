@@ -116,10 +116,18 @@ describe('personal server administration presentation', () => {
     expect(body).toContain('value="dynamic_public"');
     expect(body).toContain('Requested scopes');
     expect(body).toContain('ordinary spaces');
-    expect(body).toContain('provider defaults');
     expect(body).not.toContain('id="personal-client-secret"');
     expect(body).not.toContain('id="personal-issuer"');
     expect(body).not.toContain('bearerToken');
+  });
+  test('empty scope guidance does not promise automatic provider defaults', () => {
+    const form = new PolicyForm();
+    expect(form.scopes).toBe('');
+    const body = render(PolicyFields, { props: { form, idPrefix: 'personal' } }).body;
+    expect(body).toContain('Umbod does not automatically accept scopes a provider assigns by default');
+    expect(body).toContain('sign-in fails until you enter those scopes here');
+    expect(body).not.toMatch(/leave empty to use provider defaults/i);
+    expect(body).not.toMatch(/empty scopes use provider defaults/i);
   });
   test('public clients display exact issuer and ID but no secret field', () => {
     const form = new PolicyForm();

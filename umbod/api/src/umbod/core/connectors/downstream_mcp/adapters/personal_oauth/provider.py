@@ -25,6 +25,7 @@ from ...personal_connections.oauth_models import (
     ExchangePersonalOAuth,
     PersonalOAuthProviderFailure,
     PersonalOAuthProviderUnsupported,
+    PersonalOAuthScopeMismatch,
     PreparePersonalOAuth,
     PreparedPersonalOAuth,
 )
@@ -89,6 +90,10 @@ class DiscoveredPersonalOAuthProvider:
                 return await self._prepare(command)
         except PersonalOAuthProviderFailure:
             raise PersonalOAuthProviderFailure("Personal OAuth provider request failed") from None
+        except PersonalOAuthScopeMismatch as mismatch:
+            raise PersonalOAuthScopeMismatch(
+                mismatch.step, mismatch.configured_scopes, mismatch.returned_scopes,
+            ) from None
         except (ValueError, TypeError, KeyError):
             raise PersonalOAuthProviderUnsupported("Personal OAuth provider is unsupported") from None
         except Exception:
@@ -201,9 +206,12 @@ class DiscoveredPersonalOAuthProvider:
             or not set(client.grant_types) <= set(grant_types)
             or client.response_types != ["code"]
             or ("application_type" in raw_client and raw_client["application_type"] != registration["application_type"])
-            or ("scope" in raw_client and parse_oauth_scopes(client.scope) != command.policy.requested_scopes)
         ):
             raise ValueError("Unsupported registration")
+        if "scope" in raw_client:
+            returned_scopes = parse_oauth_scopes(client.scope)
+            if returned_scopes != command.policy.requested_scopes:
+                raise PersonalOAuthScopeMismatch("registration", command.policy.requested_scopes, returned_scopes)
         return client.client_id
 
     async def exchange(self, command: ExchangePersonalOAuth) -> Authorized:

@@ -116,3 +116,18 @@ class PersonalOAuthProviderUnsupported(ValueError):
 
 class PersonalOAuthProviderFailure(ValueError):
     pass
+
+
+class PersonalOAuthScopeMismatch(PersonalOAuthProviderUnsupported):
+    """A provider answered successfully with scopes that differ from the configured request.
+
+    Scope values are validated OAuth scope tokens; no provider body or credential is retained.
+    """
+
+    def __init__(
+        self, step: Literal["registration"], configured_scopes: tuple[str, ...], returned_scopes: tuple[str, ...],
+    ) -> None:
+        super().__init__("Personal OAuth provider is unsupported")
+        self.step: Literal["registration"] = step
+        self.configured_scopes = configured_scopes
+        self.returned_scopes = returned_scopes

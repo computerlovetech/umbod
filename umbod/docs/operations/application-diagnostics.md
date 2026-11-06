@@ -67,6 +67,25 @@ The diagnostic model is defined in [invocation diagnostics](https://github.com/c
 
 The first meaningful failure must survive cancellation, task-group wrapping, session shutdown, and connection cleanup. Cleanup must not replace the primary reason, response evidence, or exception origin. A cleanup failure without an earlier operation failure must remain observable.
 
+## Personal OAuth scope mismatches
+
+When a provider successfully registers Umbod's client but returns scopes that differ from the connector's configured Requested scopes, sign-in stops before a pending attempt is published. The attempt is retained as `failed`. Umbod never accepts provider-assigned scopes automatically; the administrator must configure them explicitly.
+
+The personal API returns HTTP 422 with `code=personal_oauth_scope_mismatch`, `step`, `configured_scopes`, and `returned_scopes`. Other registration incompatibilities keep `personal_oauth_provider_unsupported`. The workspace shows administrators the connector, returned scopes, and a link to the Requested scopes setting; other users are told to ask an administrator.
+
+The service publishes a sanitized event, and the registered receiver logs one WARNING on `umbod.personal_oauth`:
+
+| Field | Meaning |
+| --- | --- |
+| `event.name` | `personal_oauth.scope_mismatch`. |
+| `connector.id` | Connector whose configuration prevents sign-in. |
+| `oauth.step` | OAuth step that returned the scopes; currently `registration`. |
+| `reason` | `scope_mismatch`. |
+| `oauth.scopes.configured`, `oauth.scopes.configured_count` | Configured requested scopes. |
+| `oauth.scopes.returned`, `oauth.scopes.returned_count` | Validated scope tokens returned by the provider. |
+
+Scope values pass the OAuth scope-token grammar and configured size bounds before publication. Tokens, authorization codes, client secrets, state, and raw provider responses are never included.
+
 ## Privacy rules
 
 Never include credentials, tokens, authorization headers, OAuth codes or state, request/response bodies, tool arguments/results, personal data, or unrestricted endpoint URLs in application logs. Provider error descriptions are untrusted input: truncation does not make them safe. Map recognized provider codes to approved local reasons; use a fixed fallback for unknown codes.

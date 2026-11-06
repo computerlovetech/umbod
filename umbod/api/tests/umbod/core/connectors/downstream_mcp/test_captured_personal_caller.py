@@ -1,5 +1,5 @@
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 from pydantic import ValidationError
 
@@ -37,7 +37,7 @@ async def test_unavailable_caller_cannot_start_oauth_before_any_owner_lookup() -
         UnavailablePersonalCaller(kind="unavailable"), inventory,
         AsyncMock(spec=ConnectorDefinitionStore), connections, attempts,
         AsyncMock(spec=PersonalOAuthProvider), "https://umbod.example/callback",
-        lambda: datetime.now(UTC), AsyncMock(spec=PersonalOAuthConfigurationStore),
+        lambda: datetime.now(UTC), AsyncMock(spec=PersonalOAuthConfigurationStore), diagnostics=Mock(),
     )
     with pytest.raises(MissingCanonicalPrincipal):
         await service.start("connector")

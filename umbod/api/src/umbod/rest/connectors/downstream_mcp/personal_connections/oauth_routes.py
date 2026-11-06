@@ -9,6 +9,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models impo
     PersonalOAuthConflict,
     PersonalOAuthProviderFailure,
     PersonalOAuthProviderUnsupported,
+    PersonalOAuthScopeMismatch,
     PersonalOAuthUnavailable,
 )
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_service import PersonalOAuthService
@@ -29,6 +30,12 @@ async def safe_oauth_operation(operation: Awaitable[Result]) -> Result:
         raise HTTPException(404, detail={"code": "personal_oauth_unavailable"}) from None
     except PersonalOAuthConflict:
         raise HTTPException(409, detail={"code": "personal_oauth_conflict"}) from None
+    except PersonalOAuthScopeMismatch as mismatch:
+        raise HTTPException(422, detail={
+            "code": "personal_oauth_scope_mismatch", "step": mismatch.step,
+            "configured_scopes": list(mismatch.configured_scopes),
+            "returned_scopes": list(mismatch.returned_scopes),
+        }) from None
     except PersonalOAuthProviderUnsupported:
         raise HTTPException(422, detail={"code": "personal_oauth_provider_unsupported"}) from None
     except PersonalOAuthProviderFailure:

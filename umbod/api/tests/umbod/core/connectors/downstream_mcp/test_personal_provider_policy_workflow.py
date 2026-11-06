@@ -6,7 +6,7 @@ from datetime import UTC, datetime, timedelta
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery
 from urllib.parse import parse_qs, urlsplit
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from pydantic import SecretStr
@@ -53,7 +53,7 @@ async def start_configured(case: AttemptCase, method: str) -> tuple[str, str]:
         captured_personal_caller(case.query.key.principal, ("team",)), inventory, case.bundle.definitions,
         case.bundle.personal_connections, case.bundle.personal_oauth_attempts,
         DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), "https://umbod.example/api/oauth/downstream-mcp/callback",
-        case.clock, case.bundle.personal_oauth_configurations,
+        case.clock, case.bundle.personal_oauth_configurations, diagnostics=Mock(),
     )
     started = await service.start("personal")
     state = parse_qs(urlsplit(started.authorization_url.get_secret_value()).query)["state"][0]

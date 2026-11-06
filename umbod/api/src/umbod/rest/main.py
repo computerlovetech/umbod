@@ -38,6 +38,12 @@ from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback im
     callback_response,
     router as personal_oauth_callback_router,
 )
+from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_dependencies import (
+    get_personal_oauth_diagnostics_publisher,
+)
+from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_diagnostics import (
+    create_personal_oauth_diagnostics_signal,
+)
 from umbod.rest.authentication.csrf_middleware import RestCookieCsrfMiddleware
 from umbod.rest.capability_descriptions import router as capability_description_router
 from umbod.rest.connectors import (
@@ -229,6 +235,8 @@ def _mount_personal_connections_app(
         return settings
 
     personal_app.dependency_overrides[get_app_config] = provide_app_config
+    personal_oauth_diagnostics = create_personal_oauth_diagnostics_signal()
+    personal_app.dependency_overrides[get_personal_oauth_diagnostics_publisher] = lambda: personal_oauth_diagnostics
     @personal_app.middleware("http")
     async def prevent_user_response_caching(
         request: Request, call_next: Callable[[Request], Awaitable[Response]],

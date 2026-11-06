@@ -10,3 +10,4 @@ description: "Owner-scoped connection status and authorization controls."
 - [ConnectionCard.svelte](./ConnectionCard.svelte) — Connection detail and recovery presentation.
 - [ConnectionStatusBadge.svelte](./ConnectionStatusBadge.svelte) — Compact local status presentation.
 - [personal-connections.test.ts](./personal-connections.test.ts) — Connection presentation tests.
+- [scope-mismatch.test.ts](./scope-mismatch.test.ts) — Scope configuration failure explanations.

@@ -1,7 +1,7 @@
 from tests.umbod.core.connectors.downstream_mcp.personal_caller_support import captured_personal_caller
 import asyncio
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 from pydantic import SecretStr
@@ -53,7 +53,7 @@ def service_dependencies() -> tuple[PersonalOAuthService, AsyncMock, AsyncMock]:
     return PersonalOAuthService(
         captured_personal_caller(principal, ("team",)), inventory, definitions,
         connections, attempts, provider, "https://api.example/api/oauth/downstream-mcp/callback",
-        lambda: next(ticks), configurations,
+        lambda: next(ticks), configurations, diagnostics=Mock(),
     ), attempts, provider
 
 
