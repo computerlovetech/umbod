@@ -242,3 +242,25 @@ def test_matching_configured_scope_permits_sign_in_to_start(scope_api: ScopeApi,
     assert query["code_challenge_method"] == ["S256"]
     registration = json.loads(scope_api.transport.requests[-1].body.get_secret_value())
     assert registration["scope"] == scope
+
+
+def test_configured_scopes_returned_in_a_different_order_permit_sign_in(scope_api: ScopeApi) -> None:
+    connector_id = scope_api.create_connector("Document service", scopes=("documents.read", "tasks:read"))
+    scope_api.provider_will_register("tasks:read documents.read")
+
+    response = scope_api.start(connector_id)
+
+    assert response.status_code == 201
+    assert response.json()["status"] == "pending"
+    assert parse_qs(urlsplit(response.json()["authorization_url"]).query)["scope"] == ["documents.read tasks:read"]
+
+
+def test_returned_scope_beyond_configured_request_is_a_mismatch(scope_api: ScopeApi) -> None:
+    connector_id = scope_api.create_connector("Document service", scopes=("documents.read",))
+    scope_api.provider_will_register("documents.read documents.write")
+
+    response = scope_api.start(connector_id)
+
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "personal_oauth_scope_mismatch"
+    assert response.json()["detail"]["returned_scopes"] == ["documents.read", "documents.write"]

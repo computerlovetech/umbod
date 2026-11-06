@@ -1,4 +1,5 @@
 import { render } from 'svelte/server';
+import { HttpError } from '$lib/admin/infrastructure/transport';
 import { InMemoryAttemptScheduler } from '$lib/personal-connections/infrastructure/in-memory-attempt-scheduler';
 import { describe, expect, test, vi } from 'vitest';
 import type { ToastApi } from '$lib/components/feedback/toast-state.svelte';
@@ -155,6 +156,26 @@ describe('dashboard presentation', () => {
     expect(body).not.toMatch(/Publish|Unpublish|Published|Unpublished/);
     expect(body).not.toContain('Edit connector');
     expect(body).not.toContain('Delete connector');
+  });
+
+  test.each([
+    { canManage: true, explanation: '“Calendar” returned scope “documents.read” during client registration, but no scopes were configured in Umbod.', settingLink: true },
+    { canManage: false, explanation: 'Ask an administrator to update its Requested scopes setting.', settingLink: false }
+  ])('scope mismatch explanation follows workspace management permission (canManage: $canManage)', async ({ canManage, explanation, settingLink }): Promise<void> => {
+    const personal: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
+    vi.spyOn(personal.authorization, 'start').mockRejectedValue(new HttpError(422, 'https://umbod.test/api', {
+      detail: { code: 'personal_oauth_scope_mismatch', step: 'registration', configured_scopes: [], returned_scopes: ['documents.read'] }
+    }));
+    const state: DashboardController = new DashboardState(new InMemoryDashboardApi(catalogue), personal, undefined, new InMemoryAttemptScheduler());
+    await state.loadCatalogue();
+    state.selectConnector('downstream_mcp:calendar');
+    await state.personalCard('calendar')!.start();
+
+    const body = render(ConnectorWorkspace, { props: { state, canManage } }).body;
+
+    expect(body).toContain(explanation);
+    expect(body.includes('#personal-policy-calendar-scopes')).toBe(settingLink);
+    expect(body.includes('documents.read')).toBe(canManage);
   });
 
   test('capability tabs count resource templates with resources and initially show only tool descriptions', (): void => {

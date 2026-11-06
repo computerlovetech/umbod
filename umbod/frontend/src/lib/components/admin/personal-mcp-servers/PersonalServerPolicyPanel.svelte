@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, untrack } from 'svelte';
+  import { onMount, tick, untrack } from 'svelte';
   import { adminApi } from '$lib/admin/infrastructure/admin-api';
   import type { PersonalServerAdministration } from '$lib/admin/personal-mcp-servers/administration';
   import type { InstanceConfigurationRoute } from '$lib/admin/instance-configuration-api';
@@ -14,7 +14,19 @@
     return { api: api ?? composite!.personalServers, configuration: configuration ?? composite!.instanceConfiguration };
   });
   const state = new PersonalServerFormState(dependencies.api, dependencies.configuration, untrack(() => connectorId), undefined, untrack(() => accessLost), untrack(() => lockChanged));
-  onMount(() => { void state.reload(); return state.dispose; });
+  // Links such as the dashboard's scope-mismatch explanation target a policy field by fragment. The field only
+  // exists once the policy has loaded, after the browser's own fragment navigation, so reveal it after reload.
+  async function revealFragmentField(): Promise<void> {
+    let target: string;
+    try { target = decodeURIComponent(window.location.hash.slice(1)); } catch { return; }
+    if (!target.startsWith(`personal-policy-${untrack(() => connectorId)}-`)) return;
+    await tick();
+    const field = document.getElementById(target);
+    if (!field) return;
+    field.scrollIntoView({ block: 'center' });
+    field.focus({ preventScroll: true });
+  }
+  onMount(() => { void state.reload().then(revealFragmentField); return state.dispose; });
 </script>
 <section aria-label="Personal OAuth settings">
   <p>Current Group permissions trust all tools available to each downstream user, including future tools after explicit rediscovery. No per-tool approval, activation or tool grants are required. Publication does not provide OAuth authorization, user enablement or private discovery.</p>
