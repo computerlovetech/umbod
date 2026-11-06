@@ -1,0 +1,75 @@
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+import pytest
+
+from umbod.core.telemetry.analytics import (
+    AnalyticsLogRecord,
+    DimensionGroup,
+    LogDimension,
+    LogWriteBatch,
+    MissingDimensionValue,
+    OwnedLog,
+    PresentDimensionValue,
+    UnownedLog,
+)
+from umbod.infrastructure.telemetry.sqlite.database import SqliteAnalyticsRuntime
+
+
+@pytest.mark.asyncio
+async def test_sqlite_analytics_record_columns_survive_runtime_recreation(tmp_path: Path) -> None:
+    path = tmp_path / "analytics.sqlite3"
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    owner_id = 'owner 雪 "quoted" \\path'
+    values = ("source 雪", 'event "quoted"\\path\nline', "ERROR", "session-1", "")
+    records = (
+        AnalyticsLogRecord(
+            occurred_at=epoch - timedelta(microseconds=1),
+            owner=OwnedLog(kind="owned", owner_id=owner_id),
+            dimensions=tuple(
+                DimensionGroup(dimension=dimension, value=PresentDimensionValue(kind="present", value=value))
+                for dimension, value in zip(LogDimension, values, strict=True)
+            ),
+        ),
+        AnalyticsLogRecord(
+            occurred_at=epoch,
+            owner=UnownedLog(kind="unowned"),
+            dimensions=tuple(
+                DimensionGroup(dimension=dimension, value=MissingDimensionValue(kind="missing"))
+                for dimension in LogDimension
+            ),
+        ),
+        AnalyticsLogRecord(
+            occurred_at=epoch + timedelta(seconds=1, microseconds=234567),
+            owner=OwnedLog(kind="owned", owner_id=owner_id),
+            dimensions=tuple(
+                DimensionGroup(dimension=dimension, value=PresentDimensionValue(kind="present", value=""))
+                for dimension in LogDimension
+            ),
+        ),
+    )
+    writer = SqliteAnalyticsRuntime(path, ())
+    try:
+        await writer.ensure_ready()
+        await writer.create_writer().append_logs(LogWriteBatch(records=records))
+    finally:
+        await writer.shutdown()
+
+    reader = SqliteAnalyticsRuntime(path, ())
+    try:
+        await reader.ensure_ready()
+        async with reader.connection() as connection:
+            async with connection.execute(
+                "SELECT occurred_at_us, owner_id, source, event_name, severity, session_id, tool_name, "
+                "typeof(occurred_at_us), typeof(owner_id), typeof(source), typeof(event_name), "
+                "typeof(severity), typeof(session_id), typeof(tool_name) "
+                "FROM analytics_logs ORDER BY occurred_at_us"
+            ) as cursor:
+                rows = await cursor.fetchall()
+    finally:
+        await reader.shutdown()
+    assert [tuple(row) for row in rows] == [
+        (-1, owner_id, *values, "integer", "text", "text", "text", "text", "text", "text"),
+        (0, None, None, None, None, None, None, "integer", "null", "null", "null", "null", "null", "null"),
+        (1234567, owner_id, "", "", "", "", "", "integer", "text", "text", "text", "text", "text", "text"),
+    ]

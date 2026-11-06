@@ -8,7 +8,7 @@ import logging
 import mcp.types as mt
 import pytest
 
-from fastmcp.exceptions import AuthorizationError
+from fastmcp.exceptions import AuthorizationError, ValidationError
 from fastmcp.server.middleware.middleware import MiddlewareContext
 from fastmcp.tools import FunctionTool, ToolResult
 
@@ -24,11 +24,18 @@ from umbod.mcp.logging import (
     McpAuditOutcome,
     McpAuditRecorder,
 )
+from tests.support.signals import InMemorySignalFailureHandler
+from umbod.mcp.listeners.invocation_audit import InvocationAuditReceiver
 from umbod.mcp.signals import (
+    McpInvocationPublisher,
+    McpSignals,
+    McpToolIdentity,
+    McpToolInvocationFailureCategory,
     McpInvocationActor,
     current_mcp_invocation_context,
 )
 from umbod.mcp.middleware import McpAuditMiddleware
+from umbod.mcp.logging.audit.formatting import StructuredMcpAuditFormatter
 
 
 class RecordingSink:
@@ -237,6 +244,9 @@ async def test_on_execute_code_records_hash_and_outcome(
 
     event = sink.events[0]
     assert event.outcome == audit_outcome
+    assert StructuredMcpAuditFormatter().format_mcp_activity(event).severity_text == (
+        "INFO" if audit_outcome == McpAuditOutcome.SUCCESS else "WARNING"
+    )
     assert event.target.tool_name == "execute_code"
     assert (
         event.target.attributes["code_hash"]
@@ -263,13 +273,19 @@ async def test_on_call_tool_denied_records_denied_and_reraises() -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool_name", ["search_tools", "execute_tool", "execute_code"])
-async def test_fixed_tool_exception_is_audited_once_and_reraised(tool_name: str) -> None:
+@pytest.mark.parametrize(("failure_type", "category", "severity"), [
+    (RuntimeError, McpAuditFailureCategory.UNEXPECTED_ERROR, "ERROR"),
+    (ValidationError, McpAuditFailureCategory.VALIDATION, "WARNING"),
+])
+async def test_fixed_tool_exception_is_audited_once_and_reraised(
+    tool_name: str, failure_type: type[Exception], category: McpAuditFailureCategory, severity: str,
+) -> None:
     sink = RecordingSink()
     code = "private code"
     message = mt.CallToolRequestParams(name=tool_name, arguments={"code": code})
-    error = RuntimeError("private failure")
+    error = failure_type("private failure")
 
-    with pytest.raises(RuntimeError) as raised:
+    with pytest.raises(failure_type) as raised:
         await _middleware(sink).on_call_tool(
             _context("tools/call", message), CallNextStub(None, error)
         )
@@ -279,6 +295,8 @@ async def test_fixed_tool_exception_is_audited_once_and_reraised(tool_name: str)
     event = sink.events[0]
     assert event.outcome == McpAuditOutcome.FAILURE
     assert event.target.tool_name == tool_name
+    assert event.failure_category == category
+    assert StructuredMcpAuditFormatter().format_mcp_activity(event).severity_text == severity
     if tool_name == "execute_code":
         assert event.target.attributes["code_hash"] == hashlib.sha256(code.encode()).hexdigest()
 
@@ -296,6 +314,45 @@ async def test_gateway_returned_error_is_audited_once_as_failure() -> None:
     assert returned is result
     assert len(sink.events) == 1
     assert sink.events[0].outcome == McpAuditOutcome.FAILURE
+    assert sink.events[0].failure_category == McpAuditFailureCategory.TOOL_ERROR
+    assert StructuredMcpAuditFormatter().format_mcp_activity(sink.events[0]).severity_text == "WARNING"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool_name", ["execute_tool", "execute_code"])
+@pytest.mark.parametrize("category", list(McpToolInvocationFailureCategory))
+async def test_gateway_audit_preserves_nested_failure_classification_without_leaking_to_next_request(
+    tool_name: str, category: McpToolInvocationFailureCategory,
+) -> None:
+    sink = RecordingSink()
+    recorder = McpAuditRecorder(sink, "umbod", application_failures=create_application_failure_signal())
+    signals = McpSignals(InMemorySignalFailureHandler())
+    signals.invocation_completed.connect("audit", InvocationAuditReceiver(recorder))
+    publisher = McpInvocationPublisher(signals)
+    message = mt.CallToolRequestParams(name=tool_name)
+    result = ToolResult(content=[], is_error=True)
+
+    async def nested_failure(context: MiddlewareContext[object]) -> ToolResult:
+        lifecycle = publisher.start(McpToolIdentity("nested_tool", "connector", "operation"))
+        publisher.failed(lifecycle, category, None, None)
+        return result
+
+    middleware = _middleware(sink)
+    returned = await middleware.on_call_tool(_context("tools/call", message), nested_failure)
+
+    assert returned is result
+    assert len(sink.events) == 2
+    assert sink.events[-1].failure_category.value == category.value
+    expected_severity = "ERROR" if category in {
+        McpToolInvocationFailureCategory.CONNECTOR_ERROR, McpToolInvocationFailureCategory.UNEXPECTED_ERROR,
+    } else "WARNING"
+    assert StructuredMcpAuditFormatter().format_mcp_activity(sink.events[-1]).severity_text == expected_severity
+
+    await middleware.on_call_tool(_context("tools/call", message), CallNextStub(result, None))
+
+    assert len(sink.events) == 3
+    assert sink.events[-1].failure_category == McpAuditFailureCategory.TOOL_ERROR
+    assert StructuredMcpAuditFormatter().format_mcp_activity(sink.events[-1]).severity_text == "WARNING"
 
 
 @pytest.mark.asyncio

@@ -1,4 +1,3 @@
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -171,15 +170,14 @@ def test_patch_returns_success_snapshot_despite_grant_revocation_after_commit(
     assert filesystem_http.client.get(path, headers={"Authorization": "Bearer bob"}).status_code == 403
 
 
-@pytest.mark.parametrize("filesystem_persistence_config", ["sqlite"], indirect=True)
-def test_owner_patch_with_sqlite_corrupt_policy_returns_committed_unavailable_snapshot(
-    filesystem_http: FilesystemHttp,
+def test_owner_patch_with_undecodable_policy_returns_committed_unavailable_snapshot(
+    filesystem_http: FilesystemHttp, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from uuid import UUID
 
     from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
     from umbod.infrastructure import create_access_control_driver
-    from tests.support.filesystem.access_snapshots import corrupt_stored_grant
+    from tests.support.filesystem.access_snapshots import fail_stored_grant_decoding
 
     client = filesystem_http.client
     home = client.post(BASE + "/home").json()
@@ -189,8 +187,7 @@ def test_owner_patch_with_sqlite_corrupt_policy_returns_committed_unavailable_sn
     )
     policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
     client.portal.call(policies.add_grant, grant)
-    assert filesystem_http.factories.settings.connector_store.type == "sqlite"
-    corrupt_stored_grant(Path(filesystem_http.factories.settings.connector_store.sqlite_path), grant)
+    fail_stored_grant_decoding(filesystem_http.factories.persistence_runtime.database, grant.node_id, monkeypatch)
     path = f"{BASE}/nodes/{home['id']}"
     inspected = client.get(path)
     assert inspected.status_code == 200

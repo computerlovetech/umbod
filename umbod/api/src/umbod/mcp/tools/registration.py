@@ -24,12 +24,15 @@ from umbod.mcp.responses.ports import ToolResponseAdapter
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
 
 from umbod.core.invocation.failure_evidence import (
+    InvocationExceptionEvidence,
     InvocationFailureEvidence,
     InvocationFailureOrigin,
+    InvocationRejectedFailure,
     InvocationReturnedFailure,
+    current_invocation_failure,
     exception_evidence,
 )
-from umbod.mcp.tools.errors import ToolAuthorizationDenied, ToolResponseContractError
+from umbod.mcp.tools.errors import BuiltinToolRejected, ToolAuthorizationDenied, ToolResponseContractError
 from umbod.mcp.signals import McpInvocationPublisher
 from umbod.mcp.signals.lifecycle import UnavailableToolInvocationLifecycle
 from umbod.mcp.signals.events import McpToolIdentity, McpToolInvocationFailureCategory
@@ -91,11 +94,14 @@ class ObservedFunctionTool(Tool):
             result = await self._delegate.run(arguments)
         except (asyncio.CancelledError, AuthorizationError, MCPError):
             raise
-        except ToolAuthorizationDenied as error:
-            self._publish_failure(lifecycle, McpToolInvocationFailureCategory.AUTHORIZATION, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
+        except ToolAuthorizationDenied:
+            self._publish_failure(lifecycle, McpToolInvocationFailureCategory.AUTHORIZATION, InvocationRejectedFailure(InvocationFailureOrigin.CLIENT_INPUT))
             raise
-        except ValidationError as error:
-            self._publish_failure(lifecycle, McpToolInvocationFailureCategory.VALIDATION, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
+        except ValidationError:
+            self._publish_failure(lifecycle, McpToolInvocationFailureCategory.VALIDATION, InvocationRejectedFailure(InvocationFailureOrigin.CLIENT_INPUT))
+            raise
+        except BuiltinToolRejected:
+            self._publish_failure(lifecycle, McpToolInvocationFailureCategory.TOOL_ERROR, InvocationRejectedFailure(InvocationFailureOrigin.CLIENT_INPUT))
             raise
         except Exception as error:
             self._publish_failure(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
@@ -117,7 +123,13 @@ class ObservedFunctionTool(Tool):
             self._publish_response_failure(lifecycle, error)
             raise
         if is_error:
-            self._publish_failure(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, InvocationReturnedFailure(InvocationFailureOrigin.INTERNAL))
+            evidence = current_invocation_failure() or InvocationReturnedFailure(InvocationFailureOrigin.INTERNAL)
+            category = (
+                McpToolInvocationFailureCategory.UNEXPECTED_ERROR
+                if isinstance(evidence, InvocationExceptionEvidence)
+                else McpToolInvocationFailureCategory.TOOL_ERROR
+            )
+            self._publish_failure(lifecycle, category, evidence)
         else:
             self._publish_success(lifecycle)
         return result

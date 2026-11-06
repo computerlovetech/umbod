@@ -4,6 +4,8 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.support.connector_plugins import TestConnectorPlugin
+from umbod.config import AppConfig
 from umbod.rest.main import create_app
 
 
@@ -14,7 +16,10 @@ def server_root_secret(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_health_endpoint(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _set_empty_deployment_file(tmp_path, monkeypatch)
-    client = TestClient(create_app())
+    client = TestClient(create_app(
+        settings=AppConfig(rest={"metrics_enabled": False}, connector_store={"type": "inmemory"}),
+        connector_registrations=[],
+    ))
 
     response = client.get("/system/health")
 
@@ -27,7 +32,14 @@ def test_connector_configuration_round_trips_through_routes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _set_test_deployment_file(tmp_path, monkeypatch)
-    client = TestClient(create_app())
+    client = TestClient(create_app(
+        settings=AppConfig(
+            rest={"metrics_enabled": False},
+            connector_store={"type": "inmemory"},
+            admin_authentication={"mode": "simulation", "simulated_admin": True},
+        ),
+        connector_registrations=[TestConnectorPlugin.registration()],
+    ))
 
     response = client.put(
         "/api/admin/connectors/catalog/test/configuration",

@@ -1,9 +1,11 @@
-import sqlite3
-from pathlib import Path
+from collections.abc import AsyncIterator
 
 import pytest
+import pytest_asyncio
 
-from tests.persistence_runtime import prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
+from tests.support.messaging import reject_database_event_appends
+from umbod.core.persistence import Database
 from umbod.core.activation import ActivationStatus, ActivationStore, CapabilityActivationState, CapabilityRef, create_capability_activation_store
 from umbod.core.capabilities.descriptions import ClearCapabilityDescriptionOverride, ConnectorCapabilityDescriptionKey, ConnectorCapabilityDescriptionOverrideStore, SetCapabilityDescriptionOverride
 from umbod.core.capabilities.descriptions.factories import ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory
@@ -12,17 +14,24 @@ from umbod.core.invocation.tools.database_configuration_mutation import Database
 from umbod.core.messaging.stores.event_stream import DatabaseEventStream
 
 
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[Database]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mutation", (
     "single_activation", "batch_activation", "tool_configuration", "activation_reconcile",
     "description_set", "description_clear", "description_delete",
 ))
-async def test_discovery_event_append_failure_rolls_back_mutation(tmp_path: Path, mutation: str) -> None:
-    path = tmp_path / "events.sqlite3"
-    runtime = await prepared_sqlite_runtime(path)
-    activations: ActivationStore = await create_capability_activation_store(runtime.database)
-    descriptions: ConnectorCapabilityDescriptionOverrideStore = await ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory(runtime.database).create()
-    tools: ConnectorToolConfigurationMutationPort = DatabaseConnectorToolConfigurationMutationAdapter(runtime.database)
+async def test_discovery_event_append_failure_rolls_back_mutation(database: Database, monkeypatch: pytest.MonkeyPatch, mutation: str) -> None:
+    activations: ActivationStore = await create_capability_activation_store(database)
+    descriptions: ConnectorCapabilityDescriptionOverrideStore = await ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory(database).create()
+    tools: ConnectorToolConfigurationMutationPort = DatabaseConnectorToolConfigurationMutationAdapter(database)
     ref = CapabilityRef(connector_kind="native", connector_id="test", capability_kind="tool", capability_key="echo")
     key = ConnectorCapabilityDescriptionKey(kind="native", connector_id="test")
     if mutation in ("description_clear", "description_delete"):
@@ -31,11 +40,10 @@ async def test_discovery_event_append_failure_rolls_back_mutation(tmp_path: Path
         await activations.set_status(ref, ActivationStatus.ENABLED)
     original_description = await descriptions.get(key)
     original_activation = await activations.get_status(ref)
-    events = DatabaseEventStream(runtime.database)
+    events = DatabaseEventStream(database)
     original_events = await events.list_after(0, 100)
-    with sqlite3.connect(path) as connection:
-        connection.execute("CREATE TRIGGER reject_event BEFORE INSERT ON messaging_events BEGIN SELECT RAISE(ABORT, 'event append failed'); END")
-    with pytest.raises(sqlite3.IntegrityError, match="event append failed"):
+    reject_database_event_appends(database, monkeypatch)
+    with pytest.raises(RuntimeError, match="event append failed"):
         if mutation == "single_activation":
             await activations.set_status(ref, ActivationStatus.ENABLED)
         elif mutation == "batch_activation":

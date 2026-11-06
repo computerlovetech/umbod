@@ -33,6 +33,7 @@ from umbod.core.user_catalogue.in_memory import InMemoryCatalogueSource
 from umbod.core.user_catalogue.read_state import plan_catalogue_state
 from umbod.core.user_catalogue.readiness import RequestConnectorReadiness
 from umbod.core.user_catalogue.shared import IndexedCapabilityPermissions, SharedCatalogueSource
+from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_policy import OAuthPolicy
 from umbod.rest.connectors.dependencies import get_connector_capability_description_override_store
 from umbod.rest.connectors.native.dependencies import get_connector_current_configuration_store, get_connector_registry
 from umbod.rest.connectors.openapi.dependencies import get_openapi_connector_store
@@ -51,6 +52,7 @@ def get_personal_catalogue_store_supplier(
 
 
 async def get_user_catalogue(
+    oauth_policy: OAuthPolicy,
     factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
     captured: Annotated[CatalogueCaller, Depends(get_catalogue_caller)],
     supplier: Annotated[PersonalCatalogueStoreSupplier, Depends(get_personal_catalogue_store_supplier)],
@@ -148,7 +150,7 @@ async def get_user_catalogue(
                 described_definitions.append(definition.model_copy(update={"capability_description": override.description}) if isinstance(override, OverriddenCapabilityDescription) else definition)
             personal_source = PersonalCatalogueSource(
                 tuple(described_definitions), stores.personal_tool_discovery, resolution.principal,
-                settings.personal_connections.oauth_enabled, utc_clock,
+                oauth_policy.enabled, utc_clock,
             )
             personal_connectors = await personal_source.list_connectors()
             sources.append(InMemoryCatalogueSource(personal_connectors))

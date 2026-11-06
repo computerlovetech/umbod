@@ -2,7 +2,6 @@ import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from unittest.mock import create_autospec
-from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -40,7 +39,6 @@ from umbod.infrastructure import (
     create_root_provisioning,
     create_filesystem_transactions,
 )
-from tests.persistence_runtime import prepared_sqlite_runtime
 from tests.umbod.core.filesystem.test_creation_acceptance import metadata, user
 from tests.umbod.core.filesystem.test_database_persistence import FailingCommitDatabase
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
@@ -145,23 +143,15 @@ async def test_concurrent_bootstrap_preserves_only_first_grant_set(filesystem_ru
 
 
 @pytest.mark.asyncio
-async def test_sqlite_reopen_preserves_completion_and_does_not_regrant(tmp_path: Path) -> None:
-    path = tmp_path / "bootstrap.db"
-    runtime = await prepared_sqlite_runtime(path)
-    try:
-        root = await create_root_provisioning(database=runtime.database).provision(bootstrap_spec())
-        policies = create_access_control_driver(database=runtime.database)
-        await policies.remove_grant(ROOT_ID, user("alice"))
-    finally:
-        await runtime.shutdown()
-    reopened = await prepared_sqlite_runtime(path)
-    try:
-        assert await create_root_provisioning(database=reopened.database).provision(bootstrap_spec()) == root
-        policies = create_access_control_driver(database=reopened.database)
-        assert (await policies.get_owner(ROOT_ID)).owner == SYSTEM_ROOT_OWNER
-        assert await policies.list_grants(ROOT_ID) == []
-    finally:
-        await reopened.shutdown()
+async def test_service_recreation_preserves_completion_and_does_not_regrant(filesystem_runtime: PersistenceRuntime) -> None:
+    database = filesystem_runtime.database
+    root = await create_root_provisioning(database=database).provision(bootstrap_spec())
+    policies = create_access_control_driver(database=database)
+    await policies.remove_grant(ROOT_ID, user("alice"))
+    assert await create_root_provisioning(database=database).provision(bootstrap_spec()) == root
+    policies = create_access_control_driver(database=database)
+    assert (await policies.get_owner(ROOT_ID)).owner == SYSTEM_ROOT_OWNER
+    assert await policies.list_grants(ROOT_ID) == []
 
 
 def test_bootstrap_models_require_explicit_immutable_unique_user_or_group_grants() -> None:

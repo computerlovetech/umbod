@@ -33,7 +33,7 @@ from umbod.core.activation import ActivationStatus, CapabilityRef
 from tests.mcp_fixtures import build_test_mcp
 
 @pytest.fixture(autouse=True)
-def UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, installed_test_connector_plugins: None) -> None:
     availability_path = _write_availability_file(tmp_path, [{'id': 'slack'}, {'id': 'test'}])
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
 

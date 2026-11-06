@@ -1,6 +1,5 @@
 import asyncio
 from collections.abc import AsyncIterator
-from pathlib import Path
 
 import pytest
 
@@ -26,11 +25,13 @@ from tests.support.filesystem.adapters import AdapterFactory, AdapterPair
 
 
 @pytest.fixture(params=["inmemory", "local"])
-def content(request: pytest.FixtureRequest, tmp_path: Path) -> ContentDriver:
+def content(request: pytest.FixtureRequest) -> ContentDriver:
     if request.param == "inmemory":
         return create_content_driver(InMemoryContentConfig(type="inmemory"))
     return create_content_driver(
-        LocalContentConfig(type="local", directory=tmp_path / "content")
+        LocalContentConfig(
+            type="local", directory=request.getfixturevalue("tmp_path") / "content"
+        )
     )
 
 

@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import math
 import socket
 
@@ -215,7 +216,8 @@ async def test_returned_error_is_returned_unchanged_and_recorded_as_failure() ->
     assert len(logger.events) == 1
     assert isinstance(logger.events[0], McpToolInvocationFailed)
     assert logger.events[0].evidence == InvocationReturnedFailure(InvocationFailureOrigin.INTERNAL)
-    assert logger.events[0].failure_category == McpToolInvocationFailureCategory.UNEXPECTED_ERROR
+    assert logger.events[0].failure_category == McpToolInvocationFailureCategory.TOOL_ERROR
+    assert StructuredMcpToolInvocationLogFormatter().format_invocation_completed(logger.events[0]).severity_text == "WARNING"
 
 
 @pytest.mark.asyncio
@@ -264,6 +266,34 @@ async def test_only_typed_authorization_denials_avoid_error_telemetry(
     assert isinstance(event, McpToolInvocationFailed)
     assert event.failure_category == category
     assert StructuredMcpToolInvocationLogFormatter().format_invocation_completed(event).severity_text == severity
+
+
+@pytest.mark.asyncio
+async def test_authorization_rejection_does_not_produce_framework_error_logs(caplog: pytest.LogCaptureFixture) -> None:
+    logger = RecordingLogger()
+    server = FastMCP("test")
+
+    async def invoke() -> None:
+        raise ToolAuthorizationDenied("Access denied")
+
+    McpObservedToolRegistrar(server, _publisher(logger, RecordingMetrics())).register(
+        invoke, name="test_tool", description="Test tool", auth=None,
+    )
+
+    framework_logger = logging.getLogger("fastmcp.server.server")
+    framework_logger.addHandler(caplog.handler)
+    try:
+        async with Client(server) as client:
+            result = await client.call_tool("test_tool", {}, raise_on_error=False)
+    finally:
+        framework_logger.removeHandler(caplog.handler)
+
+    assert result.is_error is True
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+    assert any(record.levelno == logging.WARNING for record in caplog.records)
+    assert len(logger.events) == 1
+    assert isinstance(logger.events[0], McpToolInvocationFailed)
+    assert logger.events[0].failure_category == McpToolInvocationFailureCategory.AUTHORIZATION
 
 
 @pytest.mark.asyncio

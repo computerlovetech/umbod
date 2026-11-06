@@ -42,15 +42,15 @@ class InMemoryKeySetSource:
         return self.keys
 
 
-@pytest.fixture
-def key() -> PyJWK:
+@pytest.fixture(scope="module")
+def public_key_document() -> str:
     private = rsa.generate_private_key(public_exponent=65537, key_size=2048)
-    return PyJWK(
-        {
-            **json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(private.public_key())),
-            "kid": "known",
-        }
-    )
+    return jwt.algorithms.RSAAlgorithm.to_jwk(private.public_key())
+
+
+@pytest.fixture
+def key(public_key_document: str) -> PyJWK:
+    return PyJWK({**json.loads(public_key_document), "kid": "known"})
 
 
 def token(kid: str) -> str:

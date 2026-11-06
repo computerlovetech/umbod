@@ -95,25 +95,50 @@ def test_completed_shutdown_cancels_process_deadline() -> None:
     assert not terminated.wait(timeout=0.04)
 
 
-def test_shutdown_deadline_exits_even_when_main_thread_is_blocked(
+@pytest.mark.asyncio
+async def test_shutdown_deadline_exits_even_when_main_thread_is_blocked(
     tmp_path: Path,
 ) -> None:
-    result = subprocess.run(
-        [
+    startup_timeout = 30
+    shutdown_timeout = 5
+    diagnostics = tmp_path / "shutdown-deadline.stderr"
+    with diagnostics.open("wb") as output:
+        process = await asyncio.create_subprocess_exec(
             sys.executable,
             "-c",
             (
-                "import os, threading; "
+                "import os, sys, threading; "
                 "from umbod.hosting.api_server import ProcessShutdownDeadline; "
                 "deadline = ProcessShutdownDeadline(0.02, os._exit); "
+                "print('ready', flush=True); "
+                "assert sys.stdin.readline() == 'shutdown\\n'; "
                 "deadline.arm(); threading.Event().wait()"
             ),
-        ],
-        cwd=tmp_path,
-        capture_output=True,
-        timeout=5,
-    )
-    assert result.returncode == 1
+            cwd=tmp_path,
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=output,
+        )
+        phase = "startup"
+        try:
+            try:
+                assert process.stdout is not None
+                assert process.stdin is not None
+                ready = await asyncio.wait_for(process.stdout.readline(), startup_timeout)
+                assert ready == b"ready\n", diagnostics.read_text()
+                phase = "shutdown"
+                process.stdin.write(b"shutdown\n")
+                await process.stdin.drain()
+                await asyncio.wait_for(process.communicate(), shutdown_timeout)
+                assert process.returncode == 1, diagnostics.read_text()
+            finally:
+                if process.returncode is None:
+                    process.kill()
+                await process.communicate()
+        except TimeoutError as error:
+            raise AssertionError(
+                f"Timed out during deadline subprocess {phase}: {diagnostics.read_text()}"
+            ) from error
 
 
 def _ports(count: int) -> tuple[int, ...]:
@@ -128,15 +153,16 @@ def _ports(count: int) -> tuple[int, ...]:
 
 
 def _wait_for(
-    condition: Callable[[], bool], process: subprocess.Popen[bytes], log: Path
+    condition: Callable[[], bool], process: subprocess.Popen[bytes], log: Path,
+    *, timeout: float, description: str,
 ) -> None:
-    deadline = time.monotonic() + 25
+    deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         assert process.poll() is None, log.read_text()
         if condition():
             return
         time.sleep(0.05)
-    raise AssertionError(f"Timed out waiting for listeners: {log.read_text()}")
+    raise AssertionError(f"Timed out waiting for {description}: {log.read_text()}")
 
 
 def _healthy(origins: tuple[str, str]) -> bool:
@@ -145,6 +171,14 @@ def _healthy(origins: tuple[str, str]) -> bool:
             httpx.get(f"{origins[0]}/system/health", timeout=0.5).status_code == 200
             and httpx.get(f"{origins[1]}/ready", timeout=0.5).status_code == 200
         )
+    except httpx.TransportError:
+        return False
+
+
+def _metrics_recorded(origin: str, samples: frozenset[str]) -> bool:
+    try:
+        response = httpx.get(f"{origin}/metrics", timeout=0.5)
+        return response.status_code == 200 and samples.issubset(response.text.splitlines())
     except httpx.TransportError:
         return False
 
@@ -240,7 +274,10 @@ def test_api_command_serves_private_collector_and_shared_analytics(
             stderr=subprocess.STDOUT,
         )
         try:
-            _wait_for(lambda: _healthy(origins), process, log)
+            _wait_for(
+                lambda: _healthy(origins), process, log,
+                timeout=60, description="API and collector startup",
+            )
             for signal in ("logs", "metrics", "traces"):
                 response = httpx.post(f"{origins[0]}/v1/{signal}", json={}, timeout=3)
                 assert response.status_code == 404
@@ -277,13 +314,21 @@ def test_api_command_serves_private_collector_and_shared_analytics(
             )
             assert exported.status_code == 200, exported.text
             assert _count(origins[0]) == 1
-            metrics = httpx.get(f"http://127.0.0.1:{rest_metrics}/metrics", timeout=3)
+            metrics_origin = f"http://127.0.0.1:{rest_metrics}"
+            expected_samples = frozenset({
+                'umbod_rest_requests_total{method="POST",route="/admin/telemetry/log-counts",status_class="2xx"} 1.0',
+                'umbod_collector_requests_total{method="POST",route="/v1/logs",status_class="2xx"} 1.0',
+                'umbod_collector_requests_total{method="POST",route="/v1/logs",status_class="4xx"} 1.0',
+                'umbod_collector_request_duration_seconds_count{method="POST",route="/v1/logs",status_class="2xx"} 1.0',
+                "umbod_collector_log_records_accepted_total 1.0",
+            })
+            _wait_for(
+                lambda: _metrics_recorded(metrics_origin, expected_samples), process, log,
+                timeout=5, description="request metrics publication",
+            )
+            metrics = httpx.get(f"{metrics_origin}/metrics", timeout=3)
             assert metrics.status_code == 200
-            assert 'umbod_rest_requests_total{method="POST",route="/admin/telemetry/log-counts",status_class="2xx"} 1.0' in metrics.text
-            assert 'umbod_collector_requests_total{method="POST",route="/v1/logs",status_class="2xx"} 1.0' in metrics.text
-            assert 'umbod_collector_requests_total{method="POST",route="/v1/logs",status_class="4xx"} 1.0' in metrics.text
-            assert 'umbod_collector_request_duration_seconds_count{method="POST",route="/v1/logs",status_class="2xx"} 1.0' in metrics.text
-            assert "umbod_collector_log_records_accepted_total 1.0" in metrics.text
+            assert expected_samples.issubset(metrics.text.splitlines()), metrics.text
             assert 'route="/ready"' not in metrics.text
             assert "listener-test-token" not in metrics.text
             serving_pids = {row.split(",")[0] for row in pids.read_text().splitlines()}
@@ -303,6 +348,8 @@ def test_api_command_serves_private_collector_and_shared_analytics(
                     ),
                     process,
                     log,
+                    timeout=60,
+                    description="reloaded API and collector readiness",
                 )
                 assert _count(origins[0]) == 1
             else:

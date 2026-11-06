@@ -7,7 +7,7 @@ from umbod.core.administrator.connector_configuration import (
 )
 from umbod.core.responses import RetryAdvice
 from umbod.mcp.administrator.errors import configuration_rejection_error
-from umbod.mcp.tools.errors import BuiltinToolError
+from umbod.mcp.tools.errors import BuiltinToolError, BuiltinToolRejected
 
 
 @pytest.mark.parametrize(
@@ -34,6 +34,7 @@ def test_rejection_exposes_only_approved_static_details(
     error = configuration_rejection_error(result)
 
     assert isinstance(error, BuiltinToolError)
+    assert isinstance(error, BuiltinToolRejected)
     assert error.details.code == expected_code
     assert str(error) == error.details.message
     assert error.retry == RetryAdvice.AFTER_CORRECTION

@@ -159,9 +159,12 @@ async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
     invocation = next(record for record in records if record["body"] == "mcp tool invocation completed")
     if category == "authorization":
         assert result.content[0].text == "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."
-        assert invocation["attributes"]["exception.type"] == "BuiltinToolAuthorizationDenied"
-    assert invocation["attributes"]["mcp.failure.origin"] == "internal"
-    assert "exception.stacktrace" in invocation["attributes"]
+        assert invocation["attributes"]["mcp.failure.origin"] == "client_input"
+        assert "exception.type" not in invocation["attributes"]
+        assert "exception.stacktrace" not in invocation["attributes"]
+    else:
+        assert invocation["attributes"]["mcp.failure.origin"] == "internal"
+        assert "exception.stacktrace" in invocation["attributes"]
     assert "SECRET" not in output.getvalue()
     assert "/private/path" not in output.getvalue()
     assert any(sample.labels["outcome"] == "failure" for sample in filesystem_error_context.metrics.metric_samples())

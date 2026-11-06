@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 from fastmcp import Client, FastMCP
 
@@ -9,15 +7,14 @@ from umbod.infrastructure import InMemoryContentConfig, create_access_control_dr
 from umbod.mcp.filesystem.browsing import FilesystemBrowseTool
 from umbod.mcp.filesystem.factory import DatabaseFilesystemServiceFactory
 from umbod.mcp.filesystem.update import FilesystemUpdateNodeTool
-from tests.persistence_runtime import prepared_sqlite_runtime
-from tests.support.filesystem.access_snapshots import corrupt_stored_grant
+from tests.persistence_runtime import prepared_inmemory_runtime
+from tests.support.filesystem.access_snapshots import fail_stored_grant_decoding
 from .conftest import ScopedCallerCapture, caller_snapshot
 
 
 @pytest.mark.asyncio
-async def test_sqlite_corrupt_policy_browse_and_update_return_unavailable_not_private(tmp_path: Path) -> None:
-    path = tmp_path / "mcp.sqlite"
-    runtime = await prepared_sqlite_runtime(path)
+async def test_undecodable_policy_browse_and_update_return_unavailable_not_private(monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime = await prepared_inmemory_runtime()
     try:
         database = runtime.database
         callers = ScopedCallerCapture()
@@ -28,7 +25,7 @@ async def test_sqlite_corrupt_policy_browse_and_update_return_unavailable_not_pr
             permissions={Permission.DISCOVER, Permission.WRITE}, recursive=False,
         )
         await create_access_control_driver(database=database).add_grant(grant)
-        corrupt_stored_grant(path, grant)
+        fail_stored_grant_decoding(database, home.id, monkeypatch)
         services = DatabaseFilesystemServiceFactory(
             database, create_content_driver(InMemoryContentConfig(type="inmemory")), 1024, "issuer", "http://localhost",
         )

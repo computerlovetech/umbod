@@ -15,14 +15,15 @@ from umbod.core.activation import CAPABILITY_ACTIVATION_STATE_TABLE, create_capa
 from umbod.core.activation.stores.service import CapabilityActivationStoreService
 from umbod.core.connectors.downstream_mcp.management import DownstreamConnectorUnitOfWorkService, InMemoryDownstreamConnectorUnitOfWork, utc_clock
 from umbod.core.connectors.downstream_mcp.stores import CONNECTOR_CREDENTIAL_TABLE, CONNECTOR_DEFINITION_TABLE, CONNECTOR_HEALTH_TABLE, ConnectorDefinitionStoreService, ConnectorHealthStoreService, EncryptedCredentialStoreService, TOOL_CATALOG_TABLE, ToolCatalogStoreService
-from tests.persistence_runtime import create_inmemory_runtime, prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import create_inmemory_runtime, prepared_inmemory_runtime
 from umbod.core.persistence import Database
 import asyncio
-from collections.abc import Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 import pytest
+import pytest_asyncio
 from umbod.core.publishing import ConnectorPublishingStore
 from umbod.core.capabilities.tools.names import PublicToolNameConflictError
 from umbod.core.connectors.downstream_mcp.models import ConnectorHealthy, DiscoveredToolWithoutOutputSchema, StaticBearerConnectorDefinition, StaticBearerCredentialState, ToolCatalogSnapshot, ToolIdentity
@@ -92,8 +93,13 @@ async def _database_inmemory(_: Path, fault: Callable[[str], None]) -> Aggregate
     return await _database_harness((await prepared_inmemory_runtime()).database, fault)
 
 
-async def _sqlite(path: Path, fault: Callable[[str], None]) -> AggregateHarness:
-    return await _database_harness((await prepared_sqlite_runtime(path)).database, fault)
+@pytest_asyncio.fixture
+async def shared_database() -> AsyncIterator[Database]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
 
 @pytest.mark.parametrize("factory", (_inmemory, _database_inmemory), ids=("detached-inmemory", "database-inmemory"))
 @pytest.mark.asyncio
@@ -165,10 +171,9 @@ def _published_prefix_command(connector_id: str, tool_name_prefix: str) -> Creat
     return CreateDownstreamConnectorAggregate(definition=StaticBearerConnectorDefinition(connector_id=connector_id, display_name=connector_id.title(), tool_name_prefix=tool_name_prefix, capability_description=f'Manage {connector_id} tools', endpoint_url=f'https://{connector_id}.test/mcp'), credential=ReplaceCredential(credential=StaticBearerCredentialState(connector_id=connector_id, bearer_token='secret-token')), catalog=ReplaceCatalog(snapshot=ToolCatalogSnapshot(connector_id=connector_id, discovered_at=checked_at, tools=(DiscoveredToolWithoutOutputSchema(identity=ToolIdentity(connector_id=connector_id, downstream_name='search'), title='Search', description='Search', input_schema={'type': 'object'}),))), health=ReplaceHealth(health=ConnectorHealthy(connector_id=connector_id, checked_at=checked_at)), activation=ReconcileActivation(operation_names=('search',)), publication=PreservePublication())
 
 @pytest.mark.asyncio
-async def test_sqlite_concurrent_prefix_updates_commit_only_one_conflicting_claim(tmp_path: Path) -> None:
-    database_path = tmp_path / 'concurrent-prefix.sqlite3'
-    first = await _sqlite(database_path, lambda phase: None)
-    second = await _sqlite(database_path, lambda phase: None)
+async def test_concurrent_prefix_updates_commit_only_one_conflicting_claim(shared_database: Database) -> None:
+    first = await _database_harness(shared_database, lambda phase: None)
+    second = await _database_harness(shared_database, lambda phase: None)
     alpha = _published_prefix_command('alpha', 'Alpha')
     beta = _published_prefix_command('beta', 'Beta')
     await first.unit_of_work.create(alpha)

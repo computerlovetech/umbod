@@ -31,7 +31,8 @@ from umbod.core.connectors.openapi.catalog import StoreBackedOpenApiCapabilityCa
 from umbod.core.permissions import CapabilityPermissionCatalog, ConnectorPermissionUpdate, ConnectorToolRef, SaveGroupPermissionsRequest, ToolPermissionUpdate, UpdateGroupPermissionsRequest
 from umbod.core.permissions.management import GroupPermissionManagementService
 from umbod.mcp.auth import MCPAuthProviderFactory
-from umbod.mcp.connectors.native import create_default_mcp_connector_runtime
+from tests.mcp_fixtures import empty_connector_plugins
+from umbod.mcp.connectors.native import create_default_mcp_connector_runtime, default_runtime
 from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory
 from umbod.mcp.public_app import OpenApiRuntimeAdapters, build_mcp, build_mcp_with_openapi_adapters
 from umbod.rest.main import create_app
@@ -108,6 +109,7 @@ def connector_availability(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     path = tmp_path / 'connector-availability.json'
     path.write_text('{"connectors": []}', encoding='utf-8')
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(path))
+    monkeypatch.setattr(default_runtime, 'load_connector_plugins', empty_connector_plugins)
 
 @pytest.mark.asyncio
 async def test_admin_to_codemode_execution_enforces_live_state() -> None:

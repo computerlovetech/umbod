@@ -1,9 +1,38 @@
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Sequence
+from typing import Sequence, TypeVar
+from unittest.mock import Mock
+
+import pytest
+from pydantic import BaseModel
 
 from messaging.models import MessagingEvent, MessagingEventType, StreamEvent
 from messaging.ports import EventStream, EventStreamFactory
+from umbod.core.messaging.stores.schema import EVENT_TABLE
+from umbod.core.persistence import Database, DatabaseSession, GeneratedIntegerKeyInsertCommand, Table, TransactionMode
+
+RowT = TypeVar("RowT", bound=BaseModel)
+KeyT = TypeVar("KeyT", bound=BaseModel)
+
+
+def reject_database_event_appends(database: Database, monkeypatch: pytest.MonkeyPatch) -> None:
+    original_session = database.session
+
+    @asynccontextmanager
+    async def rejecting_session(*, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:
+        async with original_session(mode=mode) as session:
+            async def insert_event(table: Table[RowT, KeyT], command: GeneratedIntegerKeyInsertCommand[RowT]) -> int:
+                if table == EVENT_TABLE:
+                    raise RuntimeError("event append failed")
+                return await session.insert_generated_integer_key(table, command)
+
+            rejecting = Mock(spec=DatabaseSession, wraps=session)
+            rejecting.insert_generated_integer_key.side_effect = insert_event
+            yield rejecting
+
+    monkeypatch.setattr(database, "session", rejecting_session)
 
 
 class InMemoryEventStream:

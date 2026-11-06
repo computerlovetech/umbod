@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.support.connector_plugins import TestConnectorPlugin
 from umbod.config import AppConfig
 from umbod.rest.main import create_app
 
@@ -19,7 +20,7 @@ def test_native_catalogue_requires_configuration_publication_activation_and_expl
         connector_store={"type": "inmemory"},
         admin_authentication={"mode": "simulation", "simulated_admin": True},
     )
-    with TestClient(create_app(settings)) as client:
+    with TestClient(create_app(settings, connector_registrations=[TestConnectorPlugin.registration()])) as client:
         assert client.get("/api/me/catalogue").json()["connectors"] == []
         client.put("/api/admin/connectors/catalog/test/configuration", json={"configuration": {
             "instance_name": "Demo", "api_key": "test-key",

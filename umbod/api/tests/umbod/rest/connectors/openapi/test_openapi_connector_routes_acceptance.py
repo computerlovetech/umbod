@@ -1,13 +1,20 @@
 import json
-import sqlite3
 from pathlib import Path
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 
-from umbod.config import SQLiteConnectorStoreConfig
-from umbod.rest.main import create_app
+from tests.persistence_runtime import create_inmemory_runtime
+from umbod.core.configuration.persistence.stores.schema import (
+    CONNECTOR_CONFIGURATION_TABLE,
+    ConnectorConfigurationRecord,
+)
+from umbod.core.persistence import AllFields, NoFilter, Query, Unordered
+from umbod.infrastructure import AppPersistenceRuntime
+from umbod.rest.factories import ConnectorApiDependencyFactories
+from umbod.rest.main import create_app, create_app_with_dependency_factories
 from umbod.rest.settings import APISettings
 
 
@@ -21,16 +28,11 @@ def connector_availability(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 def _settings(*limits: int) -> APISettings:
     import_limit = limits[0] if limits else 10_485_760
     return APISettings(
+        rest={"metrics_enabled": False},
         connector_store={"type": "inmemory"},
         openapi_connectors={"json_import_max_bytes": import_limit},
         admin_authentication={"mode": "simulation", "simulated_admin": True},
     )
-
-
-def _sqlite_settings(database_path: Path) -> APISettings:
-    return _settings().model_copy(update={
-        "connector_store": SQLiteConnectorStoreConfig(sqlite_path=str(database_path)),
-    })
 
 
 def _document(*operation_ids: str) -> dict[str, Any]:
@@ -144,35 +146,41 @@ def _publication_status(client: TestClient, connector_id: str) -> str:
     return str(response.json()["publication_status"])
 
 
-def test_configuration_routes_mask_encrypt_and_preserve_bearer_token(tmp_path: Path) -> None:
-    database_path = tmp_path / "api.sqlite3"
-    client = TestClient(create_app(settings=_sqlite_settings(database_path), connector_registrations=[]))
-    connector = _create(client)
-    path = f"/api/admin/connectors/openapi/{connector['connector_id']}/configuration"
+def test_configuration_routes_mask_encrypt_and_preserve_bearer_token() -> None:
+    runtime = create_inmemory_runtime()
+    factories = ConnectorApiDependencyFactories.from_settings(_settings(), runtime, [])
+    with TestClient(create_app_with_dependency_factories(factories)) as client:
+        connector = _create(client)
+        path = f"/api/admin/connectors/openapi/{connector['connector_id']}/configuration"
 
-    initial = client.get(path)
-    saved = client.put(path, json={"bearer_token": "private-token"})
-    preserved = client.put(path, json={"bearer_token": "   "})
+        initial = client.get(path)
+        saved = client.put(path, json={"bearer_token": "private-token"})
+        preserved = client.put(path, json={"bearer_token": "   "})
 
-    assert initial.json() == {
-        "configured": False,
-        "authentication_type": "none",
-        "masked_token": None,
-    }
-    expected_masked = {
-        "configured": True,
-        "authentication_type": "bearer",
-        "masked_token": "********",
-    }
-    assert saved.status_code == 200
-    assert saved.json() == expected_masked
-    assert preserved.json() == expected_masked
-    assert "private-token" not in saved.text
-    with sqlite3.connect(database_path) as database:
-        rows = database.execute("SELECT ciphertext FROM connector_configurations").fetchall()
-    assert len(rows) == 1
-    assert "private-token" not in str(rows[0][0])
+        assert initial.json() == {
+            "configured": False,
+            "authentication_type": "none",
+            "masked_token": None,
+        }
+        expected_masked = {
+            "configured": True,
+            "authentication_type": "bearer",
+            "masked_token": "********",
+        }
+        assert saved.status_code == 200
+        assert saved.json() == expected_masked
+        assert preserved.json() == expected_masked
+        assert "private-token" not in saved.text
 
+        async def read_configurations() -> tuple[ConnectorConfigurationRecord, ...]:
+            async with runtime.database.read_session() as session:
+                return await session.find_many(
+                    CONNECTOR_CONFIGURATION_TABLE, Query(NoFilter(), AllFields(), Unordered()),
+                )
+
+        rows = client.portal.call(read_configurations)
+        assert len(rows) == 1
+        assert "private-token" not in rows[0].ciphertext
 
 def test_configuration_routes_return_not_found_without_leaking_input() -> None:
     client = TestClient(
@@ -437,18 +445,28 @@ def test_json_import_rejects_request_over_configured_limit() -> None:
     assert response.json() == {"detail": {"code": "openapi_import_too_large", "max_bytes": 100}}
 
 
-def test_connectors_persist_across_app_recreation(tmp_path: Path) -> None:
-    settings = _sqlite_settings(tmp_path / "api.sqlite3")
-    first_client = TestClient(create_app(settings=settings, connector_registrations=[]))
-    connector = _create(first_client)
+def test_connectors_remain_visible_across_app_recreation() -> None:
+    settings = _settings()
+    runtime = create_inmemory_runtime()
+    first_factories = ConnectorApiDependencyFactories.from_settings(settings, runtime, [])
+    with TestClient(create_app_with_dependency_factories(first_factories)) as first_client:
+        connector = _create(first_client)
+        second_runtime = AppPersistenceRuntime(
+            database=runtime.database, readiness=runtime.readiness,
+        )
+        second_factories = ConnectorApiDependencyFactories.from_settings(settings, second_runtime, [])
+        second_app = create_app_with_dependency_factories(second_factories)
 
-    second_client = TestClient(create_app(settings=settings, connector_registrations=[]))
+        async def read_recreated_connector() -> None:
+            async with second_app.router.lifespan_context(second_app), AsyncClient(
+                transport=ASGITransport(app=second_app), base_url="http://testserver",
+            ) as second_client:
+                assert (
+                    (await second_client.get(f"/api/admin/connectors/openapi/{connector['connector_id']}")).json()
+                    == connector
+                )
 
-    assert (
-        second_client.get(f"/api/admin/connectors/openapi/{connector['connector_id']}").json()
-        == connector
-    )
-
+        first_client.portal.call(read_recreated_connector)
 
 def test_openapi_connector_routes_are_admin_protected() -> None:
     settings = APISettings(

@@ -1,13 +1,19 @@
-from pathlib import Path
-
+import httpx
+import pytest
 from fastapi.testclient import TestClient
 
 from umbod.config import AppConfig, OtlpReceiverConfig, TelemetryAnalyticsConfig
 from umbod.config.telemetry import TelemetryAppConfig
+from umbod.core.telemetry.analytics import TelemetryAnalyticsRuntime, TelemetryAnalyticsUnavailable
+from umbod.rest import main as rest_application
+from umbod.rest.telemetry import application as telemetry_application
 from umbod.rest.telemetry.application import create_telemetry_app
 from umbod.core.telemetry import TelemetryExport, TelemetrySink
 from umbod.rest.main import create_app
 from umbod.rest.telemetry.dependencies import get_telemetry_sink
+
+from tests.persistence_runtime import create_inmemory_runtime
+from tests.support.telemetry_runtime import InMemoryTelemetryAnalyticsRuntime
 
 from .conftest import AnalyticsVerifier
 from .test_routes import BASE
@@ -24,17 +30,22 @@ def test_disabled_runtime_reports_unavailability_not_zero(
     assert response.headers["cache-control"] == "no-store"
 
 
-class AcceptingTelemetrySink:
+class RecordingTelemetrySink:
+    def __init__(self) -> None:
+        self.batches: list[TelemetryExport] = []
+
     def export(self, batch: TelemetryExport) -> None:
-        return None
+        self.batches.append(batch)
 
 
-def test_admin_reader_queries_private_collector_records_after_restart(
-    configuration: AppConfig, query_body: dict[str, object], tmp_path: Path,
+@pytest.mark.anyio
+async def test_admin_reader_queries_private_collector_records_after_application_reconstruction(
+    configuration: AppConfig, query_body: dict[str, object], monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings = configuration.model_copy(update={
+    settings = AppConfig.model_validate(configuration.model_dump() | {
+        "connector_store": {"type": "inmemory"},
         "otlp_receiver": OtlpReceiverConfig(enabled=True, bearer_token="analytics-ingestion"),
-        "telemetry_analytics": TelemetryAnalyticsConfig(enabled=True, sqlite_path=str(tmp_path / "analytics.sqlite3")),
+        "telemetry_analytics": TelemetryAnalyticsConfig(enabled=False),
     })
     payload = {"resourceLogs": [{
         "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": "codex"}}]},
@@ -46,26 +57,59 @@ def test_admin_reader_queries_private_collector_records_after_restart(
             "attributes": [{"key": "tool.name", "value": {"stringValue": "shell"}}],
         }]}],
     }]}
-    collector = create_telemetry_app(TelemetryAppConfig(
+    collector_settings = TelemetryAppConfig(
         runtime=settings.runtime,
         otlp_receiver=settings.otlp_receiver,
         telemetry_analytics=settings.telemetry_analytics,
-    ))
+    )
+    persistence = create_inmemory_runtime()
+    selected_settings: list[AppConfig | TelemetryAppConfig] = []
+    runtimes: list[TelemetryAnalyticsRuntime] = []
+
+    def select_runtime(config: AppConfig | TelemetryAppConfig) -> TelemetryAnalyticsRuntime:
+        selected_settings.append(config)
+        runtime = InMemoryTelemetryAnalyticsRuntime(persistence.database, persistence.readiness)
+        runtimes.append(runtime)
+        return runtime
+
+    sink = RecordingTelemetrySink()
 
     def provide_sink() -> TelemetrySink:
-        return AcceptingTelemetrySink()
+        return sink
 
-    collector.dependency_overrides[get_telemetry_sink] = provide_sink
-    with TestClient(collector) as client:
-        exported = client.post("/v1/logs", json=payload, headers={"Authorization": "Bearer analytics-ingestion"})
-        assert exported.status_code == 200
-    restarted = create_app(settings, (), admin_verifier=AnalyticsVerifier())
-    with TestClient(restarted, headers={"Authorization": "Bearer admin"}) as client:
-        response = client.post(BASE, json=query_body | {
-            "filters": [{"dimension": "severity", "values": ["ERROR"]}],
-            "group_by": ["source", "event_name", "tool_name"],
-            "bucketing": {"kind": "fixed", "width": "hour"},
-        })
+    try:
+        monkeypatch.setattr(telemetry_application, "create_configured_analytics_runtime", select_runtime)
+        monkeypatch.setattr(rest_application, "create_configured_analytics_runtime", select_runtime)
+        collector = create_telemetry_app(collector_settings)
+        collector.dependency_overrides[get_telemetry_sink] = provide_sink
+        async with collector.router.lifespan_context(collector):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=collector), base_url="http://collector") as client:
+                exported = await client.post("/v1/logs", json=payload, headers={"Authorization": "Bearer analytics-ingestion"})
+                assert exported.status_code == 200
+                assert len(sink.batches) == 1
+                assert sink.batches[0].item_count == 2
+        assert len(runtimes) == 1
+        with pytest.raises(TelemetryAnalyticsUnavailable):
+            await runtimes[0].ensure_ready()
+        recreated = create_app(settings, (), admin_verifier=AnalyticsVerifier())
+        async with recreated.router.lifespan_context(recreated):
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=recreated), base_url="http://api",
+                headers={"Authorization": "Bearer admin"},
+            ) as client:
+                response = await client.post(BASE, json=query_body | {
+                    "filters": [{"dimension": "severity", "values": ["ERROR"]}],
+                    "group_by": ["source", "event_name", "tool_name"],
+                    "bucketing": {"kind": "fixed", "width": "hour"},
+                })
+        assert len(runtimes) == 2
+        assert runtimes[0] is not runtimes[1]
+        assert selected_settings[0] is collector_settings
+        assert selected_settings[1] is settings
+        with pytest.raises(TelemetryAnalyticsUnavailable):
+            await runtimes[1].ensure_ready()
+    finally:
+        await persistence.shutdown()
     assert response.status_code == 200
     assert response.json() == {"rows": [{
         "groups": [

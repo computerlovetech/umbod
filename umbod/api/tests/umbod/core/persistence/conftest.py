@@ -8,6 +8,7 @@ from tests.umbod.core.persistence.contract_support import DATABASE_ADAPTERS, Dat
 
 
 @pytest.fixture(params=DATABASE_ADAPTERS, ids=lambda adapter: cast(DatabaseAdapter, adapter).name)
-def database(request: pytest.FixtureRequest, tmp_path: Path) -> Database:
+def database(request: pytest.FixtureRequest) -> Database:
     adapter = cast(DatabaseAdapter, request.param)
-    return adapter.factory(tmp_path)
+    path = request.getfixturevalue("tmp_path") if adapter.name == "sqlite" else Path()
+    return adapter.factory(path)

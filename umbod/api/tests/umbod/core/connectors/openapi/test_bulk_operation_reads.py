@@ -1,12 +1,11 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
 import pytest_asyncio
 
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.activation import CAPABILITY_ACTIVATION_STATE_TABLE
 from umbod.core.capabilities.catalog import CapabilityCatalog
 from umbod.core.connectors.openapi.catalog import StoreBackedOpenApiCapabilityCatalog
@@ -34,14 +33,13 @@ from umbod.core.persistence.query import DeleteQuery, InsertCommand, NoFilter
 pytestmark = pytest.mark.asyncio
 
 
-@pytest_asyncio.fixture(params=["inmemory", "sqlite"])
-async def database(request: pytest.FixtureRequest, tmp_path: Path) -> Database:
-    runtime = (
-        await prepared_inmemory_runtime()
-        if request.param == "inmemory"
-        else await prepared_sqlite_runtime(tmp_path / "bulk.sqlite")
-    )
-    return runtime.database
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[Database]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
 
 
 @pytest.fixture

@@ -25,6 +25,7 @@ class McpAuditFailureCategory(StrEnum):
     AUTHENTICATION = "authentication"
     AUTHORIZATION = "authorization"
     VALIDATION = "validation"
+    TOOL_ERROR = "tool_error"
     CONNECTOR_ERROR = "connector_error"
     UNEXPECTED_ERROR = "unexpected_error"
 

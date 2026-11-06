@@ -2,7 +2,6 @@ import aiosqlite
 
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from pathlib import Path
 from typing import cast
 
 from pydantic import BaseModel
@@ -24,6 +23,11 @@ from umbod.core.persistence.query import (
     _encode_model,
 )
 from umbod.infrastructure.persistence.sqlite.compiler import SQLiteCompiler
+from umbod.infrastructure.connections import ConnectionProvider
+from umbod.infrastructure.connections.lifecycle import complete_cleanup
+from umbod.infrastructure.persistence.sqlite.schema_validation import (
+    validate_non_reusing_key_schema,
+)
 from umbod.infrastructure.persistence.sqlite.value_mapping import SQLiteValueMapper
 
 
@@ -114,72 +118,59 @@ class _SQLiteDatabaseSession(_SQLiteReadSession):
 
 
 class SQLiteDatabase:
-    def __init__(self, database_path: str, *, create_parent_dirs: bool) -> None:
-        self._database_path = database_path
-        self._create_parent_dirs = create_parent_dirs
+    def __init__(self, connections: ConnectionProvider[aiosqlite.Connection]) -> None:
+        self._connections = connections
 
     async def ensure_schema(self, tables: Sequence[Table[BaseModel, BaseModel]]) -> None:
-        if self._create_parent_dirs:
-            parent = Path(self._database_path).parent
-            if str(parent) != ".":
-                parent.mkdir(parents=True, exist_ok=True)
-        connection = await self._connect()
         compiler = SQLiteCompiler(SQLiteValueMapper())
-        try:
-            await connection.execute("PRAGMA journal_mode=WAL")
-            for table in tables:
-                compiled = compiler.create_table(table)
-                await connection.execute(compiled.statement, compiled.parameters)
-            await connection.commit()
-        except BaseException:
-            await connection.rollback()
-            raise
-        finally:
-            await connection.close()
+        async with self._connections.get_connection() as connection:
+            try:
+                cursor = await connection.execute("PRAGMA journal_mode=WAL")
+                await cursor.close()
+                cursor = await connection.execute("BEGIN IMMEDIATE")
+                await cursor.close()
+                for table in tables:
+                    compiled = compiler.create_table(table)
+                    cursor = await connection.execute(compiled.statement, compiled.parameters)
+                    await cursor.close()
+                    await validate_non_reusing_key_schema(connection, table)
+                await connection.commit()
+            except BaseException:
+                await complete_cleanup(connection.rollback())
+                raise
 
     @asynccontextmanager
     async def schema_connection(self) -> AsyncIterator[aiosqlite.Connection]:
-        connection = await self._connect()
-        try:
-            await connection.execute("BEGIN IMMEDIATE")
-            yield connection
-            await connection.commit()
-        except BaseException:
-            await connection.rollback()
-            raise
-        finally:
-            await connection.close()
+        async with self._connections.get_connection() as connection:
+            try:
+                cursor = await connection.execute("BEGIN IMMEDIATE")
+                await cursor.close()
+                yield connection
+                await connection.commit()
+            except BaseException:
+                await complete_cleanup(connection.rollback())
+                raise
 
     @asynccontextmanager
     async def read_session(self) -> AsyncIterator[ReadSession]:
-        connection = await self._connect()
-        try:
-            await connection.execute("PRAGMA query_only=ON")
-            await connection.execute("BEGIN")
-            yield _SQLiteReadSession(connection)
-        finally:
+        async with self._connections.get_connection() as connection:
             try:
-                await connection.rollback()
+                for statement in ("PRAGMA query_only=ON", "BEGIN"):
+                    cursor = await connection.execute(statement)
+                    await cursor.close()
+                yield _SQLiteReadSession(connection)
             finally:
-                await connection.close()
+                await complete_cleanup(connection.rollback())
 
     @asynccontextmanager
     async def session(self, *, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:
-        connection = await self._connect()
-        try:
-            statement = "BEGIN IMMEDIATE" if mode is TransactionMode.SERIALIZED_WRITE else "BEGIN"
-            await connection.execute(statement)
-            yield _SQLiteDatabaseSession(connection)
-            await connection.commit()
-        except BaseException:
-            await connection.rollback()
-            raise
-        finally:
-            await connection.close()
-
-    async def _connect(self) -> aiosqlite.Connection:
-        connection = await aiosqlite.connect(self._database_path)
-        connection.row_factory = aiosqlite.Row
-        await connection.execute("PRAGMA foreign_keys=ON")
-        await connection.execute("PRAGMA busy_timeout=5000")
-        return connection
+        async with self._connections.get_connection() as connection:
+            try:
+                statement = "BEGIN IMMEDIATE" if mode is TransactionMode.SERIALIZED_WRITE else "BEGIN"
+                cursor = await connection.execute(statement)
+                await cursor.close()
+                yield _SQLiteDatabaseSession(connection)
+                await connection.commit()
+            except BaseException:
+                await complete_cleanup(connection.rollback())
+                raise

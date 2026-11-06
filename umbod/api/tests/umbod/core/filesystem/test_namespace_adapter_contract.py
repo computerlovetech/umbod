@@ -1,9 +1,11 @@
 import asyncio
+from collections.abc import Callable
 from uuid import UUID, uuid4
 
 import pytest
 
 from umbod.core.filesystem import (
+    NamespaceDriver,
     ContentRef,
     EmptyContent,
     InvalidName,
@@ -18,16 +20,15 @@ from umbod.core.filesystem import (
     WrongNodeKind,
 )
 
-from tests.support.filesystem.adapters import AdapterFactory, AdapterPair
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", [NodeKind.FILE, NodeKind.DIRECTORY])
 async def test_metadata_mutation_is_revision_checked_and_shared_between_namespace_instances(
-    adapter_factory: AdapterFactory, kind: NodeKind,
+    namespace_factory: Callable[[], NamespaceDriver], kind: NodeKind,
 ) -> None:
-    namespace = adapter_factory().namespace
-    other = adapter_factory().namespace
+    namespace = namespace_factory()
+    other = namespace_factory()
     root = await namespace.get_root()
     node = await namespace.create_node(root.id, "described", kind, metadata())
     changed_metadata = NodeMetadata(content_type="text/plain", attributes={"description": "Read for context", "team": "research"})
@@ -44,15 +45,15 @@ async def test_metadata_mutation_is_revision_checked_and_shared_between_namespac
 
 
 @pytest.mark.asyncio
-async def test_fresh_namespace_supports_fixed_root_lookup_without_discovery(adapters: AdapterPair) -> None:
-    root = await adapters.namespace.get_node(UUID(int=0))
+async def test_fresh_namespace_supports_fixed_root_lookup_without_discovery(namespace: NamespaceDriver) -> None:
+    root = await namespace.get_node(UUID(int=0))
     assert root.id == UUID(int=0)
-    assert tuple(await adapters.namespace.list_children(root.id)) == ()
+    assert tuple(await namespace.list_children(root.id)) == ()
 
 
 @pytest.mark.asyncio
-async def test_fresh_namespace_supports_root_listing_without_discovery(adapters: AdapterPair) -> None:
-    assert tuple(await adapters.namespace.list_children(UUID(int=0))) == ()
+async def test_fresh_namespace_supports_root_listing_without_discovery(namespace: NamespaceDriver) -> None:
+    assert tuple(await namespace.list_children(UUID(int=0))) == ()
 
 
 def metadata() -> NodeMetadata:
@@ -60,8 +61,8 @@ def metadata() -> NodeMetadata:
 
 
 @pytest.mark.asyncio
-async def test_concurrent_callers_discover_one_root(adapter_factory: AdapterFactory) -> None:
-    roots = await asyncio.gather(*(adapter_factory().namespace.get_root() for _ in range(8)))
+async def test_concurrent_callers_discover_one_root(namespace_factory: Callable[[], NamespaceDriver]) -> None:
+    roots = await asyncio.gather(*(namespace_factory().get_root() for _ in range(8)))
 
     assert len({root.id for root in roots}) == 1
     assert all(root.name == "" and root.kind == NodeKind.DIRECTORY for root in roots)
@@ -70,8 +71,7 @@ async def test_concurrent_callers_discover_one_root(adapter_factory: AdapterFact
 
 
 @pytest.mark.asyncio
-async def test_names_are_exact_and_listings_are_sorted(adapters: AdapterPair) -> None:
-    namespace = adapters.namespace
+async def test_names_are_exact_and_listings_are_sorted(namespace: NamespaceDriver) -> None:
     root = await namespace.get_root()
     names = ("report", "Report", "é", "e\u0301", " leading ", " ")
     for name in names:
@@ -83,34 +83,34 @@ async def test_names_are_exact_and_listings_are_sorted(adapters: AdapterPair) ->
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("name", ["", ".", "..", "a/b", "a\\b", "a\x00b", "\ud800"])
-async def test_invalid_names_leave_namespace_unchanged(adapters: AdapterPair, name: str) -> None:
-    root = await adapters.namespace.get_root()
+async def test_invalid_names_leave_namespace_unchanged(namespace: NamespaceDriver, name: str) -> None:
+    root = await namespace.get_root()
 
     with pytest.raises(InvalidName):
-        await adapters.namespace.create_node(root.id, name, NodeKind.FILE, metadata())
+        await namespace.create_node(root.id, name, NodeKind.FILE, metadata())
 
-    assert tuple(await adapters.namespace.list_children(root.id)) == ()
-    assert await adapters.namespace.get_root() == root
+    assert tuple(await namespace.list_children(root.id)) == ()
+    assert await namespace.get_root() == root
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", [NodeKind.FILE, NodeKind.DIRECTORY])
 async def test_duplicate_names_are_rejected_across_node_kinds(
-    adapters: AdapterPair, kind: NodeKind,
+    namespace: NamespaceDriver, kind: NodeKind,
 ) -> None:
-    root = await adapters.namespace.get_root()
-    original = await adapters.namespace.create_node(root.id, "occupied", NodeKind.FILE, metadata())
+    root = await namespace.get_root()
+    original = await namespace.create_node(root.id, "occupied", NodeKind.FILE, metadata())
 
     with pytest.raises(NameCollision):
-        await adapters.namespace.create_node(root.id, "occupied", kind, metadata())
+        await namespace.create_node(root.id, "occupied", kind, metadata())
 
-    assert tuple(await adapters.namespace.list_children(root.id)) == (original,)
+    assert tuple(await namespace.list_children(root.id)) == (original,)
 
 
 @pytest.mark.asyncio
-async def test_concurrent_duplicate_creation_has_one_winner(adapter_factory: AdapterFactory) -> None:
-    first = adapter_factory().namespace
-    second = adapter_factory().namespace
+async def test_concurrent_duplicate_creation_has_one_winner(namespace_factory: Callable[[], NamespaceDriver]) -> None:
+    first = namespace_factory()
+    second = namespace_factory()
     root = await first.get_root()
 
     results = await asyncio.gather(
@@ -125,63 +125,63 @@ async def test_concurrent_duplicate_creation_has_one_winner(adapter_factory: Ada
 
 
 @pytest.mark.asyncio
-async def test_independent_callers_preserve_each_others_creations(adapter_factory: AdapterFactory) -> None:
-    root = await adapter_factory().namespace.get_root()
+async def test_independent_callers_preserve_each_others_creations(namespace_factory: Callable[[], NamespaceDriver]) -> None:
+    root = await namespace_factory().get_root()
     names = tuple(f"file-{index}" for index in range(10))
 
     await asyncio.gather(*(
-        adapter_factory().namespace.create_node(root.id, name, NodeKind.FILE, metadata())
+        namespace_factory().create_node(root.id, name, NodeKind.FILE, metadata())
         for name in names
     ))
 
-    children = await adapter_factory().namespace.list_children(root.id)
+    children = await namespace_factory().list_children(root.id)
     assert {node.name for node in children} == set(names)
 
 
 @pytest.mark.asyncio
-async def test_missing_nodes_are_distinct_domain_failures(adapters: AdapterPair) -> None:
+async def test_missing_nodes_are_distinct_domain_failures(namespace: NamespaceDriver) -> None:
     with pytest.raises(MissingNode):
-        await adapters.namespace.get_node(uuid4())
+        await namespace.get_node(uuid4())
     with pytest.raises(MissingNode):
-        await adapters.namespace.list_children(uuid4())
+        await namespace.list_children(uuid4())
     with pytest.raises(MissingNode):
-        await adapters.namespace.create_node(uuid4(), "child", NodeKind.FILE, metadata())
+        await namespace.create_node(uuid4(), "child", NodeKind.FILE, metadata())
 
 
 @pytest.mark.asyncio
-async def test_files_cannot_be_parents_or_have_children_listed(adapters: AdapterPair) -> None:
-    root = await adapters.namespace.get_root()
-    file = await adapters.namespace.create_node(root.id, "file", NodeKind.FILE, metadata())
+async def test_files_cannot_be_parents_or_have_children_listed(namespace: NamespaceDriver) -> None:
+    root = await namespace.get_root()
+    file = await namespace.create_node(root.id, "file", NodeKind.FILE, metadata())
 
     with pytest.raises(WrongNodeKind):
-        await adapters.namespace.create_node(file.id, "child", NodeKind.FILE, metadata())
+        await namespace.create_node(file.id, "child", NodeKind.FILE, metadata())
     with pytest.raises(WrongNodeKind):
-        await adapters.namespace.list_children(file.id)
+        await namespace.list_children(file.id)
 
-    assert await adapters.namespace.get_node(file.id) == file
+    assert await namespace.get_node(file.id) == file
 
 
 @pytest.mark.asyncio
-async def test_metadata_cannot_mutate_namespace_without_revision_checks(adapters: AdapterPair) -> None:
-    root = await adapters.namespace.get_root()
+async def test_metadata_cannot_mutate_namespace_without_revision_checks(namespace: NamespaceDriver) -> None:
+    root = await namespace.get_root()
     supplied = metadata()
-    created = await adapters.namespace.create_node(root.id, "file", NodeKind.FILE, supplied)
+    created = await namespace.create_node(root.id, "file", NodeKind.FILE, supplied)
     supplied.attributes["team"] = "changed-input"
     created.metadata.attributes["team"] = "changed-result"
-    retrieved = await adapters.namespace.get_node(created.id)
+    retrieved = await namespace.get_node(created.id)
 
     assert retrieved.metadata.attributes == {"team": "research"}
     retrieved.metadata.attributes["team"] = "changed-read"
-    listed = (await adapters.namespace.list_children(root.id))[0]
+    listed = (await namespace.list_children(root.id))[0]
     assert listed.metadata.attributes == {"team": "research"}
 
 
 @pytest.mark.asyncio
-async def test_content_publication_checks_revisions_and_preserves_parent(adapters: AdapterPair) -> None:
-    root = await adapters.namespace.get_root()
-    file = await adapters.namespace.create_node(root.id, "file", NodeKind.FILE, metadata())
+async def test_content_publication_checks_revisions_and_preserves_parent(namespace: NamespaceDriver) -> None:
+    root = await namespace.get_root()
+    file = await namespace.create_node(root.id, "file", NodeKind.FILE, metadata())
     reference = ContentRef(key=uuid4().hex, size=3)
-    published = await adapters.namespace.update_node(
+    published = await namespace.update_node(
         file.id, content=reference, expected_revision=file.revision,
     )
 
@@ -189,21 +189,21 @@ async def test_content_publication_checks_revisions_and_preserves_parent(adapter
     assert published.revision == file.revision + 1
     assert published.created_at == file.created_at
     assert published.updated_at >= file.updated_at
-    assert await adapters.namespace.get_root() == root
+    assert await namespace.get_root() == root
     with pytest.raises(RevisionConflict):
-        await adapters.namespace.update_node(
+        await namespace.update_node(
             file.id, content=ContentRef(key=uuid4().hex, size=4), expected_revision=file.revision,
         )
-    assert await adapters.namespace.get_node(file.id) == published
+    assert await namespace.get_node(file.id) == published
 
 
 @pytest.mark.asyncio
-async def test_directories_cannot_receive_content_references(adapters: AdapterPair) -> None:
-    root = await adapters.namespace.get_root()
+async def test_directories_cannot_receive_content_references(namespace: NamespaceDriver) -> None:
+    root = await namespace.get_root()
 
     with pytest.raises(WrongNodeKind):
-        await adapters.namespace.update_node(
+        await namespace.update_node(
             root.id, content=ContentRef(key=uuid4().hex, size=1), expected_revision=root.revision,
         )
 
-    assert await adapters.namespace.get_root() == root
+    assert await namespace.get_root() == root

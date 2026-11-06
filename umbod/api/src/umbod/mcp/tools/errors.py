@@ -1,10 +1,13 @@
+from logging import WARNING
+
 from fastmcp.exceptions import ToolError, ValidationError
 
 from umbod.core.responses import RetryAdvice, ToolErrorDetails, ToolNotice
 
 
 class ToolAuthorizationDenied(ToolError):
-    pass
+    def __init__(self, message: str) -> None:
+        super().__init__(message, log_level=WARNING)
 
 
 class BuiltinToolError(ToolError):
@@ -12,6 +15,10 @@ class BuiltinToolError(ToolError):
         super().__init__(message)
         self.details = details
         self.retry = retry
+
+
+class BuiltinToolRejected(BuiltinToolError):
+    pass
 
 
 class BuiltinToolArgumentError(ValidationError):

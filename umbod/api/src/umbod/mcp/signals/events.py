@@ -20,6 +20,7 @@ class McpToolInvocationOutcome(StrEnum):
 class McpToolInvocationFailureCategory(StrEnum):
     VALIDATION = "validation"
     AUTHORIZATION = "authorization"
+    TOOL_ERROR = "tool_error"
     CONNECTOR_ERROR = "connector_error"
     UNEXPECTED_ERROR = "unexpected_error"
 

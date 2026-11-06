@@ -1,7 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from pathlib import Path
 from unittest.mock import create_autospec
 from uuid import uuid4
 
@@ -26,7 +25,6 @@ from umbod.infrastructure import (
     create_access_control_driver, create_filesystem_browsing, create_filesystem_creation,
     create_namespace_driver, create_root_group_policy_management,
 )
-from tests.persistence_runtime import prepared_sqlite_runtime
 from tests.umbod.core.filesystem.test_creation_acceptance import metadata, user
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
 
@@ -269,19 +267,10 @@ async def test_replacement_failure_restores_exact_existing_policy_and_revision(f
 
 
 @pytest.mark.asyncio
-async def test_sqlite_reopen_preserves_policy_and_revision(tmp_path: Path) -> None:
-    path = tmp_path / "policy.db"
-    runtime = await prepared_sqlite_runtime(path)
-    try:
-        service = management(runtime)
-        saved = await service.save(SaveRootGroupPolicy(expected_revision=(await service.inspect()).revision, groups=(group("team"),)))
-    finally:
-        await runtime.shutdown()
-    reopened = await prepared_sqlite_runtime(path)
-    try:
-        assert await management(reopened).inspect() == saved
-    finally:
-        await reopened.shutdown()
+async def test_service_recreation_preserves_policy_and_revision(filesystem_runtime: PersistenceRuntime) -> None:
+    service = management(filesystem_runtime)
+    saved = await service.save(SaveRootGroupPolicy(expected_revision=(await service.inspect()).revision, groups=(group("team"),)))
+    assert await management(filesystem_runtime).inspect() == saved
 
 
 @pytest.mark.parametrize("payload", [

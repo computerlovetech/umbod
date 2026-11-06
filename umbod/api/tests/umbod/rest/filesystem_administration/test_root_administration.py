@@ -25,7 +25,7 @@ def admin_settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppConfig
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
     return AppConfig(
         rest={"metrics_enabled": False},
-        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "administration.sqlite")},
+        connector_store={"type": "inmemory"},
         admin_authentication={"mode": "simulation", "simulated_admin": True},
         oidc={"issuer_url": " Exact Issuer "},
         mcp={"permission_group_claim": "filesystem_groups"},

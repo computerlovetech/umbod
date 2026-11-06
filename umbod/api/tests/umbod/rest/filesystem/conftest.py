@@ -2,6 +2,7 @@ from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 import pytest
 from fastapi import FastAPI, Request
@@ -49,11 +50,10 @@ def filesystem_upload_max_bytes(request: pytest.FixtureRequest) -> int:
 
 
 @pytest.fixture
-def filesystem_persistence_config(
-    request: pytest.FixtureRequest, isolated_connector_store_database: Path,
-) -> PersistenceConfig:
+def filesystem_persistence_config(request: pytest.FixtureRequest) -> PersistenceConfig:
     if getattr(request, "param", "inmemory") == "sqlite":
-        return SQLiteConnectorStoreConfig(sqlite_path=str(isolated_connector_store_database))
+        database_path = cast(Path, request.getfixturevalue("isolated_connector_store_database"))
+        return SQLiteConnectorStoreConfig(sqlite_path=str(database_path))
     return InMemoryConnectorStoreConfig()
 
 

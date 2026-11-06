@@ -2,14 +2,54 @@ import pytest
 from fastmcp.exceptions import ResourceError
 
 from umbod.core.filesystem.authorization.errors import PermissionDenied
-from umbod.core.filesystem.errors import InvalidName, MissingNode, NameCollision, RevisionConflict, StorageFailure
-from umbod.core.filesystem.sharing import SharingPolicyUnavailable
-from umbod.core.filesystem.uploads.errors import UploadConflict, UploadReceiptUnavailable
+from umbod.core.filesystem.content.errors import UploadTooLarge
+from umbod.core.filesystem.errors import (
+    InvalidMove, InvalidName, MissingNode, NameCollision, PolicyDecodingFailure,
+    RevisionConflict, RootMutation, StorageFailure, WrongNodeKind,
+)
+from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
+from umbod.core.filesystem.uploads.errors import (
+    UploadChecksumMismatch, UploadConflict, UploadExpired, UploadLengthMismatch,
+    UploadMediaTypeMismatch, UploadReceiptUnavailable,
+)
 from umbod.core.responses import OperationState, RetryAdvice
 from umbod.mcp.filesystem.approval_state import FileDeletionApprovalDenied
-from umbod.mcp.filesystem.errors import filesystem_operation, filesystem_resource_operation
+from umbod.mcp.filesystem.errors import (
+    InvalidReadEncoding, ReadTooLarge, filesystem_operation, filesystem_preflight, filesystem_resource_operation,
+)
 from umbod.mcp.responses.progress import operation_completed, operation_progress_context
-from umbod.mcp.tools.errors import BuiltinToolAuthorizationDenied, BuiltinToolError
+from umbod.mcp.tools.errors import BuiltinToolAuthorizationDenied, BuiltinToolError, BuiltinToolRejected
+
+
+@pytest.mark.parametrize("error_type", [
+    InvalidSharingPolicy, ReadTooLarge, InvalidReadEncoding, UploadTooLarge,
+    UploadChecksumMismatch, UploadReceiptUnavailable, UploadConflict, UploadExpired,
+    UploadLengthMismatch, UploadMediaTypeMismatch, InvalidMove, RootMutation,
+    InvalidName, NameCollision, WrongNodeKind, RevisionConflict,
+])
+def test_preflight_expected_domain_failures_are_builtin_tool_rejections(error_type: type[Exception]) -> None:
+    with operation_progress_context() as progress:
+        with pytest.raises(BuiltinToolRejected) as caught:
+            with filesystem_preflight():
+                raise error_type("SECRET /private/path")
+        assert progress.state is OperationState.NOT_STARTED
+    assert isinstance(caught.value, BuiltinToolError)
+    assert "SECRET" not in str(caught.value)
+    assert "/private/path" not in caught.value.details.model_dump_json()
+
+
+@pytest.mark.parametrize("error_type", [
+    StorageFailure, PolicyDecodingFailure, SharingPolicyUnavailable, RuntimeError,
+])
+def test_preflight_server_faults_are_not_builtin_tool_rejections(error_type: type[Exception]) -> None:
+    with operation_progress_context() as progress:
+        with pytest.raises(BuiltinToolError) as caught:
+            with filesystem_preflight():
+                raise error_type("SECRET /private/path")
+        assert progress.state is OperationState.NOT_STARTED
+    assert not isinstance(caught.value, BuiltinToolRejected)
+    assert "SECRET" not in str(caught.value)
+    assert "/private/path" not in caught.value.details.model_dump_json()
 
 
 @pytest.mark.parametrize(

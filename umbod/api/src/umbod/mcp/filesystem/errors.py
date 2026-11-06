@@ -6,7 +6,9 @@ from mcp.shared.exceptions import MCPError
 
 from umbod.core.responses import RetryAdvice, ToolErrorDetails
 from umbod.mcp.responses.progress import operation_started
-from umbod.mcp.tools.errors import BuiltinToolApprovalDenied, BuiltinToolAuthorizationDenied, BuiltinToolError
+from umbod.mcp.tools.errors import (
+    BuiltinToolApprovalDenied, BuiltinToolAuthorizationDenied, BuiltinToolError, BuiltinToolRejected,
+)
 
 from .approval_state import FileDeletionApprovalDenied
 
@@ -128,7 +130,8 @@ def filesystem_preflight() -> Iterator[None]:
     except Exception as error:
         for error_type, message in _ERROR_MESSAGES.items():
             if isinstance(error, error_type):
-                raise BuiltinToolError(
+                failure_type = BuiltinToolError if error_type in (StorageFailure, SharingPolicyUnavailable) else BuiltinToolRejected
+                raise failure_type(
                     message, details=_ERROR_DETAILS[error_type],
                     retry=_ERROR_RETRIES.get(error_type, RetryAdvice.AFTER_CORRECTION),
                 ) from None

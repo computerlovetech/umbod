@@ -1,4 +1,7 @@
 import asyncio
+
+import aiosqlite
+
 from dataclasses import dataclass
 from typing import assert_never
 
@@ -12,9 +15,11 @@ from umbod.core.persistence import (
     PersistenceReadiness,
     PersistenceRuntime,
 )
+from umbod.infrastructure.connections import ConnectionProvider
 from umbod.infrastructure.persistence.inmemory.database import InMemoryDatabase
 from umbod.infrastructure.persistence.schema_preparation import prepare_application_schema
 from umbod.infrastructure.persistence.sqlite.database import SQLiteDatabase
+from umbod.infrastructure.persistence.sqlite.factories import create_pooled_sqlite_database
 from umbod.infrastructure.persistence.sqlite.schema_preparation import SQLiteCurrentSchemaPreparation
 
 
@@ -63,6 +68,26 @@ class AppPersistenceRuntime:
         return None
 
 
+class SQLitePersistenceRuntime:
+    def __init__(
+        self, database: SQLiteDatabase, connections: ConnectionProvider[aiosqlite.Connection]
+    ) -> None:
+        self.database = database
+        self._connections = connections
+        self._schema_readiness = SQLitePersistenceReadiness(database)
+
+    @property
+    def readiness(self) -> PersistenceReadiness:
+        return self
+
+    async def ensure_ready(self) -> None:
+        await self._connections.initialize()
+        await self._schema_readiness.ensure_ready()
+
+    async def shutdown(self) -> None:
+        await self._connections.close()
+
+
 class ConfiguredPersistenceRuntimeProvider:
     def __init__(self, config: PersistenceConfig) -> None:
         self._config = config
@@ -76,9 +101,8 @@ class ConfiguredPersistenceRuntimeProvider:
                 readiness=InMemoryPersistenceReadiness(database),
             )
         if isinstance(config, SQLiteConnectorStoreConfig):
-            database = SQLiteDatabase(config.sqlite_path, create_parent_dirs=True)
-            return AppPersistenceRuntime(
-                database=database,
-                readiness=SQLitePersistenceReadiness(database),
+            resources = create_pooled_sqlite_database(
+                config.sqlite_path, create_parent_dirs=True
             )
+            return SQLitePersistenceRuntime(resources.database, resources.connections)
         assert_never(config)

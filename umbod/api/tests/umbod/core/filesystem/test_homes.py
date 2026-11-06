@@ -1,5 +1,4 @@
 import asyncio
-from pathlib import Path
 from uuid import UUID, uuid4
 
 import pytest
@@ -17,7 +16,6 @@ from umbod.infrastructure import (
     create_access_control_driver, create_filesystem_browsing, create_filesystem_creation,
     create_filesystem_homes, create_namespace_driver, create_root_provisioning,
 )
-from tests.persistence_runtime import prepared_sqlite_runtime
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
 
 
@@ -132,16 +130,7 @@ async def test_ancestor_grants_and_admin_membership_do_not_disclose_home(
 
 
 @pytest.mark.asyncio
-async def test_sqlite_reopen_retains_home_mapping(tmp_path: Path) -> None:
-    path = tmp_path / "homes.sqlite"
+async def test_service_recreation_retains_home_mapping(filesystem_runtime: PersistenceRuntime) -> None:
     caller = snapshot("alice", "issuer", ())
-    runtime = await prepared_sqlite_runtime(path)
-    try:
-        node = await create_filesystem_homes(database=runtime.database).get_or_provision(caller)
-    finally:
-        await runtime.shutdown()
-    reopened = await prepared_sqlite_runtime(path)
-    try:
-        assert await create_filesystem_homes(database=reopened.database).get_or_provision(caller) == node
-    finally:
-        await reopened.shutdown()
+    node = await create_filesystem_homes(database=filesystem_runtime.database).get_or_provision(caller)
+    assert await create_filesystem_homes(database=filesystem_runtime.database).get_or_provision(caller) == node

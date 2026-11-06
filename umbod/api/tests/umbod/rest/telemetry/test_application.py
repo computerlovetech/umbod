@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -11,10 +12,14 @@ from fastapi.testclient import TestClient
 from umbod.config import AppConfig, OtlpReceiverConfig, RestConfig, RuntimeConfig, TelemetryAnalyticsConfig
 from umbod.config.telemetry import TelemetryAppConfig
 from umbod.core.telemetry import TelemetryExport, TelemetrySink
-from umbod.core.telemetry.analytics import InstanceScope, LogCountQuery, NoTimeBuckets, TelemetryAnalyticsUnavailable, TimeRange
+from umbod.core.telemetry.analytics import InstanceScope, LogCountQuery, NoTimeBuckets, TelemetryAnalyticsRuntime, TelemetryAnalyticsUnavailable, TimeRange
+from umbod.rest.telemetry import application as telemetry_application
 from umbod.rest.main import create_app
 from umbod.rest.telemetry.application import create_telemetry_app
 from umbod.rest.telemetry.dependencies import get_analytics_reader, get_telemetry_sink
+
+from tests.persistence_runtime import create_inmemory_runtime
+from tests.support.telemetry_runtime import InMemoryTelemetryAnalyticsRuntime
 
 
 @pytest.fixture(autouse=True)
@@ -29,15 +34,18 @@ def enabled_telemetry_logging() -> Iterator[None]:
 
 
 class AcceptedTelemetrySink:
+    def __init__(self) -> None:
+        self.exports: list[TelemetryExport] = []
+
     def export(self, batch: TelemetryExport) -> None:
-        return None
+        self.exports.append(batch)
 
 
 def collector_settings() -> TelemetryAppConfig:
     return TelemetryAppConfig(
         runtime=RuntimeConfig(),
         otlp_receiver=OtlpReceiverConfig(enabled=True, bearer_token="collector-test"),
-        telemetry_analytics=TelemetryAnalyticsConfig(),
+        telemetry_analytics=TelemetryAnalyticsConfig(enabled=False),
     )
 
 
@@ -65,11 +73,11 @@ def test_receiver_can_be_mounted_with_explicit_lifespan() -> None:
         assert client.post("/telemetry/v1/logs", json={}, headers={"Authorization": "Bearer collector-test"}).status_code == 200
 
 
-def test_standalone_analytics_persists_and_shuts_down(tmp_path: Path) -> None:
+@pytest.mark.anyio
+async def test_standalone_analytics_retains_records_across_application_reconstruction_and_shuts_down(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     settings = collector_settings()
-    settings.telemetry_analytics = TelemetryAnalyticsConfig(
-        enabled=True, sqlite_path=str(tmp_path / "collector.sqlite3"),
-    )
     query = LogCountQuery(
         scope=InstanceScope(kind="instance"),
         time_range=TimeRange(
@@ -78,27 +86,44 @@ def test_standalone_analytics_persists_and_shuts_down(tmp_path: Path) -> None:
         ),
         filters=(), group_by=(), bucketing=NoTimeBuckets(kind="none"), max_groups=10,
     )
-    app = create_telemetry_app(settings)
+    persistence = create_inmemory_runtime()
+    selected_settings: list[AppConfig | TelemetryAppConfig] = []
+
+    def select_runtime(config: AppConfig | TelemetryAppConfig) -> TelemetryAnalyticsRuntime:
+        selected_settings.append(config)
+        return InMemoryTelemetryAnalyticsRuntime(persistence.database, persistence.readiness)
+
+    sink = AcceptedTelemetrySink()
 
     def provide_sink() -> TelemetrySink:
-        return AcceptedTelemetrySink()
+        return sink
 
-    app.dependency_overrides[get_telemetry_sink] = provide_sink
-    with TestClient(app) as client:
-        response = client.post(
-            "/v1/logs",
-            json={"resourceLogs": [{"scopeLogs": [{"logRecords": [{"severityText": "INFO"}]}]}]},
-            headers={"Authorization": "Bearer collector-test"},
-        )
-        assert response.status_code == 200
-        reader = app.dependency_overrides[get_analytics_reader]()
-        assert client.portal.call(reader.count_logs, query).rows[0].count == 1
-    restarted = create_telemetry_app(settings)
-    with TestClient(restarted) as client:
-        with pytest.raises(TelemetryAnalyticsUnavailable):
-            client.portal.call(reader.count_logs, query)
-        restarted_reader = restarted.dependency_overrides[get_analytics_reader]()
-        assert client.portal.call(restarted_reader.count_logs, query).rows[0].count == 1
+    try:
+        monkeypatch.setattr(telemetry_application, "create_configured_analytics_runtime", select_runtime)
+        app = create_telemetry_app(settings)
+        app.dependency_overrides[get_telemetry_sink] = provide_sink
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://collector") as client:
+                response = await client.post(
+                    "/v1/logs",
+                    json={"resourceLogs": [{"scopeLogs": [{"logRecords": [{"severityText": "INFO"}]}]}]},
+                    headers={"Authorization": "Bearer collector-test"},
+                )
+                assert response.status_code == 200
+                reader = app.dependency_overrides[get_analytics_reader]()
+                assert (await reader.count_logs(query)).rows[0].count == 1
+                assert len(sink.exports) == 1
+        recreated = create_telemetry_app(settings)
+        async with recreated.router.lifespan_context(recreated):
+            with pytest.raises(TelemetryAnalyticsUnavailable):
+                await reader.count_logs(query)
+            recreated_reader = recreated.dependency_overrides[get_analytics_reader]()
+            assert (await recreated_reader.count_logs(query)).rows[0].count == 1
+            assert recreated_reader is not reader
+        assert len(selected_settings) == 2
+        assert all(config is settings for config in selected_settings)
+    finally:
+        await persistence.shutdown()
 
 
 @pytest.mark.parametrize("signal", ["logs", "metrics", "traces"])
@@ -109,6 +134,8 @@ def test_api_never_includes_ingestion(
     deployment.write_text('{"connectors":[]}', encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
     settings = AppConfig(
+        connector_store={"type": "inmemory"},
+        telemetry_analytics=TelemetryAnalyticsConfig(enabled=False),
         rest=RestConfig(metrics_enabled=False),
         otlp_receiver=OtlpReceiverConfig(enabled=True, bearer_token="collector-test"),
     )

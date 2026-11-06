@@ -4,7 +4,9 @@ from umbod.core.permissions.factories import create_group_permission_store
 from umbod.core.permissions.domain import ConnectorCapabilityRef, SaveGroupPermissionsRequest
 from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.publishing.stores.service import ConnectorPublishingStoreService
-from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
+from umbod.infrastructure import AppPersistenceRuntime
+from umbod.rest.factories import ConnectorApiDependencyFactories
+from contextlib import AsyncExitStack
 from tests.persistence_runtime import create_inmemory_runtime
 from collections.abc import Awaitable, Callable
 from pathlib import Path
@@ -14,12 +16,12 @@ import jwt
 import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
-from fastapi.testclient import TestClient
+import httpx
 from fastmcp.exceptions import ToolError
 from mcp.shared.exceptions import MCPError
 from pydantic import ConfigDict, Field, SecretStr
 from starlette.applications import Starlette
-from umbod.config import ConnectorStoreConfig
+from umbod.config import InMemoryConnectorStoreConfig
 from tests.support.configuration import InMemoryConnectorCurrentConfigurationStore
 from umbod.core.connectors.native.deployment.availability import DeploymentConnectorAvailability
 from umbod.core.connectors.native.runtime import assemble_connector_runtime
@@ -35,7 +37,7 @@ from umbod.mcp.context import PublicAppConfig, PublicAppRuntimeContext
 from umbod.mcp.public_app import build_starlette_app, create_runtime_context
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, LocalConnectorRuntimeStateSourceStrategy
 from umbod.mcp.settings import MCPAppSettings, MCPSettings
-from umbod.rest.main import create_app
+from umbod.rest.main import create_app_with_dependency_factories
 from umbod.rest.settings import APISettings
 from umbod_sdk.connectors.plugin_api import ConfigurationCheckResult, Connector
 from umbod_sdk.connectors.proxies import Model
@@ -64,18 +66,19 @@ def _echo_connector() -> Connector:
         return f'Echo resource: {message}'
     return connector
 
-async def _build_public_app(tmp_path: Path, exposure_mode: Literal['flat', 'gateway', 'codemode']='flat') -> tuple[Starlette, str, PublicAppRuntimeContext, ConnectorPublishingStoreService]:
+async def _build_public_app(runtime_resources: AsyncExitStack, exposure_mode: Literal['flat', 'gateway', 'codemode']='flat') -> tuple[Starlette, str, PublicAppRuntimeContext, ConnectorPublishingStoreService]:
     token = jwt.encode({'email': 'agent@example.com', 'groups': ['agents']}, key='', algorithm='none')
-    settings = MCPAppSettings(mcp=MCPSettings(metrics_enabled=False, auth_mode='single_test_user', test_bearer_token=token, connector_tool_exposure_mode=exposure_mode, downstream_discovery_enabled=False, stateless_http=True, _env_file=None), endpoints={'mcp_base_url': 'http://localhost'}, connector_store=ConnectorStoreConfig(type='sqlite', sqlite_path=str(tmp_path / 'agent-http-integration.sqlite3')), connector_security={'configuration_secret': 'test-secret', 'approval_state_key': 'integration-approval-state-key-with-sufficient-entropy'}, _env_file=None)
+    settings = MCPAppSettings(rest={'metrics_enabled': False}, mcp=MCPSettings(metrics_enabled=False, auth_mode='single_test_user', test_bearer_token=token, connector_tool_exposure_mode=exposure_mode, downstream_discovery_enabled=False, stateless_http=True, _env_file=None), endpoints={'mcp_base_url': 'http://localhost'}, connector_store=InMemoryConnectorStoreConfig(), connector_security={'configuration_secret': 'test-secret', 'approval_state_key': 'integration-approval-state-key-with-sufficient-entropy'}, _env_file=None)
+    persistence_runtime = create_inmemory_runtime()
+    runtime_resources.push_async_callback(persistence_runtime.shutdown)
+    await persistence_runtime.readiness.ensure_ready()
     configuration_store = InMemoryConnectorCurrentConfigurationStore()
-    publishing_store = ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE)
+    publishing_store = ConnectorPublishingStoreService(persistence_runtime.database, PUBLICATION_STATE_TABLE)
     await configuration_store.save_current_configuration('echo', EchoConfiguration(api_token=SecretStr('valid-token')))
     await publishing_store.publish_connector('echo')
     connector_runtime = assemble_connector_runtime(plugins=[_echo_connector()], availability=DeploymentConnectorAvailability.from_mapping({'connectors': [{'id': 'echo'}]}), configuration_store=configuration_store, publishing_store=publishing_store)
     tool_state_store = InMemoryConnectorToolRuntimeStateStore()
     tool_state_store.save_runtime_state(ConnectorToolRuntimeState(key=ConnectorToolRef('echo', 'echo_message'), status='enabled'))
-    persistence_runtime = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
-    await persistence_runtime.readiness.ensure_ready()
     activation_store = await create_capability_activation_store(persistence_runtime.database)
     await activation_store.set_status(CapabilityRef('native', 'echo', 'tool', 'echo_message'), ActivationStatus.ENABLED)
     permission_store = await create_group_permission_store(persistence_runtime.database)
@@ -90,7 +93,7 @@ async def _build_public_app(tmp_path: Path, exposure_mode: Literal['flat', 'gate
         ),
         ActivationStatus.ENABLED,
     )
-    config = PublicAppConfig(settings=settings, telemetry=create_configured_mcp_telemetry(settings), connector_runtime=connector_runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=LocalConnectorRuntimeStateSourceStrategy(configuration_store, publishing_store), stateless_http=True, api_base_url=None, persistence_runtime=persistence_runtime, connector_tool_runtime_state_store=tool_state_store)
+    config = PublicAppConfig(settings=settings, telemetry=create_configured_mcp_telemetry(settings), connector_runtime=connector_runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=LocalConnectorRuntimeStateSourceStrategy(configuration_store, publishing_store), stateless_http=True, api_base_url=None, persistence_runtime=AppPersistenceRuntime(database=persistence_runtime.database, readiness=persistence_runtime.readiness), connector_tool_runtime_state_store=tool_state_store)
     context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     context.group_permission_runtime_state.grant_connector('agents', 'echo')
     context.group_permission_runtime_state.grant_tool('agents', 'echo', 'echo_message')
@@ -102,13 +105,29 @@ async def _build_public_app(tmp_path: Path, exposure_mode: Literal['flat', 'gate
     )
     return (await build_starlette_app(context), token, context, publishing_store)
 
+
+async def _admin_client(
+    runtime_resources: AsyncExitStack, context: PublicAppRuntimeContext,
+) -> httpx.AsyncClient:
+    runtime = AppPersistenceRuntime(
+        database=context.persistence_runtime.database, readiness=context.persistence_runtime.readiness,
+    )
+    factories = ConnectorApiDependencyFactories.from_settings(
+        APISettings.model_validate(context.settings.model_dump()), runtime, [_echo_connector().registration()],
+    )
+    app = create_app_with_dependency_factories(factories)
+    await runtime_resources.enter_async_context(app.router.lifespan_context(app))
+    return await runtime_resources.enter_async_context(httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://testserver",
+    ))
+
 class _RestConnectorToolRuntimeStateReader:
 
-    def __init__(self, admin: TestClient) -> None:
+    def __init__(self, admin: httpx.AsyncClient) -> None:
         self._admin = admin
 
     async def get_runtime_state(self, key: ConnectorToolRef) -> Optional[ConnectorToolRuntimeState]:
-        response = self._admin.get(f'/system/connectors/{key.connector_id}/tool/{key.operation_name}')
+        response = await self._admin.get(f'/system/connectors/{key.connector_id}/tool/{key.operation_name}')
         if response.status_code == 404:
             return None
         response.raise_for_status()
@@ -117,7 +136,7 @@ class _RestConnectorToolRuntimeStateReader:
             raise ValueError(f'Unexpected connector tool status: {status}')
         return ConnectorToolRuntimeState(key=key, status=status)
 
-async def _synchronize_echo_tool_runtime_state(admin: TestClient, context: PublicAppRuntimeContext) -> None:
+async def _synchronize_echo_tool_runtime_state(admin: httpx.AsyncClient, context: PublicAppRuntimeContext) -> None:
     synchronizer = ConnectorToolRuntimeStateSynchronizer(reader=_RestConnectorToolRuntimeStateReader(admin), store=context.connector_tool_runtime_state_store, reconciler=context.mcp.connector_tool_registry)
     await synchronizer.sync_runtime_state(ConnectorToolRef('echo', 'echo_message'))
 
@@ -132,8 +151,8 @@ def _http_transport(app: Starlette, token: Optional[str], request_hook: Optional
 
 @pytest.mark.parametrize('presented_token', [None, 'invalid-token'], ids=['missing', 'invalid'])
 @pytest.mark.asyncio
-async def test_agent_without_valid_authentication_is_rejected_during_http_initialization(tmp_path: Path, presented_token: Optional[str]) -> None:
-    (app, _token, _context, _publishing_store) = await _build_public_app(tmp_path)
+async def test_agent_without_valid_authentication_is_rejected_during_http_initialization(runtime_resources: AsyncExitStack, presented_token: Optional[str]) -> None:
+    (app, _token, _context, _publishing_store) = await _build_public_app(runtime_resources)
     with pytest.raises(ExceptionGroup) as rejection:
         async with app.router.lifespan_context(app):
             async with Client(_http_transport(app, presented_token)):
@@ -145,8 +164,8 @@ async def test_agent_without_valid_authentication_is_rejected_during_http_initia
     assert error.message == 'Server returned an error response'
 
 @pytest.mark.asyncio
-async def test_development_mode_handles_sequential_requests_without_session_id(tmp_path: Path) -> None:
-    (app, token, _context, _publishing_store) = await _build_public_app(tmp_path)
+async def test_development_mode_handles_sequential_requests_without_session_id(runtime_resources: AsyncExitStack) -> None:
+    (app, token, _context, _publishing_store) = await _build_public_app(runtime_resources)
     observed_session_ids: list[Optional[str]] = []
 
     async def record_session_id(request: httpx2.Request) -> None:
@@ -165,8 +184,8 @@ async def test_development_mode_handles_sequential_requests_without_session_id(t
 
 @pytest.mark.parametrize('exposure_mode', ['flat', 'gateway', 'codemode'])
 @pytest.mark.asyncio
-async def test_authenticated_agent_discovers_and_invokes_tool_in_exposure_mode(tmp_path: Path, exposure_mode: Literal['flat', 'gateway', 'codemode']) -> None:
-    (app, token, _context, _publishing_store) = await _build_public_app(tmp_path, exposure_mode)
+async def test_authenticated_agent_discovers_and_invokes_tool_in_exposure_mode(runtime_resources: AsyncExitStack, exposure_mode: Literal['flat', 'gateway', 'codemode']) -> None:
+    (app, token, _context, _publishing_store) = await _build_public_app(runtime_resources, exposure_mode)
     async with app.router.lifespan_context(app):
         async with Client(_http_transport(app, token)) as client:
             tools = {tool.name: tool for tool in await client.list_tools()}
@@ -198,8 +217,8 @@ async def test_authenticated_agent_discovers_and_invokes_tool_in_exposure_mode(t
             assert result.structured_content['final_value'] == {'message': 'codemode'}
 
 @pytest.mark.asyncio
-async def test_agent_receives_validation_error_for_missing_required_tool_argument(tmp_path: Path) -> None:
-    (app, token, _context, _publishing_store) = await _build_public_app(tmp_path)
+async def test_agent_receives_validation_error_for_missing_required_tool_argument(runtime_resources: AsyncExitStack) -> None:
+    (app, token, _context, _publishing_store) = await _build_public_app(runtime_resources)
     async with app.router.lifespan_context(app):
         async with Client(_http_transport(app, token)) as client:
             with pytest.raises(ToolError) as rejection:
@@ -208,8 +227,8 @@ async def test_agent_receives_validation_error_for_missing_required_tool_argumen
     assert 'Missing required argument' in str(rejection.value)
 
 @pytest.mark.asyncio
-async def test_agent_cannot_distinguish_unknown_tool_from_unauthorized_tool(tmp_path: Path) -> None:
-    (app, token, _context, _publishing_store) = await _build_public_app(tmp_path)
+async def test_agent_cannot_distinguish_unknown_tool_from_unauthorized_tool(runtime_resources: AsyncExitStack) -> None:
+    (app, token, _context, _publishing_store) = await _build_public_app(runtime_resources)
     async with app.router.lifespan_context(app):
         async with Client(_http_transport(app, token)) as client:
             with pytest.raises(ToolError) as rejection:
@@ -217,19 +236,19 @@ async def test_agent_cannot_distinguish_unknown_tool_from_unauthorized_tool(tmp_
     assert str(rejection.value) == "Authorization failed for tool 'unknown_tool': not found or not authorized"
 
 @pytest.mark.asyncio
-async def test_admin_activation_changes_public_tool_discovery_and_stale_invocation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_admin_activation_changes_public_tool_discovery_and_stale_invocation(runtime_resources: AsyncExitStack, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     availability_path = tmp_path / 'connector-availability.json'
     availability_path.write_text('{"connectors": [{"id": "echo"}]}', encoding='utf-8')
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
-    (app, token, context, _publishing_store) = await _build_public_app(tmp_path)
-    admin = TestClient(create_app(settings=APISettings.model_validate(context.settings.model_dump()), connector_registrations=[_echo_connector().registration()]))
+    (app, token, context, _publishing_store) = await _build_public_app(runtime_resources)
+    admin = await _admin_client(runtime_resources, context)
     activation_path = '/api/admin/connectors/catalog/echo/tools/activation'
     async with app.router.lifespan_context(app):
         async with Client(_http_transport(app, token)) as client:
-            enabled_response = admin.put(activation_path, json={'tools': [{'tool_id': 'echo_message', 'activation_status': 'enabled'}]})
+            enabled_response = await admin.put(activation_path, json={'tools': [{'tool_id': 'echo_message', 'activation_status': 'enabled'}]})
             await _synchronize_echo_tool_runtime_state(admin, context)
             names_when_enabled = {tool.name for tool in await client.list_tools()}
-            disabled_response = admin.put(activation_path, json={'tools': [{'tool_id': 'echo_message', 'activation_status': 'disabled'}]})
+            disabled_response = await admin.put(activation_path, json={'tools': [{'tool_id': 'echo_message', 'activation_status': 'disabled'}]})
             await _synchronize_echo_tool_runtime_state(admin, context)
             names_when_disabled = {tool.name for tool in await client.list_tools()}
             with pytest.raises(ToolError) as rejection:
@@ -244,13 +263,13 @@ async def test_admin_activation_changes_public_tool_discovery_and_stale_invocati
 
 @pytest.mark.parametrize('approved', [True, False], ids=['accepted', 'rejected'])
 @pytest.mark.asyncio
-async def test_admin_ask_policy_requires_agent_confirmation_before_http_invocation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, approved: bool) -> None:
+async def test_admin_ask_policy_requires_agent_confirmation_before_http_invocation(runtime_resources: AsyncExitStack, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, approved: bool) -> None:
     availability_path = tmp_path / 'connector-availability.json'
     availability_path.write_text('{"connectors": [{"id": "echo"}]}', encoding='utf-8')
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
-    (app, token, context, _publishing_store) = await _build_public_app(tmp_path)
-    admin = TestClient(create_app(settings=APISettings.model_validate(context.settings.model_dump()), connector_registrations=[_echo_connector().registration()]))
-    policy_response = admin.put('/api/admin/connectors/catalog/echo/tools/activation', json={'tools': [{'tool_id': 'echo_message', 'invocation_mode': 'ask', 'expected_policy_revision': 0}]})
+    (app, token, context, _publishing_store) = await _build_public_app(runtime_resources)
+    admin = await _admin_client(runtime_resources, context)
+    policy_response = await admin.put('/api/admin/connectors/catalog/echo/tools/activation', json={'tools': [{'tool_id': 'echo_message', 'invocation_mode': 'ask', 'expected_policy_revision': 0}]})
     approval_requests: list[str] = []
 
     async def confirmation_handler(message: str, *_args: object) -> dict[str, bool]:
@@ -268,14 +287,14 @@ async def test_admin_ask_policy_requires_agent_confirmation_before_http_invocati
         assert result.structured_content == {'message': 'requires approval'}
 
 @pytest.mark.asyncio
-async def test_admin_changes_observed_ask_policy_to_direct_without_further_elicitation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_admin_changes_observed_ask_policy_to_direct_without_further_elicitation(runtime_resources: AsyncExitStack, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     availability_path = tmp_path / 'connector-availability.json'
     availability_path.write_text('{"connectors": [{"id": "echo"}]}', encoding='utf-8')
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
-    (app, token, context, _publishing_store) = await _build_public_app(tmp_path)
-    admin = TestClient(create_app(settings=APISettings.model_validate(context.settings.model_dump()), connector_registrations=[_echo_connector().registration()]))
+    (app, token, context, _publishing_store) = await _build_public_app(runtime_resources)
+    admin = await _admin_client(runtime_resources, context)
     activation_path = '/api/admin/connectors/catalog/echo/tools/activation'
-    ask_response = admin.put(activation_path, json={'tools': [{'tool_id': 'echo_message', 'invocation_mode': 'ask', 'expected_policy_revision': 0}]})
+    ask_response = await admin.put(activation_path, json={'tools': [{'tool_id': 'echo_message', 'invocation_mode': 'ask', 'expected_policy_revision': 0}]})
     approval_requests: list[str] = []
 
     async def confirmation_handler(message: str, *_args: object) -> dict[str, bool]:
@@ -284,7 +303,7 @@ async def test_admin_changes_observed_ask_policy_to_direct_without_further_elici
     async with app.router.lifespan_context(app):
         async with Client(_http_transport(app, token), elicitation_handler=confirmation_handler) as client:
             ask_result = await client.call_tool('echo_echo_message', {'message': 'ask first'})
-            direct_response = admin.put(activation_path, json={'tools': [{'tool_id': 'echo_message', 'invocation_mode': 'direct', 'expected_policy_revision': 1}]})
+            direct_response = await admin.put(activation_path, json={'tools': [{'tool_id': 'echo_message', 'invocation_mode': 'direct', 'expected_policy_revision': 1}]})
             direct_result = await client.call_tool('echo_echo_message', {'message': 'direct next'})
     assert ask_response.status_code == 200
     assert ask_response.json()['tools'][0]['policy_revision'] == 1
@@ -297,8 +316,8 @@ async def test_admin_changes_observed_ask_policy_to_direct_without_further_elici
     assert direct_result.structured_content == {'message': 'direct next'}
 
 @pytest.mark.asyncio
-async def test_authenticated_agent_discovers_and_uses_prompt_and_resource_over_http(tmp_path: Path) -> None:
-    (app, token, _context, _publishing_store) = await _build_public_app(tmp_path)
+async def test_authenticated_agent_discovers_and_uses_prompt_and_resource_over_http(runtime_resources: AsyncExitStack) -> None:
+    (app, token, _context, _publishing_store) = await _build_public_app(runtime_resources)
     async with app.router.lifespan_context(app):
         async with Client(_http_transport(app, token)) as client:
             prompts = {prompt.name: prompt for prompt in await client.list_prompts()}
@@ -314,8 +333,8 @@ async def test_authenticated_agent_discovers_and_uses_prompt_and_resource_over_h
     assert resources[0].text == 'Echo resource: hello'
 
 @pytest.mark.asyncio
-async def test_agent_loses_discovery_and_execution_when_connector_is_unpublished(tmp_path: Path) -> None:
-    (app, token, _context, publishing_store) = await _build_public_app(tmp_path)
+async def test_agent_loses_discovery_and_execution_when_connector_is_unpublished(runtime_resources: AsyncExitStack) -> None:
+    (app, token, _context, publishing_store) = await _build_public_app(runtime_resources)
     async with app.router.lifespan_context(app):
         async with Client(_http_transport(app, token)) as client:
             names_before = {tool.name for tool in await client.list_tools()}
@@ -328,8 +347,8 @@ async def test_agent_loses_discovery_and_execution_when_connector_is_unpublished
     assert str(rejection.value) == "Authorization failed for tool 'echo_echo_message': not found or not authorized"
 
 @pytest.mark.asyncio
-async def test_agent_loses_discovery_and_execution_when_permission_is_revoked(tmp_path: Path) -> None:
-    (app, token, context, _publishing_store) = await _build_public_app(tmp_path)
+async def test_agent_loses_discovery_and_execution_when_permission_is_revoked(runtime_resources: AsyncExitStack) -> None:
+    (app, token, context, _publishing_store) = await _build_public_app(runtime_resources)
     async with app.router.lifespan_context(app):
         async with Client(_http_transport(app, token)) as client:
             names_before = {tool.name for tool in await client.list_tools()}

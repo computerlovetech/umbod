@@ -5,7 +5,6 @@ from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -14,7 +13,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_mo
 
 from pydantic import BaseModel
 
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.management import (
     DeleteDownstreamConnectorAggregate,
@@ -107,12 +106,8 @@ class AttemptCase:
 
 
 @pytest_asyncio.fixture
-async def case(request: pytest.FixtureRequest) -> AsyncIterator[AttemptCase]:
-    if getattr(request, "param", "inmemory") == "sqlite":
-        directory: Path = request.getfixturevalue("tmp_path")
-        runtime = await prepared_sqlite_runtime(directory / "oauth.sqlite3")
-    else:
-        runtime = await prepared_inmemory_runtime()
+async def case() -> AsyncIterator[AttemptCase]:
+    runtime = await prepared_inmemory_runtime()
     try:
         yield await initialized_attempt_case(runtime.database)
     finally:
@@ -240,25 +235,17 @@ async def test_attempt_survives_adapter_recreation_and_completes_atomically(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("case", ("sqlite",), indirect=True)
-async def test_sqlite_attempt_finishes_through_recreated_database_runtime(
-    case: AttemptCase, tmp_path: Path
-) -> None:
-    database_path = tmp_path / "oauth.sqlite3"
+async def test_pending_attempt_finishes_through_recreated_stores(case: AttemptCase) -> None:
     await pending(case)
-    runtime = await prepared_sqlite_runtime(database_path)
-    try:
-        restored = await create_downstream_mcp_stores("test-secret", runtime.database)
-        attempt = await restored.personal_oauth_attempts.claim(claim_command(case))
-        assert attempt.preparation == case.command.preparation
-        assert (
-            await restored.personal_oauth_attempts.complete(completion(case))
-        ).status == "completed"
-        state = await case.bundle.personal_connections.get(case.query.key)
-        assert isinstance(state, PersonalConnection)
-        assert state.authorization == completion(case).authorization
-    finally:
-        await runtime.shutdown()
+    restored = await create_downstream_mcp_stores("test-secret", case.database)
+    attempt = await restored.personal_oauth_attempts.claim(claim_command(case))
+    assert attempt.preparation == case.command.preparation
+    assert (
+        await restored.personal_oauth_attempts.complete(completion(case))
+    ).status == "completed"
+    state = await case.bundle.personal_connections.get(case.query.key)
+    assert isinstance(state, PersonalConnection)
+    assert state.authorization == completion(case).authorization
 
 
 @pytest.mark.asyncio

@@ -20,8 +20,7 @@ from umbod.core.telemetry.analytics import (
     Unbucketed,
 )
 
-from .conftest import ReaderFactory
-from .in_memory import NormalizedLog
+from tests.support.telemetry_analytics import NormalizedLog, ReaderFactory
 
 
 def _query(query: LogCountQuery, **changes: object) -> LogCountQuery:

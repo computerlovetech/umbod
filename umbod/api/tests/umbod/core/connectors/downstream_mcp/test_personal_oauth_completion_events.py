@@ -1,6 +1,3 @@
-import sqlite3
-from pathlib import Path
-
 import pytest
 
 from tests.umbod.core.connectors.downstream_mcp.test_personal_discovery_event_transactions import assert_notification, events, reject_events, snapshot
@@ -20,15 +17,13 @@ async def test_oauth_direct_connection_completion_emits_one_notification(case: A
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("case", ("sqlite",), indirect=True)
-async def test_oauth_completion_event_failure_restores_connection_and_attempt(case: AttemptCase, tmp_path: Path) -> None:
-    path = tmp_path / "oauth.sqlite3"
+async def test_oauth_completion_event_failure_restores_connection_and_attempt(case: AttemptCase, monkeypatch: pytest.MonkeyPatch) -> None:
     await pending(case)
     await case.store.claim(claim_command(case))
     before = await snapshot(case.database)
     previous_events = await events(case.database)
-    reject_events(path)
-    with pytest.raises(sqlite3.IntegrityError, match="event append failed"):
+    reject_events(case.database, monkeypatch)
+    with pytest.raises(RuntimeError, match="event append failed"):
         await case.store.complete(completion(case))
     assert await snapshot(case.database) == before
     assert await events(case.database) == previous_events

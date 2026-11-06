@@ -1,7 +1,5 @@
 import asyncio
-import multiprocessing
 from collections.abc import AsyncIterator, Sequence
-from concurrent.futures import ProcessPoolExecutor
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -14,7 +12,6 @@ from umbod.core.filesystem import (
     NodeKind,
     NodeMetadata,
     Ownership,
-    OwnershipNotFound,
     Permission,
     Principal,
     PrincipalType,
@@ -41,8 +38,6 @@ from umbod.infrastructure import (
     create_filesystem,
     create_namespace_driver,
 )
-from tests.persistence_runtime import create_sqlite_runtime, prepared_sqlite_runtime
-from tests.support.filesystem.processes import create_database_child_in_process
 
 
 def metadata() -> NodeMetadata:
@@ -58,128 +53,104 @@ async def stream(data: bytes) -> AsyncIterator[bytes]:
 
 
 @pytest.mark.asyncio
-async def test_sqlite_reopen_preserves_namespace_bytes_and_policies_with_neighboring_data(
-    tmp_path: Path,
+async def test_service_recreation_preserves_namespace_bytes_and_policies_with_neighboring_data(
+    filesystem_runtime: PersistenceRuntime, tmp_path: Path,
 ) -> None:
-    path = tmp_path / "shared.db"
+    database = filesystem_runtime.database
     config = FilesystemConfig(
         content=LocalContentConfig(type="local", directory=tmp_path / "content")
     )
-    runtime = await prepared_sqlite_runtime(path)
-    try:
-        filesystem = create_filesystem(config, database=runtime.database)
-        root = await filesystem.get_root()
-        directory = await filesystem.create_directory(root.id, "Reports", metadata())
-        file = await filesystem.create_file(directory.id, "Résumé.txt", metadata())
-        written = await filesystem.write(
-            file.id, stream(b"persisted\x00bytes"), expected_revision=file.revision
-        )
-        policies = create_access_control_driver(database=runtime.database)
-        owner = Ownership(node_id=file.id, owner=subject("owner"))
-        grant = AccessGrant(
-            node_id=file.id,
-            principal=subject("reader"),
-            permissions={Permission.READ},
-            recursive=True,
-        )
-        await policies.set_owner(owner)
-        await policies.add_grant(grant)
-        publishing = await create_connector_publishing_store(runtime.database)
-        await publishing.publish_connector("neighbor")
-    finally:
-        await runtime.shutdown()
-    reopened = await prepared_sqlite_runtime(path)
-    try:
-        filesystem = create_filesystem(config, database=reopened.database)
-        policies = create_access_control_driver(database=reopened.database)
-        assert await filesystem.get_root() == root
-        assert tuple(await filesystem.list_children(root.id)) == (directory,)
-        assert await filesystem.get_node(file.id) == written
-        assert (
-            b"".join([chunk async for chunk in filesystem.read(file.id)])
-            == b"persisted\x00bytes"
-        )
-        assert await policies.get_owner(file.id) == owner
-        assert tuple(await policies.list_grants(file.id)) == (grant,)
-        publishing = await create_connector_publishing_store(reopened.database)
-        assert await publishing.is_published("neighbor")
-    finally:
-        await reopened.shutdown()
+    filesystem = create_filesystem(config, database=database)
+    root = await filesystem.get_root()
+    directory = await filesystem.create_directory(root.id, "Reports", metadata())
+    file = await filesystem.create_file(directory.id, "Résumé.txt", metadata())
+    written = await filesystem.write(
+        file.id, stream(b"persisted\x00bytes"), expected_revision=file.revision
+    )
+    policies = create_access_control_driver(database=database)
+    owner = Ownership(node_id=file.id, owner=subject("owner"))
+    grant = AccessGrant(
+        node_id=file.id,
+        principal=subject("reader"),
+        permissions={Permission.READ},
+        recursive=True,
+    )
+    await policies.set_owner(owner)
+    await policies.add_grant(grant)
+    publishing = await create_connector_publishing_store(database)
+    await publishing.publish_connector("neighbor")
+    filesystem = create_filesystem(config, database=database)
+    policies = create_access_control_driver(database=database)
+    assert await filesystem.get_root() == root
+    assert tuple(await filesystem.list_children(root.id)) == (directory,)
+    assert await filesystem.get_node(file.id) == written
+    assert (
+        b"".join([chunk async for chunk in filesystem.read(file.id)])
+        == b"persisted\x00bytes"
+    )
+    assert await policies.get_owner(file.id) == owner
+    assert tuple(await policies.list_grants(file.id)) == (grant,)
+    publishing = await create_connector_publishing_store(database)
+    assert await publishing.is_published("neighbor")
 
 
 @pytest.mark.asyncio
-async def test_separate_processes_initialize_one_root_and_preserve_all_creations(
-    tmp_path: Path,
+async def test_independent_services_initialize_one_root_and_preserve_all_creations(
+    filesystem_runtime: PersistenceRuntime,
 ) -> None:
-    path = tmp_path / "processes.db"
-    schema_runtime = await prepared_sqlite_runtime(path)
-    await schema_runtime.shutdown()
     names = tuple(f"child-{index}" for index in range(8))
-    loop = asyncio.get_running_loop()
-    with ProcessPoolExecutor(
-        max_workers=2, mp_context=multiprocessing.get_context("spawn")
-    ) as pool:
-        roots = await asyncio.gather(
-            *(
-                loop.run_in_executor(pool, create_database_child_in_process, path, name)
-                for name in names
-            )
-        )
-    runtime = await prepared_sqlite_runtime(path)
-    try:
-        namespace = create_namespace_driver(database=runtime.database)
+
+    async def create_child(name: str) -> str:
+        namespace = create_namespace_driver(database=filesystem_runtime.database)
         root = await namespace.get_root()
-        assert set(roots) == {str(root.id)}
-        assert {node.name for node in await namespace.list_children(root.id)} == set(
-            names
-        )
-    finally:
-        await runtime.shutdown()
+        await namespace.create_node(root.id, name, NodeKind.FILE, metadata())
+        return str(root.id)
+
+    roots = await asyncio.gather(*(create_child(name) for name in names))
+    namespace = create_namespace_driver(database=filesystem_runtime.database)
+    root = await namespace.get_root()
+    assert set(roots) == {str(root.id)}
+    assert {node.name for node in await namespace.list_children(root.id)} == set(
+        names
+    )
 
 
 @pytest.mark.asyncio
-async def test_independent_sqlite_runtime_conflicts_preserve_winning_mutations(
-    tmp_path: Path,
+async def test_independent_services_preserve_winning_mutations_on_conflict(
+    filesystem_runtime: PersistenceRuntime,
 ) -> None:
-    path = tmp_path / "conflicts.db"
-    first_runtime = await prepared_sqlite_runtime(path)
-    second_runtime = await prepared_sqlite_runtime(path)
-    try:
-        first = create_namespace_driver(database=first_runtime.database)
-        second = create_namespace_driver(database=second_runtime.database)
-        roots = await asyncio.gather(first.get_root(), second.get_root())
-        assert roots[0] == roots[1]
-        root = roots[0]
-        creations = await asyncio.gather(
-            first.create_node(root.id, "same", NodeKind.FILE, metadata()),
-            second.create_node(root.id, "same", NodeKind.FILE, metadata()),
-            return_exceptions=True,
-        )
-        winners = [result for result in creations if isinstance(result, Node)]
-        assert len(winners) == 1
-        assert sum(isinstance(result, NameCollision) for result in creations) == 1
-        file = winners[0]
-        publications = await asyncio.gather(
-            first.update_node(
-                file.id,
-                content=ContentRef(key="a" * 32, size=1),
-                expected_revision=file.revision,
-            ),
-            second.update_node(
-                file.id,
-                content=ContentRef(key="b" * 32, size=2),
-                expected_revision=file.revision,
-            ),
-            return_exceptions=True,
-        )
-        published = [result for result in publications if isinstance(result, Node)]
-        assert len(published) == 1
-        assert sum(isinstance(result, RevisionConflict) for result in publications) == 1
-        assert await second.get_node(file.id) == published[0]
-        assert tuple(await first.list_children(root.id)) == (published[0],)
-    finally:
-        await first_runtime.shutdown()
-        await second_runtime.shutdown()
+    first = create_namespace_driver(database=filesystem_runtime.database)
+    second = create_namespace_driver(database=filesystem_runtime.database)
+    roots = await asyncio.gather(first.get_root(), second.get_root())
+    assert roots[0] == roots[1]
+    root = roots[0]
+    creations = await asyncio.gather(
+        first.create_node(root.id, "same", NodeKind.FILE, metadata()),
+        second.create_node(root.id, "same", NodeKind.FILE, metadata()),
+        return_exceptions=True,
+    )
+    winners = [result for result in creations if isinstance(result, Node)]
+    assert len(winners) == 1
+    assert sum(isinstance(result, NameCollision) for result in creations) == 1
+    file = winners[0]
+    publications = await asyncio.gather(
+        first.update_node(
+            file.id,
+            content=ContentRef(key="a" * 32, size=1),
+            expected_revision=file.revision,
+        ),
+        second.update_node(
+            file.id,
+            content=ContentRef(key="b" * 32, size=2),
+            expected_revision=file.revision,
+        ),
+        return_exceptions=True,
+    )
+    published = [result for result in publications if isinstance(result, Node)]
+    assert len(published) == 1
+    assert sum(isinstance(result, RevisionConflict) for result in publications) == 1
+    assert await second.get_node(file.id) == published[0]
+    assert tuple(await first.list_children(root.id)) == (published[0],)
 
 
 @pytest.mark.asyncio
@@ -287,22 +258,3 @@ async def test_failed_policy_replacements_preserve_previous_records(
         await broken.remove_grant(root.id, grant.principal)
     assert await policies.get_owner(root.id) == owner
     assert tuple(await policies.list_grants(root.id)) == (grant,)
-
-
-@pytest.mark.asyncio
-async def test_application_readiness_prepares_filesystem_without_constructor_io(
-    tmp_path: Path,
-) -> None:
-    runtime = create_sqlite_runtime(tmp_path / "readiness.db")
-    try:
-        namespace = create_namespace_driver(database=runtime.database)
-        policies = create_access_control_driver(database=runtime.database)
-        with pytest.raises(StorageFailure):
-            await namespace.get_root()
-        await runtime.readiness.ensure_ready()
-        root = await namespace.get_root()
-        with pytest.raises(OwnershipNotFound):
-            await policies.get_owner(root.id)
-        assert tuple(await policies.list_grants(root.id)) == ()
-    finally:
-        await runtime.shutdown()

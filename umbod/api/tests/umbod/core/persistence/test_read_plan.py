@@ -29,10 +29,13 @@ from umbod.core.persistence import (
     UpsertCommand,
 )
 from tests.umbod.core.persistence.contract_support import (
+    GeneratedRow,
     PayloadResult,
     RecordResult,
     SampleKey,
     SampleRow,
+    generated_table,
+    non_reusing_generated_table,
     row as make_row,
     table as make_table,
 )
@@ -182,6 +185,25 @@ async def test_full_table_descriptor_participates_in_deduplication(
     async with counted_session(database, (table,)) as (session, counter):
         await plan.execute(session)
     assert counter.find_many.await_count == 2
+
+
+@pytest.mark.asyncio
+async def test_key_generation_policy_participates_in_read_deduplication(
+    plan: ReadPlanOperations,
+) -> None:
+    ordinary, _ = generated_table("same_samples")
+    opted_in, _ = non_reusing_generated_table("same_samples")
+    equivalent, _ = non_reusing_generated_table("same_samples")
+    query: Query[GeneratedRow, GeneratedRow] = Query(NoFilter(), AllFields(), Unordered())
+    ordinary_handle = plan.find_many(ordinary, query)
+    opted_in_handle = plan.find_many(opted_in, query)
+    equivalent_handle = plan.find_many(equivalent, query)
+    session = create_autospec(DatabaseSession, instance=True)
+    session.find_many.return_value = ()
+    results = await plan.execute(session)
+    assert session.find_many.await_count == 2
+    assert results.get(ordinary_handle) == ()
+    assert results.get(opted_in_handle) == results.get(equivalent_handle) == ()
 
 
 @pytest.mark.asyncio

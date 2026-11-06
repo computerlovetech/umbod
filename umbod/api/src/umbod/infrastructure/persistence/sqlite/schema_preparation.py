@@ -10,7 +10,6 @@ _SQLITE_SPECIFIC_TABLE_NAMES = frozenset(
     {
         "connector_capability_description_overrides",
         "messaging_checkpoints",
-        "messaging_events",
     }
 )
 _CURRENT_SCHEMA_STATEMENTS = (
@@ -22,7 +21,6 @@ _CURRENT_SCHEMA_STATEMENTS = (
         revision INTEGER NOT NULL CHECK (revision > 0),
         CHECK ((state = 'system' AND description IS NULL) OR (state = 'overridden' AND description IS NOT NULL AND length(trim(description)) BETWEEN 1 AND 300))
     )""",
-    "CREATE TABLE IF NOT EXISTS messaging_events (sequence INTEGER PRIMARY KEY AUTOINCREMENT, event_type TEXT NOT NULL, document TEXT NOT NULL)",
     "CREATE TABLE IF NOT EXISTS messaging_checkpoints (consumer_id TEXT PRIMARY KEY, sequence INTEGER NOT NULL CHECK(sequence >= 0))",
     "CREATE UNIQUE INDEX IF NOT EXISTS downstream_mcp_connector_definitions_public_path_uq ON downstream_mcp_connector_definitions(public_path)",
     "CREATE INDEX IF NOT EXISTS messaging_events_type_sequence_idx ON messaging_events(event_type, sequence)",

@@ -3,7 +3,6 @@ from tests.umbod.core.connectors.downstream_mcp.personal_discovery_support impor
 from datetime import timedelta
 
 import asyncio
-from pathlib import Path
 
 import pytest
 from jsonschema import ValidationError
@@ -336,16 +335,11 @@ async def test_aggregate_delete_fault_restores_policy_and_owner_observation(runt
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("runtime_case", ["sqlite"], indirect=True)
-async def test_observations_survive_worker_recreation(runtime_case: RuntimeCase, tmp_path: Path) -> None:
-    from tests.persistence_runtime import prepared_sqlite_runtime
-
+async def test_observations_survive_store_recreation(runtime_case: RuntimeCase) -> None:
     policy = await replace_policy(runtime_case, (approved_tool("read"),))
     await enable_tool(runtime_case, "read")
     await save_matches(runtime_case, policy)
-    path = tmp_path / "runtime.sqlite3"
-    database = (await prepared_sqlite_runtime(path)).database
-    recreated = await create_downstream_mcp_stores("runtime-secret", database)
+    recreated = await create_downstream_mcp_stores("runtime-secret", runtime_case.database)
     assert len(await read_available(recreated, runtime_case.query)) == 1
 
 

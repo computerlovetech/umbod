@@ -5,9 +5,10 @@ from collections.abc import Iterator
 from typing import Any
 
 import pytest
-from fastmcp import Client
+from fastmcp import Client, FastMCP
 from fastmcp.tools import ToolResult
-from fastmcp.exceptions import ToolError
+from fastmcp.exceptions import ToolError, ValidationError as ToolValidationError
+from jsonschema.exceptions import SchemaError
 from fastmcp.server.providers.proxy import ProxyTool
 
 from umbod.logging import create_application_failure_signal
@@ -66,8 +67,15 @@ def completion_records(capsys: pytest.CaptureFixture[str], caplog: pytest.LogCap
 
 
 def assert_failure(record: dict[str, Any], connector_id: str, name: str, tool: str, operation: str, mode: str, stage: str, reason: str) -> None:
-    assert record["severity_text"] == "ERROR"
-    assert record["severity_number"] == 17
+    expected_categories = {
+        "invalid_arguments": "validation",
+        "admission_denied": "authorization",
+        "authorization_rejected": "authorization",
+        "downstream_tool_error": "tool_error",
+    }
+    category = expected_categories.get(reason, "connector_error")
+    assert record["severity_text"] == ("ERROR" if category == "connector_error" else "WARNING")
+    assert record["severity_number"] == (17 if category == "connector_error" else 13)
     assert record["resource"] == {"service.name": "failure-test"}
     assert record["trace_id"]
     attributes = record["attributes"]
@@ -75,12 +83,12 @@ def assert_failure(record: dict[str, Any], connector_id: str, name: str, tool: s
     assert attributes["mcp.connector.name"] == name
     assert attributes["mcp.tool.name"] == tool
     assert attributes["mcp.operation.name"] == operation
-    assert attributes["mcp.failure.category"] == "connector_error"
+    assert attributes["mcp.failure.category"] == category
     assert attributes["mcp.failure.stage"] == stage
     assert attributes["mcp.failure.reason"] == reason
     assert attributes["mcp.execution_mode"] == mode
-    if reason == "downstream_tool_error":
-        assert attributes["mcp.failure.origin"] == "downstream_mcp"
+    if category != "connector_error":
+        assert attributes["mcp.failure.origin"] == ("downstream_mcp" if reason == "downstream_tool_error" else "client_input")
         assert not any(key.startswith("exception.") for key in attributes)
     else:
         assert attributes["exception.type"]
@@ -144,7 +152,7 @@ async def test_shared_failures_enrich_normal_stdout_completion(configured_signal
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("reason,stage", [("context_unavailable", "context"), ("admission_denied", "admission"), ("invalid_arguments", "arguments"), ("invalid_output", "output"), ("authorization_rejected", "authorization"), ("authorization_health_unavailable", "authorization"), ("transport_failure", "transport"), ("runtime_failure", "runtime"), ("contract_mismatch", "transport"), ("target_expired", "transport"), ("timeout", "transport"), ("downstream_tool_error", "downstream")])
+@pytest.mark.parametrize("reason,stage", [("context_unavailable", "context"), ("admission_denied", "admission"), ("invalid_arguments", "arguments"), ("contract_mismatch", "arguments"), ("invalid_output", "output"), ("authorization_rejected", "authorization"), ("authorization_health_unavailable", "authorization"), ("transport_failure", "transport"), ("runtime_failure", "runtime"), ("contract_mismatch", "transport"), ("target_expired", "transport"), ("timeout", "transport"), ("downstream_tool_error", "downstream")])
 async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: RuntimeCase, configured_signals: McpSignals, capsys: pytest.CaptureFixture[str], caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch, reason: str, stage: str) -> None:
     configure_logging("failure-test", "INFO")
     execution = await execution_case(runtime_case)
@@ -157,6 +165,8 @@ async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: R
         await runtime_case.bundle.personal_connections.disconnect(runtime_case.query.key)
     elif reason == "invalid_arguments":
         arguments = {"value": 12}
+    elif reason == "contract_mismatch" and stage == "arguments":
+        held.parameters = {"type": "invalid-schema-type"}
     elif reason == "invalid_output":
         execution.transport.results[(runtime_case.query.key, "read")] = PersonalToolResult(result={"content": [{"type": "text", "text": SENSITIVE}], "structuredContent": SENSITIVE})
     elif reason == "downstream_tool_error":
@@ -173,8 +183,9 @@ async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: R
                 raise PersonalRuntimeUnavailable(SENSITIVE)
             raise PersonalRuntimeUnavailable(SENSITIVE, diagnostic=InvocationFailureDiagnostic(execution_mode="personal", stage=stage, reason=reason))
         monkeypatch.setattr(execution.transport, "call_tool", fail)
-    if reason == "invalid_arguments":
-        with pytest.raises(RuntimeError, match="^Personal tool unavailable$"):
+    if reason == "invalid_arguments" or (reason == "contract_mismatch" and stage == "arguments"):
+        failure_type = ToolValidationError if reason == "invalid_arguments" else RuntimeError
+        with pytest.raises(failure_type, match="^Personal tool unavailable$"):
             await held.run(arguments)
     else:
         result = await held.run(arguments)
@@ -185,11 +196,73 @@ async def test_personal_failures_enrich_normal_stdout_completion(runtime_case: R
     assert_failure(records[0], "personal", "Personal", "Personal_read", "read", "personal", stage, reason)
     attributes = records[0]["attributes"]
     downstream = {"authorization_rejected", "transport_failure", "contract_mismatch", "target_expired", "timeout", "downstream_tool_error"}
-    assert attributes["mcp.failure.origin"] == ("downstream_mcp" if reason in downstream else "internal")
+    expected_origin = (
+        "client_input" if reason in {"invalid_arguments", "admission_denied", "authorization_rejected"}
+        else "downstream_mcp" if reason in downstream and stage != "arguments" else "internal"
+    )
+    assert attributes["mcp.failure.origin"] == expected_origin
     if reason == "runtime_failure":
         assert attributes["exception.type"] == "RuntimeError"
         assert "in fail" in attributes["exception.stacktrace"]
+    if reason == "contract_mismatch" and stage == "arguments":
+        assert attributes["exception.type"] == "PersonalToolPolicyInvalid"
     assert current_invocation_failure() is None
+
+
+@pytest.mark.asyncio
+async def test_personal_invalid_arguments_do_not_produce_framework_error_logs(
+    runtime_case: RuntimeCase, configured_signals: McpSignals,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    execution = await execution_case(runtime_case)
+    provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), configured_signals.invocation_completed.send)
+    held = await provider.get_tool("Personal_read")
+    server = FastMCP("test")
+    server.add_tool(held)
+
+    async with Client(server) as client:
+        result = await client.call_tool("Personal_read", {"value": 12}, raise_on_error=False)
+
+    assert result.is_error is True
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+    assert any(record.levelno == logging.WARNING for record in caplog.records)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("schema", "severity", "category", "failure_type"), [
+    ({"type": "object", "properties": {"value": {"type": "integer"}}}, "WARNING", "validation", ToolValidationError),
+    ({"type": "invalid-schema-type"}, "ERROR", "connector_error", SchemaError),
+])
+async def test_shared_argument_rejections_warn_but_invalid_schemas_remain_errors(
+    configured_signals: McpSignals, capsys: pytest.CaptureFixture[str],
+    caplog: pytest.LogCaptureFixture, schema: dict[str, Any], severity: str, category: str,
+    failure_type: type[Exception],
+) -> None:
+    configure_logging("failure-test", "INFO")
+
+    def unused_client_factory() -> Client:
+        raise AssertionError("Invalid arguments must not contact downstream")
+
+    async def ensure_access() -> None:
+        raise AssertionError("Invalid arguments must fail before execution")
+
+    held = AuthorizedDownstreamProxyTool(
+        identity=McpToolIdentity(tool_name="Shared_read", connector_id="shared", operation_name="read"),
+        backend_tool=ProxyTool(client_factory=unused_client_factory, name="read", parameters=schema),
+        ensure_access=ensure_access, public_name="Shared_read",
+        execution_pipeline=SignalToolExecutionPipelineFactory(configured_signals, PermitAllConnectorInvocationPolicy()).create(
+            "Shared", lambda result: isinstance(result, ToolResult) and result.is_error,
+        ),
+    )
+
+    with pytest.raises(failure_type):
+        await held.run({"value": SENSITIVE})
+
+    records = completion_records(capsys, caplog)
+    assert len(records) == 1
+    assert records[0]["severity_text"] == severity
+    assert records[0]["attributes"]["mcp.failure.category"] == category
+    assert ("exception.stacktrace" in records[0]["attributes"]) == (severity == "ERROR")
 
 
 @pytest.mark.asyncio

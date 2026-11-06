@@ -18,6 +18,7 @@ from umbod.core.persistence import (
     JsonValueCodec,
     KeyCodec,
     NoFilter,
+    NonReusingIntegerKeyCodec,
     PydanticJsonCodec,
     Query,
     RowCodec,
@@ -28,7 +29,8 @@ from umbod.core.persistence import (
     Unordered,
     UpsertCommand,
 )
-from tests.persistence_runtime import create_inmemory_runtime, create_sqlite_runtime
+from tests.persistence_runtime import create_inmemory_runtime
+from tests.umbod.infrastructure.persistence.adapters import create_contract_sqlite_database
 
 class SampleRow(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -118,13 +120,9 @@ def _inmemory(_path: Path) -> Database:
     return create_inmemory_runtime().database
 
 
-def _sqlite(path: Path) -> Database:
-    return create_sqlite_runtime(path / 'contract.sqlite').database
-
-
 DATABASE_ADAPTERS = (
     DatabaseAdapter('inmemory', _inmemory),
-    DatabaseAdapter('sqlite', _sqlite),
+    DatabaseAdapter('sqlite', create_contract_sqlite_database),
 )
 
 
@@ -199,6 +197,21 @@ def generated_table(name: str='generated_samples') -> tuple[Table[GeneratedRow, 
     fields = cast(tuple[Field[GeneratedRow, object], ...], (sequence, payload))
     keys = cast(tuple[Field[GeneratedRow, object], ...], (sequence,))
     return (Table(identity, RowCodec(GeneratedRow, fields), KeyCodec(GeneratedKey, keys)), sequence)
+
+
+def non_reusing_generated_table(
+    name: str = "non_reusing_generated_samples",
+) -> tuple[Table[GeneratedRow, GeneratedKey], Field[GeneratedRow, int]]:
+    table, sequence = generated_table(name)
+    return (
+        Table(
+            table.identity,
+            table.row_codec,
+            NonReusingIntegerKeyCodec(table.key_codec.model_type, table.key_codec.fields),
+        ),
+        sequence,
+    )
+
 
 def canonical_table(name: str='canonical_samples') -> Table[CanonicalRow, CanonicalKey]:
     identity = TableIdentity(name)

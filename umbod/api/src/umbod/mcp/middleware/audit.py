@@ -9,7 +9,7 @@ from collections.abc import Sequence
 
 import mcp.types as mt
 
-from fastmcp.exceptions import AuthorizationError
+from fastmcp.exceptions import AuthorizationError, ValidationError
 from fastmcp.server.middleware.middleware import CallNext, Middleware, MiddlewareContext
 from fastmcp.tools.base import Tool, ToolResult
 
@@ -24,6 +24,7 @@ from umbod.mcp.signals import (
     McpToolIdentity,
     set_mcp_invocation_context,
     reset_mcp_invocation_context,
+    current_mcp_invocation_context,
 )
 from umbod.mcp.logging.audit.event import (
     McpAuditFailure,
@@ -108,13 +109,13 @@ class McpAuditMiddleware(Middleware):
             if context.message.name in {"search_tools", "execute_tool", "execute_code"}:
                 target = self._recorder.tool_target(_tool_identity(context.message))
                 audit_result = (
-                    McpAuditFailure(McpAuditFailureCategory.UNEXPECTED_ERROR)
+                    McpAuditFailure(_request_failure_category())
                     if result.is_error else McpAuditSuccess()
                 )
                 if context.message.name == "execute_code":
                     target = self._recorder.code_execution_target(_code_hash(context.message))
                     if _code_execution_failed(result):
-                        audit_result = McpAuditFailure(McpAuditFailureCategory.UNEXPECTED_ERROR)
+                        audit_result = McpAuditFailure(_request_failure_category())
                 self._recorder.record_tool_invocation(
                     self._identity_source.identity_from_request(context.fastmcp_context),
                     target,
@@ -130,7 +131,7 @@ class McpAuditMiddleware(Middleware):
                 correlation,
             )
             raise
-        except Exception:
+        except Exception as error:
             if context.message.name in {"search_tools", "execute_tool", "execute_code"}:
                 target = (
                     self._recorder.code_execution_target(_code_hash(context.message))
@@ -140,13 +141,24 @@ class McpAuditMiddleware(Middleware):
                 self._recorder.record_tool_invocation(
                     self._identity_source.identity_from_request(context.fastmcp_context),
                     target,
-                    McpAuditFailure(McpAuditFailureCategory.UNEXPECTED_ERROR),
+                    McpAuditFailure(
+                        McpAuditFailureCategory.VALIDATION
+                        if isinstance(error, ValidationError)
+                        else McpAuditFailureCategory.UNEXPECTED_ERROR
+                    ),
                     correlation,
                     time.time_ns(),
                 )
             raise
         finally:
             reset_mcp_invocation_context(token)
+
+
+def _request_failure_category() -> McpAuditFailureCategory:
+    context = current_mcp_invocation_context()
+    if context is None:
+        return McpAuditFailureCategory.TOOL_ERROR
+    return McpAuditFailureCategory(context.failures.category.value)
 
 
 def _new_correlation() -> McpAuditCorrelation:

@@ -1,24 +1,44 @@
-import json
-import sqlite3
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
-from pathlib import Path
+from typing import TypeVar
 from unittest.mock import AsyncMock, Mock
 
+import pytest
+from pydantic import BaseModel
+
 from umbod.core.filesystem.errors import StorageFailure
-from umbod.core.filesystem.models import AccessGrant, NodeId, Principal
+from umbod.core.filesystem.models import NodeId, Principal
 from umbod.core.filesystem.ports import AccessControlDriver
 from umbod.core.filesystem.transactions import FilesystemSession, FilesystemTransactions
 
 
-def corrupt_stored_grant(path: Path, grant: AccessGrant) -> None:
-    payload = {**grant.model_dump(mode="json"), "permissions": ["bogus"]}
-    with sqlite3.connect(path) as connection:
-        changed = connection.execute(
-            "UPDATE filesystem_grants SET payload = ? WHERE node_id = ?",
-            (json.dumps(payload), str(grant.node_id)),
-        )
-        assert changed.rowcount == 1
+from umbod.core.filesystem.stores.schema import GRANT_TABLE, GrantRecord
+from umbod.core.persistence import Database, DatabaseSession, PersistenceDecodingError, Query, Table, TransactionMode
+
+RowT = TypeVar("RowT", bound=BaseModel)
+KeyT = TypeVar("KeyT", bound=BaseModel)
+ResultT = TypeVar("ResultT", bound=BaseModel)
+
+
+def fail_stored_grant_decoding(database: Database, node_id: NodeId, monkeypatch: pytest.MonkeyPatch) -> None:
+    original_session = database.session
+
+    @asynccontextmanager
+    async def failing_session(*, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:
+        async with original_session(mode=mode) as session:
+            async def find_many(table: Table[RowT, KeyT], query: Query[RowT, ResultT]) -> Sequence[ResultT]:
+                rows = await session.find_many(table, query)
+                if table == GRANT_TABLE and any(
+                    isinstance(row, GrantRecord) and row.node_id == str(node_id) for row in rows
+                ):
+                    raise PersistenceDecodingError(table.name, "payload", ValueError("Invalid stored grant"))
+                return rows
+
+            failing = Mock(spec=DatabaseSession, wraps=session)
+            failing.find_many.side_effect = find_many
+            yield failing
+
+    monkeypatch.setattr(database, "session", failing_session)
 
 
 class RevokeAfterCommitTransactions:

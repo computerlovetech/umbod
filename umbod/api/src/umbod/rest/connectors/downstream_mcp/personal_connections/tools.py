@@ -12,10 +12,9 @@ from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports imp
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolDiscoveryService, PersonalToolPolicyUnavailable
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
-from umbod.rest.dependencies import get_connector_api_dependency_factories
-from umbod.rest.factories import ConnectorApiDependencyFactories
 
 from .dependencies import get_personal_caller
+from .oauth_policy import OAuthPolicy
 
 
 class DiscoverPersonalToolsRequest(BaseModel):
@@ -23,19 +22,19 @@ class DiscoverPersonalToolsRequest(BaseModel):
 
 
 def get_personal_tool_transport(
-    factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
+    policy: OAuthPolicy,
 ) -> PersonalMcpTransport:
-    if not factories.settings.personal_connections.oauth_enabled:
+    if not policy.enabled:
         raise HTTPException(status_code=404, detail={"code": "personal_oauth_unavailable"})
     return create_personal_mcp_transport()
 
 
 def get_personal_tool_discovery(
-    factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
+    policy: OAuthPolicy,
     stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     transport: Annotated[PersonalMcpTransport, Depends(get_personal_tool_transport)],
 ) -> PersonalToolDiscoveryService:
-    if not factories.settings.personal_connections.oauth_enabled:
+    if not policy.enabled:
         raise HTTPException(status_code=404, detail={"code": "personal_oauth_unavailable"})
     return PersonalToolDiscoveryService(stores.personal_runtime_authorizations, stores.personal_tool_access, transport, utc_clock)
 

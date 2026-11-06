@@ -71,6 +71,13 @@ A synchronous public dependency can also be a useful seam. Do not assume that si
 - Do not add or remove test cases merely to perform the cleanup. If regression coverage is necessary, explain it and report the exact case-count delta, including parametrization.
 - Follow the selected source area's typing, naming, documentation, and code-style rules. Apply repository restrictions on comments and docstrings; do not introduce untyped helpers where the language and project require types.
 
+### Optional mutation feedback
+
+- Consider mutation testing when assertions seem weak, important boundary or failure cases may be missing, or a test rewrite needs evidence that fault detection was preserved. Otherwise continue with ordinary verification; mutation testing is not required for every batch.
+- Keep analysis within the selected source and test boundaries. For Python, use mutmut when compatible tooling and a passing, deterministic baseline are available. If setup or runtime cost is disproportionate, report the limitation rather than expanding the task.
+- Follow [mutation testing](references/mutation-testing.md) for the bounded discovery, agent-feedback, and verification loop. Optimize for meaningful behavior protected, not mutation score.
+- Never add production-private access to kill a mutant. If the behavior cannot be tested well through a supported public boundary, recommend the smallest production refactor under section 5 and obtain approval under section 6 before implementing it.
+
 ## 5. Recognize a missing seam
 
 If public coverage would require unrelated application state, rendering, authentication, persistence, networking, or service setup, retain the focused test rather than silently broadening it. Explain exactly which private dependency remains and why.
@@ -119,6 +126,7 @@ Provide a concise report containing:
 - Private dependencies removed, public replacements, and any dependencies deliberately retained.
 - Whether tests remained isolated and which real behavior the fakes leave in place.
 - Before/after focused case counts and reasons for additions or removals.
+- When mutation testing was used: source/test scope, actionable gaps, survivor dispositions, verified test improvements, and incomplete or unreliable outcomes.
 - Concrete refactor recommendations or approved refactors implemented; clearly distinguish recommendations from changes.
 - Actual focused, full-suite, lint, static-analysis, documentation, and runtime outcomes as applicable, including skips, retries, unresolved findings, and checks not run.
 - Confirmation that unrelated changes were preserved.

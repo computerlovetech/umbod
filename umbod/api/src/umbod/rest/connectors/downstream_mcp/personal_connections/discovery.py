@@ -10,10 +10,9 @@ from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolDisc
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.core.connectors.downstream_mcp.stores.ports import ConnectorDefinitionReader
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
-from umbod.rest.dependencies import get_connector_api_dependency_factories
-from umbod.rest.factories import ConnectorApiDependencyFactories
 
 from .dependencies import get_personal_caller
+from .oauth_policy import OAuthPolicy
 
 
 class PersonalConnectorDiscovery:
@@ -33,9 +32,8 @@ class PersonalConnectorDiscovery:
 
 
 def get_personal_connector_discovery(
-    factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
+    policy: OAuthPolicy,
     stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     caller: Annotated[PersonalCaller, Depends(get_personal_caller)],
 ) -> PersonalConnectorDiscovery:
-    enabled = factories.settings.personal_connections.enabled and factories.settings.personal_connections.oauth_enabled
-    return PersonalConnectorDiscovery(stores.personal_tool_discovery, stores.definitions, caller.principal, enabled, utc_clock)
+    return PersonalConnectorDiscovery(stores.personal_tool_discovery, stores.definitions, caller.principal, policy.enabled, utc_clock)

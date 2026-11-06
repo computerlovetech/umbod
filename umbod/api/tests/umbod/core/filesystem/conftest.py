@@ -1,9 +1,9 @@
-from collections.abc import AsyncIterator
-from pathlib import Path
+from collections.abc import AsyncIterator, Callable
 
 import pytest
 import pytest_asyncio
 
+from umbod.core.filesystem import NamespaceDriver
 from umbod.core.persistence import PersistenceRuntime
 from umbod.infrastructure import (
     InMemoryContentConfig,
@@ -28,24 +28,38 @@ async def filesystem_runtime() -> AsyncIterator[PersistenceRuntime]:
         await runtime.shutdown()
 
 
+@pytest.fixture
+def namespace_factory(
+    filesystem_runtime: PersistenceRuntime,
+) -> Callable[[], NamespaceDriver]:
+    def create() -> NamespaceDriver:
+        return create_namespace_driver(database=filesystem_runtime.database)
+
+    return create
+
+
+@pytest.fixture
+def namespace(namespace_factory: Callable[[], NamespaceDriver]) -> NamespaceDriver:
+    return namespace_factory()
+
+
 @pytest.fixture(params=["inmemory", "local"])
 def adapter_factory(
     request: pytest.FixtureRequest,
-    tmp_path: Path,
-    filesystem_runtime: PersistenceRuntime,
+    namespace_factory: Callable[[], NamespaceDriver],
 ) -> AdapterFactory:
     content = (
         create_content_driver(InMemoryContentConfig(type="inmemory"))
         if request.param == "inmemory"
         else create_content_driver(
-            LocalContentConfig(type="local", directory=tmp_path / "content")
+            LocalContentConfig(
+                type="local", directory=request.getfixturevalue("tmp_path") / "content"
+            )
         )
     )
 
     def create() -> AdapterPair:
-        return AdapterPair(
-            create_namespace_driver(database=filesystem_runtime.database), content
-        )
+        return AdapterPair(namespace_factory(), content)
 
     return create
 

@@ -184,6 +184,15 @@ class KeyCodec(Generic[RowT, KeyT]):
 
 
 @dataclass(frozen=True)
+class NonReusingIntegerKeyCodec(KeyCodec[RowT, KeyT]):
+    def __post_init__(self) -> None:
+        if len(self.fields) != 1:
+            raise ValueError("Non-reusing integer keys require exactly one key field")
+        if self.fields[0].codec.column_type is not ColumnType.INTEGER:
+            raise ValueError("Non-reusing integer keys require an integer key field")
+
+
+@dataclass(frozen=True)
 class Table(Generic[RowT, KeyT]):
     identity: TableIdentity
     row_codec: RowCodec[RowT]

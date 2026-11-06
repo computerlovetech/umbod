@@ -15,15 +15,14 @@ from umbod.config import (
 
 
 @pytest.fixture(autouse=True)
-def isolated_operator_environment(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def isolated_operator_environment(monkeypatch: pytest.MonkeyPatch) -> None:
     for name in os.environ:
         if name.startswith("UMBOD_"):
             monkeypatch.delenv(name)
-    monkeypatch.chdir(tmp_path)
 
 
 def test_analytics_defaults_are_disabled_with_independent_disk_path() -> None:
-    operator = OperatorSettings()
+    operator = OperatorSettings(_env_file=None)
     config = build_app_config(operator)
 
     assert operator.telemetry_analytics_enabled is False
@@ -42,7 +41,7 @@ def test_analytics_environment_overrides_are_assembled(
     monkeypatch.setenv("UMBOD_TELEMETRY_ANALYTICS_ENABLED", str(enabled).lower())
     monkeypatch.setenv("UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH", "metrics/analytics.sqlite3")
 
-    config = build_app_config(OperatorSettings())
+    config = build_app_config(OperatorSettings(_env_file=None))
 
     assert config.telemetry_analytics.enabled is enabled
     assert config.telemetry_analytics.sqlite_path == "metrics/analytics.sqlite3"
@@ -54,7 +53,7 @@ def test_analytics_path_does_not_inherit_application_path_or_data_directory(
     monkeypatch.setenv("UMBOD_DATA_DIR", "/custom/application")
     monkeypatch.setenv("UMBOD_CONNECTOR_STORE_SQLITE_PATH", "/other/application.sqlite3")
 
-    config = build_app_config(OperatorSettings())
+    config = build_app_config(OperatorSettings(_env_file=None))
 
     assert config.connector_store.sqlite_path == "/other/application.sqlite3"
     assert config.telemetry_analytics.sqlite_path == ".data/analytics.sqlite3"
@@ -67,7 +66,7 @@ def test_analytics_rejects_invalid_disk_paths_in_runtime_and_operator_settings(p
     with pytest.raises(ValidationError, match="on-disk SQLite path"):
         TelemetryAnalyticsConfig(sqlite_path=path)
     with pytest.raises(ValidationError, match="on-disk SQLite path"):
-        OperatorSettings(telemetry_analytics_sqlite_path=path)
+        OperatorSettings(_env_file=None, telemetry_analytics_sqlite_path=path)
 
 
 @pytest.mark.parametrize("suffix", ["", "-wal", "-shm", "-journal"])
@@ -128,7 +127,7 @@ def test_environment_configuration_rejects_application_database_alias(
     monkeypatch.setenv("UMBOD_TELEMETRY_ANALYTICS_SQLITE_PATH", "./application.sqlite3")
 
     with pytest.raises(ValidationError, match="separate SQLite file"):
-        build_app_config(OperatorSettings())
+        build_app_config(OperatorSettings(_env_file=None))
 
 
 def test_disabled_analytics_does_not_require_file_separation() -> None:

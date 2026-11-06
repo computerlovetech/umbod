@@ -2,7 +2,9 @@ from pathlib import Path
 
 import pytest
 
+from umbod.config import OtlpReceiverConfig, RuntimeConfig, TelemetryAnalyticsConfig
 from umbod.config.app import AppConfig
+from umbod.config.telemetry import TelemetryAppConfig
 from umbod.core.telemetry.analytics import TelemetryAnalyticsUnavailable
 from umbod.infrastructure.telemetry import create_configured_analytics_runtime
 
@@ -36,6 +38,23 @@ async def test_enabled_config_uses_independent_database(tmp_path: Path) -> None:
     await runtime.shutdown()
     assert path.exists()
     assert not application.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_standalone_config_selects_analytics_storage(tmp_path: Path, enabled: bool) -> None:
+    path = tmp_path / "analytics.sqlite3"
+    config = TelemetryAppConfig(
+        runtime=RuntimeConfig(),
+        otlp_receiver=OtlpReceiverConfig(enabled=True, bearer_token="collector-test"),
+        telemetry_analytics=TelemetryAnalyticsConfig(enabled=enabled, sqlite_path=str(path)),
+    )
+    runtime = create_configured_analytics_runtime(config)
+    try:
+        await runtime.ensure_ready()
+    finally:
+        await runtime.shutdown()
+    assert path.exists() is enabled
 
 
 def test_enabled_config_rejects_unsafe_application_uri(tmp_path: Path) -> None:

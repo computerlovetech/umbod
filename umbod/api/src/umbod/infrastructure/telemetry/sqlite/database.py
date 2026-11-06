@@ -12,6 +12,14 @@ from umbod.core.telemetry.analytics import (
     TelemetryAnalyticsWriter,
 )
 
+from umbod.infrastructure.connections import (
+    ConnectionPool,
+    ConnectionPoolUnavailableError,
+    ConnectionProvider,
+)
+from umbod.infrastructure.connections.lifecycle import complete_cleanup
+from umbod.infrastructure.connections.sqlite import SQLiteConnectionDriver
+
 from .schema import ensure_schema
 
 
@@ -62,6 +70,9 @@ class SqliteAnalyticsRuntime:
             raise TelemetryAnalyticsUnavailable(
                 "Telemetry analytics is unavailable"
             ) from None
+        self._connections: ConnectionProvider[aiosqlite.Connection] = ConnectionPool(
+            SQLiteConnectionDriver(str(self._path), create_parent_dirs=False), size=2
+        )
         self._condition = asyncio.Condition()
         self._readiness_lock = asyncio.Lock()
         self._ready = False
@@ -88,28 +99,24 @@ class SqliteAnalyticsRuntime:
             self._active += 1
         try:
             yield
-        except (sqlite3.Error, OSError, ValueError, TypeError, OverflowError):
+        except (
+            sqlite3.Error,
+            OSError,
+            ValueError,
+            TypeError,
+            OverflowError,
+            ConnectionPoolUnavailableError,
+        ):
             raise TelemetryAnalyticsUnavailable(
                 "Telemetry analytics is unavailable"
             ) from None
         finally:
-            async with self._condition:
-                self._active -= 1
-                self._condition.notify_all()
+            await complete_cleanup(self._finish_operation())
 
-    @asynccontextmanager
-    async def _connection(self) -> AsyncIterator[aiosqlite.Connection]:
-        connection = aiosqlite.connect(self._path, timeout=5.0)
-        opening = asyncio.ensure_future(connection)
-        try:
-            await asyncio.shield(opening)
-            await connection.execute("PRAGMA busy_timeout = 5000")
-            yield connection
-        finally:
-            try:
-                await opening
-            finally:
-                await connection.close()
+    async def _finish_operation(self) -> None:
+        async with self._condition:
+            self._active -= 1
+            self._condition.notify_all()
 
     async def _prepare(self) -> None:
         async with self._readiness_lock:
@@ -121,8 +128,9 @@ class SqliteAnalyticsRuntime:
             try:
                 await asyncio.shield(preparing)
             finally:
-                await preparing
-            async with self._connection() as connection:
+                await complete_cleanup(preparing)
+            await self._connections.initialize()
+            async with self._connections.get_connection() as connection:
                 await connection.execute("BEGIN IMMEDIATE")
                 await ensure_schema(connection)
                 await connection.commit()
@@ -140,10 +148,14 @@ class SqliteAnalyticsRuntime:
     async def connection(self) -> AsyncIterator[aiosqlite.Connection]:
         async with self._operation():
             await self._prepare()
-            async with self._connection() as connection:
+            async with self._connections.get_connection() as connection:
                 yield connection
 
     async def shutdown(self) -> None:
+        await complete_cleanup(self._shutdown())
+
+    async def _shutdown(self) -> None:
         async with self._condition:
             self._closed = True
             await self._condition.wait_for(lambda: self._active == 0)
+        await self._connections.close()

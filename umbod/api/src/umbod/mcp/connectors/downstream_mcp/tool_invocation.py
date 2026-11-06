@@ -4,7 +4,7 @@ from collections.abc import Awaitable, Callable
 
 import anyio
 import httpx2
-from fastmcp.exceptions import ClientError, ToolError
+from fastmcp.exceptions import ClientError, ToolError, ValidationError as ToolValidationError
 from mcp.shared.exceptions import MCPError
 
 from umbod.core.invocation.failure_evidence import (
@@ -40,6 +40,7 @@ from umbod.core.invocation import (
 from umbod.core.invocation.tools.execution import PreparedToolExecution, ToolExecutionRequest, ToolExecutionPipeline, prepare_tool_execution
 from umbod.mcp.connectors.native import ModernConnectorApprovalRequired
 from umbod.mcp.signals import McpToolIdentity
+from umbod.mcp.tools.errors import ToolAuthorizationDenied
 
 
 class _InitialDownstreamContext:
@@ -88,7 +89,7 @@ class AuthorizedDownstreamTool(Tool):
         except ModernConnectorApprovalRequired:
             raise
         except ConnectorInvocationDenied as error:
-            raise RuntimeError("Connector invocation denied") from error
+            raise ToolAuthorizationDenied("Connector invocation denied") from error
         finally:
             invocation_failure.reset(diagnostic_token)
 
@@ -118,7 +119,10 @@ class AuthorizedDownstreamTool(Tool):
     def _validate_arguments(self, arguments: dict[str, Any]) -> None:
         validator = validator_for(self.parameters)
         validator.check_schema(self.parameters)
-        validator(self.parameters).validate(arguments)
+        try:
+            validator(self.parameters).validate(arguments)
+        except ValidationError:
+            raise ToolValidationError("Invalid tool arguments. Use arguments matching the tool input schema.") from None
 
     async def _invoke_downstream(self, arguments: dict[str, Any]) -> ToolResult:
         raise NotImplementedError
@@ -176,9 +180,13 @@ class AuthorizedPersonalTool(AuthorizedDownstreamTool):
             validate_contract_schema(self.parameters)
             Draft202012Validator(self.parameters, registry=Registry()).validate(arguments)
             return
-        except (ValidationError, PersonalToolPolicyInvalid) as error:
+        except ValidationError as error:
             capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
             invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="arguments", reason="invalid_arguments"))
+            raise ToolValidationError("Personal tool unavailable") from None
+        except PersonalToolPolicyInvalid as error:
+            capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
+            invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="arguments", reason="contract_mismatch"))
         except Exception as error:
             capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
             invocation_failure.set(InvocationFailureDiagnostic(execution_mode="personal", stage="runtime", reason="runtime_failure"))

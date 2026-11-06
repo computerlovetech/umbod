@@ -112,12 +112,49 @@ async def test_restart_preserves_records(
 ) -> None:
     path = tmp_path / "analytics.sqlite3"
     first = create_sqlite_analytics_runtime(path, ())
-    await first.create_writer().append_logs(batch)
-    await first.shutdown()
+    reader = first.create_reader()
+    writer = first.create_writer()
+    try:
+        await writer.append_logs(batch)
+    finally:
+        await first.shutdown()
     second = create_sqlite_analytics_runtime(path, ())
-    result = await second.create_reader().count_logs(query)
-    await second.shutdown()
+    try:
+        await second.ensure_ready()
+        with pytest.raises(TelemetryAnalyticsUnavailable):
+            await reader.count_logs(query)
+        with pytest.raises(TelemetryAnalyticsUnavailable):
+            await writer.append_logs(batch)
+        result = await second.create_reader().count_logs(query)
+    finally:
+        await second.shutdown()
     assert result.rows[0].count == 2
+
+
+@pytest.mark.asyncio
+async def test_reader_and_writer_reuse_eagerly_opened_connections(
+    tmp_path: Path, batch: LogWriteBatch, query: LogCountQuery, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    connections: list[aiosqlite.Connection] = []
+    connect = aiosqlite.connect
+
+    def tracked_connect(*args: object, **kwargs: object) -> aiosqlite.Connection:
+        connection = connect(*args, **kwargs)
+        connections.append(connection)
+        return connection
+
+    monkeypatch.setattr(aiosqlite, "connect", tracked_connect)
+    runtime = create_sqlite_analytics_runtime(tmp_path / "analytics.sqlite3", ())
+    try:
+        await runtime.ensure_ready()
+        assert len(connections) == 2
+        for _ in range(3):
+            await runtime.create_writer().append_logs(batch)
+            result = await runtime.create_reader().count_logs(query)
+        assert result.rows[0].count == 6
+        assert len(connections) == 2
+    finally:
+        await runtime.shutdown()
 
 
 @pytest.mark.asyncio
@@ -290,9 +327,17 @@ async def test_batch_transaction_rolls_back_on_sql_failure(
         TelemetryAnalyticsUnavailable, match="^Telemetry analytics is unavailable$"
     ):
         await runtime.create_writer().append_logs(batch)
-    result = await runtime.create_reader().count_logs(query)
-    await runtime.shutdown()
-    assert result.rows[0].count == 0
+    try:
+        result = await runtime.create_reader().count_logs(query)
+        assert result.rows[0].count == 0
+        async with aiosqlite.connect(path) as connection:
+            await connection.execute("DROP TRIGGER reject_unowned")
+            await connection.commit()
+        await runtime.create_writer().append_logs(batch)
+        result = await runtime.create_reader().count_logs(query)
+        assert result.rows[0].count == 2
+    finally:
+        await runtime.shutdown()
 
 
 @pytest.mark.asyncio

@@ -7,6 +7,7 @@ from typing import Optional, TypeAlias
 
 
 class InvocationFailureOrigin(StrEnum):
+    CLIENT_INPUT = "client_input"
     INTERNAL = "internal"
     CONNECTOR = "connector_execution"
     OPENAPI = "downstream_openapi"
@@ -25,7 +26,12 @@ class InvocationReturnedFailure:
     origin: InvocationFailureOrigin
 
 
-InvocationFailureEvidence: TypeAlias = InvocationExceptionEvidence | InvocationReturnedFailure
+@dataclass(frozen=True)
+class InvocationRejectedFailure:
+    origin: InvocationFailureOrigin
+
+
+InvocationFailureEvidence: TypeAlias = InvocationExceptionEvidence | InvocationReturnedFailure | InvocationRejectedFailure
 
 class _NoInvocationFailure:
     pass

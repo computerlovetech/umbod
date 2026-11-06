@@ -1,4 +1,5 @@
 from collections import Counter
+from collections.abc import Callable
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -16,6 +17,7 @@ from umbod.core.telemetry.analytics import (
     MissingDimensionValue,
     OwnersScope,
     PresentDimensionValue,
+    TelemetryAnalyticsReader,
     TimeBucket,
     Unbucketed,
 )
@@ -107,3 +109,6 @@ class InMemoryTelemetryAnalyticsReader:
             for group in row.groups
         )
         return start, values
+
+
+ReaderFactory = Callable[[tuple[NormalizedLog, ...]], TelemetryAnalyticsReader]

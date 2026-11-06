@@ -213,6 +213,14 @@ Application CLI behavior, process isolation, architecture contracts and genuine 
 
 ---
 
+## 10. Use mutation feedback during test writing
+
+- Proactively consider bounded mutation testing when writing or strengthening tests, especially for important failure paths, weak assertions or coverage-preserving rewrites. It is available on demand, not required for every edit.
+- Follow the [mutation testing guide](../../../skills/development/improve-testability/references/mutation-testing.md) directly; invoking the manual `improve-testability` skill is not required. Python tooling is already a pinned API development dependency.
+- Keep mutation testing out of CI and release pipelines. Use it to discover behavioral gaps, not as a mutation-score gate; preserve public test boundaries and ordinary verification.
+
+---
+
 ## Quick checklist
 
 - [ ] Test paths mirror the owning source module.
@@ -230,3 +238,4 @@ Application CLI behavior, process isolation, architecture contracts and genuine 
 - [ ] Repetitive domain inputs use `parametrize` instead of copy-paste; backend parametrization is confined to database-adapter parity contracts, not repeated across consumer business scenarios.
 - [ ] Parameter matrices cover meaningful differences without multiplying unrelated scenarios.
 - [ ] Standalone static-analysis tools are not executed as part of the application pytest suite.
+- [ ] Mutation feedback was considered for important failure paths, weak assertions or coverage-preserving rewrites; any use stayed bounded and on demand.

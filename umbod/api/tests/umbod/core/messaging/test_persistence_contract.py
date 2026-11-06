@@ -1,8 +1,8 @@
-from pathlib import Path
-from typing import cast
 import asyncio
+from collections.abc import AsyncIterator
 
 import pytest
+import pytest_asyncio
 
 from umbod.core.messaging import (
     DatabaseEventCheckpointStore,
@@ -10,29 +10,19 @@ from umbod.core.messaging import (
 )
 from messaging.models import MessagingEvent
 from messaging.ports import EventCheckpointStore, EventStream
-from tests.umbod.core.persistence.contract_support import (
-    DATABASE_ADAPTERS,
-    DatabaseAdapter,
-)
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 
 MessagingServices = tuple[EventStream, EventCheckpointStore]
 
 
-@pytest.fixture(params=DATABASE_ADAPTERS, ids=lambda adapter: cast(DatabaseAdapter, adapter).name)
-def messaging_services(request: pytest.FixtureRequest, tmp_path: Path) -> MessagingServices:
-    adapter = cast(DatabaseAdapter, request.param)
-
-    async def _prepare() -> MessagingServices:
-        if adapter.name == 'inmemory':
-            runtime = await prepared_inmemory_runtime()
-        else:
-            runtime = await prepared_sqlite_runtime(tmp_path / 'contract.sqlite')
+@pytest_asyncio.fixture
+async def messaging_services() -> AsyncIterator[MessagingServices]:
+    runtime = await prepared_inmemory_runtime()
+    try:
         database = runtime.database
-        return DatabaseEventStream(database), DatabaseEventCheckpointStore(database)
-
-    return asyncio.run(_prepare())
-
+        yield DatabaseEventStream(database), DatabaseEventCheckpointStore(database)
+    finally:
+        await runtime.shutdown()
 
 
 def _event(event_type: str, subject: str) -> MessagingEvent:

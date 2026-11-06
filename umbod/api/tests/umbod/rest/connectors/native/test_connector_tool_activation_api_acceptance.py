@@ -5,6 +5,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.support.connector_plugins import TestConnectorPlugin
+from umbod.config import AppConfig
 from umbod.rest.main import create_app
 
 
@@ -20,7 +22,14 @@ def client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> TestClient:
     availability_path = tmp_path / "connector-availability.json"
     availability_path.write_text(json.dumps({"connectors": [{"id": "test"}]}), encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability_path))
-    return TestClient(create_app())
+    return TestClient(create_app(
+        settings=AppConfig(
+            rest={"metrics_enabled": False},
+            connector_store={"type": "inmemory"},
+            admin_authentication={"mode": "simulation", "simulated_admin": True},
+        ),
+        connector_registrations=[TestConnectorPlugin.registration()],
+    ))
 
 
 def test_native_openapi_exposes_consolidated_activation_route(client: TestClient) -> None:

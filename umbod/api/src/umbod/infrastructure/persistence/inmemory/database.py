@@ -17,6 +17,7 @@ from umbod.core.persistence.query import (
     InsertCommand,
     KeyT,
     NoFilter,
+    NonReusingIntegerKeyCodec,
     Not,
     OneOf,
     OrderBy,
@@ -28,6 +29,7 @@ from umbod.core.persistence.query import (
     UpsertCommand,
     _decode_result,
     _encode_model,
+    _portable_integer,
     validate_query,
 )
 
@@ -68,9 +70,11 @@ class _InMemoryDatabaseSession(_InMemoryReadSession):
         self,
         tables: MutableMapping[object, StoredTable],
         generated_integer_keys: MutableMapping[tuple[object, str], int],
+        non_reusing_integer_keys: Mapping[object, str],
     ) -> None:
         super().__init__(tables)
         self._generated_integer_keys = generated_integer_keys
+        self._non_reusing_integer_keys = non_reusing_integer_keys
 
     async def insert(self, table: Table[RowT, KeyT], command: InsertCommand[RowT]) -> bool:
         encoded = _encode_model(table, command.row, table.row_codec.fields)
@@ -79,6 +83,7 @@ class _InMemoryDatabaseSession(_InMemoryReadSession):
         if key in rows:
             return False
         rows[key] = deepcopy(encoded)
+        self._advance_non_reusing_integer_key(table, encoded)
         return True
 
     async def insert_generated_integer_key(
@@ -92,7 +97,7 @@ class _InMemoryDatabaseSession(_InMemoryReadSession):
         highest_stored_value = max(
             (int(row[command.generated_field.name]) for row in rows.values()), default=0
         )
-        generated_value = (
+        generated_value = _portable_integer(
             max(self._generated_integer_keys.get(counter_key, 0), highest_stored_value) + 1
         )
         self._generated_integer_keys[counter_key] = generated_value
@@ -108,6 +113,17 @@ class _InMemoryDatabaseSession(_InMemoryReadSession):
         if row_key != key:
             raise ValueError(f"Upsert key does not match row key for {table.name}")
         self._tables.setdefault(table.identity, {})[key] = deepcopy(encoded)
+        self._advance_non_reusing_integer_key(table, encoded)
+
+    def _advance_non_reusing_integer_key(
+        self, table: Table[RowT, KeyT], encoded: Mapping[str, object]
+    ) -> None:
+        if table.identity in self._non_reusing_integer_keys:
+            field_name = self._non_reusing_integer_keys[table.identity]
+            counter_key = (table.identity, field_name)
+            self._generated_integer_keys[counter_key] = max(
+                self._generated_integer_keys.get(counter_key, 0), int(encoded[field_name]), 0
+            )
 
     async def delete(self, table: Table[RowT, KeyT], query: DeleteQuery[RowT]) -> int:
         validate_query(table, query)
@@ -122,12 +138,29 @@ class InMemoryDatabase:
     def __init__(self) -> None:
         self._tables: dict[object, StoredTable] = {}
         self._generated_integer_keys: dict[tuple[object, str], int] = {}
+        self._non_reusing_integer_keys: dict[object, str] = {}
         self._transaction_lock = asyncio.Lock()
 
     async def ensure_schema(self, tables: Sequence[Table[BaseModel, BaseModel]]) -> None:
         async with self._transaction_lock:
+            existing_tables = set(self._tables)
+            non_reusing_integer_keys = dict(self._non_reusing_integer_keys)
+            for table in tables:
+                if isinstance(table.key_codec, NonReusingIntegerKeyCodec):
+                    field_name = table.key_codec.fields[0].name
+                    if (
+                        table.identity in existing_tables
+                        and non_reusing_integer_keys.get(table.identity) != field_name
+                    ):
+                        raise ValueError(
+                            f"In-memory table {table.name!r} requires an explicit migration "
+                            "before enabling a different non-reusing key policy"
+                        )
+                    non_reusing_integer_keys[table.identity] = field_name
+                existing_tables.add(table.identity)
             for table in tables:
                 self._tables.setdefault(table.identity, {})
+            self._non_reusing_integer_keys = non_reusing_integer_keys
 
     @asynccontextmanager
     async def read_session(self) -> AsyncIterator[ReadSession]:
@@ -141,7 +174,9 @@ class InMemoryDatabase:
         async with self._transaction_lock:
             transaction_tables = deepcopy(self._tables)
             transaction_generated_integer_keys = deepcopy(self._generated_integer_keys)
-            yield _InMemoryDatabaseSession(transaction_tables, transaction_generated_integer_keys)
+            yield _InMemoryDatabaseSession(
+                transaction_tables, transaction_generated_integer_keys, self._non_reusing_integer_keys
+            )
             self._tables = transaction_tables
             self._generated_integer_keys = transaction_generated_integer_keys
 

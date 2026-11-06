@@ -1,5 +1,6 @@
 import asyncio
 import time
+from collections.abc import AsyncIterator
 from typing import cast
 from urllib.parse import parse_qs
 
@@ -31,18 +32,25 @@ from umbod.core.connectors.downstream_mcp.models import OAuthCredentialState
 from umbod.core.connectors.downstream_mcp.stores import (
     CONNECTOR_CREDENTIAL_TABLE,
     ConnectorIdQuery,
+    CredentialFound,
+    EncryptedCredentialStore,
     EncryptedCredentialStoreService,
     SaveCredential,
 )
-from tests.persistence_runtime import create_sqlite_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
+from umbod.core.persistence import AllFields, Database, NoFilter, Query, Unordered
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def prepare_oauth_database(tmp_path):
-    await prepared_sqlite_runtime(tmp_path / "oauth.sqlite3")
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[Database]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
 
 
-def document(endpoint="https://tools.example/mcp", expired=False):
+def document(endpoint: str = "https://tools.example/mcp", expired: bool = False) -> AuthorizationDocument:
     return AuthorizationDocument(
         endpoint_url=endpoint,
         client_info=OAuthClientInformationFull(
@@ -67,15 +75,15 @@ def document(endpoint="https://tools.example/mcp", expired=False):
     )
 
 
-def store_at(path):
+def store_for(database: Database) -> EncryptedCredentialStore:
     return EncryptedCredentialStoreService(
-        create_sqlite_runtime(path).database,
+        database,
         CONNECTOR_CREDENTIAL_TABLE,
         AuthenticatedTextCipher("oauth-test-key"),
     )
 
 
-async def seed(store, connector_id="one", expired=False):
+async def seed(store: EncryptedCredentialStore, connector_id: str = "one", expired: bool = False) -> SecretStr:
     value = DetachedConnectorOAuthStorage(document(expired=expired), "").export()
     await store.save(
         SaveCredential(
@@ -86,26 +94,29 @@ async def seed(store, connector_id="one", expired=False):
 
 
 @pytest.mark.asyncio
-async def test_authorization_is_encrypted_and_survives_new_store(tmp_path):
-    path = tmp_path / "oauth.sqlite3"
-    original = await seed(store_at(path))
-    reopened = store_at(path)
+async def test_authorization_is_encrypted_and_survives_store_recreation(database: Database) -> None:
+    original = await seed(store_for(database))
+    reopened = store_for(database)
     restored = await reopened.get(ConnectorIdQuery(connector_id="one"))
+    assert isinstance(restored, CredentialFound)
+    assert isinstance(restored.credential, OAuthCredentialState)
     assert restored.credential.authorization == original
-    assert b"old-access" not in path.read_bytes()
-    assert b"old-refresh" not in path.read_bytes()
+    async with database.read_session() as session:
+        stored = await session.find_one(CONNECTOR_CREDENTIAL_TABLE, Query(NoFilter(), AllFields(), Unordered()))
+    assert stored is not None
+    assert "old-access" not in stored.document
+    assert "old-refresh" not in stored.document
     assert "old-access" not in restored.credential.model_dump_json()
     assert "old-refresh" not in repr(restored.credential)
 
 
 @pytest.mark.asyncio
-async def test_expired_token_refreshes_once_across_two_clients_and_persists(tmp_path):
-    path = tmp_path / "oauth.sqlite3"
-    store = store_at(path)
+async def test_expired_token_refreshes_once_across_two_clients_and_persists(database: Database) -> None:
+    store = store_for(database)
     await seed(store, expired=True)
-    refreshes = []
+    refreshes: list[httpx2.Request] = []
 
-    async def handle(request):
+    async def handle(request: httpx2.Request) -> httpx2.Response:
         if str(request.url) == "https://auth.example/token":
             body = parse_qs(request.content.decode())
             assert body["grant_type"] == ["refresh_token"]
@@ -124,26 +135,28 @@ async def test_expired_token_refreshes_once_across_two_clients_and_persists(tmp_
         assert request.headers["authorization"] == "Bearer new-access"
         return httpx2.Response(200, json={"ok": True})
 
-    async def use():
-        oauth = ConnectorOAuth(PersistedConnectorOAuthStorage(document(), "one", store_at(path)))
+    async def use() -> None:
+        oauth = ConnectorOAuth(PersistedConnectorOAuthStorage(document(), "one", store_for(database)))
         async with httpx2.AsyncClient(transport=httpx2.MockTransport(handle), auth=oauth) as client:
             assert (await client.post("https://tools.example/mcp")).status_code == 200
 
     await asyncio.gather(use(), use())
     assert len(refreshes) == 1
     saved = await store.get(ConnectorIdQuery(connector_id="one"))
+    assert isinstance(saved, CredentialFound)
+    assert isinstance(saved.credential, OAuthCredentialState)
     restored = AuthorizationDocument.model_validate_json(
         saved.credential.authorization.get_secret_value()
     )
     assert restored.tokens.refresh_token == "rotated-refresh"
     assert restored.expires_at > time.time()
-    await use()  # Simulates a new runtime provider after restart, no browser.
+    await use()
     assert len(refreshes) == 1
 
 
 @pytest.mark.asyncio
-async def test_stale_refresh_cannot_overwrite_new_sign_in_or_resurrect_deleted_connection(tmp_path):
-    store = store_at(tmp_path / "oauth.sqlite3")
+async def test_stale_refresh_cannot_overwrite_new_sign_in_or_resurrect_deleted_connection(database: Database) -> None:
+    store = store_for(database)
     original = await seed(store)
     replacement = SecretStr(document().model_dump_json())
     assert await store.replace_oauth_authorization("one", original, replacement)
@@ -153,8 +166,8 @@ async def test_stale_refresh_cannot_overwrite_new_sign_in_or_resurrect_deleted_c
 
 
 @pytest.mark.asyncio
-async def test_authorization_is_scoped_to_connector_and_endpoint(tmp_path):
-    store = store_at(tmp_path / "oauth.sqlite3")
+async def test_authorization_is_scoped_to_connector_and_endpoint(database: Database) -> None:
+    store = store_for(database)
     await seed(store)
     with pytest.raises(SignInRequired):
         await PersistedConnectorOAuthStorage(document(), "other", store).load()

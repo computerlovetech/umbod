@@ -14,6 +14,7 @@ from umbod.core.persistence.query import (
     InsertCommand,
     KeyT,
     NoFilter,
+    NonReusingIntegerKeyCodec,
     Not,
     OneOf,
     OrderBy,
@@ -155,13 +156,18 @@ class SQLiteCompiler:
             ColumnType.BOOLEAN: "INTEGER NOT NULL",
             ColumnType.JSON: "TEXT NOT NULL",
         }
+        non_reusing = isinstance(table.key_codec, NonReusingIntegerKeyCodec)
         definitions = tuple(
-            f"{self._quote(field.name)} {types[field.codec.column_type]}"
+            f"{self._quote(field.name)} INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL"
+            if non_reusing and field == table.key_codec.fields[0]
+            else f"{self._quote(field.name)} {types[field.codec.column_type]}"
             for field in table.row_codec.fields
         )
-        key = ", ".join(self._quote(field.name) for field in table.key_codec.fields)
+        if not non_reusing:
+            key = ", ".join(self._quote(field.name) for field in table.key_codec.fields)
+            definitions += (f"PRIMARY KEY ({key})",)
         return CompiledStatement(
-            statement=f"CREATE TABLE IF NOT EXISTS {self._quote(table.name)} ({', '.join(definitions)}, PRIMARY KEY ({key}))"
+            statement=f"CREATE TABLE IF NOT EXISTS {self._quote(table.name)} ({', '.join(definitions)})"
         )
 
     def _predicate(self, predicate: Predicate[RowT]) -> tuple[str, tuple[object, ...]]:

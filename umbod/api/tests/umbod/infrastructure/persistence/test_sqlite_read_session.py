@@ -7,24 +7,29 @@ import pytest
 import pytest_asyncio
 
 from umbod.core.persistence import AllFields, InsertCommand, NoFilter, Query, TransactionMode, Unordered
+from umbod.infrastructure.connections import UnpooledConnectionProvider
+from umbod.infrastructure.connections.sqlite import SQLiteConnectionDriver
 from umbod.infrastructure.persistence.sqlite.database import SQLiteDatabase
 from tests.umbod.core.persistence.contract_support import row, table
 
 
-class ObservedSQLiteDatabase(SQLiteDatabase):
-    def __init__(self, path: Path) -> None:
-        super().__init__(str(path), create_parent_dirs=True)
-        self.connections: list[aiosqlite.Connection] = []
-
-    async def _connect(self) -> aiosqlite.Connection:
-        connection = await super()._connect()
-        self.connections.append(connection)
-        return connection
+@pytest.fixture
+def connections() -> list[aiosqlite.Connection]:
+    return []
 
 
 @pytest_asyncio.fixture
-async def database(tmp_path: Path) -> AsyncIterator[ObservedSQLiteDatabase]:
-    instance = ObservedSQLiteDatabase(tmp_path / "read.sqlite")
+async def database(
+    tmp_path: Path, connections: list[aiosqlite.Connection],
+) -> AsyncIterator[SQLiteDatabase]:
+    driver = SQLiteConnectionDriver(str(tmp_path / "read.sqlite"), create_parent_dirs=True)
+
+    async def record_connection() -> aiosqlite.Connection:
+        connection = await driver.connect()
+        connections.append(connection)
+        return connection
+
+    instance = SQLiteDatabase(UnpooledConnectionProvider(record_connection, driver.close))
     contract_table, _, _, _ = table()
     await instance.ensure_schema((contract_table,))
     yield instance
@@ -32,10 +37,10 @@ async def database(tmp_path: Path) -> AsyncIterator[ObservedSQLiteDatabase]:
 
 @pytest.mark.asyncio
 async def test_sqlite_read_connection_rejects_engine_writes_and_closes_on_exit(
-    database: ObservedSQLiteDatabase,
+    database: SQLiteDatabase, connections: list[aiosqlite.Connection],
 ) -> None:
     async with database.read_session():
-        connection = database.connections[-1]
+        connection = connections[-1]
         with pytest.raises(aiosqlite.OperationalError, match="readonly"):
             await connection.execute("DELETE FROM typed_samples")
     with pytest.raises(ValueError, match="no active connection"):
@@ -44,7 +49,7 @@ async def test_sqlite_read_connection_rejects_engine_writes_and_closes_on_exit(
 
 @pytest.mark.asyncio
 async def test_sqlite_snapshot_starts_at_first_read_without_reserving_writer(
-    database: ObservedSQLiteDatabase,
+    database: SQLiteDatabase,
 ) -> None:
     contract_table, _, _, _ = table()
     async with database.read_session() as reader:
@@ -58,8 +63,8 @@ async def test_sqlite_snapshot_starts_at_first_read_without_reserving_writer(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("error_type", (RuntimeError, asyncio.CancelledError))
 async def test_sqlite_failed_read_session_setup_closes_connection(
-    database: ObservedSQLiteDatabase, monkeypatch: pytest.MonkeyPatch,
-    error_type: type[BaseException],
+    database: SQLiteDatabase, monkeypatch: pytest.MonkeyPatch,
+    error_type: type[BaseException], connections: list[aiosqlite.Connection],
 ) -> None:
     execute = aiosqlite.Connection.execute
 
@@ -75,4 +80,4 @@ async def test_sqlite_failed_read_session_setup_closes_connection(
         async with database.read_session():
             pytest.fail("read session should not open")
     with pytest.raises(ValueError, match="no active connection"):
-        await database.connections[-1].execute("SELECT 1")
+        await connections[-1].execute("SELECT 1")

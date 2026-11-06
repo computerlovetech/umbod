@@ -100,6 +100,55 @@ async def test_delete_returns_count_and_is_rolled_back_with_transaction(database
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("mode", tuple(TransactionMode))
+async def test_generated_keys_are_allocated_independently_per_table(
+    database: Database, mode: TransactionMode,
+) -> None:
+    first, first_sequence = generated_table("first_generated_samples")
+    second, second_sequence = generated_table("second_generated_samples")
+    await database.ensure_schema((first, second))
+
+    for expected_key, payload in ((1, "first"), (2, "second")):
+        async with database.session(mode=mode) as session:
+            assert await session.insert_generated_integer_key(
+                first,
+                GeneratedIntegerKeyInsertCommand(
+                    GeneratedRow(sequence=0, payload=payload), first_sequence
+                ),
+            ) == expected_key
+
+    async with database.session(mode=mode) as session:
+        assert await session.insert_generated_integer_key(
+            second,
+            GeneratedIntegerKeyInsertCommand(
+                GeneratedRow(sequence=0, payload="independent"), second_sequence
+            ),
+        ) == 1
+
+    async with database.session(mode=mode) as session:
+        assert await session.insert_generated_integer_key(
+            first,
+            GeneratedIntegerKeyInsertCommand(
+                GeneratedRow(sequence=0, payload="continued"), first_sequence
+            ),
+        ) == 3
+
+    async with database.read_session() as session:
+        first_rows = await session.find_many(
+            first, Query(NoFilter(), AllFields(), OrderBy((first_sequence,)))
+        )
+        second_rows = await session.find_many(
+            second, Query(NoFilter(), AllFields(), OrderBy((second_sequence,)))
+        )
+    assert first_rows == (
+        GeneratedRow(sequence=1, payload="first"),
+        GeneratedRow(sequence=2, payload="second"),
+        GeneratedRow(sequence=3, payload="continued"),
+    )
+    assert second_rows == (GeneratedRow(sequence=1, payload="independent"),)
+
+
+@pytest.mark.asyncio
 async def test_generated_keys_are_unique_for_concurrent_serialized_writes(
     database: Database,
 ) -> None:

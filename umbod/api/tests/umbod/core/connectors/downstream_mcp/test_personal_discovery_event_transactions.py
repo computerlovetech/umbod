@@ -1,7 +1,6 @@
-import sqlite3
-from collections.abc import Awaitable, Callable
-from contextlib import closing
-from pathlib import Path
+from collections.abc import AsyncIterator, Awaitable, Callable
+from contextlib import asynccontextmanager
+from unittest.mock import Mock
 
 import pytest
 from messaging.models import StreamEvent
@@ -22,7 +21,8 @@ from umbod.core.connectors.downstream_mcp.stores.personal_discovery_schema impor
 from umbod.core.connectors.downstream_mcp.stores.personal_tools_schema import PERSONAL_TOOL_OBSERVATION_TABLE, PERSONAL_TOOL_POLICY_TABLE
 from umbod.core.connectors.downstream_mcp.stores.schema import PERSONAL_CONNECTION_TABLE
 from umbod.core.messaging.stores.event_stream import DatabaseEventStream
-from umbod.core.persistence import AllFields, Database, NoFilter, Query, TransactionMode, Unordered
+from umbod.core.messaging.stores.schema import EVENT_TABLE, MessagingEventKey, MessagingEventRecord
+from umbod.core.persistence import AllFields, Database, DatabaseSession, GeneratedIntegerKeyInsertCommand, NoFilter, Query, Table, TransactionMode, Unordered
 
 __all__ = ["runtime_case"]
 
@@ -40,9 +40,25 @@ async def snapshot(database: Database) -> tuple[object, ...]:
         return tuple([tuple(await session.find_many(table, Query(filter=NoFilter(), projection=AllFields(), ordering=Unordered()))) for table in tables])
 
 
-def reject_events(path: Path) -> None:
-    with closing(sqlite3.connect(path)) as connection, connection:
-        connection.execute("CREATE TRIGGER reject_discovery_event BEFORE INSERT ON messaging_events WHEN NEW.event_type = 'connector.discovery.changed' BEGIN SELECT RAISE(ABORT, 'event append failed'); END")
+def reject_events(database: Database, monkeypatch: pytest.MonkeyPatch) -> None:
+    original_session = database.session
+
+    @asynccontextmanager
+    async def rejecting_session(*, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:
+        async with original_session(mode=mode) as session:
+            async def insert_event(
+                table: Table[MessagingEventRecord, MessagingEventKey],
+                command: GeneratedIntegerKeyInsertCommand[MessagingEventRecord],
+            ) -> int:
+                if table == EVENT_TABLE and command.row.event_type == "connector.discovery.changed":
+                    raise RuntimeError("event append failed")
+                return await session.insert_generated_integer_key(table, command)
+
+            rejecting = Mock(spec=DatabaseSession, wraps=session)
+            rejecting.insert_generated_integer_key.side_effect = insert_event
+            yield rejecting
+
+    monkeypatch.setattr(database, "session", rejecting_session)
 
 
 def assert_notification(entries: list[StreamEvent]) -> None:
@@ -94,14 +110,12 @@ async def test_personal_mutations_publish_only_sanitized_connector_notification(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", OPERATIONS)
-@pytest.mark.parametrize("runtime_case", ["sqlite"], indirect=True)
-async def test_event_failure_restores_personal_mutation(runtime_case: RuntimeCase, tmp_path: Path, operation: str) -> None:
-    path = tmp_path / "runtime.sqlite3"
+async def test_event_failure_restores_personal_mutation(runtime_case: RuntimeCase, monkeypatch: pytest.MonkeyPatch, operation: str) -> None:
     run = await mutation(runtime_case, operation)
     before = await snapshot(runtime_case.database)
     previous_events = await events(runtime_case.database)
-    reject_events(path)
-    error = PersonalAuthorizationHealthUnavailable if operation == "rejection" else sqlite3.IntegrityError
+    reject_events(runtime_case.database, monkeypatch)
+    error = PersonalAuthorizationHealthUnavailable if operation == "rejection" else RuntimeError
     with pytest.raises(error):
         await run()
     assert await snapshot(runtime_case.database) == before

@@ -24,7 +24,9 @@ from umbod.core.telemetry.analytics import (
     TelemetryAnalyticsWriter,
     TimeRange,
 )
-from umbod.infrastructure import create_configured_analytics_runtime
+from tests.persistence_runtime import create_inmemory_runtime
+from tests.support.telemetry_runtime import InMemoryTelemetryAnalyticsRuntime
+from umbod.core.persistence import PersistenceRuntime
 from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationError
 from umbod.rest.main import create_app_with_shared_metrics
 from umbod.rest.metrics import PrometheusRestMetricsRecorder
@@ -101,9 +103,8 @@ def configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppConfig:
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
     return AppConfig(
         otlp_receiver=OtlpReceiverConfig(enabled=True, bearer_token="analytics-ingestion"),
-        telemetry_analytics=TelemetryAnalyticsConfig(
-            enabled=True, sqlite_path=str(tmp_path / "analytics.sqlite3"),
-        ),
+        connector_store={"type": "inmemory"},
+        telemetry_analytics=TelemetryAnalyticsConfig(enabled=False),
         admin_authentication={
             "mode": "jwt", "environment": "development", "required_membership": "analytics-admins",
         },
@@ -111,9 +112,20 @@ def configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppConfig:
     )
 
 
+@pytest.fixture
+async def analytics_persistence() -> AsyncIterator[PersistenceRuntime]:
+    persistence = create_inmemory_runtime()
+    try:
+        yield persistence
+    finally:
+        await persistence.shutdown()
+
+
 @asynccontextmanager
-async def _applications(configuration: AppConfig) -> AsyncIterator[Applications]:
-    runtime = RecordingRuntime(create_configured_analytics_runtime(configuration))
+async def _applications(
+    configuration: AppConfig, persistence: PersistenceRuntime,
+) -> AsyncIterator[Applications]:
+    runtime = RecordingRuntime(InMemoryTelemetryAnalyticsRuntime(persistence.database, persistence.readiness))
     sink = RecordingSink()
     metrics = PrometheusRestMetricsRecorder()
 
@@ -176,25 +188,25 @@ def _payload() -> dict[str, object]:
     }]}
 
 
-async def test_accepted_logs_are_queryable_through_admin_api_and_persist_after_restart(
-    configuration: AppConfig, query: LogCountQuery,
+async def test_accepted_logs_are_queryable_across_application_reconstruction(
+    configuration: AppConfig, analytics_persistence: PersistenceRuntime, query: LogCountQuery,
 ) -> None:
-    async with _applications(configuration) as apps:
+    async with _applications(configuration, analytics_persistence) as apps:
         response = await apps.collector.post("/v1/logs", json=_payload())
         assert response.status_code == 200
         count = await apps.api.post(BASE, json=_query_body(query))
         assert count.status_code == 200
         assert count.json()["rows"][0]["count"] == 1
-    async with _applications(configuration) as restarted:
-        count = await restarted.api.post(BASE, json=_query_body(query))
+    async with _applications(configuration, analytics_persistence) as recreated:
+        count = await recreated.api.post(BASE, json=_query_body(query))
         assert count.status_code == 200
         assert count.json()["rows"][0]["count"] == 1
 
 
 async def test_collector_and_rest_metrics_share_existing_exposition(
-    configuration: AppConfig, query: LogCountQuery,
+    configuration: AppConfig, analytics_persistence: PersistenceRuntime, query: LogCountQuery,
 ) -> None:
-    async with _applications(configuration) as apps:
+    async with _applications(configuration, analytics_persistence) as apps:
         assert (await apps.collector.post("/v1/logs", json=_payload())).status_code == 200
         assert (await apps.api.post(BASE, json=_query_body(query))).status_code == 200
         async with AsyncClient(
@@ -207,8 +219,8 @@ async def test_collector_and_rest_metrics_share_existing_exposition(
         assert "umbod_collector_log_records_accepted_total 1.0" in response.text
 
 
-async def test_shared_runtime_lifetime_is_owned_only_by_host(configuration: AppConfig) -> None:
-    async with _applications(configuration) as apps:
+async def test_shared_runtime_lifetime_is_owned_only_by_host(configuration: AppConfig, analytics_persistence: PersistenceRuntime) -> None:
+    async with _applications(configuration, analytics_persistence) as apps:
         assert apps.runtime.ready_calls == 1
         assert apps.runtime.shutdown_calls == 0
         reader = apps.runtime.create_reader()
@@ -226,10 +238,10 @@ async def test_shared_runtime_lifetime_is_owned_only_by_host(configuration: AppC
 
 
 async def test_shared_ingestion_identity_does_not_create_trusted_owner(
-    configuration: AppConfig, query: LogCountQuery,
+    configuration: AppConfig, analytics_persistence: PersistenceRuntime, query: LogCountQuery,
 ) -> None:
     owner_query = query.model_copy(update={"scope": OwnersScope(kind="owners", owner_ids=("claimed-owner",))})
-    async with _applications(configuration) as apps:
+    async with _applications(configuration, analytics_persistence) as apps:
         response = await apps.collector.post("/v1/logs", json=_payload())
         assert response.status_code == 200
         result = await apps.runtime.create_reader().count_logs(owner_query)
@@ -238,9 +250,9 @@ async def test_shared_ingestion_identity_does_not_create_trusted_owner(
 
 @pytest.mark.parametrize("authorized,valid,status", [(False, True, 401), (True, False, 400)])
 async def test_rejected_exports_do_not_write_analytics(
-    configuration: AppConfig, query: LogCountQuery, authorized: bool, valid: bool, status: int,
+    configuration: AppConfig, analytics_persistence: PersistenceRuntime, query: LogCountQuery, authorized: bool, valid: bool, status: int,
 ) -> None:
-    async with _applications(configuration) as apps:
+    async with _applications(configuration, analytics_persistence) as apps:
         response = await apps.collector.post(
             "/v1/logs", json=_payload() if valid else {"resourceLogs": "invalid"},
             headers={"Authorization": "Bearer analytics-ingestion" if authorized else "Bearer invalid"},
@@ -253,12 +265,12 @@ async def test_rejected_exports_do_not_write_analytics(
 
 
 async def test_analytics_failure_is_not_acknowledged_and_hides_backend_details(
-    configuration: AppConfig, query: LogCountQuery,
+    configuration: AppConfig, analytics_persistence: PersistenceRuntime, query: LogCountQuery,
 ) -> None:
     def unavailable_writer() -> TelemetryAnalyticsWriter:
         return UnavailableWriter()
 
-    async with _applications(configuration) as apps:
+    async with _applications(configuration, analytics_persistence) as apps:
         apps.collector_app.dependency_overrides[get_analytics_writer] = unavailable_writer
         response = await apps.collector.post("/v1/logs", json=_payload())
         assert response.status_code == 503
@@ -269,10 +281,10 @@ async def test_analytics_failure_is_not_acknowledged_and_hides_backend_details(
 
 
 async def test_analytics_groups_match_normalized_export_attributes(
-    configuration: AppConfig, query: LogCountQuery,
+    configuration: AppConfig, analytics_persistence: PersistenceRuntime, query: LogCountQuery,
 ) -> None:
     grouped = query.model_copy(update={"group_by": (LogDimension.SOURCE, LogDimension.EVENT_NAME, LogDimension.TOOL_NAME)})
-    async with _applications(configuration) as apps:
+    async with _applications(configuration, analytics_persistence) as apps:
         response = await apps.collector.post("/v1/logs", json=_payload())
         assert response.status_code == 200
         result = await apps.api.post(BASE, json=_query_body(grouped))
@@ -282,9 +294,9 @@ async def test_analytics_groups_match_normalized_export_attributes(
 
 @pytest.mark.parametrize("source,count", [("codex", 1), ("other", 0)])
 async def test_admin_filters_match_collector_logs(
-    configuration: AppConfig, query: LogCountQuery, source: str, count: int,
+    configuration: AppConfig, analytics_persistence: PersistenceRuntime, query: LogCountQuery, source: str, count: int,
 ) -> None:
-    async with _applications(configuration) as apps:
+    async with _applications(configuration, analytics_persistence) as apps:
         response = await apps.collector.post("/v1/logs", json=_payload())
         assert response.status_code == 200
         result = await apps.api.post(BASE, json=_query_body(query) | {
@@ -296,9 +308,9 @@ async def test_admin_filters_match_collector_logs(
 
 @pytest.mark.parametrize("signal", ["logs", "metrics", "traces"])
 async def test_listener_boundaries_and_admin_authentication_remain_separate(
-    configuration: AppConfig, query: LogCountQuery, signal: str,
+    configuration: AppConfig, analytics_persistence: PersistenceRuntime, query: LogCountQuery, signal: str,
 ) -> None:
-    async with _applications(configuration) as apps:
+    async with _applications(configuration, analytics_persistence) as apps:
         for token in ("analytics-ingestion", "invalid"):
             headers = {"Authorization": f"Bearer {token}"}
             assert (await apps.api.post(f"/v1/{signal}", json={}, headers=headers)).status_code == 404

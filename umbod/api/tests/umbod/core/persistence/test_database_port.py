@@ -241,6 +241,39 @@ async def test_insert_stores_canonical_snapshot(database: Database) -> None:
     assert stored.payload == {"items": ["original"]}
 
 
+@pytest.mark.parametrize("read_many", [False, True], ids=["find_one", "find_many"])
+@pytest.mark.asyncio
+async def test_read_results_contain_detached_mutable_json(database: Database, read_many: bool) -> None:
+    table = canonical_table()
+    row = CanonicalRow(
+        record_id="record",
+        enabled=True,
+        payload={"items": ["original"]},
+        labels=(),
+        document=SampleDocument(label="document"),
+    )
+    await database.ensure_schema((table,))
+    query = Query(NoFilter(), AllFields(), Unordered())
+    async with database.session(mode=TransactionMode.READ_WRITE) as session:
+        await session.insert(table, InsertCommand(row=row))
+    async with database.read_session() as session:
+        if read_many:
+            observed, = await session.find_many(table, query)
+        else:
+            observed = await session.find_one(table, query)
+        assert observed is not None
+        payload = cast(dict[str, list[str]], observed.payload)
+        payload["items"].append("mutated")
+        payload["added"] = ["new"]
+        assert observed.payload == {"items": ["original", "mutated"], "added": ["new"]}
+        reread = await session.find_one(table, query)
+        assert reread is not None
+        assert reread.payload == {"items": ["original"]}
+    async with database.read_session() as session:
+        rows = await session.find_many(table, query)
+        assert tuple(stored.payload for stored in rows) == ({"items": ["original"]},)
+
+
 @pytest.mark.asyncio
 async def test_non_json_value_is_rejected_at_database_boundary(database: Database) -> None:
     table = canonical_table()

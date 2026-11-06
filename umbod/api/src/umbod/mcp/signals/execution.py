@@ -2,10 +2,14 @@ import asyncio
 from collections.abc import Callable
 from typing import Any, Protocol
 
-from umbod.core.invocation.policy import ConnectorInvocationPolicy
+from fastmcp.exceptions import AuthorizationError, ValidationError
+
+from umbod.core.invocation.policy import ConnectorInvocationDenied, ConnectorInvocationPolicy
 
 from umbod.core.invocation.failure_evidence import (
+    InvocationExceptionEvidence,
     InvocationFailureOrigin,
+    InvocationRejectedFailure,
     InvocationReturnedFailure,
     current_invocation_failure,
     exception_evidence,
@@ -17,6 +21,7 @@ from umbod.mcp.signals.events import McpToolIdentity, McpToolInvocationFailureCa
 from umbod.mcp.signals.lifecycle import McpToolInvocationLifecycle, UnavailableToolInvocationLifecycle
 from umbod.mcp.signals.diagnostics import invocation_failure
 from umbod.mcp.signals.publisher import McpInvocationPublisher
+from umbod.mcp.tools.errors import ToolAuthorizationDenied
 from umbod.core.invocation.tools.execution import ToolExecutionPipeline, create_tool_execution_pipeline
 
 
@@ -52,9 +57,26 @@ class ConnectorInvocationSignalInterceptor:
             return
         if isinstance(outcome, ToolExecutionFailed) and isinstance(outcome.error, (ModernConnectorApprovalRequired, asyncio.CancelledError)):
             return
+        diagnostic = invocation_failure.get()
+        diagnostic_rejection = {
+            "invalid_arguments": McpToolInvocationFailureCategory.VALIDATION,
+            "admission_denied": McpToolInvocationFailureCategory.AUTHORIZATION,
+            "authorization_rejected": McpToolInvocationFailureCategory.AUTHORIZATION,
+        }.get(diagnostic.reason) if diagnostic is not None else None
         if isinstance(outcome, ToolExecutionFailed):
-            evidence = current_invocation_failure() or exception_evidence(outcome.error, InvocationFailureOrigin.INTERNAL)
-            self._publisher.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, invocation_failure.get(), evidence)
+            evidence = current_invocation_failure()
+            category = McpToolInvocationFailureCategory.CONNECTOR_ERROR
+            rejection = isinstance(outcome.error, (ValidationError, ConnectorInvocationDenied, AuthorizationError, ToolAuthorizationDenied))
+            server_diagnostic = diagnostic is not None and diagnostic_rejection is None
+            if diagnostic_rejection is not None:
+                category = diagnostic_rejection
+                evidence = InvocationRejectedFailure(InvocationFailureOrigin.CLIENT_INPUT)
+            elif rejection and not isinstance(evidence, InvocationExceptionEvidence) and not server_diagnostic:
+                category = McpToolInvocationFailureCategory.VALIDATION if isinstance(outcome.error, ValidationError) else McpToolInvocationFailureCategory.AUTHORIZATION
+                evidence = InvocationRejectedFailure(InvocationFailureOrigin.CLIENT_INPUT)
+            else:
+                evidence = evidence or exception_evidence(outcome.error, InvocationFailureOrigin.INTERNAL)
+            self._publisher.failed(state, category, diagnostic, evidence)
             return
         try:
             returned_error = isinstance(outcome, ToolExecutionSucceeded) and self._result_is_error(outcome.result)
@@ -71,7 +93,13 @@ class ConnectorInvocationSignalInterceptor:
                     "openapi": InvocationFailureOrigin.OPENAPI,
                 }.get(request.identity.connector_kind, InvocationFailureOrigin.INTERNAL)
                 evidence = InvocationReturnedFailure(returned_origin)
-            self._publisher.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, invocation_failure.get(), evidence)
+            category = McpToolInvocationFailureCategory.TOOL_ERROR
+            if diagnostic_rejection is not None:
+                category = diagnostic_rejection
+                evidence = InvocationRejectedFailure(InvocationFailureOrigin.CLIENT_INPUT)
+            elif isinstance(evidence, InvocationExceptionEvidence) or (diagnostic is not None and diagnostic.reason != "downstream_tool_error"):
+                category = McpToolInvocationFailureCategory.CONNECTOR_ERROR
+            self._publisher.failed(state, category, diagnostic, evidence)
         else:
             self._publisher.succeeded(state)
 

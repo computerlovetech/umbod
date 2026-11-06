@@ -33,7 +33,7 @@ MCP invocation completion records retain the existing connector, tool, operation
 | Field | Meaning |
 | --- | --- |
 | `mcp.failure.category` | Invocation failure classification. |
-| `mcp.failure.origin` | Internal application, connector execution, downstream OpenAPI, or downstream MCP evidence. |
+| `mcp.failure.origin` | Client input, internal application, connector execution, downstream OpenAPI, or downstream MCP evidence. |
 | `mcp.failure.stage` | Stage at which the operation failed. |
 | `mcp.failure.reason` | Allowlisted, machine-readable diagnostic reason. |
 | `mcp.downstream.response_received` | Whether this diagnostic carries downstream HTTP-response evidence. False does not prove the remote service was never contacted. |
@@ -101,7 +101,9 @@ Filesystem errors retain stable codes and add bounded recovery guidance. Argumen
 4. Extend the allowlisted reason at that failure point and verify its propagation to serialized output. Do not broaden redaction exceptions or replay production writes to obtain more detail.
 5. Preserve conservative uncertainty and no-replay behavior for OAuth exchanges and tool calls. More precise diagnostics do not establish whether an upstream mutation completed.
 
-Expected denials and conflicts need explicit classification and an appropriate non-error severity. Genuine unexpected/internal failures must remain ERROR and alertable. Do not suppress all tool or filesystem errors to reduce alert volume.
+Expected argument validation, authorization and approval denials, known domain rejections, and explicit tool-error results use WARNING in invocation and audit logs. Their failure outcomes and metrics remain unchanged. Categories are `validation`, `authorization`, or `tool_error`; rejected client input carries `client_input` origin without exception frames. Authentication denials also use WARNING in audit logs.
+
+Unexpected exceptions, storage and sharing-configuration failures, transport failures, result-classifier failures, and invalid output contracts remain ERROR and alertable. An explicit error result backed by unexpected exception evidence remains a server fault rather than becoming `tool_error`. Invalid or unresolved server-side argument schemas remain contract failures, not client validation errors. Gateway and code-mode audit records retain the strongest nested invocation failure category within their request, so sanitizing a backend error result does not downgrade its audit severity. Downstream origin alone never makes a failure expected. Do not suppress all tool or filesystem errors to reduce alert volume.
 
 ## Verification and enforcement
 

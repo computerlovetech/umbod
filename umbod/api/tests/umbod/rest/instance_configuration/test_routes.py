@@ -20,7 +20,7 @@ def admin_client(
         runtime=RuntimeConfig(app_name="effective-instance"),
         admin_authentication=AdminAuthConfig(mode="simulation", simulated_admin=True),
     )
-    with TestClient(create_app(settings=settings)) as client:
+    with TestClient(create_app(settings=settings, connector_registrations=[])) as client:
         yield client
 
 
@@ -70,7 +70,7 @@ def test_instance_configuration_uses_admin_authorization_policy(
     _configure_connector_availability(tmp_path, monkeypatch)
     settings = AppConfig(rest={"metrics_enabled": False}, admin_authentication=authentication)
 
-    with TestClient(create_app(settings=settings)) as client:
+    with TestClient(create_app(settings=settings, connector_registrations=[])) as client:
         response = client.get("/api/admin/instance-configuration")
 
     assert response.status_code == expected_status

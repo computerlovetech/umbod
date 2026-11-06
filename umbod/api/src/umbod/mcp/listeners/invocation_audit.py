@@ -1,5 +1,7 @@
 import uuid
 
+from umbod.mcp.signals.context import current_mcp_invocation_context
+
 from umbod.mcp.logging.audit.event import (
     McpAuditCorrelation,
     McpAuditFailure,
@@ -19,6 +21,7 @@ from umbod.mcp.signals import (
 _AUDIT_FAILURE_CATEGORIES: dict[McpToolInvocationFailureCategory, McpAuditFailureCategory] = {
     McpToolInvocationFailureCategory.VALIDATION: McpAuditFailureCategory.VALIDATION,
     McpToolInvocationFailureCategory.AUTHORIZATION: McpAuditFailureCategory.AUTHORIZATION,
+    McpToolInvocationFailureCategory.TOOL_ERROR: McpAuditFailureCategory.TOOL_ERROR,
     McpToolInvocationFailureCategory.CONNECTOR_ERROR: McpAuditFailureCategory.CONNECTOR_ERROR,
     McpToolInvocationFailureCategory.UNEXPECTED_ERROR: McpAuditFailureCategory.UNEXPECTED_ERROR,
 }
@@ -30,6 +33,9 @@ class InvocationAuditReceiver:
 
     def __call__(self, event: McpToolInvocationCompleted) -> None:
         started = event.started
+        context = current_mcp_invocation_context()
+        if isinstance(event, McpToolInvocationFailed) and context is not None:
+            context.failures.record(event.failure_category)
         identity = started.tool
         if identity.connector_id is None and identity.tool_name in {"search_tools", "execute_tool", "execute_code"}:
             return

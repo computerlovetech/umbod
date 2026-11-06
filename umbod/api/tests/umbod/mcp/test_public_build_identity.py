@@ -1,4 +1,4 @@
-from pathlib import Path
+from contextlib import AsyncExitStack
 
 import httpx
 import pytest
@@ -10,16 +10,17 @@ from umbod.mcp.middleware.response_metadata import RESPONSE_METADATA_KEY
 
 
 @pytest.mark.asyncio
-async def test_public_initialization_and_server_card_share_build_identity(tmp_path: Path) -> None:
-    app, token, _context, _publishing_store = await _build_public_app(tmp_path)
-    async with app.router.lifespan_context(app):
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://localhost") as client:
-            card = await client.get("/.well-known/mcp/server-card.json")
-            initialized = await client.post("/mcp", json=INITIALIZE, headers={**HEADERS, "Authorization": f"Bearer {token}"})
-            failed = await client.post("/mcp", json={
-                "jsonrpc": "2.0", "id": 2, "method": "tools/call",
-                "params": {"name": "echo_echo_message", "arguments": {}},
-            }, headers={**HEADERS, "Authorization": f"Bearer {token}"})
+async def test_public_initialization_and_server_card_share_build_identity() -> None:
+    async with AsyncExitStack() as runtime_resources:
+        app, token, _context, _publishing_store = await _build_public_app(runtime_resources)
+        async with app.router.lifespan_context(app):
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://localhost") as client:
+                card = await client.get("/.well-known/mcp/server-card.json")
+                initialized = await client.post("/mcp", json=INITIALIZE, headers={**HEADERS, "Authorization": f"Bearer {token}"})
+                failed = await client.post("/mcp", json={
+                    "jsonrpc": "2.0", "id": 2, "method": "tools/call",
+                    "params": {"name": "echo_echo_message", "arguments": {}},
+                }, headers={**HEADERS, "Authorization": f"Bearer {token}"})
     assert card.json()["version"] == UMBOD_RELEASE
     assert rpc_result(initialized)["serverInfo"]["version"] == UMBOD_RELEASE
     failure = rpc_result(failed)

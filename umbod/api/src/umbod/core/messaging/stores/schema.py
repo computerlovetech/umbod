@@ -6,6 +6,7 @@ from umbod.core.persistence import (
     Field,
     IntegerCodec,
     KeyCodec,
+    NonReusingIntegerKeyCodec,
     RowCodec,
     Table,
     TableIdentity,
@@ -49,7 +50,7 @@ EVENT_TABLE = Table(
             (EVENT_SEQUENCE, EVENT_TYPE, EVENT_DOCUMENT),
         ),
     ),
-    KeyCodec(
+    NonReusingIntegerKeyCodec(
         MessagingEventKey, cast(tuple[Field[MessagingEventRecord, object], ...], (EVENT_SEQUENCE,))
     ),
 )

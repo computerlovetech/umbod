@@ -1,4 +1,5 @@
 import json
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -6,9 +7,7 @@ import pytest
 import pytest_asyncio
 from pydantic import SecretStr, ValidationError
 
-from pathlib import Path
-
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
 from umbod.core.connectors.downstream_mcp.personal_connections.authorization_models import (
@@ -94,13 +93,16 @@ async def install_authorization(case: RuntimeCase, authorization: Authorized) ->
 
 
 @pytest_asyncio.fixture
-async def runtime_case(request: pytest.FixtureRequest, tmp_path: Path) -> RuntimeCase:
-    runtime = (
-        await prepared_sqlite_runtime(tmp_path / "runtime.sqlite3")
-        if getattr(request, "param", "inmemory") == "sqlite"
-        else await prepared_inmemory_runtime()
-    )
-    bundle = await create_downstream_mcp_stores("runtime-secret", runtime.database)
+async def runtime_case() -> AsyncIterator[RuntimeCase]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield await _create_runtime_case(runtime.database)
+    finally:
+        await runtime.shutdown()
+
+
+async def _create_runtime_case(database: Database) -> RuntimeCase:
+    bundle = await create_downstream_mcp_stores("runtime-secret", database)
     definition = OAuthConnectorDefinition(
         connector_id="personal",
         display_name="Personal",
@@ -109,7 +111,7 @@ async def runtime_case(request: pytest.FixtureRequest, tmp_path: Path) -> Runtim
     )
     await bundle.definitions.save(SaveConnectorDefinition(definition=definition))
     await bundle.publishing.publish_connector("personal")
-    async with runtime.database.session(
+    async with database.session(
         mode=TransactionMode.SERIALIZED_WRITE
     ) as session:
         configuration = await install_personal_oauth_configuration(
@@ -161,7 +163,7 @@ async def runtime_case(request: pytest.FixtureRequest, tmp_path: Path) -> Runtim
         refresh_token=AbsentPersonalRefreshToken(),
     )
     case = RuntimeCase(
-        database=runtime.database,
+        database=database,
         bundle=bundle,
         store=bundle.personal_runtime_authorizations,
         query=PersonalRuntimeAuthorizationQuery(key=key, group_ids=("team",), now=now),

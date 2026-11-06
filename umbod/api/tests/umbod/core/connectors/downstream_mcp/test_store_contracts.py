@@ -1,13 +1,10 @@
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.stores import CONNECTOR_CREDENTIAL_TABLE, CONNECTOR_DEFINITION_TABLE, CONNECTOR_HEALTH_TABLE, ConnectorDefinitionStoreService, ConnectorHealthStoreService, EncryptedCredentialStoreService, TOOL_CATALOG_TABLE, ToolCatalogStoreService
-from tests.persistence_runtime import create_sqlite_runtime, prepared_inmemory_runtime, prepared_sqlite_runtime
-from umbod.core.persistence import Database
+from tests.persistence_runtime import prepared_inmemory_runtime
+from umbod.core.persistence import AllFields, Database, NoFilter, Query, Unordered
 import asyncio
-import sqlite3
 from collections.abc import AsyncIterator
-from contextlib import closing
 from datetime import UTC, datetime
-from pathlib import Path
 import pytest
 import pytest_asyncio
 from pydantic import SecretStr, ValidationError
@@ -116,17 +113,16 @@ async def test_catalog_rejects_duplicate_and_cross_connector_tool_identities() -
         _snapshot('alpha', _tool('beta', 'tool'))
 
 @pytest.mark.asyncio
-async def test_sqlite_credentials_are_encrypted_and_wrong_key_cannot_read(tmp_path: Path) -> None:
-    path = tmp_path / 'store.db'
-    await prepared_sqlite_runtime(path)
-    store = EncryptedCredentialStoreService(create_sqlite_runtime(path).database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('correct-key'))
+async def test_credentials_are_encrypted_and_wrong_key_cannot_read(database: Database) -> None:
+    store = EncryptedCredentialStoreService(database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('correct-key'))
     credential = StaticBearerCredentialState(connector_id='alpha', bearer_token=SecretStr('plaintext-token'))
     await store.save(SaveCredential(credential=credential))
-    with closing(sqlite3.connect(path)) as connection:
-        stored = connection.execute('SELECT document FROM downstream_mcp_connector_credentials').fetchone()[0]
-    assert 'plaintext-token' not in stored
+    async with database.read_session() as session:
+        stored = await session.find_one(CONNECTOR_CREDENTIAL_TABLE, Query(NoFilter(), AllFields(), Unordered()))
+    assert stored is not None
+    assert 'plaintext-token' not in stored.document
     with pytest.raises(ConnectorConfigurationDecryptionError):
-        await EncryptedCredentialStoreService(create_sqlite_runtime(path).database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('wrong-key')).get(ConnectorIdQuery(connector_id='alpha'))
+        await EncryptedCredentialStoreService(database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('wrong-key')).get(ConnectorIdQuery(connector_id='alpha'))
 
 @pytest.mark.asyncio
 async def test_no_auth_definition_contains_no_credential_material() -> None:

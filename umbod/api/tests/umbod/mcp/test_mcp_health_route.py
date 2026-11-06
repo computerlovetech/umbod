@@ -7,6 +7,8 @@ import pytest
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
+from tests.mcp_fixtures import empty_connector_plugins
+from umbod.mcp import public_app
 from tests.mcp_telemetry_fixtures import RecordingMetricsServerFactory
 from umbod.config import AppConfig
 from umbod.mcp.public_app import build_starlette_app, create_runtime_context, load_configured_public_app_config
@@ -20,9 +22,10 @@ def UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH(
 ) -> None:
     availability_path = tmp_path / "connectors.json"
     availability_path.write_text(
-        json.dumps({"connectors": [{"id": "slack"}, {"id": "test"}]}), encoding="utf-8"
+        json.dumps({"connectors": []}), encoding="utf-8"
     )
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability_path))
+    monkeypatch.setattr(public_app, "load_connector_plugins", empty_connector_plugins)
 
 
 @pytest.mark.parametrize("metrics_enabled", [False, True])

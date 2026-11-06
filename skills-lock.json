@@ -64,7 +64,7 @@
     "improve-testability": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "9a18c3850da1d62c7f50ac9504aac2091498832908cb09e6f83354f4ac01f69f"
+      "computedHash": "d37907721822130cd6236b5bb574335003df43195949c307117e90f06770bcde"
     },
     "ports-adapters-io": {
       "source": "./skills",
@@ -79,8 +79,7 @@
     "python-test-practices": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "9cc06c7eeeb34ee0264c32d059d91551823ef3ef66b01527eecdf0fffe470ec1",
-      "installMode": "copy"
+      "computedHash": "5127ab834d0f582827418b94fc0c360fc86877ca6a93c6c3859185fd904f73dc"
     },
     "release-umbod": {
       "source": "./skills",

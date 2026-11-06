@@ -4,9 +4,14 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from httpx import Response
+from httpx import ASGITransport, AsyncClient, Response
+from starlette.datastructures import UploadFile
 
-from umbod.rest.main import create_app
+from tests.persistence_runtime import create_inmemory_runtime
+from umbod.infrastructure import AppPersistenceRuntime
+from umbod.rest.connectors.openapi import routes as openapi_routes
+from umbod.rest.factories import ConnectorApiDependencyFactories
+from umbod.rest.main import create_app, create_app_with_dependency_factories
 from umbod.rest.settings import APISettings
 
 
@@ -19,6 +24,7 @@ def connector_availability(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
 
 def _settings(import_limit: int = 10_485_760) -> APISettings:
     return APISettings(
+        rest={"metrics_enabled": False},
         connector_store={"type": "inmemory"},
         openapi_connectors={"json_import_max_bytes": import_limit},
         admin_authentication={"mode": "simulation", "simulated_admin": True},
@@ -71,49 +77,91 @@ def _has_current_catalog(client: TestClient, connector_id: str) -> bool:
     return response.json()["publication_status"] != "unconfigured"
 
 
-def test_file_import_replaces_current_catalog_with_document_and_multiple_hosts(
-    tmp_path: Path,
+def test_file_import_replaces_current_catalog_with_document_and_multiple_hosts() -> None:
+    settings = _settings()
+    runtime = create_inmemory_runtime()
+    factories = ConnectorApiDependencyFactories.from_settings(settings, runtime, [])
+    with TestClient(create_app_with_dependency_factories(factories)) as client:
+        connector_id = _create(client)
+        document = _document()
+        document["info"]["description"] = "upload-body-token-canary"
+
+        response = _upload(
+            client,
+            connector_id,
+            json.dumps(document).encode(),
+            approved_hosts=("api.example.com", "cdn.example.com"),
+        )
+
+        assert response.status_code == 201
+        assert response.json()["approved_hosts"] == ["api.example.com", "cdn.example.com"]
+        assert response.json()["operation_ids"] == ["listItems"]
+        assert response.json()["selected_server_url"] == "https://api.example.com"
+        assert _has_current_catalog(client, connector_id)
+
+
+        recreated_runtime = AppPersistenceRuntime(
+            database=runtime.database, readiness=runtime.readiness,
+        )
+        recreated_factories = ConnectorApiDependencyFactories.from_settings(settings, recreated_runtime, [])
+        recreated_app = create_app_with_dependency_factories(recreated_factories)
+
+        async def read_recreated_catalog() -> None:
+            async with recreated_app.router.lifespan_context(recreated_app), AsyncClient(
+                transport=ASGITransport(app=recreated_app), base_url="http://testserver",
+            ) as recreated:
+                detail = await recreated.get(f"/api/admin/connectors/openapi/{connector_id}")
+                assert detail.status_code == 200
+                assert detail.json()["publication_status"] != "unconfigured"
+                tools = await recreated.get(f"/api/admin/connectors/openapi/{connector_id}/tools")
+                assert tools.status_code == 200
+                assert tools.json()["tools"] == [
+                    {
+                        "operation_id": "listItems",
+                        "method": "GET",
+                        "path": "/items",
+                        "summary": "",
+                        "description": "",
+                        "activation_status": "disabled",
+                        "parameters": {"type": "object", "properties": {}, "required": []},
+                        "output_schema_status": "absent",
+                    }
+                ]
+
+
+        client.portal.call(read_recreated_catalog)
+
+@pytest.mark.parametrize(
+    "content,filename,expected_status",
+    [
+        (json.dumps(_document()).encode(), "spec.json", 201),
+        (b'{"openapi":', "spec.json", 422),
+        (b" " * 4097, "spec.json", 413),
+        (b"{}", "spec.yaml", 415),
+    ],
+)
+def test_file_import_closes_uploads_on_success_and_failure(
+    content: bytes, filename: str, expected_status: int, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    settings = APISettings(
-        connector_store={"type": "sqlite", "sqlite_path": str(tmp_path / "api.sqlite3")},
-        admin_authentication={"mode": "simulation", "simulated_admin": True},
-    )
-    client = TestClient(create_app(settings=settings, connector_registrations=[]))
-    connector_id = _create(client)
-    document = _document()
-    document["info"]["description"] = "upload-body-token-canary"
+    uploads: list[UploadFile] = []
+    original_reader = openapi_routes.read_json_object
 
-    response = _upload(
-        client,
-        connector_id,
-        json.dumps(document).encode(),
-        approved_hosts=("api.example.com", "cdn.example.com"),
-    )
+    async def read_and_record(file: UploadFile | str, max_bytes: int) -> dict[str, Any]:
+        if not isinstance(file, str):
+            uploads.append(file)
+        return await original_reader(file, max_bytes)
 
-    assert response.status_code == 201
-    assert response.json()["approved_hosts"] == ["api.example.com", "cdn.example.com"]
-    assert response.json()["operation_ids"] == ["listItems"]
-    assert response.json()["selected_server_url"] == "https://api.example.com"
-    assert _has_current_catalog(client, connector_id)
-
-    recreated = TestClient(
-        create_app(settings=settings, connector_registrations=[])
-    )
-    assert _has_current_catalog(recreated, connector_id)
-    tools = recreated.get(f"/api/admin/connectors/openapi/{connector_id}/tools")
-    assert tools.status_code == 200
-    assert tools.json()["tools"] == [
-        {
-            "operation_id": "listItems",
-            "method": "GET",
-            "path": "/items",
-            "summary": "",
-            "description": "",
-            "activation_status": "disabled",
-            "parameters": {"type": "object", "properties": {}, "required": []},
-            "output_schema_status": "absent",
-        }
-    ]
+    monkeypatch.setattr(openapi_routes, "read_json_object", read_and_record)
+    with TestClient(create_app(settings=_settings(4096), connector_registrations=[])) as client:
+        try:
+            connector_id = _create(client)
+            response = _upload(client, connector_id, content, filename=filename)
+            assert response.status_code == expected_status
+            assert len(uploads) == 1
+            assert uploads[0].file.closed
+        finally:
+            for upload in uploads:
+                client.portal.call(upload.close)
 
 
 def test_file_import_normalizes_deduplicates_and_ignores_blank_approved_hosts() -> None:

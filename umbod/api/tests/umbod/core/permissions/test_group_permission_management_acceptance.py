@@ -1,7 +1,7 @@
 from umbod.core.permissions.factories import create_group_permission_store
 from collections.abc import AsyncIterator
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
-from pathlib import Path
+from tests.persistence_runtime import prepared_inmemory_runtime
+from umbod.core.persistence import Database
 import pytest
 import pytest_asyncio
 from umbod.core.permissions import (
@@ -70,12 +70,17 @@ def _management(
 
 
 @pytest_asyncio.fixture
-async def store() -> AsyncIterator[GroupPermissionStore]:
+async def database() -> AsyncIterator[Database]:
     runtime = await prepared_inmemory_runtime()
     try:
-        yield await create_group_permission_store(runtime.database)
+        yield runtime.database
     finally:
         await runtime.shutdown()
+
+
+@pytest_asyncio.fixture
+async def store(database: Database) -> GroupPermissionStore:
+    return await create_group_permission_store(database)
 
 
 @pytest.mark.asyncio
@@ -331,10 +336,8 @@ async def test_applied_change_reports_clients_notified_from_notifier(
 
 
 @pytest.mark.asyncio
-async def test_permissions_persist_across_store_recreation(tmp_path: Path) -> None:
-    sqlite_path = tmp_path / "permissions.sqlite3"
+async def test_permissions_persist_across_store_recreation(database: Database) -> None:
     tool = ConnectorToolRef("github", "list_repositories")
-    database = (await prepared_sqlite_runtime(sqlite_path)).database
     store = await create_group_permission_store(database)
     await _management(store).save_group_permissions(
         SaveGroupPermissionsRequest(

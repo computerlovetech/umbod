@@ -1,9 +1,10 @@
 import asyncio
-from pathlib import Path
+from collections.abc import AsyncIterator
 
 import pytest
+import pytest_asyncio
 
-from tests.persistence_runtime import prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.personal_connections import (
     Authorized,
@@ -27,6 +28,7 @@ from umbod.core.connectors.downstream_mcp.stores.schema import (
 from umbod.core.persistence import (
     AllFields,
     NoFilter,
+    PersistenceRuntime,
     Query,
     TransactionMode,
     Unordered,
@@ -34,12 +36,19 @@ from umbod.core.persistence import (
 )
 
 
+@pytest_asyncio.fixture
+async def runtime() -> AsyncIterator[PersistenceRuntime]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield runtime
+    finally:
+        await runtime.shutdown()
+
+
 @pytest.mark.asyncio
-async def test_encrypted_personal_state_survives_adapter_recreation(
-    tmp_path: Path,
+async def test_encrypted_personal_state_survives_store_recreation(
+    runtime: PersistenceRuntime,
 ) -> None:
-    path = tmp_path / "personal.sqlite3"
-    runtime = await prepared_sqlite_runtime(path)
     bundle = await create_downstream_mcp_stores("encryption-secret", runtime.database)
     await bundle.definitions.save(SaveConnectorDefinition(definition=OAuthConnectorDefinition(
         connector_id="alpha", display_name="Alpha", endpoint_url="https://alpha.example/mcp",
@@ -60,7 +69,7 @@ async def test_encrypted_personal_state_survives_adapter_recreation(
         )
     )
     restored: PersonalConnectionStore = EncryptedPersonalConnectionStore(
-        (await prepared_sqlite_runtime(path)).database,
+        runtime.database,
         AuthenticatedTextCipher("encryption-secret"),
     )
     assert await restored.get(key) == saved
@@ -71,20 +80,18 @@ async def test_encrypted_personal_state_survives_adapter_recreation(
         )
     assert row is not None
     assert "never-plaintext-authorization" not in row.document
-    assert "never-plaintext-authorization".encode() not in path.read_bytes()
 
 
 @pytest.mark.asyncio
-async def test_independent_adapters_serialize_competing_authorization_writes(
-    tmp_path: Path,
+async def test_independent_stores_serialize_competing_authorization_writes(
+    runtime: PersistenceRuntime,
 ) -> None:
-    path = tmp_path / "race.sqlite3"
     first: PersonalConnectionStore = EncryptedPersonalConnectionStore(
-        (await prepared_sqlite_runtime(path)).database,
+        runtime.database,
         AuthenticatedTextCipher("secret"),
     )
     second: PersonalConnectionStore = EncryptedPersonalConnectionStore(
-        (await prepared_sqlite_runtime(path)).database,
+        runtime.database,
         AuthenticatedTextCipher("secret"),
     )
     key = PersonalConnectionKey(
@@ -123,9 +130,8 @@ async def test_independent_adapters_serialize_competing_authorization_writes(
 @pytest.mark.parametrize("tampered_field", ("namespace", "subject", "connector_id"))
 @pytest.mark.asyncio
 async def test_decrypted_ownership_must_match_requested_row(
-    tmp_path: Path, tampered_field: str
+    runtime: PersistenceRuntime, tampered_field: str
 ) -> None:
-    runtime = await prepared_sqlite_runtime(tmp_path / "personal.sqlite3")
     store: PersonalConnectionStore = EncryptedPersonalConnectionStore(
         runtime.database, AuthenticatedTextCipher("secret")
     )

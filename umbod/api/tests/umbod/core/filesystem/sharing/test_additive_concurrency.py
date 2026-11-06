@@ -2,7 +2,6 @@ from tests.support.filesystem.sharing_policy import GROUP_SCOPE, group_commands,
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -20,7 +19,7 @@ from umbod.core.groups import GroupInUse, RegisterGroup
 from umbod.core.groups.stores.composition import create_group_management, shared_group_usage
 from umbod.core.groups.stores.service import DatabaseGroupCatalogue
 from umbod.core.persistence import Database, TransactionMode
-from tests.persistence_runtime import prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from tests.umbod.core.filesystem.test_authorized_content import caller
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
 from .conftest import SharingContext, sharing_context
@@ -30,15 +29,12 @@ from .test_policy import principal
 
 
 @pytest_asyncio.fixture
-async def independent_connections(tmp_path: Path) -> AsyncIterator[tuple[SharingContext, Database]]:
-    path = tmp_path / "additive-sharing.db"
-    first = await prepared_sqlite_runtime(path)
-    second = await prepared_sqlite_runtime(path)
+async def independent_services() -> AsyncIterator[tuple[SharingContext, Database]]:
+    runtime = await prepared_inmemory_runtime()
     try:
-        yield await sharing_context(first.database), second.database
+        yield await sharing_context(runtime.database), runtime.database
     finally:
-        await second.shutdown()
-        await first.shutdown()
+        await runtime.shutdown()
 
 
 def sharing_service(database: Database) -> FilesystemSharing:
@@ -47,10 +43,10 @@ def sharing_service(database: Database) -> FilesystemSharing:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("scenario", ["same-group", "different-groups", "identical"])
-async def test_independent_connections_serialize_additive_requests_without_lost_updates(
-    independent_connections: tuple[SharingContext, Database], scenario: str,
+async def test_independent_services_serialize_additive_requests_without_lost_updates(
+    independent_services: tuple[SharingContext, Database], scenario: str,
 ) -> None:
-    context, second = independent_connections
+    context, second = independent_services
     for identifier in ("team", "other"):
         await context.groups.register_group(RegisterGroup(group_id=identifier))
     checked, release, started = asyncio.Event(), asyncio.Event(), asyncio.Event()
@@ -88,9 +84,9 @@ async def test_independent_connections_serialize_additive_requests_without_lost_
 
 @pytest.mark.asyncio
 async def test_additive_share_commits_before_independent_group_deletion(
-    independent_connections: tuple[SharingContext, Database],
+    independent_services: tuple[SharingContext, Database],
 ) -> None:
-    context, second = independent_connections
+    context, second = independent_services
     await context.groups.register_group(RegisterGroup(group_id="team"))
     checked, release, started = asyncio.Event(), asyncio.Event(), asyncio.Event()
     gated = SharingService(VerifiedIdentityResolver(), GatedTransactions(DatabaseSharingTransactions(context.database), checked, release), "issuer")
@@ -113,9 +109,9 @@ async def test_additive_share_commits_before_independent_group_deletion(
 
 @pytest.mark.asyncio
 async def test_independent_group_deletion_before_additive_share_prevents_resurrection(
-    independent_connections: tuple[SharingContext, Database],
+    independent_services: tuple[SharingContext, Database],
 ) -> None:
-    context, second = independent_connections
+    context, second = independent_services
     await context.groups.register_group(RegisterGroup(group_id="team"))
     before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     checked, release, started = asyncio.Event(), asyncio.Event(), asyncio.Event()
@@ -147,9 +143,9 @@ async def test_independent_group_deletion_before_additive_share_prevents_resurre
 
 @pytest.mark.asyncio
 async def test_independent_revocation_before_additive_share_denies_current_authority(
-    independent_connections: tuple[SharingContext, Database],
+    independent_services: tuple[SharingContext, Database],
 ) -> None:
-    context, second = independent_connections
+    context, second = independent_services
     await context.groups.register_group(RegisterGroup(group_id="recipient"))
     await context.policies.add_grant(AccessGrant(node_id=context.node.id, principal=principal("delegates"), permissions={Permission.DISCOVER, Permission.SHARE}, recursive=False))
     checked, release, started = asyncio.Event(), asyncio.Event(), asyncio.Event()
@@ -178,9 +174,9 @@ async def test_independent_revocation_before_additive_share_denies_current_autho
 
 @pytest.mark.asyncio
 async def test_independent_additive_commit_invalidates_old_replace_and_allows_fresh_replace(
-    independent_connections: tuple[SharingContext, Database],
+    independent_services: tuple[SharingContext, Database],
 ) -> None:
-    context, second = independent_connections
+    context, second = independent_services
     await context.groups.register_group(RegisterGroup(group_id="team"))
     before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
     await sharing_service(second).share(caller(), context.node.id, command("team", Permission.READ))

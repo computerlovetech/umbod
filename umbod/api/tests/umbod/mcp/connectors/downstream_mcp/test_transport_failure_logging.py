@@ -145,7 +145,8 @@ async def test_scripted_network_failures_reach_public_tool_and_serialized_stdout
         assert attributes["mcp.downstream.http.status_code"] == status
     else:
         assert "mcp.downstream.http.status_code" not in attributes
-    assert attributes["mcp.failure.origin"] == ("internal" if internal_failure else "downstream_mcp")
+    expected_origin = "client_input" if reason == "authorization_rejected" else "internal" if internal_failure else "downstream_mcp"
+    assert attributes["mcp.failure.origin"] == expected_origin
     if scenario in {"inventory_snapshot", "inventory_cleanup_timeout"}:
         assert attributes["exception.type"] == "RuntimeError"
         assert "in fail_inventory_mapping" in attributes["exception.stacktrace"]

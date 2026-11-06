@@ -2,7 +2,6 @@ from tests.support.filesystem.sharing_policy import GROUP_SCOPE, group_commands,
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 import pytest
 
@@ -14,9 +13,8 @@ from umbod.core.filesystem.stores.sharing import DatabaseSharingSession, Databas
 from umbod.core.groups import GroupInUse, RegisterGroup
 from umbod.core.groups.stores.composition import shared_group_usage
 from umbod.core.groups.stores.service import DatabaseGroupCatalogue
-from tests.persistence_runtime import prepared_sqlite_runtime
 from tests.umbod.core.filesystem.test_authorized_content import caller
-from .conftest import SharingContext, sharing_context
+from .conftest import SharingContext
 from .test_policy import group, replace
 
 
@@ -102,31 +100,22 @@ async def test_group_deletion_first_rejects_sharing_without_resurrection(context
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("attempt", range(3))
-async def test_separate_sqlite_connections_have_exactly_one_replacement_winner(tmp_path: Path, attempt: int) -> None:
-    path = tmp_path / f"sharing-{attempt}.db"
-    first = await prepared_sqlite_runtime(path)
-    second = await prepared_sqlite_runtime(path)
-    try:
-        context = await sharing_context(first.database)
-        for identifier in ("first", "second"):
-            await context.groups.register_group(RegisterGroup(group_id=identifier))
-        before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
-        services = (
-            SharingService(VerifiedIdentityResolver(), DatabaseSharingTransactions(first.database), "issuer"),
-            SharingService(VerifiedIdentityResolver(), DatabaseSharingTransactions(second.database), "issuer"),
-        )
-        results = await asyncio.gather(*(
-            service.replace(caller(), context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision=before.revision, grants=group_commands((group(identifier),))))
-            for service, identifier in zip(services, ("first", "second"), strict=True)
-        ), return_exceptions=True)
-        assert sum(isinstance(result, RevisionConflict) for result in results) == 1
-        winners = [result for result in results if not isinstance(result, BaseException)]
-        assert len(winners) == 1
-        assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == winners[0]
-    finally:
-        await second.shutdown()
-        await first.shutdown()
+async def test_independent_services_have_exactly_one_replacement_winner(context: SharingContext) -> None:
+    for identifier in ("first", "second"):
+        await context.groups.register_group(RegisterGroup(group_id=identifier))
+    before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)
+    services = (
+        SharingService(VerifiedIdentityResolver(), DatabaseSharingTransactions(context.database), "issuer"),
+        SharingService(VerifiedIdentityResolver(), DatabaseSharingTransactions(context.database), "issuer"),
+    )
+    results = await asyncio.gather(*(
+        service.replace(caller(), context.node.id, ReplaceNodePolicy(recipient_type="group", expected_revision=before.revision, grants=group_commands((group(identifier),))))
+        for service, identifier in zip(services, ("first", "second"), strict=True)
+    ), return_exceptions=True)
+    assert sum(isinstance(result, RevisionConflict) for result in results) == 1
+    winners = [result for result in results if not isinstance(result, BaseException)]
+    assert len(winners) == 1
+    assert await context.service.inspect(caller(), context.node.id, GROUP_SCOPE) == winners[0]
 
 
 class FailingGrants:

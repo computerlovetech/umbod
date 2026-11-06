@@ -1,6 +1,3 @@
-import sqlite3
-from pathlib import Path
-
 import pytest
 
 from tests.umbod.core.connectors.downstream_mcp.test_personal_discovery_event_transactions import Mutation, assert_notification, events, reject_events, snapshot
@@ -48,14 +45,12 @@ async def test_accepted_refresh_transition_emits_notification(runtime_case: Runt
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", OPERATIONS)
-@pytest.mark.parametrize("runtime_case", ["sqlite"], indirect=True)
-async def test_refresh_event_failure_restores_state_including_uncertainty(runtime_case: RuntimeCase, refresh_store: PersonalRefreshStore, tmp_path: Path, operation: str) -> None:
-    path = tmp_path / "runtime.sqlite3"
+async def test_refresh_event_failure_restores_state_including_uncertainty(runtime_case: RuntimeCase, refresh_store: PersonalRefreshStore, monkeypatch: pytest.MonkeyPatch, operation: str) -> None:
     run = await mutation(runtime_case, refresh_store, operation)
     before = await snapshot(runtime_case.database)
     previous_events = await events(runtime_case.database)
-    reject_events(path)
-    with pytest.raises(sqlite3.IntegrityError, match="event append failed"):
+    reject_events(runtime_case.database, monkeypatch)
+    with pytest.raises(RuntimeError, match="event append failed"):
         await run()
     assert await snapshot(runtime_case.database) == before
     assert await events(runtime_case.database) == previous_events

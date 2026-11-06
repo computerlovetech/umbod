@@ -128,6 +128,7 @@ def test_registered_audit_receiver_records_success_invocation_details() -> None:
     [
         (McpToolInvocationFailureCategory.VALIDATION, McpAuditFailureCategory.VALIDATION),
         (McpToolInvocationFailureCategory.AUTHORIZATION, McpAuditFailureCategory.AUTHORIZATION),
+        (McpToolInvocationFailureCategory.TOOL_ERROR, McpAuditFailureCategory.TOOL_ERROR),
         (McpToolInvocationFailureCategory.CONNECTOR_ERROR, McpAuditFailureCategory.CONNECTOR_ERROR),
         (
             McpToolInvocationFailureCategory.UNEXPECTED_ERROR,

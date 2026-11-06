@@ -6,6 +6,7 @@ from typing import Literal, Protocol
 import pytest
 from fastapi.testclient import TestClient
 
+from tests.support.connector_plugins import SlackConnectorPlugin
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
 
@@ -301,5 +302,5 @@ def _create_boundary(
     availability_path.write_text(json.dumps({"connectors": [{"id": "slack"}]}), encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability_path))
     return FastApiAdminApiBoundary(
-        TestClient(create_app(settings=settings)), "X-Forwarded-Access-Token"
+        TestClient(create_app(settings=settings, connector_registrations=[SlackConnectorPlugin.registration()])), "X-Forwarded-Access-Token"
     )

@@ -146,7 +146,11 @@ def _enum_value(value: StrEnum) -> str:
 
 
 def _severity_for(event: McpToolInvocationEvent) -> str:
-    if isinstance(event, McpToolInvocationFailed) and event.failure_category == McpToolInvocationFailureCategory.AUTHORIZATION:
+    if isinstance(event, McpToolInvocationFailed) and event.failure_category in {
+        McpToolInvocationFailureCategory.AUTHORIZATION,
+        McpToolInvocationFailureCategory.VALIDATION,
+        McpToolInvocationFailureCategory.TOOL_ERROR,
+    }:
         return "WARNING"
     if event.outcome == McpToolInvocationOutcome.FAILURE:
         return "ERROR"

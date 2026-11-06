@@ -7,11 +7,11 @@ description: Backend behavior, adapter and architecture tests with shared runtim
 # Files
 
 - [__init__.py](./__init__.py)
-- [conftest.py](./conftest.py) — Worker-owned isolation directories with unique per-test database paths and shared connector fixtures.
+- [conftest.py](./conftest.py) — Opt-in plugin discovery, database path allocation and explicit prepared-runtime cleanup.
 - [mcp_fixtures.py](./mcp_fixtures.py) — MCP application fixtures.
 - [mcp_telemetry_fixtures.py](./mcp_telemetry_fixtures.py) — Typed recording telemetry and listener test adapters.
 - [persistence_runtime.py](./persistence_runtime.py) — In-memory runtimes for business tests and explicit SQLite runtimes for adapter integration.
-- [test_persistence_fixtures.py](./test_persistence_fixtures.py) — Fixture isolation checks.
+- [test_persistence_fixtures.py](./test_persistence_fixtures.py) — Opt-in setup, unchanged configuration defaults and lazy database preparation.
 - [cli](./umbod/cli/) — CLI behavior tests aligned with the source CLI package.
 - [config](./umbod/config/) — Runtime configuration tests.
 - [core](./umbod/core/) — Core behavior and contract tests aligned with source modules.
@@ -25,7 +25,8 @@ description: Backend behavior, adapter and architecture tests with shared runtim
 - [messaging](./messaging/) — Shared messaging tests.
 - [rest](./umbod/rest/) — REST behavior and contract tests selected by this directory.
 - [REST connectors](./umbod/rest/connectors/) — Connector route tests grouped by source provider module.
-- [REST filesystem fixtures](./umbod/rest/filesystem/conftest.py) — Minimal route composition and explicit full-application integration fixtures.
+- [REST filesystem fixtures](./umbod/rest/filesystem/conftest.py) — Minimal route composition and SQLite path allocation only for SQLite consumers.
+- [Filesystem fixture isolation](./umbod/rest/filesystem/test_fixture_isolation.py) — In-memory setup avoids SQLite resources; SQLite paths remain unprepared.
 - [MCP filesystem fixtures](./umbod/mcp/filesystem/conftest.py) — Fresh service state separated from optional server, tool and resource registration.
 - [support](./support/README.md) — Test-only adapters and acceptance drivers.
 - [umbod](./umbod/) — Application module tests.
@@ -38,5 +39,6 @@ description: Backend behavior, adapter and architecture tests with shared runtim
 - [Test correctness rules](../../../.semgrep/test-correctness.yml) — Mutable-default checks and contextual patching and empty-container fallback warnings.
 - [Semgrep scan scope](../../../.semgrepignore) — Includes test trees while excluding dependencies and build output.
 - [Persistence contracts](./umbod/core/persistence/) — Shared parameterized behavior checks for in-memory and SQLite drivers.
+- [Codec rejection contracts](./umbod/core/persistence/test_database_contract_codec_failures.py) — Contextual errors, unchanged rows, transaction rollback and recovery through database ports.
 - [Filesystem acceptance tests](./umbod/core/filesystem/) — Namespace, ownership and authorization behavior using in-memory database persistence.
 - [Kind runtime checks](../../tests/kind-runtime/README.md) — Running-service verification, separate from unit and adapter tests. Metrics acceptance tests do not establish deployment-level network isolation; verify that against deployed services.

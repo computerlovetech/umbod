@@ -1,6 +1,6 @@
 from umbod.core.administrator.connector_configuration import ConfigurationRejected
 from umbod.core.responses import RetryAdvice, ToolArgumentIssue, ToolErrorDetails
-from umbod.mcp.tools.errors import BuiltinToolError
+from umbod.mcp.tools.errors import BuiltinToolRejected
 
 
 _REJECTION_DETAILS: dict[str, ToolErrorDetails] = {
@@ -48,9 +48,9 @@ _GENERIC_REJECTION = ToolErrorDetails(
 )
 
 
-def configuration_rejection_error(result: ConfigurationRejected) -> BuiltinToolError:
+def configuration_rejection_error(result: ConfigurationRejected) -> BuiltinToolRejected:
     details = _REJECTION_DETAILS.get(result.error.code, _GENERIC_REJECTION)
-    return BuiltinToolError(
+    return BuiltinToolRejected(
         details.message,
         details=details,
         retry=RetryAdvice.AFTER_CORRECTION,

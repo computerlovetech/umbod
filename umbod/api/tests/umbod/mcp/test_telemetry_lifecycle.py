@@ -5,6 +5,8 @@ from pathlib import Path
 import pytest
 from starlette.applications import Starlette
 
+from tests.mcp_fixtures import empty_connector_plugins
+from umbod.mcp import public_app
 from tests.mcp_telemetry_fixtures import RecordingMetricsServer, RecordingMetricsServerFactory
 from umbod.config import AppConfig
 from umbod.core.persistence import Database, PersistenceRuntime
@@ -57,6 +59,7 @@ def deployment(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     path = tmp_path / "connectors.json"
     path.write_text('{"connectors": []}', encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(path))
+    monkeypatch.setattr(public_app, "load_connector_plugins", empty_connector_plugins)
 
 
 async def create_application(enabled: bool, listeners: McpMetricsServerFactory) -> tuple[Starlette, RecordingPersistenceRuntime]:

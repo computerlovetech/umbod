@@ -19,10 +19,11 @@ from .dependencies import (
     get_personal_caller,
 )
 from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, PersonalConnectorInventory
+from .oauth_policy import OAuthPolicy
 
 
-def require_personal_oauth(factories: Factories) -> None:
-    if not factories.settings.personal_connections.oauth_enabled:
+def require_personal_oauth(policy: OAuthPolicy) -> None:
+    if not policy.enabled:
         raise HTTPException(status_code=404, detail={"code": "personal_oauth_unavailable"})
 
 
@@ -58,6 +59,7 @@ async def get_personal_oauth_service(
 
 
 async def get_personal_oauth_callback_service(
+    enabled: Annotated[None, Depends(require_personal_oauth)],
     stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     provider: Annotated[PersonalOAuthProvider, Depends(get_personal_oauth_provider)],
 ) -> PersonalOAuthCallbackService:

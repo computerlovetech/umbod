@@ -7,7 +7,6 @@ from typing import cast
 from fastmcp import FastMCP
 from starlette.applications import Starlette
 from umbod.mcp.auth import MCPAuthProvider, MCPAuthProviderFactory
-from umbod.mcp.connectors.native import create_default_mcp_connector_runtime
 from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore
 from umbod.mcp.context import PublicAppConfig
 from umbod.mcp.public_app import build_mcp, build_starlette_app, create_runtime_context
@@ -17,6 +16,10 @@ from umbod.core.configuration import ConnectorCurrentConfigurationStore
 from umbod.core.publishing import ConnectorPublishingStore
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.core.connectors.native.runtime import ConnectorRuntime, ConnectorToolMapping
+
+def empty_connector_plugins(include_diagnostics: bool = False) -> list[object]:
+    return []
+
 
 def runtime_options_from_kwargs(kwargs: dict[str, object]) -> ConnectorRuntimeOptions:
     kwargs.pop('connector_tool_runtime_state_store', None)
@@ -52,6 +55,6 @@ def create_test_mcp_http_app(settings: MCPAppSettings, auth_provider: MCPAuthPro
     async def _build() -> Starlette:
         persistence_runtime = ConfiguredPersistenceRuntimeProvider(resolved_settings.connector_store).create()
         await persistence_runtime.readiness.ensure_ready()
-        config = PublicAppConfig(settings=resolved_settings, telemetry=create_configured_mcp_telemetry(resolved_settings), connector_runtime=await create_default_mcp_connector_runtime(resolved_settings, persistence_runtime), auth_provider=auth_provider, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=HttpConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime)
+        config = PublicAppConfig(settings=resolved_settings, telemetry=create_configured_mcp_telemetry(resolved_settings), connector_runtime=await resolve_connector_runtime(resolved_settings, ConnectorRuntimeOptions(connector_registrations=[]), persistence_runtime), auth_provider=auth_provider, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=HttpConnectorRuntimeStateSourceStrategy(), stateless_http=False, api_base_url=None, persistence_runtime=persistence_runtime)
         return await build_starlette_app(await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings)))
     return asyncio.run(_build())

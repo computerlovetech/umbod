@@ -1,14 +1,15 @@
 import asyncio
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pytest
 import pytest_asyncio
 from pydantic import ValidationError
 
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 from tests.support.identity_directory import InMemoryIdentityDirectory
+from umbod.core.groups.stores.composition import create_group_management
+from umbod.core.persistence import Database
 from umbod.core.identity_directory.models import DirectoryScope, IdentityObservation
 from umbod.core.identity_directory.ports import IdentityDirectoryStore
 from umbod.core.identity_directory.service import IdentityObservationService
@@ -45,20 +46,23 @@ def scope(**changes: object) -> DirectoryScope:
     )
 
 
-@pytest_asyncio.fixture(params=["port", "inmemory", "sqlite"])
-async def store(
-    request: pytest.FixtureRequest, tmp_path: Path
-) -> AsyncIterator[IdentityDirectoryStore]:
+@pytest_asyncio.fixture(params=["port", "inmemory"])
+async def store(request: pytest.FixtureRequest) -> AsyncIterator[IdentityDirectoryStore]:
     if request.param == "port":
         yield InMemoryIdentityDirectory()
         return
-    runtime = (
-        await prepared_inmemory_runtime()
-        if request.param == "inmemory"
-        else await prepared_sqlite_runtime(tmp_path / "directory.sqlite")
-    )
+    runtime = await prepared_inmemory_runtime()
     try:
         yield DatabaseIdentityDirectory(runtime.database)
+    finally:
+        await runtime.shutdown()
+
+
+@pytest_asyncio.fixture
+async def directory_database() -> AsyncIterator[Database]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield runtime.database
     finally:
         await runtime.shutdown()
 
@@ -181,53 +185,37 @@ async def test_users_keep_distinct_provenance_and_search_known_fields(
 
 
 @pytest.mark.asyncio
-async def test_sqlite_reopen_preserves_directory_and_does_not_register_groups(
-    tmp_path: Path,
+async def test_store_recreation_preserves_directory_and_does_not_register_groups(
+    directory_database: Database,
 ) -> None:
-    path = tmp_path / "directory.sqlite"
-    runtime = await prepared_sqlite_runtime(path)
-    store = DatabaseIdentityDirectory(runtime.database)
+    store = DatabaseIdentityDirectory(directory_database)
     await store.observe(observation())
     original = await store.search_users(scope())
-    await runtime.shutdown()
-    reopened = await prepared_sqlite_runtime(path)
-    try:
-        assert (
-            await DatabaseIdentityDirectory(reopened.database).search_users(scope())
-            == original
-        )
-        from umbod.core.groups.stores.composition import create_group_management
-
-        assert await create_group_management(reopened.database).list_groups() == ()
-    finally:
-        await reopened.shutdown()
+    assert (
+        await DatabaseIdentityDirectory(directory_database).search_users(scope())
+        == original
+    )
+    assert await create_group_management(directory_database).list_groups() == ()
 
 
 @pytest.mark.asyncio
-async def test_independent_sqlite_runtimes_serialize_simultaneous_first_observations(
-    tmp_path: Path,
+async def test_independent_stores_serialize_simultaneous_first_observations(
+    directory_database: Database,
 ) -> None:
-    path = tmp_path / "shared.sqlite"
-    first = await prepared_sqlite_runtime(path)
-    second = await prepared_sqlite_runtime(path)
-    try:
-        stores = (
-            DatabaseIdentityDirectory(first.database),
-            DatabaseIdentityDirectory(second.database),
-        )
-        await asyncio.gather(
-            stores[0].observe(observation()),
-            stores[1].observe(observation(observed_at=NOW + timedelta(seconds=1))),
-        )
-        left = await stores[0].search_users(scope())
-        right = await stores[1].search_users(scope())
-        assert left == right
-        assert len(left.users) == 1
-        assert left.users[0].first_seen_at == NOW
-        assert left.users[0].last_seen_at == NOW + timedelta(seconds=1)
-    finally:
-        await first.shutdown()
-        await second.shutdown()
+    stores = (
+        DatabaseIdentityDirectory(directory_database),
+        DatabaseIdentityDirectory(directory_database),
+    )
+    await asyncio.gather(
+        stores[0].observe(observation()),
+        stores[1].observe(observation(observed_at=NOW + timedelta(seconds=1))),
+    )
+    left = await stores[0].search_users(scope())
+    right = await stores[1].search_users(scope())
+    assert left == right
+    assert len(left.users) == 1
+    assert left.users[0].first_seen_at == NOW
+    assert left.users[0].last_seen_at == NOW + timedelta(seconds=1)
 
 
 @pytest.mark.parametrize(

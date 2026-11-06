@@ -1,25 +1,33 @@
-import sqlite3
-from pathlib import Path
+from collections.abc import AsyncIterator
 
 import pytest
+import pytest_asyncio
 
-from tests.persistence_runtime import prepared_sqlite_runtime
-from tests.umbod.core.connectors.downstream_mcp.test_unit_of_work_contract import _command, _sqlite
+from tests.persistence_runtime import prepared_inmemory_runtime
+from tests.support.messaging import reject_database_event_appends
+from tests.umbod.core.connectors.downstream_mcp.test_unit_of_work_contract import _command, _database_harness
+from umbod.core.persistence import Database
 from umbod.core.connectors.downstream_mcp.management import DeleteDownstreamConnectorAggregate
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery
 
 
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[Database]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mutation", ("create", "delete"))
-async def test_database_event_append_failure_rolls_back_aggregate(tmp_path: Path, mutation: str) -> None:
-    path = tmp_path / "events.sqlite3"
-    await prepared_sqlite_runtime(path)
-    harness = await _sqlite(path, lambda phase: None)
+async def test_database_event_append_failure_rolls_back_aggregate(database: Database, monkeypatch: pytest.MonkeyPatch, mutation: str) -> None:
+    harness = await _database_harness(database, lambda phase: None)
     if mutation == "delete":
         await harness.unit_of_work.create(_command())
-    with sqlite3.connect(path) as connection:
-        connection.execute("CREATE TRIGGER reject_event BEFORE INSERT ON messaging_events BEGIN SELECT RAISE(ABORT, 'event append failed'); END")
-    with pytest.raises(sqlite3.IntegrityError, match="event append failed"):
+    reject_database_event_appends(database, monkeypatch)
+    with pytest.raises(RuntimeError, match="event append failed"):
         if mutation == "create":
             await harness.unit_of_work.create(_command())
         else:

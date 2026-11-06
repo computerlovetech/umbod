@@ -1,34 +1,42 @@
-import sqlite3
-from pathlib import Path
+from collections.abc import AsyncIterator
 
 import pytest
+import pytest_asyncio
 
-from tests.persistence_runtime import prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
+from tests.support.messaging import reject_database_event_appends
+from umbod.core.persistence import Database
 from umbod.core.messaging.stores.event_stream import DatabaseEventStream
 from umbod.core.permissions import CapabilityPermissionUpdate, ConnectorCapabilityRef, ConnectorPermissionUpdate, GroupPermissionStore, SaveGroupPermissionsRequest, UpdateGroupPermissionsRequest
 from umbod.core.permissions.factories import create_group_permission_store
+
+
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[Database]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ("update", "save"))
 @pytest.mark.parametrize("action", ("grant", "revoke"))
 async def test_permission_event_append_failure_rolls_back_grants(
-    tmp_path: Path, operation: str, action: str,
+    database: Database, monkeypatch: pytest.MonkeyPatch, operation: str, action: str,
 ) -> None:
-    path = tmp_path / "permissions.sqlite3"
-    runtime = await prepared_sqlite_runtime(path)
-    store: GroupPermissionStore = await create_group_permission_store(runtime.database)
+    store: GroupPermissionStore = await create_group_permission_store(database)
     capability = ConnectorCapabilityRef(connector_id="test", capability_kind="tool", capability_key="echo")
     if action == "revoke":
         await store.save_group_permissions(SaveGroupPermissionsRequest(
             group_id="readers", connector_ids=("test",), capabilities=(capability,),
         ))
     previous = await store.list_group_permissions("readers")
-    events = DatabaseEventStream(runtime.database)
+    events = DatabaseEventStream(database)
     previous_events = await events.list_after(0, 100)
-    with sqlite3.connect(path) as connection:
-        connection.execute("CREATE TRIGGER reject_event BEFORE INSERT ON messaging_events BEGIN SELECT RAISE(ABORT, 'event append failed'); END")
-    with pytest.raises(sqlite3.IntegrityError, match="event append failed"):
+    reject_database_event_appends(database, monkeypatch)
+    with pytest.raises(RuntimeError, match="event append failed"):
         if operation == "update":
             await store.update_group_permissions(UpdateGroupPermissionsRequest(
                 group_id="readers",
@@ -46,9 +54,8 @@ async def test_permission_event_append_failure_rolls_back_grants(
 
 
 @pytest.mark.asyncio
-async def test_permission_mutations_publish_once_and_noop_updates_publish_nothing(tmp_path: Path) -> None:
-    runtime = await prepared_sqlite_runtime(tmp_path / "permissions.sqlite3")
-    store: GroupPermissionStore = await create_group_permission_store(runtime.database)
+async def test_permission_mutations_publish_once_and_noop_updates_publish_nothing(database: Database) -> None:
+    store: GroupPermissionStore = await create_group_permission_store(database)
     command = UpdateGroupPermissionsRequest(
         group_id="readers",
         connectors=(ConnectorPermissionUpdate(connector_id="test", permission_status="enabled"),),
@@ -56,7 +63,7 @@ async def test_permission_mutations_publish_once_and_noop_updates_publish_nothin
     )
     await store.update_group_permissions(command)
     await store.update_group_permissions(command)
-    events = await DatabaseEventStream(runtime.database).list_after(0, 100)
+    events = await DatabaseEventStream(database).list_after(0, 100)
     assert len(events) == 1
     assert events[0].event.event_type == "mcp.group_permission.changed"
     assert events[0].event.metadata["action"] == "grant"

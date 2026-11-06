@@ -63,16 +63,12 @@ def _create_connector(client: TestClient, headers: dict[str, str], slug: str) ->
 
 
 @pytest.fixture
-def personal_api(request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[PersonalApi]:
+def personal_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[PersonalApi]:
     deployment = tmp_path / "deployment.json"
     deployment.write_text('{"connectors": []}', encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
     settings = AppConfig(
-        connector_store=(
-            {"type": "sqlite", "sqlite_path": str(tmp_path / "personal.sqlite3")}
-            if getattr(request, "param", "inmemory") == "sqlite"
-            else {"type": "inmemory"}
-        ),
+        connector_store={"type": "inmemory"},
         rest={"metrics_enabled": False},
         admin_authentication={
             "mode": "jwt", "environment": "development", "required_membership": "admins",

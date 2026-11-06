@@ -14,7 +14,7 @@ from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationEr
 from umbod.rest.main import create_app
 from umbod.rest.telemetry.dependencies import get_analytics_reader
 
-from tests.umbod.core.telemetry.analytics.in_memory import InMemoryTelemetryAnalyticsReader, NormalizedLog
+from tests.support.telemetry_analytics import InMemoryTelemetryAnalyticsReader, NormalizedLog
 
 
 class AnalyticsVerifier:
@@ -50,6 +50,8 @@ def configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppConfig:
     deployment.write_text('{"connectors": []}', encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(deployment))
     return AppConfig(
+        connector_store={"type": "inmemory"},
+        telemetry_analytics={"enabled": False},
         admin_authentication={
             "mode": "jwt", "environment": "development", "required_membership": "analytics-admins",
         },

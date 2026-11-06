@@ -48,7 +48,7 @@ Never write an ADR unless explicitly asked to do so by the user.
 - [ADR-013: Signal-Owned Application Logging and Side Effects](umbod/project/architecture-records/ADR-013-signal-owned-application-logging.md) — Read before adding application logs, diagnostic events, observational side effects, or signal failure handling.
 - [ADR-014: Built-In MCP Responses With Explicit Agent Guidance](umbod/project/architecture-records/ADR-014-built-in-mcp-response-guidance.md) — Read before creating built-in MCP tools or changing response DTOs, content/metadata separation, extensions, or confirmation and elicitation.
 
-## Where to start by task
+## Source code index
 
 Use the `write-module-readme` skill to maintain module `README.md` files and keep them up to date with module content.
 

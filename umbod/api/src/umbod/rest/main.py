@@ -1,7 +1,7 @@
 from umbod.core.connectors.downstream_mcp.oauth.service import OAuthService
 from umbod.rest.connectors.downstream_mcp.oauth import get_oauth_service, router as oauth_router
 from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping, Sequence
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import dataclass
 from typing import Any, cast
@@ -35,9 +35,9 @@ from umbod.rest.filesystem_administration import router as filesystem_administra
 from umbod.rest.connectors.downstream_mcp.personal_connections import router as personal_connections_router
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback import (
     PersonalOAuthQueryRedactionMiddleware,
-    callback_response,
-    router as personal_oauth_callback_router,
 )
+from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback_app import create_personal_oauth_callback_app
+from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_policy import PersonalOAuthPolicy
 from umbod.rest.authentication.csrf_middleware import RestCookieCsrfMiddleware
 from umbod.rest.capability_descriptions import router as capability_description_router
 from umbod.rest.connectors import (
@@ -78,13 +78,26 @@ from umbod.rest.users.jwks import (
 from umbod.rest.users.signing_keys import SigningKeyResolver
 
 
+OAuthDependencyOverrides = Mapping[Callable[..., object], Callable[..., object]]
+
+
 @dataclass(frozen=True)
 class _CreateAppArguments:
     settings: APISettings | None
     connector_registrations: Sequence[ConnectorRegistration] | None
     admin_verifier: JwtVerifier | None
-    oauth_service: OAuthService | None
+    oauth_dependencies: OAuthDependencyOverrides
     user_verifier_factory: JwtVerifierFactory
+
+
+def _create_oauth_dependency_overrides(service: object) -> OAuthDependencyOverrides:
+    if service is None:
+        return {}
+
+    def provide_oauth_service() -> OAuthService:
+        return cast(OAuthService, service)
+
+    return {get_oauth_service: provide_oauth_service}
 
 
 def _resolve_create_app_arguments(*args: Any, **kwargs: Any) -> _CreateAppArguments:
@@ -110,7 +123,7 @@ def _resolve_create_app_arguments(*args: Any, **kwargs: Any) -> _CreateAppArgume
     return _CreateAppArguments(
         settings=settings, connector_registrations=connector_registrations,
         admin_verifier=cast(JwtVerifier | None, kwargs.get("admin_verifier")),
-        oauth_service=cast(OAuthService | None, kwargs.get("oauth_service")),
+        oauth_dependencies=_create_oauth_dependency_overrides(kwargs.get("oauth_service")),
         user_verifier_factory=(
             SuppliedJwtVerifierFactory(cast(JwtVerifier, kwargs["user_verifier"]))
             if kwargs.get("user_verifier") is not None else JwtVerifierFactory()
@@ -153,7 +166,7 @@ def _mount_admin_app(
     dependency_factories: ConnectorApiDependencyFactories,
     app_config: AppConfig,
     verifier_factory: JwtVerifierFactory,
-    oauth_service: OAuthService | None,
+    oauth_dependencies: OAuthDependencyOverrides,
     analytics_runtime: TelemetryAnalyticsRuntime,
 ) -> tuple[BaseRoute, ...]:
     admin_router = APIRouter()
@@ -170,11 +183,7 @@ def _mount_admin_app(
     admin_router.include_router(instance_configuration_router)
     admin_router.include_router(filesystem_administration_router)
     admin_app = SubApiAppFactory(title="umbod-admin-api", router=admin_router).create()
-    if oauth_service is not None:
-        def provide_oauth_service() -> OAuthService:
-            return oauth_service
-
-        admin_app.dependency_overrides[get_oauth_service] = provide_oauth_service
+    admin_app.dependency_overrides.update(oauth_dependencies)
     admin_routes = tuple(admin_router.routes)
 
     def provide_app_config() -> AppConfig:
@@ -247,25 +256,9 @@ def _mount_personal_oauth_callback_app(
 ) -> None:
     if not (settings.personal_connections.enabled and settings.personal_connections.oauth_enabled):
         return
-    callback_app = FastAPI(
-        title="umbod-personal-oauth-callback", docs_url=None, redoc_url=None,
-        openapi_url=None, redirect_slashes=False,
+    callback_app = create_personal_oauth_callback_app(
+        dependency_factories, PersonalOAuthPolicy(enabled=True),
     )
-    callback_app.include_router(personal_oauth_callback_router)
-    _attach_dependency_factories(callback_app, dependency_factories)
-
-    @callback_app.middleware("http")
-    async def protect_callback_response(
-        request: Request, call_next: Callable[[Request], Awaitable[Response]],
-    ) -> Response:
-        try:
-            response = await call_next(request)
-        except Exception:
-            return callback_response(400, settings.endpoints.site_base_url.rstrip("/") + "/dashboard")
-        if response.status_code != 200:
-            return callback_response(400, settings.endpoints.site_base_url.rstrip("/") + "/dashboard")
-        return response
-
     app.mount("/api/oauth/downstream-mcp", callback_app)
 
 
@@ -355,6 +348,21 @@ def create_app(*args: Any, **kwargs: Any) -> FastAPI:
     )
 
 
+def create_app_with_dependency_factories(
+    dependency_factories: ConnectorApiDependencyFactories,
+    *args: Any, **kwargs: Any,
+) -> FastAPI:
+    create_app_arguments = _resolve_create_app_arguments(*args, **kwargs)
+    if create_app_arguments.settings is not None or create_app_arguments.connector_registrations is not None:
+        raise TypeError("create_app_with_dependency_factories() uses settings and connector registrations from its factories")
+    app_settings = dependency_factories.settings
+    return _assemble_application(
+        create_app_arguments, app_settings,
+        create_configured_analytics_runtime(app_settings), True,
+        PrometheusRestMetricsRecorder(), dependency_factories,
+    )
+
+
 def create_app_with_analytics_runtime(
     analytics_runtime: TelemetryAnalyticsRuntime, *args: Any, **kwargs: Any,
 ) -> FastAPI:
@@ -387,6 +395,22 @@ def _create_application(
     dependency_factories = ConnectorApiDependencyFactories.from_settings(
         app_settings, persistence_runtime, create_app_arguments.connector_registrations
     )
+    return _assemble_application(
+        create_app_arguments, app_settings, analytics_runtime, manage_analytics,
+        metrics_recorder, dependency_factories,
+    )
+
+
+def _assemble_application(
+    create_app_arguments: _CreateAppArguments,
+    app_settings: APISettings,
+    analytics_runtime: TelemetryAnalyticsRuntime,
+    manage_analytics: bool,
+    metrics_recorder: PrometheusRestMetricsRecorder,
+    dependency_factories: ConnectorApiDependencyFactories,
+) -> FastAPI:
+    app_settings.validate_rest_authentication()
+    persistence_runtime = dependency_factories.persistence_runtime
     dependency_factories.validate_startup()
     metrics_server = RestMetricsHttpServer(
         metrics_recorder, app_settings.rest.metrics_port
@@ -401,7 +425,7 @@ def _create_application(
     )
     admin_routes = _mount_admin_app(
         app, app_settings, dependency_factories, app_settings, verifier_factory,
-        create_app_arguments.oauth_service, analytics_runtime,
+        create_app_arguments.oauth_dependencies, analytics_runtime,
     )
     _mount_personal_connections_app(
         app, app_settings, dependency_factories

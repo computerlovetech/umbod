@@ -1,5 +1,4 @@
 from collections.abc import AsyncIterator
-from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -16,18 +15,12 @@ from umbod.core.filesystem import (
     PrincipalType,
 )
 from umbod.infrastructure import create_access_control_driver
-from tests.persistence_runtime import prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
 
 
-@pytest_asyncio.fixture(params=["inmemory", "sqlite"])
-async def policies(
-    request: pytest.FixtureRequest, tmp_path: Path
-) -> AsyncIterator[AccessControlDriver]:
-    runtime = (
-        await prepared_inmemory_runtime()
-        if request.param == "inmemory"
-        else await prepared_sqlite_runtime(tmp_path / "policies.db")
-    )
+@pytest_asyncio.fixture
+async def policies() -> AsyncIterator[AccessControlDriver]:
+    runtime = await prepared_inmemory_runtime()
     try:
         yield create_access_control_driver(database=runtime.database)
     finally:

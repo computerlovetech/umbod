@@ -61,6 +61,7 @@ def test_admin_gets_schema_driven_configuration_form_definition(client: TestClie
     assert response.json() == slack_configuration_form_definition()
 
 
+@pytest.mark.usefixtures("installed_test_connector_plugins")
 def test_default_built_in_slack_connector_can_be_configured(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -76,6 +77,7 @@ def test_default_built_in_slack_connector_can_be_configured(
     assert response.json() == slack_configuration_form_definition()
 
 
+@pytest.mark.usefixtures("installed_test_connector_plugins")
 def test_default_built_in_test_connector_is_available_for_flow_testing(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

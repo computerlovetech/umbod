@@ -1,9 +1,18 @@
-from umbod.config import InMemoryConnectorStoreConfig, PersistenceConfig, SQLiteConnectorStoreConfig
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 import json
 from pathlib import Path
 import pytest
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from umbod.rest.main import create_app
+from httpx import ASGITransport, AsyncClient
+
+from tests.persistence_runtime import create_inmemory_runtime
+from umbod.core.persistence import PersistenceRuntime
+from umbod.infrastructure import AppPersistenceRuntime
+from umbod.rest.factories import ConnectorApiDependencyFactories
+from umbod.rest.main import create_app, create_app_with_dependency_factories
 from umbod.rest.settings import APISettings
 from tests.support.connector_plugins import TestConnectorPlugin
 DIFF_UPDATE_PERMISSION_CHANGE_METADATA: list[dict[str, str]] = [{'group_id': 'engineering', 'action': 'grant', 'target_kind': 'tool', 'connector_id': 'test', 'operation_name': 'get_default_response', 'capability_kind': 'tool', 'capability_key': 'get_default_response'}, {'group_id': 'engineering', 'action': 'grant', 'target_kind': 'tool', 'connector_id': 'test', 'operation_name': 'echo', 'capability_kind': 'tool', 'capability_key': 'echo'}, {'group_id': 'engineering', 'action': 'revoke', 'target_kind': 'tool', 'connector_id': 'test', 'operation_name': 'get_default_response', 'capability_kind': 'tool', 'capability_key': 'get_default_response'}]
@@ -49,12 +58,14 @@ class FastApiAdminMcpPermissionApi:
         return (response.status_code, response.json())
 
 @pytest.fixture
-def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FastApiAdminMcpPermissionApi:
-    return _create_api(tmp_path, monkeypatch, True, InMemoryConnectorStoreConfig())
+def api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[FastApiAdminMcpPermissionApi]:
+    with _create_api(tmp_path, monkeypatch, True, create_inmemory_runtime()) as permission_api:
+        yield permission_api
 
 @pytest.fixture
-def unassignable_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> FastApiAdminMcpPermissionApi:
-    return _create_api(tmp_path, monkeypatch, False, InMemoryConnectorStoreConfig())
+def unassignable_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[FastApiAdminMcpPermissionApi]:
+    with _create_api(tmp_path, monkeypatch, False, create_inmemory_runtime()) as permission_api:
+        yield permission_api
 
 def test_openapi_exposes_only_aggregate_group_permission_mutations(api: FastApiAdminMcpPermissionApi) -> None:
     response = api.client.get('/api/admin/openapi.json')
@@ -186,19 +197,20 @@ def test_diff_update_openapi_permissions_can_revoke_and_grant_tools(tmp_path: Pa
     availability_path = tmp_path / 'connector-availability.json'
     availability_path.write_text('{"connectors": []}', encoding='utf-8')
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
-    settings = APISettings(admin_authentication={'mode': 'simulation', 'simulated_admin': True}, connector_store={'type': 'inmemory'})
-    api = FastApiAdminMcpPermissionApi(TestClient(create_app(settings=settings, connector_registrations=[])))
-    created = api.client.post('/api/admin/connectors/openapi', json={'display_name': 'Inventory', 'capability_description': 'Manage inventory resources'})
-    connector_id = str(created.json()['connector_id'])
-    document = {'openapi': '3.1.0', 'info': {'title': 'Inventory', 'version': '1'}, 'servers': [{'url': 'https://api.example.com'}], 'paths': {'/items': {'get': {'operationId': 'listItems', 'responses': {'200': {'description': 'ok'}}}, 'post': {'operationId': 'createItem', 'responses': {'200': {'description': 'ok'}}}}}}
-    assert api.client.post(f'/api/admin/connectors/openapi/{connector_id}/imports', json={'document': document, 'approved_hosts': ['api.example.com']}).status_code == 201
-    assert api.client.put(f'/api/admin/connectors/openapi/{connector_id}/publication').status_code == 200
-    assert api.client.put(f'/api/admin/connectors/openapi/{connector_id}/tools/activation', json={'tools': [{'tool_id': operation_id, 'activation_status': 'enabled'} for operation_id in ('listItems', 'createItem')]}).status_code == 200
-    assert api.grant_tool('engineering', connector_id, 'listItems')[0] == 200
-    (saved_status, saved) = api.update_group('engineering', {'connectors': [{'connector_id': connector_id, 'permission_status': 'enabled'}], 'capabilities': [{'connector_id': connector_id, 'capability_kind': 'tool', 'capability_key': 'createItem', 'permission_status': 'enabled'}, {'connector_id': connector_id, 'capability_kind': 'tool', 'capability_key': 'listItems', 'permission_status': 'disabled'}]})
-    assert saved_status == 200
-    assert saved == {'status': 'applied', 'group_id': 'engineering'}
-    assert api.get_group('engineering') == {'group_id': 'engineering', 'connector_ids': [connector_id], 'capabilities': [{'connector_id': connector_id, 'capability_kind': 'tool', 'capability_key': 'createItem'}]}
+    settings = APISettings(rest={'metrics_enabled': False}, admin_authentication={'mode': 'simulation', 'simulated_admin': True}, connector_store={'type': 'inmemory'})
+    with TestClient(create_app(settings=settings, connector_registrations=[])) as client:
+        api = FastApiAdminMcpPermissionApi(client)
+        created = api.client.post('/api/admin/connectors/openapi', json={'display_name': 'Inventory', 'capability_description': 'Manage inventory resources'})
+        connector_id = str(created.json()['connector_id'])
+        document = {'openapi': '3.1.0', 'info': {'title': 'Inventory', 'version': '1'}, 'servers': [{'url': 'https://api.example.com'}], 'paths': {'/items': {'get': {'operationId': 'listItems', 'responses': {'200': {'description': 'ok'}}}, 'post': {'operationId': 'createItem', 'responses': {'200': {'description': 'ok'}}}}}}
+        assert api.client.post(f'/api/admin/connectors/openapi/{connector_id}/imports', json={'document': document, 'approved_hosts': ['api.example.com']}).status_code == 201
+        assert api.client.put(f'/api/admin/connectors/openapi/{connector_id}/publication').status_code == 200
+        assert api.client.put(f'/api/admin/connectors/openapi/{connector_id}/tools/activation', json={'tools': [{'tool_id': operation_id, 'activation_status': 'enabled'} for operation_id in ('listItems', 'createItem')]}).status_code == 200
+        assert api.grant_tool('engineering', connector_id, 'listItems')[0] == 200
+        (saved_status, saved) = api.update_group('engineering', {'connectors': [{'connector_id': connector_id, 'permission_status': 'enabled'}], 'capabilities': [{'connector_id': connector_id, 'capability_kind': 'tool', 'capability_key': 'createItem', 'permission_status': 'enabled'}, {'connector_id': connector_id, 'capability_kind': 'tool', 'capability_key': 'listItems', 'permission_status': 'disabled'}]})
+        assert saved_status == 200
+        assert saved == {'status': 'applied', 'group_id': 'engineering'}
+        assert api.get_group('engineering') == {'group_id': 'engineering', 'connector_ids': [connector_id], 'capabilities': [{'connector_id': connector_id, 'capability_kind': 'tool', 'capability_key': 'createItem'}]}
 
 def test_admin_can_list_assignable_permission_targets(unassignable_api: FastApiAdminMcpPermissionApi) -> None:
     initial_response = unassignable_api.client.get('/api/admin/mcp-permissions/assignable-targets')
@@ -215,16 +227,30 @@ def test_non_admin_cannot_manage_permissions(tmp_path: Path, monkeypatch: pytest
     availability_path = tmp_path / 'connector-availability.json'
     availability_path.write_text(json.dumps({'connectors': [{'id': 'test'}]}), encoding='utf-8')
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
-    settings = APISettings(admin_authentication={'mode': 'jwt', 'jwt_header_name': 'X-Forwarded-Access-Token', 'jwks_url': 'https://identity.example.com/.well-known/jwks.json', 'membership_claim': 'groups', 'required_membership': 'umbod-admins'}, connector_store={'type': 'inmemory'})
-    response = TestClient(create_app(settings=settings, connector_registrations=[TestConnectorPlugin.registration()])).get('/api/admin/mcp-permissions/groups')
-    assert response.status_code == 401
+    settings = APISettings(rest={'metrics_enabled': False}, admin_authentication={'mode': 'jwt', 'jwt_header_name': 'X-Forwarded-Access-Token', 'jwks_url': 'https://identity.example.com/.well-known/jwks.json', 'membership_claim': 'groups', 'required_membership': 'umbod-admins'}, connector_store={'type': 'inmemory'})
+    with TestClient(create_app(settings=settings, connector_registrations=[TestConnectorPlugin.registration()])) as client:
+        response = client.get('/api/admin/mcp-permissions/groups')
+        assert response.status_code == 401
 
-def test_permissions_persist_through_recreated_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    store_config = SQLiteConnectorStoreConfig(sqlite_path=str(tmp_path / 'umbod.sqlite3'))
-    first_api = _create_api(tmp_path, monkeypatch, True, store_config)
-    first_api.grant_tool('engineering', 'test', 'echo')
-    second_api = _create_api(tmp_path, monkeypatch, True, store_config)
-    assert second_api.get_group('engineering') == {'group_id': 'engineering', 'connector_ids': [], 'capabilities': [{'connector_id': 'test', 'capability_kind': 'tool', 'capability_key': 'echo'}]}
+def test_permissions_remain_visible_through_recreated_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    runtime = create_inmemory_runtime()
+    with _create_api(tmp_path, monkeypatch, True, runtime) as first_api:
+        assert first_api.grant_tool('engineering', 'test', 'echo')[0] == 200
+        second_runtime = AppPersistenceRuntime(
+            database=runtime.database, readiness=runtime.readiness,
+        )
+        second_app = _permission_app(tmp_path, monkeypatch, second_runtime)
+        assert second_app is not first_api.client.app
+
+        async def read_recreated_group() -> None:
+            async with second_app.router.lifespan_context(second_app), AsyncClient(
+                transport=ASGITransport(app=second_app), base_url="http://testserver",
+            ) as second_client:
+                response = await second_client.get('/api/admin/mcp-permissions/groups/engineering')
+                assert response.status_code == 200
+                assert response.json() == {'group_id': 'engineering', 'connector_ids': [], 'capabilities': [{'connector_id': 'test', 'capability_kind': 'tool', 'capability_key': 'echo'}]}
+
+        first_api.client.portal.call(read_recreated_group)
 
 def test_runtime_can_read_current_group_permissions(api: FastApiAdminMcpPermissionApi) -> None:
     api.grant_tool('engineering', 'test', 'echo')
@@ -257,15 +283,30 @@ def test_admin_diff_update_publishes_permission_change_events(api: FastApiAdminM
     assert status_code == 200
     assert [stream_event['event']['metadata'] for stream_event in events] == DIFF_UPDATE_PERMISSION_CHANGE_METADATA
 
-def _create_api(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, provision_assignable_test_connector: bool, store_config: PersistenceConfig) -> FastApiAdminMcpPermissionApi:
+def _permission_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, runtime: PersistenceRuntime) -> FastAPI:
     availability_path = tmp_path / 'connector-availability.json'
     availability_path.write_text(json.dumps({'connectors': [{'id': 'test'}]}), encoding='utf-8')
     monkeypatch.setenv('UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH', str(availability_path))
-    settings = APISettings(admin_authentication={'mode': 'simulation', 'simulated_admin': True}, connector_store=store_config)
-    api = FastApiAdminMcpPermissionApi(TestClient(create_app(settings=settings, connector_registrations=[TestConnectorPlugin.registration()])))
-    if provision_assignable_test_connector:
-        _provision_assignable_test_connector(api)
-    return api
+    settings = APISettings(
+        rest={'metrics_enabled': False},
+        admin_authentication={'mode': 'simulation', 'simulated_admin': True},
+        connector_store={'type': 'inmemory'},
+    )
+    factories = ConnectorApiDependencyFactories.from_settings(
+        settings, runtime, [TestConnectorPlugin.registration()],
+    )
+    return create_app_with_dependency_factories(factories)
+
+@contextmanager
+def _create_api(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    provision_assignable_test_connector: bool, runtime: PersistenceRuntime,
+) -> Iterator[FastApiAdminMcpPermissionApi]:
+    with TestClient(_permission_app(tmp_path, monkeypatch, runtime)) as client:
+        api = FastApiAdminMcpPermissionApi(client)
+        if provision_assignable_test_connector:
+            _provision_assignable_test_connector(api)
+        yield api
 
 def _provision_assignable_test_connector(api: FastApiAdminMcpPermissionApi) -> None:
     api.configure_test_connector()

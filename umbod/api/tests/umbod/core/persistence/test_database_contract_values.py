@@ -88,3 +88,34 @@ async def test_invalid_boolean_runtime_value_is_rejected(database: Database) -> 
     async with database.session(mode=TransactionMode.READ_WRITE) as session:
         with pytest.raises(TypeError, match="expected bool"):
             await session.insert(contract_table, InsertCommand(row=invalid))
+
+
+@pytest.mark.parametrize("number", [-(2**63) - 1, 2**63])
+@pytest.mark.asyncio
+async def test_upsert_outside_signed_64_bit_range_preserves_existing_row(
+    database: Database, number: int,
+) -> None:
+    contract_table = scalar_table()
+    original = ScalarRow(record_id="existing", number=7, enabled=True, optional_text="original")
+    invalid = ScalarRow(
+        record_id=original.record_id, number=number, enabled=False, optional_text="replacement",
+    )
+    await database.ensure_schema((contract_table,))
+    async with database.session(mode=TransactionMode.READ_WRITE) as session:
+        await session.insert(contract_table, InsertCommand(row=original))
+
+    async with database.session(mode=TransactionMode.READ_WRITE) as session:
+        with pytest.raises(
+            TypeError,
+            match=r"Invalid value for scalar_samples\.number: expected signed 64-bit integer",
+        ):
+            await session.upsert(
+                contract_table,
+                UpsertCommand(key=ScalarKey(record_id=original.record_id), row=invalid),
+            )
+
+    async with database.read_session() as session:
+        observed = await session.find_many(
+            contract_table, Query(NoFilter(), AllFields(), Unordered()),
+        )
+    assert tuple(observed) == (original,)

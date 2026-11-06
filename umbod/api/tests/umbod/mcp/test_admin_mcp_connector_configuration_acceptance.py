@@ -1,7 +1,8 @@
 from umbod.logging import create_application_failure_signal
 from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory, create_configured_openapi_runtime_adapters
+import asyncio
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -9,13 +10,14 @@ from typing import Any
 import httpx2
 import jwt
 import pytest
-from fastapi.testclient import TestClient
+import pytest_asyncio
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
 from fastmcp.tools import ToolResult
 from starlette.applications import Starlette
 
 from umbod.config import AppConfig, McpConfig
+from tests.mcp_fixtures import empty_connector_plugins
 from umbod.mcp import public_app
 from umbod.mcp.logging import McpAuditRecorder
 from umbod.mcp.telemetry import McpTelemetryDependencies
@@ -23,7 +25,11 @@ from tests.mcp_telemetry_fixtures import RecordingApplicationMetricsRecorder, Re
 from umbod.mcp.logging.invocation.formatting import StructuredMcpToolInvocationLogFormatter
 from umbod.mcp.logging.invocation.sink import InMemoryMcpToolInvocationLogSink
 from umbod.mcp.metrics import CompletedToolInvocation, InvocationOutcome, InvocationScope
-from umbod.rest.main import create_app
+from umbod.infrastructure import AppPersistenceRuntime
+from umbod.mcp.context import PublicAppConfig
+from umbod.mcp.runtime_options import StoreBackedConnectorRuntimeStateSourceStrategy
+from umbod.rest.factories import ConnectorApiDependencyFactories
+from umbod.rest.main import create_app_with_dependency_factories
 from umbod.rest.settings import APISettings
 
 READ_TOOL = "read_connector_configuration"
@@ -48,7 +54,6 @@ class AdminConnectorConfigurationJourney:
     app: Starlette
     token: str
     connector: ConnectorReference
-    duplicate_capability_connector: ConnectorReference
 
     def transport(self) -> StreamableHttpTransport:
         asgi_transport = httpx2.ASGITransport(app=self.app)
@@ -64,9 +69,8 @@ class AdminConnectorConfigurationJourney:
 
     @asynccontextmanager
     async def client(self) -> AsyncIterator[Client]:
-        async with self.app.router.lifespan_context(self.app):
-            async with Client(self.transport()) as client:
-                yield client
+        async with Client(self.transport()) as client:
+            yield client
 
 
 class AdminConnectorConfigurationDsl:
@@ -119,12 +123,12 @@ def principal_without_membership_claim() -> AdministratorPrincipal:
 
 
 def settings(
-    database_path: Path,
     token: str,
     mcp_administrator_enabled: bool = True,
 ) -> AppConfig:
     return AppConfig(
-        connector_store={"type": "sqlite", "sqlite_path": str(database_path)},
+        connector_store={"type": "inmemory"},
+        rest={"metrics_enabled": False},
         openapi_connectors={"json_import_max_bytes": 4096},
         mcp=McpConfig(
             metrics_enabled=False,
@@ -157,35 +161,8 @@ def token_for(principal: AdministratorPrincipal, include_memberships: bool = Tru
     return jwt.encode(claims, key="", algorithm="none")
 
 
-async def create_journey(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    principal: AdministratorPrincipal,
-    *telemetry_bundles: McpTelemetryDependencies,
-    include_memberships: bool = True,
-    mcp_administrator_enabled: bool = True,
-) -> AdminConnectorConfigurationJourney:
-    if len(telemetry_bundles) > 1:
-        raise TypeError("At most one telemetry bundle may be supplied")
-    availability_path = tmp_path / f"availability-{principal.email}.json"
-    availability_path.write_text('{"connectors": []}', encoding="utf-8")
-    monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability_path))
-    database_path = tmp_path / f"{principal.email}.sqlite3"
-    token = token_for(principal, include_memberships)
-    app_settings = settings(database_path, token, mcp_administrator_enabled)
-    admin = TestClient(
-        create_app(
-            settings=APISettings.model_validate(app_settings.model_dump()),
-            connector_registrations=[],
-        )
-    )
-    response = admin.post(
-        "/api/admin/connectors/openapi",
-        json={"display_name": "Acceptance inventory", "capability_description": "Read inventory"},
-    )
-    assert response.status_code == 201
-    connector = ConnectorReference("openapi", response.json()["connector_id"])
-    document = {
+def inventory_document() -> dict[str, Any]:
+    return {
         "openapi": "3.1.0",
         "info": {"title": "Inventory", "version": "1"},
         "servers": [{"url": "https://inventory.example.test"}],
@@ -199,17 +176,27 @@ async def create_journey(
             }
         },
     }
-    imported = admin.post(
+
+
+async def prepare_connector(admin: httpx2.AsyncClient) -> ConnectorReference:
+    response = await admin.post(
+        "/api/admin/connectors/openapi",
+        json={"display_name": "Acceptance inventory", "capability_description": "Read inventory"},
+    )
+    assert response.status_code == 201
+    connector = ConnectorReference("openapi", response.json()["connector_id"])
+    document = inventory_document()
+    imported = await admin.post(
         f"/api/admin/connectors/openapi/{connector.connector_id}/imports",
         json={"document": document, "approved_hosts": ["inventory.example.test"]},
     )
     assert imported.status_code == 201
-    configured = admin.put(
+    configured = await admin.put(
         f"/api/admin/connectors/openapi/{connector.connector_id}/configuration",
         json={"authentication_type": "bearer", "bearer_token": "acceptance-secret-token"},
     )
     assert configured.status_code == 200
-    activation = admin.put(
+    activation = await admin.put(
         f"/api/admin/connectors/openapi/{connector.connector_id}/tools/activation",
         json={
             "tools": [
@@ -223,13 +210,13 @@ async def create_journey(
         },
     )
     assert activation.status_code == 200
-    description = admin.put(
+    description = await admin.put(
         f"/api/admin/connector-capability-descriptions/openapi/{connector.connector_id}",
         json={"action": "set", "description": "Custom inventory", "expected_revision": 0},
     )
     assert description.status_code == 200
-    assert admin.post("/api/admin/mcp-permissions/groups/engineering").status_code == 200
-    permissions = admin.put(
+    assert (await admin.post("/api/admin/mcp-permissions/groups/engineering")).status_code == 200
+    permissions = await admin.put(
         "/api/admin/mcp-permissions/groups/engineering/permissions",
         json={
             "connectors": [
@@ -246,18 +233,23 @@ async def create_journey(
         },
     )
     assert permissions.status_code == 200
-    duplicate_response = admin.post(
+    return connector
+
+
+async def prepare_duplicate_connector(admin: httpx2.AsyncClient) -> ConnectorReference:
+    document = inventory_document()
+    duplicate_response = await admin.post(
         "/api/admin/connectors/openapi",
         json={"display_name": "Second inventory", "capability_description": "Read inventory"},
     )
     assert duplicate_response.status_code == 201
     duplicate_connector = ConnectorReference("openapi", duplicate_response.json()["connector_id"])
-    duplicate_import = admin.post(
+    duplicate_import = await admin.post(
         f"/api/admin/connectors/openapi/{duplicate_connector.connector_id}/imports",
         json={"document": document, "approved_hosts": ["inventory.example.test"]},
     )
     assert duplicate_import.status_code == 201
-    duplicate_activation = admin.put(
+    duplicate_activation = await admin.put(
         f"/api/admin/connectors/openapi/{duplicate_connector.connector_id}/tools/activation",
         json={
             "tools": [
@@ -271,24 +263,162 @@ async def create_journey(
         },
     )
     assert duplicate_activation.status_code == 200
-    config = await public_app.load_configured_public_app_config(app_settings)
-    if telemetry_bundles:
-        config = replace(config, telemetry=telemetry_bundles[0])
-    context = replace(await public_app.create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings)), api_base_url=None)
-    return AdminConnectorConfigurationJourney(
-        await public_app.build_starlette_app(context),
-        token,
-        connector,
-        duplicate_connector,
-    )
+    return duplicate_connector
+
+
+@dataclass(frozen=True)
+class ConnectorIsolationArrangement:
+    journey: AdminConnectorConfigurationJourney
+    duplicate_capability_connector: ConnectorReference
+
+
+class AdminConnectorConfigurationJourneyFactory:
+    def __init__(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stack: AsyncExitStack
+    ) -> None:
+        self._tmp_path = tmp_path
+        self._monkeypatch = monkeypatch
+        self._stack = stack
+
+    def prepare_settings(
+        self,
+        principal: AdministratorPrincipal,
+        include_memberships: bool,
+        mcp_administrator_enabled: bool,
+    ) -> tuple[AppConfig, str]:
+        tmp_path = self._tmp_path
+        monkeypatch = self._monkeypatch
+        availability_path = tmp_path / f"availability-{principal.email}.json"
+        availability_path.write_text('{"connectors": []}', encoding="utf-8")
+        monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability_path))
+        token = token_for(principal, include_memberships)
+        app_settings = settings(token, mcp_administrator_enabled)
+        return app_settings, token
+
+    async def prepare_config(
+        self, app_settings: AppConfig, *telemetry_bundles: McpTelemetryDependencies,
+    ) -> PublicAppConfig:
+        self._monkeypatch.setattr(public_app, "load_connector_plugins", empty_connector_plugins)
+        config = await public_app.load_configured_public_app_config(app_settings)
+        self._stack.push_async_callback(config.persistence_runtime.shutdown)
+        application_runtime = AppPersistenceRuntime(
+            database=config.persistence_runtime.database, readiness=config.persistence_runtime.readiness,
+        )
+        config = replace(
+            config, persistence_runtime=application_runtime,
+            configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), api_base_url=None,
+        )
+        if telemetry_bundles:
+            config = replace(config, telemetry=telemetry_bundles[0])
+        return config
+
+    @asynccontextmanager
+    async def admin_client(self, config: PublicAppConfig) -> AsyncIterator[httpx2.AsyncClient]:
+        runtime = AppPersistenceRuntime(
+            database=config.persistence_runtime.database, readiness=config.persistence_runtime.readiness,
+        )
+        factories = ConnectorApiDependencyFactories.from_settings(
+            APISettings.model_validate(config.settings.model_dump()), runtime, [],
+        )
+        app = create_app_with_dependency_factories(factories)
+        async with app.router.lifespan_context(app), httpx2.AsyncClient(
+            transport=httpx2.ASGITransport(app=app), base_url="http://testserver",
+        ) as admin:
+            yield admin
+
+    async def __call__(
+        self,
+        principal: AdministratorPrincipal,
+        *telemetry_bundles: McpTelemetryDependencies,
+        include_memberships: bool = True,
+        mcp_administrator_enabled: bool = True,
+    ) -> AdminConnectorConfigurationJourney:
+        if len(telemetry_bundles) > 1:
+            raise TypeError("At most one telemetry bundle may be supplied")
+        app_settings, token = self.prepare_settings(
+            principal, include_memberships, mcp_administrator_enabled
+        )
+        config = await self.prepare_config(app_settings, *telemetry_bundles)
+        async with self.admin_client(config) as admin:
+            connector = await prepare_connector(admin)
+        return await self.start(config, token, connector)
+
+    async def isolation(self) -> ConnectorIsolationArrangement:
+        app_settings, token = self.prepare_settings(administrator(), True, True)
+        config = await self.prepare_config(app_settings)
+        async with self.admin_client(config) as admin:
+            connector = await prepare_connector(admin)
+            duplicate_connector = await prepare_duplicate_connector(admin)
+        journey = await self.start(config, token, connector)
+        return ConnectorIsolationArrangement(journey, duplicate_connector)
+
+    async def start(
+        self,
+        config: PublicAppConfig,
+        token: str,
+        connector: ConnectorReference,
+    ) -> AdminConnectorConfigurationJourney:
+        try:
+            context = await public_app.create_runtime_context(
+                config,
+                downstream_client_factory=await create_configured_downstream_client_factory(
+                    config.settings, config.persistence_runtime.database,
+                ),
+                openapi_adapters=create_configured_openapi_runtime_adapters(config.settings),
+            )
+            app = await public_app.build_starlette_app(context)
+        except BaseException:
+            await config.persistence_runtime.shutdown()
+            raise
+        ready: asyncio.Future[None] = asyncio.get_running_loop().create_future()
+        stop = asyncio.Event()
+        task = asyncio.create_task(own_application_lifespan(app, ready, stop))
+        self._stack.push_async_callback(close_application_lifespan, task, stop)
+        try:
+            await asyncio.shield(ready)
+        except BaseException:
+            stop.set()
+            await task
+            if ready.done() and not ready.cancelled():
+                ready.exception()
+            raise
+        return AdminConnectorConfigurationJourney(app, token, connector)
+
+
+async def own_application_lifespan(
+    app: Starlette, ready: asyncio.Future[None], stop: asyncio.Event
+) -> None:
+    try:
+        async with app.router.lifespan_context(app):
+            ready.set_result(None)
+            await stop.wait()
+    except BaseException as error:
+        if ready.done():
+            raise
+        ready.set_exception(error)
+
+
+async def close_application_lifespan(
+    task: asyncio.Task[None], stop: asyncio.Event
+) -> None:
+    stop.set()
+    await task
+
+
+@pytest_asyncio.fixture
+async def create_journey(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[AdminConnectorConfigurationJourneyFactory]:
+    async with AsyncExitStack() as stack:
+        yield AdminConnectorConfigurationJourneyFactory(tmp_path, monkeypatch, stack)
 
 
 @pytest.mark.asyncio
 async def test_administrator_can_discover_and_read_connector_configuration(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
+        await create_journey(administrator())
     )
     assert {READ_TOOL, UPSERT_TOOL} <= await configuration.available_tools()
     result = await configuration.read()
@@ -326,7 +456,7 @@ async def test_administrator_can_discover_and_read_connector_configuration(
 
 @pytest.mark.asyncio
 async def test_administrator_read_records_one_internal_log_audit_and_metric(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
     invocation_sink = InMemoryMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter())
     audit_sink = RecordingAuditSink()
@@ -334,7 +464,7 @@ async def test_administrator_read_records_one_internal_log_audit_and_metric(
     listeners = RecordingMetricsServerFactory()
     telemetry = McpTelemetryDependencies(create_application_failure_signal(), invocation_sink, McpAuditRecorder(audit_sink, "test", application_failures=create_application_failure_signal()), metrics, listeners)
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator(), telemetry)
+        await create_journey(administrator(), telemetry)
     )
 
     result = await configuration.read()
@@ -365,10 +495,10 @@ async def test_administrator_read_records_one_internal_log_audit_and_metric(
 
 @pytest.mark.asyncio
 async def test_empty_desired_state_is_idempotent_no_op_with_complete_read_back(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
+        await create_journey(administrator())
     )
     before = await configuration.read()
     first_upsert = await configuration.upsert_raw({"operations": []})
@@ -386,12 +516,12 @@ async def test_empty_desired_state_is_idempotent_no_op_with_complete_read_back(
 
 @pytest.mark.asyncio
 async def test_partial_activation_upsert_preserves_omitted_state_and_connector_scope(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
-    journey = await create_journey(tmp_path, monkeypatch, administrator())
-    configuration = AdminConnectorConfigurationDsl(journey)
+    arrangement = await create_journey.isolation()
+    configuration = AdminConnectorConfigurationDsl(arrangement.journey)
     duplicate_configuration = AdminConnectorConfigurationDsl(
-        journey, journey.duplicate_capability_connector
+        arrangement.journey, arrangement.duplicate_capability_connector
     )
     before = await configuration.read()
     result = await configuration.upsert_raw(
@@ -429,10 +559,10 @@ async def test_partial_activation_upsert_preserves_omitted_state_and_connector_s
 
 @pytest.mark.asyncio
 async def test_invocation_mode_upsert_preserves_omitted_state_and_idempotent_revision(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
+        await create_journey(administrator())
     )
     before = await configuration.read()
     changed = await configuration.upsert_raw(
@@ -482,10 +612,10 @@ async def test_invocation_mode_upsert_preserves_omitted_state_and_idempotent_rev
 
 @pytest.mark.asyncio
 async def test_description_override_upsert_preserves_omitted_state_and_is_idempotent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
+        await create_journey(administrator())
     )
     before = await configuration.read()
     changed = await configuration.upsert_raw(
@@ -523,10 +653,10 @@ async def test_description_override_upsert_preserves_omitted_state_and_is_idempo
 
 @pytest.mark.asyncio
 async def test_restore_system_description_returns_complete_state_and_is_idempotent(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
+        await create_journey(administrator())
     )
     before = await configuration.read()
     restored = await configuration.upsert_raw(
@@ -561,10 +691,10 @@ async def test_restore_system_description_returns_complete_state_and_is_idempote
 
 @pytest.mark.asyncio
 async def test_partial_group_permission_upsert_supports_connector_and_capability_grants(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
+        await create_journey(administrator())
     )
     before = await configuration.read()
     disabled = await configuration.upsert_raw(
@@ -651,10 +781,10 @@ async def test_partial_group_permission_upsert_supports_connector_and_capability
 
 @pytest.mark.asyncio
 async def test_unknown_permission_target_is_rejected_before_any_write(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
+        await create_journey(administrator())
     )
     before = await configuration.read()
     result = await configuration.upsert_raw(
@@ -685,10 +815,10 @@ async def test_unknown_permission_target_is_rejected_before_any_write(
 
 @pytest.mark.asyncio
 async def test_stale_description_revision_reports_conflict_without_write(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
+        await create_journey(administrator())
     )
     before = await configuration.read()
     result = await configuration.upsert_raw(
@@ -710,9 +840,9 @@ async def test_stale_description_revision_reports_conflict_without_write(
 
 @pytest.mark.asyncio
 async def test_unknown_activation_targets_are_rejected_before_any_write(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
-    journey = await create_journey(tmp_path, monkeypatch, administrator())
+    journey = await create_journey(administrator())
     configuration = AdminConnectorConfigurationDsl(journey)
     before = await configuration.read()
     unknown_capability = await configuration.upsert_raw(
@@ -761,10 +891,10 @@ async def test_unknown_activation_targets_are_rejected_before_any_write(
 
 @pytest.mark.asyncio
 async def test_combined_desired_state_applies_every_dimension_and_repeated_upsert_is_no_op(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
+        await create_journey(administrator())
     )
     desired_state = {
         "operations": [
@@ -830,10 +960,10 @@ async def test_combined_desired_state_applies_every_dimension_and_repeated_upser
 
 @pytest.mark.asyncio
 async def test_combined_stale_request_rolls_back_every_configuration_dimension(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
+        await create_journey(administrator())
     )
     before = await configuration.read()
     rejected = await configuration.upsert_raw(
@@ -868,10 +998,10 @@ async def test_combined_stale_request_rolls_back_every_configuration_dimension(
 
 @pytest.mark.asyncio
 async def test_malformed_desired_state_is_rejected_at_mcp_tool_boundary(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    create_journey: AdminConnectorConfigurationJourneyFactory
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
-        await create_journey(tmp_path, monkeypatch, administrator())
+        await create_journey(administrator())
     )
     result = await configuration.upsert_raw(
         {"operations": "this must be an array of structured declarations"}
@@ -894,15 +1024,12 @@ async def test_malformed_desired_state_is_rejected_at_mcp_tool_boundary(
     ids=["non-administrator", "missing-membership-claim"],
 )
 async def test_unauthorized_caller_cannot_discover_administration_tools(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    create_journey: AdminConnectorConfigurationJourneyFactory,
     principal: AdministratorPrincipal,
     include_memberships: bool,
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
         await create_journey(
-            tmp_path,
-            monkeypatch,
             principal,
             include_memberships=include_memberships,
         )
@@ -913,9 +1040,9 @@ async def test_unauthorized_caller_cannot_discover_administration_tools(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool", [READ_TOOL, UPSERT_TOOL])
 async def test_builtin_administration_success_metadata_preserves_declared_schemas(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool: str,
+    create_journey: AdminConnectorConfigurationJourneyFactory, tool: str,
 ) -> None:
-    journey = await create_journey(tmp_path, monkeypatch, administrator())
+    journey = await create_journey(administrator())
     arguments: dict[str, Any] = {
         "connector_kind": journey.connector.connector_kind,
         "connector_id": journey.connector.connector_id,
@@ -948,10 +1075,10 @@ async def test_builtin_administration_success_metadata_preserves_declared_schema
     ("SECRET_ID", "SECRET_KIND", "connector_kind"),
 ])
 async def test_builtin_administration_invalid_arguments_have_safe_field_diagnostics(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tool: str,
+    create_journey: AdminConnectorConfigurationJourneyFactory, tool: str,
     connector_id: str, connector_kind: str, field: str,
 ) -> None:
-    journey = await create_journey(tmp_path, monkeypatch, administrator())
+    journey = await create_journey(administrator())
     arguments: dict[str, Any] = {"connector_kind": connector_kind, "connector_id": connector_id}
     if tool == UPSERT_TOOL:
         arguments["desired_state"] = {"operations": []}
@@ -969,13 +1096,10 @@ async def test_builtin_administration_invalid_arguments_have_safe_field_diagnost
 
 @pytest.mark.asyncio
 async def test_disabled_feature_hides_administration_tools_from_administrator(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+    create_journey: AdminConnectorConfigurationJourneyFactory,
 ) -> None:
     configuration = AdminConnectorConfigurationDsl(
         await create_journey(
-            tmp_path,
-            monkeypatch,
             administrator(),
             mcp_administrator_enabled=False,
         )

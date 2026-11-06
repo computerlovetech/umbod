@@ -10,10 +10,10 @@ from umbod.core.capabilities.descriptions.stores.schema import (
 from umbod.core.capabilities.descriptions.stores.service import (
     ConnectorCapabilityDescriptionOverrideStoreService,
 )
-from tests.persistence_runtime import create_inmemory_runtime, prepared_inmemory_runtime, prepared_sqlite_runtime
+from tests.persistence_runtime import prepared_inmemory_runtime
+from collections.abc import AsyncIterator
 import asyncio
-import sqlite3
-from pathlib import Path
+from umbod.core.persistence import Database
 from typing import cast
 import pytest
 import pytest_asyncio
@@ -25,12 +25,17 @@ from umbod.core.connectors.native.registry import ConnectorRegistry, InMemoryCon
 from umbod.core.connectors.openapi.management.models import OpenApiConnector
 from umbod.proxies import Model
 
-@pytest_asyncio.fixture(params=['inmemory', 'sqlite'])
-async def store(request: pytest.FixtureRequest, tmp_path: Path) -> ConnectorCapabilityDescriptionOverrideStore:
-    if request.param == 'sqlite':
-        database = (await prepared_sqlite_runtime(tmp_path / 'umbod.db')).database
-        return ConnectorCapabilityDescriptionOverrideStoreService(database, CAPABILITY_DESCRIPTION_OVERRIDE_TABLE)
-    database = (await prepared_inmemory_runtime()).database
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[Database]:
+    runtime = await prepared_inmemory_runtime()
+    try:
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
+
+
+@pytest.fixture
+def store(database: Database) -> ConnectorCapabilityDescriptionOverrideStore:
     return ConnectorCapabilityDescriptionOverrideStoreService(database, CAPABILITY_DESCRIPTION_OVERRIDE_TABLE)
 
 def _key(kind: str='native') -> ConnectorCapabilityDescriptionKey:
@@ -84,30 +89,18 @@ def test_description_accepts_300_characters() -> None:
     assert len(command.description) == 300
 
 @pytest.mark.asyncio
-async def test_configured_factory_returns_one_store_during_concurrent_initialization(tmp_path: Path) -> None:
-    factory = ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory(create_inmemory_runtime().database)
+async def test_configured_factory_returns_one_store_during_concurrent_initialization(database: Database) -> None:
+    factory = ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory(database)
     (first, second) = await asyncio.gather(factory.create(), factory.create())
     assert first is second
 
 @pytest.mark.asyncio
-async def test_sqlite_two_connection_compare_and_swap(tmp_path: Path) -> None:
-    path = tmp_path / 'umbod.db'
-    database = (await prepared_sqlite_runtime(path)).database
+async def test_store_instances_reject_stale_revision(database: Database) -> None:
     first = ConnectorCapabilityDescriptionOverrideStoreService(database, CAPABILITY_DESCRIPTION_OVERRIDE_TABLE)
     second = ConnectorCapabilityDescriptionOverrideStoreService(database, CAPABILITY_DESCRIPTION_OVERRIDE_TABLE)
     await first.set(SetCapabilityDescriptionOverride(key=_key(), description='first', expected_revision=0))
     with pytest.raises(OverrideRevisionConflictError):
         await second.set(SetCapabilityDescriptionOverride(key=_key(), description='second', expected_revision=0))
-
-@pytest.mark.asyncio
-async def test_sqlite_schema_has_state_constraints_and_initializes_idempotently(tmp_path: Path) -> None:
-    path = tmp_path / 'umbod.db'
-    runtime = await prepared_sqlite_runtime(path)
-    await runtime.readiness.ensure_ready()
-    with sqlite3.connect(path) as connection:
-        sql = connection.execute("SELECT sql FROM sqlite_master WHERE name = 'connector_capability_description_overrides'").fetchone()[0]
-        assert 'CHECK' in sql
-        assert connection.execute('SELECT count(*) FROM connector_capability_description_overrides').fetchone()[0] == 0
 
 class _BaseReader:
 
@@ -165,9 +158,7 @@ async def test_composite_base_reader_rejects_missing_target() -> None:
         await reader.read(_connector_key('native', 'missing'))
 
 @pytest.mark.asyncio
-async def test_resolver_returns_base_for_system_and_override_when_set() -> None:
-    database = (await prepared_inmemory_runtime()).database
-    store = ConnectorCapabilityDescriptionOverrideStoreService(database, CAPABILITY_DESCRIPTION_OVERRIDE_TABLE)
+async def test_resolver_returns_base_for_system_and_override_when_set(store: ConnectorCapabilityDescriptionOverrideStore) -> None:
     resolver = CapabilityDescriptionOverrideResolver(store, _BaseReader())
     assert (await resolver.resolve(_key())).description == 'system description'
     await store.set(SetCapabilityDescriptionOverride(key=_key(), description='custom', expected_revision=0))

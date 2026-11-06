@@ -385,12 +385,12 @@ async def import_catalog(
         document = request_dto.document
         approved_hosts = request_dto.approved_hosts
     elif content_type == "multipart/form-data":
-        form = await request.form()
-        file = form.get("file")
-        document = await read_json_object(
-            file if isinstance(file, StarletteUploadFile) else "", max_bytes
-        )
-        approved_hosts = tuple(str(value) for value in form.getlist("approved_hosts"))
+        async with request.form() as form:
+            file = form.get("file")
+            document = await read_json_object(
+                file if isinstance(file, StarletteUploadFile) else "", max_bytes
+            )
+            approved_hosts = tuple(str(value) for value in form.getlist("approved_hosts"))
     else:
         raise HTTPException(
             status_code=415, detail={"code": "openapi_import_unsupported_media_type"}

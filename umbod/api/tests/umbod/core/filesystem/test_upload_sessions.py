@@ -3,14 +3,13 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Optional
 from uuid import UUID, uuid4
 
 import pytest
 import pytest_asyncio
 
-from umbod.core.filesystem import ByteStream, ContentDriver, ContentRef, NameCollision, Permission, RootBootstrapGrant, RootBootstrapSpec, StorageFailure, StorageKey
+from umbod.core.filesystem import ByteStream, ContentDriver, ContentRef, NameCollision, StorageFailure, StorageKey
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
 from umbod.core.filesystem.content import ContentService, UploadTooLarge
 from umbod.core.filesystem.deletion import DeletionService
@@ -21,11 +20,7 @@ from umbod.core.filesystem.uploads import UploadService, UploadSession, UploadSt
 from umbod.core.filesystem.uploads.ports import UploadTransaction
 from umbod.core.filesystem.uploads.errors import UploadConflict, UploadExpired, UploadLengthMismatch
 from umbod.core.persistence import PersistenceRuntime
-from umbod.infrastructure import (
-    LocalContentConfig, create_content_driver, create_filesystem_transactions, create_namespace_driver,
-    create_root_provisioning,
-)
-from tests.persistence_runtime import prepared_sqlite_runtime
+from umbod.infrastructure import create_filesystem_transactions, create_namespace_driver
 from tests.umbod.core.filesystem.test_authorized_content import ContentContext, alice, caller, metadata, stream
 from tests.umbod.core.filesystem.test_authorized_content import content_context as content_context
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
@@ -371,38 +366,24 @@ async def test_expiry_during_transfer_does_not_publish_staged_reference(uploads:
 
 
 @pytest.mark.asyncio
-async def test_sqlite_restart_recovers_pending_uploaded_and_completed_sessions(tmp_path: Path) -> None:
-    path = tmp_path / "uploads.sqlite"
-    config = LocalContentConfig(type="local", directory=tmp_path / "content")
-    clock = Clock(datetime(2026, 1, 1, tzinfo=timezone.utc))
-    runtime = await prepared_sqlite_runtime(path)
-    await create_root_provisioning(database=runtime.database).provision(RootBootstrapSpec(grants=(
-        RootBootstrapGrant(principal=alice(), permissions=frozenset({Permission.DISCOVER, Permission.WRITE})),
-    )))
-    service = UploadService(VerifiedIdentityResolver(), DatabaseUploadTransactions(runtime.database),
-                            create_content_driver(config), 6, clock, timedelta(hours=1))
+async def test_recreated_services_recover_pending_uploaded_and_completed_sessions(
+    uploads: UploadContext, filesystem_runtime: PersistenceRuntime,
+) -> None:
+    database = filesystem_runtime.database
+    content = uploads.content.content
+    clock = uploads.clock
+    service = uploads.service
     pending = await service.begin(caller(), ROOT_ID, "pending", metadata(), 1)
     uploaded = await service.begin(caller(), ROOT_ID, "uploaded", metadata(), 1)
     await service.put(caller(), uploaded.id, "application/octet-stream", stream(b"x"))
-    await runtime.shutdown()
-    runtime = await prepared_sqlite_runtime(path)
-    try:
-        content = create_content_driver(config)
-        service = UploadService(VerifiedIdentityResolver(), DatabaseUploadTransactions(runtime.database), content, 6, clock, timedelta(hours=1))
-        assert (await service.get(caller(), pending.id)).progress.status == "pending"
-        assert (await service.get(caller(), uploaded.id)).progress.status == "uploaded"
-        result = await service.complete(caller(), uploaded.id)
-    finally:
-        await runtime.shutdown()
-    runtime = await prepared_sqlite_runtime(path)
-    try:
-        content = create_content_driver(config)
-        service = UploadService(VerifiedIdentityResolver(), DatabaseUploadTransactions(runtime.database), content, 6, clock, timedelta(hours=1))
-        assert not (await service.complete(caller(), uploaded.id)).created
-        assert (await service.complete(caller(), uploaded.id)).node == result.node
-        download = await ContentService(VerifiedIdentityResolver(), create_filesystem_transactions(database=runtime.database),
-                                        content, 6).open_download(caller(), result.node.id)
-        assert b"".join([chunk async for chunk in download.data]) == b"x"
-        assert len(await create_namespace_driver(database=runtime.database).list_children(ROOT_ID)) == 1
-    finally:
-        await runtime.shutdown()
+    service = UploadService(VerifiedIdentityResolver(), DatabaseUploadTransactions(database), content, 6, clock, timedelta(hours=1))
+    assert (await service.get(caller(), pending.id)).progress.status == "pending"
+    assert (await service.get(caller(), uploaded.id)).progress.status == "uploaded"
+    result = await service.complete(caller(), uploaded.id)
+    service = UploadService(VerifiedIdentityResolver(), DatabaseUploadTransactions(database), content, 6, clock, timedelta(hours=1))
+    assert not (await service.complete(caller(), uploaded.id)).created
+    assert (await service.complete(caller(), uploaded.id)).node == result.node
+    download = await ContentService(VerifiedIdentityResolver(), create_filesystem_transactions(database=database),
+                                    content, 6).open_download(caller(), result.node.id)
+    assert b"".join([chunk async for chunk in download.data]) == b"x"
+    assert len(await create_namespace_driver(database=database).list_children(ROOT_ID)) == 1

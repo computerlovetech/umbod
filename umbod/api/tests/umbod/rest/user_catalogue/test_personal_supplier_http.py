@@ -30,6 +30,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models im
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationQuery
 from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.rest.connectors.downstream_mcp.personal_connections.tools import get_personal_tool_transport
+from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_policy import PersonalOAuthPolicy, get_personal_oauth_policy
 from umbod.rest.authentication.authorization import JwtClaims
 from umbod.rest.authentication.deps import get_verified_access_claims
 from umbod.rest.dependencies import get_connector_api_dependency_factories
@@ -159,14 +160,18 @@ async def authorize_owner(stores: DownstreamMcpStores, key: PersonalConnectionKe
 
 
 @pytest.mark.parametrize("revocation", ["enablement", "authorization"])
-@pytest.mark.parametrize("personal_api", ["sqlite"], indirect=True)
 def test_owner_revocation_is_visible_on_next_catalogue_without_cross_caller_metadata(
     personal_api: PersonalApi, recorded_stores: list[DownstreamMcpStores], revocation: str,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     api = personal_api
     api.settings.connector_security.configuration_secret = LOCAL_DOWNSTREAM_MCP_CREDENTIAL_SECRET
-    api.settings.personal_connections.oauth_enabled = True
     APISettings.model_validate(api.settings.model_dump())
+
+    def provide_policy() -> PersonalOAuthPolicy:
+        return PersonalOAuthPolicy(enabled=True)
+
+    monkeypatch.setitem(api.personal_app.dependency_overrides, get_personal_oauth_policy, provide_policy)
     api.client.get("/api/me/catalogue", headers=api.headers("alice")).raise_for_status()
     transport = InMemoryPersonalMcpTransport()
     for subject in ("alice", "bob"):

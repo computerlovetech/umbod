@@ -63,10 +63,10 @@ def create_current_user_api(
     settings: APISettings, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> CurrentUserApiBoundary:
     availability_path = tmp_path / "connector-availability.json"
-    availability_path.write_text(json.dumps({"connectors": [{"id": "slack"}]}), encoding="utf-8")
+    availability_path.write_text(json.dumps({"connectors": []}), encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability_path))
     return FastApiCurrentUserApiBoundary(
-        TestClient(create_app(settings=settings)), "X-Forwarded-Access-Token"
+        TestClient(create_app(settings=settings, connector_registrations=[])), "X-Forwarded-Access-Token"
     )
 
 
@@ -146,11 +146,12 @@ def test_authenticated_caller_can_use_authorization_bearer_header(
     tokens: JwtTokenFactory,
 ) -> None:
     availability_path = tmp_path / "connector-availability.json"
-    availability_path.write_text(json.dumps({"connectors": [{"id": "slack"}]}), encoding="utf-8")
+    availability_path.write_text(json.dumps({"connectors": []}), encoding="utf-8")
     monkeypatch.setenv("UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH", str(availability_path))
     current_user_api = FastApiCurrentUserApiBoundary(
         TestClient(
             create_app(
+                connector_registrations=[],
                 settings=APISettings(
                     admin_authentication={
                         "mode": "jwt",
