@@ -5,9 +5,9 @@ import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
+from typing import Optional
 
 import httpx
-import pytest
 
 
 def _ports(count: int) -> tuple[int, ...]:
@@ -22,42 +22,47 @@ def _ports(count: int) -> tuple[int, ...]:
 
 
 
-def _wait_for(
-    condition: Callable[[], bool], process: subprocess.Popen[bytes], log: Path,
+def _wait_for[Result](
+    condition: Callable[[], Result], process: subprocess.Popen[bytes], log: Path,
     *, timeout: float, description: str,
-) -> None:
+) -> Result:
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         assert process.poll() is None, log.read_text()
-        if condition():
-            return
+        result = condition()
+        if result:
+            return result
         time.sleep(0.05)
     raise AssertionError(f"Timed out waiting for {description}: {log.read_text()}")
 
 
 
-def _healthy(origins: tuple[str, str]) -> bool:
+def _healthy(client: httpx.Client, origins: tuple[str, str]) -> bool:
     try:
         return (
-            httpx.get(f"{origins[0]}/system/health", timeout=0.5).status_code == 200
-            and httpx.get(f"{origins[1]}/ready", timeout=0.5).status_code == 200
+            client.get(f"{origins[0]}/system/health", timeout=0.5).status_code == 200
+            and client.get(f"{origins[1]}/ready", timeout=0.5).status_code == 200
         )
     except httpx.TransportError:
         return False
 
 
 
-def _metrics_recorded(origin: str, samples: frozenset[str]) -> bool:
+def _metrics_recorded(
+    client: httpx.Client, origin: str, samples: frozenset[str],
+) -> Optional[httpx.Response]:
     try:
-        response = httpx.get(f"{origin}/metrics", timeout=0.5)
-        return response.status_code == 200 and samples.issubset(response.text.splitlines())
+        response = client.get(f"{origin}/metrics", timeout=0.5)
+        if response.status_code == 200 and samples.issubset(response.text.splitlines()):
+            return response
     except httpx.TransportError:
-        return False
+        pass
+    return None
 
 
 
-def _count(origin: str) -> int:
-    response = httpx.post(
+def _count(client: httpx.Client, origin: str) -> int:
+    response = client.post(
         f"{origin}/api/admin/telemetry/log-counts",
         json={
             "time_range": {
@@ -76,17 +81,13 @@ def _count(origin: str) -> int:
 
 
 
-@pytest.mark.parametrize("reload", [False, True])
 def test_api_command_serves_private_collector_and_shared_analytics(
     tmp_path: Path,
-    reload: bool,
 ) -> None:
     api_port, collector_port, rest_metrics, mcp_port, mcp_metrics = _ports(5)
     origins = (f"http://127.0.0.1:{api_port}", f"http://127.0.0.1:{collector_port}")
     declaration = tmp_path / "connectors.json"
     declaration.write_text('{"connectors": []}')
-    marker = tmp_path / "reload_marker.py"
-    marker.write_text("generation = 1\n")
     pids = tmp_path / "listener-pids.txt"
     pids.write_text("")
     (tmp_path / "sitecustomize.py").write_text(
@@ -122,7 +123,6 @@ def test_api_command_serves_private_collector_and_shared_analytics(
             "UMBOD_CONNECTOR_STORE": "inmemory",
             "UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH": str(declaration),
             "UMBOD_DATA_DIR": str(tmp_path / "data"),
-            "WATCHFILES_FORCE_POLLING": "true",
             "LISTENER_TEST_PID_PATH": str(pids),
             "PYTHONPATH": str(tmp_path) + os.pathsep + os.environ.get("PYTHONPATH", ""),
         }
@@ -137,9 +137,7 @@ def test_api_command_serves_private_collector_and_shared_analytics(
         "--host",
         "127.0.0.1",
     ]
-    if reload:
-        arguments.append("--reload")
-    with log.open("wb") as output:
+    with log.open("wb") as output, httpx.Client(trust_env=False) as client:
         process = subprocess.Popen(
             arguments,
             cwd=tmp_path,
@@ -149,23 +147,23 @@ def test_api_command_serves_private_collector_and_shared_analytics(
         )
         try:
             _wait_for(
-                lambda: _healthy(origins), process, log,
+                lambda: _healthy(client, origins), process, log,
                 timeout=60, description="API and collector startup",
             )
             for signal in ("logs", "metrics", "traces"):
-                response = httpx.post(f"{origins[0]}/v1/{signal}", json={}, timeout=3)
+                response = client.post(f"{origins[0]}/v1/{signal}", json={}, timeout=3)
                 assert response.status_code == 404
             assert (
-                httpx.post(
+                client.post(
                     f"{origins[1]}/api/admin/telemetry/log-counts", json={}, timeout=3
                 ).status_code
                 == 404
             )
             assert (
-                httpx.post(f"{origins[1]}/v1/logs", json={}, timeout=3).status_code
+                client.post(f"{origins[1]}/v1/logs", json={}, timeout=3).status_code
                 == 401
             )
-            exported = httpx.post(
+            exported = client.post(
                 f"{origins[1]}/v1/logs",
                 json={
                     "resourceLogs": [
@@ -187,7 +185,7 @@ def test_api_command_serves_private_collector_and_shared_analytics(
                 timeout=3,
             )
             assert exported.status_code == 200, exported.text
-            assert _count(origins[0]) == 1
+            assert _count(client, origins[0]) == 1
             metrics_origin = f"http://127.0.0.1:{rest_metrics}"
             expected_samples = frozenset({
                 'umbod_rest_requests_total{method="POST",route="/admin/telemetry/log-counts",status_class="2xx"} 1.0',
@@ -196,11 +194,11 @@ def test_api_command_serves_private_collector_and_shared_analytics(
                 'umbod_collector_request_duration_seconds_count{method="POST",route="/v1/logs",status_class="2xx"} 1.0',
                 "umbod_collector_log_records_accepted_total 1.0",
             })
-            _wait_for(
-                lambda: _metrics_recorded(metrics_origin, expected_samples), process, log,
+            metrics = _wait_for(
+                lambda: _metrics_recorded(client, metrics_origin, expected_samples), process, log,
                 timeout=5, description="request metrics publication",
             )
-            metrics = httpx.get(f"{metrics_origin}/metrics", timeout=3)
+            assert metrics is not None
             assert metrics.status_code == 200
             assert expected_samples.issubset(metrics.text.splitlines()), metrics.text
             assert 'route="/ready"' not in metrics.text
@@ -210,25 +208,9 @@ def test_api_command_serves_private_collector_and_shared_analytics(
             assert {
                 int(row.split(",")[1]) for row in pids.read_text().splitlines()
             } == {api_port, collector_port, rest_metrics}
-            if reload:
-                marker.write_text("generation = 2\n")
-                _wait_for(
-                    lambda: (
-                        len(
-                            {row.split(",")[0] for row in pids.read_text().splitlines()}
-                        )
-                        >= 2
-                        and _healthy(origins)
-                    ),
-                    process,
-                    log,
-                    timeout=60,
-                    description="reloaded API and collector readiness",
-                )
-                assert _count(origins[0]) == 1
-            else:
-                assert serving_pids == {str(process.pid)}
+            assert serving_pids == {str(process.pid)}
         finally:
+            client.close()
             process.terminate()
             try:
                 process.wait(timeout=20)

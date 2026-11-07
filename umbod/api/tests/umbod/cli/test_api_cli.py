@@ -1,11 +1,13 @@
 import os
 from pathlib import Path
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 from pytest import MonkeyPatch
 
-from umbod.cli.api import ServeCommand
+from umbod.cli.api import ServeCommand, run_api_server, validate_listener_ports
+from umbod.config import AppConfig
 
 
 @pytest.fixture(autouse=True)
@@ -32,6 +34,26 @@ def _run(
 
     ServeCommand()(host="0.0.0.0", port=cli_port, reload=False)
     return invocation
+
+
+def test_run_api_server_forwards_to_hosting_delegate(monkeypatch: MonkeyPatch) -> None:
+    delegate = Mock()
+    settings = AppConfig()
+    monkeypatch.setattr("umbod.hosting.api_server.run_api_server", delegate)
+
+    run_api_server(settings=settings, host="127.0.0.1", port=9200, reload=False)
+
+    delegate.assert_called_once_with(settings, "127.0.0.1", 9200, False)
+
+
+def test_validate_listener_ports_forwards_to_hosting_delegate(monkeypatch: MonkeyPatch) -> None:
+    delegate = Mock()
+    settings = AppConfig()
+    monkeypatch.setattr("umbod.hosting.api_server.validate_listener_ports", delegate)
+
+    validate_listener_ports(settings=settings, port=9200)
+
+    delegate.assert_called_once_with(settings, 9200)
 
 
 def test_serve_uses_configured_rest_traffic_port(monkeypatch: MonkeyPatch) -> None:

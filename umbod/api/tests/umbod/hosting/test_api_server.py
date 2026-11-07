@@ -7,10 +7,10 @@ import pytest
 
 from umbod.config import AppConfig, OtlpReceiverConfig
 from umbod.hosting.api_server import (
-    ProcessShutdownDeadline,
     serve_api,
     validate_listener_ports,
 )
+from umbod.hosting.shutdown import ProcessShutdownDeadline
 from umbod.core.telemetry.analytics import (
     TelemetryAnalyticsReader,
     TelemetryAnalyticsRuntime,
@@ -60,6 +60,9 @@ async def test_startup_failure_signals_shutdown_before_entering_runtime_cleanup(
 
 
 def test_shutdown_deadline_requests_nonzero_exit_when_cleanup_stalls() -> None:
+    from umbod.hosting.api_server import ProcessShutdownDeadline as compatibility_alias
+
+    assert compatibility_alias is ProcessShutdownDeadline
     terminated = threading.Event()
     codes: list[int] = []
 
@@ -102,7 +105,7 @@ async def test_shutdown_deadline_exits_even_when_main_thread_is_blocked(
             "-c",
             (
                 "import os, sys, threading; "
-                "from umbod.hosting.api_server import ProcessShutdownDeadline; "
+                "from umbod.hosting.shutdown import ProcessShutdownDeadline; "
                 "deadline = ProcessShutdownDeadline(0.02, os._exit); "
                 "print('ready', flush=True); "
                 "assert sys.stdin.readline() == 'shutdown\\n'; "

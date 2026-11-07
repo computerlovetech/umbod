@@ -6,7 +6,7 @@ description: "FastAPI delivery for administration, authenticated users, system e
 
 # Files
 
-- [__init__.py](./__init__.py) — Package exports.
+- [__init__.py](./__init__.py) — Deferred package exports preserving original owner identities.
 - [admin_overview/](./admin_overview/README.md) — Overview metadata summary.
 - [authentication/](./authentication/) — Authentication and cookie safeguards.
 - [capability_descriptions/](./capability_descriptions/) — Description overrides.

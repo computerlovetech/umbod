@@ -3,11 +3,22 @@ from typing import Annotated, Any, Optional
 
 import typer
 
-from umbod.config import load_server_app_config
-from umbod.hosting.api_server import run_api_server, validate_listener_ports
+from umbod.config import AppConfig, load_server_app_config
 from umbod.logging import configure_logging
 
 app = typer.Typer(help="REST API server commands.", no_args_is_help=True)
+
+
+def run_api_server(settings: AppConfig, host: str, port: int, reload: bool) -> None:
+    from umbod.hosting.api_server import run_api_server as delegate
+
+    delegate(settings, host, port, reload)
+
+
+def validate_listener_ports(settings: AppConfig, port: int) -> None:
+    from umbod.hosting.api_server import validate_listener_ports as delegate
+
+    delegate(settings, port)
 
 
 class ServeCommand:

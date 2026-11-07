@@ -1,7 +1,5 @@
 import asyncio
 import os
-import threading
-from collections.abc import Callable
 from functools import partial
 from socket import socket
 
@@ -15,26 +13,12 @@ from umbod.hosting.listeners import (
     capture_shutdown_signals,
     serve_listeners,
 )
+from umbod.hosting.shutdown import ProcessShutdownDeadline
 from umbod.infrastructure import create_configured_analytics_runtime
 from umbod.logging import configure_logging
 from umbod.rest.main import create_app_with_shared_metrics
 from umbod.rest.metrics import PrometheusRestMetricsRecorder
 from umbod.rest.telemetry.application import create_receiver_app_with_registry
-
-
-class ProcessShutdownDeadline:
-    def __init__(self, seconds: float, terminate: Callable[[int], object]) -> None:
-        self.timer = threading.Timer(seconds, terminate, args=(1,))
-        self.timer.daemon = True
-        self.started = False
-
-    def arm(self) -> None:
-        if not self.started:
-            self.started = True
-            self.timer.start()
-
-    def cancel(self) -> None:
-        self.timer.cancel()
 
 
 def validate_listener_ports(settings: AppConfig, port: int) -> None:
