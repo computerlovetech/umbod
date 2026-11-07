@@ -1,5 +1,5 @@
 site_name: Umbod
-site_description: Installation, user guides, operations, and architecture documentation for Umbod
+site_description: Installation, user guides, operations, and feature reference documentation for Umbod
 site_dir: site
 
 theme:

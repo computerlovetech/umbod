@@ -10,8 +10,6 @@ Application diagnostics explain failures without copying the data being processe
 
 ## Signal-owned side effects
 
-[ADR-013: Signal-Owned Application Logging and Side Effects](https://github.com/computerlovetech/umbod/blob/main/umbod/project/architecture-records/ADR-013-signal-owned-application-logging.md) governs this standard and its exceptions.
-
 Application operations publish typed failure events; logging, metrics, and audit adapters own the corresponding side effects. Reuse the existing application-local signal system rather than introducing a global event bus or invoking a logging helper inside an operation.
 
 Capture and sanitize failure evidence at the failure point, before cleanup can replace it. Publish an immutable snapshot with approved context, not a live exception, traceback object, request, payload, or credential. Every receiver, not only the logging receiver, must receive safe data.

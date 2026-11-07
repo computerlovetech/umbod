@@ -26,5 +26,4 @@ An incompatible existing table fails preparation with an explicit migration requ
 
 The neutral schema declares the guarantee. Drivers implement it; SQLite-specific schema validation remains in infrastructure. Tests exercise public database operations for allocation behavior and reserve physical schema checks for SQLite adapter tests.
 
-- [ADR-001](../../project/architecture-records/ADR-001-backend-neutral-persistence.md) — Backend-neutral schemas and infrastructure-owned preparation.
 - [SQLite allocation rules](https://www.sqlite.org/autoinc.html) — Committed historical maxima, rollback and `AUTOINCREMENT` limitations.
