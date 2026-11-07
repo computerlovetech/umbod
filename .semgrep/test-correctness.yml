@@ -170,3 +170,149 @@ rules:
       - pattern-not: $PARAM or dict()
       - pattern-not: $PARAM or list()
       - pattern-not: $PARAM or set()
+
+  - id: python.tests.no-business-sqlite-backend-imports
+    languages: [python]
+    severity: ERROR
+    message: Business and configuration tests must not import physical SQLite backends or dual-driver registries.
+    paths:
+      include:
+        - '**/tests/umbod/core/**'
+        - '**/tests/umbod/rest/**'
+        - '**/tests/umbod/mcp/**'
+        - '**/tests/umbod/cli/**'
+        - '**/tests/umbod/hosting/**'
+        - '**/tests/messaging/**'
+        - '**/tests/umbod/config/**'
+      exclude:
+        - '**/tests/umbod/hosting/integration/test_api_server_process.py'
+        - '**/tests/umbod/core/persistence/test_driver_package_imports.py'
+    pattern-either:
+      - pattern: import sqlite3
+      - pattern: import aiosqlite
+      - patterns:
+          - pattern: from $MODULE import $MEMBER
+          - metavariable-regex:
+              metavariable: $MODULE
+              regex: '(^|.*\.)(sqlite|sqlite3|aiosqlite)(\..*)?$'
+      - patterns:
+          - pattern: import $MODULE
+          - metavariable-regex:
+              metavariable: $MODULE
+              regex: '(^|.*\.)(sqlite|sqlite3|aiosqlite)(\..*)?$'
+      - patterns:
+          - pattern: from $MODULE import $MEMBER
+          - metavariable-regex:
+              metavariable: $MEMBER
+              regex: '^(create_sqlite_.*|prepared_sqlite_.*|SQLiteDatabase|SqliteDatabase|SQLiteConnectionDriver)$'
+      - pattern: from $MODULE import DATABASE_ADAPTERS
+      - pattern: from tests.umbod.infrastructure.persistence.adapters import $MEMBER
+
+  - id: python.tests.no-business-sqlite-runtime
+    languages: [python]
+    severity: ERROR
+    message: Use the in-memory persistence runtime outside physical-driver tests and the exact host-process integration.
+    paths:
+      include:
+        - '**/tests/umbod/core/**'
+        - '**/tests/umbod/rest/**'
+        - '**/tests/umbod/mcp/**'
+        - '**/tests/umbod/cli/**'
+        - '**/tests/umbod/hosting/**'
+        - '**/tests/messaging/**'
+        - '**/tests/umbod/config/**'
+      exclude:
+        - '**/tests/umbod/hosting/integration/test_api_server_process.py'
+    pattern-either:
+      - pattern: sqlite3.connect(...)
+      - pattern: aiosqlite.connect(...)
+      - pattern: SQLiteDatabase(...)
+      - pattern: SqliteDatabase(...)
+      - pattern: SQLiteConnectionDriver(...)
+      - pattern: create_sqlite_runtime(...)
+      - pattern: prepared_sqlite_runtime(...)
+      - pattern: create_sqlite_analytics_runtime(...)
+      - patterns:
+          - pattern: $OBJECT.$FACTORY(...)
+          - metavariable-regex:
+              metavariable: $FACTORY
+              regex: '^(create_sqlite_.*|prepared_sqlite_.*|SQLiteDatabase|SqliteDatabase|SQLiteConnectionDriver)$'
+
+  - id: python.tests.no-business-sqlite-configuration
+    languages: [python]
+    severity: ERROR
+    message: SQLite configuration and physical fixture policy belong in configuration or infrastructure tests, not business tests.
+    paths:
+      include:
+        - '**/tests/umbod/core/**'
+        - '**/tests/umbod/rest/**'
+        - '**/tests/umbod/mcp/**'
+        - '**/tests/umbod/cli/**'
+        - '**/tests/umbod/hosting/**'
+        - '**/tests/messaging/**'
+        - '**/tests/umbod/config/**'
+      exclude:
+        - '**/tests/umbod/hosting/integration/test_api_server_process.py'
+        - '**/tests/umbod/config/**'
+    pattern-either:
+      - pattern: $CONFIG.sqlite_path
+      - pattern: SQLiteConnectorStoreConfig(...)
+      - pattern: ConnectorStoreConfig(..., type="sqlite", ...)
+      - pattern: TelemetryAnalyticsConfig(..., enabled=True, ...)
+      - patterns:
+          - pattern: $CONFIG(..., sqlite_path=$PATH, ...)
+          - metavariable-regex:
+              metavariable: $CONFIG
+              regex: '.*Config$'
+      - pattern: '{..., "connector_store": {..., "type": "sqlite", ...}, ...}'
+      - pattern: '{..., "analytics": {..., "enabled": True, ...}, ...}'
+      - pattern: '{..., "telemetry_analytics": {..., "enabled": True, ...}, ...}'
+      - pattern: '$CONFIG(..., telemetry_analytics={..., "enabled": True, ...}, ...)'
+      - pattern: 'TelemetryAnalyticsConfig.model_validate({..., "enabled": True, ...}, ...)'
+      - pattern: TelemetryAnalyticsConfig.model_construct(..., enabled=True, ...)
+      - pattern: 'TelemetryAnalyticsConfig.model_copy(..., update={..., "enabled": True, ...}, ...)'
+      - pattern: os.environ["UMBOD_CONNECTOR_STORE"] = "sqlite"
+      - pattern: $PATCH.setenv("UMBOD_CONNECTOR_STORE", "sqlite")
+      - pattern: $PATCH.setitem(os.environ, "UMBOD_CONNECTOR_STORE", "sqlite")
+      - pattern: $HELPER(..., UMBOD_CONNECTOR_STORE="sqlite", ...)
+      - patterns:
+          - pattern: $HELPER(..., UMBOD_TELEMETRY_ANALYTICS_ENABLED=$VALUE, ...)
+          - metavariable-regex:
+              metavariable: $VALUE
+              regex: '^([''\"](?i:true|1)[''\"]|True|1)$'
+      - patterns:
+          - pattern-either:
+              - pattern: os.environ[$KEY] = $VALUE
+              - pattern: $PATCH.setenv($KEY, $VALUE)
+              - pattern: '{$KEY: $VALUE, ...}'
+          - metavariable-regex:
+              metavariable: $KEY
+              regex: '^[''"]UMBOD_.*SQLITE.*PATH[''"]$'
+      - patterns:
+          - pattern-either:
+              - pattern: os.environ["UMBOD_TELEMETRY_ANALYTICS_ENABLED"] = $VALUE
+              - pattern: $PATCH.setenv("UMBOD_TELEMETRY_ANALYTICS_ENABLED", $VALUE)
+              - pattern: '{..., "UMBOD_TELEMETRY_ANALYTICS_ENABLED": $VALUE, ...}'
+          - metavariable-regex:
+              metavariable: $VALUE
+              regex: '^([''"](?i:true|1)[''"]|True|1)$'
+      - pattern: '{..., "UMBOD_CONNECTOR_STORE": "sqlite", ...}'
+      - pattern: |
+          def $FUNCTION(..., prepared_connector_store_database, ...):
+            ...
+      - pattern: |
+          def $FUNCTION(..., isolated_connector_store_database, ...):
+            ...
+
+  - id: python.tests.no-config-policy-runtime-construction
+    languages: [python]
+    severity: ERROR
+    message: Configuration policy tests may validate backend configuration but must not construct persistence runtimes.
+    paths:
+      include:
+        - '**/tests/umbod/config/**'
+    pattern-either:
+      - pattern: ConfiguredPersistenceRuntimeProvider(...)
+      - pattern: create_configured_analytics_runtime(...)
+      - pattern: $MODULE.ConfiguredPersistenceRuntimeProvider(...)
+      - pattern: $MODULE.create_configured_analytics_runtime(...)

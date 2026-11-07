@@ -1,7 +1,4 @@
 import asyncio
-from collections.abc import Callable
-from dataclasses import dataclass
-from pathlib import Path
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict
@@ -29,8 +26,6 @@ from umbod.core.persistence import (
     Unordered,
     UpsertCommand,
 )
-from tests.persistence_runtime import create_inmemory_runtime
-from tests.umbod.infrastructure.persistence.adapters import create_contract_sqlite_database
 
 class SampleRow(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -105,25 +100,6 @@ class ScalarValuesResult(BaseModel):
     model_config = ConfigDict(frozen=True, strict=True)
     number: int
     enabled: bool
-
-
-DatabaseFactory = Callable[[Path], Database]
-
-
-@dataclass(frozen=True)
-class DatabaseAdapter:
-    name: str
-    factory: DatabaseFactory
-
-
-def _inmemory(_path: Path) -> Database:
-    return create_inmemory_runtime().database
-
-
-DATABASE_ADAPTERS = (
-    DatabaseAdapter('inmemory', _inmemory),
-    DatabaseAdapter('sqlite', create_contract_sqlite_database),
-)
 
 
 async def serialized_claim_observations(

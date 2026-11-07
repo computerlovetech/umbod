@@ -15,7 +15,7 @@ from umbod.core.persistence import (
     TransactionMode,
     UpsertCommand,
 )
-from tests.umbod.core.persistence.contract_support import (
+from tests.support.persistence_contracts import (
     GeneratedRow,
     SampleKey,
     generated_table,

@@ -1,43 +1,68 @@
-from tests.persistence_runtime import create_sqlite_runtime
-from collections.abc import Callable
-from pathlib import Path
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
+
 import pytest
-from umbod.core.messaging import (
-    DatabaseEventCheckpointStore,
-    DatabaseEventStream,
-)
 from messaging.in_memory import InMemoryEventCheckpointStore, InMemoryEventCheckpointStoreMessages
-from tests.support.messaging import InMemoryEventStream
 from messaging.ports import EventCheckpointStore, EventStream
 
-def _in_memory_stream(_database_path: Path) -> InMemoryEventStream:
-    return InMemoryEventStream('closed')
+from tests.persistence_runtime import create_inmemory_runtime
+from tests.support.messaging import InMemoryEventStream
+from umbod.core.messaging import DatabaseEventCheckpointStore, DatabaseEventStream
 
-def _sqlite_stream(database_path: Path) -> EventStream:
-    database = create_sqlite_runtime(database_path).database
-    return DatabaseEventStream(database)
 
-def _in_memory_checkpoint(_database_path: Path) -> InMemoryEventCheckpointStore:
-    return InMemoryEventCheckpointStore(InMemoryEventCheckpointStoreMessages())
+@asynccontextmanager
+async def _in_memory_stream() -> AsyncIterator[EventStream]:
+    yield InMemoryEventStream("closed")
 
-def _sqlite_checkpoint(database_path: Path) -> EventCheckpointStore:
-    database = create_sqlite_runtime(database_path).database
-    return DatabaseEventCheckpointStore(database)
+
+@asynccontextmanager
+async def _database_stream() -> AsyncIterator[EventStream]:
+    runtime = create_inmemory_runtime()
+    try:
+        yield DatabaseEventStream(runtime.database)
+    finally:
+        await runtime.shutdown()
+
+
+@asynccontextmanager
+async def _in_memory_checkpoint() -> AsyncIterator[EventCheckpointStore]:
+    yield InMemoryEventCheckpointStore(InMemoryEventCheckpointStoreMessages())
+
+
+@asynccontextmanager
+async def _database_checkpoint() -> AsyncIterator[EventCheckpointStore]:
+    runtime = create_inmemory_runtime()
+    try:
+        yield DatabaseEventCheckpointStore(runtime.database)
+    finally:
+        await runtime.shutdown()
+
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('factory', [_in_memory_stream, _sqlite_stream])
-async def test_event_streams_reject_negative_sequence(tmp_path: Path, factory: Callable[[Path], EventStream]) -> None:
-    with pytest.raises(ValueError, match='sequence cannot be negative'):
-        await factory(tmp_path / 'events.sqlite3').list_after(-1, 1)
+@pytest.mark.parametrize("factory", [_in_memory_stream, _database_stream])
+async def test_event_streams_reject_negative_sequence(
+    factory: Callable[[], AbstractAsyncContextManager[EventStream]],
+) -> None:
+    async with factory() as stream:
+        with pytest.raises(ValueError, match="sequence cannot be negative"):
+            await stream.list_after(-1, 1)
+
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('factory', [_in_memory_stream, _sqlite_stream])
-async def test_event_streams_reject_negative_limit(tmp_path: Path, factory: Callable[[Path], EventStream]) -> None:
-    with pytest.raises(ValueError, match='limit cannot be negative'):
-        await factory(tmp_path / 'events.sqlite3').list_after(0, -1)
+@pytest.mark.parametrize("factory", [_in_memory_stream, _database_stream])
+async def test_event_streams_reject_negative_limit(
+    factory: Callable[[], AbstractAsyncContextManager[EventStream]],
+) -> None:
+    async with factory() as stream:
+        with pytest.raises(ValueError, match="limit cannot be negative"):
+            await stream.list_after(0, -1)
+
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize('factory', [_in_memory_checkpoint, _sqlite_checkpoint])
-async def test_checkpoint_stores_reject_negative_sequence(tmp_path: Path, factory: Callable[[Path], EventCheckpointStore]) -> None:
-    with pytest.raises(ValueError, match='sequence cannot be negative'):
-        await factory(tmp_path / 'events.sqlite3').save_last_processed_sequence('consumer', -1)
+@pytest.mark.parametrize("factory", [_in_memory_checkpoint, _database_checkpoint])
+async def test_checkpoint_stores_reject_negative_sequence(
+    factory: Callable[[], AbstractAsyncContextManager[EventCheckpointStore]],
+) -> None:
+    async with factory() as store:
+        with pytest.raises(ValueError, match="sequence cannot be negative"):
+            await store.save_last_processed_sequence("consumer", -1)

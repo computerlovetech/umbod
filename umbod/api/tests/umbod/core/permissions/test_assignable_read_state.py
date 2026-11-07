@@ -1,12 +1,11 @@
-from pathlib import Path
+from collections.abc import AsyncIterator
 from typing import cast
 from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
-from pydantic import BaseModel
 
-from tests.umbod.core.persistence.contract_support import DATABASE_ADAPTERS, DatabaseAdapter
+from tests.persistence_runtime import create_inmemory_runtime
 from umbod.core.activation.domain import ActivationStatus, CapabilityRef
 from umbod.core.activation.stores.schema import (
     CAPABILITY_ACTIVATION_STATE_CONNECTOR_ID,
@@ -24,7 +23,6 @@ from umbod.core.persistence import (
     DeleteQuery,
     Equals,
     InsertCommand,
-    Table,
     TransactionMode,
 )
 from umbod.core.persistence.plan import ReadPlan, ReadPlanOperations
@@ -38,14 +36,14 @@ from umbod.core.publishing.stores.schema import (
 pytestmark = pytest.mark.asyncio
 
 
-@pytest_asyncio.fixture(params=DATABASE_ADAPTERS, ids=lambda adapter: cast(DatabaseAdapter, adapter).name)
-async def database(request: pytest.FixtureRequest, tmp_path: Path) -> Database:
-    database = cast(DatabaseAdapter, request.param).factory(tmp_path)
-    await database.ensure_schema(cast(tuple[Table[BaseModel, BaseModel], ...], (
-        PUBLICATION_STATE_TABLE,
-        CAPABILITY_ACTIVATION_STATE_TABLE,
-    )))
-    return database
+@pytest_asyncio.fixture
+async def database() -> AsyncIterator[Database]:
+    runtime = create_inmemory_runtime()
+    try:
+        await runtime.readiness.ensure_ready()
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
 
 
 async def _seed(database: Database) -> None:

@@ -10,7 +10,7 @@ from umbod.core.persistence import AllFields, InsertCommand, NoFilter, Query, Tr
 from umbod.infrastructure.connections import UnpooledConnectionProvider
 from umbod.infrastructure.connections.sqlite import SQLiteConnectionDriver
 from umbod.infrastructure.persistence.sqlite.database import SQLiteDatabase
-from tests.umbod.core.persistence.contract_support import row, table
+from tests.support.persistence_contracts import row, table
 
 
 @pytest.fixture

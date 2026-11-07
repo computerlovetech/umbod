@@ -5,7 +5,7 @@ from pathlib import Path
 import aiosqlite
 import pytest
 
-from tests.umbod.core.persistence.contract_support import row, table
+from tests.support.persistence_contracts import row, table
 from umbod.core.persistence import AllFields, InsertCommand, NoFilter, Query, TransactionMode, Unordered
 from umbod.infrastructure.connections import ConnectionPool, ConnectionPoolUnavailableError, ConnectionProvider, UnpooledConnectionProvider
 from umbod.infrastructure.connections.sqlite import SQLiteConnectionDriver

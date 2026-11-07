@@ -5,7 +5,7 @@ from typing import Protocol
 
 from umbod.core.persistence import AllFields, Equals, InsertCommand, Query, TransactionMode, Unordered
 from tests.persistence_runtime import prepared_sqlite_runtime
-from tests.umbod.core.persistence.contract_support import row, table
+from tests.support.persistence_contracts import row, table
 
 
 class ProcessStartGate(Protocol):

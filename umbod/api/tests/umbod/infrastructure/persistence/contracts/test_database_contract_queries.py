@@ -3,7 +3,7 @@ from typing import cast
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from tests.umbod.core.persistence.contract_support import SampleRow, table
+from tests.support.persistence_contracts import SampleRow, table
 from umbod.core.persistence import (
     AllFields,
     AllOf,

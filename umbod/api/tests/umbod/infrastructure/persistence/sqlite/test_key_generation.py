@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from tests.persistence_runtime import create_sqlite_runtime
-from tests.umbod.core.persistence.contract_support import (
+from tests.support.persistence_contracts import (
     GeneratedKey,
     GeneratedRow,
     generated_table,

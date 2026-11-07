@@ -4,7 +4,7 @@ from typing import cast
 import pytest
 
 from umbod.core.persistence import Database
-from tests.umbod.core.persistence.contract_support import DATABASE_ADAPTERS, DatabaseAdapter
+from tests.umbod.infrastructure.persistence.adapters import DATABASE_ADAPTERS, DatabaseAdapter
 
 
 @pytest.fixture(params=DATABASE_ADAPTERS, ids=lambda adapter: cast(DatabaseAdapter, adapter).name)

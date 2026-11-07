@@ -5,13 +5,9 @@ from typing import cast
 import pytest
 
 from tests.persistence_runtime import create_sqlite_runtime
+from tests.support.persistence_contracts import row, table
 from umbod.config import ConnectorStoreConfig, SQLiteConnectorStoreConfig
-from umbod.core.connectors.downstream_mcp.models import StaticBearerConnectorDefinition
-from umbod.core.connectors.downstream_mcp.stores import (
-    ConnectorDefinitionStore,
-    SaveConnectorDefinition,
-    create_downstream_mcp_stores,
-)
+from umbod.core.persistence import AllFields, InsertCommand, NoFilter, Query, TransactionMode, Unordered
 
 
 def test_unrequested_application_fixtures_are_not_set_up(request: pytest.FixtureRequest) -> None:
@@ -44,12 +40,15 @@ def test_configuration_isolation_reuses_worker_directory_without_requesting_tmp_
     assert not isolated_connector_store_database.exists()
 
 
-def test_runtime_construction_does_not_prepare_the_isolated_database(
+@pytest.mark.asyncio
+async def test_runtime_construction_does_not_prepare_the_isolated_database(
     isolated_connector_store_database: Path,
 ) -> None:
-    create_sqlite_runtime(isolated_connector_store_database)
-
-    assert not isolated_connector_store_database.exists()
+    runtime = create_sqlite_runtime(isolated_connector_store_database)
+    try:
+        assert not isolated_connector_store_database.exists()
+    finally:
+        await runtime.shutdown()
 
 
 @pytest.mark.parametrize("display_name", ["First", "Second"])
@@ -64,20 +63,13 @@ async def test_explicit_preparation_provides_fresh_writable_store_state(
     runtime = create_sqlite_runtime(prepared_connector_store_database)
     try:
         await runtime.readiness.ensure_ready()
-        stores = await create_downstream_mcp_stores(
-            credential_secret="fixture-test-secret",
-            database=runtime.database,
-        )
-        definitions: ConnectorDefinitionStore = stores.definitions
-        assert (await definitions.list()).definitions == ()
-        definition = StaticBearerConnectorDefinition(
-            connector_id="fixture-connector",
-            display_name=display_name,
-            endpoint_url="https://fixture.example.test/mcp",
-        )
-
-        await definitions.save(SaveConnectorDefinition(definition=definition))
-
-        assert (await definitions.list()).definitions == (definition,)
+        fixture_table, _, _, _ = table("prepared_fixture_probe")
+        await runtime.database.ensure_schema((fixture_table,))
+        selection = Query(NoFilter(), AllFields(), Unordered())
+        record = row("fixture-record", display_name)
+        async with runtime.database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
+            assert tuple(await session.find_many(fixture_table, selection)) == ()
+            await session.insert(fixture_table, InsertCommand(row=record))
+            assert tuple(await session.find_many(fixture_table, selection)) == (record,)
     finally:
         await runtime.shutdown()

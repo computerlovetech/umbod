@@ -12,7 +12,7 @@ from umbod.core.persistence import (
     TransactionMode,
     UpsertCommand,
 )
-from tests.umbod.core.persistence.contract_support import SampleKey, row, table
+from tests.support.persistence_contracts import SampleKey, row, table
 
 
 @pytest.mark.asyncio

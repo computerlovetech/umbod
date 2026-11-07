@@ -99,14 +99,30 @@ def test_fresh_process_uvicorn_serves_mcp_public_health(tmp_path: Path) -> None:
     program = '''
 import asyncio
 import socket
+from dataclasses import replace
 import httpx
 import uvicorn
 import umbod.config
+import umbod.hosting.applications as applications
+from umbod.mcp.context import PublicAppConfig
+from umbod.mcp.runtime_options import StoreBackedConnectorRuntimeStateSourceStrategy
+
+configured_loader = applications.load_configured_public_app_config
+
+async def load_memory_config(settings: umbod.config.AppConfig) -> PublicAppConfig:
+    config = await configured_loader(settings)
+    return replace(
+        config, configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(),
+        api_base_url=None,
+    )
+
+applications.load_configured_public_app_config = load_memory_config
 
 async def verify() -> None:
     settings = umbod.config.AppConfig.model_validate({
         "mcp": {"auth_mode": "none", "metrics_enabled": False, "messaging_transport": "sql"},
-        "connector_store": {"type": "sqlite", "sqlite_path": "backend.sqlite3"},
+        "connector_store": {"type": "inmemory"},
+        "telemetry_analytics": {"enabled": False},
     })
     umbod.config.load_server_app_config = lambda path: settings
     with socket.socket() as listener:

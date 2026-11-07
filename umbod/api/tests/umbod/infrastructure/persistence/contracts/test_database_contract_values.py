@@ -14,7 +14,7 @@ from umbod.core.persistence import (
     Unordered,
     UpsertCommand,
 )
-from tests.umbod.core.persistence.contract_support import ScalarKey, ScalarRow, ScalarValuesResult, scalar_table
+from tests.support.persistence_contracts import ScalarKey, ScalarRow, ScalarValuesResult, scalar_table
 
 
 @pytest.mark.parametrize("number", [-(2**63), 2**63 - 1])

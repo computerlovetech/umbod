@@ -1,7 +1,7 @@
 import asyncio
 from umbod.mcp.telemetry import McpTelemetryDependencies
 from umbod.mcp.telemetry.composition import create_configured_mcp_telemetry
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
@@ -22,6 +22,8 @@ from umbod.hosting import (
 )
 from umbod.hosting import applications
 from umbod.mcp import public_app
+from umbod.mcp.context import PublicAppConfig
+from umbod.mcp.runtime_options import StoreBackedConnectorRuntimeStateSourceStrategy
 
 
 class OwnerVerifier:
@@ -47,7 +49,8 @@ def settings(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppConfig:
     return AppConfig.model_validate({
         "rest": {"metrics_enabled": False},
         "mcp": {"metrics_enabled": False, "auth_mode": "none", "messaging_transport": "sql"},
-        "connector_store": {"type": "sqlite", "sqlite_path": str(tmp_path / "backend.sqlite3")},
+        "connector_store": {"type": "inmemory"},
+        "telemetry_analytics": {"enabled": False},
         "admin_authentication": {
             "mode": "jwt", "membership_claim": "groups",
             "required_membership": "owners",
@@ -88,7 +91,17 @@ async def test_actual_mcp_app_serves_health_and_enters_lifespan(
         shutdown.side_effect = runtime.shutdown
         return SimpleNamespace(database=runtime.database, readiness=runtime.readiness, shutdown=shutdown)
 
+    configured_loader = applications.load_configured_public_app_config
+
+    async def load_memory_config(selected_settings: AppConfig) -> PublicAppConfig:
+        config = await configured_loader(selected_settings)
+        return replace(
+            config, configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(),
+            api_base_url=None,
+        )
+
     monkeypatch.setattr(public_app.ConfiguredPersistenceRuntimeProvider, "create", create_persistence)
+    monkeypatch.setattr(applications, "load_configured_public_app_config", load_memory_config)
     app = await create_mcp_app(settings, auth_provider=None, group_permission_runtime_state=None, invocation_log_sink=None)
     shutdown.assert_not_awaited()
     async with app.router.lifespan_context(app):

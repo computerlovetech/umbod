@@ -2,7 +2,6 @@ from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
 
 import pytest
 from fastapi import FastAPI, Request
@@ -10,7 +9,7 @@ from fastapi.testclient import TestClient
 from starlette.middleware import Middleware
 from starlette.routing import Mount
 
-from umbod.config import AppConfig, InMemoryConnectorStoreConfig, PersistenceConfig, SQLiteConnectorStoreConfig
+from umbod.config import AppConfig, InMemoryConnectorStoreConfig, PersistenceConfig
 from umbod.core.callers import AuthenticationProvenance, CallerContext
 from umbod.core.filesystem import Permission, Principal, PrincipalType, RootBootstrapGrant, RootBootstrapSpec
 from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider, create_root_provisioning
@@ -50,10 +49,7 @@ def filesystem_upload_max_bytes(request: pytest.FixtureRequest) -> int:
 
 
 @pytest.fixture
-def filesystem_persistence_config(request: pytest.FixtureRequest) -> PersistenceConfig:
-    if getattr(request, "param", "inmemory") == "sqlite":
-        database_path = cast(Path, request.getfixturevalue("isolated_connector_store_database"))
-        return SQLiteConnectorStoreConfig(sqlite_path=str(database_path))
+def filesystem_persistence_config() -> InMemoryConnectorStoreConfig:
     return InMemoryConnectorStoreConfig()
 
 

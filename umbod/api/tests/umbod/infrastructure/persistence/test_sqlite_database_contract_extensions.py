@@ -5,7 +5,7 @@ from umbod.infrastructure.persistence.sqlite.factories import create_unpooled_sq
 from pathlib import Path
 import pytest
 from umbod.core.persistence import AllFields, Equals, Fields, GeneratedIntegerKeyInsertCommand, InsertCommand, NoFilter, PersistenceDecodingError, Query, TransactionMode, Unordered, UpsertCommand
-from tests.umbod.core.persistence.contract_support import CanonicalKey, CanonicalRow, GeneratedRow, SampleDocument, SampleKey, ScalarKey, ScalarRow, ScalarValuesResult, canonical_table, generated_table, row, scalar_table, serialized_claim_observations, table
+from tests.support.persistence_contracts import CanonicalKey, CanonicalRow, GeneratedRow, SampleDocument, SampleKey, ScalarKey, ScalarRow, ScalarValuesResult, canonical_table, generated_table, row, scalar_table, serialized_claim_observations, table
 
 @pytest.mark.asyncio
 async def test_sqlite_persists_across_database_instances(tmp_path: Path) -> None:

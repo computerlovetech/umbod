@@ -18,7 +18,7 @@ from umbod.core.persistence import (
     TransactionMode,
     UpsertCommand,
 )
-from tests.umbod.core.persistence.contract_support import SampleKey, SampleRow, row, table
+from tests.support.persistence_contracts import SampleKey, SampleRow, row, table
 
 
 @dataclass(frozen=True)

@@ -9,7 +9,7 @@ from umbod.core.persistence import AllFields, NoFilter, OrderBy, Query
 from umbod.infrastructure.persistence.sqlite.factories import create_unpooled_sqlite_database
 from tests.persistence_runtime import prepared_sqlite_runtime
 from tests.support.persistence_processes import claim_and_create_in_process
-from tests.umbod.core.persistence.contract_support import row, table
+from tests.support.persistence_contracts import row, table
 
 
 @pytest.mark.asyncio

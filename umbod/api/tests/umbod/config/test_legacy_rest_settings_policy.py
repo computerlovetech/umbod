@@ -1,6 +1,7 @@
 from pytest import MonkeyPatch, raises
 
 from umbod.config import (
+    AppConfig,
     OperatorSettings,
     build_app_config,
     load_app_config_without_env_file,
@@ -8,7 +9,7 @@ from umbod.config import (
 
 
 
-def _config(monkeypatch: MonkeyPatch, **env: str):
+def _config(monkeypatch: MonkeyPatch, **env: str) -> AppConfig:
     for key, value in env.items():
         monkeypatch.setenv(key, value)
     return build_app_config(OperatorSettings(_env_file=None))

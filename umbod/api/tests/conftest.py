@@ -1,5 +1,3 @@
-import asyncio
-from collections.abc import Generator
 from pathlib import Path
 from uuid import uuid4
 
@@ -28,16 +26,3 @@ def isolated_connector_store_directory(tmp_path_factory: pytest.TempPathFactory)
 @pytest.fixture
 def isolated_connector_store_database(isolated_connector_store_directory: Path) -> Path:
     return isolated_connector_store_directory / f"{uuid4().hex}.sqlite3"
-
-
-@pytest.fixture
-def prepared_connector_store_database(
-    isolated_connector_store_database: Path,
-) -> Generator[Path, None, None]:
-    from tests.persistence_runtime import prepared_sqlite_runtime
-
-    runtime = asyncio.run(prepared_sqlite_runtime(isolated_connector_store_database))
-    try:
-        yield isolated_connector_store_database
-    finally:
-        asyncio.run(runtime.shutdown())
