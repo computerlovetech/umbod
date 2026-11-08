@@ -88,7 +88,7 @@ def test_mcp_command_defaults_to_separate_listeners_with_metrics_and_clean_shutd
         "UMBOD_MCP_ADMINISTRATOR_PORT": str(admin_port),
         "UMBOD_MCP_ADMINISTRATOR_BASE_URL": origins[1],
         "UMBOD_TELEMETRY_ANALYTICS_ENABLED": "false",
-        "UMBOD_CONNECTOR_STORE": "sqlite",
+        "UMBOD_CONNECTOR_STORE": "inmemory",
         "UMBOD_CONNECTOR_DEPLOYMENT_CONFIGURATION_PATH": str(declaration),
         "UMBOD_DATA_DIR": str(tmp_path / "data"),
         "LISTENER_TEST_PID_PATH": str(pids),
