@@ -47,7 +47,7 @@ tags:
 - [AdminSplitWorkspace](src/lib/components/admin/shared/AdminSplitWorkspace.svelte) — Responsive master/detail surface; use for a labelled selector sidebar and detail pane across workspace features.
 - [CapabilityCatalogGrid](src/lib/components/admin/shared/CapabilityCatalogGrid.svelte) — Responsive list grid; use to arrange capability cards consistently, supplying list items as content.
 - [ScrollableToolCatalog](src/lib/components/admin/shared/ScrollableToolCatalog.svelte) — Height-bounded tool-list region; use for independently scrolling tool catalogues with a stable scrollbar gutter.
-- [WorkspaceShell](src/lib/components/shared/workspace/WorkspaceShell.svelte) — Application navigation, account, and logout frame; use for top-level workspace sections rather than a generic content container.
+- [WorkspaceShell](src/lib/components/shared/workspace/WorkspaceShell.svelte) — Contextual sidebar, optional section heading and return link, account and logout frame; parents own destinations and eligibility.
 - [AccountPicture](src/lib/components/header/AccountPicture.svelte) — Account image with accessible placeholder; use for consistent user identity imagery in headers and navigation.
 
 ## Connector and catalogue presentation
@@ -84,7 +84,7 @@ tags:
 
 - [Getting started composition](src/lib/components/getting-started/README.md) — Feature-owned harness onboarding and personal-token workflows; reuse its neutral controls, not the complete page.
 
-- [Log analytics composition](src/lib/components/admin/analytics/README.md) — Feature-owned query form and result table; excluded from reusable controls because it owns administrator analytics workflows.
+- [Log analytics composition](src/lib/components/admin/analytics/README.md) — Feature-owned reports with session drill-down and a custom explorer; excluded because it owns administrator analytics workflows.
 
 - [Files compositions](src/lib/components/files/README.md) — Feature-owned sharing, rename, move and upload dialogs; excluded from reusable controls because they own files workflows.
 

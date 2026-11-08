@@ -25,8 +25,8 @@ describe('persistent group permissions layout', () => {
       { label: 'Connectors', href: '/admin/group-permissions/connectors', current: activeTab === 'connectors' ? 'page' : null },
       { label: 'Filesystem', href: '/admin/group-permissions/filesystem', current: activeTab === 'filesystem' ? 'page' : null }
     ]);
-    const sidebar = document.querySelector('nav[aria-label="Workspace navigation"]')!;
-    expect([...sidebar.querySelectorAll('a[aria-current="page"]')].map((link) => link.textContent)).toEqual(['Group permissions']);
+    const sidebar = document.querySelector('nav[aria-label="Administration navigation"]')!;
+    expect([...sidebar.querySelectorAll('a[aria-current="page"]')].map((link) => link.textContent.trim())).toEqual(['Group permissions']);
     expect(body).toContain('Active permission editor');
     expect(document.querySelectorAll('aside[aria-label="Groups"]')).toHaveLength(1);
   });

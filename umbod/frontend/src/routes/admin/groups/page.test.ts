@@ -5,7 +5,7 @@ import { load } from './+page';
 import GroupsPage from './+page.svelte';
 import { publicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
 import { AuthenticationRequiredError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
-import { workspaceNavigation } from '$lib/workspace/navigation';
+import { administrationNavigation, workspaceNavigation } from '$lib/workspace/navigation';
 
 vi.mock('$app/state', () => ({ navigating: { to: null, from: null }, page: { url: new URL('https://umbod.test/admin/groups') } }));
 afterEach((): void => { vi.restoreAllMocks(); });
@@ -35,8 +35,8 @@ describe('groups route', () => {
     document.body.innerHTML = body;
     expect(document.querySelector('h1')?.textContent).toBe('Groups');
     expect(body).not.toContain('admin-eyebrow');
-    expect(document.querySelector('nav[aria-label="Workspace navigation"] a[aria-current="page"]')?.getAttribute('href')).toBe('/admin/groups');
+    expect(document.querySelector('nav[aria-label="Administration navigation"] a[aria-current="page"]')?.getAttribute('href')).toBe('/admin/groups');
     expect(workspaceNavigation(false).some((item) => item.href === '/admin/groups')).toBe(false);
-    expect(workspaceNavigation(true).some((item) => item.href === '/admin/groups')).toBe(true);
+    expect(administrationNavigation.some((item) => item.href === '/admin/groups')).toBe(true);
   });
 });

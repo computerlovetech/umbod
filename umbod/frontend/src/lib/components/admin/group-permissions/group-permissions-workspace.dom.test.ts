@@ -26,8 +26,9 @@ describe('persistent group permissions composition', () => {
     await vi.waitFor(() => expect(state.connectors?.editorStatus).toBe('ready'));
     component = mount(WorkspaceTestHarness, { target: document.body, props: { state, get tab(): GroupPermissionsTab { return inputs.get('tab')!; } } });
     flushSync();
-    const selectors = ['.workspace-shell', '[aria-label="Workspace navigation"]', '.page-header', '.permission-tabs', '.admin-split-workspace', 'aside[aria-label="Groups"]', '.groups', '.group-header'];
+    const selectors = ['.workspace-shell', '[aria-label="Administration navigation"]', '.page-header', '.permission-tabs', '.admin-split-workspace', 'aside[aria-label="Groups"]', '.groups', '.group-header'];
     const nodes = selectors.map((selector) => document.querySelector(selector));
+    for (const node of nodes) expect(node).not.toBeNull();
     const firstCheckbox = document.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
     firstCheckbox.click();
     await settle();

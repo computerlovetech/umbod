@@ -4,24 +4,26 @@ import type { LogCountSource } from './port';
 import type { LogCountQuery, LogCountResponse } from './domain/schemas';
 import { QueryDraft, dimensionLabels } from './query-draft.svelte';
 import { FilterChoices } from './filter-choices.svelte';
+import { reportOptions, reports, reportValue, resolveReport, type ReportId } from './reports';
 
 type ReadonlyValue<T> = T extends object ? { readonly [Key in keyof T]: ReadonlyValue<T[Key]> } : T;
 
 interface Submission {
+  report: ReportId;
   query: LogCountQuery;
   fingerprint: string;
 }
 
-interface SubmittedResult {
-  query: LogCountQuery;
+interface SubmittedResult extends Submission {
   response: LogCountResponse;
-  fingerprint: string;
 }
 
 const detailSchema = z.object({ detail: z.string() });
 
 export class AnalyticsState {
   readonly draft = new QueryDraft();
+  readonly reportRange = new QueryDraft();
+  private reportValue = $state<ReportId>('tools');
   readonly choices: FilterChoices;
   private resultValue = $state.raw<SubmittedResult | undefined>();
   private pendingValue = $state(false);
@@ -37,6 +39,36 @@ export class AnalyticsState {
     this.choices = new FilterChoices(this.draft, source, now, this.loseAccess);
   }
 
+  get report(): ReportId { return this.reportValue; }
+  get custom(): boolean { return this.report === 'custom'; }
+  get formDraft(): QueryDraft { return this.custom ? this.draft : this.reportRange; }
+  get fingerprint(): string { return JSON.stringify([this.report, this.custom ? this.draft.fingerprint : this.reportRange.fingerprint]); }
+  get narrowedSession(): string | undefined {
+    return this.submittedReport ? this.resultValue?.query.filters.find((filter) => filter.dimension === 'session_id')?.values[0] : undefined;
+  }
+  isSessionGroup(group: ReadonlyValue<LogCountResponse['rows'][number]['groups'][number]>): boolean {
+    return this.submittedReport !== undefined && group.dimension === 'session_id' && group.value.kind === 'present' && group.value.value !== '';
+  }
+  get submittedCustom(): boolean { return this.resultValue?.report === 'custom'; }
+  private get submittedReport(): typeof reports[keyof typeof reports] | undefined {
+    const report = this.resultValue?.report;
+    return report && report !== 'custom' ? reports[report] : undefined;
+  }
+  get submittedFilters(): ReadonlyArray<ReadonlyValue<LogCountQuery['filters'][number]>> {
+    const filters = this.resultValue?.query.filters ?? [];
+    return this.submittedCustom ? filters : filters.filter((filter) => filter.dimension !== 'activity_kind');
+  }
+  get resultLabel(): string { return this.submittedReport?.label ?? 'Results'; }
+  get countLabel(): string { return this.submittedReport?.countLabel ?? 'Log count'; }
+  get explanation(): string { return this.submittedReport?.explanation ?? ''; }
+  formatValue(dimension: LogCountQuery['group_by'][number], value: string): string { return this.submittedCustom ? value : reportValue(dimension, value); }
+  setReport(value: string): void {
+    if (reportOptions.some((option) => option.value === value)) {
+      this.reportValue = value as ReportId;
+      if (!this.custom) this.choices.close();
+    }
+  }
+
   get result(): ReadonlyValue<SubmittedResult> | undefined { return this.resultValue; }
   get tableRows(): ReadonlyArray<ReadonlyValue<LogCountResponse['rows'][number]>> {
     return this.resultValue?.response.rows ?? [];
@@ -48,7 +80,7 @@ export class AnalyticsState {
   get error(): string { return this.errorValue; }
   get validation(): string { return this.validationValue; }
   get accessLost(): boolean { return this.accessLostValue; }
-  get changed(): boolean { return this.resultValue !== undefined && this.draft.fingerprint !== this.resultValue.fingerprint; }
+  get changed(): boolean { return this.resultValue !== undefined && this.fingerprint !== this.resultValue.fingerprint; }
   get total(): number { return this.resultValue?.response.rows.reduce((total, row) => total + row.count, 0) ?? 0; }
   get groupCount(): number {
     if (this.total === 0) return 0;
@@ -67,12 +99,12 @@ export class AnalyticsState {
     this.validationValue = '';
     let query: LogCountQuery;
     try {
-      query = this.draft.resolve(this.now());
+      query = this.report === 'custom' ? this.draft.resolve(this.now()) : resolveReport(this.report, this.reportRange.resolveTimeRange(this.now()));
     } catch (failure) {
       this.validationValue = failure instanceof Error ? failure.message : 'Check your query settings.';
       return;
     }
-    await this.submit({ query, fingerprint: this.draft.fingerprint });
+    await this.submit({ query, fingerprint: this.fingerprint, report: this.report });
   }
 
   async previous(): Promise<void> {
@@ -87,16 +119,42 @@ export class AnalyticsState {
     if (!this.pending && this.failedSubmission) await this.submit(this.failedSubmission);
   }
 
+  async narrowToSession(session: string): Promise<void> {
+    if (session !== '') await this.changeSessionScope(session);
+  }
+
+  async allSessions(): Promise<void> {
+    if (this.narrowedSession !== undefined) await this.changeSessionScope(undefined);
+  }
+
+  private async changeSessionScope(session: string | undefined): Promise<void> {
+    const result = this.resultValue;
+    if (!result || !this.submittedReport || this.pending) return;
+    await this.submit({
+      query: {
+        ...result.query,
+        filters: [
+          ...result.query.filters.filter((filter) => filter.dimension !== 'session_id'),
+          ...(session === undefined ? [] : [{ dimension: 'session_id' as const, values: [session] }])
+        ],
+        pagination: { limit: 100, offset: 0 }
+      },
+      report: result.report,
+      fingerprint: result.fingerprint
+    });
+  }
+
   private async navigate(change: number): Promise<void> {
     const result = this.resultValue;
     if (!result) return;
     await this.submit({
       query: { ...result.query, pagination: { limit: 100, offset: result.query.pagination.offset + change } },
+      report: result.report,
       fingerprint: result.fingerprint
     });
   }
 
-  private async submit({ query, fingerprint }: Submission): Promise<void> {
+  private async submit({ query, fingerprint, report }: Submission): Promise<void> {
     if (this.disposed || this.accessLost) return;
     this.failedSubmission = undefined;
     this.validationValue = '';
@@ -108,10 +166,10 @@ export class AnalyticsState {
     try {
       const response = await this.source.query(query, this.controller.signal);
       if (this.disposed || generation !== this.generation) return;
-      this.resultValue = { query, response, fingerprint };
+      this.resultValue = { query, response, fingerprint, report };
     } catch (failure) {
       if (this.disposed || generation !== this.generation) return;
-      this.failedSubmission = { query, fingerprint };
+      this.failedSubmission = { query, fingerprint, report };
       if (failure instanceof AuthenticationRequiredError || (failure instanceof HttpError && [401, 403].includes(failure.status))) {
         this.loseAccess();
       } else if (failure instanceof HttpError && failure.status === 503) {

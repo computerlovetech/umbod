@@ -18,8 +18,8 @@ class LogCountRequest(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     time_range: TimeRange
-    filters: tuple[DimensionFilter, ...]
-    group_by: tuple[LogDimension, ...]
+    filters: Annotated[tuple[DimensionFilter, ...], Field(max_length=len(LogDimension))]
+    group_by: Annotated[tuple[LogDimension, ...], Field(max_length=len(LogDimension))]
     bucketing: Annotated[NoTimeBuckets | FixedTimeBuckets, Field(discriminator="kind")]
     pagination: PaginationQuery
 

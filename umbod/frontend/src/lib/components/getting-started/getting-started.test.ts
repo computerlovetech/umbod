@@ -15,7 +15,7 @@ describe('unified Getting started page', () => {
   test.each([true, false])('is available in the shared navigation with administration=%s', (administration): void => {
     const items = workspaceNavigation(administration);
     expect(items.filter((item) => item.id === 'gettingStarted')).toEqual([
-      { id: 'gettingStarted', label: 'Getting started', href: '/getting-started' }
+      { id: 'gettingStarted', label: 'Getting started', href: '/getting-started', icon: 'gettingStarted' }
     ]);
     expect(items.some((item) => item.href.includes('mcp-setup'))).toBe(false);
   });

@@ -19,7 +19,7 @@ description: "OTLP HTTP JSON and protobuf ingestion for logs, metrics and traces
 - [responses.py](./responses.py) — Encoding-matched OTLP success and safe status responses.
 - [routes.py](./routes.py) — Ingestion coordination.
 - [validation.py](./validation.py) — OTLP JSON and binary protobuf validation with canonical payload conversion.
-- [normalization.py](./normalization.py) — OTLP log projection into ownerless analytical records.
+- [normalization.py](./normalization.py) — Privacy-limited OTLP extraction and canonical activity enrichment into ownerless analytical records.
 
 # Related links
 

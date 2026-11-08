@@ -130,7 +130,7 @@ Concrete drivers, query compilation, schema preparation and connections live und
 
 `POST /api/admin/telemetry/log-counts` returns typed count rows through the configured analytics reader. It requires administrator authentication, not the ingestion credential. Instance scope is constructed by the server; requests cannot supply a scope or choose owners. Cookie-bearing browser requests require the trusted Origin and `X-Umbod-Web-Request: 1` protections used by other administrator operations.
 
-All request fields are required: `time_range` with aware `start` and `end`, `filters` with dimension and string values, ordered `group_by`, `bucketing` with kind `none` or kind `fixed` and minute/hour/day width, and `pagination` with required strict integer `limit` from 1 to 1,000 and `offset` from 0 to 9,007,199,254,740,991. Booleans, numeric strings and fractional values are rejected. Filters and grouping dimensions must be unique; each filter has a nonempty array of unique string values, including an empty string when explicitly selected. Supported dimensions are `source`, `event_name`, `severity`, `session_id` and `tool_name`.
+All request fields are required: `time_range` with aware `start` and `end`, `filters` with dimension and string values, ordered `group_by`, `bucketing` with kind `none` or kind `fixed` and minute/hour/day width, and `pagination` with required strict integer `limit` from 1 to 1,000 and `offset` from 0 to 9,007,199,254,740,991. Booleans, numeric strings and fractional values are rejected. Filters and grouping dimensions must be unique; each filter has a nonempty array of unique string values, including an empty string when explicitly selected. Supported dimensions are `source`, `event_name`, `severity`, `session_id`, `tool_name`, `activity_kind` and `outcome`.
 
 Responses contain `rows` with `groups`, `count` and `bucket`, plus `has_more` indicating whether another aggregate row follows the page. No query-wide totals are returned. Each group identifies its dimension and an explicit missing or present string value. Buckets identify either no bucketing or their UTC start. Successful, validation and known backend-error responses are not cacheable. Invalid queries return 422; disabled or unavailable analytics returns 503 without backend diagnostics or partial counts. Administrator authentication and authorization failures retain 401/403 behavior.
 
@@ -151,11 +151,32 @@ The API host owns shared analytics startup and shutdown independently of applica
 
 ### Normalized log fields
 
-Analytics stores occurrence time, trusted ownership state and the five supported dimensions, not log bodies or arbitrary attributes. Occurrence time uses `timeUnixNano`, then `observedTimeUnixNano`, then the server receipt time. Integer nanoseconds are reduced to integer microseconds without floating-point conversion.
+Analytics stores occurrence time, trusted ownership state and the seven supported dimensions, not log bodies or arbitrary attributes. Occurrence time uses `timeUnixNano`, then `observedTimeUnixNano`, then the server receipt time. Integer nanoseconds are reduced to integer microseconds without floating-point conversion.
 
 Source comes from resource `service.name`. Event name uses the log `eventName`, falling back to string attribute `event.name`. Severity uses `severityText`; numeric-only severities remain missing. Session uses the first present string attribute among `session.id`, `session_id`, `conversation.id`, `conversation_id` and `mcp.session.id`. Tool uses `tool.name`, `tool_name` and `mcp.tool.name` in that order. Duplicate attribute keys use the last occurrence; nonstring values are missing. Empty string attributes remain distinct from missing fields.
 
 All records received through shared or personal ingestion credentials remain unowned. Client-provided identity attributes never populate trusted ownership. Owner-scoped queries therefore exclude these records until a trusted ownership mechanism is introduced.
+
+### Normalized activity fields
+
+A small producer mapping enriches recognized logs with `activity_kind` and, for completed tools, `outcome`. Original source, event, tool, session and severity dimensions remain unchanged. Unknown producers and unrelated events remain queryable without inferred enrichment.
+
+| Producer event | Activity kind | File-tool classification |
+| --- | --- | --- |
+| `claude_code.tool_result` | `tool_call` | Exact `Read` becomes `file_read`; `Edit` and `Write` become `file_edit` |
+| `claude_code.skill_activated` | `skill_activation` | None |
+| `codex.tool_result` | `tool_call` | Native `apply_patch` becomes `file_edit`; shell execution is not classified |
+| `codex.skill_invocation` | `skill_activation` | None |
+
+Qualified event names identify the supported format even when `service.name` is customized. Claude's bare `tool_result` and `skill_activated` attributes are recognized only for sources `claude-code` and `claude-code-desktop`. The existing `codex` source with bare `tool_result` is retained as a legacy convention; it is not the current namespaced Codex producer contract. Bare names from other sources are not classified.
+
+Completed tools receive `outcome` of `success`, `failure` or `unknown` from the explicit `success` attribute. OTLP boolean values and exact strings `true` and `false` are supported. Missing or malformed values remain `unknown`; INFO, WARNING and ERROR severity do not determine execution outcome. Permission decisions, API requests and skill-file reads do not become completed tools or skill activations by inference.
+
+Each input record produces one analytics record. File activity kinds are tool-call subtypes, so the Tool calls report filters all three tool kinds without duplicating records. File reports count calls, not distinct files. Skill reports count activation records, not distinct skills or successful task completions. Arguments, file paths and skill names are not retained for these reports.
+
+The version-2 analytics schema adds the two nullable dimensions. Existing recognized records are classified from their retained source, event and tool fields during the transactional version-1 upgrade. Historical Codex `apply_patch` records remain generic `tool_call` records because native versus external tool provenance was not retained. Historical tool outcomes become `unknown` because their result attributes were not stored. Unrecognized history remains unchanged; the migration does not import historical stdout or recover discarded attributes.
+
+Mappings follow [Claude Code monitoring](https://code.claude.com/docs/en/monitoring-usage), the [Codex tool-result producer](https://github.com/openai/codex/blob/main/codex-rs/otel/src/tool_result.rs), the [Codex skill-invocation producer](https://github.com/openai/codex/blob/main/codex-rs/otel/src/skill_invocation.rs) and its [native patch-tool definition](https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/handlers/apply_patch_spec.rs). These contracts describe supported formats, not proof that a deployed client version exports every event. Missing activity is not a measured zero, and retransmitted exports can inflate all counts.
 
 ## Sensitive data
 

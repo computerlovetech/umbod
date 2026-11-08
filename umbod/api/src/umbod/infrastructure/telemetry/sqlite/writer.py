@@ -43,8 +43,8 @@ class SqliteAnalyticsWriter:
             await connection.execute("BEGIN")
             await connection.executemany(
                 "INSERT INTO analytics_logs "
-                "(occurred_at_us, owner_id, source, event_name, severity, session_id, tool_name) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "(occurred_at_us, owner_id, source, event_name, severity, session_id, tool_name, activity_kind, outcome) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 rows,
             )
             await connection.commit()

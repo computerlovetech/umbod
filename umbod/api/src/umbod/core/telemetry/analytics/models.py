@@ -39,6 +39,8 @@ class LogDimension(str, Enum):
     SEVERITY = "severity"
     SESSION_ID = "session_id"
     TOOL_NAME = "tool_name"
+    ACTIVITY_KIND = "activity_kind"
+    OUTCOME = "outcome"
 
 
 class BucketWidth(str, Enum):
@@ -103,8 +105,8 @@ class PaginationQuery(AnalyticsModel):
 class LogCountQuery(AnalyticsModel):
     scope: Annotated[InstanceScope | OwnersScope, Field(discriminator="kind")]
     time_range: TimeRange
-    filters: tuple[DimensionFilter, ...]
-    group_by: tuple[LogDimension, ...]
+    filters: Annotated[tuple[DimensionFilter, ...], Field(max_length=len(LogDimension))]
+    group_by: Annotated[tuple[LogDimension, ...], Field(max_length=len(LogDimension))]
     bucketing: Annotated[NoTimeBuckets | FixedTimeBuckets, Field(discriminator="kind")]
     pagination: PaginationQuery
 

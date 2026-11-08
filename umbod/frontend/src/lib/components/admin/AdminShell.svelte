@@ -3,7 +3,8 @@
   import type { Snippet } from 'svelte';
   import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
   import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
-  import { workspaceNavigation, workspacePresentation } from '$lib/workspace/navigation';
+  import { administrationNavigation, administrationPresentation } from '$lib/workspace/navigation';
+  import { useWorkspaceNavigationHistory } from '$lib/workspace/navigation-history-context';
 
   type AdminShellActiveItem =
     | 'analytics'
@@ -24,12 +25,13 @@
 
   let { activeItem, accountIdentity, contentWidth = 'default', contentLoading = false, navigationScope, children, logout = logoutNavigation }: AdminShellProps = $props();
 
-  const navigationItems = workspaceNavigation(true);
+  const navigationHistory = useWorkspaceNavigationHistory();
 </script>
 
 <WorkspaceShell
-  {...workspacePresentation}
-  {navigationItems}
+  {...administrationPresentation}
+  navigationItems={administrationNavigation}
+  backLink={{ label: 'Back to workspace', href: navigationHistory?.returnHref ?? '/dashboard' }}
   {activeItem}
   {accountIdentity}
   {contentWidth}

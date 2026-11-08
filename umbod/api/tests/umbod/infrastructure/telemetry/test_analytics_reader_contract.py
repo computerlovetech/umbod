@@ -196,6 +196,35 @@ async def test_filters_combine_or_values_and_dimensions_with_binary_exactness(
 
 
 @pytest.mark.asyncio
+async def test_canonical_tool_union_excludes_skills_and_missing_enrichment(
+    reader_factory: AsyncReaderFactory, query: LogCountQuery,
+) -> None:
+    reader = await reader_factory((
+        _log(None, activity_kind="file_read", outcome="success"),
+        _log(None, activity_kind="file_edit", outcome="failure"),
+        _log(None, activity_kind="tool_call", outcome="unknown"),
+        _log(None, activity_kind="skill_activation"),
+        _log(None, event_name="unrecognized"),
+    ))
+    tool_filter = DimensionFilter(
+        dimension=LogDimension.ACTIVITY_KIND, values=("tool_call", "file_read", "file_edit"),
+    )
+    result = await reader.count_logs(_query(query, filters=(tool_filter,)))
+    assert result == LogCountResult(has_more=False, rows=(_row(3),))
+    failures = await reader.count_logs(_query(query, filters=(
+        tool_filter, DimensionFilter(dimension=LogDimension.OUTCOME, values=("failure",)),
+    )))
+    assert failures == LogCountResult(has_more=False, rows=(_row(1),))
+    outcomes = await reader.count_logs(_query(query, group_by=(LogDimension.OUTCOME,)))
+    assert outcomes == LogCountResult(has_more=False, rows=(
+        _row(2, ((LogDimension.OUTCOME, None),)),
+        _row(1, ((LogDimension.OUTCOME, "failure"),)),
+        _row(1, ((LogDimension.OUTCOME, "success"),)),
+        _row(1, ((LogDimension.OUTCOME, "unknown"),)),
+    ))
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("dimension", list(LogDimension))
 async def test_writer_column_mapping_preserves_missing_empty_and_present_values(
     reader_factory: AsyncReaderFactory,

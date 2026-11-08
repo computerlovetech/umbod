@@ -16,6 +16,7 @@ from umbod.core.telemetry.analytics import (
     PresentDimensionValue,
     UnownedLog,
 )
+from umbod.core.telemetry.analytics.activity import ActivityOutcome, ToolOrigin, classify_activity
 from umbod.rest.telemetry.validation import parse_message
 
 
@@ -80,4 +81,39 @@ def _dimensions(record: LogRecord, resource: dict[str, str]) -> dict[LogDimensio
         dimensions[LogDimension.EVENT_NAME] = record.event_name
     if record.severity_text:
         dimensions[LogDimension.SEVERITY] = record.severity_text
+    dimensions.update(classify_activity(
+        source=dimensions.get(LogDimension.SOURCE, ""),
+        event=dimensions.get(LogDimension.EVENT_NAME, ""),
+        tool=dimensions.get(LogDimension.TOOL_NAME, ""),
+        outcome=_outcome(record.attributes),
+        tool_origin=_tool_origin(attributes),
+    ))
     return dimensions
+
+
+def _outcome(attributes: Iterable[KeyValue]) -> ActivityOutcome:
+    outcome: ActivityOutcome = "unknown"
+    for attribute in attributes:
+        if attribute.key != "success":
+            continue
+        outcome = "unknown"
+        value_type = attribute.value.WhichOneof("value")
+        if value_type == "bool_value":
+            outcome = "success" if attribute.value.bool_value else "failure"
+        elif value_type == "string_value":
+            if attribute.value.string_value == "true":
+                outcome = "success"
+            elif attribute.value.string_value == "false":
+                outcome = "failure"
+    return outcome
+
+
+def _tool_origin(attributes: dict[str, str]) -> ToolOrigin:
+    external = any(
+        attributes.get(key, "").strip()
+        for key in ("mcp_server", "mcp_server_origin", "mcp.server.name", "mcp.tool.name")
+    ) or any(
+        attributes.get(key) in ("mcp", "custom")
+        for key in ("tool_type", "tool.type", "tool_kind", "tool.kind", "tool_origin", "tool_namespace")
+    )
+    return "external" if external else "native"

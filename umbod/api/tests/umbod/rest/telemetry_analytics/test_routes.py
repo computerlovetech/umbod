@@ -16,6 +16,20 @@ from .conftest import AnalyticsHttp
 BASE = "/api/admin/telemetry/log-counts"
 
 
+def test_all_seven_dimensions_are_accepted_for_filters_and_grouping(
+    analytics_http: AnalyticsHttp, query_body: dict[str, object],
+) -> None:
+    dimensions = ["source", "event_name", "severity", "session_id", "tool_name", "activity_kind", "outcome"]
+    response = analytics_http.client.post(BASE, json=query_body | {
+        "filters": [{"dimension": dimension, "values": ["value"]} for dimension in dimensions],
+        "group_by": dimensions,
+    })
+    assert response.status_code == 200
+    assert response.json() == {"has_more": False, "rows": []}
+    assert len(analytics_http.reader.queries[0].filters) == 7
+    assert len(analytics_http.reader.queries[0].group_by) == 7
+
+
 def test_instance_count_includes_owned_and_unowned_logs(
     analytics_http: AnalyticsHttp, query_body: dict[str, object],
 ) -> None:

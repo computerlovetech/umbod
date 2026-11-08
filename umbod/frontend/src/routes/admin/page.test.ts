@@ -13,7 +13,7 @@ describe('administration entry', (): void => {
     const links = workspaceNavigation(true);
     expect(links.some((link): boolean => link.id === 'overview' || link.href === '/admin')).toBe(false);
     expect(links.map((link): string => link.href)).toEqual([
-      '/dashboard', '/files', '/getting-started', '/admin/analytics', '/admin/connectors', '/admin/groups', '/admin/group-permissions/connectors', '/admin/instance-configuration'
+      '/dashboard', '/files', '/getting-started', '/admin/connectors'
     ]);
   });
 });

@@ -34,7 +34,7 @@ function content(state: FilesState, folder: NewFolderState, upload: UploadState)
 describe('Files user composition', () => {
   test('Files navigation exists for both regular and administrator workspaces', (): void => {
     for (const allowed of [false, true]) {
-      expect(workspaceNavigation(allowed)).toContainEqual({ id: 'files', label: 'Files', href: '/files' });
+      expect(workspaceNavigation(allowed)).toContainEqual({ id: 'files', label: 'Files', href: '/files', icon: 'files' });
     }
     expect(workspaceNavigation(false).some((item) => item.href.startsWith('/admin'))).toBe(false);
   });

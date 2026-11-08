@@ -12,6 +12,7 @@ export class FilterChoices {
   private openValue = $state(false);
   private dimensionValue = $state<Dimension>('source');
   private searchValue = $state('');
+  private manualSessionValue = $state('');
   private pendingValue = $state('');
   private errorValue = $state('');
   private entries = $state.raw<readonly Choice[]>([]);
@@ -30,6 +31,10 @@ export class FilterChoices {
   get open(): boolean { return this.openValue; }
   get dimension(): Dimension { return this.dimensionValue; }
   get search(): string { return this.searchValue; }
+  get manualSession(): string { return this.manualSessionValue; }
+  get canAddSession(): boolean {
+    return !this.disposed && this.open && this.dimension === 'session_id' && this.manualSession !== '' && !this.draft.filters.session_id.includes(this.manualSession);
+  }
   get pending(): string { return this.pendingValue; }
   get error(): string { return this.errorValue; }
   get stale(): boolean { return this.signature !== undefined && this.signature !== this.timeSignature; }
@@ -56,6 +61,7 @@ export class FilterChoices {
 
   close = (): void => {
     this.openValue = false;
+    this.manualSessionValue = '';
     this.cancel();
     this.entries = [];
     this.signature = undefined;
@@ -68,12 +74,20 @@ export class FilterChoices {
     this.cancel();
     this.dimensionValue = parsed.data;
     this.searchValue = '';
+    this.manualSessionValue = '';
     this.entries = [];
     this.signature = undefined;
     await this.refresh();
   };
 
   setSearch = (value: string): void => { this.searchValue = value; };
+  setManualSession = (value: string): void => { this.manualSessionValue = value; };
+
+  addSession = (): void => {
+    if (!this.canAddSession) return;
+    this.draft.selectFilter('session_id', this.manualSession);
+    this.manualSessionValue = '';
+  };
 
   refresh = async (): Promise<void> => {
     if (this.disposed || !this.open) return;

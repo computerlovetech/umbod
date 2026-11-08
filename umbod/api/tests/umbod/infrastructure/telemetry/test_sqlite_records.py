@@ -21,7 +21,7 @@ async def test_sqlite_analytics_record_columns_survive_runtime_recreation(tmp_pa
     path = tmp_path / "analytics.sqlite3"
     epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
     owner_id = 'owner 雪 "quoted" \\path'
-    values = ("source 雪", 'event "quoted"\\path\nline', "ERROR", "session-1", "")
+    values = ("source 雪", 'event "quoted"\\path\nline', "ERROR", "session-1", "", "tool_call", "failure")
     records = (
         AnalyticsLogRecord(
             occurred_at=epoch - timedelta(microseconds=1),
@@ -60,16 +60,16 @@ async def test_sqlite_analytics_record_columns_survive_runtime_recreation(tmp_pa
         await reader.ensure_ready()
         async with reader.connection() as connection:
             async with connection.execute(
-                "SELECT occurred_at_us, owner_id, source, event_name, severity, session_id, tool_name, "
+                "SELECT occurred_at_us, owner_id, source, event_name, severity, session_id, tool_name, activity_kind, outcome, "
                 "typeof(occurred_at_us), typeof(owner_id), typeof(source), typeof(event_name), "
-                "typeof(severity), typeof(session_id), typeof(tool_name) "
+                "typeof(severity), typeof(session_id), typeof(tool_name), typeof(activity_kind), typeof(outcome) "
                 "FROM analytics_logs ORDER BY occurred_at_us"
             ) as cursor:
                 rows = await cursor.fetchall()
     finally:
         await reader.shutdown()
     assert [tuple(row) for row in rows] == [
-        (-1, owner_id, *values, "integer", "text", "text", "text", "text", "text", "text"),
-        (0, None, None, None, None, None, None, "integer", "null", "null", "null", "null", "null", "null"),
-        (1234567, owner_id, "", "", "", "", "", "integer", "text", "text", "text", "text", "text", "text"),
+        (-1, owner_id, *values, "integer", *("text",) * 8),
+        (0, *(None,) * 8, "integer", *("null",) * 8),
+        (1234567, owner_id, *("",) * 7, "integer", *("text",) * 8),
     ]

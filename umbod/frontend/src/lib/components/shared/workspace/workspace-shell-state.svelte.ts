@@ -1,5 +1,6 @@
 import type { LogoutNavigation } from '$lib/admin/infrastructure/logout';
 
+import type { SidebarTransition } from '$lib/workspace/navigation-history.svelte';
 import type { WorkspaceNavigationItem } from '$lib/workspace/navigation';
 export type { WorkspaceNavigationItem } from '$lib/workspace/navigation';
 
@@ -9,12 +10,20 @@ export interface WorkspaceNavigationContext {
   destinationPath: string | null;
   originPath: string | null;
   navigationScope?: string;
+  hasBackLink?: boolean;
+  sidebarTransition?: SidebarTransition;
 }
 
 export class WorkspaceShellState {
   loggingOut = $state(false);
 
   constructor(private readonly context: () => WorkspaceNavigationContext) {}
+
+  get sidebarTransition(): SidebarTransition {
+    const context = this.context();
+    const entrance = context.hasBackLink ? 'forward' : 'backward';
+    return context.sidebarTransition === entrance ? entrance : null;
+  }
 
   get navigationPending(): boolean {
     const context = this.context();

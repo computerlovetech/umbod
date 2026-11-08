@@ -1,7 +1,7 @@
 import { dimensions, logCountQuerySchema, type Dimension, type LogCountQuery } from './domain/schemas';
 
 export const dimensionLabels: Record<Dimension, string> = {
-  source: 'Source', event_name: 'Event name', severity: 'Severity', session_id: 'Session ID', tool_name: 'Tool name'
+  source: 'Source', event_name: 'Event name', severity: 'Severity', session_id: 'Session ID', tool_name: 'Tool name', activity_kind: 'Activity kind', outcome: 'Outcome'
 };
 export const dimensionOptions = dimensions.map((dimension) => ({ value: dimension, label: dimensionLabels[dimension] }));
 export const rangeOptions = [
@@ -22,7 +22,7 @@ export class QueryDraft {
   private offsetValue = $state('+00:00');
   private bucketValue = $state<BucketWidth>('none');
   private grouping = $state.raw<readonly Dimension[]>(['severity']);
-  private filterValues = $state.raw<Record<Dimension, readonly string[]>>({ source: [], event_name: [], severity: [], session_id: [], tool_name: [] });
+  private filterValues = $state.raw<Record<Dimension, readonly string[]>>({ source: [], event_name: [], severity: [], session_id: [], tool_name: [], activity_kind: [], outcome: [] });
 
   get preset(): RangePreset { return this.presetValue; }
   get start(): string { return this.startValue; }

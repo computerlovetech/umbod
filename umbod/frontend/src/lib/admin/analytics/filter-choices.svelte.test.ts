@@ -111,6 +111,56 @@ describe('existing filter choices', () => {
     expect(state.choices.options).toEqual([{ value: '"Beta"', label: 'Beta (4)' }]);
   });
 
+  it('adds an exact manual session independently of discovery without duplicates or extra requests', async (): Promise<void> => {
+    const { source, state } = setup();
+    state.setReport('custom');
+    state.draft.selectFilter('source', 'client');
+    await state.choices.show();
+    source.failure = new Error('offline');
+    await state.choices.setDimension('session_id');
+    expect(state.choices.error).not.toBe('');
+    expect(state.choices.canAddSession).toBe(false);
+    state.choices.setManualSession(' exact session ');
+    expect(state.choices.canAddSession).toBe(true);
+    state.choices.addSession();
+    expect(state.draft.filters.session_id).toEqual([' exact session ']);
+    expect(state.draft.filters.source).toEqual(['client']);
+    expect(state.choices.manualSession).toBe('');
+    expect(source.queries).toHaveLength(2);
+    state.choices.setManualSession(' exact session ');
+    expect(state.choices.canAddSession).toBe(false);
+    state.choices.addSession();
+    expect(state.draft.filters.session_id).toEqual([' exact session ']);
+    source.failure = undefined;
+    await state.run();
+    expect(source.queries[2].filters).toEqual([{ dimension: 'source', values: ['client'] }, { dimension: 'session_id', values: [' exact session '] }]);
+    state.dispose();
+  });
+
+  it('guards manual session entry after closure, dimension changes and disposal', async (): Promise<void> => {
+    const { state } = setup();
+    state.setReport('custom');
+    await state.choices.show();
+    await state.choices.setDimension('session_id');
+    state.choices.setManualSession('discarded');
+    state.choices.close();
+    expect(state.choices.manualSession).toBe('');
+    state.choices.setManualSession('closed');
+    state.choices.addSession();
+    expect(state.draft.filters.session_id).toEqual([]);
+    await state.choices.show();
+    await state.choices.setDimension('source');
+    expect(state.choices.manualSession).toBe('');
+    state.choices.setManualSession('wrong dimension');
+    state.choices.addSession();
+    expect(state.draft.filters.session_id).toEqual([]);
+    await state.choices.setDimension('session_id');
+    state.dispose();
+    state.choices.setManualSession('disposed');
+    state.choices.addSession();
+    expect(state.draft.filters.session_id).toEqual([]);
+  });
+
   it('requires a valid time range before making a discovery request', async (): Promise<void> => {
     const { source, state } = setup();
     state.draft.setPreset('custom');

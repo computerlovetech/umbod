@@ -30,7 +30,7 @@ describe('independent workspace access', () => {
     await readingAccess;
     expect(access.accountIdentity).toMatchObject({ kind: 'visible', name: 'Alex' });
     expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual([
-      '/dashboard', '/files', '/getting-started', '/admin/analytics', '/admin/connectors', '/admin/groups', '/admin/group-permissions/connectors', '/admin/instance-configuration'
+      '/dashboard', '/files', '/getting-started', '/admin/connectors'
     ]);
     dashboard.dispose();
     access.dispose();

@@ -1,4 +1,5 @@
 import { render } from 'svelte/server';
+import { Window } from 'happy-dom';
 import { createRawSnippet } from 'svelte';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import WorkspaceShell from './WorkspaceShell.svelte';
@@ -82,7 +83,9 @@ describe('workspace shell public interface', () => {
     expect(body).toContain(`aria-busy="${busy}"`);
     expect(body.includes('content-loading active')).toBe(busy);
     expect(body.includes(' inert')).toBe(busy);
-    expect(body).toContain('aria-current="page">Group permissions');
+    const document = new Window().document;
+    document.body.innerHTML = body;
+    expect(document.querySelector('nav a[aria-current="page"]')?.textContent.trim()).toBe('Group permissions');
   });
 
   test.each([

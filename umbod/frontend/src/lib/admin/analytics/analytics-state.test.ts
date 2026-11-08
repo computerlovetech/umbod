@@ -13,7 +13,9 @@ const response: LogCountResponse = { has_more: false, rows: [
 function setup(): { source: InMemoryLogCounts; state: AnalyticsState } {
   const source = new InMemoryLogCounts();
   source.response = response;
-  return { source, state: new AnalyticsState(source, now) };
+  const state = new AnalyticsState(source, now);
+  state.setReport('custom');
+  return { source, state };
 }
 
 describe('log-count query state', () => {
