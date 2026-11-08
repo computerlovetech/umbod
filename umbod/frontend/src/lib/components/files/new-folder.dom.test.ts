@@ -52,6 +52,39 @@ async function setup(): Promise<InMemoryFilesApi> {
 }
 
 describe('new folder action buttons', (): void => {
+  test('focuses the folder name after the native dialog opens', async (): Promise<void> => {
+    vi.spyOn(HTMLDialogElement.prototype, 'showModal').mockImplementation(function (this: HTMLDialogElement): void {
+      this.open = true;
+      const title = this.querySelector<HTMLElement>('[data-dialog-title]');
+      expect(title).not.toBeNull();
+      title!.focus();
+    });
+    await setup();
+    const dialog = document.querySelector('[role="dialog"]');
+    expect(dialog).not.toBeNull();
+    expect(dialog?.getAttribute('aria-modal')).toBe('true');
+    expect(document.getElementById(dialog!.getAttribute('aria-labelledby')!)?.textContent).toBe('New folder');
+    expect(dialog?.querySelector('form[aria-label="New folder"]')).not.toBeNull();
+    expect(document.activeElement).toBe(document.getElementById('folder-name'));
+  });
+
+  test.each(['Cancel', 'Close', 'backdrop'])('%s dismisses the modal without creating a folder', async (label): Promise<void> => {
+    const api = await setup();
+    const create = vi.spyOn(api.filesystem, 'createFolder');
+    const dismiss = label === 'backdrop'
+      ? document.querySelector<HTMLDialogElement>('dialog')
+      : label === 'Close'
+        ? document.querySelector<HTMLButtonElement>('button[aria-label="Close"]')
+        : button(label);
+    expect(dismiss).not.toBeNull();
+    if (label === 'backdrop') dismiss!.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: -10, clientY: -10 }));
+    else dismiss!.click();
+    await tick();
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    await vi.waitFor(() => expect(document.activeElement).toBe(document.getElementById('new-folder-button')));
+    expect(create).not.toHaveBeenCalled();
+  });
+
   test.each(['Create folder', 'Cancel'])('Escape on %s cancels and restores the invoking button', async (label): Promise<void> => {
     const api = await setup();
     const create = vi.spyOn(api.filesystem, 'createFolder');

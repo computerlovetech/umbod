@@ -28,9 +28,10 @@ export class SharingDialogState {
   private location = '';
   private disposed = false;
 
-  constructor(private readonly api: NodeSharingApi, private readonly revoke: (id: string) => void, private readonly recheck: (id: string) => void) {}
+  constructor(private readonly api: NodeSharingApi, private readonly revoke: (id: string) => void, private readonly recheck: (id: string) => void, private readonly label: (node: NodeSummary) => string = (node: NodeSummary): string => node.name || 'Files') {}
 
   get node(): NodeSummary | undefined { return this.target; }
+  get nodeName(): string { return this.target ? this.label(this.target) : 'Files'; }
   get open(): boolean { return this.stage !== 'closed'; }
   get phase(): string { return this.stage; }
   get pending(): boolean { return this.saving; }
@@ -152,7 +153,7 @@ export class SharingDialogState {
       if (!this.current(generation)) return;
       if (view.node_id !== id) throw new Error('Unexpected node access');
       this.accept(view);
-      this.announcement = `Sharing updated for “${this.target.name || 'Files'}”.`;
+      this.announcement = `Sharing updated for “${this.nodeName}”.`;
       this.revoke(id);
       this.recheck(id);
       this.saving = false;

@@ -11,7 +11,27 @@ export class FilesNavigationState {
   private controller: AbortController | undefined;
   private disposed = false;
 
-  constructor(private readonly api: FilesystemApi) {}
+  constructor(private readonly api: FilesystemApi, private readonly personalRoot: () => string | undefined = () => undefined) {}
+
+  get displayItems(): BreadcrumbItem[] {
+    const items = this.path?.items ?? [];
+    const root = this.personalRoot();
+    const index = items.findIndex((item) => item.id === root);
+    return index < 0 ? items : items.slice(index);
+  }
+
+  get displayComplete(): boolean {
+    const first = this.displayItems[0];
+    return this.path?.complete === true || !!first && this.isPersonalRoot(first);
+  }
+
+  private isPersonalRoot(item: BreadcrumbItem): boolean {
+    return item.id === this.personalRoot();
+  }
+
+  private isCanonicalRoot(item: BreadcrumbItem): boolean {
+    return this.path?.complete === true && this.path.items[0].id === item.id;
+  }
 
   reset = (): void => {
     ++this.generation;
@@ -68,25 +88,26 @@ export class FilesNavigationState {
   };
 
   get parent(): BreadcrumbItem | undefined {
-    const parent = this.path?.items.at(-2);
+    const parent = this.displayItems.at(-2);
     return parent?.kind === 'directory' ? parent : undefined;
   }
 
   get atRoot(): boolean {
-    return this.path?.complete === true && this.path.items.length === 1 && this.path.items[0].kind === 'directory';
+    const items = this.displayItems;
+    return items.length === 1 && items[0].kind === 'directory' && (this.isPersonalRoot(items[0]) || this.isCanonicalRoot(items[0]));
   }
 
-  label = (item: BreadcrumbItem): string => this.path?.complete && this.path.items[0].id === item.id ? 'Files' : item.name;
+  label = (item: BreadcrumbItem): string => this.isPersonalRoot(item) ? 'Files' : this.isCanonicalRoot(item) ? 'Shared files' : item.name;
 
-  href = (item: BreadcrumbItem): string => this.path?.complete && this.path.items[0].id === item.id ? '/files' : '/files?node=' + encodeURIComponent(item.id);
+  href = (item: BreadcrumbItem): string => this.isPersonalRoot(item) ? '/files' : '/files?node=' + encodeURIComponent(item.id);
 
   get visibleItems(): BreadcrumbItem[] {
-    const items = this.path?.items ?? [];
+    const items = this.displayItems;
     return items.length > 4 ? [items[0], ...items.slice(-2)] : items;
   }
 
   get omittedAncestors(): BreadcrumbItem[] {
-    const items = this.path?.items ?? [];
+    const items = this.displayItems;
     return items.length > 4 ? items.slice(1, -2) : [];
   }
 

@@ -132,6 +132,6 @@ describe('file deletion presentation', (): void => {
     expect(description?.textContent).not.toMatch(/physical|erase|storage|disk/i);
     expect(dialog?.querySelector('[data-dialog-cancel]')?.textContent).toBe('Cancel');
     expect(dialog?.querySelector('button.admin-shared-button--danger')?.textContent).toBe('Delete file');
-    expect([...window.document.querySelectorAll('button')].map((button) => button.textContent)).toEqual(['Cancel', 'Delete file']);
+    expect([...window.document.querySelectorAll('button')].map((button) => button.getAttribute('aria-label') ?? button.textContent)).toEqual(['Close', 'Cancel', 'Delete file']);
   });
 });

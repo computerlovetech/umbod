@@ -1,7 +1,7 @@
 import { SvelteSet } from 'svelte/reactivity';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { FilesystemApi } from '../api';
-import { fileNameSchema, nodeIdSchema, nodeSummarySchema, type NodeSummary, type UpdateNode } from '../domain/schemas';
+import { fileNameSchema, nodeSummarySchema, type NodeSummary, type UpdateNode } from '../domain/schemas';
 import { FilesNavigationState } from './navigation-state.svelte';
 
 type Availability = 'hidden' | 'loading' | 'allowed' | 'denied' | 'error';
@@ -12,7 +12,7 @@ export class NodeUpdateState {
   private moveAvailability = $state<Availability>('hidden');
   private mode = $state<'rename' | 'move' | undefined>(undefined);
   private name = $state('');
-  private folderId = $state('');
+  private browseTarget: string | undefined;
   private destination = $state.raw<NodeSummary | undefined>(undefined);
   private directories = $state.raw<NodeSummary[]>([]);
   private destinationAllowed = $state(false);
@@ -26,8 +26,8 @@ export class NodeUpdateState {
   private readonly uncertainIds = new SvelteSet<string>();
   readonly navigation: FilesNavigationState;
 
-  constructor(private readonly api: FilesystemApi, private readonly accept: (node: NodeSummary) => void, private readonly reloadNode: () => Promise<void>) {
-    this.navigation = new FilesNavigationState(api);
+  constructor(private readonly api: FilesystemApi, private readonly accept: (node: NodeSummary) => void, private readonly reloadNode: () => Promise<void>, personalRoot: () => string | undefined = () => undefined) {
+    this.navigation = new FilesNavigationState(api, personalRoot);
   }
 
   get canRename(): boolean { return this.renameAvailability === 'allowed'; }
@@ -36,8 +36,8 @@ export class NodeUpdateState {
   get open(): boolean { return this.mode !== undefined; }
   get moving(): boolean { return this.mode === 'move'; }
   get draft(): string { return this.name; }
-  get directFolderId(): string { return this.folderId; }
   get folder(): NodeSummary | undefined { return this.destination; }
+  get destinationName(): string { return this.destination ? this.navigation.label(this.destination) : 'Files'; }
   get folders(): readonly NodeSummary[] { return this.directories; }
   get loading(): boolean { return this.browsing; }
   get pending(): boolean { return this.saving || !!this.current && this.pendingIds.has(this.current.id); }
@@ -56,6 +56,7 @@ export class NodeUpdateState {
     this.moveAvailability = 'hidden';
     this.message = '';
     this.destination = undefined;
+    this.browseTarget = undefined;
     this.directories = [];
     this.destinationAllowed = false;
     this.saving = false;
@@ -125,22 +126,20 @@ export class NodeUpdateState {
   };
 
   changeName = (name: string): void => { if (!this.saving && !this.needsReload) this.name = name; };
-  changeFolderId = (id: string): void => { if (!this.saving) this.folderId = id; };
-  openDirectFolder = async (): Promise<void> => {
-    if (!nodeIdSchema.safeParse(this.folderId).success) { this.message = 'Enter a valid folder ID.'; return; }
-    await this.browse(this.folderId);
+  retryBrowse = async (): Promise<void> => {
+    if (this.browseTarget) await this.browse(this.browseTarget);
   };
 
   browse = async (id: string): Promise<void> => {
     const source = this.current;
     if (!source || this.saving || this.disposed) return;
     const generation = ++this.browseGeneration;
+    this.browseTarget = id;
     this.browsing = true;
     this.destinationAllowed = false;
     this.message = '';
     this.directories = [];
     this.destination = undefined;
-    this.navigation.reset();
     try {
       const folder = await this.api.getNode(id);
       if (this.disposed || generation !== this.browseGeneration) return;
@@ -148,6 +147,7 @@ export class NodeUpdateState {
       this.destination = folder;
       await this.navigation.select(folder);
       if (this.disposed || generation !== this.browseGeneration) return;
+      if (this.navigation.phase !== 'ready') throw new Error('Destination path unavailable');
       const knownInvalid = folder.id === source.id || folder.id === source.parent_id || this.navigation.path?.items.some((item) => item.id === source.id) === true;
       if (!knownInvalid) {
         try {
@@ -163,7 +163,10 @@ export class NodeUpdateState {
       if (this.disposed || generation !== this.browseGeneration) return;
       this.directories = children.filter((node) => node.kind === 'directory' && node.id !== source.id);
     } catch {
-      if (!this.disposed && generation === this.browseGeneration) this.message = 'Could not browse this folder. Retry or enter another folder ID.';
+      if (!this.disposed && generation === this.browseGeneration) {
+        this.destinationAllowed = false;
+        this.message = 'Could not browse this folder. Try again or choose another folder from the path above.';
+      }
     } finally {
       if (!this.disposed && generation === this.browseGeneration) this.browsing = false;
     }

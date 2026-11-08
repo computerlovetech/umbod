@@ -39,8 +39,8 @@ from .config import (
 )
 
 
-def create_filesystem_homes(*, database: Database) -> HomeService:
-    return HomeService(DatabaseHomeTransactions(database))
+def create_filesystem_homes(*, database: Database, resolver: FilesystemIdentityResolver) -> HomeService:
+    return HomeService(resolver, DatabaseHomeTransactions(database))
 
 
 def create_filesystem_access(

@@ -123,6 +123,7 @@ describe('files reads and authoritative navigation', () => {
     const late = deferred<typeof snapshot>();
     const read = vi.spyOn(api.filesystem, 'browse').mockImplementationOnce(() => late.promise);
     const pending = files.load(null);
+    await vi.waitFor(() => expect(read).toHaveBeenCalled());
     const signal = read.mock.calls[0][1];
     files.dispose();
     expect(signal?.aborted).toBe(true);

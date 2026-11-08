@@ -97,6 +97,7 @@ describe('authoritative file navigation', () => {
     const pending = deferred<typeof response>();
     const read = vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(pending.promise);
     const loading = files.load(fileId);
+    await vi.waitFor(() => expect(read).toHaveBeenCalled());
     const signal = read.mock.calls[0][1];
     if (action === 'navigate') await files.load(null);
     else if (action === 'dispose') files.dispose();

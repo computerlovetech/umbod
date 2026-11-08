@@ -2,7 +2,7 @@ from uuid import uuid4
 
 from umbod.core.callers import CallerSnapshot
 
-from ..authorization import PermissionDenied, UnresolvedIdentity, VerifiedIdentityResolver
+from ..authorization import FilesystemIdentityResolver, PermissionDenied, UnresolvedIdentity
 from ..browsing import NodeSummary, summary
 from ..creation.service import require_unowned_unshared_node
 from ..errors import MissingNode, OwnershipNotFound
@@ -14,11 +14,12 @@ from .ports import HomeTransactions
 
 
 class HomeService:
-    def __init__(self, transactions: HomeTransactions) -> None:
+    def __init__(self, resolver: FilesystemIdentityResolver, transactions: HomeTransactions) -> None:
+        self._resolver = resolver
         self._transactions = transactions
 
     async def get_or_provision(self, caller: CallerSnapshot) -> NodeSummary:
-        identity = await VerifiedIdentityResolver().resolve(caller)
+        identity = await self._resolver.resolve(caller)
         if isinstance(identity, UnresolvedIdentity):
             raise PermissionDenied()
         async with self._transactions.transaction() as session:

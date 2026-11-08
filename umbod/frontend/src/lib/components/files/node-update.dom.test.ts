@@ -8,6 +8,8 @@ import { FilesState } from '$lib/files/state/files-state.svelte';
 import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
 import { UploadState } from '$lib/files/state/upload-state.svelte';
 import FilesContent from './FilesContent.svelte';
+import NodeUpdateDialog from './NodeUpdateDialog.svelte';
+import { NodeUpdateState } from '$lib/files/state/node-update-state.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
 let files: FilesState | undefined;
@@ -48,6 +50,29 @@ async function setup(id: string | null, writable = true): Promise<InMemoryFilesA
 }
 
 describe('selected node update controls', (): void => {
+  test('renders only the home-relative destination path and Files label after the home is renamed', async (): Promise<void> => {
+    const api = new InMemoryFilesApi(rootId, filesystemFixture);
+    const state = new NodeUpdateState(api.filesystem, (): void => {}, async (): Promise<void> => {}, () => folderId);
+    try {
+      await api.filesystem.updateNode(folderId, 1, { name: 'Renamed home' });
+      await state.select(await api.filesystem.getNode(fileId), { rename: true, move: true });
+      state.showMove();
+      await state.browse(folderId);
+      const target = document.createElement('div');
+      document.body.append(target);
+      component = mount(NodeUpdateDialog, { target, props: { state } });
+      await tick();
+      const path = document.querySelector('nav[aria-label="Destination path"]')!;
+      expect(path.querySelectorAll('button')).toHaveLength(1);
+      expect(button('Files', path)).toBeDefined();
+      expect(path.textContent).not.toContain('Shared files');
+      expect(document.querySelector('.destination')?.textContent).toBe('Destination: Files');
+      expect(document.querySelector('dialog')?.textContent).not.toContain('Renamed home');
+    } finally {
+      state.dispose();
+    }
+  });
+
   test.each([[folderId, fileId, 'Renamed.txt'], [rootId, folderId, 'Renamed folder']])('renames the row child of %s without changing the parent', async (parentId, childId, name): Promise<void> => {
     const api = await setup(parentId);
     await vi.waitFor(() => expect(files?.rowEditing.controllers.get(childId)?.update.canRename).toBe(true));
@@ -82,11 +107,7 @@ describe('selected node update controls', (): void => {
     button('Move').click();
     await vi.waitFor(() => expect(files?.rowEditing.controllers.get(fileId)?.update.loading).toBe(false));
     await tick();
-    const destination = document.querySelector<HTMLInputElement>('#move-folder-id')!;
-    destination.value = rootId;
-    destination.dispatchEvent(new Event('input', { bubbles: true }));
-    await tick();
-    button('Open folder ID').click();
+    button('Files', document.querySelector('nav[aria-label="Destination path"]')!).click();
     await vi.waitFor(() => expect(files?.rowEditing.controllers.get(fileId)?.update.canSubmit).toBe(true));
     await tick();
     button('Move here').click();
@@ -94,6 +115,51 @@ describe('selected node update controls', (): void => {
     expect((await api.filesystem.getNode(fileId)).parent_id).toBe(rootId);
     expect(document.querySelector('tbody')).toBeNull();
     expect(document.activeElement).toBe(document.querySelector('h1'));
+  });
+
+  test('offers retry when the initial destination path cannot load', async (): Promise<void> => {
+    const api = await setup(fileId);
+    await vi.waitFor(() => expect(files?.update.canMove).toBe(true));
+    await tick();
+    vi.spyOn(api.filesystem, 'getBreadcrumbs').mockRejectedValueOnce(new Error('Offline'));
+    await openAction('Move');
+    await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('Could not browse'));
+    expect(button('Move here').disabled).toBe(true);
+    button('Retry folder').click();
+    await vi.waitFor(() => expect(document.querySelector('nav[aria-label="Destination path"]')?.textContent).toContain('Files'));
+    await vi.waitFor(() => expect(files?.update.loading).toBe(false));
+    await tick();
+    expect(document.querySelector('[role="alert"]')).toBeNull();
+    button('Files', document.querySelector('nav[aria-label="Destination path"]')!).click();
+    await vi.waitFor(() => expect(files?.update.canSubmit).toBe(true));
+  });
+
+  test('browses named folders and recovers from failed navigation without IDs', async (): Promise<void> => {
+    const api = await setup(fileId);
+    await vi.waitFor(() => expect(files?.update.canMove).toBe(true));
+    await tick();
+    await openAction('Move');
+    await vi.waitFor(() => expect(files?.update.loading).toBe(false));
+    await tick();
+    vi.spyOn(api.filesystem, 'getNode').mockRejectedValueOnce(new Error('Offline'));
+    button('Files', document.querySelector('nav[aria-label="Destination path"]')!).click();
+    await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('Could not browse'));
+    expect(button('Move here').disabled).toBe(true);
+    button('Retry folder').click();
+    await vi.waitFor(() => expect(files?.update.canSubmit).toBe(true));
+    await tick();
+    const folder = document.querySelector<HTMLButtonElement>('button[aria-label="Open Projects"]');
+    expect(folder).not.toBeNull();
+    folder!.click();
+    await vi.waitFor(() => expect(files?.update.folder?.id).toBe(folderId));
+    await vi.waitFor(() => expect(files?.update.loading).toBe(false));
+    await tick();
+    expect(document.querySelector('.destination')?.textContent).toBe('Destination: Projects');
+    expect(button('Move here').disabled).toBe(true);
+    button('Cancel').click();
+    await tick();
+    expect(document.querySelector('dialog')).toBeNull();
+    expect((await api.filesystem.getNode(fileId)).parent_id).toBe(folderId);
   });
 
   test.each([null, fileId])('hides root or unauthorized actions for %s', async (id): Promise<void> => {
@@ -153,7 +219,7 @@ describe('selected node update controls', (): void => {
     expect(files?.update.needsReload).toBe(false);
   });
 
-  test('uses directory picker, direct ID navigation and cancellation without mutation', async (): Promise<void> => {
+  test('uses named folder navigation and cancellation without requiring IDs', async (): Promise<void> => {
     const api = await setup(fileId);
     await vi.waitFor(() => expect(files?.update.canMove).toBe(true));
     await tick();
@@ -165,11 +231,10 @@ describe('selected node update controls', (): void => {
     expect(button('Cancel').hasAttribute('data-dialog-cancel')).toBe(true);
     expect(document.activeElement).toBe(button('Cancel'));
     expect(document.querySelector('[aria-label="Destination folders"]')?.textContent).not.toContain('Notes.txt');
-    const id = document.querySelector<HTMLInputElement>('#move-folder-id')!;
-    id.value = rootId;
-    id.dispatchEvent(new Event('input', { bubbles: true }));
-    await tick();
-    button('Open folder ID').click();
+    expect(document.querySelector('dialog input')).toBeNull();
+    expect(document.querySelector('dialog')?.textContent).toContain('No subfolders in this folder.');
+    expect(document.querySelector('dialog')?.textContent).not.toContain('Retry folder');
+    button('Files', document.querySelector('nav[aria-label="Destination path"]')!).click();
     await vi.waitFor(() => expect(files?.update.canSubmit).toBe(true));
     await tick();
     expect(button('Move here').disabled).toBe(false);

@@ -20,7 +20,7 @@ describe('shared capability description override UI', () => {
     const modal = source('../components/admin/capability-descriptions/CapabilityDescriptionOverrideModal.svelte');
     const editor = source('../components/admin/capability-descriptions/CapabilityDescriptionOverrideForm.svelte');
 
-    expect(modal).toContain('AdminModalShell');
+    expect(modal).toContain('ModalShell');
     expect(modal).toContain('<CapabilityDescriptionOverrideForm');
     expect(modal).toContain('Edit capability description');
     expect(editor).toContain('Default description');

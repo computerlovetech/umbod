@@ -1,7 +1,7 @@
 <script lang="ts">
   import Button from '$lib/components/admin/shared/Button.svelte';
   import type { ConnectorListItem } from '$lib/admin/connectors';
-  import AdminModalShell from '$lib/components/admin/shared/AdminModalShell.svelte';
+  import ModalShell from '$lib/components/shared/ModalShell.svelte';
   import ConnectorConfigurationForm from './ConnectorConfigurationForm.svelte';
   import ConnectorIcon from './ConnectorIcon.svelte';
   import type { ConnectorCatalogState } from './connector-catalog-state.svelte';
@@ -21,7 +21,7 @@
 <svelte:window onkeydown={state.handleKeydown} />
 
 {#if state.open}
-  <AdminModalShell title={state.mode === 'add' ? 'Add connector' : 'Configure connector'} titleId="connector-catalog-modal-title" close={state.close}>
+  <ModalShell title={state.mode === 'add' ? 'Add connector' : 'Configure connector'} titleId="connector-catalog-modal-title" close={state.close}>
     {#snippet children()}
       {#if selectedConnector}
         {#if state.mode === 'add'}
@@ -58,7 +58,7 @@
         <p class="empty">No connectors are available to add.</p>
       {/if}
     {/snippet}
-  </AdminModalShell>
+  </ModalShell>
 {/if}
 
 <style>

@@ -115,8 +115,8 @@ describe('group management form wiring', () => {
     expect((document.getElementById('provider-group-id') as HTMLInputElement).readOnly).toBe(false);
     input('provider-group-id', 'new-team');
     input('group-label', 'New team');
-    if (dismissal === 'Escape') window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
-    else if (dismissal === 'backdrop') dialog.parentElement!.click();
+    if (dismissal === 'Escape') dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
+    else if (dismissal === 'backdrop') dialog.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: -10, clientY: -10 }));
     else button(dismissal).click();
     await tick();
     expect(document.querySelector('[role="dialog"]')).toBeNull();

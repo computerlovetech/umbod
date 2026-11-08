@@ -22,6 +22,25 @@ function fixture(): { api: InMemoryFilesApi; state: SharingDialogState; revoke: 
 }
 
 describe('sharing eligibility', (): void => {
+  test('resolves renamed home labels by ID for buttons, dialog and saved announcement without renaming nodes', async (): Promise<void> => {
+    const { api } = fixture();
+    const home = filesystemNode({ id: folderId, parent_id: rootId, name: 'Renamed home' });
+    api.sharing.configure({ ...access, node_id: home.id }, groups);
+    const eligibility = new SharingEligibilityState(api.sharing, (node): string => node.id === folderId ? 'Files' : node.name || 'Shared files');
+    try {
+      expect(eligibility.label(home)).toBe('Files');
+      expect(eligibility.label(filesystemFixture[2])).toBe('Notes.txt');
+      await eligibility.dialog.show(home);
+      expect(eligibility.dialog.nodeName).toBe('Files');
+      expect(eligibility.dialog.node?.name).toBe('Renamed home');
+      await eligibility.dialog.save();
+      expect(eligibility.dialog.status).toBe('Sharing updated for “Files”.');
+      expect(home.name).toBe('Renamed home');
+    } finally {
+      eligibility.dispose();
+    }
+  });
+
   test('starts hidden, accepts only validated inspection, and never assumes administrator or node-kind authority', async (): Promise<void> => {
     const { api } = fixture();
     const eligibility = new SharingEligibilityState(api.sharing);

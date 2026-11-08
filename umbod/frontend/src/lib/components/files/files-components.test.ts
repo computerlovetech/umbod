@@ -4,7 +4,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
 import type { FilesApi } from '$lib/files/api';
 import type { NodeSummary } from '$lib/files/domain/schemas';
-import { deferred, fileId, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
+import { deferred, fileId, filesystemFixture, filesystemNode, folderId, rootId } from '$lib/files/fixtures.test-support';
 import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
 import { FilesState, filesHref } from '$lib/files/state/files-state.svelte';
 import { UploadState } from '$lib/files/state/upload-state.svelte';
@@ -32,6 +32,28 @@ function content(state: FilesState, folder: NewFolderState, upload: UploadState)
 }
 
 describe('Files user composition', () => {
+  test('personal home is the Files page itself, including the upload destination', async (): Promise<void> => {
+    const home = filesystemNode({ id: folderId, parent_id: rootId, name: 'Home-internal-identity' });
+    const api = new InMemoryFilesApi(rootId, [filesystemFixture[0], home, filesystemFixture[2]]);
+    vi.spyOn(api.filesystem, 'getHome').mockImplementation((signal) => api.filesystem.getNode(folderId, signal));
+    const state = new FilesState(api);
+    const folder = new NewFolderState(api, state);
+    const upload = new UploadState(api, state);
+    await state.load(null);
+    upload.show();
+    const body = content(state, folder, upload);
+    expect(body).toContain('Files</h1>');
+    expect(body).toContain('Notes.txt');
+    expect(body).not.toContain(home.name);
+    expect(body).not.toContain('aria-label="File path"');
+    expect(body).not.toContain('Actions for “Files”');
+    expect(body).toContain('Upload file');
+    expect(body).toContain('New folder');
+    upload.dispose();
+    folder.dispose();
+    state.dispose();
+  });
+
   test('Files navigation exists for both regular and administrator workspaces', (): void => {
     for (const allowed of [false, true]) {
       expect(workspaceNavigation(allowed)).toContainEqual({ id: 'files', label: 'Files', href: '/files', icon: 'files' });

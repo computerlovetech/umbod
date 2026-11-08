@@ -4,6 +4,7 @@ import { InMemoryFilesApi } from '../infrastructure/in-memory-api.test-support';
 import { deferred, fileId, filesystemFixture, folderId, rootId } from '../fixtures.test-support';
 import type { NodeSummary } from '../domain/schemas';
 import { FilesState } from './files-state.svelte';
+import { NodeUpdateState } from './node-update-state.svelte';
 
 async function setup(id: string = fileId): Promise<{ api: InMemoryFilesApi; files: FilesState }> {
   const api = new InMemoryFilesApi(rootId, filesystemFixture);
@@ -15,6 +16,37 @@ async function setup(id: string = fileId): Promise<{ api: InMemoryFilesApi; file
 }
 
 describe('selected node updates', (): void => {
+  test('keeps the renamed home boundary in the picker while retaining raw ancestors for descendant checks', async (): Promise<void> => {
+    const api = new InMemoryFilesApi(rootId, filesystemFixture);
+    let personalRoot = folderId;
+    const state = new NodeUpdateState(api.filesystem, (): void => {}, async (): Promise<void> => {}, () => personalRoot);
+    try {
+      await api.filesystem.updateNode(folderId, 1, { name: 'Renamed personal storage' });
+      await state.select(await api.filesystem.getNode(fileId), { rename: true, move: true });
+      state.showMove();
+      await state.browse(folderId);
+      expect(state.destinationName).toBe('Files');
+      expect(state.navigation.displayItems.map((item) => item.id)).toEqual([folderId]);
+      expect(state.navigation.path?.items.map((item) => item.id)).toEqual([rootId, folderId]);
+      expect(state.navigation.parent).toBeUndefined();
+      expect(state.navigation.atRoot).toBe(true);
+      expect(state.folder?.name).toBe('Renamed personal storage');
+      await state.browse(rootId);
+      expect(state.destinationName).toBe('Shared files');
+      expect(state.canSubmit).toBe(true);
+      const child = await api.filesystem.createFolder(folderId, { name: 'Nested', metadata: { content_type: {}, attributes: {} } });
+      personalRoot = child.id;
+      await state.select(await api.filesystem.getNode(folderId), { rename: true, move: true });
+      state.showMove();
+      await state.browse(child.id);
+      expect(state.navigation.displayItems.map((item) => item.id)).toEqual([child.id]);
+      expect(state.navigation.path?.items.some((item) => item.id === folderId)).toBe(true);
+      expect(state.canSubmit).toBe(false);
+    } finally {
+      state.dispose();
+    }
+  });
+
   test('moves directly to an authorized folder without opening a dialog', async (): Promise<void> => {
     const { api, files } = await setup();
     const destination = await api.filesystem.getNode(rootId);

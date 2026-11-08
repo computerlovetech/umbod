@@ -1,6 +1,6 @@
 <script lang="ts">
   import Button from '$lib/components/admin/shared/Button.svelte';
-  import { nativeDialog } from '$lib/components/shared/dialogs/native-dialog';
+  import ModalShell from '$lib/components/shared/ModalShell.svelte';
   import Form from '$lib/components/admin/shared/Form.svelte';
   import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
   import Select from '$lib/components/admin/shared/Select.svelte';
@@ -9,22 +9,9 @@
   let { state, signIn }: { state: SharingDialogState; signIn: () => void } = $props();
   const id = $props.id();
 
-  function backdrop(event: MouseEvent): void {
-    if (event.target !== event.currentTarget) return;
-    const bounds = (event.currentTarget as HTMLDialogElement).getBoundingClientRect();
-    if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) void state.close();
-  }
-
   function submit(event: SubmitEvent): void { event.preventDefault(); void state.save(); }
 </script>
 
-<dialog aria-labelledby={id + '-title'} aria-modal="true" onclick={backdrop} {@attach nativeDialog(() => { void state.close(); }, () => !state.pending, '[data-dialog-cancel]')}>
-  <header>
-    <h2 id={id + '-title'}>Share “{state.node?.name || 'Files'}”</h2>
-    <Button variant="quiet" iconOnly style="flex: none;" type="button" aria-label="Close sharing" data-dialog-cancel disabled={state.pending} onclick={() => { void state.close(); }}>
-      <svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18" /></svg>
-    </Button>
-  </header>
   {#snippet fields()}
     {#if state.phase === 'loading'}
       <p role="status">Loading sharing and registered groups…</p>
@@ -64,18 +51,14 @@
     {#if state.phase === 'sign-in'}<LoadingButton label="Sign in" loading={false} variant="secondary" onclick={signIn} />{/if}
   {/snippet}
   {#snippet actions()}
-    <LoadingButton label="Cancel" loading={false} disabled={state.pending} variant="secondary" onclick={() => { void state.close(); }} />
+    <LoadingButton label="Cancel" loading={false} disabled={state.pending} variant="secondary" data-dialog-cancel onclick={() => { void state.close(); }} />
     <LoadingButton type="submit" label="Save sharing" loadingLabel="Saving…" loading={state.pending} disabled={!state.canSave} />
   {/snippet}
+<ModalShell title={`Share “${state.nodeName}”`} titleId={id + '-title'} close={() => { void state.close(); }} closeDisabled={state.pending} initialFocus={'button[aria-label="Close"]'} --modal-width="42rem" --modal-padding="1.25rem">
   <Form aria-label="Manage group sharing" onsubmit={submit} {fields} {actions} />
-</dialog>
+</ModalShell>
 
 <style>
-  dialog { box-sizing: border-box; width: min(42rem, calc(100% - 2rem)); max-width: none; max-height: calc(100dvh - 2rem); overflow: hidden; padding: 1.25rem; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-ink); box-shadow: var(--admin-shadow-dialog); }
-  dialog[open] { display: flex; flex-direction: column; }
-  dialog::backdrop { background: var(--admin-overlay); }
-  header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; flex: none; }
-  h2 { font-size: 1.05rem; margin: 0 0 0.35rem; overflow-wrap: anywhere; }
   h3 { font-size: 0.95rem; margin: 0; overflow-wrap: anywhere; }
   p { margin: 0; line-height: 1.5; }
   .hint, .provider-id { font-size: 0.85rem; color: var(--admin-muted); }
@@ -91,5 +74,5 @@
   .error { padding: 0.65rem; border-radius: var(--admin-radius); background: var(--admin-danger-bg); color: var(--admin-danger-text); font-size: 0.85rem; }
   :focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  @media (max-width: 480px) { dialog { padding: 1rem; } .group { padding: 0.75rem; } }
+  @media (max-width: 480px) { .group { padding: 0.75rem; } }
 </style>

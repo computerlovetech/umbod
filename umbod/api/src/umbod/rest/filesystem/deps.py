@@ -83,8 +83,9 @@ async def require_filesystem_identity(
 
 def get_filesystem_homes(
     database: Annotated[Database, Depends(get_filesystem_database)],
+    resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
 ) -> HomeService:
-    return create_filesystem_homes(database=database)
+    return create_filesystem_homes(database=database, resolver=resolver)
 
 
 def get_filesystem_access(

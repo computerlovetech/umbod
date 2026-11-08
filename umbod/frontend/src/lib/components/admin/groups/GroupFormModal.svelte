@@ -1,6 +1,6 @@
 <script lang="ts">
   import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
-  import AdminModalShell from '$lib/components/admin/shared/AdminModalShell.svelte';
+  import ModalShell from '$lib/components/shared/ModalShell.svelte';
   import Form from '$lib/components/admin/shared/Form.svelte';
   import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
   import type { GroupsState } from './groups-state.svelte';
@@ -17,7 +17,7 @@
   }
 </script>
 
-<AdminModalShell
+<ModalShell
   title={state.isEditing ? 'Edit group' : 'Create group'}
   titleId="group-form-title"
   close={state.cancel}
@@ -82,7 +82,7 @@
     {/snippet}
     <Form onsubmit={submit} {fields} {actions} />
   {/snippet}
-</AdminModalShell>
+</ModalShell>
 
 <style>
   fieldset { border: 0; display: grid; gap: 1rem; margin: 0; min-width: 0; padding: 0; }

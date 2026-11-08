@@ -25,7 +25,7 @@ async def test_home_converges_without_root_permissions_and_survives_rename(
 ) -> None:
     database = filesystem_runtime.database
     caller = snapshot("alice", "issuer", ())
-    homes = create_filesystem_homes(database=database)
+    homes = create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver())
     nodes = await asyncio.gather(*(homes.get_or_provision(caller) for _ in range(8)))
     assert len({node.id for node in nodes}) == 1
     node = nodes[0]
@@ -44,14 +44,14 @@ async def test_home_converges_without_root_permissions_and_survives_rename(
         node.id, details=NodeUpdate(name="Renamed", parent_id=ROOT_ID, metadata=node.metadata),
         expected_revision=node.revision,
     )
-    assert (await create_filesystem_homes(database=database).get_or_provision(caller)).name == renamed.name
+    assert (await create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver()).get_or_provision(caller)).name == renamed.name
     assert len(await namespace.list_children(ROOT_ID)) == 1
     await create_root_provisioning(database=database).provision(RootBootstrapSpec(grants=()))
 
 
 @pytest.mark.asyncio
 async def test_exact_user_issuer_home_isolation(filesystem_runtime: PersistenceRuntime) -> None:
-    homes = create_filesystem_homes(database=filesystem_runtime.database)
+    homes = create_filesystem_homes(database=filesystem_runtime.database, resolver=VerifiedIdentityResolver())
     identities = [snapshot("alice", "issuer", ()), snapshot("alice", "other", ()),
                   snapshot("other", "issuer", ()), snapshot(" alice ", "issuer", ())]
     nodes = [await homes.get_or_provision(caller) for caller in identities]
@@ -61,7 +61,8 @@ async def test_exact_user_issuer_home_isolation(filesystem_runtime: PersistenceR
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provenance", [
-    AuthenticationProvenance.LOCAL_TEST, AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
+    AuthenticationProvenance.LOCAL_SIMULATION, AuthenticationProvenance.LOCAL_TEST,
+    AuthenticationProvenance.DEPLOYMENT_AUTHENTICATED,
     AuthenticationProvenance.UNAVAILABLE,
 ])
 async def test_home_denies_unverified(
@@ -73,7 +74,7 @@ async def test_home_denies_unverified(
         "subject": UnavailableSubject(kind="unavailable") if provenance == AuthenticationProvenance.UNAVAILABLE else caller.caller.subject,
     }), groups=caller.groups)
     with pytest.raises(PermissionDenied):
-        await create_filesystem_homes(database=filesystem_runtime.database).get_or_provision(caller)
+        await create_filesystem_homes(database=filesystem_runtime.database, resolver=VerifiedIdentityResolver()).get_or_provision(caller)
 
 
 @pytest.mark.asyncio
@@ -86,7 +87,7 @@ async def test_home_binding_corruption_never_replaces_or_adopts(
 
     database = filesystem_runtime.database
     caller = snapshot("alice", "issuer", ())
-    homes = create_filesystem_homes(database=database)
+    homes = create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver())
     if corruption == "owner":
         node = await homes.get_or_provision(caller)
         await create_access_control_driver(database=database).set_owner(Ownership(
@@ -116,7 +117,7 @@ async def test_ancestor_grants_and_admin_membership_do_not_disclose_home(
     filesystem_runtime: PersistenceRuntime,
 ) -> None:
     database = filesystem_runtime.database
-    home = await create_filesystem_homes(database=database).get_or_provision(snapshot("alice", "issuer", ()))
+    home = await create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver()).get_or_provision(snapshot("alice", "issuer", ()))
     policies = create_access_control_driver(database=database)
     await policies.add_grant(AccessGrant(
         node_id=ROOT_ID, principal=Principal(type=PrincipalType.GROUP, issuer="issuer", id="administrators"),
@@ -132,5 +133,5 @@ async def test_ancestor_grants_and_admin_membership_do_not_disclose_home(
 @pytest.mark.asyncio
 async def test_service_recreation_retains_home_mapping(filesystem_runtime: PersistenceRuntime) -> None:
     caller = snapshot("alice", "issuer", ())
-    node = await create_filesystem_homes(database=filesystem_runtime.database).get_or_provision(caller)
-    assert await create_filesystem_homes(database=filesystem_runtime.database).get_or_provision(caller) == node
+    node = await create_filesystem_homes(database=filesystem_runtime.database, resolver=VerifiedIdentityResolver()).get_or_provision(caller)
+    assert await create_filesystem_homes(database=filesystem_runtime.database, resolver=VerifiedIdentityResolver()).get_or_provision(caller) == node

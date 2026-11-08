@@ -2,7 +2,7 @@
   import type { BrowserSubmitFunction as SubmitFunction } from '$lib/admin/operations/browser-submit';
   import type { DownstreamMcpConnector } from '$lib/admin/downstream-mcp-connectors';
   import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
-  import AdminModalShell from '$lib/components/admin/shared/AdminModalShell.svelte';
+  import ModalShell from '$lib/components/shared/ModalShell.svelte';
   import Form from '$lib/components/admin/shared/Form.svelte';
   import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
   import Select from '$lib/components/admin/shared/Select.svelte';
@@ -61,7 +61,7 @@
 
 <svelte:window onkeydown={state.handleKeydown} />
 {#if state.modal === 'create' || state.modal === 'configure'}
-  <AdminModalShell title={configuring ? 'Configure MCP proxy connector' : 'Add MCP proxy connector'} titleId={`${fieldPrefix}-title`} close={state.close}>
+  <ModalShell title={configuring ? 'Configure MCP proxy connector' : 'Add MCP proxy connector'} titleId={`${fieldPrefix}-title`} close={state.close}>
     {#snippet children()}
       {#snippet fields()}
         {#if configuring}<input type="hidden" name="connectorId" value={connector?.connector_id ?? ''} />{/if}
@@ -109,7 +109,7 @@
       {/snippet}
       <Form method="POST" operation={configuring ? 'configure' : 'create'} {submit} {fields} {actions} />
     {/snippet}
-  </AdminModalShell>
+  </ModalShell>
 {/if}
 
 <style>

@@ -1,6 +1,7 @@
 import type { BrowseResult, UpdateNode, UpdateDescription, Breadcrumbs, CreateFolder, FileUpload, NodeSummary, BeginUpload, UploadSession, UploadTransfer } from './domain/schemas';
 
 export interface FilesystemApi {
+  getHome(signal?: AbortSignal): Promise<NodeSummary>;
   browse(target: string | null, signal?: AbortSignal): Promise<BrowseResult>;
   getNode(id: string, signal?: AbortSignal): Promise<NodeSummary>;
   getBreadcrumbs(id: string, signal?: AbortSignal): Promise<Breadcrumbs>;

@@ -8,7 +8,7 @@ import { RowEditingState } from './row-editing-state.svelte';
 import { DragMoveState } from './drag-move-state.svelte';
 import { DeletionState } from './deletion-state.svelte';
 import type { FilesApi } from '../api';
-import { browseResultSchema, nodeIdSchema, type NodeSummary } from '../domain/schemas';
+import { browseResultSchema, nodeIdSchema, nodeSummarySchema, type NodeSummary } from '../domain/schemas';
 import { readFailure, type FilesPhase } from '../errors';
 
 export function filesHref(id?: string): string {
@@ -26,7 +26,7 @@ export class FilesState {
   private readonly updatedNodes = new Map<string, { node: NodeSummary; sequence: number }>();
   private readonly confirmedDeletedIds = new Set<string>();
   private target: string | null = null;
-  private rootId: string | undefined;
+  private rootId = $state<string | undefined>(undefined);
   private generation = 0;
   private controller: AbortController | undefined;
   private disposed = false;
@@ -41,11 +41,11 @@ export class FilesState {
   readonly sharing: SharingEligibilityState;
 
   constructor(private readonly api: FilesApi, openParent?: (id: string) => Promise<void>) {
-    this.update = new NodeUpdateState(api.filesystem, this.acceptUpdate, this.reload);
+    this.update = new NodeUpdateState(api.filesystem, this.acceptUpdate, this.reload, () => this.rootId);
     this.description = new DescriptionState(api.filesystem, this.acceptDescription, this.reload);
-    this.rowEditing = new RowEditingState(api.filesystem, this.acceptUpdate, this.reload);
-    this.sharing = new SharingEligibilityState(api.sharing);
-    this.navigation = new FilesNavigationState(api.filesystem);
+    this.rowEditing = new RowEditingState(api.filesystem, this.acceptUpdate, this.reload, () => this.rootId);
+    this.sharing = new SharingEligibilityState(api.sharing, (node) => node.id === this.rootId ? 'Files' : node.name || 'Files');
+    this.navigation = new FilesNavigationState(api.filesystem, () => this.rootId);
     const deletionOperations = new SvelteMap<string, symbol>();
     this.deletion = new DeletionState(api, openParent ?? ((id) => this.load(id)), this.reload, this.acceptDeleted, true, deletionOperations);
     this.rowDeletion = new RowDeletionState(api, this.reload, this.acceptRowDeleted, deletionOperations);
@@ -78,13 +78,25 @@ export class FilesState {
     this.createDirectoryAllowed = false;
     const listingStartSequence = this.updateSequence;
     try {
-      const result = browseResultSchema.parse(await this.api.filesystem.browse(target === null ? null : nodeIdSchema.parse(target), signal));
+      const selectedId = target === null ? null : nodeIdSchema.parse(target);
+      if (!this.rootId) {
+        try {
+          const home = nodeSummarySchema.parse(await this.api.filesystem.getHome(signal));
+          if (this.disposed || generation !== this.generation || signal.aborted) return;
+          if (home.kind !== 'directory') throw new Error('Invalid home');
+          this.rootId = home.id;
+        } catch (error) {
+          if (selectedId === null || signal.aborted) throw error;
+        }
+      }
+      const browseId = selectedId ?? this.rootId;
+      if (!browseId) throw new Error('Home unavailable');
+      const result = browseResultSchema.parse(await this.api.filesystem.browse(browseId, signal));
       if (this.disposed || generation !== this.generation || signal.aborted) return;
-      if (target !== null && result.node.id !== target) throw new Error('Unexpected browse target');
+      if (result.node.id !== browseId) throw new Error('Unexpected browse target');
       const loadedNode = result.node;
       const known = this.updatedNodes.get(loadedNode.id)?.node;
       const node = known && known.revision > loadedNode.revision ? known : loadedNode;
-      if (target === null) this.rootId = node.id;
       const capabilities = new Map(result.capabilities.map((capability) => [capability.node_id, capability]));
       const current = capabilities.get(node.id)!;
       this.node = node;
@@ -94,7 +106,7 @@ export class FilesState {
       this.children = node.kind === 'directory' ? this.reconcileChildren(node.id, result.entries, listingStartSequence, true) : [];
       this.sharing.seed(result.capabilities);
       this.phase = 'ready';
-      void this.update.select(node, current);
+      void this.update.select(node, node.id === this.rootId ? { rename: false, move: false } : current);
       void this.description.select(node, current.edit_description);
       this.sharing.select(this.children);
       this.rowEditing.select(this.children, capabilities);
@@ -170,6 +182,14 @@ export class FilesState {
     const selectedId = this.target === null ? this.rootId : this.target;
     if (selectedId === node.parent_id) this.acceptDeleted(node);
   };
+
+  get atPersonalRoot(): boolean {
+    return !!this.node && this.node.id === this.rootId;
+  }
+
+  get locationName(): string {
+    return this.atPersonalRoot ? 'Files' : this.node ? this.navigation.label(this.node) || 'Files' : 'Files';
+  }
 
   reload = async (): Promise<void> => this.load(this.target);
 

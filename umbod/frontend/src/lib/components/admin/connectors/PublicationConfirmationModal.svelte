@@ -1,5 +1,5 @@
 <script lang="ts">
-  import AdminModalShell from '$lib/components/admin/shared/AdminModalShell.svelte';
+  import ModalShell from '$lib/components/shared/ModalShell.svelte';
   import Button from '$lib/components/admin/shared/Button.svelte';
 
   type Props = {
@@ -16,7 +16,7 @@
 </script>
 
 {#if open}
-  <AdminModalShell
+  <ModalShell
     {title}
     titleId="publication-confirmation-title"
     descriptionId="publication-confirmation-message"
@@ -27,7 +27,7 @@
       <Button variant="secondary" onclick={oncancel}>{cancelLabel}</Button>
       <Button onclick={onconfirm}>{confirmLabel}</Button>
     </div>
-  </AdminModalShell>
+  </ModalShell>
 {/if}
 
 <style>

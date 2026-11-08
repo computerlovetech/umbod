@@ -17,7 +17,7 @@ from tests.umbod.core.filesystem.test_verified_identity import snapshot
 async def test_owner_metadata_reports_actual_private_policy(filesystem_runtime: PersistenceRuntime) -> None:
     database = filesystem_runtime.database
     caller = snapshot("alice", "issuer", ())
-    node = await create_filesystem_homes(database=database).get_or_provision(caller)
+    node = await create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver()).get_or_provision(caller)
     projected = (await create_filesystem_access(database=database, resolver=VerifiedIdentityResolver()).enrich_nodes(caller, [node]))[0]
     assert projected.permissions.model_dump() == {
         "can_discover": True, "can_read": True, "can_write": True, "can_delete": False, "can_share": True,
@@ -42,7 +42,7 @@ async def test_projection_uses_direct_matching_rights_and_fresh_revocation(
 ) -> None:
     database = filesystem_runtime.database
     owner = snapshot("alice", "issuer", ())
-    node = await create_filesystem_homes(database=database).get_or_provision(owner)
+    node = await create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver()).get_or_provision(owner)
     policies = create_access_control_driver(database=database)
     group = Principal(type=PrincipalType.GROUP, issuer="issuer", id="team")
     grant = AccessGrant(node_id=node.id, principal=group, permissions=rights, recursive=True)
@@ -69,7 +69,7 @@ async def test_group_union_and_foreign_unregistered_grants_are_not_filtered(
 ) -> None:
     database = filesystem_runtime.database
     owner = snapshot("alice", "issuer", ())
-    home = await create_filesystem_homes(database=database).get_or_provision(owner)
+    home = await create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver()).get_or_provision(owner)
     namespace = create_namespace_driver(database=database)
     file = await namespace.create_node(home.id, "file", NodeKind.FILE, NodeMetadata(content_type={}, attributes={}))
     policies = create_access_control_driver(database=database)
@@ -105,7 +105,7 @@ async def test_access_metadata_cannot_disclose_missing_nodes(filesystem_runtime:
 
     database = filesystem_runtime.database
     caller = snapshot("alice", "issuer", ())
-    node = await create_filesystem_homes(database=database).get_or_provision(caller)
+    node = await create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver()).get_or_provision(caller)
     access = create_filesystem_access(database=database, resolver=VerifiedIdentityResolver())
     with pytest.raises(PermissionDenied):
         await access.enrich_nodes(caller, [node.model_copy(update={"id": uuid4(), "parent_id": ROOT_ID})])

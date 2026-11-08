@@ -11,7 +11,7 @@
     {#if state.path}
       <nav class="desktop-path" aria-label="File path">
         <ol>
-          {#if !state.path.complete}
+          {#if !state.displayComplete}
             <li class="partial"><span title="Earlier folders are unavailable">Earlier folders unavailable</span><span aria-hidden="true">/</span></li>
           {/if}
           {#each state.visibleItems as item, index (item.id)}

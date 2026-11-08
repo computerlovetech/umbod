@@ -8,8 +8,8 @@ export class RowEditingEntry {
   readonly update: NodeUpdateState;
   readonly description: DescriptionState;
 
-  constructor(api: FilesystemApi, accept: (node: NodeSummary) => void, reload: () => Promise<void>) {
-    this.update = new NodeUpdateState(api, accept, reload);
+  constructor(api: FilesystemApi, accept: (node: NodeSummary) => void, reload: () => Promise<void>, personalRoot: () => string | undefined = () => undefined) {
+    this.update = new NodeUpdateState(api, accept, reload, personalRoot);
     this.description = new DescriptionState(api, accept, reload);
   }
 }
@@ -22,7 +22,7 @@ export class RowEditingState {
   private generation = 0;
   private disposed = false;
 
-  constructor(private readonly api: FilesystemApi, private readonly accept: (node: NodeSummary) => void, private readonly reload: () => Promise<void>) {}
+  constructor(private readonly api: FilesystemApi, private readonly accept: (node: NodeSummary) => void, private readonly reload: () => Promise<void>, private readonly personalRoot: () => string | undefined = () => undefined) {}
 
   select = (nodes: NodeSummary[], capabilities?: ReadonlyMap<string, BrowseCapabilities>): void => {
     if (this.disposed) return;
@@ -36,7 +36,7 @@ export class RowEditingState {
           if (this.disposed || generation !== this.generation) return;
           const refreshed = this.nodes.get(node.id);
           if (refreshed) this.controllers.get(node.id)?.update.acceptReloadedNode(refreshed);
-        });
+        }, this.personalRoot);
         this.controllers.set(node.id, entry);
       }
       const previous = this.nodes.get(node.id);

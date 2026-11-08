@@ -15,6 +15,13 @@ export class InMemoryFilesystem implements FilesystemApi {
     for (const node of nodes) this.nodes.set(node.id, nodeSummarySchema.parse(node));
   }
 
+  getHome = async (signal?: AbortSignal): Promise<NodeSummary> => {
+    signal?.throwIfAborted();
+    const home = this.nodes.get(this.rootId);
+    if (!home || !this.canRead(home)) throw new HttpError(403, 'Forbidden', {});
+    return this.summarize(home);
+  };
+
   browse = async (target: string | null, signal?: AbortSignal): Promise<BrowseResult> => {
     const node = await this.getNode(target ?? this.rootId, signal);
     const breadcrumbs = await this.getBreadcrumbs(node.id, signal);

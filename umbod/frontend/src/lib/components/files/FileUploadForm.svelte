@@ -1,7 +1,7 @@
 <script lang="ts">
   import Button from '$lib/components/admin/shared/Button.svelte';
   import { tick } from 'svelte';
-  import { nativeDialog } from '$lib/components/shared/dialogs/native-dialog';
+  import ModalShell from '$lib/components/shared/ModalShell.svelte';
   import { FileDropState } from '$lib/files/state/file-drop-state.svelte';
   import { formatFileSize, type UploadState } from '$lib/files/state/upload-state.svelte';
 
@@ -47,10 +47,10 @@
 
 <svelte:window ondragover={drop.preventOutside} ondrop={drop.preventOutside} />
 
-<dialog aria-labelledby={id + '-title'} aria-describedby={id + '-destination'} aria-modal="true" {@attach nativeDialog(() => { void cancel(); }, () => !state.pending, 'input[type="file"]:not(:disabled)')}>
+<ModalShell title="Upload a file" titleId={id + '-title'} descriptionId={id + '-destination'} close={() => { void cancel(); }} closeDisabled={state.pending} initialFocus={'input[type="file"]:not(:disabled)'} --modal-width="42rem" --modal-padding="1.25rem" --modal-overflow="auto">
 <form id={id + '-form'} aria-label="Upload file" aria-busy={state.pending} onsubmit={(event) => { event.preventDefault(); void submit(event.currentTarget); }}>
   <div class="form-heading">
-    <div><h2 id={id + '-title'}>Upload a file</h2><p id={id + '-destination'} class="destination">To <strong>{destination}</strong></p></div>
+    <p id={id + '-destination'} class="destination">To <strong>{destination}</strong></p>
     <span class="limit">One file at a time</span>
   </div>
   <fieldset disabled={state.pending || state.uncertain}>
@@ -93,14 +93,11 @@
     {#if state.signInRequired}<Button variant="secondary" type="button" onclick={signIn}>Sign in</Button>{/if}
   </div>
 </form>
-</dialog>
+</ModalShell>
 
 <style>
-  dialog { box-sizing: border-box; width: min(42rem, calc(100% - 2rem)); max-width: none; max-height: calc(100dvh - 2rem); overflow: auto; padding: 0; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-ink); box-shadow: var(--admin-shadow-dialog); }
-  dialog::backdrop { background: var(--admin-overlay); }
-  form { padding: 1.25rem; margin: 0; }
+  form { margin: 1rem 0 0; }
   .form-heading { display: flex; flex-wrap: wrap; align-items: start; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem; }
-  h2 { font-size: 1.05rem; margin: 0 0 0.35rem; }
   p { margin: 0; }
   .destination, .limit, .hint, .selected-file span, .progress { font-size: 0.85rem; color: var(--admin-muted); }
   .destination { overflow-wrap: anywhere; }
@@ -126,5 +123,5 @@
   progress { width: 100%; accent-color: var(--admin-accent); }
   :focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  @media (max-width: 480px) { form { padding: 1rem; } .selection { flex-wrap: wrap; } }
+  @media (max-width: 480px) { .selection { flex-wrap: wrap; } }
 </style>

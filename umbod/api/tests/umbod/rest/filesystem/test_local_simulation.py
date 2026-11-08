@@ -96,6 +96,39 @@ async def test_local_filesystem_requires_explicit_root_grant_and_retains_private
 
 
 @pytest.mark.asyncio
+async def test_local_home_is_private_and_idempotent_without_root_grants(
+    local_filesystem_settings: AppConfig, local_filesystem_runtime: PersistenceRuntime,
+) -> None:
+    async with _local_filesystem_client(local_filesystem_settings, local_filesystem_runtime) as client:
+        assert (await client.get(BASE + "/browse")).status_code == 403
+        first = await client.post(BASE + "/home")
+        repeated = await client.post(BASE + "/home")
+        assert first.status_code == repeated.status_code == 200
+        assert first.json() == repeated.json()
+        home = first.json()
+        assert home["visible_to"]["owner"] == {
+            "type": "user", "issuer": "urn:umbod:local", "id": "test-user",
+        }
+        assert home["visible_to"]["grants"] == []
+        assert (await client.get(BASE + "/browse")).status_code == 403
+        browsed = await client.get(BASE + "/browse", params={"node_id": home["id"]})
+        assert browsed.status_code == 200
+        assert browsed.json()["node"] == home
+    other_settings = AppConfig.model_validate({
+        **local_filesystem_settings.model_dump(),
+        "admin_authentication": {
+            **local_filesystem_settings.admin_authentication.model_dump(), "simulated_user_id": "other-user",
+        },
+    })
+    async with _local_filesystem_client(other_settings, local_filesystem_runtime) as other:
+        assert (await other.get(BASE + f"/nodes/{home['id']}")).status_code == 403
+        other_home = await other.post(BASE + "/home")
+        assert other_home.status_code == 200
+        assert other_home.json()["id"] != home["id"]
+        assert other_home.json()["visible_to"]["owner"]["id"] == "other-user"
+
+
+@pytest.mark.asyncio
 async def test_local_filesystem_rejects_client_selected_issuer(
     local_filesystem_settings: AppConfig, local_filesystem_runtime: PersistenceRuntime,
 ) -> None:

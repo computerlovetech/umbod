@@ -35,7 +35,7 @@ async function mixedResponse(): Promise<BrowseResult> {
 }
 
 function fixture(respond: (request: TransportRequest<unknown>) => Promise<unknown>): { files: FilesState; api: FilesApi; transport: RecordingTransport } {
-  const transport = new RecordingTransport(respond);
+  const transport = new RecordingTransport(async (request) => request.path === '/me/filesystem/home' ? filesystemFixture[0] : respond(request));
   const unexpected = async (): Promise<never> => { throw new Error('Unexpected sharing probe'); };
   const api: FilesApi = {
     filesystem: new FilesystemRoute(transport, { transfer: unexpected }),
@@ -45,7 +45,20 @@ function fixture(respond: (request: TransportRequest<unknown>) => Promise<unknow
 }
 
 describe('coherent filesystem browse', (): void => {
-  test('one GET initializes a mixed directory, its path and all advisory controls with no probes', async (): Promise<void> => {
+  test('home resolution uses the caller-only POST and validates the returned node', async (): Promise<void> => {
+    const home = filesystemNode({ id: folderId, parent_id: rootId, name: 'Home-opaque' });
+    const transport = new RecordingTransport(async () => home);
+    const route = new FilesystemRoute(transport, { transfer: async (): Promise<void> => {} });
+    const signal = new AbortController().signal;
+    expect(await route.getHome(signal)).toEqual(home);
+    expect(transport.requests.map(({ method, path, signal: requestSignal }) => ({ method, path, signal: requestSignal }))).toEqual([
+      { method: 'POST', path: '/me/filesystem/home', signal }
+    ]);
+    const invalid = new FilesystemRoute(new RecordingTransport(async () => ({ id: 'invalid' })), { transfer: async (): Promise<void> => {} });
+    await expect(invalid.getHome()).rejects.toBeInstanceOf(SchemaValidationError);
+  });
+
+  test('home resolution and one GET initialize a directory without eligibility probes', async (): Promise<void> => {
     const response = await mixedResponse();
     const { files, api, transport } = fixture(async () => response);
     await files.load(folderId);
@@ -67,6 +80,7 @@ describe('coherent filesystem browse', (): void => {
     }
     expect(files.rowDeletion.controllers.get(fileId)?.available).toBe(true);
     expect(transport.requests.map(({ method, path }) => ({ method, path }))).toEqual([
+      { method: 'POST', path: '/me/filesystem/home' },
       { method: 'GET', path: '/me/filesystem/browse?node_id=' + folderId }
     ]);
     expect(api.sharing.inspectAccess).not.toHaveBeenCalled();
@@ -93,24 +107,25 @@ describe('coherent filesystem browse', (): void => {
     await files.update.submit();
     expect(files.node?.name).toBe('Canonical');
     expect(files.navigation.path?.items.at(-1)?.name).toBe('Canonical');
-    expect(transport.requests.map(({ method }) => method)).toEqual(['GET', 'PATCH', 'PATCH']);
+    expect(transport.requests.map(({ method }) => method)).toEqual(['POST', 'GET', 'PATCH', 'PATCH']);
     expect(api.sharing.inspectAccess).not.toHaveBeenCalled();
     files.dispose();
   });
 
-  test('root omits query and file inspection uses an empty listing', async (): Promise<void> => {
+  test('personal root uses its resolved UUID and file inspection uses an empty listing', async (): Promise<void> => {
     const memory = new InMemoryFilesApi(rootId, filesystemFixture);
-    const { api, transport, files } = fixture(async (request) => memory.filesystem.browse(request.path.includes('?') ? fileId : null));
+    const { api, transport, files } = fixture(async (request) => memory.filesystem.browse(request.path.endsWith(fileId) ? fileId : rootId));
     await files.load(null);
     expect(files.node?.id).toBe(rootId);
-    expect(transport.requests[0].path).toBe('/me/filesystem/browse');
+    expect(transport.requests[0].path).toBe('/me/filesystem/home');
+    expect(transport.requests[1].path).toBe('/me/filesystem/browse?node_id=' + rootId);
     await files.load(fileId);
     expect(files.children).toEqual([]);
     expect(files.deletion.available).toBe(true);
     expect(files.uploadAvailability).toBe('hidden');
-    expect(transport.requests).toHaveLength(2);
+    expect(transport.requests).toHaveLength(3);
     await expect(api.filesystem.browse('invalid')).rejects.toThrow();
-    expect(transport.requests).toHaveLength(2);
+    expect(transport.requests).toHaveLength(3);
     files.dispose();
   });
 
@@ -142,7 +157,7 @@ describe('coherent filesystem browse', (): void => {
     expect(row.update.open).toBe(false);
     expect(row.description.open).toBe(false);
     expect(files.sharing.available(fileId)).toBe(false);
-    expect(transport.requests).toHaveLength(1);
+    expect(transport.requests).toHaveLength(2);
     folder.dispose();
     upload.dispose();
     files.dispose();
@@ -208,13 +223,14 @@ describe('coherent filesystem browse', (): void => {
       return action === 'navigate' ? memory.filesystem.browse(null) : response;
     });
     const loading = files.load(folderId);
+    await vi.waitFor(() => expect(transport.requests).toHaveLength(2));
     expect(files.node).toBeUndefined();
     expect(files.navigation.path).toBeUndefined();
     expect(files.children).toEqual([]);
     if (action === 'dispose') files.dispose();
     else if (action === 'navigate') await files.load(null);
     else await files.reload();
-    expect(transport.requests[0].signal?.aborted).toBe(true);
+    expect(transport.requests[1].signal?.aborted).toBe(true);
     pending.resolve(response);
     await loading;
     expect(files.node?.id).toBe(action === 'dispose' ? undefined : action === 'navigate' ? rootId : folderId);

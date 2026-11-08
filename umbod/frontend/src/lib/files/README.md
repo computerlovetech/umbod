@@ -18,7 +18,8 @@ description: "User filesystem browsing, direct-node group sharing, directory cre
 - [state/description-state.test.ts](./state/description-state.test.ts) — Authoritative reconciliation, creation descriptions, duplicate protection and stale-result tests.
 - [description-api.test.ts](./description-api.test.ts) — Conditional description transport, validation, upload metadata and authority tests.
 - [browse-api.test.ts](./browse-api.test.ts) — Real state and route request-budget, coherent response validation, denied actions and cancellation tests.
-- [state/files-state.svelte.ts](./state/files-state.svelte.ts) — One-response browsing, advisory capability seeding and authoritative concurrent mutation reconciliation.
+- [state/files-state.svelte.ts](./state/files-state.svelte.ts) — Personal-home entry, coherent browsing, capability seeding and concurrent mutation reconciliation.
+- [state/personal-root-state.test.ts](./state/personal-root-state.test.ts) — Personal-root navigation, home lookup failures, renamed homes, creation targets and stale responses.
 - [api.ts](./api.ts) — Filesystem operations and typed recipient-filtered sharing ports.
 - [domain/sharing.ts](./domain/sharing.ts) — Strict group/user grant targets, labelled access views and minimal blocked recipient contracts.
 - [state/sharing-eligibility-state.svelte.ts](./state/sharing-eligibility-state.svelte.ts) — Browse-seeded sharing eligibility, fresh dialog rechecks and bounded checks for newly created rows.
@@ -26,7 +27,7 @@ description: "User filesystem browsing, direct-node group sharing, directory cre
 - [state/sharing-state.test.ts](./state/sharing-state.test.ts) — Eligibility, mutation, cancellation, self-revocation and stale-result behavior tests.
 - [sharing-api.test.ts](./sharing-api.test.ts) — Mixed recipient preservation, scoped query validation and strong conditional JSON transport tests.
 - [breadcrumbs-api.test.ts](./breadcrumbs-api.test.ts) — Minimal breadcrumb schemas, visibility boundaries and shared HTTP transport tests.
-- [state/navigation-state.svelte.ts](./state/navigation-state.svelte.ts) — Browse-seeded paths, fresh move navigation, confirmed parents and known-ancestor overflow state.
+- [state/navigation-state.svelte.ts](./state/navigation-state.svelte.ts) — Authoritative paths with personal-home display boundaries, confirmed parents and ancestor overflow.
 - [state/navigation-state.test.ts](./state/navigation-state.test.ts) — Deep links, partial paths, stale responses, disposal, ancestor overflow and read isolation tests.
 - [domain/](./domain/) — Filesystem validation contracts.
 - [errors.ts](./errors.ts) — Safe read, creation and upload failures.

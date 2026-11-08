@@ -22,7 +22,7 @@ description: Reusable administration presentation and interaction controls.
 - [Button styling](../../../styles/buttons.css) — Canonical typography, variants, sizing, focus, hover, and disabled rules.
 - [Button DOM tests](button.dom.test.ts) — Native action semantics, forwarding, references, attachments, and delayed loading feedback.
 - [Button test harness](button.test-support.svelte) — Mounted button, loading button, and link compositions for native behavior checks.
-- [Modal shell](AdminModalShell.svelte) — Modal-styled surface with dismissal; does not provide native dialog focus management.
+- [Shared modal shell](../../shared/ModalShell.svelte) — Actor-independent native dialog surface with guarded dismissal and initial-focus integration.
 - [Configuration field](AdminConfigurationField.svelte) — Configuration input rendering.
 - [Split workspace](AdminSplitWorkspace.svelte) — Shared master-detail layout.
 

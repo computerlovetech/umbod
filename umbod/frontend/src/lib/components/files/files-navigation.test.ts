@@ -17,7 +17,7 @@ function documentFor(state: FilesNavigationState): Window['document'] {
 
 function fixture(canRead: (node: NodeSummary) => boolean = () => true): { api: InMemoryFilesApi; state: FilesNavigationState } {
   const api = new InMemoryFilesApi(rootId, filesystemFixture, undefined, undefined, canRead);
-  return { api, state: new FilesNavigationState(api.filesystem) };
+  return { api, state: new FilesNavigationState(api.filesystem, () => rootId) };
 }
 
 describe('compact file navigation', () => {

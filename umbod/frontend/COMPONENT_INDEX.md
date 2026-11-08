@@ -27,7 +27,7 @@ tags:
 
 - [ActionMenu](src/lib/components/shared/ActionMenu.svelte) — Keyboard-accessible popup menu; use for contextual actions with custom trigger and menu content.
 - [AdminSidebarActionMenu](src/lib/components/admin/shared/AdminSidebarActionMenu.svelte) — Ellipsis-trigger wrapper around ActionMenu; use for compact contextual actions in lists and sidebars.
-- [AdminModalShell](src/lib/components/admin/shared/AdminModalShell.svelte) — Modal-styled surface with heading and dismissal; use with care: it is not native dialog and provides no focus trap or restoration.
+- [ModalShell](src/lib/components/shared/ModalShell.svelte) — Native modal with heading and upper-right close button; use for dialogs with guarded dismissal and caller-selected initial focus.
 - [Native dialog attachment](src/lib/components/shared/dialogs/native-dialog.ts) — Shared native-dialog lifecycle and initial-focus mechanics; use when composing a native dialog rather than duplicating its setup.
 
 ## Loading, notifications, and values

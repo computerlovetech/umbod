@@ -15,8 +15,8 @@ export class SharingEligibilityState {
   private disposed = false;
   readonly dialog: SharingDialogState;
 
-  constructor(private readonly api: NodeSharingApi) {
-    this.dialog = new SharingDialogState(api, this.revoke, this.recheck);
+  constructor(private readonly api: NodeSharingApi, readonly label: (node: NodeSummary) => string = (node: NodeSummary): string => node.name || 'Files') {
+    this.dialog = new SharingDialogState(api, this.revoke, this.recheck, this.label);
   }
 
   seed = (capabilities: readonly { node_id: string; share: boolean }[]): void => {

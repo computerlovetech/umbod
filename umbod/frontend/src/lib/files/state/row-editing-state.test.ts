@@ -23,6 +23,28 @@ function rowState(api: InMemoryFilesApi): RowEditingState {
 }
 
 describe('table row editing', (): void => {
+  test('passes the personal home boundary to row move navigation by ID after a rename', async (): Promise<void> => {
+    const { api } = fixture();
+    const state = new RowEditingState(api.filesystem, (): void => {}, async (): Promise<void> => {}, () => folderId);
+    try {
+      await api.filesystem.updateNode(folderId, 1, { name: 'Renamed home' });
+      state.select([await api.filesystem.getNode(fileId)]);
+      await vi.waitFor(() => expect(state.controllers.get(fileId)?.update.canMove).toBe(true));
+      const update = state.controllers.get(fileId)!.update;
+      update.showMove();
+      await update.browse(folderId);
+      expect(update.destinationName).toBe('Files');
+      expect(update.navigation.displayItems.map((item) => item.id)).toEqual([folderId]);
+      expect(update.navigation.parent).toBeUndefined();
+      expect(update.navigation.atRoot).toBe(true);
+      await update.browse(rootId);
+      expect(update.destinationName).toBe('Shared files');
+      expect(update.canSubmit).toBe(true);
+    } finally {
+      state.dispose();
+    }
+  });
+
   test('renames and edits the child description with authoritative revisions without changing the parent', async (): Promise<void> => {
     const { api, files } = fixture();
     const row = await ready(files);

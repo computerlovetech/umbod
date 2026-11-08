@@ -1,13 +1,12 @@
 <script lang="ts">
   import Button from '$lib/components/admin/shared/Button.svelte';
-  import { nativeDialog } from '$lib/components/shared/dialogs/native-dialog';
+  import ModalShell from '$lib/components/shared/ModalShell.svelte';
   import type { DescriptionState } from '$lib/files/state/description-state.svelte';
   let { state, name }: { state: DescriptionState; name: string } = $props();
   const id = $props.id();
 </script>
 
-<dialog aria-labelledby={id + '-title'} {@attach nativeDialog(state.cancel, () => !state.pending, 'textarea')}>
-  <h2 id={id + '-title'}>Edit description</h2>
+<ModalShell title="Edit description" titleId={id + '-title'} close={state.cancel} closeDisabled={state.pending} initialFocus="textarea" --modal-overflow="auto">
   <p>{name || 'Files'}</p>
   <form aria-label="Edit description" aria-busy={state.pending} onsubmit={(event) => { event.preventDefault(); void state.save(); }}>
     <label for={id + '-description'}>Description</label>
@@ -21,12 +20,10 @@
     </div>
   </form>
   <p role="status" aria-atomic="true">{state.pending ? 'Saving description…' : state.status}</p>
-</dialog>
+</ModalShell>
 
 <style>
-  dialog { box-sizing: border-box; width: min(36rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; background: var(--admin-panel); color: var(--admin-ink); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); box-shadow: var(--admin-shadow-dialog); }
-  dialog::backdrop { background: var(--admin-overlay); }
-  h2, p { overflow-wrap: anywhere; }
+  p { overflow-wrap: anywhere; }
   p { color: var(--admin-muted); }
   label { display: block; margin-block: 1rem 0.4rem; }
   textarea { display: block; box-sizing: border-box; width: 100%; margin-bottom: 0.6rem; resize: vertical; }

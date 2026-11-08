@@ -32,7 +32,7 @@ class DatabaseFilesystemServiceFactory:
         self._api_base_url = api_base_url
 
     def homes(self) -> HomeService:
-        return create_filesystem_homes(database=self._database)
+        return create_filesystem_homes(database=self._database, resolver=VerifiedIdentityResolver())
 
     def access(self) -> AccessMetadataService:
         return create_filesystem_access(database=self._database, resolver=VerifiedIdentityResolver())

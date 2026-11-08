@@ -173,7 +173,7 @@ describe('personal server administration presentation', () => {
       title: 'Confirm change', titleId: 'dialog-title', descriptionId: 'dialog-description', close: vi.fn(),
       children: createRawSnippet(() => ({ render: (): string => '<p id="dialog-description">Review this change.</p>' }))
     } }).body;
-    expect(body).toContain('<dialog aria-labelledby="dialog-title" aria-describedby="dialog-description"');
+    expect(body).toContain('<dialog role="dialog" aria-modal="true" aria-labelledby="dialog-title" aria-describedby="dialog-description"');
     expect(body).toContain('id="dialog-title" tabindex="-1"');
     expect(body).toContain('aria-label="Close"');
     expect(body).not.toContain('autofocus');

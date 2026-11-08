@@ -21,7 +21,7 @@ describe('browse upload capabilities', () => {
     expect(files.phase).toBe('ready');
     expect(files.uploadAvailability).toBe('allowed');
     expect(upload.available).toBe(true);
-    expect(browse).toHaveBeenCalledExactlyOnceWith(null, expect.any(AbortSignal));
+    expect(browse).toHaveBeenCalledExactlyOnceWith(rootId, expect.any(AbortSignal));
     await files.load(fileId);
     expect(files.uploadAvailability).toBe('hidden');
     expect(upload.available).toBe(false);
@@ -69,6 +69,7 @@ describe('browse upload capabilities', () => {
     const pending = deferred<typeof response>();
     const browse = vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(pending.promise);
     const loading = files.load(null);
+    await vi.waitFor(() => expect(browse).toHaveBeenCalled());
     const signal = browse.mock.calls[0][1];
     await files.load(fileId);
     if (outcome === 'resolve') pending.resolve(response);
@@ -86,6 +87,7 @@ describe('browse upload capabilities', () => {
     const pending = deferred<typeof response>();
     const browse = vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(pending.promise);
     const loading = files.load(null);
+    await vi.waitFor(() => expect(browse).toHaveBeenCalled());
     const signal = browse.mock.calls[0][1];
     files.dispose();
     if (outcome === 'resolve') pending.resolve(response);

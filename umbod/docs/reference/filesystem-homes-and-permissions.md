@@ -28,6 +28,8 @@ Repeated and concurrent home requests resolve the same directory. Lookup never a
 
 Shared-root browsing filters each child independently. Administrator status or access to the root does not reveal another user's unshared home. A user can explicitly share their home under the existing sharing rules; home lookup does not reset those choices. These are application authorization guarantees, not encryption against operators of the underlying storage.
 
+The web Files page opens directly into the caller's home, provisioning it on first use, and presents it as **Files** rather than a separate `Home-<UUID>` folder. Breadcrumbs and move destinations stop at this personal root and keep its internal name out of headings, upload destinations and sharing dialogs. This presentation follows the durable home binding even after a rename. Explicit node links outside the home remain available under existing permissions; the canonical root is labelled **Shared files** and retains its explicit node UUID link. No existing nodes are moved or renamed.
+
 REST exposes the same caller-only operation through POST `/api/me/filesystem/home`. The `/api/me` prefix identifies the caller; it does not turn the entire filesystem into a personal namespace. Existing root browsing and explicit node UUIDs retain their meaning. A home is not a new `/me` path alias or a working directory.
 
 ## Caller permissions

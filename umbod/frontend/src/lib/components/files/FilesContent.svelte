@@ -67,7 +67,7 @@
     <div class="drop-prompt">
       <svg aria-hidden="true" viewBox="0 0 24 24" width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6" /></svg>
       <h2>Drop a file to upload</h2>
-      <p>To {state.node?.name || 'Files'}</p>
+      <p>To {state.locationName}</p>
       <p>One file at a time. Upload starts when you drop.</p>
     </div>
   </div>
@@ -75,8 +75,8 @@
 
 <div class="heading">
   <div class="heading-identity">
-    <h1 id="files-heading" class="admin-title" tabindex="-1" {@attach state.rowDeletion.attachFocus}>{state.node?.name || 'Files'}</h1>
-    {#if state.phase === 'ready' && state.node}<NodeActions update={state.update} description={state.description} name={state.node.name} {signIn} />{/if}
+    <h1 id="files-heading" class="admin-title" tabindex="-1" {@attach state.rowDeletion.attachFocus}>{state.locationName}</h1>
+    {#if state.phase === 'ready' && state.node && !state.atPersonalRoot}<NodeActions update={state.update} description={state.description} name={state.node.name} {signIn} />{/if}
   </div>
   {#if state.node?.kind === 'directory'}
     <div class="toolbar">
@@ -112,7 +112,7 @@
     {#if state.uploadAvailability === 'sign-in'}
       <p class="availability-error">Sign in to check upload availability. <Button variant="quiet" size="compact" onclick={signIn}>Sign in</Button></p>
     {/if}
-    {#if upload.open && upload.available}<FileUploadForm state={upload} destination={state.node.name || 'Files'} {signIn} />{/if}
+    {#if upload.open && upload.available}<FileUploadForm state={upload} destination={state.locationName} {signIn} />{/if}
     {#if folder.open}<NewFolderForm state={folder} />{/if}
     {#if state.children.length === 0}
       <p role="status">This folder is empty.</p>

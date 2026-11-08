@@ -22,7 +22,7 @@ async def test_undecodable_policy_preserves_owner_authority_and_denies_nonowner(
 ) -> None:
     database = filesystem_runtime.database
     caller = snapshot("alice", "issuer", ())
-    node = await create_filesystem_homes(database=database).get_or_provision(caller)
+    node = await create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver()).get_or_provision(caller)
     grant = AccessGrant(
         node_id=node.id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="bob"),
         permissions={Permission.DISCOVER, Permission.WRITE}, recursive=False,
@@ -56,7 +56,7 @@ async def test_update_returns_commit_snapshot_when_direct_grant_is_revoked_after
     database = filesystem_runtime.database
     owner = snapshot("alice", "issuer", ())
     writer = snapshot("bob", "issuer", ())
-    node = await create_filesystem_homes(database=database).get_or_provision(owner)
+    node = await create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver()).get_or_provision(owner)
     principal = Principal(type=PrincipalType.USER, issuer="issuer", id="bob")
     policies = create_access_control_driver(database=database)
     await policies.add_grant(AccessGrant(
@@ -82,7 +82,7 @@ async def test_policy_io_failure_rolls_back_update_and_is_not_represented_as_una
 ) -> None:
     database = filesystem_runtime.database
     caller = snapshot("alice", "issuer", ())
-    node = await create_filesystem_homes(database=database).get_or_provision(caller)
+    node = await create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver()).get_or_provision(caller)
     transactions = FailingGrantReadTransactions(create_filesystem_transactions(database=database))
     access = AccessMetadataService(VerifiedIdentityResolver(), transactions)
     with pytest.raises(StorageFailure, match="Database I/O failed"):

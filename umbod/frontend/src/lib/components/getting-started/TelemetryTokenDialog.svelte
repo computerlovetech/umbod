@@ -3,15 +3,14 @@
   import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
   import Select from '$lib/components/admin/shared/Select.svelte';
   import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
-  import { nativeDialog } from '$lib/components/shared/dialogs/native-dialog';
+  import ModalShell from '$lib/components/shared/ModalShell.svelte';
   import type { TelemetrySetupState } from './telemetry-setup-state.svelte';
 
   let { state }: { state: TelemetrySetupState } = $props();
   const id = $props.id();
 </script>
 
-<dialog aria-labelledby={`${id}-title`} {@attach nativeDialog(state.closeCreate, () => !state.creating, 'input[name="token-name"]')}>
-  <h2 id={`${id}-title`}>{state.configuration ? 'Token configuration' : 'Create telemetry token'}</h2>
+<ModalShell title={state.configuration ? 'Token configuration' : 'Create telemetry token'} titleId={`${id}-title`} close={state.closeCreate} closeDisabled={state.creating} initialFocus={'input[name="token-name"]'} --modal-width="42rem" --modal-overflow="auto">
   {#if state.configuration}
     <div class="configuration">
       <h3>{state.agent === 'codex' ? '~/.codex/config.toml' : '~/.claude/settings.json'}</h3>
@@ -38,12 +37,9 @@
     </form>
   {/if}
   {#if state.error}<p class="admin-message admin-message--error" role="alert">{state.error}</p>{/if}
-</dialog>
+</ModalShell>
 
 <style>
-  dialog { box-sizing: border-box; width: min(42rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.5rem; background: var(--admin-panel); color: var(--admin-ink); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); box-shadow: var(--admin-shadow-dialog); }
-  dialog::backdrop { background: var(--admin-overlay); }
-  h2 { font-size: 20px; letter-spacing: -0.025em; margin: 0; }
   h3 { font-size: 16px; margin: 0; overflow-wrap: anywhere; }
   p { color: var(--admin-muted); font-size: 14px; line-height: 1.6; }
   a { color: var(--admin-accent-strong); text-underline-offset: 3px; }

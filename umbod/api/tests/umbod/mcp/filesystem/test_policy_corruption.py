@@ -3,6 +3,7 @@ from fastmcp import Client, FastMCP
 
 from umbod.core.callers import AuthenticationProvenance
 from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
+from umbod.core.filesystem.authorization import VerifiedIdentityResolver
 from umbod.infrastructure import InMemoryContentConfig, create_access_control_driver, create_content_driver, create_filesystem_homes
 from umbod.mcp.filesystem.browsing import FilesystemBrowseTool
 from umbod.mcp.filesystem.factory import DatabaseFilesystemServiceFactory
@@ -19,7 +20,7 @@ async def test_undecodable_policy_browse_and_update_return_unavailable_not_priva
         database = runtime.database
         callers = ScopedCallerCapture()
         callers.current.set(caller_snapshot("alice", "issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED))
-        home = await create_filesystem_homes(database=database).get_or_provision(callers.current.get())
+        home = await create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver()).get_or_provision(callers.current.get())
         grant = AccessGrant(
             node_id=home.id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="bob"),
             permissions={Permission.DISCOVER, Permission.WRITE}, recursive=False,

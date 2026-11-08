@@ -2,7 +2,7 @@
   import type { BrowserSubmitFunction as SubmitFunction } from '$lib/admin/operations/browser-submit';
   import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
   import AdminFileUpload from '$lib/components/admin/shared/AdminFileUpload.svelte';
-  import AdminModalShell from '$lib/components/admin/shared/AdminModalShell.svelte';
+  import ModalShell from '$lib/components/shared/ModalShell.svelte';
   import Form from '$lib/components/admin/shared/Form.svelte';
   import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
   import Select from '$lib/components/admin/shared/Select.svelte';
@@ -34,7 +34,7 @@
 <svelte:window onkeydown={state.handleKeydown} />
 
 {#if state.open}
-  <AdminModalShell title={state.mode === 'create' ? 'Add OpenAPI connector' : 'Configure OpenAPI connector'} titleId="openapi-setup-title" close={state.close}>
+  <ModalShell title={state.mode === 'create' ? 'Add OpenAPI connector' : 'Configure OpenAPI connector'} titleId="openapi-setup-title" close={state.close}>
     {#snippet children()}
       {#snippet fields()}
         <input type="hidden" name="connectorId" value={state.connectorId} />
@@ -84,7 +84,7 @@
       {/snippet}
       <Form method="POST" operation={state.mode === 'create' ? 'setup' : 'configure'} enctype="multipart/form-data" {submit} {fields} {actions} />
     {/snippet}
-  </AdminModalShell>
+  </ModalShell>
 {/if}
 
 <style>

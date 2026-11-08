@@ -15,6 +15,7 @@
   import ConnectorSidebarList from '$lib/components/admin/connectors/ConnectorSidebarList.svelte';
   import PublicationConfirmationModal from '$lib/components/admin/connectors/PublicationConfirmationModal.svelte';
   import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
+  import ModalShell from '$lib/components/shared/ModalShell.svelte';
   import AdminSidebarActionMenu from '$lib/components/admin/shared/AdminSidebarActionMenu.svelte';
   import Button from '$lib/components/admin/shared/Button.svelte';
   import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
@@ -93,7 +94,16 @@
   oncancel={state.operations.cancel}
 />
 {#if confirmation && selected}
-  <div class="backdrop" role="presentation"><div class="confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title"><h2 id="confirm-title">Delete connector?</h2><p>This permanently removes the connector and its discovered catalog.</p><form method="POST" data-operation={state.modal} use:browserSubmit={mutationSubmit('delete', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id} /><footer><Button variant="secondary" onclick={state.close}>Cancel</Button><Button type="submit" variant="danger" disabled={state.submitting}>{state.submitting ? 'Working…' : 'Confirm'}</Button></footer></form></div></div>
+  <ModalShell title="Delete connector?" titleId="confirm-title" descriptionId="confirm-description" close={state.close} closeDisabled={state.submitting} role="alertdialog" --modal-width="28rem" --modal-overflow="auto">
+    <p id="confirm-description" class="deletion-description">This permanently removes the connector and its discovered catalog.</p>
+    <form method="POST" data-operation={state.modal} use:browserSubmit={mutationSubmit('delete', selected.display_name)}>
+      <input type="hidden" name="connectorId" value={selected.connector_id} />
+      <footer class="deletion-actions">
+        <Button variant="secondary" type="button" data-dialog-cancel disabled={state.submitting} onclick={state.close}>Cancel</Button>
+        <Button type="submit" variant="danger" disabled={state.submitting}>{state.submitting ? 'Working…' : 'Confirm'}</Button>
+      </footer>
+    </form>
+  </ModalShell>
 {/if}
 {#if form?.message && (form.status === 'stale' || form.status === 'conflict' || form.status === 'authentication' || form.status === 'invalid')}<p class="feedback" role="alert">{form.message}</p>{/if}
 {#if state.operations.busy}<p role="status" class="feedback">Updating MCP connector…</p>{/if}
@@ -167,11 +177,8 @@
   .datetime-pair span { display: grid; gap: .1rem; }
   .datetime-pair strong { color: var(--admin-muted); font-size: 11px; font-weight: 600; }
   .tools h3 { color: var(--admin-ink); font-size: 1rem; margin: 0 0 .875rem; }
-  .backdrop { align-items: center; background: var(--admin-overlay); display: flex; inset: 0; justify-content: center; padding: 1rem; position: fixed; z-index: 110; }
-  .confirm { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: var(--admin-radius-panel); box-shadow: var(--admin-shadow-dialog); box-sizing: border-box; color: var(--admin-ink); max-height: calc(100dvh - 2rem); overflow-y: auto; padding: 1.5rem; width: min(28rem, 100%); }
-  .confirm h2 { font-size: 1.25rem; font-weight: 600; letter-spacing: -.03em; margin: 0; }
-  .confirm p { color: var(--admin-muted); font-size: 14px; line-height: 1.55; margin: 1rem 0 1.5rem; }
-  .confirm footer { border-top: 1px solid var(--admin-border); display: flex; flex-wrap: wrap; gap: .7rem; justify-content: flex-end; padding-top: 1rem; }
+  .deletion-description { color: var(--admin-muted); font-size: 14px; line-height: 1.55; margin: 1rem 0 1.5rem; }
+  .deletion-actions { border-top: 1px solid var(--admin-border); display: flex; flex-wrap: wrap; gap: .7rem; justify-content: flex-end; padding-top: 1rem; }
   .danger-text[role='menuitem'] { color: var(--admin-danger-text); }
   .feedback { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); color: var(--admin-muted); font-size: 14px; line-height: 1.55; padding: 1rem; }
   .feedback[role='alert'] { background: var(--admin-danger-bg); border-color: var(--admin-danger-border); color: var(--admin-danger-text); }

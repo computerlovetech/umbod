@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 
-const sharedShell = readFileSync('src/lib/components/admin/shared/AdminModalShell.svelte', 'utf8');
+const sharedShell = readFileSync('src/lib/components/shared/ModalShell.svelte', 'utf8');
 const select = readFileSync('src/lib/components/admin/shared/Select.svelte', 'utf8');
 const openApiModal = readFileSync('src/lib/components/admin/openapi-connectors/OpenApiConnectorSetupModal.svelte', 'utf8');
 const publicationModal = readFileSync('src/lib/components/admin/connectors/PublicationConfirmationModal.svelte', 'utf8');
@@ -15,25 +15,25 @@ const mcpPage = readFileSync('src/lib/components/admin/downstream-mcp-connectors
 
  describe('admin connector modal consistency', () => {
   test('both setup modals compose the shared accessible shell', () => {
-    expect(openApiModal).toContain('import AdminModalShell');
-    expect(mcpModal).toContain('import AdminModalShell');
-    expect(openApiModal).toContain('<AdminModalShell');
-    expect(mcpModal).toContain('<AdminModalShell');
-    expect(sharedShell).toContain('role="dialog"');
+    expect(openApiModal).toContain('import ModalShell');
+    expect(mcpModal).toContain('import ModalShell');
+    expect(openApiModal).toContain('<ModalShell');
+    expect(mcpModal).toContain('<ModalShell');
+    expect(sharedShell).toContain('<dialog {role}');
     expect(sharedShell).toContain('aria-labelledby={titleId}');
     expect(sharedShell).toContain('aria-label="Close"');
     expect(sharedShell).toContain('<Button variant="quiet" iconOnly');
   });
 
   test('confirmation dialogs compose the same shared shell', () => {
-    expect(publicationModal).toContain('import AdminModalShell');
-    expect(publicationModal).toContain('<AdminModalShell');
+    expect(publicationModal).toContain('import ModalShell');
+    expect(publicationModal).toContain('<ModalShell');
     expect(publicationModal).toContain('descriptionId="publication-confirmation-message"');
-    expect(confirmationDialog).toContain('import AdminModalShell');
-    expect(confirmationDialog).toContain('<AdminModalShell');
+    expect(confirmationDialog).toContain('import ModalShell');
+    expect(confirmationDialog).toContain('<ModalShell');
     expect(publicationModal).not.toContain('class="backdrop"');
     expect(confirmationDialog).not.toContain('class="backdrop"');
-    expect(sharedShell).toContain("event.key === 'Escape'");
+    expect(sharedShell).toContain('nativeDialog(close, () => !closeDisabled, initialFocus)');
   });
 
   test('both modals use the shared select and preserve hidden form values', () => {
@@ -54,7 +54,7 @@ const mcpPage = readFileSync('src/lib/components/admin/downstream-mcp-connectors
     expect(catalogPage).toContain('aria-label="Add connector"');
     expect(catalogPage).toContain('data.connectors.filter((connector) => connector.isConfigured)');
     expect(catalogModal).toContain('connectors.filter((connector) => !connector.isConfigured)');
-    expect(catalogModal).toContain('<AdminModalShell');
+    expect(catalogModal).toContain('<ModalShell');
     expect(catalogModal).toContain('aria-label="Available connectors"');
     expect(catalogModal).toContain('<ConnectorConfigurationForm');
     expect(catalogModal).toContain('onsaved={state.close}');

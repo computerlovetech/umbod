@@ -6,6 +6,9 @@ import { browseResultSchema, type BrowseResult, updateDescriptionSchema, updateN
 export class FilesystemRoute implements FilesystemApi {
   constructor(private readonly transport: Transport, private readonly transfer: UploadTransferPort) {}
 
+  getHome = (signal?: AbortSignal): Promise<NodeSummary> =>
+    this.transport.request({ method: 'POST', path: '/me/filesystem/home', outputSchema: nodeSummarySchema, signal });
+
   browse = async (target: string | null, signal?: AbortSignal): Promise<BrowseResult> => {
     const id = target === null ? null : nodeIdSchema.parse(target);
     const result = await this.transport.request({

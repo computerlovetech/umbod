@@ -8,6 +8,9 @@ import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
 import { UploadState } from '$lib/files/state/upload-state.svelte';
 import type { NodeAccess } from '$lib/files/domain/sharing';
 import FilesContent from './FilesContent.svelte';
+import NodeShareButton from './NodeShareButton.svelte';
+import NodeSharingDialog from './NodeSharingDialog.svelte';
+import { SharingEligibilityState } from '$lib/files/state/sharing-eligibility-state.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
 let files: FilesState | undefined;
@@ -81,6 +84,35 @@ async function search(query: string): Promise<HTMLInputElement> {
 function submit(): void { document.querySelector('dialog form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }
 
 describe('Files group sharing UI', (): void => {
+  test('uses the home label for the share button, dialog heading and saved announcement after a canonical rename', async (): Promise<void> => {
+    const api = new InMemoryFilesApi(rootId, filesystemFixture);
+    const home = { ...filesystemFixture[1], name: 'Renamed home' };
+    api.sharing.configure({ ...view, node_id: home.id }, groups);
+    const sharing = new SharingEligibilityState(api.sharing, (node): string => node.id === home.id ? 'Files' : node.name);
+    try {
+      sharing.seed([{ node_id: home.id, share: true }]);
+      const target = document.createElement('div');
+      document.body.append(target);
+      component = mount(NodeShareButton, { target, props: { node: home, sharing } });
+      await tick();
+      const trigger = button('Share “Files”');
+      expect(trigger.title).toBe('Share “Files”');
+      trigger.click();
+      await vi.waitFor(() => expect(sharing.dialog.phase).toBe('ready'));
+      await unmount(component);
+      component = mount(NodeSharingDialog, { target, props: { state: sharing.dialog, signIn: vi.fn() } });
+      await tick();
+      expect(document.querySelector('dialog h2')?.textContent).toBe('Share “Files”');
+      expect(sharing.dialog.node?.name).toBe('Renamed home');
+      button('Save sharing').click();
+      await vi.waitFor(() => expect(sharing.dialog.open).toBe(false));
+      expect(sharing.dialog.status).toBe('Sharing updated for “Files”.');
+      expect(home.name).toBe('Renamed home');
+    } finally {
+      sharing.dispose();
+    }
+  });
+
   test('renders authorized current directory, directory/file rows and file details; denied defaults remain hidden', async (): Promise<void> => {
     const { state } = await setup(rootId);
     await vi.waitFor(() => expect(button('Share “Files”')).toBeDefined());
@@ -107,9 +139,8 @@ describe('Files group sharing UI', (): void => {
     trigger.click();
     await vi.waitFor(() => expect(document.querySelector('input[role="combobox"]')).not.toBeNull());
     await tick();
-    expect(document.activeElement).toBe(button('Close sharing'));
-    expect(button('Close sharing').hasAttribute('data-dialog-cancel')).toBe(true);
-    button('Close sharing').click();
+    expect(document.activeElement).toBe(button('Close'));
+    button('Close').click();
     await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
     await vi.waitFor(() => expect(document.activeElement).toBe(trigger));
     expect(replace).not.toHaveBeenCalled();
@@ -220,7 +251,7 @@ describe('Files group sharing UI', (): void => {
     expect(document.activeElement).toBe(picker);
   });
 
-  test.each(['Cancel', 'Close sharing', 'escape', 'backdrop'])('dismisses by %s and restores invoking focus without mutation', async (mechanism): Promise<void> => {
+  test.each(['Cancel', 'Close', 'escape', 'backdrop'])('dismisses by %s and restores invoking focus without mutation', async (mechanism): Promise<void> => {
     const { api } = await setup();
     const replace = vi.spyOn(api.sharing, 'replaceAccess');
     const trigger = button('Actions for “Notes.txt”');
@@ -247,7 +278,7 @@ describe('Files group sharing UI', (): void => {
     expect(document.querySelector('[role="listbox"]')).toBeNull();
     expect(document.querySelector<HTMLInputElement>('input[role="combobox"]')?.disabled).toBe(true);
     expect(button('Cancel').disabled).toBe(true);
-    expect(button('Close sharing').disabled).toBe(true);
+    expect(button('Close').disabled).toBe(true);
     const dialog = document.querySelector('dialog')!;
     dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
     dialog.dispatchEvent(new MouseEvent('click', { clientX: -10, clientY: -10, bubbles: true }));
