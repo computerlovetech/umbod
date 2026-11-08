@@ -17,7 +17,7 @@
 
 {#if menuState.available}
   <div class="node-actions" {@attach menuState.attach}>
-    <ActionMenu open={menuState.open} label={`Actions for “${name || 'Files'}”`} onopenchange={menuState.setOpen} --action-menu-trigger-size="2.75rem" --action-menu-trigger-z-index="1" --action-menu-min-width="12.5rem">
+    <ActionMenu open={menuState.open} label={`Actions for “${name || 'Files'}”`} onopenchange={menuState.setOpen} --action-menu-trigger-size="var(--node-actions-trigger-size, 2.75rem)" --action-menu-trigger-z-index="1" --action-menu-min-width="12.5rem">
       {#snippet trigger()}
         <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
       {/snippet}
@@ -47,6 +47,6 @@
   .action-label { display: flex; align-items: center; gap: 0.65rem; white-space: normal; }
   .node-actions button.danger { color: var(--admin-danger); }
   .node-actions button.danger:hover:not(:disabled) { background: color-mix(in srgb, var(--admin-danger) 8%, var(--admin-panel)); }
-  .description-status:empty { display: none; }
+  .description-status { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
   [role='alert'] { color: var(--admin-danger); }
 </style>

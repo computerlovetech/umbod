@@ -50,6 +50,11 @@ tags:
 - [WorkspaceShell](src/lib/components/shared/workspace/WorkspaceShell.svelte) — Contextual sidebar, optional section heading and return link, account and logout frame; parents own destinations and eligibility.
 - [AccountPicture](src/lib/components/header/AccountPicture.svelte) — Account image with accessible placeholder; use for consistent user identity imagery in headers and navigation.
 
+## Files presentation
+
+- [FileTypeIcon](src/lib/components/files/FileTypeIcon.svelte) — Accessible file-format and folder SVGs; groups common MIME types and extensions with a generic fallback, without loading file contents.
+- [FilesContainer](src/lib/components/files/FilesContainer.svelte) — Common file/folder frame with fixed identity, navigation, sharing, action and description slots; callers own eligibility and content.
+
 ## Connector and catalogue presentation
 
 - [ConnectorIcon](src/lib/components/admin/connectors/ConnectorIcon.svelte) — Decorative image or initials in standard sizes; use for connector identity, with accessible naming supplied elsewhere.

@@ -21,11 +21,26 @@ function fixture(canRead: (node: NodeSummary) => boolean = () => true): { api: I
 }
 
 describe('compact file navigation', () => {
-  test('complete root has no redundant path bar or Up button', async (): Promise<void> => {
+  test('home retains the same path bar with a plain current Files label and no parent link', async (): Promise<void> => {
     const { state } = fixture();
     await state.select(filesystemFixture[0]);
     const document = documentFor(state);
-    expect(document.querySelector('nav')).toBeNull();
+    expect(document.querySelector('.desktop-path[aria-label="File path"]')).not.toBeNull();
+    expect(document.querySelector('.desktop-path [aria-current="page"]')?.textContent).toBe('Files');
+    expect(document.querySelector('.mobile-path [aria-current="page"]')?.textContent).toBe('Files');
+    expect(document.querySelector('.partial')).toBeNull();
+    expect(document.querySelector('a, button')).toBeNull();
+  });
+
+  test('a nested personal home uses Files rather than its stored name or system ancestors', async (): Promise<void> => {
+    const { api } = fixture();
+    const state = new FilesNavigationState(api.filesystem, () => folderId);
+    await state.select(filesystemFixture[1]);
+    const document = documentFor(state);
+    expect(document.querySelector('.desktop-path [aria-current="page"]')?.textContent).toBe('Files');
+    expect(document.querySelector('.mobile-path [aria-current="page"]')?.textContent).toBe('Files');
+    expect(document.body.textContent).not.toContain('Projects');
+    expect(document.body.textContent).not.toContain('Shared files');
     expect(document.querySelector('a, button')).toBeNull();
   });
 

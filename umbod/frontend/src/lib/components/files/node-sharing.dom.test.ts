@@ -6,7 +6,7 @@ import { deferred, fileId, filesystemFixture, folderId, rootId } from '$lib/file
 import { FilesState } from '$lib/files/state/files-state.svelte';
 import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
 import { UploadState } from '$lib/files/state/upload-state.svelte';
-import type { NodeAccess } from '$lib/files/domain/sharing';
+import type { NodeAccess, SharingRecipient, SharingRecipientSearchResult } from '$lib/files/domain/sharing';
 import FilesContent from './FilesContent.svelte';
 import NodeShareButton from './NodeShareButton.svelte';
 import NodeSharingDialog from './NodeSharingDialog.svelte';
@@ -25,11 +25,11 @@ afterEach(async (): Promise<void> => {
 });
 
 const view: NodeAccess = { node_id: fileId, revision: 'opaque', grants: [{ recipient: { type: 'group', group_id: ' Provider Team ', label: 'Design' }, permissions: ['write', 'share'] }, { recipient: { type: 'user', user_id: 'person-a', label: 'Hidden person' }, permissions: ['read'] }], blocked_recipients: [{ type: 'group', group_id: 'blocked' }, { type: 'user', user_id: 'protected-person' }] };
-const groups = [{ group_id: ' Provider Team ', label: 'Design', description: 'Design team' }, { group_id: 'second', label: 'Readers', description: 'Project readers' }];
+const recipients: SharingRecipient[] = [{ type: 'group', group_id: ' Provider Team ', label: 'Design' }, { type: 'group', group_id: 'second', label: 'Readers' }, { type: 'user', user_id: 'person-a', label: 'Hidden person' }, { type: 'user', user_id: 'person-b', label: 'New person' }];
 
 async function setup(id: string = folderId, configure = true): Promise<{ api: InMemoryFilesApi; state: FilesState; signIn: ReturnType<typeof vi.fn> }> {
   const api = new InMemoryFilesApi(rootId, filesystemFixture);
-  if (configure) for (const node of filesystemFixture) api.sharing.configure({ ...view, node_id: node.id }, groups);
+  if (configure) for (const node of filesystemFixture) api.sharing.configure({ ...view, node_id: node.id }, recipients);
   const state = new FilesState(api);
   files = state;
   const signIn = vi.fn();
@@ -61,7 +61,7 @@ async function open(label = 'Share “Notes.txt”'): Promise<void> {
 
 async function select(label: string): Promise<void> {
   const picker = document.querySelector<HTMLInputElement>('input[role="combobox"]')!;
-  picker.focus();
+  await search(label);
   picker.click();
   await tick();
   const option = Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find((candidate) => candidate.textContent?.trim().startsWith(label));
@@ -78,6 +78,7 @@ async function search(query: string): Promise<HTMLInputElement> {
   picker.dispatchEvent(new Event('input', { bubbles: true }));
   flushSync();
   await tick();
+  await vi.waitFor(() => expect(document.querySelector('dialog')?.textContent).not.toContain('Searching…'));
   return picker;
 }
 
@@ -87,7 +88,7 @@ describe('Files group sharing UI', (): void => {
   test('uses the home label for the share button, dialog heading and saved announcement after a canonical rename', async (): Promise<void> => {
     const api = new InMemoryFilesApi(rootId, filesystemFixture);
     const home = { ...filesystemFixture[1], name: 'Renamed home' };
-    api.sharing.configure({ ...view, node_id: home.id }, groups);
+    api.sharing.configure({ ...view, node_id: home.id }, recipients);
     const sharing = new SharingEligibilityState(api.sharing, (node): string => node.id === home.id ? 'Files' : node.name);
     try {
       sharing.seed([{ node_id: home.id, share: true }]);
@@ -104,7 +105,7 @@ describe('Files group sharing UI', (): void => {
       await tick();
       expect(document.querySelector('dialog h2')?.textContent).toBe('Share “Files”');
       expect(sharing.dialog.node?.name).toBe('Renamed home');
-      button('Save sharing').click();
+      button('Save group sharing').click();
       await vi.waitFor(() => expect(sharing.dialog.open).toBe(false));
       expect(sharing.dialog.status).toBe('Sharing updated for “Files”.');
       expect(home.name).toBe('Renamed home');
@@ -125,7 +126,7 @@ describe('Files group sharing UI', (): void => {
     expect(document.querySelector('tbody button[aria-label^="Share"]')).toBeNull();
     await state.load(fileId);
     await tick();
-    expect(button('Share “Notes.txt”').closest('[aria-label="File details"]')).not.toBeNull();
+    expect(button('Share “Notes.txt”').closest('[aria-label="Location actions"]')).not.toBeNull();
     state.sharing.reset();
     await tick();
     expect(document.querySelector('button[aria-label^="Share"]')).toBeNull();
@@ -166,18 +167,18 @@ describe('Files group sharing UI', (): void => {
     const replace = vi.spyOn(api.sharing, 'replaceAccess');
     await open();
     expect(document.querySelector('dialog')?.getAttribute('aria-labelledby')).toBeTruthy();
-    expect(document.querySelector('form')?.getAttribute('aria-label')).toBe('Manage group sharing');
-    expect(document.querySelector('dialog')?.textContent).toContain('Design team');
+    expect(document.querySelector('form')?.getAttribute('aria-label')).toBe('Manage sharing');
+    expect(document.querySelector('dialog')?.textContent).toContain('Design');
     expect(document.querySelector('dialog')?.textContent).not.toContain('Hidden person');
     expect(document.querySelector('dialog')?.textContent).not.toContain('protected-person');
     expect(document.querySelector('dialog')?.textContent).not.toContain('Discover makes this item visible');
     expect(document.querySelector('dialog')?.textContent).not.toContain('Other existing access rules');
     expect(document.querySelector('dialog')?.textContent).not.toContain('No editable group access');
     expect(document.querySelector('dialog')?.textContent).not.toContain('Only this folder is shared');
-    const original = document.querySelector('section.group')!;
+    const original = document.querySelector('section.recipient')!;
     expect(Array.from(original.querySelectorAll<HTMLInputElement>('input:checked')).map((input) => input.parentElement?.textContent?.trim())).toEqual(['Write', 'Manage sharing']);
     await select('Readers');
-    const second = document.querySelectorAll('section.group')[1];
+    const second = document.querySelectorAll('section.recipient')[1];
     expect(Array.from(second.querySelectorAll<HTMLInputElement>('input:checked')).map((input) => input.parentElement?.textContent?.trim())).toEqual(['Discover', 'Read']);
     const deletion = Array.from(second.querySelectorAll<HTMLInputElement>('input')).find((input) => input.parentElement?.textContent?.trim() === 'Delete')!;
     deletion.click();
@@ -198,20 +199,20 @@ describe('Files group sharing UI', (): void => {
     await open();
     expect(document.querySelector('select')).toBeNull();
     expect(document.querySelector('dialog')?.textContent).not.toContain('Find a registered group');
-    const picker = await search('PROJECT');
+    const picker = await search('Readers');
     const list = document.querySelector('[role="listbox"]');
     expect(list?.closest('dialog')).toBe(document.querySelector('dialog'));
     expect(list?.textContent).toContain('Readers');
     expect(list?.textContent).not.toContain('Design');
     await search('missing-group');
-    expect(document.querySelector('[role="listbox"]')?.textContent).toContain('No groups found');
+    expect(document.querySelector('[role="listbox"]')?.textContent).toContain('No recipients found');
     expect(document.querySelectorAll('[role="option"]')).toHaveLength(0);
     await search('readers');
     const enter = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
     picker.dispatchEvent(enter);
     await tick();
     expect(enter.defaultPrevented).toBe(true);
-    expect(document.querySelectorAll('section.group')).toHaveLength(2);
+    expect(document.querySelectorAll('section.recipient')).toHaveLength(2);
     expect(picker.value).toBe('');
     expect(document.querySelector('[role="listbox"]')).toBeNull();
     expect(document.activeElement).toBe(picker);
@@ -225,16 +226,78 @@ describe('Files group sharing UI', (): void => {
     button('Remove Design').click();
     await tick();
     await search('provider team');
-    expect(document.querySelector('[role="option"]')?.textContent?.trim()).toBe('Design');
-    expect(document.querySelector('[role="listbox"]')?.textContent).not.toContain('Provider Team');
+    expect(document.querySelector('[role="option"]')?.textContent?.trim()).toBe('Design ( Provider Team )');
+    expect(document.querySelector('[role="listbox"]')?.textContent).toContain('Provider Team');
     expect(document.querySelector('[role="listbox"]')?.textContent).not.toContain('Design team');
     await select('Design');
-    expect(document.querySelector('section.group')?.textContent).toContain(' Provider Team ');
+    expect(document.querySelector('section.recipient')?.textContent).toContain(' Provider Team ');
     submit();
     await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
     expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'opaque', {
       grants: [{ recipient: { type: 'group', group_id: ' Provider Team ' }, permissions: ['discover', 'read'] }]
     }, 'group');
+  });
+
+  test('keeps tabs, picker and current access mounted while another recipient type loads', async (): Promise<void> => {
+    const { api } = await setup();
+    await open();
+    const dialog = document.querySelector('dialog');
+    const picker = document.querySelector<HTMLInputElement>('input[role="combobox"]');
+    const groupTab = button('Groups');
+    const userTab = button('Users');
+    const group = document.querySelector('section.recipient');
+    expect(picker).not.toBeNull();
+    expect(group?.getAttribute('aria-label')).toBe('Design');
+    const response = deferred<NodeAccess>();
+    const inspect = vi.spyOn(api.sharing, 'inspectAccess').mockReturnValueOnce(response.promise);
+    userTab.focus();
+    userTab.click();
+    await tick();
+    expect(inspect).toHaveBeenCalledWith(fileId, 'user', expect.any(AbortSignal));
+    expect(document.querySelector('dialog')).toBe(dialog);
+    expect(document.querySelector('input[role="combobox"]')).toBe(picker);
+    expect(button('Groups')).toBe(groupTab);
+    expect(button('Users')).toBe(userTab);
+    expect(document.querySelector('section.recipient')).toBe(group);
+    expect(picker?.disabled).toBe(true);
+    expect(picker?.closest('fieldset')?.getAttribute('aria-busy')).toBe('true');
+    expect(groupTab.closest('fieldset')?.disabled).toBe(true);
+    expect(button('Save group sharing').disabled).toBe(true);
+    response.resolve({ ...view, grants: [view.grants[1]], blocked_recipients: [view.blocked_recipients[1]] });
+    await vi.waitFor(() => expect(picker?.disabled).toBe(false));
+    expect(document.querySelector('input[role="combobox"]')).toBe(picker);
+    expect(button('Users')).toBe(userTab);
+    expect(userTab.getAttribute('aria-pressed')).toBe('true');
+    expect(picker?.placeholder).toBe('Search users by name');
+    expect(picker?.closest('fieldset')?.getAttribute('aria-busy')).toBe('false');
+    expect(document.querySelector('section.recipient')?.getAttribute('aria-label')).toBe('Hidden person');
+    expect(button('Save user sharing').disabled).toBe(false);
+    expect(document.activeElement).toBe(userTab);
+  });
+
+  test('keeps one search-status row mounted between idle, loading and search results', async (): Promise<void> => {
+    const { api } = await setup();
+    await open();
+    const status = document.querySelector('.search-status');
+    expect(status).not.toBeNull();
+    expect(status?.textContent).toBe('');
+    const response = deferred<SharingRecipientSearchResult>();
+    const lookup = vi.spyOn(api.sharing, 'searchRecipients').mockReturnValueOnce(response.promise);
+    const picker = document.querySelector<HTMLInputElement>('input[role="combobox"]')!;
+    picker.focus();
+    picker.value = 'read';
+    picker.dispatchEvent(new Event('input', { bubbles: true }));
+    flushSync();
+    expect(document.querySelector('.search-status')).toBe(status);
+    expect(status?.textContent).toBe('Searching…');
+    await vi.waitFor(() => expect(lookup).toHaveBeenCalledOnce());
+    response.resolve({ recipients: [{ type: 'group', group_id: 'second', label: 'Readers' }], has_more: true });
+    await vi.waitFor(() => expect(status?.textContent).toBe('Refine search for more matches.'));
+    expect(document.querySelector('.search-status')).toBe(status);
+    expect(document.querySelectorAll('.recipient-picker > [role="status"]')).toHaveLength(1);
+    await search('missing');
+    expect(document.querySelector('.search-status')).toBe(status);
+    expect(status?.textContent).toBe('');
   });
 
   test('Escape dismisses search results without dismissing the sharing dialog', async (): Promise<void> => {
@@ -279,6 +342,10 @@ describe('Files group sharing UI', (): void => {
     expect(document.querySelector<HTMLInputElement>('input[role="combobox"]')?.disabled).toBe(true);
     expect(button('Cancel').disabled).toBe(true);
     expect(button('Close').disabled).toBe(true);
+    expect(button('Groups').closest('fieldset')?.disabled).toBe(true);
+    expect(button('Users').closest('fieldset')?.disabled).toBe(true);
+    button('Users').click();
+    expect(button('Groups').getAttribute('aria-pressed')).toBe('true');
     const dialog = document.querySelector('dialog')!;
     dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
     dialog.dispatchEvent(new MouseEvent('click', { clientX: -10, clientY: -10, bubbles: true }));
@@ -297,12 +364,81 @@ describe('Files group sharing UI', (): void => {
     const replace = vi.spyOn(api.sharing, 'replaceAccess').mockRejectedValueOnce(new HttpError(412, 'Conflict', {}));
     submit();
     await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('Access changed elsewhere'));
-    expect(document.querySelectorAll('section.group')).toHaveLength(2);
-    expect(button('Save sharing').disabled).toBe(true);
+    expect(document.querySelectorAll('section.recipient')).toHaveLength(2);
+    expect(button('Save group sharing').disabled).toBe(true);
     expect(replace).toHaveBeenCalledOnce();
     button('Reload latest access').click();
-    await vi.waitFor(() => expect(document.querySelectorAll('section.group')).toHaveLength(1));
-    expect(button('Save sharing').disabled).toBe(false);
+    await vi.waitFor(() => expect(document.querySelectorAll('section.recipient')).toHaveLength(1));
+    expect(button('Save group sharing').disabled).toBe(false);
+  });
+
+  test('searches and edits users through the same modal without replacing group grants', async (): Promise<void> => {
+    const { api } = await setup();
+    await open();
+    button('Users').click();
+    await vi.waitFor(() => expect(document.querySelector('section.recipient')?.textContent).toContain('Hidden person'));
+    expect(button('Save user sharing')).toBeDefined();
+    await select('New person');
+    const added = document.querySelector('section[aria-label="New person"]')!;
+    const write = Array.from(added.querySelectorAll<HTMLInputElement>('input')).find((input) => input.parentElement?.textContent?.trim() === 'Write')!;
+    expect(write).toBeDefined();
+    write.click();
+    button('Remove Hidden person').click();
+    await tick();
+    const replace = vi.spyOn(api.sharing, 'replaceAccess');
+    button('Save user sharing').click();
+    await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
+    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'opaque', { grants: [{ recipient: { type: 'user', user_id: 'person-b' }, permissions: ['discover', 'read', 'write'] }] }, 'user');
+    expect((await api.sharing.inspectAccess(fileId, 'group')).grants).toEqual([view.grants[0]]);
+  });
+
+  test('dirty scope changes offer Keep editing or Discard changes', async (): Promise<void> => {
+    await setup();
+    await open();
+    button('Remove Design').click();
+    await tick();
+    button('Users').click();
+    await tick();
+    expect(document.querySelector('[aria-label="Unsaved sharing changes"]')).not.toBeNull();
+    expect(button('Save group sharing').disabled).toBe(true);
+    button('Keep editing').click();
+    await tick();
+    expect(button('Groups').getAttribute('aria-pressed')).toBe('true');
+    expect(document.querySelectorAll('section.recipient')).toHaveLength(0);
+    button('Users').click();
+    await tick();
+    button('Discard changes').click();
+    await vi.waitFor(() => expect(document.querySelector('section.recipient')?.textContent).toContain('Hidden person'));
+    expect(button('Users').getAttribute('aria-pressed')).toBe('true');
+    expect(button('Save user sharing').disabled).toBe(false);
+  });
+
+  test('blank search shows guidance without requesting recipients', async (): Promise<void> => {
+    const { api } = await setup();
+    const searchRecipients = vi.spyOn(api.sharing, 'searchRecipients');
+    await open();
+    const picker = await search('   ');
+    picker.click();
+    await tick();
+    expect(document.querySelector('[role="listbox"]')?.textContent).toContain('Type a name to search');
+    expect(document.querySelectorAll('[role="option"]')).toHaveLength(0);
+    expect(searchRecipients).not.toHaveBeenCalled();
+  });
+
+  test('failed search leaves loaded permissions editable', async (): Promise<void> => {
+    const { api } = await setup();
+    await open();
+    vi.spyOn(api.sharing, 'searchRecipients').mockRejectedValueOnce(new Error('offline'));
+    await search('Readers');
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain("Couldn't search recipients");
+    const read = Array.from(document.querySelectorAll<HTMLInputElement>('section.recipient input')).find((input) => input.parentElement?.textContent?.trim() === 'Read')!;
+    expect(read.disabled).toBe(false);
+    read.click();
+    await tick();
+    expect(read.checked).toBe(true);
+    expect(button('Save group sharing').disabled).toBe(false);
+    button('Save group sharing').click();
+    await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
   });
 
   test('restores the row menu trigger after sharing is revoked while other actions remain', async (): Promise<void> => {

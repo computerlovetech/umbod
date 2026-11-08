@@ -8,7 +8,7 @@ from umbod.core.callers import CallerSnapshot
 from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
 from umbod.core.filesystem.authorization import FilesystemIdentityResolver
 from umbod.core.filesystem.sharing import (
-    EligibleSharingGroup, EligibleSharingGroups,
+    GroupSharingRecipient, SharingRecipientSearchQuery, SharingRecipientSearchResult,
     FilesystemSharing, InvalidSharingPolicy, SharingPolicyUnavailable,
     NodePolicyView, ReplaceNodePolicy, SharingScope, SharingRecipientType,
     GroupSharingTarget, SharingGrantSummary,
@@ -180,21 +180,23 @@ def test_group_ids_are_exact_registered_recipients_without_automatic_creation(
     assert accepted.json()["grants"][0]["recipient"]["group_id"] == " Exact "
 
 
+@pytest.mark.parametrize("suffix", ["", "/recipients?query=team"])
 @pytest.mark.parametrize("error,status,code", [
     (InvalidSharingPolicy("private group state"), 422, "filesystem_sharing_invalid"),
     (SharingPolicyUnavailable("private issuer"), 503, "filesystem_policy_unavailable"),
 ])
 def test_domain_errors_are_sanitized(
-    sharing_http: FilesystemHttp, error: Exception, status: int, code: str,
+    sharing_http: FilesystemHttp, error: Exception, status: int, code: str, suffix: str,
 ) -> None:
     service = create_autospec(FilesystemSharing, instance=True)
     service.inspect.side_effect = error
+    service.search_recipients.side_effect = error
 
     def provide() -> FilesystemSharing:
         return service
 
     sharing_http.app.dependency_overrides[get_filesystem_sharing] = provide
-    response = sharing_http.client.get(f"{BASE}/nodes/{uuid4()}/access")
+    response = sharing_http.client.get(f"{BASE}/nodes/{uuid4()}/access" + suffix)
     assert response.status_code == status
     assert response.json()["detail"]["code"] == code
     assert "private" not in response.text
@@ -282,27 +284,33 @@ def test_nonadmin_owner_can_select_registered_groups_without_admin_catalogue_acc
         group_id=" Exact ", label="Display label", description="Managed collaboration",
     ))
     path = access_path(private_node)
-    eligible = sharing_http.client.get(path + "/eligible-groups")
+    search_path = path + "/recipients?query=display&recipient_type=group"
+    eligible = sharing_http.client.get(search_path)
     assert eligible.status_code == 200, eligible.text
-    assert eligible.json() == {"groups": [
-        {"group_id": " Exact ", "label": "Display label", "description": "Managed collaboration"},
-        {"group_id": "team", "label": "team", "description": ""},
-    ]}
+    assert eligible.json() == {"recipients": [
+        {"type": "group", "group_id": " Exact ", "label": "Display label"},
+    ], "has_more": False}
     assert sharing_http.client.get("/api/admin/groups").status_code in (401, 403)
     assert sharing_http.client.get("/api/me/groups").status_code == 404
     grant_recipient(sharing_http, private_node, {Permission.DISCOVER, Permission.SHARE})
-    assert sharing_http.client.get(path + "/eligible-groups", headers={"Authorization": "Bearer bob"}).json() == eligible.json()
+    assert sharing_http.client.get(search_path, headers={"Authorization": "Bearer bob"}).json() == eligible.json()
+    assert sharing_http.client.get(path + "/eligible-groups").status_code == 404
 
 
 @pytest.mark.parametrize("permissions", [set(), {Permission.DISCOVER}, {Permission.SHARE}])
-def test_eligible_groups_requires_both_permissions_and_hides_missing_target(
+@pytest.mark.parametrize("recipient_type", ["group", "user", ""])
+def test_recipient_search_requires_both_permissions_and_hides_missing_target(
     sharing_http: FilesystemHttp, private_node: dict[str, object], permissions: set[Permission],
+    recipient_type: str,
 ) -> None:
     if permissions:
         grant_recipient(sharing_http, private_node, permissions)
     headers = {"Authorization": "Bearer bob"}
-    hidden = sharing_http.client.get(access_path(private_node) + "/eligible-groups", headers=headers)
-    missing = sharing_http.client.get(f"{BASE}/nodes/{uuid4()}/access/eligible-groups", headers=headers)
+    params = {"query": "team"}
+    if recipient_type:
+        params["recipient_type"] = recipient_type
+    hidden = sharing_http.client.get(access_path(private_node) + "/recipients", headers=headers, params=params)
+    missing = sharing_http.client.get(f"{BASE}/nodes/{uuid4()}/access/recipients", headers=headers, params=params)
     assert hidden.status_code == missing.status_code == 403
     assert hidden.json() == missing.json()
     assert "team" not in hidden.text
@@ -313,13 +321,17 @@ class RecordingSharing:
         self.view = NodePolicyView(node_id=node_id, revision="before", grants=(), blocked_recipients=())
         self.commands: list[ReplaceNodePolicy] = []
         self.scopes: list[SharingScope] = []
+        self.searches: list[SharingRecipientSearchQuery] = []
 
-    async def eligible_groups(self, snapshot: CallerSnapshot, node_id: UUID) -> EligibleSharingGroups:
+    async def search_recipients(
+        self, snapshot: CallerSnapshot, node_id: UUID, query: SharingRecipientSearchQuery,
+    ) -> SharingRecipientSearchResult:
         assert node_id == self.view.node_id
         assert snapshot.caller
-        return EligibleSharingGroups(groups=(EligibleSharingGroup(
-            group_id=" Exact ", label="Display label", description="Collaboration",
-        ),))
+        self.searches.append(query)
+        return SharingRecipientSearchResult(recipients=(GroupSharingRecipient(
+            type="group", group_id=" Exact ", label="Display label",
+        ),), has_more=True)
 
     async def inspect(self, snapshot: CallerSnapshot, node_id: UUID, scope: SharingScope) -> NodePolicyView:
         self.scopes.append(scope)
@@ -357,11 +369,14 @@ def test_routes_use_sharing_port_and_return_its_authoritative_projection(
 
     sharing_http.app.dependency_overrides[get_filesystem_sharing] = provide
     path = f"{BASE}/nodes/{identifier}/access"
-    eligible = sharing_http.client.get(path + "/eligible-groups")
+    eligible = sharing_http.client.get(path + "/recipients", params={"query": "Display"})
     assert eligible.status_code == 200
-    assert eligible.json() == {"groups": [{
-        "group_id": " Exact ", "label": "Display label", "description": "Collaboration",
-    }]}
+    assert eligible.json() == {"recipients": [{
+        "type": "group", "group_id": " Exact ", "label": "Display label",
+    }], "has_more": True}
+    assert service.searches == [SharingRecipientSearchQuery(
+        query="Display", scope=SharingScope(recipient_types=frozenset(("group", "user"))),
+    )]
     assert "etag" not in eligible.headers
     assert eligible.headers["cache-control"] == "no-store"
     inspected = sharing_http.client.get(path)
@@ -382,6 +397,84 @@ def test_routes_use_sharing_port_and_return_its_authoritative_projection(
         "recipient_type": recipient_type, "expected_revision": "before",
         "grants": [{"recipient": recipient, "permissions": ["read"]}],
     }
+
+
+@pytest.mark.parametrize("recipient_type,expected_types", [
+    ("", {"group", "user"}), ("group", {"group"}), ("user", {"user"}),
+])
+def test_recipient_search_returns_only_safe_matching_local_recipients(
+    sharing_http: FilesystemHttp, private_node: dict[str, object], observed_user: str,
+    recipient_type: str, expected_types: set[str],
+) -> None:
+    register_recipient(sharing_http, "reader-team")
+    observe_user(sharing_http, "foreign", "private-subject", "Foreign Reader")
+    params = {"query": "  ReAdEr  "}
+    if recipient_type:
+        params["recipient_type"] = recipient_type
+    response = sharing_http.client.get(access_path(private_node) + "/recipients", params=params)
+    assert response.status_code == 200, response.text
+    expected = [
+        {"type": "group", "group_id": "reader-team", "label": "reader-team"},
+        {"type": "user", "user_id": observed_user, "label": "Bob Reader"},
+    ]
+    assert response.json() == {
+        "recipients": [recipient for recipient in expected if recipient["type"] in expected_types],
+        "has_more": False,
+    }
+    assert "etag" not in response.headers
+    assert response.headers["cache-control"] == "no-store"
+    for secret in ("private@example.test", "foreign", "private-subject", "issuer", "description"):
+        assert secret not in response.text
+
+
+@pytest.mark.parametrize("query", [
+    "", "query=", "query=%20%20", "query=" + "a" * 201,
+    "query=team&recipient_type=", "query=team&recipient_type=invalid",
+    "query=team&recipient_type=GROUP", "query=team&recipient_type=%20group%20",
+    "query=team&recipient_type=group&recipient_type=user",
+    "query=team&recipient_type=group&recipient_type=group",
+])
+def test_invalid_recipient_search_never_calls_port(sharing_http: FilesystemHttp, query: str) -> None:
+    service = create_autospec(FilesystemSharing, instance=True)
+
+    def provide() -> FilesystemSharing:
+        return service
+
+    sharing_http.app.dependency_overrides[get_filesystem_sharing] = provide
+    response = sharing_http.client.get(f"{BASE}/nodes/{uuid4()}/access/recipients?" + query)
+    assert response.status_code == 422
+    assert response.headers["cache-control"] == "no-store"
+    service.search_recipients.assert_not_called()
+
+
+@pytest.mark.parametrize("kind,subject", [(PrincipalType.USER, "bob"), (PrincipalType.GROUP, "reader-team")])
+def test_recipient_search_excludes_protected_collisions(
+    sharing_http: FilesystemHttp, private_node: dict[str, object], observed_user: str,
+    kind: PrincipalType, subject: str,
+) -> None:
+    register_recipient(sharing_http, "reader-team")
+    driver = create_access_control_driver(database=sharing_http.factories.persistence_runtime.database)
+    sharing_http.client.portal.call(driver.add_grant, AccessGrant(
+        node_id=UUID(str(private_node["id"])),
+        principal=Principal(type=kind, issuer="issuer", id=subject),
+        permissions={Permission.READ}, recursive=True,
+    ))
+    response = sharing_http.client.get(access_path(private_node) + "/recipients", params={
+        "query": "reader", "recipient_type": kind.value,
+    })
+    assert response.status_code == 200, response.text
+    assert response.json() == {"recipients": [], "has_more": False}
+
+
+@pytest.mark.parametrize("authorization", ["", "Bearer invalid"])
+def test_recipient_search_rejects_unverified_authentication(
+    sharing_http: FilesystemHttp, private_node: dict[str, object], authorization: str,
+) -> None:
+    response = sharing_http.client.get(access_path(private_node) + "/recipients", params={"query": "team"}, headers={
+        "Authorization": authorization,
+    })
+    assert response.status_code == 401
+    assert "team" not in response.text
 
 
 def observe_user(http: FilesystemHttp, issuer: str, subject: str, label: str) -> str:

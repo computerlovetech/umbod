@@ -46,6 +46,10 @@ Legacy requests using top-level `group_id` instead of `recipient` remain support
 
 Search inputs and share inputs/outputs advertise alternative `anyOf` schema branches. Clients must resolve the advertised branches and references rather than assuming one flat object with every field. A canonical share returns a typed recipient; a legacy group share retains its legacy identity fields. Both include additive visibility metadata. MCP's legacy compatibility does not apply to REST policy replacement.
 
+## Search recipients with REST
+
+`GET /api/me/filesystem/nodes/{node_id}/access/recipients` accepts required `query` and optional `recipient_type=group|user`. Omission searches both types. It uses the same core search, validation, authorization and typed `recipients`/`has_more` result as `filesystem_search_sharing_recipients`.
+
 ## Inspect and replace policy with REST
 
 Resource: `/api/me/filesystem/nodes/{node_id}/access`.
@@ -73,6 +77,6 @@ On a stale revision, reread and reconcile the policy before retrying. Do not bli
 
 ### REST migration and boundaries
 
-The previous groups-only node-access request body is no longer accepted. Migrate node-policy clients to typed `grants`, an explicit replacement scope, and ETag-based concurrency. Do not confuse this with the administrator root-access API, which still uses `groups` and `expected_revision`, or the group-specific `/access/eligible-groups` endpoint.
+The previous groups-only node-access request body is no longer accepted. Migrate node-policy clients to typed `grants`, an explicit replacement scope, and ETag-based concurrency. The group-specific recipient catalogue has been removed; use unified recipient search. Do not confuse node-policy replacement with the administrator root-access API, which still uses `groups` and `expected_revision`.
 
-The browser sharing dialog uses group-scoped replacement and does not edit user grants. Neither policy views nor sharing summaries are complete effective-access audits. Recursive, malformed, unresolved, and foreign-issuer grants remain protected rather than being silently removed.
+The browser sharing dialog edits groups or users separately, searching through the unified recipient endpoint and saving only the selected type. Switching types with unsaved changes requires confirmation. Neither policy views nor sharing summaries are complete effective-access audits. Recursive, malformed, unresolved, and foreign-issuer grants remain protected rather than being silently removed.

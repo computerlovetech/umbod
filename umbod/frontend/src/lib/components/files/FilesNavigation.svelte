@@ -6,8 +6,7 @@
   let { state, signIn }: { state: FilesNavigationState; signIn: () => void } = $props();
 </script>
 
-{#if !state.atRoot}
-  <div class="navigation">
+<div class="navigation">
     {#if state.path}
       <nav class="desktop-path" aria-label="File path">
         <ol>
@@ -39,8 +38,12 @@
           {/each}
         </ol>
       </nav>
-      <nav class="mobile-path" aria-label="Parent folder">
-        {#if state.parent}
+      <nav class="mobile-path" aria-label={state.atRoot ? 'File path' : 'Parent folder'}>
+        {#if state.atRoot}
+          {#each state.visibleItems as item (item.id)}
+            <span class="name" aria-current="page" title={state.label(item)}>{state.label(item)}</span>
+          {/each}
+        {:else if state.parent}
           <a class="parent-link" href={state.href(state.parent)} title={state.label(state.parent)}><span aria-hidden="true">‹</span><span class="name">{state.label(state.parent)}</span></a>
         {:else}
           <span class="name" title="Earlier folders are unavailable">Earlier folders unavailable</span>
@@ -52,15 +55,14 @@
       <p role="status">{state.phase === 'sign-in' ? 'Sign in to view the file path.' : 'File path unavailable.'}</p>
       {#if state.phase === 'sign-in'}<Button variant="secondary" onclick={signIn}>Sign in</Button>{:else}<Button variant="secondary" onclick={state.reload}>Retry file path</Button>{/if}
     {/if}
-  </div>
-{/if}
+</div>
 
 <style>
-  .navigation { box-sizing: border-box; display: flex; align-items: center; gap: 0.75rem; min-width: 0; max-width: 100%; margin: 1rem 0; }
+  .navigation { box-sizing: border-box; display: flex; align-items: center; gap: 0.75rem; min-width: 0; max-width: 100%; min-height: 2.75rem; }
   nav { min-width: 0; max-width: 100%; }
   .desktop-path { flex: 1; }
   ol { display: flex; align-items: center; gap: 0.5rem; padding: 0; margin: 0; list-style: none; min-width: 0; }
-  li { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+  li { display: flex; align-items: center; gap: 0.5rem; min-width: 0; min-height: 2.75rem; }
   li > span[aria-hidden] { flex: 0 0 auto; }
   .overflow { flex: 0 0 auto; }
   .partial { color: var(--admin-muted); }
@@ -74,6 +76,6 @@
   :focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
   @media (max-width: 640px) {
     .desktop-path { display: none; }
-    .mobile-path { display: block; }
+    .mobile-path { display: flex; align-items: center; min-height: 2.75rem; }
   }
 </style>

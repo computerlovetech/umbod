@@ -1,14 +1,14 @@
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
 import type { NodeSharingApi } from '../api';
-import { nodeAccessSchema, nodeAccessWriteSchema, replaceAccessSchema, eligibleSharingGroupsSchema, sharingRecipientTypeSchema, type SharingRecipientType, type NodeAccess, type ReplaceAccess, type SharingGroup } from '../domain/sharing';
+import { nodeAccessSchema, nodeAccessWriteSchema, replaceAccessSchema, sharingRecipientSchema, sharingRecipientSearchSchema, sharingRecipientSearchResultSchema, sharingRecipientTypeSchema, type SharingRecipientType, type NodeAccess, type ReplaceAccess, type SharingRecipient, type SharingRecipientSearchResult } from '../domain/sharing';
 
 export class InMemoryNodeSharing implements NodeSharingApi {
   private readonly access = new Map<string, NodeAccess>();
-  private groups: SharingGroup[] = [];
+  private recipients: SharingRecipient[] = [];
 
-  configure = (access: NodeAccess, groups: SharingGroup[]): void => {
+  configure = (access: NodeAccess, recipients: SharingRecipient[]): void => {
     this.access.set(access.node_id, nodeAccessSchema.parse(access));
-    this.groups = eligibleSharingGroupsSchema.parse({ groups }).groups;
+    this.recipients = sharingRecipientSchema.array().parse(recipients);
   };
 
   available = (id: string): boolean => this.access.has(id);
@@ -23,11 +23,20 @@ export class InMemoryNodeSharing implements NodeSharingApi {
     return nodeAccessSchema.parse({ ...access, grants: access.grants.filter((grant) => recipientType === undefined || grant.recipient.type === recipientType), blocked_recipients: access.blocked_recipients.filter((recipient) => recipientType === undefined || recipient.type === recipientType) });
   };
 
-  listEligibleSharingGroups = async (id: string, signal?: AbortSignal): Promise<SharingGroup[]> => {
-    const access = await this.inspectAccess(id, 'group', signal);
-    const blocked = access.blocked_recipients.flatMap((recipient) => recipient.type === 'group' ? [recipient.group_id] : []);
-    return eligibleSharingGroupsSchema.parse({ groups: this.groups.filter((group) => !blocked.includes(group.group_id)) }).groups;
+  searchRecipients = async (id: string, query: string, recipientType?: SharingRecipientType, signal?: AbortSignal): Promise<SharingRecipientSearchResult> => {
+    const parsed = sharingRecipientSearchSchema.safeParse({ query, recipient_type: recipientType });
+    if (!parsed.success) throw new SchemaValidationError('outbound', parsed.error.issues);
+    const access = await this.inspectAccess(id, parsed.data.recipient_type, signal);
+    const normalizedQuery = this.normalizeSearchText(parsed.data.query);
+    const matches = this.recipients.filter((recipient) =>
+      (parsed.data.recipient_type === undefined || recipient.type === parsed.data.recipient_type)
+      && !access.blocked_recipients.some((blocked) => blocked.type === recipient.type && (blocked.type === 'group' && recipient.type === 'group' ? blocked.group_id === recipient.group_id : blocked.type === 'user' && recipient.type === 'user' && blocked.user_id === recipient.user_id))
+      && (this.normalizeSearchText(recipient.label).includes(normalizedQuery) || recipient.type === 'group' && this.normalizeSearchText(recipient.group_id).includes(normalizedQuery))
+    );
+    return sharingRecipientSearchResultSchema.parse({ recipients: matches.slice(0, 50), has_more: matches.length > 50 });
   };
+
+  private normalizeSearchText(value: string): string { return value.trim().replace(/\s+/g, ' ').toLowerCase(); }
 
   replaceAccess = async (id: string, revision: string, body: ReplaceAccess, recipientType: SharingRecipientType): Promise<NodeAccess> => {
     sharingRecipientTypeSchema.parse(recipientType);
@@ -36,10 +45,9 @@ export class InMemoryNodeSharing implements NodeSharingApi {
     if (revision !== current.revision) throw new HttpError(412, 'Conflict', {});
     const grants = parsed.grants.map(({ recipient, permissions }) => {
       if (recipient.type !== recipientType || current.blocked_recipients.some((blocked) => JSON.stringify(blocked) === JSON.stringify(recipient))) throw new HttpError(422, 'Invalid recipient', {});
-      const group = recipient.type === 'group' ? this.groups.find((candidate) => candidate.group_id === recipient.group_id) : undefined;
-      if (recipient.type === 'group' && !group) throw new HttpError(422, 'Invalid group', {});
-      const previous = current.grants.find((grant) => grant.recipient.type === recipient.type && (grant.recipient.type === 'group' && recipient.type === 'group' ? grant.recipient.group_id === recipient.group_id : grant.recipient.type === 'user' && recipient.type === 'user' && grant.recipient.user_id === recipient.user_id));
-      return { recipient: { ...recipient, label: group?.label ?? previous?.recipient.label ?? (recipient.type === 'user' ? recipient.user_id : recipient.group_id) }, permissions };
+      const known = this.recipients.find((candidate) => candidate.type === recipient.type && (candidate.type === 'group' && recipient.type === 'group' ? candidate.group_id === recipient.group_id : candidate.type === 'user' && recipient.type === 'user' && candidate.user_id === recipient.user_id));
+      if (!known) throw new HttpError(422, 'Invalid recipient', {});
+      return { recipient: known, permissions };
     });
     const result = nodeAccessSchema.parse({ ...current, grants: [...current.grants.filter((grant) => grant.recipient.type !== recipientType), ...grants], revision: current.revision + '-next' });
     this.access.set(id, result);

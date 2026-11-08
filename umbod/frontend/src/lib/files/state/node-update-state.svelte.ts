@@ -2,7 +2,7 @@ import { SvelteSet } from 'svelte/reactivity';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { FilesystemApi } from '../api';
 import { fileNameSchema, nodeSummarySchema, type NodeSummary, type UpdateNode } from '../domain/schemas';
-import { FilesNavigationState } from './navigation-state.svelte';
+import { MoveDestinationState } from './move-destination-state.svelte';
 
 type Availability = 'hidden' | 'loading' | 'allowed' | 'denied' | 'error';
 
@@ -12,22 +12,16 @@ export class NodeUpdateState {
   private moveAvailability = $state<Availability>('hidden');
   private mode = $state<'rename' | 'move' | undefined>(undefined);
   private name = $state('');
-  private browseTarget: string | undefined;
-  private destination = $state.raw<NodeSummary | undefined>(undefined);
-  private directories = $state.raw<NodeSummary[]>([]);
-  private destinationAllowed = $state(false);
-  private browsing = $state(false);
   private saving = $state(false);
   private message = $state('');
   private generation = 0;
-  private browseGeneration = 0;
   private disposed = false;
   private readonly pendingIds = new SvelteSet<string>();
   private readonly uncertainIds = new SvelteSet<string>();
-  readonly navigation: FilesNavigationState;
+  readonly destinations: MoveDestinationState;
 
   constructor(private readonly api: FilesystemApi, private readonly accept: (node: NodeSummary) => void, private readonly reloadNode: () => Promise<void>, personalRoot: () => string | undefined = () => undefined) {
-    this.navigation = new FilesNavigationState(api, personalRoot);
+    this.destinations = new MoveDestinationState(api, personalRoot, () => this.pending || this.needsReload);
   }
 
   get canRename(): boolean { return this.renameAvailability === 'allowed'; }
@@ -36,32 +30,24 @@ export class NodeUpdateState {
   get open(): boolean { return this.mode !== undefined; }
   get moving(): boolean { return this.mode === 'move'; }
   get draft(): string { return this.name; }
-  get folder(): NodeSummary | undefined { return this.destination; }
-  get destinationName(): string { return this.destination ? this.navigation.label(this.destination) : 'Files'; }
-  get folders(): readonly NodeSummary[] { return this.directories; }
-  get loading(): boolean { return this.browsing; }
+  get title(): string { return this.moving ? `Move “${this.current?.name ?? ''}”` : 'Rename item'; }
+  get submitLabel(): string { return this.moving ? this.destinations.selected ? `Move to “${this.destinations.selectedName}”` : 'Move' : 'Rename'; }
   get pending(): boolean { return this.saving || !!this.current && this.pendingIds.has(this.current.id); }
-  get error(): string { return this.message; }
+  get error(): string { return this.message || this.destinations.error; }
   get needsReload(): boolean { return !!this.current && this.uncertainIds.has(this.current.id); }
   get canSubmit(): boolean {
-    return !!this.current && !this.saving && !this.pendingIds.has(this.current.id) && !this.needsReload && (this.mode === 'rename' ? this.canRename && fileNameSchema.safeParse(this.name).success && this.name !== this.current.name : this.mode === 'move' && this.canMove && this.destinationAllowed && !this.browsing);
+    return !!this.current && !this.saving && !this.pendingIds.has(this.current.id) && !this.needsReload && (this.mode === 'rename' ? this.canRename && fileNameSchema.safeParse(this.name).success && this.name !== this.current.name : this.mode === 'move' && this.canMove && this.destinations.canSubmit);
   }
 
   reset = (): void => {
     ++this.generation;
-    ++this.browseGeneration;
     this.current = undefined;
     this.mode = undefined;
     this.renameAvailability = 'hidden';
     this.moveAvailability = 'hidden';
     this.message = '';
-    this.destination = undefined;
-    this.browseTarget = undefined;
-    this.directories = [];
-    this.destinationAllowed = false;
     this.saving = false;
-    this.browsing = false;
-    this.navigation.reset();
+    this.destinations.reset();
   };
 
   select = async (node: NodeSummary, eligibility?: { rename: boolean; move: boolean }): Promise<void> => {
@@ -122,57 +108,11 @@ export class NodeUpdateState {
     if (!this.canMove || !this.current || typeof this.current.parent_id !== 'string' || this.pending || this.needsReload) return;
     this.mode = 'move';
     this.message = '';
-    void this.browse(this.current.parent_id);
+    void this.destinations.open(this.current);
   };
 
   changeName = (name: string): void => { if (!this.saving && !this.needsReload) this.name = name; };
-  retryBrowse = async (): Promise<void> => {
-    if (this.browseTarget) await this.browse(this.browseTarget);
-  };
-
-  browse = async (id: string): Promise<void> => {
-    const source = this.current;
-    if (!source || this.saving || this.disposed) return;
-    const generation = ++this.browseGeneration;
-    this.browseTarget = id;
-    this.browsing = true;
-    this.destinationAllowed = false;
-    this.message = '';
-    this.directories = [];
-    this.destination = undefined;
-    try {
-      const folder = await this.api.getNode(id);
-      if (this.disposed || generation !== this.browseGeneration) return;
-      if (folder.kind !== 'directory') throw new Error('Not a folder');
-      this.destination = folder;
-      await this.navigation.select(folder);
-      if (this.disposed || generation !== this.browseGeneration) return;
-      if (this.navigation.phase !== 'ready') throw new Error('Destination path unavailable');
-      const knownInvalid = folder.id === source.id || folder.id === source.parent_id || this.navigation.path?.items.some((item) => item.id === source.id) === true;
-      if (!knownInvalid) {
-        try {
-          await this.api.checkUpdateEligibility(folder.id);
-          if (this.disposed || generation !== this.browseGeneration) return;
-          this.destinationAllowed = true;
-        } catch (error) {
-          if (this.disposed || generation !== this.browseGeneration) return;
-          this.message = this.failure(error) === 'denied' ? 'You cannot move items to this folder.' : 'Could not check destination. Retry opening the folder.';
-        }
-      }
-      const children = await this.api.listChildren(folder.id);
-      if (this.disposed || generation !== this.browseGeneration) return;
-      this.directories = children.filter((node) => node.kind === 'directory' && node.id !== source.id);
-    } catch {
-      if (!this.disposed && generation === this.browseGeneration) {
-        this.destinationAllowed = false;
-        this.message = 'Could not browse this folder. Try again or choose another folder from the path above.';
-      }
-    } finally {
-      if (!this.disposed && generation === this.browseGeneration) this.browsing = false;
-    }
-  };
-
-  cancel = (): void => { if (!this.saving) { this.mode = undefined; ++this.browseGeneration; } };
+  cancel = (): void => { if (!this.saving) { this.mode = undefined; this.destinations.reset(); } };
   reload = async (): Promise<void> => {
     if (this.saving || !this.current) return;
     const id = this.current.id;
@@ -183,7 +123,7 @@ export class NodeUpdateState {
   submit = async (): Promise<void> => {
     const node = this.current;
     if (!node || !this.canSubmit || this.disposed) return;
-    const body = this.mode === 'rename' ? { name: this.name } : { parent_id: this.destination!.id };
+    const body = this.mode === 'rename' ? { name: this.name } : { parent_id: this.destinations.selected!.id };
     await this.persistUpdate(node, body);
   };
 
@@ -238,5 +178,5 @@ export class NodeUpdateState {
   }
 
   private failure(error: unknown): Availability { return error instanceof HttpError && [403, 404].includes(error.status) ? 'denied' : 'error'; }
-  dispose = (): void => { this.reset(); this.disposed = true; this.navigation.dispose(); };
+  dispose = (): void => { this.reset(); this.disposed = true; };
 }

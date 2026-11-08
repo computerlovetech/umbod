@@ -88,8 +88,9 @@ async def test_group_matching_is_normalized_literal_id_or_label_and_reuses_eligi
     ))
     result = await context.service.search_recipients(caller(), context.node.id, search(text, GROUP))
     assert tuple(recipient.group_id for recipient in result.recipients) == expected
-    eligible = await context.service.eligible_groups(caller(), context.node.id)
-    assert all(recipient.group_id in {group.group_id for group in eligible.groups} for recipient in result.recipients)
+    assert all(recipient.group_id in {" Exact%_ID ", "label"} for recipient in result.recipients)
+    assert all(recipient.group_id != "blocked" for recipient in result.recipients)
+    assert not result.has_more
 
 
 @pytest.mark.asyncio
@@ -113,13 +114,14 @@ async def test_authority_precedes_all_catalogue_and_directory_reads_even_for_mis
 
 
 @pytest.mark.asyncio
-async def test_group_only_search_and_existing_eligible_groups_never_read_directory() -> None:
+async def test_group_only_search_never_reads_directory() -> None:
     ports = transactions()
     ports.users = UnreadableUsers()
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
     result = await service.search_recipients(caller(), initial_root().id, search("TEAM", GROUP))
     assert result.recipients == (GroupSharingRecipient(type="group", group_id="team", label="team"),)
-    assert len((await service.eligible_groups(caller(), initial_root().id)).groups) == 1
+    assert len(result.recipients) == 1
+    assert not result.has_more
 
 
 @pytest.mark.asyncio

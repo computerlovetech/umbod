@@ -10,7 +10,8 @@
 
 <style>
   section { margin: 1rem 0; }
-  h2 { font-size: 1rem; }
-  p { color: var(--admin-muted); }
+  h2 { margin: 0 0 0.65rem; font-size: 1rem; }
+  p { margin: 0; line-height: 1.6; color: var(--admin-muted); }
+  .description { color: var(--admin-ink); }
   .description { white-space: pre-wrap; overflow-wrap: anywhere; }
 </style>

@@ -21,11 +21,15 @@ export const nodeAccessSchema = z.strictObject({ node_id: nodeIdSchema, revision
 export const nodeAccessWriteSchema = nodeAccessSchema.extend({ visible_to: nodeVisibilitySchema });
 export type NodeAccessWrite = z.infer<typeof nodeAccessWriteSchema>;
 export type SharingRecipientType = z.infer<typeof sharingRecipientTypeSchema>;
-export const eligibleSharingGroupsSchema = z.strictObject({ groups: z.array(z.strictObject({ group_id: groupIdSchema, label: z.string(), description: z.string() })) });
+export const sharingRecipientSearchQuerySchema = z.string().trim().min(1).max(200);
+export const sharingRecipientSearchSchema = z.strictObject({ query: sharingRecipientSearchQuerySchema, recipient_type: sharingRecipientTypeSchema.optional() });
+export const sharingRecipientSearchResultSchema = z.strictObject({ recipients: z.array(sharingRecipientSchema), has_more: z.boolean() });
+export type SharingRecipient = z.infer<typeof sharingRecipientSchema>;
+export type SharingRecipientTarget = z.infer<typeof sharingRecipientTargetSchema>;
+export type SharingRecipientSearchResult = z.infer<typeof sharingRecipientSearchResultSchema>;
 export type SharingPermission = z.infer<typeof sharingPermissionSchema>;
 export type NodeAccess = z.infer<typeof nodeAccessSchema>;
 export type ReplaceAccess = z.infer<typeof replaceAccessSchema>;
-export type SharingGroup = z.infer<typeof eligibleSharingGroupsSchema>['groups'][number];
 
 export const sharingPermissions: ReadonlyArray<{ readonly value: SharingPermission; readonly label: string }> = [
   { value: 'discover', label: 'Discover' }, { value: 'read', label: 'Read' }, { value: 'write', label: 'Write' },

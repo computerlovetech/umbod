@@ -6,7 +6,7 @@ import pytest
 from umbod.core.filesystem import AccessGrant, Ownership, Permission, Principal, PrincipalType
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
 from umbod.core.filesystem.namespace import initial_root
-from umbod.core.filesystem.sharing import GroupPolicy, ReplaceNodePolicy, SharingService
+from umbod.core.filesystem.sharing import GroupPolicy, ReplaceNodePolicy, SharingRecipientSearchQuery, SharingService
 from tests.support.filesystem.group_sharing import (
     InMemorySharingTransactions, SharingGroups, SharingNamespace, SharingPolicies,
 )
@@ -31,7 +31,10 @@ async def test_denied_or_missing_nodes_never_read_recipient_catalogue() -> None:
         with pytest.raises(PermissionDenied):
             await service.replace(snapshot("admin", "issuer", ("admins",)), node_id, ReplaceNodePolicy(recipient_type="group", expected_revision="unknown", grants=group_commands(())))
         with pytest.raises(PermissionDenied):
-            await service.eligible_groups(snapshot("admin", "issuer", ("admins",)), node_id)
+            await service.search_recipients(
+                snapshot("admin", "issuer", ("admins",)), node_id,
+                SharingRecipientSearchQuery(query="team", scope=GROUP_SCOPE),
+            )
     assert ports.groups.reads == 0
 
 
@@ -46,7 +49,11 @@ async def test_port_fake_replacement_returns_authoritative_policy() -> None:
     assert group_policies(result) == (policy,)
     assert result.revision != before.revision
     assert await service.inspect(caller(), root.id, GROUP_SCOPE) == result
-    assert tuple(group.group_id for group in (await service.eligible_groups(caller(), root.id)).groups) == ("team",)
+    recipients = await service.search_recipients(
+        caller(), root.id, SharingRecipientSearchQuery(query="team", scope=GROUP_SCOPE),
+    )
+    assert tuple(recipient.group_id for recipient in recipients.recipients) == ("team",)
+    assert not recipients.has_more
 
 
 @pytest.mark.asyncio

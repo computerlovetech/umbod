@@ -39,7 +39,7 @@ function fixture(respond: (request: TransportRequest<unknown>) => Promise<unknow
   const unexpected = async (): Promise<never> => { throw new Error('Unexpected sharing probe'); };
   const api: FilesApi = {
     filesystem: new FilesystemRoute(transport, { transfer: unexpected }),
-    sharing: { inspectAccess: vi.fn(unexpected), replaceAccess: vi.fn(unexpected), listEligibleSharingGroups: vi.fn(unexpected) }
+    sharing: { inspectAccess: vi.fn(unexpected), replaceAccess: vi.fn(unexpected), searchRecipients: vi.fn(unexpected) }
   };
   return { files: new FilesState(api), api, transport };
 }

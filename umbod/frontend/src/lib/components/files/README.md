@@ -11,24 +11,28 @@ description: "User filesystem browsing, accessible node sharing, folder creation
 - [node-actions.dom.test.ts](./node-actions.dom.test.ts) — Single row trigger, icon-labelled actions, sharing eligibility and deletion lifecycle interactions.
 - [node-actions-state.svelte.ts](./node-actions-state.svelte.ts) — Menu visibility, action dispatch and persistent-trigger focus restoration.
 - [NodeDescriptionDialog.svelte](./NodeDescriptionDialog.svelte) — Native description editor with pending guards and explicit conflict recovery.
-- [NodeUpdateDialog.svelte](./NodeUpdateDialog.svelte) — Feature-owned native rename and move dialogs with an independent directory picker and explicit reload recovery.
-- [node-update.dom.test.ts](./node-update.dom.test.ts) — Selected actions, root hiding, rename collisions, directory selection and cancellation interactions.
+- [NodeUpdateDialog.svelte](./NodeUpdateDialog.svelte) — Feature-owned rename and move dialogs with expandable folders, explicit destination selection and reload recovery.
+- [node-update.dom.test.ts](./node-update.dom.test.ts) — Rename, destination selection, branch retries, cancellation and empty-folder keyboard focus interactions.
+- [folder-picker-focus-state.svelte.ts](./folder-picker-focus-state.svelte.ts) — Keeps focused folder disclosures mounted until blur when asynchronous loading reveals an empty branch.
 
 - [files-components.test.ts](./files-components.test.ts) — Coherent browse loading, fail-closed heading and path rendering, navigation and creation form tests.
 - [FilesDescription.svelte](./FilesDescription.svelte) — Read-only current file and folder descriptions, separate from contextual editing actions.
 - [files-description.dom.test.ts](./files-description.dom.test.ts) — Description editing, clear, cancel, pending, denied, conflict and creation input interactions.
-- [FilesContent.svelte](./FilesContent.svelte) — Compact table, pointer-following file previews, contextual actions and separate internal-move and external-upload drops.
-- [row-presentation.ts](./row-presentation.ts) — Whitespace-normalized description previews capped at 120 characters without changing detail text.
-- [row-presentation.test.ts](./row-presentation.test.ts) — Preview whitespace, character limits and Unicode truncation tests.
+- [FilesContainer.svelte](./FilesContainer.svelte) — Shared home, folder and file layout with stable heading height, navigation, actions and description slots.
+- [FilesContent.svelte](./FilesContent.svelte) — File and folder composition with common actions and descriptions, compact listings, metadata, drag previews and upload drops.
+- [FileTypeIcon.svelte](./FileTypeIcon.svelte) — Accessible grouped format icons shared by list rows and filename-based drag previews.
+- [file-type-icons.ts](./file-type-icons.ts) — Common format groups and inline SVGs; specific MIME types precede extensions, with safe generic and text fallbacks.
+- [file-type-icons.test.ts](./file-type-icons.test.ts) — Grouped extensions, MIME precedence, normalization, unknown formats and directory overrides.
+- [file-type-icon.dom.test.ts](./file-type-icon.dom.test.ts) — Accessible category rendering and in-place row icon changes after a filename extension is renamed.
 - [file-drag-move.dom.test.ts](./file-drag-move.dom.test.ts) — Drag preview identity and positioning, targeting, reconciliation, focus, recovery and external upload isolation.
 - [FileUploadForm.svelte](./FileUploadForm.svelte) — Native upload modal, file picker, drop target and server-validated upload feedback.
 - [file-upload-form.test.ts](./file-upload-form.test.ts) — Modal semantics, accessible selection, validation and pending states.
 - [FileDeletionDialog.svelte](./FileDeletionDialog.svelte) — Files-owned permanent removal confirmation using shared native-dialog mechanics.
 - [file-deletion.test.ts](./file-deletion.test.ts) — Row and details eligibility, accessible filename-specific confirmation and danger action presentation tests.
 - [NodeShareButton.svelte](./NodeShareButton.svelte) — Filename-labelled, authority-confirmed sharing entrypoints with one decorative share icon.
-- [NodeSharingDialog.svelte](./NodeSharingDialog.svelte) — Sharing modal with a searchable custom group picker and explicit permissions.
+- [NodeSharingDialog.svelte](./NodeSharingDialog.svelte) — Sharing modal with Groups/Users selection, unified recipient search, guarded draft switching and explicit permissions.
 - [node-sharing.dom.test.ts](./node-sharing.dom.test.ts) — Searchable recipient selection, action visibility, draft editing, pending guards and focus recovery tests.
 - [FilesPage.svelte](./FilesPage.svelte) — Files composition with independent neutral profile loading.
-- [FilesNavigation.svelte](./FilesNavigation.svelte) — Compact breadcrumbs, known-ancestor overflow and confirmed mobile parent links.
+- [FilesNavigation.svelte](./FilesNavigation.svelte) — Consistent home and child path rows, known-ancestor overflow and confirmed mobile parent links.
 - [files-navigation.test.ts](./files-navigation.test.ts) — Root, partial path, ancestor overflow, mobile parent markup and independent failure presentation tests.
 - [NewFolderForm.svelte](./NewFolderForm.svelte) — Inline folder creation with optional description guidance.

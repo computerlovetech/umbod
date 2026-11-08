@@ -2,60 +2,62 @@ import { tick } from 'svelte';
 import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
 import type { NodeSharingApi } from '../api';
 import type { NodeSummary } from '../domain/schemas';
-import { nodeAccessSchema, replaceAccessSchema, eligibleSharingGroupsSchema, sharingPermissions, type NodeAccess, type SharingGroup, type SharingPermission } from '../domain/sharing';
+import { nodeAccessSchema, replaceAccessSchema, sharingPermissions, type NodeAccess, type ReplaceAccess, type SharingRecipient, type SharingRecipientType, type SharingPermission } from '../domain/sharing';
+import { RecipientSearchState } from './recipient-search-state.svelte';
 
-type DraftGroup = { readonly group_id: string; readonly label: string; readonly description: string; readonly permissions: readonly SharingPermission[] };
+type DraftRecipient = { readonly recipient: Readonly<SharingRecipient>; readonly id: string; readonly label: string; readonly permissions: readonly SharingPermission[] };
+
+function recipientId(recipient: SharingRecipient): string { return recipient.type === 'group' ? recipient.group_id : recipient.user_id; }
 
 export class SharingDialogState {
   private target = $state.raw<NodeSummary>();
-  private stage = $state<'closed' | 'loading' | 'ready' | 'error' | 'denied' | 'sign-in'>('closed');
+  private stage = $state<'closed' | 'loading' | 'refreshing' | 'ready' | 'error' | 'denied' | 'sign-in'>('closed');
   private saving = $state(false);
-  private draft = $state.raw<readonly DraftGroup[]>([]);
-  private catalogue = $state.raw<readonly SharingGroup[]>([]);
+  private scope = $state<SharingRecipientType>('group');
+  private requestedScope = $state<SharingRecipientType>();
+  private draft = $state.raw<readonly DraftRecipient[]>([]);
   private blocked: string[] = [];
   private revision = '';
+  private original = '';
   private banner = $state('');
   private recovery = $state(false);
-  private invalidRecipients = $state(false);
-  private catalogueLoading = $state(false);
-  private catalogueFailure = $state('');
-  private query = $state('');
   private announcement = $state('');
   private generation = 0;
-  private catalogueGeneration = 0;
   private controller: AbortController | undefined;
   private trigger: HTMLElement | undefined;
   private location = '';
   private disposed = false;
+  readonly search: RecipientSearchState;
 
-  constructor(private readonly api: NodeSharingApi, private readonly revoke: (id: string) => void, private readonly recheck: (id: string) => void, private readonly label: (node: NodeSummary) => string = (node: NodeSummary): string => node.name || 'Files') {}
+  constructor(private readonly api: NodeSharingApi, private readonly revoke: (id: string) => void, private readonly recheck: (id: string) => void, private readonly label: (node: NodeSummary) => string = (node: NodeSummary): string => node.name || 'Files') {
+    this.search = new RecipientSearchState(api, this.handleSearchAuthorityFailure);
+  }
 
   get node(): NodeSummary | undefined { return this.target; }
   get nodeName(): string { return this.target ? this.label(this.target) : 'Files'; }
   get open(): boolean { return this.stage !== 'closed'; }
   get phase(): string { return this.stage; }
   get pending(): boolean { return this.saving; }
-  get groups(): readonly DraftGroup[] { return this.draft; }
+  get refreshing(): boolean { return this.stage === 'refreshing'; }
+  get recipientType(): SharingRecipientType { return this.scope; }
+  get confirmingSwitch(): boolean { return this.requestedScope !== undefined; }
+  get recipients(): readonly DraftRecipient[] { return this.draft; }
   get permissions(): typeof sharingPermissions { return sharingPermissions; }
   get error(): string { return this.banner; }
   get needsReload(): boolean { return this.recovery; }
-  get needsGroupsRefresh(): boolean { return this.invalidRecipients; }
-  get groupsLoading(): boolean { return this.catalogueLoading; }
-  get groupsError(): string { return this.catalogueFailure; }
-  get filter(): string { return this.query; }
+  get filter(): string { return this.search.query; }
   get status(): string { return this.announcement; }
-  get editable(): boolean { return this.stage === 'ready' && !this.saving && !this.recovery; }
-  get canSave(): boolean { return this.editable && !this.invalidRecipients && !this.catalogueLoading && !this.catalogueFailure && replaceAccessSchema.safeParse({ grants: this.draft.map(({ group_id, permissions }) => ({ recipient: { type: 'group', group_id }, permissions })) }).success; }
-  get availableGroups(): readonly SharingGroup[] {
-    const query = this.query.toLocaleLowerCase();
-    return this.catalogue.filter((group) => !this.blocked.includes(group.group_id) && !this.draft.some((entry) => entry.group_id === group.group_id) && [group.label, group.description, group.group_id].some((text) => text.toLocaleLowerCase().includes(query)));
+  get editable(): boolean { return this.stage === 'ready' && !this.saving && !this.recovery && !this.confirmingSwitch && !this.search.unavailable; }
+  get canSave(): boolean { return this.editable && replaceAccessSchema.safeParse(this.body()).success; }
+  get dirty(): boolean { return JSON.stringify(this.body()) !== this.original; }
+  get pickerLabel(): string { return this.scope === 'group' ? 'Add group' : 'Add user'; }
+  get searchPlaceholder(): string { return this.scope === 'group' ? 'Search groups by name or ID' : 'Search users by name'; }
+  get saveLabel(): string { return this.scope === 'group' ? 'Save group sharing' : 'Save user sharing'; }
+  get availableRecipients(): readonly SharingRecipient[] {
+    return this.search.recipients.filter((recipient) => recipient.type === this.scope && !this.blocked.includes(recipientId(recipient)) && !this.draft.some((entry) => entry.id === recipientId(recipient)));
   }
-
-  get groupOptions(): { value: string; label: string }[] {
-    return this.availableGroups.map((group) => ({
-      value: group.group_id,
-      label: group.label
-    }));
+  get recipientOptions(): { value: string; label: string }[] {
+    return this.availableRecipients.map((recipient) => ({ value: recipientId(recipient), label: recipient.label ? `${recipient.label} (${recipientId(recipient)})` : recipientId(recipient) }));
   }
 
   show = async (node: NodeSummary, trigger?: HTMLElement): Promise<void> => {
@@ -63,93 +65,84 @@ export class SharingDialogState {
     this.target = Object.freeze(structuredClone(node));
     this.trigger = trigger;
     this.location = typeof window === 'undefined' ? '' : window.location.href;
-    this.query = '';
+    this.scope = 'group';
     this.draft = [];
-    this.catalogue = [];
     await this.reloadLatest();
   };
 
-  reloadLatest = async (): Promise<void> => {
+  selectRecipientType = async (recipientType: SharingRecipientType): Promise<void> => {
+    if (this.saving || this.stage !== 'ready' || recipientType === this.scope || this.confirmingSwitch) return;
+    if (this.dirty) {
+      this.requestedScope = recipientType;
+      return;
+    }
+    await this.switchTo(recipientType);
+  };
+
+  keepEditing = (): void => { this.requestedScope = undefined; };
+
+  discardAndSwitch = async (): Promise<void> => {
+    const recipientType = this.requestedScope;
+    if (!recipientType || this.saving) return;
+    this.requestedScope = undefined;
+    await this.switchTo(recipientType);
+  };
+
+  reloadLatest = async (): Promise<void> => { await this.loadLatest(this.scope); };
+
+  private loadLatest = async (recipientType: SharingRecipientType): Promise<void> => {
     if (!this.target || this.saving || this.disposed) return;
     const generation = ++this.generation;
-    ++this.catalogueGeneration;
-    this.catalogueLoading = false;
     this.controller?.abort();
     this.controller = new AbortController();
-    this.stage = 'loading';
+    this.search.reset();
+    this.stage = this.stage === 'ready' || this.refreshing ? 'refreshing' : 'loading';
     this.banner = '';
+    this.requestedScope = undefined;
     const id = this.target.id;
     try {
-      const [access, groups] = await Promise.all([
-        this.api.inspectAccess(id, 'group', this.controller.signal), this.api.listEligibleSharingGroups(id, this.controller.signal)
-      ]);
+      const view = nodeAccessSchema.parse(await this.api.inspectAccess(id, recipientType, this.controller.signal));
       if (!this.current(generation)) return;
-      const view = nodeAccessSchema.parse(access);
       if (view.node_id !== id) throw new Error('Unexpected node access');
-      this.catalogue = Object.freeze(eligibleSharingGroupsSchema.parse({ groups }).groups.map((group) => Object.freeze(group)));
+      this.scope = recipientType;
       this.accept(view);
       this.recovery = false;
-      this.invalidRecipients = false;
-      this.catalogueFailure = '';
+      this.search.target(id, this.scope);
       this.stage = 'ready';
     } catch (error) {
-      if (!this.current(generation)) return;
-      this.failRead(error, id);
+      if (this.current(generation)) this.failRead(error, id);
     }
   };
 
-  refreshGroups = async (): Promise<void> => {
-    if (!this.editable || !this.target || this.catalogueLoading) return;
-    const generation = this.generation;
-    const catalogueGeneration = ++this.catalogueGeneration;
-    const id = this.target.id;
-    this.catalogueLoading = true;
-    this.catalogueFailure = '';
-    try {
-      const groups = await this.api.listEligibleSharingGroups(id, this.controller?.signal);
-      if (!this.current(generation) || catalogueGeneration !== this.catalogueGeneration) return;
-      this.catalogue = Object.freeze(eligibleSharingGroupsSchema.parse({ groups }).groups.map((group) => Object.freeze(group)));
-      this.invalidRecipients = this.draft.some((entry) => !groups.some((group) => group.group_id === entry.group_id));
-      this.banner = this.invalidRecipients ? 'Remove unavailable groups before saving. Your changes have been kept.' : '';
-    } catch (error) {
-      if (!this.current(generation) || catalogueGeneration !== this.catalogueGeneration) return;
-      if (error instanceof AuthenticationRequiredError || error instanceof HttpError && [401, 403, 404].includes(error.status)) this.failRead(error, id);
-      else this.catalogueFailure = "Couldn't refresh registered groups. Try again.";
-    } finally {
-      if (this.current(generation) && catalogueGeneration === this.catalogueGeneration) this.catalogueLoading = false;
-    }
-  };
-
-  changeFilter = (value: string): void => { if (this.editable) this.query = value; };
+  changeFilter = (value: string): void => { if (this.editable) this.search.changeQuery(value); };
 
   add = (id: string): void => {
     if (!this.editable) return;
-    const group = this.availableGroups.find((entry) => entry.group_id === id);
-    if (!group) return;
-    this.draft = Object.freeze([...this.draft, Object.freeze({ ...group, permissions: Object.freeze(['discover', 'read'] as SharingPermission[]) })]);
-    this.query = '';
+    const recipient = this.availableRecipients.find((entry) => recipientId(entry) === id);
+    if (!recipient) return;
+    this.draft = Object.freeze([...this.draft, Object.freeze({ recipient, id, label: recipient.label || id, permissions: Object.freeze(['discover', 'read'] as SharingPermission[]) })]);
+    this.search.changeQuery('');
   };
 
   remove = (id: string): void => {
-    if (!this.editable) return;
-    this.draft = Object.freeze(this.draft.filter((group) => group.group_id !== id));
-    if (this.invalidRecipients && !this.catalogueLoading) this.invalidRecipients = this.draft.some((entry) => !this.catalogue.some((group) => group.group_id === entry.group_id));
+    if (this.editable) this.draft = Object.freeze(this.draft.filter((entry) => entry.id !== id));
   };
 
   changePermission = (id: string, permission: SharingPermission, enabled: boolean): void => {
     if (!this.editable) return;
-    this.draft = Object.freeze(this.draft.map((group) => group.group_id === id ? Object.freeze({ ...group, permissions: Object.freeze(enabled ? [...new Set([...group.permissions, permission])] : group.permissions.filter((value) => value !== permission)) }) : group));
+    this.draft = Object.freeze(this.draft.map((entry) => entry.id === id ? Object.freeze({ ...entry, permissions: Object.freeze(enabled ? [...new Set([...entry.permissions, permission])] : entry.permissions.filter((value) => value !== permission)) }) : entry));
   };
 
   save = async (): Promise<void> => {
     if (!this.canSave || !this.target) return;
     const id = this.target.id;
     const generation = this.generation;
-    const body = replaceAccessSchema.parse({ grants: this.draft.map(({ group_id, permissions }) => ({ recipient: { type: 'group', group_id }, permissions })) });
+    const body = replaceAccessSchema.parse(this.body());
     this.saving = true;
     this.banner = '';
+    this.search.reset();
     try {
-      const view = nodeAccessSchema.parse(await this.api.replaceAccess(id, this.revision, body, 'group'));
+      const view = nodeAccessSchema.parse(await this.api.replaceAccess(id, this.revision, body, this.scope));
       if (!this.current(generation)) return;
       if (view.node_id !== id) throw new Error('Unexpected node access');
       this.accept(view);
@@ -165,8 +158,8 @@ export class SharingDialogState {
         this.recovery = true;
         this.banner = 'Access changed elsewhere. Your changes have been kept. Reload latest to discard this draft and review current access.';
       } else if (error instanceof HttpError && error.status === 422) {
-        this.invalidRecipients = true;
-        this.banner = 'A group may no longer be available. Your changes have been kept. Refresh registered groups and review recipients.';
+        this.recovery = true;
+        this.banner = 'A recipient may no longer be available. Your changes have been kept. Reload latest to discard this draft and review current access.';
       } else {
         this.recovery = true;
         this.banner = "Couldn't confirm the change. Do not submit again until you reload latest access. Reloading discards this draft so you can review the authoritative result.";
@@ -190,37 +183,54 @@ export class SharingDialogState {
 
   reset = (): void => {
     ++this.generation;
-    ++this.catalogueGeneration;
     this.controller?.abort();
+    this.search.reset();
     this.stage = 'closed';
     this.saving = false;
-    this.catalogueLoading = false;
     this.target = undefined;
     this.trigger = undefined;
     this.draft = [];
+    this.requestedScope = undefined;
     this.recovery = false;
-    this.invalidRecipients = false;
-    this.catalogueFailure = '';
     this.banner = '';
-    this.query = '';
-    this.catalogue = [];
     this.blocked = [];
     this.revision = '';
+    this.original = '';
   };
 
   dispose = (): void => { this.disposed = true; this.reset(); };
+
+  private handleSearchAuthorityFailure = async (error: unknown): Promise<void> => {
+    if (!this.target) return;
+    const generation = this.generation;
+    const id = this.target.id;
+    if (error instanceof AuthenticationRequiredError || error instanceof HttpError && error.status === 401) {
+      this.failRead(error, id);
+      return;
+    }
+    try {
+      const view = nodeAccessSchema.parse(await this.api.inspectAccess(id, this.scope, this.controller?.signal));
+      if (this.current(generation) && view.node_id !== id) this.failRead(new Error('Unexpected node access'), id);
+    } catch (inspectionError) {
+      if (this.current(generation)) this.failRead(inspectionError, id);
+    }
+  };
+
+  private async switchTo(recipientType: SharingRecipientType): Promise<void> {
+    await this.loadLatest(recipientType);
+  }
+
+  private body(): ReplaceAccess {
+    return { grants: this.draft.map(({ recipient, permissions }) => ({ recipient: recipient.type === 'group' ? { type: 'group', group_id: recipient.group_id } : { type: 'user', user_id: recipient.user_id }, permissions: [...permissions] })) };
+  }
 
   private current(generation: number): boolean { return !this.disposed && generation === this.generation && (typeof window === 'undefined' || window.location.href === this.location); }
 
   private accept(view: NodeAccess): void {
     this.revision = view.revision;
-    this.blocked = view.blocked_recipients.flatMap((recipient) => recipient.type === 'group' ? [recipient.group_id] : []);
-    this.draft = Object.freeze(view.grants.flatMap(({ recipient, permissions }) => {
-      if (recipient.type !== 'group') return [];
-      const entry = { group_id: recipient.group_id, permissions };
-      const metadata = this.catalogue.find((group) => group.group_id === entry.group_id);
-      return [Object.freeze({ ...entry, label: recipient.label || entry.group_id, description: metadata?.description || '', permissions: Object.freeze([...entry.permissions]) })];
-    }));
+    this.blocked = view.blocked_recipients.flatMap((recipient) => recipient.type === this.scope ? [recipient.type === 'group' ? recipient.group_id : recipient.user_id] : []);
+    this.draft = Object.freeze(view.grants.flatMap(({ recipient, permissions }) => recipient.type !== this.scope ? [] : [Object.freeze({ recipient: Object.freeze(recipient), id: recipientId(recipient), label: recipient.label || recipientId(recipient), permissions: Object.freeze([...permissions]) })]));
+    this.original = JSON.stringify(this.body());
   }
 
   private failRead(error: unknown, id: string): void {

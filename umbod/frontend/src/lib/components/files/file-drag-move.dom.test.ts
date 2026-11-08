@@ -299,21 +299,27 @@ describe('file row drag move UI', (): void => {
     expect(upload.pending).toBe(false);
   });
 
-  test('table descriptions are bounded single-line previews while file details retain full text', async (): Promise<void> => {
+  test('the list omits descriptions while file details group full text, metadata and actions', async (): Promise<void> => {
     const description = 'First line\n\nSecond line\t' + 'Detailed guidance '.repeat(20) + '\nFinal line';
-    const { files } = await setup(description);
-    const preview = row(fileId).querySelector('.item-description')?.textContent;
-    expect(preview).toBeDefined();
-    expect(Array.from(preview!)).toHaveLength(120);
-    expect(preview).toMatch(/^First line Second line Detailed guidance /);
-    expect(preview).toMatch(/…$/u);
-    expect(preview).not.toMatch(/[\n\r\t]/u);
+    const { api, files } = await setup(description);
+    api.sharing.configure({ node_id: fileId, revision: 'revision', grants: [], blocked_recipients: [] }, []);
+    expect(row(fileId).textContent).not.toContain('First line');
     expect(document.querySelector('tbody')?.textContent).not.toContain(description);
     const link = row(fileId).querySelector<HTMLAnchorElement>('a')!;
     const destination = new URL(link.href).searchParams.get('node');
     await files.load(destination);
     await tick();
     expect(document.querySelector('table')).toBeNull();
+    const details = document.querySelector('[aria-label="File details"]')!;
     expect(document.querySelector('[aria-label="Description"]')?.textContent).toContain(description);
+    expect(document.querySelector('[aria-label="Description"] h2')?.textContent).toBe('Description');
+    expect(details.querySelector('[aria-label="Metadata"] h2')?.textContent).toBe('Metadata');
+    expect(details.querySelector('[aria-label="Metadata"] dl')?.textContent).toContain('Content type');
+    await vi.waitFor((): void => expect(files.sharing.available(fileId)).toBe(true));
+    await tick();
+    const actions = document.querySelector('[role="group"][aria-label="Location actions"]')!;
+    expect(actions).not.toBeNull();
+    expect(actions.querySelector('button[aria-label="Share “Notes.txt”"]')).not.toBeNull();
+    expect(actions.textContent).toContain('Delete file');
   });
 });

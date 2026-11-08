@@ -10,7 +10,7 @@ description: "Authenticated filesystem browsing, creation, transfers, typed reci
 - [access.py](./access.py) — Shared caller metadata dependency and enriched browse response schemas.
 - [deps.py](./deps.py) — Request-local caller and service composition.
 - [errors.py](./errors.py) — Safe domain error translation.
-- [sharing.py](./sharing.py) — Typed recipient views, explicit recipient-type replacement scopes, policy ETags and eligible-group discovery.
+- [sharing.py](./sharing.py) — Typed recipient views, explicit recipient-type replacement scopes, policy ETags and unified recipient search.
 - [deletion.py](./deletion.py) — Authorized permanent file DELETE requiring one strong quoted positive numeric If-Match revision.
 - [metadata.py](./metadata.py) — Per-operation node OPTIONS and atomic revision-checked metadata, rename and move PATCH for files and directories.
 - [downloads.py](./downloads.py) — Attachment delivery and storage-neutral download response contract.

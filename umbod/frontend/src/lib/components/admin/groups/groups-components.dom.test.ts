@@ -39,6 +39,29 @@ function renderGroups(directory = new InMemoryIdentityDirectory()): { api: InMem
 }
 
 describe('group management form wiring', () => {
+  it('renders labelled group rows with accessible icon-only edit and delete actions', async (): Promise<void> => {
+    renderGroups();
+    const list = document.querySelector('ul[aria-label="Groups"]');
+    expect(list).not.toBeNull();
+    expect(list?.textContent).toContain(group.label);
+    expect(list?.textContent).toContain(group.description);
+    expect(list?.textContent).toContain(group.group_id);
+    for (const label of ['Edit Operators', 'Delete Operators']) {
+      const action = button(label);
+      expect(action.textContent?.trim()).toBe('');
+      expect(action.title).toBe(label);
+      expect(action.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    }
+    button('Edit Operators').click();
+    await tick();
+    expect((document.getElementById('group-label') as HTMLInputElement).value).toBe(group.label);
+    button('Cancel').click();
+    await tick();
+    button('Delete Operators').click();
+    await tick();
+    expect(document.querySelector('section[aria-label="Confirm group deletion"]')).not.toBeNull();
+  });
+
   it('shows login-observed groups during creation and selects their exact provider values', async (): Promise<void> => {
     const value = ' / Exact Team ';
     const directory = new InMemoryIdentityDirectory({ issuer: 'issuer', claim: 'teams', groups: [{ value, first_seen_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-01-01T00:00:00Z' }], has_more: false });

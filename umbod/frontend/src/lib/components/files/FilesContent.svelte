@@ -5,13 +5,14 @@
   import type { UploadState } from '$lib/files/state/upload-state.svelte';
   import { FileDropState } from '$lib/files/state/file-drop-state.svelte';
   import NodeActions from './NodeActions.svelte';
-  import { descriptionPreview } from './row-presentation';
   import NodeShareButton from './NodeShareButton.svelte';
   import NodeSharingDialog from './NodeSharingDialog.svelte';
   import FilesNavigation from './FilesNavigation.svelte';
   import FileDeletionDialog from './FileDeletionDialog.svelte';
   import FileUploadForm from './FileUploadForm.svelte';
   import FilesDescription from './FilesDescription.svelte';
+  import FilesContainer from './FilesContainer.svelte';
+  import FileTypeIcon from './FileTypeIcon.svelte';
   import NewFolderForm from './NewFolderForm.svelte';
 
   let { state, folder, upload, signIn }: { state: FilesState; folder: NewFolderState; upload: UploadState; signIn: () => void } = $props();
@@ -57,7 +58,7 @@
 <img class="file-drag-image" src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" alt="" aria-hidden="true" width="1" height="1" draggable="false" decoding="sync" {@attach state.dragMove.attachDragImage} />
 {#if state.dragMove.dragging}
   <div class="file-drag-preview" aria-hidden="true" style:--preview-x={`${state.dragMove.previewX}px`} style:--preview-y={`${state.dragMove.previewY}px`}>
-    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h8l4 4v14H6zM14 3v5h4" /></svg>
+    <FileTypeIcon kind="file" name={state.dragMove.previewName} size={28} />
     <div class="file-drag-label"><span>Move file</span><strong>{state.dragMove.previewName}</strong></div>
   </div>
 {/if}
@@ -73,22 +74,29 @@
   </div>
 {/if}
 
-<div class="heading">
-  <div class="heading-identity">
+<FilesContainer>
+  {#snippet identity()}
     <h1 id="files-heading" class="admin-title" tabindex="-1" {@attach state.rowDeletion.attachFocus}>{state.locationName}</h1>
     {#if state.phase === 'ready' && state.node && !state.atPersonalRoot}<NodeActions update={state.update} description={state.description} name={state.node.name} {signIn} />{/if}
-  </div>
-  {#if state.node?.kind === 'directory'}
-    <div class="toolbar">
-      <NodeShareButton node={state.node} sharing={state.sharing} />
-      {#if state.phase === 'ready'}
+  {/snippet}
+  {#snippet navigation()}
+    {#if state.node}<FilesNavigation state={state.navigation} {signIn} />{/if}
+  {/snippet}
+  {#snippet sharing()}
+    {#if state.phase === 'ready' && state.node}<NodeShareButton node={state.node} sharing={state.sharing} />{/if}
+  {/snippet}
+  {#snippet actions()}
+    {#if state.phase === 'ready' && state.node?.kind === 'directory'}
       {#if upload.available}<Button variant="primary" id="upload-file-button" onclick={upload.show} disabled={upload.open}>Upload file</Button>{/if}
       {#if state.createDirectoryAllowed}<Button variant="primary" id="new-folder-button" onclick={folder.show} disabled={folder.open}>New folder</Button>{/if}
-      {/if}
-    </div>
-  {/if}
-</div>
-{#if state.node}<FilesNavigation state={state.navigation} {signIn} />{/if}
+    {:else if state.phase === 'ready' && state.node?.kind === 'file' && state.deletion.available}
+      <Button variant="danger" onclick={state.deletion.show} disabled={state.deletion.pending || !!state.deletion.confirmation}>Delete file</Button>
+    {/if}
+  {/snippet}
+  {#snippet description()}
+    {#if state.phase === 'ready' && state.node}<FilesDescription state={state.description} />{/if}
+  {/snippet}
+  {#snippet children()}
 <p class="upload-status" role="status" aria-atomic="true">{upload.pending ? 'Uploading file…' : upload.status}</p>
 
 {#if state.mutationNotice}<p role="status">{state.mutationNotice}</p>{/if}
@@ -106,7 +114,6 @@
     <Button variant="secondary" onclick={folder.reload}>Retry</Button>
   {/if}
 {:else if state.node}
-  <FilesDescription state={state.description} />
   {#if state.node.kind === 'directory'}
     {#if !upload.available && upload.error}<p role="alert">{upload.error}</p>{/if}
     {#if state.uploadAvailability === 'sign-in'}
@@ -129,12 +136,9 @@
               <tr class={['item-row', state.dragMove.isSource(item.id) && 'drag-source', state.dragMove.isTarget(item.id) && 'drop-target']} draggable={state.dragMove.canDrag(item.id)} {@attach state.dragMove.attachRow(item.id)} ondragstart={(event) => state.dragMove.start(item.id, event)} ondragover={(event) => state.dragMove.over(item.id, event)} ondragleave={(event) => state.dragMove.leave(item.id, event)} ondrop={(event) => state.dragMove.drop(item.id, event)}>
                 <td>
                   <a class="item-name" href={filesHref(item.id)} title={item.name} draggable="false">
-                    <svg role="img" aria-label={item.kind === 'directory' ? 'Folder' : 'File'} viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5">
-                      {#if item.kind === 'directory'}<path d="M3 6h7l2 3h9v11H3z" />{:else}<path d="M6 3h8l4 4v14H6z M14 3v5h4" />{/if}
-                    </svg>
+                    <FileTypeIcon kind={item.kind} name={item.name} contentType={item.metadata.content_type} />
                     <span class="item-name-label">{item.name}</span>
                   </a>
-                  {#if item.metadata.attributes.description}<p class="item-description">{descriptionPreview(item.metadata.attributes.description)}</p>{/if}
                 </td>
                 <td>{item.kind === 'directory' ? 'Folder' : 'File'}</td>
                 <td><time datetime={item.updated_at}>{updatedAt(item.updated_at)}</time></td>
@@ -154,28 +158,31 @@
       </div>
     {/if}
   {:else}
-    <section aria-label="File details" class="details">
-      <NodeShareButton node={state.node} sharing={state.sharing} />
-      {#if state.deletion.available}<Button variant="danger" onclick={state.deletion.show} disabled={state.deletion.pending || !!state.deletion.confirmation}>Delete file</Button>{/if}
+    <section aria-label="File details">
       {#if state.deletion.confirmation}<FileDeletionDialog state={state.deletion} />{/if}
       {#if state.deletion.pending}<p role="status">Deleting file…</p>{/if}
       {#if state.deletion.message}<p role="alert">{state.deletion.message}</p>{/if}
       {#if state.deletion.needsReload}<Button variant="secondary" onclick={state.deletion.reconcile}>{state.deletion.mutationSucceeded ? 'Reload parent folder' : 'Reload file'}</Button>{/if}
       {#if state.deletion.signInRequired}<Button variant="secondary" onclick={signIn}>Sign in</Button>{/if}
-      <dl>
+      <section class="metadata" aria-label="Metadata">
+        <h2>Metadata</h2>
+        <dl>
         <dt>Type</dt><dd>File</dd>
         <dt>Content type</dt><dd>{typeof state.node.metadata.content_type === 'string' ? state.node.metadata.content_type : 'Not specified'}</dd>
         <dt>Updated</dt><dd><time datetime={state.node.updated_at}>{updatedAt(state.node.updated_at)}</time></dd>
         {#each Object.entries(state.node.metadata.attributes) as [name, value] (name)}
           {#if name !== 'description'}<dt>{name}</dt><dd>{value}</dd>{/if}
         {/each}
-      </dl>
+        </dl>
+      </section>
     </section>
   {/if}
 {/if}
 
 {#if state.sharing.dialog.open}<NodeSharingDialog state={state.sharing.dialog} {signIn} />{/if}
 <p role="status" aria-atomic="true">{state.sharing.dialog.status}</p>
+  {/snippet}
+</FilesContainer>
 
 <style>
   .file-drag-image { position: fixed; top: 0; left: 0; width: 1px; height: 1px; pointer-events: none; }
@@ -187,9 +194,6 @@
   .drop-prompt { box-sizing: border-box; width: min(100%, 32rem); padding: 2.5rem 1.5rem; border: 2px dashed var(--admin-accent); border-radius: var(--admin-radius); background: var(--admin-panel); text-align: center; color: var(--admin-ink); overflow-wrap: anywhere; }
   .drop-prompt svg { color: var(--admin-accent); }
   .drop-prompt p { line-height: 1.5; }
-  .heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
-  .toolbar { display: flex; flex-wrap: wrap; gap: 0.6rem; }
-  .heading-identity { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
   .upload-status:empty, .drag-status:empty { margin: 0; }
   .drag-status:not(:empty) { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 30; max-width: calc(100vw - 3rem); box-sizing: border-box; margin: 0; padding: 0.75rem 1rem; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-ink); box-shadow: var(--admin-shadow); pointer-events: none; }
   .upload-status:not(:empty) { color: var(--admin-ink); }
@@ -197,32 +201,40 @@
   h1 { min-width: 0; overflow-wrap: anywhere; }
   a { color: var(--admin-accent); overflow-wrap: anywhere; }
   :focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
-  .items { overflow-x: auto; }
+  .items { overflow-x: auto; --node-actions-trigger-size: 1.75rem; }
   table { width: 100%; min-width: 36rem; table-layout: fixed; border-collapse: collapse; text-align: left; font-size: 0.9rem; }
   .type-column { width: 6rem; }
   .updated-column { width: 12rem; }
   .actions-column { width: 5rem; }
-  th, td { padding: 0.55rem 0.6rem; border-bottom: 1px solid var(--admin-border); }
-  th { color: var(--admin-muted); font-weight: 500; }
+  th, td { padding: 0.2rem 0.6rem; }
+  th { padding-block: 0.5rem; border-bottom: 1px solid var(--admin-border); color: var(--admin-muted); font-weight: 500; }
   .item-row { position: relative; }
-  .item-row:hover, .item-row:focus-within { background: var(--admin-soft); }
+  .item-row:nth-child(even) { background: var(--admin-soft); }
+  .item-row:hover, .item-row:focus-within { background: var(--admin-accent-soft); }
   .item-row.drag-source { opacity: 0.6; }
   .item-row.drop-target { background: var(--admin-accent-soft); box-shadow: inset 0 0 0 2px var(--admin-accent); }
   .item-row[draggable='true'] .item-name { cursor: grab; }
   .item-row[draggable='true'] .item-name::after { cursor: grab; }
   .row-actions { text-align: right; white-space: nowrap; }
   .row-actions > :global(button) { position: relative; z-index: 1; }
-  .item-description { margin: 0.3rem 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .item-name-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  time { white-space: nowrap; }
+  .items time { white-space: nowrap; }
   .item-name { display: flex; align-items: center; gap: 0.6rem; }
   .item-name::after { content: ''; position: absolute; inset: 0; cursor: pointer; }
   svg { flex-shrink: 0; }
   p, dt { color: var(--admin-muted); }
   [role='alert'] { color: var(--admin-danger); }
   .drop-prompt h2 { font-size: 1.15rem; overflow-wrap: anywhere; }
-  dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.65rem 1rem; font-size: 0.9rem; }
+  dl { display: grid; grid-template-columns: minmax(6rem, 9rem) minmax(0, 1fr); gap: 0.75rem 1rem; margin: 1rem 0 0; font-size: 0.9rem; }
   dd { margin: 0; overflow-wrap: anywhere; }
-  .details { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); padding: 1rem; }
+  .metadata { border-top: 1px solid var(--admin-border); padding-top: 1rem; }
+  .metadata h2 { margin: 0; font-size: 1rem; }
+  @media (pointer: coarse) {
+    .items { --node-actions-trigger-size: 2.75rem; }
+  }
+  @media (max-width: 480px) {
+    dl { grid-template-columns: minmax(0, 1fr); gap: 0.35rem; }
+    dd + dt { margin-top: 0.65rem; }
+  }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
 </style>

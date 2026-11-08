@@ -37,9 +37,9 @@ A move preserves the item's ID, content, ownership and direct sharing grants. Mo
 
 The root cannot be renamed or moved, but is a valid destination when authorized. Duplicate sibling names, non-directory destinations and moves into the item itself or its descendants are rejected. A failed combined update leaves every field unchanged. Revision conflicts require reloading the item before retrying.
 
-### Share with a group
+### Share with groups or users
 
-For nodes you may share, open the sharing dialog, search registered groups, choose permissions, and save. Remove a group's grant through the same dialog when access is no longer needed.
+For nodes you may share, open the sharing dialog and choose **Groups** or **Users**. Search registered groups by name or ID, or observed users by name, choose permissions, and save the selected type. Remove a recipient's grant through the same dialog when access is no longer needed. Switching types prompts before discarding unsaved changes.
 
 | Permission | Purpose |
 | --- | --- |
@@ -53,7 +53,7 @@ Permissions apply directly to the selected node. They do not inherit from a pare
 
 ### Share with an observed user
 
-MCP tools and REST clients can also grant access directly to a user. The browser sharing dialog currently manages groups only. Find an eligible recipient with `filesystem_search_sharing_recipients`, then pass its opaque `user_id` to `filesystem_share`; see the [filesystem sharing reference](../reference/filesystem-sharing.md) for request fields and REST replacement rules.
+User discovery requires verified authentication and only finds previously observed users with names. MCP tools and REST clients use the same typed recipient search; see the [filesystem sharing reference](../reference/filesystem-sharing.md) for request fields and replacement rules.
 
 Umbod's user directory records users observed during verified authentication. It is not a complete or live identity-provider directory, and an observed record does not prove an account is still active. Search matches user names, not email addresses or authentication subjects. Users without names are not searchable; identical names can identify different users. Always use the returned opaque ID rather than inventing one from a name or email.
 

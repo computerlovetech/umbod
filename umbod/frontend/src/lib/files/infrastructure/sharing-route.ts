@@ -1,7 +1,7 @@
 import { SchemaValidationError, type Transport } from '$lib/admin/infrastructure/transport';
 import type { NodeSharingApi } from '../api';
 import { nodeIdSchema } from '../domain/schemas';
-import { sharingRecipientTypeSchema, type SharingRecipientType, nodeAccessSchema, nodeAccessWriteSchema, replaceAccessSchema, sharingRevisionSchema, eligibleSharingGroupsSchema, type NodeAccess, type ReplaceAccess, type SharingGroup } from '../domain/sharing';
+import { sharingRecipientTypeSchema, type SharingRecipientType, nodeAccessSchema, nodeAccessWriteSchema, replaceAccessSchema, sharingRevisionSchema, sharingRecipientSearchSchema, sharingRecipientSearchResultSchema, type NodeAccess, type ReplaceAccess, type SharingRecipientSearchResult } from '../domain/sharing';
 
 export class NodeSharingRoute implements NodeSharingApi {
   constructor(private readonly transport: Transport) {}
@@ -9,9 +9,12 @@ export class NodeSharingRoute implements NodeSharingApi {
   inspectAccess = (id: string, recipientType?: SharingRecipientType, signal?: AbortSignal): Promise<NodeAccess> =>
     this.transport.request({ method: 'GET', path: this.accessPath(id, recipientType), outputSchema: nodeAccessSchema, signal });
 
-  listEligibleSharingGroups = async (id: string, signal?: AbortSignal): Promise<SharingGroup[]> => {
-    const result = await this.transport.request({ method: 'GET', path: this.path(id) + '/eligible-groups', outputSchema: eligibleSharingGroupsSchema, signal });
-    return result.groups;
+  searchRecipients = (id: string, query: string, recipientType?: SharingRecipientType, signal?: AbortSignal): Promise<SharingRecipientSearchResult> => {
+    const parsed = sharingRecipientSearchSchema.safeParse({ query, recipient_type: recipientType });
+    if (!parsed.success) throw new SchemaValidationError('outbound', parsed.error.issues);
+    const parameters = new URLSearchParams({ query: parsed.data.query });
+    if (parsed.data.recipient_type !== undefined) parameters.set('recipient_type', parsed.data.recipient_type);
+    return this.transport.request({ method: 'GET', path: this.path(id) + '/recipients?' + parameters.toString(), outputSchema: sharingRecipientSearchResultSchema, signal });
   };
 
   replaceAccess = (id: string, revision: string, body: ReplaceAccess, recipientType: SharingRecipientType): Promise<NodeAccess> => {

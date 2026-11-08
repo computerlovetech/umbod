@@ -8,7 +8,7 @@ from umbod.core.identity_directory.ports import ObservedUserDirectory
 from ..models import AccessGrant, NodeId
 from ..ports import AccessControlDriver, NamespaceDriver
 from .models import (
-    EligibleSharingGroups, NodePolicyView, NodeSharingSummaries, ReplaceNodePolicy,
+    NodePolicyView, NodeSharingSummaries, ReplaceNodePolicy,
     ShareNodePolicy, ShareNodeResult, SharingScope, SharingRecipientSearchQuery, SharingRecipientSearchResult,
 )
 
@@ -56,8 +56,6 @@ class FilesystemSharing(Protocol):
     async def summarize_nodes(
         self, snapshot: CallerSnapshot, node_ids: tuple[NodeId, ...],
     ) -> NodeSharingSummaries: ...
-
-    async def eligible_groups(self, snapshot: CallerSnapshot, node_id: NodeId) -> EligibleSharingGroups: ...
 
     async def inspect(
         self, snapshot: CallerSnapshot, node_id: NodeId, scope: SharingScope,

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import { mount, tick, unmount } from 'svelte';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { NodeSummary } from '$lib/files/domain/schemas';
-import { deferred, fileId, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
+import { deferred, fileId, filesystemFixture, filesystemNode, folderId, rootId } from '$lib/files/fixtures.test-support';
 import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
 import { FilesState } from '$lib/files/state/files-state.svelte';
 import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
@@ -29,6 +29,18 @@ function button(label: string, scope: ParentNode = document): HTMLButtonElement 
   return found!;
 }
 
+function namedButton(label: string): HTMLButtonElement {
+  const found = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.getAttribute('aria-label') === label);
+  expect(found, label).toBeDefined();
+  return found!;
+}
+
+async function waitForFolders(): Promise<void> {
+  await tick();
+  await vi.waitFor(() => expect(document.querySelector('[aria-label="Destination folders"]')?.getAttribute('aria-busy')).toBe('false'));
+  await tick();
+}
+
 async function openAction(label: string): Promise<void> {
   document.querySelector<HTMLButtonElement>('.heading-identity button[aria-haspopup="menu"]')!.click();
   await tick();
@@ -36,8 +48,7 @@ async function openAction(label: string): Promise<void> {
   await tick();
 }
 
-async function setup(id: string | null, writable = true): Promise<InMemoryFilesApi> {
-  const api = new InMemoryFilesApi(rootId, filesystemFixture, undefined, undefined, undefined, () => writable);
+async function setup(id: string | null, writable = true, api = new InMemoryFilesApi(rootId, filesystemFixture, undefined, undefined, undefined, () => writable)): Promise<InMemoryFilesApi> {
   const state = new FilesState(api);
   files = state;
   const target = document.createElement('div');
@@ -57,16 +68,16 @@ describe('selected node update controls', (): void => {
       await api.filesystem.updateNode(folderId, 1, { name: 'Renamed home' });
       await state.select(await api.filesystem.getNode(fileId), { rename: true, move: true });
       state.showMove();
-      await state.browse(folderId);
+      await vi.waitFor(() => expect(state.destinations.loading).toBe(false));
       const target = document.createElement('div');
       document.body.append(target);
       component = mount(NodeUpdateDialog, { target, props: { state } });
       await tick();
-      const path = document.querySelector('nav[aria-label="Destination path"]')!;
-      expect(path.querySelectorAll('button')).toHaveLength(1);
-      expect(button('Files', path)).toBeDefined();
-      expect(path.textContent).not.toContain('Shared files');
-      expect(document.querySelector('.destination')?.textContent).toBe('Destination: Files');
+      const picker = document.querySelector('[aria-label="Destination folders"]')!;
+      expect(picker.querySelectorAll('button')).toHaveLength(1);
+      expect(namedButton('Select Files').disabled).toBe(true);
+      expect(picker.textContent).toContain('Current');
+      expect(picker.textContent).not.toContain('Shared files');
       expect(document.querySelector('dialog')?.textContent).not.toContain('Renamed home');
     } finally {
       state.dispose();
@@ -105,12 +116,11 @@ describe('selected node update controls', (): void => {
     document.querySelector<HTMLButtonElement>('tbody button[aria-haspopup="menu"]')!.click();
     await tick();
     button('Move').click();
-    await vi.waitFor(() => expect(files?.rowEditing.controllers.get(fileId)?.update.loading).toBe(false));
-    await tick();
-    button('Files', document.querySelector('nav[aria-label="Destination path"]')!).click();
+    await waitForFolders();
+    namedButton('Select Files').click();
     await vi.waitFor(() => expect(files?.rowEditing.controllers.get(fileId)?.update.canSubmit).toBe(true));
     await tick();
-    button('Move here').click();
+    button('Move to “Files”').click();
     await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
     expect((await api.filesystem.getNode(fileId)).parent_id).toBe(rootId);
     expect(document.querySelector('tbody')).toBeNull();
@@ -123,43 +133,128 @@ describe('selected node update controls', (): void => {
     await tick();
     vi.spyOn(api.filesystem, 'getBreadcrumbs').mockRejectedValueOnce(new Error('Offline'));
     await openAction('Move');
-    await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('Could not browse'));
-    expect(button('Move here').disabled).toBe(true);
-    button('Retry folder').click();
-    await vi.waitFor(() => expect(document.querySelector('nav[aria-label="Destination path"]')?.textContent).toContain('Files'));
-    await vi.waitFor(() => expect(files?.update.loading).toBe(false));
-    await tick();
+    await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('Could not load folders.'));
+    expect(button('Move', document.querySelector('dialog')!).disabled).toBe(true);
+    button('Retry folders').click();
+    await waitForFolders();
     expect(document.querySelector('[role="alert"]')).toBeNull();
-    button('Files', document.querySelector('nav[aria-label="Destination path"]')!).click();
-    await vi.waitFor(() => expect(files?.update.canSubmit).toBe(true));
+    namedButton('Select Files').click();
+    await vi.waitFor(() => expect(button('Move to “Files”').disabled).toBe(false));
   });
 
-  test('browses named folders and recovers from failed navigation without IDs', async (): Promise<void> => {
+  test('retries a failed folder list in its branch without losing the current path', async (): Promise<void> => {
     const api = await setup(fileId);
     await vi.waitFor(() => expect(files?.update.canMove).toBe(true));
-    await tick();
+    const listChildren = api.filesystem.listChildren;
+    vi.spyOn(api.filesystem, 'listChildren').mockImplementation(async (id, signal): Promise<NodeSummary[]> => {
+      if (id === rootId) throw new Error('Offline');
+      return listChildren(id, signal);
+    });
     await openAction('Move');
-    await vi.waitFor(() => expect(files?.update.loading).toBe(false));
+    await waitForFolders();
+    expect(document.querySelector('[role="alert"]')?.textContent).toBe('Could not load folders.');
+    expect(namedButton('Collapse Files').getAttribute('aria-expanded')).toBe('true');
+    expect(button('Move', document.querySelector('dialog')!).disabled).toBe(true);
+    expect(document.querySelector('dialog')?.textContent).not.toContain('Retry folders');
+    vi.mocked(api.filesystem.listChildren).mockImplementation(listChildren);
+    namedButton('Retry Files').click();
+    await vi.waitFor(() => expect(document.querySelector('[role="alert"]')).toBeNull());
+    expect(namedButton('Select Projects').disabled).toBe(true);
+    expect(namedButton('Select Projects').textContent).toContain('Current');
+    expect(document.querySelector('button[aria-label="Expand Projects"]')).toBeNull();
+    expect(document.querySelector('button[aria-label="Collapse Projects"]')).toBeNull();
+    namedButton('Select Files').click();
+    await vi.waitFor(() => expect(button('Move to “Files”').disabled).toBe(false));
+  });
+
+  test.each([true, false])('expands a writable=%s folder independently of selection and selects its writable descendant', async (writable): Promise<void> => {
+    const archiveId = '00000000-0000-4000-8000-000000000004';
+    const reportsId = '00000000-0000-4000-8000-000000000005';
+    const api = new InMemoryFilesApi(rootId, [
+      ...filesystemFixture,
+      filesystemNode({ id: archiveId, parent_id: rootId, name: 'Archive' }),
+      filesystemNode({ id: reportsId, parent_id: archiveId, name: 'Reports' })
+    ], undefined, undefined, undefined, (node): boolean => node.id !== archiveId || writable);
+    await setup(fileId, true, api);
+    await vi.waitFor(() => expect(files?.update.canMove).toBe(true));
+    await openAction('Move');
+    await waitForFolders();
+    expect(namedButton('Select Archive').disabled).toBe(!writable);
+    if (!writable) expect(namedButton('Select Archive').querySelector('[aria-label="Read only"]')).not.toBeNull();
+    expect(namedButton('Expand Archive').disabled).toBe(false);
+    namedButton('Expand Archive').click();
+    await vi.waitFor(() => expect(document.querySelector('button[aria-label="Select Reports"]')).not.toBeNull());
+    expect(namedButton('Collapse Archive').getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelector('[aria-pressed="true"]')).toBeNull();
+    expect(button('Move', document.querySelector('dialog')!).disabled).toBe(true);
+    if (writable) {
+      namedButton('Select Archive').click();
+      await vi.waitFor(() => expect(button('Move to “Archive”').disabled).toBe(false));
+      expect(namedButton('Select Archive').getAttribute('aria-pressed')).toBe('true');
+      expect(namedButton('Select Archive').closest('.folder-row')?.classList.contains('selected')).toBe(true);
+      expect(namedButton('Collapse Archive').getAttribute('aria-expanded')).toBe('true');
+    }
+    namedButton('Select Reports').click();
+    await vi.waitFor(() => expect(button('Move to “Reports”').disabled).toBe(false));
+    expect(namedButton('Select Reports').getAttribute('aria-pressed')).toBe('true');
+    expect(namedButton('Select Reports').closest('.folder-row')?.classList.contains('selected')).toBe(true);
+    expect(namedButton('Select Archive').getAttribute('aria-pressed')).toBe('false');
+    namedButton('Collapse Archive').click();
     await tick();
-    vi.spyOn(api.filesystem, 'getNode').mockRejectedValueOnce(new Error('Offline'));
-    button('Files', document.querySelector('nav[aria-label="Destination path"]')!).click();
-    await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('Could not browse'));
-    expect(button('Move here').disabled).toBe(true);
-    button('Retry folder').click();
-    await vi.waitFor(() => expect(files?.update.canSubmit).toBe(true));
+    expect(document.querySelector('button[aria-label="Select Reports"]')).toBeNull();
+    expect(namedButton('Expand Archive').getAttribute('aria-expanded')).toBe('false');
+    expect(document.querySelector('[aria-pressed="true"]')).toBeNull();
+    expect(button('Move', document.querySelector('dialog')!).disabled).toBe(true);
+  });
+
+  test.each([true, false])('retains keyboard position when a writable=%s folder has no subfolders', async (writable): Promise<void> => {
+    const archiveId = '00000000-0000-4000-8000-000000000004';
+    const api = new InMemoryFilesApi(rootId, [
+      ...filesystemFixture,
+      filesystemNode({ id: archiveId, parent_id: rootId, name: 'Archive' })
+    ], undefined, undefined, undefined, (node): boolean => node.id !== archiveId || writable);
+    await setup(fileId, true, api);
+    await vi.waitFor(() => expect(files?.update.canMove).toBe(true));
+    await openAction('Move');
+    await waitForFolders();
+    const children = deferred<NodeSummary[]>();
+    vi.spyOn(api.filesystem, 'listChildren').mockReturnValueOnce(children.promise);
+    const disclosure = namedButton('Expand Archive');
+    disclosure.focus();
+    disclosure.click();
     await tick();
-    const folder = document.querySelector<HTMLButtonElement>('button[aria-label="Open Projects"]');
-    expect(folder).not.toBeNull();
-    folder!.click();
-    await vi.waitFor(() => expect(files?.update.folder?.id).toBe(folderId));
-    await vi.waitFor(() => expect(files?.update.loading).toBe(false));
+    expect(document.activeElement).toBe(disclosure);
+    children.resolve([]);
+    await vi.waitFor(() => expect(document.querySelector('button[aria-label="Collapse Archive"]')).toBeNull());
+    expect(document.activeElement).toBe(disclosure);
+    expect(disclosure.getAttribute('aria-label')).toBe('No subfolders in Archive');
+    expect(disclosure.getAttribute('aria-disabled')).toBe('true');
+    expect(namedButton('Select Archive').disabled).toBe(!writable);
+    expect(button('Move', document.querySelector('dialog')!).disabled).toBe(true);
+    button('Cancel').focus();
     await tick();
-    expect(document.querySelector('.destination')?.textContent).toBe('Destination: Projects');
-    expect(button('Move here').disabled).toBe(true);
-    button('Cancel').click();
-    await tick();
-    expect(document.querySelector('dialog')).toBeNull();
-    expect((await api.filesystem.getNode(fileId)).parent_id).toBe(folderId);
+    expect(document.querySelector('button[aria-label="No subfolders in Archive"]')).toBeNull();
+    expect(document.activeElement).toBe(button('Cancel'));
+  });
+
+  test('uses Shared files when no personal root is configured', async (): Promise<void> => {
+    const api = new InMemoryFilesApi(rootId, filesystemFixture);
+    const state = new NodeUpdateState(api.filesystem, (): void => {}, async (): Promise<void> => {});
+    try {
+      await state.select(await api.filesystem.getNode(fileId), { rename: true, move: true });
+      state.showMove();
+      const target = document.createElement('div');
+      document.body.append(target);
+      component = mount(NodeUpdateDialog, { target, props: { state } });
+      await waitForFolders();
+      expect(namedButton('Collapse Shared files').getAttribute('aria-expanded')).toBe('true');
+      expect(namedButton('Select Shared files').disabled).toBe(false);
+      expect(namedButton('Select Projects').disabled).toBe(true);
+      namedButton('Select Shared files').click();
+      await vi.waitFor(() => expect(button('Move to “Shared files”').disabled).toBe(false));
+    } finally {
+      state.dispose();
+    }
   });
 
   test.each([null, fileId])('hides root or unauthorized actions for %s', async (id): Promise<void> => {
@@ -225,19 +320,23 @@ describe('selected node update controls', (): void => {
     await tick();
     const update = vi.spyOn(api.filesystem, 'updateNode');
     await openAction('Move');
-    await vi.waitFor(() => expect(files?.update.loading).toBe(false));
-    await tick();
-    expect(button('Move here').disabled).toBe(true);
+    await waitForFolders();
+    expect(document.querySelector('#node-update-title')?.textContent).toBe('Move “Notes.txt”');
+    expect(button('Move', document.querySelector('dialog')!).disabled).toBe(true);
+    expect(namedButton('Collapse Files').getAttribute('aria-expanded')).toBe('true');
+    expect(namedButton('Select Projects').disabled).toBe(true);
+    expect(namedButton('Select Projects').textContent).toContain('Current');
+    expect(document.querySelector('button[aria-label="Expand Projects"]')).toBeNull();
+    expect(document.querySelector('button[aria-label="Collapse Projects"]')).toBeNull();
+    expect(document.querySelector('[aria-pressed="true"]')).toBeNull();
     expect(button('Cancel').hasAttribute('data-dialog-cancel')).toBe(true);
     expect(document.activeElement).toBe(button('Cancel'));
     expect(document.querySelector('[aria-label="Destination folders"]')?.textContent).not.toContain('Notes.txt');
     expect(document.querySelector('dialog input')).toBeNull();
-    expect(document.querySelector('dialog')?.textContent).toContain('No subfolders in this folder.');
-    expect(document.querySelector('dialog')?.textContent).not.toContain('Retry folder');
-    button('Files', document.querySelector('nav[aria-label="Destination path"]')!).click();
-    await vi.waitFor(() => expect(files?.update.canSubmit).toBe(true));
-    await tick();
-    expect(button('Move here').disabled).toBe(false);
+    expect(document.querySelector('dialog')?.textContent).not.toContain('Retry folders');
+    namedButton('Select Files').click();
+    await vi.waitFor(() => expect(button('Move to “Files”').disabled).toBe(false));
+    expect(namedButton('Select Files').getAttribute('aria-pressed')).toBe('true');
     button('Cancel').click();
     await tick();
     expect(document.querySelector('dialog')).toBeNull();

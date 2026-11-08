@@ -6,7 +6,7 @@ description: Filesystem session API, secure raw-byte transfers and in-memory per
 
 # Files
 
-- [sharing-route.ts](./sharing-route.ts) — Typed recipient filters, eligible groups and scoped revision-conditioned replacement over shared transport.
+- [sharing-route.ts](./sharing-route.ts) — Unified typed recipient search, filtered policy reads and scoped revision-conditioned replacement over shared transport.
 - [in-memory-sharing.test-support.ts](./in-memory-sharing.test-support.ts) — Mixed-policy test adapter with filtered reads, scoped replacement and whole-policy revisions.
 - [files-api.ts](./files-api.ts) — Browser composition and injectable transport, origin and external transfer fetch.
 - [filesystem-route.ts](./filesystem-route.ts) — One-GET browse snapshots, atomic PATCH, on-demand capability checks, conditional deletion and uploads.

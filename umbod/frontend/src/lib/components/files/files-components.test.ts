@@ -45,7 +45,7 @@ describe('Files user composition', () => {
     expect(body).toContain('Files</h1>');
     expect(body).toContain('Notes.txt');
     expect(body).not.toContain(home.name);
-    expect(body).not.toContain('aria-label="File path"');
+    expect(body).toContain('aria-label="File path"');
     expect(body).not.toContain('Actions for “Files”');
     expect(body).toContain('Upload file');
     expect(body).toContain('New folder');
@@ -92,7 +92,7 @@ describe('Files user composition', () => {
     await vi.waitFor(() => expect(upload.available).toBe(true));
     const body = content(state, folder, upload);
     expect(body).toContain('Files</h1>');
-    expect(body).not.toContain('aria-label="File path"');
+    expect(body).toContain('aria-label="File path"');
     expect(body).toContain('New folder');
     expect(body).toContain('Projects');
     expect(body).toContain('aria-label="Folder"');

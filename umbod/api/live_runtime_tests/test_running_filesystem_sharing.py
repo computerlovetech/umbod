@@ -58,7 +58,7 @@ async def assert_mcp_additive_sharing(
     search = {"node_id": node_id, "query": "admin", "recipient_type": "group"}
     expected = sorted((
         {"type": "group", "group_id": group["group_id"], "label": group["label"]}
-        for group in eligible["groups"]
+        for group in eligible["recipients"]
         if "admin" in group["group_id"].casefold() or "admin" in group["label"].casefold()
     ), key=lambda recipient: (recipient["label"].casefold(), recipient["group_id"]))
     assert tool_payload(await alice.call_tool("filesystem_search_sharing_recipients", search)) == {
@@ -123,12 +123,13 @@ async def test_signed_direct_node_group_sharing_and_revocation(runtime_endpoints
             node_path = FILESYSTEM + "/nodes/" + file["id"]
             folder_path = FILESYSTEM + "/nodes/" + folder["id"]
             access_path = node_path + "/access?recipient_type=group"
-            eligible_path = node_path + "/access/eligible-groups"
+            eligible_path = node_path + "/access/recipients?query=admin&recipient_type=group"
             eligible = alice.get(eligible_path)
             assert eligible.status_code == 200, eligible.text
-            assert set(eligible.json()) == {"groups"}
-            assert all(set(group) == {"group_id", "label", "description"} for group in eligible.json()["groups"])
-            assert "admin" in {group["group_id"] for group in eligible.json()["groups"]}
+            assert set(eligible.json()) == {"recipients", "has_more"}
+            assert eligible.json()["has_more"] is False
+            assert all(set(group) == {"type", "group_id", "label"} for group in eligible.json()["recipients"])
+            assert "admin" in {group["group_id"] for group in eligible.json()["recipients"]}
             assert "etag" not in eligible.headers
             assert eligible.headers["cache-control"] == "no-store"
             assert bob.get(eligible_path).status_code == 403
@@ -166,7 +167,7 @@ async def test_signed_direct_node_group_sharing_and_revocation(runtime_endpoints
                 sharing = {"can_share": True, "grants": [{
                     "recipient": {
                         "type": "group", "group_id": "admin",
-                        "label": next(entry["label"] for entry in eligible.json()["groups"] if entry["group_id"] == "admin"),
+                        "label": next(entry["label"] for entry in eligible.json()["recipients"] if entry["group_id"] == "admin"),
                     },
                     "permissions": ["discover", "read"],
                 }]}

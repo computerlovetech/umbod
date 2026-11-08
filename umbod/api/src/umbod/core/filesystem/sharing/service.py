@@ -131,12 +131,6 @@ class SharingService:
         groups = await session.groups.registered_groups()
         return project_policy(state, self._issuer, groups, profiles)
 
-    async def eligible_groups(self, snapshot: CallerSnapshot, node_id: NodeId) -> EligibleSharingGroups:
-        identity = await self._identity(snapshot)
-        async with self._transactions.transaction() as session:
-            state = await self._observe(session, identity, node_id)
-            return await self._eligible_groups(session, state)
-
     async def _eligible_groups(
         self, session: SharingSession, state: NodePolicyState,
     ) -> EligibleSharingGroups:

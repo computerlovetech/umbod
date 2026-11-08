@@ -168,6 +168,6 @@ describe('Files row actions menu', (): void => {
     menuitem('Share').click();
     await tick();
     expect(document.querySelector('[role="menu"]')).toBeNull();
-    await vi.waitFor(() => expect(document.querySelector('dialog form[aria-label="Manage group sharing"]')).not.toBeNull());
+    await vi.waitFor(() => expect(document.querySelector('dialog form[aria-label="Manage sharing"]')).not.toBeNull());
   });
 });

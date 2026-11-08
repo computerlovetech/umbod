@@ -1,7 +1,7 @@
 ---
 type: Software Module
 title: "User files"
-description: "User filesystem browsing, direct-node group sharing, directory creation, uploads and file deletion."
+description: "User filesystem browsing, direct-node group and user sharing, directory creation, uploads and file deletion."
 ---
 
 # Files
@@ -10,7 +10,9 @@ description: "User filesystem browsing, direct-node group sharing, directory cre
 - [state/drag-move-state.test.ts](./state/drag-move-state.test.ts) — Transfer validation, move eligibility, cancellation, uncertain outcomes and navigation-race tests.
 - [state/row-editing-state.svelte.ts](./state/row-editing-state.svelte.ts) — Per-row editing controllers with browse-seeded eligibility, bounded checks for new rows and retained drafts.
 - [state/row-editing-state.test.ts](./state/row-editing-state.test.ts) — Child targeting, reconciliation, concurrency limits and stale lifecycle tests.
-- [state/node-update-state.svelte.ts](./state/node-update-state.svelte.ts) — Selected-node rename, independent move navigation, authority checks and conditional mutation recovery.
+- [state/node-update-state.svelte.ts](./state/node-update-state.svelte.ts) — Selected-node rename, explicit move confirmation, authority checks and conditional mutation recovery.
+- [state/move-destination-state.svelte.ts](./state/move-destination-state.svelte.ts) — Expandable destination folders, independent selection, permission checks and branch-local loading.
+- [state/move-destination-state.test.ts](./state/move-destination-state.test.ts) — Selection, expansion, permission boundaries, branch retries and stale-response protection.
 - [state/node-update-state.test.ts](./state/node-update-state.test.ts) — Revision reconciliation, picker eligibility, navigation fencing and conflict recovery tests.
 - [update-node-api.test.ts](./update-node-api.test.ts) — Atomic PATCH validation, independent permissions, collisions, cycles and retained content tests.
 
@@ -23,7 +25,8 @@ description: "User filesystem browsing, direct-node group sharing, directory cre
 - [api.ts](./api.ts) — Filesystem operations and typed recipient-filtered sharing ports.
 - [domain/sharing.ts](./domain/sharing.ts) — Strict group/user grant targets, labelled access views and minimal blocked recipient contracts.
 - [state/sharing-eligibility-state.svelte.ts](./state/sharing-eligibility-state.svelte.ts) — Browse-seeded sharing eligibility, fresh dialog rechecks and bounded checks for newly created rows.
-- [state/sharing-dialog-state.svelte.ts](./state/sharing-dialog-state.svelte.ts) — Group-filtered drafts and saves, explicit permissions, conflict recovery and operation lifetime.
+- [state/sharing-dialog-state.svelte.ts](./state/sharing-dialog-state.svelte.ts) — Type-scoped group/user drafts and saves, guarded scope switches, explicit permissions and conflict recovery.
+- [state/recipient-search-state.svelte.ts](./state/recipient-search-state.svelte.ts) — Debounced unified recipient lookup with cancellation, stale-result protection and bounded-result feedback.
 - [state/sharing-state.test.ts](./state/sharing-state.test.ts) — Eligibility, mutation, cancellation, self-revocation and stale-result behavior tests.
 - [sharing-api.test.ts](./sharing-api.test.ts) — Mixed recipient preservation, scoped query validation and strong conditional JSON transport tests.
 - [breadcrumbs-api.test.ts](./breadcrumbs-api.test.ts) — Minimal breadcrumb schemas, visibility boundaries and shared HTTP transport tests.

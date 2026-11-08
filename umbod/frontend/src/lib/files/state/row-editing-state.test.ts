@@ -32,14 +32,12 @@ describe('table row editing', (): void => {
       await vi.waitFor(() => expect(state.controllers.get(fileId)?.update.canMove).toBe(true));
       const update = state.controllers.get(fileId)!.update;
       update.showMove();
-      await update.browse(folderId);
-      expect(update.destinationName).toBe('Files');
-      expect(update.navigation.displayItems.map((item) => item.id)).toEqual([folderId]);
-      expect(update.navigation.parent).toBeUndefined();
-      expect(update.navigation.atRoot).toBe(true);
-      await update.browse(rootId);
-      expect(update.destinationName).toBe('Shared files');
-      expect(update.canSubmit).toBe(true);
+      await vi.waitFor(() => expect(update.destinations.loading).toBe(false));
+      expect(update.destinations.folders).toMatchObject([{ id: folderId, name: 'Files', current: true }]);
+      expect(update.destinations.folders).toHaveLength(1);
+      await update.destinations.select(rootId);
+      expect(update.destinations.selected).toBeUndefined();
+      expect(update.canSubmit).toBe(false);
     } finally {
       state.dispose();
     }
@@ -71,7 +69,8 @@ describe('table row editing', (): void => {
     const row = await ready(files);
     const mutation = vi.spyOn(api.filesystem, 'updateNode');
     row.update.showMove();
-    await row.update.browse(rootId);
+    await vi.waitFor(() => expect(row.update.destinations.loading).toBe(false));
+    await row.update.destinations.select(rootId);
     await row.update.submit();
     expect(mutation).toHaveBeenCalledWith(fileId, 1, { parent_id: rootId });
     expect(files.children).toEqual([]);

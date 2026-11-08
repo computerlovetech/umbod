@@ -15,6 +15,11 @@ async function setup(id: string = fileId): Promise<{ api: InMemoryFilesApi; file
   return { api, files };
 }
 
+async function selectDestination(state: NodeUpdateState, id: string): Promise<void> {
+  await vi.waitFor(() => expect(state.destinations.loading).toBe(false));
+  await state.destinations.select(id);
+}
+
 describe('selected node updates', (): void => {
   test('keeps the renamed home boundary in the picker while retaining raw ancestors for descendant checks', async (): Promise<void> => {
     const api = new InMemoryFilesApi(rootId, filesystemFixture);
@@ -24,23 +29,24 @@ describe('selected node updates', (): void => {
       await api.filesystem.updateNode(folderId, 1, { name: 'Renamed personal storage' });
       await state.select(await api.filesystem.getNode(fileId), { rename: true, move: true });
       state.showMove();
-      await state.browse(folderId);
-      expect(state.destinationName).toBe('Files');
-      expect(state.navigation.displayItems.map((item) => item.id)).toEqual([folderId]);
-      expect(state.navigation.path?.items.map((item) => item.id)).toEqual([rootId, folderId]);
-      expect(state.navigation.parent).toBeUndefined();
-      expect(state.navigation.atRoot).toBe(true);
-      expect(state.folder?.name).toBe('Renamed personal storage');
-      await state.browse(rootId);
-      expect(state.destinationName).toBe('Shared files');
-      expect(state.canSubmit).toBe(true);
+      await vi.waitFor(() => expect(state.destinations.loading).toBe(false));
+      expect(state.destinations.folders).toMatchObject([{ id: folderId, name: 'Files', current: true, selectable: false }]);
+      expect(state.destinations.selected).toBeUndefined();
+      await state.destinations.select(folderId);
+      expect(state.canSubmit).toBe(false);
+      await state.destinations.select(rootId);
+      expect(state.destinations.selected).toBeUndefined();
+      expect(state.canSubmit).toBe(false);
       const child = await api.filesystem.createFolder(folderId, { name: 'Nested', metadata: { content_type: {}, attributes: {} } });
       personalRoot = child.id;
+      const rootChildren = await api.filesystem.listChildren(rootId);
+      vi.spyOn(api.filesystem, 'listChildren').mockResolvedValueOnce([...rootChildren, { ...child, parent_id: rootId }]);
       await state.select(await api.filesystem.getNode(folderId), { rename: true, move: true });
       state.showMove();
-      await state.browse(child.id);
-      expect(state.navigation.displayItems.map((item) => item.id)).toEqual([child.id]);
-      expect(state.navigation.path?.items.some((item) => item.id === folderId)).toBe(true);
+      await vi.waitFor(() => expect(state.destinations.loading).toBe(false));
+      expect(state.destinations.folders[0]).toMatchObject({ id: rootId, name: 'Shared files', children: [{ id: child.id, name: 'Files', selectable: true }] });
+      await state.destinations.select(child.id);
+      expect(state.destinations.selected).toBeUndefined();
       expect(state.canSubmit).toBe(false);
     } finally {
       state.dispose();
@@ -167,7 +173,7 @@ describe('selected node updates', (): void => {
     if (mode === 'direct') expect(await files.update.moveTo(destination)).toBe(false);
     else {
       files.update.showMove();
-      await files.update.browse(rootId);
+      await selectDestination(files.update, rootId);
       await files.update.submit();
     }
     expect(files.node).toEqual(original);
@@ -213,15 +219,18 @@ describe('selected node updates', (): void => {
     files.dispose();
   });
 
-  test('uses separate picker navigation, rejects current/self/descendants and moves to root', async (): Promise<void> => {
+  test('keeps picker selection separate, disables the current folder and excludes the source directory', async (): Promise<void> => {
     const { files } = await setup();
     files.update.showMove();
-    await vi.waitFor(() => expect(files.update.loading).toBe(false));
-    expect(files.update.folder?.id).toBe(folderId);
+    await vi.waitFor(() => expect(files.update.destinations.loading).toBe(false));
+    expect(files.update.destinations.folders).toMatchObject([{ id: rootId, name: 'Files', children: [{ id: folderId, current: true, selectable: false }] }]);
+    expect(files.update.destinations.selected).toBeUndefined();
     expect(files.update.canSubmit).toBe(false);
     expect(files.navigation.path?.items.at(-1)?.id).toBe(fileId);
-    expect(files.update.folders.every((node) => node.kind === 'directory')).toBe(true);
-    await files.update.browse(rootId);
+    await files.update.destinations.select(folderId);
+    expect(files.update.destinations.selected).toBeUndefined();
+    expect(files.update.canSubmit).toBe(false);
+    await selectDestination(files.update, rootId);
     expect(files.update.canSubmit).toBe(true);
     await files.update.submit();
     expect(files.node).toMatchObject({ id: fileId, parent_id: rootId, revision: 2 });
@@ -229,16 +238,22 @@ describe('selected node updates', (): void => {
     await files.load(folderId);
     await vi.waitFor(() => expect(files.update.canMove).toBe(true));
     files.update.showMove();
-    await files.update.browse(folderId);
+    await vi.waitFor(() => expect(files.update.destinations.loading).toBe(false));
+    expect(files.update.destinations.folders[0]).toMatchObject({ id: rootId, current: true, selectable: false, children: [] });
+    await files.update.destinations.select(folderId);
+    expect(files.update.destinations.selected).toBeUndefined();
     expect(files.update.canSubmit).toBe(false);
     files.dispose();
   });
 
-  test('rejects a known descendant destination and keeps rename eligible when source parent is denied', async (): Promise<void> => {
+  test('excludes descendant destinations and keeps rename eligible when source parent is denied', async (): Promise<void> => {
     const { api, files } = await setup(folderId);
     const child = await api.filesystem.createFolder(folderId, { name: 'Child', metadata: { attributes: {}, content_type: {} } });
     files.update.showMove();
-    await files.update.browse(child.id);
+    await vi.waitFor(() => expect(files.update.destinations.loading).toBe(false));
+    expect(files.update.destinations.folders[0].children).toEqual([]);
+    await files.update.destinations.select(child.id);
+    expect(files.update.destinations.selected).toBeUndefined();
     expect(files.update.canSubmit).toBe(false);
     files.dispose();
     const restricted = new InMemoryFilesApi(rootId, filesystemFixture, undefined, undefined, undefined, (node) => node.id !== folderId);
@@ -249,16 +264,17 @@ describe('selected node updates', (): void => {
     selected.dispose();
   });
 
-  test('starts at independently accessible source parent without querying inaccessible root', async (): Promise<void> => {
+  test('displays an independently accessible source parent without querying inaccessible root', async (): Promise<void> => {
     const api = new InMemoryFilesApi(rootId, filesystemFixture, undefined, undefined, (node) => node.id !== rootId);
     const files = new FilesState(api);
     const root = vi.spyOn(api.filesystem, 'browse');
     await files.load(fileId);
     await vi.waitFor(() => expect(files.update.canMove).toBe(true));
     files.update.showMove();
-    await vi.waitFor(() => expect(files.update.loading).toBe(false));
-    expect(files.update.folder?.id).toBe(folderId);
-    expect(files.update.navigation.path?.complete).toBe(false);
+    await vi.waitFor(() => expect(files.update.destinations.loading).toBe(false));
+    expect(files.update.destinations.folders).toMatchObject([{ id: folderId, name: 'Projects', current: true, selectable: false }]);
+    expect(files.update.destinations.selected).toBeUndefined();
+    expect(files.update.canSubmit).toBe(false);
     expect(root.mock.calls.map(([target]) => target)).not.toContain(null);
     files.dispose();
   });
@@ -307,7 +323,7 @@ describe('selected node updates', (): void => {
     const original = files.node!;
     const updated = { ...original, parent_id: rootId, name: 'Moved.txt', revision: 2 };
     files.update.showMove();
-    await files.update.browse(rootId);
+    await selectDestination(files.update, rootId);
     const response = deferred<NodeSummary>();
     vi.spyOn(api.filesystem, 'updateNode').mockReturnValueOnce(response.promise);
     const saving = files.update.submit();
@@ -347,7 +363,7 @@ describe('selected node updates', (): void => {
     const updated = { ...original, parent_id: rootId, revision: 2 };
     const newer = { ...updated, name: 'Newer.txt', revision: 3 };
     files.update.showMove();
-    await files.update.browse(rootId);
+    await selectDestination(files.update, rootId);
     const response = deferred<NodeSummary>();
     vi.spyOn(api.filesystem, 'updateNode').mockReturnValueOnce(response.promise);
     const saving = files.update.submit();
@@ -376,7 +392,7 @@ describe('selected node updates', (): void => {
   test('respects fresh destination absence after a successful move and does not resurrect revoked or deleted rows', async (): Promise<void> => {
     const { api, files } = await setup();
     files.update.showMove();
-    await files.update.browse(rootId);
+    await selectDestination(files.update, rootId);
     await files.update.submit();
     expect(files.node?.parent_id).toBe(rootId);
     const list = vi.spyOn(api.filesystem, 'listChildren').mockResolvedValue([filesystemFixture[1]]);
@@ -397,11 +413,13 @@ describe('selected node updates', (): void => {
     await files.update.checkEligibility();
     expect(files.update.canMove).toBe(true);
     files.update.showMove();
-    await vi.waitFor(() => expect(files.update.loading).toBe(false));
+    await vi.waitFor(() => expect(files.update.destinations.loading).toBe(false));
+    expect(files.update.destinations.selected).toBeUndefined();
+    expect(files.update.canSubmit).toBe(false);
     vi.spyOn(api.filesystem, 'checkUpdateEligibility').mockRejectedValueOnce(new HttpError(403, 'Denied', {}));
-    await files.update.browse(rootId);
-    expect(files.update.folder?.id).toBe(rootId);
-    expect(files.update.folders.map((node) => node.id)).toContain(folderId);
+    await files.update.destinations.select(rootId);
+    expect(files.update.destinations.folders[0]).toMatchObject({ id: rootId, selectable: false, children: [{ id: folderId }] });
+    expect(files.update.destinations.selected).toBeUndefined();
     expect(files.update.canSubmit).toBe(false);
     await files.load(null);
     expect(files.update.canRename).toBe(false);

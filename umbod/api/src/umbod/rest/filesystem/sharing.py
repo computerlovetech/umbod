@@ -6,9 +6,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, TypeAdapter, ValidationError
 
 from umbod.core.callers import CallerSnapshot
+from umbod.core.identity_directory.user_models import SearchText
 from umbod.core.filesystem.sharing import (
-    EligibleSharingGroups, FilesystemSharing, NodePolicyView, ReplaceNodePolicy,
-    ShareNodePolicy, SharingRecipientType, SharingScope,
+    FilesystemSharing, NodePolicyView, ReplaceNodePolicy,
+    ShareNodePolicy, SharingRecipientSearchQuery, SharingRecipientSearchResult,
+    SharingRecipientType, SharingScope,
 )
 
 from umbod.core.filesystem.access import Visibility, RestrictedVisibility
@@ -76,12 +78,21 @@ def expected_sharing_revision(request: Request) -> str:
     return values[0][1:-1]
 
 
-@router.get("/nodes/{node_id}/access/eligible-groups", response_model=EligibleSharingGroups)
-async def eligible_groups(
-    node_id: UUID, caller: Caller, sharing: Sharing,
-) -> EligibleSharingGroups:
+@router.get(
+    "/nodes/{node_id}/access/recipients", response_model=SharingRecipientSearchResult,
+    openapi_extra={"parameters": [{
+        **RECIPIENT_QUERY, "required": False,
+        "description": "Filter recipients by type; omitted searches both types.",
+    }]},
+)
+async def search_recipients(
+    node_id: UUID, query: SearchText, caller: Caller, sharing: Sharing,
+    scope: Annotated[SharingScope, Depends(sharing_scope)],
+) -> SharingRecipientSearchResult:
     with filesystem_errors():
-        return await sharing.eligible_groups(caller, node_id)
+        return await sharing.search_recipients(
+            caller, node_id, SharingRecipientSearchQuery(query=query, scope=scope),
+        )
 
 
 @router.get(

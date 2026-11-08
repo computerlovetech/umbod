@@ -57,6 +57,37 @@ function submit(): void {
 }
 
 describe('filesystem description UI', (): void => {
+  test('folder and file navigation retain the same header, action slots and description position', async (): Promise<void> => {
+    const { api, state } = await setup(folderId);
+    for (const node of filesystemFixture) api.sharing.configure({ node_id: node.id, revision: 'revision', grants: [], blocked_recipients: [] }, []);
+    await state.reload();
+    await vi.waitFor((): void => expect(state.sharing.available(folderId)).toBe(true));
+    await tick();
+    const container = document.querySelector('.files-container')!;
+    const header = container.querySelector('header')!;
+    const toolbar = container.querySelector('[aria-label="Location actions"]')!;
+    const sharingSlot = toolbar.firstElementChild!;
+    const actionSlot = toolbar.lastElementChild!;
+    const descriptionPosition = Array.from(container.children).indexOf(container.querySelector('[aria-label="Description"]')!);
+    expect(sharingSlot.querySelector('button')?.textContent).toContain('Share');
+    expect(actionSlot.textContent).toContain('Upload file');
+    expect(actionSlot.textContent).toContain('New folder');
+    expect(container.querySelector('table')).not.toBeNull();
+    await state.load(fileId);
+    await vi.waitFor((): void => expect(state.sharing.available(fileId)).toBe(true));
+    await tick();
+    expect(document.querySelector('.files-container')).toBe(container);
+    expect(container.querySelector('header')).toBe(header);
+    expect(container.querySelector('[aria-label="Location actions"]')).toBe(toolbar);
+    expect(descriptionPosition).toBeGreaterThan(-1);
+    expect(Array.from(container.children).indexOf(container.querySelector('[aria-label="Description"]')!)).toBe(descriptionPosition);
+    expect(sharingSlot.querySelector('button')?.textContent).toContain('Share');
+    expect(actionSlot.textContent).toContain('Delete file');
+    expect(actionSlot.textContent).not.toContain('Upload file');
+    expect(container.querySelector('table')).toBeNull();
+    expect(container.querySelector('[aria-label="Metadata"]')).not.toBeNull();
+  });
+
   test('edits the row description through its actions menu and restores focus on cancellation', async (): Promise<void> => {
     const { api, state } = await setup(folderId);
     await vi.waitFor(() => expect(state.rowEditing.controllers.get(fileId)?.description.available).toBe(true));
@@ -81,7 +112,10 @@ describe('filesystem description UI', (): void => {
     await tick();
     submit();
     await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
-    expect(document.querySelector('tbody')?.textContent).toContain('Row guidance');
+    expect(document.querySelector('tbody')?.textContent).not.toContain('Row guidance');
+    expect(document.querySelector('tbody [role="status"]')?.textContent).toBe('Description saved.');
+    expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(trigger);
     expect((await api.filesystem.getNode(fileId)).metadata.attributes.description).toBe('Row guidance');
     expect((await api.filesystem.getNode(folderId)).metadata.attributes.description).toBeUndefined();
   });
@@ -105,12 +139,12 @@ describe('filesystem description UI', (): void => {
     expect((await api.filesystem.getNode(id)).metadata.attributes).not.toHaveProperty('description');
   });
 
-  test('denied editing stays hidden while readable description and row descriptions remain visible', async (): Promise<void> => {
+  test('denied editing stays hidden while descriptions appear only in the opened item', async (): Promise<void> => {
     const { api, state } = await setup(folderId);
     await api.filesystem.updateDescription(fileId, 1, { description: 'Row guidance' });
     await state.reload();
     await tick();
-    expect(document.querySelector('tbody')?.textContent).toContain('Row guidance');
+    expect(document.querySelector('tbody')?.textContent).not.toContain('Row guidance');
     vi.spyOn(api.filesystem, 'checkDescriptionEligibility').mockRejectedValue(new HttpError(403, 'Forbidden', {}));
     await state.load(fileId);
     await tick();
