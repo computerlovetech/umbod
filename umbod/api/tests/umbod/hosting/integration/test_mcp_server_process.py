@@ -71,6 +71,18 @@ def test_mcp_command_defaults_to_separate_listeners_with_metrics_and_clean_shutd
         "        with Path(os.environ['LISTENER_TEST_PID_PATH']).open('a') as output:\n"
         "            output.write(str(os.getpid()) + ',' + str(self.config.port) + '\\n')\n"
         "Server.startup = startup\n"
+        "from dataclasses import replace\n"
+        "import umbod.hosting.mcp_server as mcp_server\n"
+        "from umbod.config import AppConfig\n"
+        "from umbod.mcp.context import PublicAppConfig\n"
+        "from umbod.mcp.runtime_options import StoreBackedConnectorRuntimeStateSourceStrategy\n"
+        "configured_loader = mcp_server.load_configured_public_app_config\n"
+        "async def load_memory_config(settings: AppConfig) -> PublicAppConfig:\n"
+        "    config = await configured_loader(settings)\n"
+        "    return replace(config,\n"
+        "        configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(),\n"
+        "        api_base_url=None)\n"
+        "mcp_server.load_configured_public_app_config = load_memory_config\n"
     )
     environment = {
         key: value for key, value in os.environ.items() if not key.startswith("UMBOD_")
