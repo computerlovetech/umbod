@@ -7,3 +7,4 @@ description: Real CLI listener processes and physical analytics recovery across 
 # Files
 
 - [test_api_server_process.py](./test_api_server_process.py) — Private collector boundaries, shared metrics, worker topology, durable reload and clean shutdown.
+- [test_mcp_server_process.py](./test_mcp_server_process.py) — Real MCP/admin listeners, shared metrics, coordinated reload, signal shutdown and port release.

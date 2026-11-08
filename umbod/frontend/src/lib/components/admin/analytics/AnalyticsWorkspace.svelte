@@ -92,13 +92,30 @@
       {#if state.submittedFilters.length > 0}<ul class="submitted-filters">{#each state.submittedFilters as filter (filter.dimension)}<li>{dimensionLabels[filter.dimension]}: {filter.values.map((value) => value === '' ? 'Empty value' : value).join(', ')}</li>{/each}</ul>{/if}
       {#if state.explanation}<p class="hint">{state.explanation}</p>{/if}
       <dl class="stats"><div><dt>{state.submittedCustom ? 'Logs' : state.countLabel} on this page</dt><dd>{state.total.toLocaleString('en')}</dd></div><div><dt>{state.submittedCustom ? 'Groups' : 'Result rows'} on this page</dt><dd>{state.groupCount.toLocaleString('en')}</dd></div></dl>
+      {#if !state.submittedCustom}
+        <section class="classification-coverage" aria-label="Scope log classifications">
+          <h3>Stored log classifications</h3>
+          <p class="hint">All log types in this range and session, not just this report or page. Separate live reads; other logs may be diagnostics. These counts do not establish usage or collection completeness.</p>
+          {#if state.coverage.pending}
+            <p role="status">Loading log classification counts…</p>
+          {:else if state.coverage.error}
+            <div role="alert">{state.coverage.error} <Button variant="secondary" size="compact" onclick={state.coverage.retry}>Retry counts</Button></div>
+          {:else if state.coverage.counts}
+            <dl class="classification-counts"><div><dt>Recognized activity logs</dt><dd>{state.coverage.counts.recognized.toLocaleString('en')}</dd></div><div><dt>Other / unclassified logs</dt><dd>{state.coverage.counts.other.toLocaleString('en')}</dd></div></dl>
+            {#if state.result.report !== 'logs' && state.result.response.rows.length === 0 && state.coverage.hasLogs}
+              <p role="status">There are stored logs in this scope, but none match this activity report on this page.</p>
+            {/if}
+          {/if}
+          {#if state.result.report !== 'logs'}<Button variant="secondary" size="compact" disabled={state.pending} onclick={() => state.inspectClassifications()}>Inspect log classifications</Button>{/if}
+        </section>
+      {/if}
       {#if state.result.response.rows.length === 0}
-        <p class="empty" role="status">{state.submittedCustom ? 'No logs on this page. Try a wider time range or fewer filters.' : 'No reported matching activity on this page. This does not establish zero usage or telemetry coverage.'}</p>
+        <p class="empty" role="status">{state.submittedCustom ? 'No logs on this page. Try a wider time range or fewer filters.' : state.result.report === 'logs' ? 'No stored logs on this page. Scope counts use separate live reads.' : 'No reported matching activity on this page. This does not establish zero usage or telemetry coverage.'}</p>
       {:else}
         <div class="table-scroll" role="region" aria-label="Log-count results table">
           <table><caption><a href="#analytics-query">{state.submittedCustom ? 'Edit query' : 'Edit report'}</a> · {#if state.submittedCustom}{state.groupingLabel} · {state.bucketLabel} · Page {state.page}. Only observed groups and time buckets are shown.{:else}Page {state.page}. Select a session to focus this report. A session can have multiple rows or span pages.{/if}</caption><thead><tr>{#if state.result.query.bucketing.kind === 'fixed'}<th scope="col">Bucket start (UTC)</th>{/if}{#each state.result.query.group_by as dimension (dimension)}<th scope="col">{dimensionLabels[dimension]}</th>{/each}<th scope="col" class="count">{state.countLabel}</th></tr></thead><tbody>
             {#each state.tableRows as row (JSON.stringify([row.bucket, row.groups]))}
-              <tr>{#if row.bucket.kind === 'bucket'}<td><DateTimeView value={row.bucket.start} /></td>{/if}{#each row.groups as group (group.dimension)}<td>{#if group.value.kind === 'missing'}<span class="missing">{state.submittedCustom ? 'Missing attribute' : 'Not reported'}</span>{:else if group.value.value === ''}<span class="missing">{state.submittedCustom ? 'Empty string' : 'Not reported'}</span>{:else if state.isSessionGroup(group)}{@const session = group.value.value}<Button variant="quiet" size="compact" class="session-link" disabled={state.pending} aria-label={`View session ${session}`} onclick={() => state.narrowToSession(session)}>{session}</Button>{:else}<span class="exact-value">{state.formatValue(group.dimension, group.value.value)}</span>{/if}</td>{/each}<td class="count">{row.count.toLocaleString('en')}</td></tr>
+              <tr>{#if row.bucket.kind === 'bucket'}<td><DateTimeView value={row.bucket.start} /></td>{/if}{#each row.groups as group (group.dimension)}<td>{#if group.value.kind === 'missing'}<span class="missing">{group.dimension === 'activity_kind' ? 'Unclassified' : state.submittedCustom ? 'Missing attribute' : 'Not reported'}</span>{:else if group.value.value === ''}<span class="missing">{group.dimension === 'activity_kind' ? 'Unclassified' : state.submittedCustom ? 'Empty string' : 'Not reported'}</span>{:else if state.isSessionGroup(group)}{@const session = group.value.value}<Button variant="quiet" size="compact" class="session-link" disabled={state.pending} aria-label={`View session ${session}`} onclick={() => state.narrowToSession(session)}>{session}</Button>{:else}<span class="exact-value">{state.formatValue(group.dimension, group.value.value)}</span>{/if}</td>{/each}<td class="count">{row.count.toLocaleString('en')}</td></tr>
             {/each}
           </tbody></table>
         </div>
@@ -143,6 +160,12 @@
   .failure { margin-bottom: 1.25rem; }
   .range { font-size: .8125rem; color: var(--admin-muted); margin: 0; }
   .submitted-filters { margin: 0; padding-left: 1.25rem; font-size: .8125rem; overflow-wrap: anywhere; white-space: pre-wrap; }
+  .classification-coverage { display: grid; gap: .5rem; border-top: 1px solid var(--admin-border); padding-top: .75rem; }
+  .classification-coverage h3 { font-size: .8125rem; margin: 0; }
+  .classification-coverage > :global(button) { justify-self: start; }
+  .classification-counts { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; margin: 0; }
+  .classification-counts div { display: flex; align-items: baseline; gap: .5rem; }
+  .classification-counts dd { font-size: .875rem; margin: 0; }
   .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0; }
   .stats div { padding: 1rem; background: var(--admin-soft); border-radius: 8px; }
   dt { font-size: .8125rem; color: var(--admin-muted); }

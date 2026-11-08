@@ -286,14 +286,15 @@ describe('existing filter choices', () => {
     expect(state.result).toBeUndefined();
     expect(state.pending).toBe(false);
     expect(state.choices.pending).toBe('');
-    expect(source.signals[1]?.aborted).toBe(true);
+    expect(source.signals[2]?.aborted).toBe(true);
     late.resolve(values());
     await running;
     expect(state.result).toBeUndefined();
     expect(state.error).toContain('Administration access');
     await state.run();
     await state.choices.show();
-    expect(source.queries).toHaveLength(3);
+    expect(source.queries).toHaveLength(4);
+    expect(source.queries[1].group_by).toEqual(['activity_kind']);
   });
 
   it('query access loss aborts discovery and ignores its late failure', async (): Promise<void> => {

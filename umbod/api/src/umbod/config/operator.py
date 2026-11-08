@@ -237,6 +237,10 @@ class OperatorSettings(BaseSettings):
         default=defaults.MCP_TEST_USER_GROUP,
         validation_alias="UMBOD_MCP_TEST_USER_GROUP",
     )
+    mcp_administrator_hosting: Literal["shared", "separate"] = "separate"
+    mcp_administrator_host: str = "127.0.0.1"
+    mcp_administrator_port: int = 8013
+    mcp_administrator_base_url: str = "http://localhost:8013"
     feature_mcp_administrator_enabled: bool = Field(
         default=True,
         validation_alias="UMBOD_FEATURE_MCP_ADMINISTRATOR_ENABLED",

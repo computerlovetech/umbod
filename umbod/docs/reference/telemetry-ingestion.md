@@ -159,7 +159,15 @@ All records received through shared or personal ingestion credentials remain uno
 
 ### Normalized activity fields
 
-A small producer mapping enriches recognized logs with `activity_kind` and, for completed tools, `outcome`. Original source, event, tool, session and severity dimensions remain unchanged. Unknown producers and unrelated events remain queryable without inferred enrichment.
+Producers can declare activity using the OTLP log-record string attribute `umbod.activity.kind`. Its exact accepted values are `tool_call`, `file_read`, `file_edit` and `skill_activation`; case changes, whitespace and nonstring values are invalid. A valid declaration takes precedence over the legacy mapping below, regardless of source, harness, event name, tool name or external-tool provenance. Explicit file kinds therefore also support external tools. Invalid, missing or wrong-typed declarations fall back to the unchanged conservative legacy classifier and ignore `umbod.activity.outcome`.
+
+For the three tool kinds, `umbod.activity.outcome` accepts only exact strings `success`, `failure` and `unknown`. If this attribute is absent, the explicit `success` attribute supplies the legacy boolean or exact-string `true`/`false` fallback. If canonical outcome is present but invalid or wrong-typed, outcome is `unknown`, even when `success` is valid. Severity never determines outcome. Duplicate keys use the last occurrence, including invalid values. `skill_activation` never receives an outcome.
+
+Declarations are producer claims, not Umbod-verified execution or success. Original source, event, tool, session and severity dimensions remain unchanged. Every input remains one stored analytics record, including unclassified records. Only the approved canonical dimensions are retained, not extra attributes, bodies, arguments, paths or skill identity. The declaration introduces no new dimensions, API fields or schema migration.
+
+Without a valid declaration, classification first tries the semantic string record attribute `event.name` using the legacy mapping below. If that attribute does not classify, it tries the retained event dimension. When both candidates are recognized but conflict, the semantic attribute wins. Raw `event_name` display and filtering remain unchanged: the log `eventName` takes precedence over the attribute, even when it is generic source-location metadata. No source-location or line-number aliases are inferred.
+
+The legacy mapping enriches only these recognized events:
 
 | Producer event | Activity kind | File-tool classification |
 | --- | --- | --- |
@@ -170,13 +178,15 @@ A small producer mapping enriches recognized logs with `activity_kind` and, for 
 
 Qualified event names identify the supported format even when `service.name` is customized. Claude's bare `tool_result` and `skill_activated` attributes are recognized only for sources `claude-code` and `claude-code-desktop`. The existing `codex` source with bare `tool_result` is retained as a legacy convention; it is not the current namespaced Codex producer contract. Bare names from other sources are not classified.
 
-Completed tools receive `outcome` of `success`, `failure` or `unknown` from the explicit `success` attribute. OTLP boolean values and exact strings `true` and `false` are supported. Missing or malformed values remain `unknown`; INFO, WARNING and ERROR severity do not determine execution outcome. Permission decisions, API requests and skill-file reads do not become completed tools or skill activations by inference.
+Legacy-mapped completed tools receive `outcome` of `success`, `failure` or `unknown` from the explicit `success` attribute. OTLP boolean values and exact strings `true` and `false` are supported. Missing or malformed values remain `unknown`; INFO, WARNING and ERROR severity do not determine execution outcome. Permission decisions, API requests and skill-file reads do not become completed tools or skill activations by inference.
 
 Each input record produces one analytics record. File activity kinds are tool-call subtypes, so the Tool calls report filters all three tool kinds without duplicating records. File reports count calls, not distinct files. Skill reports count activation records, not distinct skills or successful task completions. Arguments, file paths and skill names are not retained for these reports.
 
 The version-2 analytics schema adds the two nullable dimensions. Existing recognized records are classified from their retained source, event and tool fields during the transactional version-1 upgrade. Historical Codex `apply_patch` records remain generic `tool_call` records because native versus external tool provenance was not retained. Historical tool outcomes become `unknown` because their result attributes were not stored. Unrecognized history remains unchanged; the migration does not import historical stdout or recover discarded attributes.
 
-Mappings follow [Claude Code monitoring](https://code.claude.com/docs/en/monitoring-usage), the [Codex tool-result producer](https://github.com/openai/codex/blob/main/codex-rs/otel/src/tool_result.rs), the [Codex skill-invocation producer](https://github.com/openai/codex/blob/main/codex-rs/otel/src/skill_invocation.rs) and its [native patch-tool definition](https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/handlers/apply_patch_spec.rs). These contracts describe supported formats, not proof that a deployed client version exports every event. Missing activity is not a measured zero, and retransmitted exports can inflate all counts.
+Existing diagnostic/source-location events, including `codex_exec` events such as `event otel/src/events/session_telemetry.rs:375`, provider or metrics locations, and synthetic UI-check logs are not activity merely because of their source or tool names. Existing unclassified history cannot reliably be backfilled: discarded producer attributes, including semantic `event.name` values overridden by record metadata in the stored raw event dimension, cannot be reconstructed from retained dimensions. This contract does not reinterpret stored logs or modify the existing migration.
+
+Legacy mappings follow [Claude Code monitoring](https://code.claude.com/docs/en/monitoring-usage), the [Codex tool-result producer](https://github.com/openai/codex/blob/main/codex-rs/otel/src/tool_result.rs), the [Codex skill-invocation producer](https://github.com/openai/codex/blob/main/codex-rs/otel/src/skill_invocation.rs) and its [native patch-tool definition](https://github.com/openai/codex/blob/main/codex-rs/core/src/tools/handlers/apply_patch_spec.rs). These contracts describe supported formats, not proof that a deployed client version exports every event. Missing activity is not a measured zero, and retransmitted exports can inflate all counts.
 
 ## Sensitive data
 

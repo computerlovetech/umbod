@@ -2,12 +2,22 @@ from inspect import Parameter, Signature
 from typing import Annotated, Any, Optional
 
 import typer
-import uvicorn
-
-from umbod.config import load_server_app_config
+from umbod.config import AppConfig, load_server_app_config
 from umbod.logging import configure_logging
 
 app = typer.Typer(help="MCP server commands.", no_args_is_help=True)
+
+
+def run_mcp_server(settings: AppConfig, host: str, port: int, reload: bool) -> None:
+    from umbod.hosting.mcp_server import run_mcp_server as delegate
+
+    delegate(settings, host, port, reload)
+
+
+def validate_listener_ports(settings: AppConfig, port: int) -> None:
+    from umbod.hosting.mcp_server import validate_listener_ports as delegate
+
+    delegate(settings, port)
 
 
 class ServeCommand:
@@ -48,16 +58,23 @@ class ServeCommand:
         except ValueError as error:
             typer.echo(str(error), err=True)
             raise typer.Exit(code=1) from None
-        configure_logging(settings.runtime.app_name, settings.runtime.log_level)
         configured_port = settings.mcp.port if kwargs["port"] is None else int(kwargs["port"])
-        uvicorn.run(
-            "umbod.hosting.mcp_service:app",
-            host=str(kwargs["host"]),
-            port=configured_port,
-            reload=bool(kwargs["reload"]),
-            log_level=settings.runtime.log_level,
-            log_config=None,
-        )
+        try:
+            validate_listener_ports(settings, configured_port)
+        except ValueError as error:
+            typer.echo(str(error), err=True)
+            raise typer.Exit(code=1) from None
+        configure_logging(settings.runtime.app_name, settings.runtime.log_level)
+        try:
+            run_mcp_server(
+                settings,
+                host=str(kwargs["host"]),
+                port=configured_port,
+                reload=bool(kwargs["reload"]),
+            )
+        except (OSError, RuntimeError):
+            typer.echo("Unable to run Umbod MCP listeners.", err=True)
+            raise typer.Exit(code=1) from None
 
 
 app.command("serve")(ServeCommand())

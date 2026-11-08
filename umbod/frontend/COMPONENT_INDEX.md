@@ -84,7 +84,7 @@ tags:
 
 - [Getting started composition](src/lib/components/getting-started/README.md) — Feature-owned harness onboarding and personal-token workflows; reuse its neutral controls, not the complete page.
 
-- [Log analytics composition](src/lib/components/admin/analytics/README.md) — Feature-owned reports with session drill-down and a custom explorer; excluded because it owns administrator analytics workflows.
+- [Log analytics composition](src/lib/components/admin/analytics/README.md) — Feature-owned reports, scope classifications and frozen inspection; excluded because it owns administrator analytics workflows.
 
 - [Files compositions](src/lib/components/files/README.md) — Feature-owned sharing, rename, move and upload dialogs; excluded from reusable controls because they own files workflows.
 

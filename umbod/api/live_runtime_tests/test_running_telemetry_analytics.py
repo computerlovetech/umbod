@@ -30,8 +30,12 @@ def test_running_canonical_activity_reports_preserve_raw_events(
         for event, tool, success, severity in events:
             records.append({
                 "timeUnixNano": "1767226200000000000",
-                "eventName": event, "severityText": severity,
+                "eventName": (
+                    "event otel/src/events/session_telemetry.rs:375"
+                    if tool == "exec_command" else event
+                ), "severityText": severity,
                 "attributes": [
+                    {"key": "event.name", "value": {"stringValue": event}},
                     {"key": "conversation.id", "value": {"stringValue": session}},
                     {"key": "tool_name", "value": {"stringValue": tool}},
                     {"key": "success", "value": success},
@@ -58,7 +62,8 @@ def test_running_canonical_activity_reports_preserve_raw_events(
           {"dimension": "outcome", "values": ["failure"]}], [(claude_source, 1), (codex_source, 1)]),
         ([{"dimension": "outcome", "values": ["success"]}], [(claude_source, 1), (codex_source, 1)]),
         ([{"dimension": "event_name", "values": ["claude_code.tool_result"]}], [(claude_source, 2)]),
-        ([{"dimension": "event_name", "values": ["codex.tool_result"]}], [(codex_source, 2)]),
+        ([{"dimension": "event_name", "values": ["codex.tool_result"]}], [(codex_source, 1)]),
+        ([{"dimension": "event_name", "values": ["event otel/src/events/session_telemetry.rs:375"]}], [(codex_source, 1)]),
         ([{"dimension": "event_name", "values": ["codex.skill_invocation"]}], [(codex_source, 1)]),
         ([], [(claude_source, 2), (codex_source, 3)]),
     ):
@@ -83,6 +88,64 @@ def test_running_canonical_activity_reports_preserve_raw_events(
             }
             for source, count in expected_counts
         ]}
+
+
+def test_running_another_harness_declares_activity_and_outcomes(
+    runtime_endpoints: RuntimeEndpoints, otlp_bearer_token: str,
+) -> None:
+    source = f"another-harness-{uuid4().hex}"
+    records = []
+    for kind, outcome in (
+        ("tool_call", "success"), ("file_read", "failure"),
+        ("file_edit", "unknown"), ("skill_activation", "success"),
+    ):
+        records.append({
+            "timeUnixNano": "1767226200000000000",
+            "eventName": "harness.operation", "severityText": "ERROR",
+            "attributes": [
+                {"key": "umbod.activity.kind", "value": {"stringValue": kind}},
+                {"key": "umbod.activity.outcome", "value": {"stringValue": outcome}},
+                {"key": "success", "value": {"boolValue": True}},
+                {"key": "mcp.tool.name", "value": {"stringValue": "external_operation"}},
+            ],
+        })
+    ingestion = httpx.post(
+        f"{runtime_endpoints.otlp_base_url}/v1/logs",
+        json={"resourceLogs": [{
+            "resource": {"attributes": [
+                {"key": "service.name", "value": {"stringValue": source}},
+            ]},
+            "scopeLogs": [{"logRecords": records}],
+        }]},
+        headers={"Authorization": f"Bearer {otlp_bearer_token}"}, timeout=10,
+    )
+    assert ingestion.status_code == 200, ingestion.text
+    response = httpx.post(
+        f"{runtime_endpoints.api_base_url}/api/admin/telemetry/log-counts",
+        json={
+            "time_range": {"start": "2026-01-01T00:00:00Z", "end": "2026-01-02T00:00:00Z"},
+            "filters": [{"dimension": "source", "values": [source]}],
+            "group_by": ["activity_kind", "outcome"], "bucketing": {"kind": "none"},
+            "pagination": {"limit": 100, "offset": 0},
+        },
+        headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"}, timeout=10,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"has_more": False, "rows": [
+        {
+            "groups": [
+                {"dimension": "activity_kind", "value": {"kind": "present", "value": kind}},
+                {"dimension": "outcome", "value": outcome},
+            ],
+            "count": 1, "bucket": {"kind": "none"},
+        }
+        for kind, outcome in (
+            ("file_edit", {"kind": "present", "value": "unknown"}),
+            ("file_read", {"kind": "present", "value": "failure"}),
+            ("skill_activation", {"kind": "missing"}),
+            ("tool_call", {"kind": "present", "value": "success"}),
+        )
+    ]}
 
 
 @pytest.fixture

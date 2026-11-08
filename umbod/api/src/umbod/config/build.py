@@ -13,6 +13,7 @@ from umbod.config.app import (
     FilesystemRuntimeConfig,
     S3FilesystemContentConfig,
     LocalFilesystemContentConfig,
+    McpAdministratorConfig,
     McpConfig,
     OAuthStorageConfig,
     OidcConfig,
@@ -245,6 +246,12 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
             ),
         ),
         mcp=_build_mcp(operator, auth_recipe),
+        mcp_administrator=McpAdministratorConfig(
+            hosting=operator.mcp_administrator_hosting,
+            host=operator.mcp_administrator_host,
+            port=operator.mcp_administrator_port,
+            base_url=operator.mcp_administrator_base_url,
+        ),
         oidc=_build_oidc(operator, auth_recipe),
         oauth_storage=OAuthStorageConfig(
             directory=_oauth_storage_directory(operator),

@@ -10,9 +10,11 @@ description: Administrator log-count query contracts, request adapter and explic
 - [Port](port.ts) — Log-count query boundary.
 - [HTTP adapter](http-route.ts) — Administrator telemetry route over the shared transport.
 - [Query draft](query-draft.svelte.ts) — Exact filters, ordered grouping and explicit-offset range conversion.
-- [Reports](reports.ts) — Canonical session activity report filters, grouping and count labels.
+- [Reports](reports.ts) — Session activity and all-log classification presets, grouping and count labels.
 - [Report tests](reports.test.ts) — All-session reports, frozen session drill-down, retry, independent drafts and canonical dimensions.
-- [Query state](analytics-state.svelte.ts) — Report and custom drafts, submitted session drill-down, server pagination, retry and access-loss fencing.
+- [Query state](analytics-state.svelte.ts) — Independent drafts, frozen session and classification inspection, pagination and access-loss fencing.
+- [Classification counts](activity-coverage.svelte.ts) — Scope-wide live classification totals with complete pagination, caching and independent retry.
+- [Classification tests](activity-coverage.svelte.test.ts) — Frozen scopes, latest duplicate counts, malformed responses, retries and asynchronous fencing.
 - [Filter choices](filter-choices.svelte.ts) — Paginated observed-value discovery, manual custom session filters, range freshness and cancellation.
 - [Filter choice tests](filter-choices.svelte.test.ts) — Discovery, manual session entry, selection guards, failures and obsolete-response fencing.
 - [In-memory adapter](in-memory.test-support.ts) — Test-only validated response and request control.

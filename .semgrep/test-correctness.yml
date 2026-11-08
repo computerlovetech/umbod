@@ -242,6 +242,10 @@ rules:
     languages: [python]
     severity: ERROR
     message: SQLite configuration and physical fixture policy belong in configuration or infrastructure tests, not business tests.
+    metadata:
+      reviewed-boundaries:
+        - path: api/tests/umbod/hosting/integration/test_mcp_server_process.py
+          reason: Real CLI startup, reload and signal shutdown exercise configured persistent hosting without replacing composition.
     paths:
       include:
         - '**/tests/umbod/core/**'
@@ -253,6 +257,7 @@ rules:
         - '**/tests/umbod/config/**'
       exclude:
         - '**/tests/umbod/hosting/integration/test_api_server_process.py'
+        - '**/tests/umbod/hosting/integration/test_mcp_server_process.py'
         - '**/tests/umbod/config/**'
     pattern-either:
       - pattern: $CONFIG.sqlite_path

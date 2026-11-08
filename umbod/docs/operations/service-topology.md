@@ -28,6 +28,8 @@ flowchart LR
 | `mcp` | MCP endpoint and agent-facing tools | 8011 |
 | `telemetry` (optional) | Collector-only OTLP HTTP endpoints in the API process | 4318 |
 
+Separate [administrator MCP hosting](admin-mcp.md#hosting-and-deployment) is the default, runs in the existing MCP process, and adds only a private ClusterIP Service on port `8013`. It never runs in API or adds a Deployment. Explicit shared hosting creates no additional listener or Service; feature disablement independently prevents administrator registration and the separate listener.
+
 The API exposes metrics in the core Pod on port `8001`. The MCP container exposes metrics on port `8012`.
 
 ## Workloads and storage

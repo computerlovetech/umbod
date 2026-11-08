@@ -41,47 +41,6 @@
     </article>
   </div>
 
-  <details class="other-clients">
-    <summary>Other MCP clients</summary>
-    <div class="guides">
-      <article class="guide-card">
-        <h3>ChatGPT</h3>
-        <ol>
-          <li>Open <strong>Plugins</strong> in ChatGPT and select <strong>+ → Add custom MCP server</strong>.</li>
-          <li>Name it Umbod and enter the MCP endpoint above under <strong>Connection</strong>.</li>
-          <li>Configure the authentication method supplied by your Umbod operator, review the warning, then select <strong>Create as a plugin</strong>.</li>
-          <li>Review the discovered tools, install the plugin, and type <code>@</code> in a new conversation to select it.</li>
-        </ol>
-        <p>Developer mode is not required for the Plugins flow. Availability depends on your account and workspace policy. ChatGPT must be able to reach the endpoint.</p>
-        <a href="https://help.openai.com/en/articles/12584461-connecting-custom-mcp-servers-in-chatgpt" target="_blank" rel="noreferrer">ChatGPT custom MCP documentation</a>
-      </article>
-
-      <article class="guide-card">
-        <h3>Claude and Cowork</h3>
-        <ol>
-          <li>Open <strong>Customize → Connectors</strong> in Claude.</li>
-          <li>Select <strong>+ Add → Add custom connector</strong>, name it Umbod, and enter the MCP endpoint above.</li>
-          <li>Select <strong>Continue</strong>, review authentication, then choose <strong>Sign in now</strong> and <strong>Add</strong> to finish connecting.</li>
-          <li>Enable the connector for your conversation or Cowork task.</li>
-        </ol>
-        <p>Availability depends on your plan. Team and Enterprise workspaces may require administrator provisioning. Claude and Cowork remote connectors must be able to reach Umbod from Anthropic's infrastructure, not just your laptop.</p>
-        <a href="https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp" target="_blank" rel="noreferrer">Claude custom connector documentation</a>
-      </article>
-
-      <article class="guide-card">
-        <h3>GitHub Copilot in VS Code</h3>
-        <ol>
-          <li>Run <strong>MCP: Add Server</strong> from the Command Palette and choose <strong>HTTP</strong>.</li>
-          <li>Enter the MCP endpoint above, use server ID <code>umbod</code>, and choose <strong>Global → Copilot Global</strong> for personal configuration.</li>
-          <li>Review trust prompts and complete browser sign-in if authentication is required.</li>
-          <li>Run <strong>MCP: List Servers</strong> to inspect Umbod, then enable its tools in an agent chat.</li>
-        </ol>
-        <p>Alternatively, merge this into <code>~/.copilot/mcp-config.json</code>, keeping existing servers:</p>
-        <pre><code>{state.copilotConfiguration}</code></pre>
-        <a href="https://code.visualstudio.com/docs/agent-customization/mcp-servers" target="_blank" rel="noreferrer">VS Code MCP documentation</a>
-      </article>
-    </div>
-  </details>
 </section>
 
 <style>
@@ -103,10 +62,6 @@
   a { color: var(--admin-accent-strong); font-size: 13px; text-underline-offset: 3px; }
   code { font-family: var(--admin-mono); overflow-wrap: anywhere; }
   li code { background: var(--admin-accent-soft); border-radius: 4px; padding: 2px 4px; }
-  pre { background: var(--admin-soft); border: 1px solid var(--admin-border); border-radius: var(--admin-radius); color: var(--admin-ink); font-size: 12px; line-height: 1.6; overflow-x: auto; padding: 14px; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .other-clients { margin-top: 20px; }
-  summary { color: var(--admin-ink); cursor: pointer; font-size: 14px; font-weight: 600; }
-  summary:focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 4px; }
   @media (max-width: 900px) { .guides { grid-template-columns: 1fr; } }
   @media (max-width: 480px) { .connection-card, .guide-card { padding: 18px; } }
 </style>

@@ -7,6 +7,16 @@ ActivityOutcome = Literal["success", "failure", "unknown"]
 ToolOrigin = Literal["native", "external", "unknown"]
 
 
+def classify_declared_activity(
+    kind: str, outcome: ActivityOutcome,
+) -> Mapping[LogDimension, str]:
+    if kind in ("tool_call", "file_read", "file_edit"):
+        return {LogDimension.ACTIVITY_KIND: kind, LogDimension.OUTCOME: outcome}
+    if kind == "skill_activation":
+        return {LogDimension.ACTIVITY_KIND: kind}
+    return {}
+
+
 def classify_activity(
     source: str,
     event: str,

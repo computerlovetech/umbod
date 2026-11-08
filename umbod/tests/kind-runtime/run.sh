@@ -23,11 +23,14 @@ api_b_forward_pid=""
 api_forward_pid=""
 otlp_forward_pid=""
 mcp_forward_pid=""
+admin_mcp_forward_pid=""
 mcp_b_forward_pid=""
 fixture_forward_pid=""
 host_temporary_directory=""
 api_port="${UMBOD_TEST_API_PORT:-28010}"
 mcp_port="${UMBOD_TEST_MCP_PORT:-28011}"
+admin_mcp_port="${UMBOD_TEST_ADMIN_MCP_PORT:-28017}"
+export UMBOD_TEST_ADMIN_MCP_URL="http://127.0.0.1:${admin_mcp_port}/mcp"
 otlp_port="${UMBOD_TEST_OTLP_PORT:-24318}"
 export UMBOD_TEST_OTLP_BASE_URL="http://127.0.0.1:${otlp_port}"
 export UMBOD_TEST_API_BASE_URL="http://127.0.0.1:${api_port}"
@@ -56,7 +59,7 @@ fi
 finish() {
     exit_status=$?
     trap - EXIT
-    for forward_pid in "${api_forward_pid}" "${otlp_forward_pid}" "${api_b_forward_pid}" "${mcp_forward_pid}" "${mcp_b_forward_pid}" "${fixture_forward_pid}"; do
+    for forward_pid in "${api_forward_pid}" "${otlp_forward_pid}" "${api_b_forward_pid}" "${mcp_forward_pid}" "${mcp_b_forward_pid}" "${admin_mcp_forward_pid}" "${fixture_forward_pid}"; do
         if [[ -n "${forward_pid}" ]]; then
             kill "${forward_pid}" 2>/dev/null || true
             wait "${forward_pid}" 2>/dev/null || true
@@ -116,6 +119,7 @@ kubectl --context "${kube_context}" create secret generic umbod-collector-ci \
 helm --kube-context "${kube_context}" install "${release_name}" "${chart_directory}" \
     --values "${chart_directory}/ci/kind-values.yaml" \
     --values "${script_directory}/values.yaml" \
+    --set-string "core.mcp.administrator.baseUrl=${UMBOD_TEST_ADMIN_MCP_URL%/mcp}" \
     --wait --timeout 5m
 helm --kube-context "${kube_context}" test "${release_name}" --logs --timeout 2m
 
@@ -131,6 +135,8 @@ kubectl --context "${kube_context}" port-forward service/umbod-api "${api_port}:
 api_forward_pid=$!
 kubectl --context "${kube_context}" port-forward service/umbod-mcp "${mcp_port}:8011" --address 127.0.0.1 &
 mcp_forward_pid=$!
+kubectl --context "${kube_context}" port-forward service/umbod-mcp-administrator "${admin_mcp_port}:8017" --address 127.0.0.1 &
+admin_mcp_forward_pid=$!
 
 kubectl --context "${kube_context}" port-forward service/umbod-telemetry "${otlp_port}:4318" --address 127.0.0.1 &
 otlp_forward_pid=$!
@@ -138,6 +144,7 @@ otlp_forward_pid=$!
 for attempt in $(seq 1 30); do
     if curl --fail --silent "${UMBOD_TEST_API_BASE_URL}/system/health" >/dev/null \
         && curl --fail --silent "${UMBOD_TEST_MCP_URL%/mcp}/system/health" >/dev/null \
+        && curl --fail --silent "${UMBOD_TEST_ADMIN_MCP_URL%/mcp}/system/health" >/dev/null \
         && curl --fail --silent "${UMBOD_TEST_OTLP_BASE_URL}/ready" >/dev/null; then
         break
     fi
@@ -157,12 +164,13 @@ kubectl --context "${kube_context}" exec -i deployment/umbod-core --container ap
 kubectl --context "${kube_context}" logs deployment/umbod-core --container mcp \
     | python3 "${script_directory}/check_secret_logs.py"
 
-for forward_pid in "${api_forward_pid}" "${mcp_forward_pid}" "${otlp_forward_pid}"; do
+for forward_pid in "${api_forward_pid}" "${mcp_forward_pid}" "${admin_mcp_forward_pid}" "${otlp_forward_pid}"; do
     kill "${forward_pid}" 2>/dev/null || true
     wait "${forward_pid}" 2>/dev/null || true
 done
 api_forward_pid=""
 mcp_forward_pid=""
+admin_mcp_forward_pid=""
 otlp_forward_pid=""
 (cd "${app_directory}/api" && uv run --locked python "${script_directory}/setup_personal_runtime.py" "${host_temporary_directory}")
 IFS= read -r UMBOD_TEST_BEARER_TOKEN < "${host_temporary_directory}/bearer-a"
@@ -173,6 +181,8 @@ kubectl --context "${kube_context}" port-forward service/umbod-api "${api_port}:
 api_forward_pid=$!
 kubectl --context "${kube_context}" port-forward service/umbod-mcp "${mcp_port}:8011" --address 127.0.0.1 &
 mcp_forward_pid=$!
+kubectl --context "${kube_context}" port-forward service/umbod-mcp-administrator "${admin_mcp_port}:8017" --address 127.0.0.1 &
+admin_mcp_forward_pid=$!
 kubectl --context "${kube_context}" port-forward deployment/umbod-core "${UMBOD_TEST_MCP_B_PORT:-28013}:8013" --address 127.0.0.1 &
 mcp_b_forward_pid=$!
 kubectl --context "${kube_context}" port-forward deployment/umbod-core "${UMBOD_TEST_API_B_PORT:-28015}:8015" --address 127.0.0.1 &
@@ -184,6 +194,7 @@ fixture_forward_pid=$!
 for attempt in $(seq 1 60); do
     if curl --fail --silent "${UMBOD_TEST_API_BASE_URL}/system/health" >/dev/null \
         && curl --fail --silent "${UMBOD_TEST_MCP_URL%/mcp}/system/health" >/dev/null \
+        && curl --fail --silent "${UMBOD_TEST_ADMIN_MCP_URL%/mcp}/system/health" >/dev/null \
         && curl --fail --silent "${UMBOD_TEST_API_B_BASE_URL}/system/health" >/dev/null \
         && curl --fail --silent "${UMBOD_TEST_OTLP_BASE_URL}/ready" >/dev/null \
         && curl --fail --silent "${UMBOD_TEST_MCP_B_URL%/mcp}/system/health" >/dev/null \
@@ -205,7 +216,7 @@ opener.addheaders = [("Authorization", "Bearer " + os.environ["UMBOD_TEST_BEARER
 install_opener(opener)
 runpy.run_path(os.environ["UMBOD_TEST_BOOTSTRAP_PATH"], run_name="__main__")
 ')
-(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_user_profile.py live_runtime_tests/test_running_personal_access_tokens.py live_runtime_tests/test_running_personal_mcp_execution.py live_runtime_tests/test_running_filesystem.py live_runtime_tests/test_running_filesystem_uploads.py live_runtime_tests/test_running_filesystem_homes.py live_runtime_tests/test_running_filesystem_s3.py live_runtime_tests/test_running_filesystem_sharing.py live_runtime_tests/test_running_identity_directory.py)
+(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_mcp_administrator_hosting.py live_runtime_tests/test_running_user_profile.py live_runtime_tests/test_running_personal_access_tokens.py live_runtime_tests/test_running_personal_mcp_execution.py live_runtime_tests/test_running_filesystem.py live_runtime_tests/test_running_filesystem_uploads.py live_runtime_tests/test_running_filesystem_homes.py live_runtime_tests/test_running_filesystem_s3.py live_runtime_tests/test_running_filesystem_sharing.py live_runtime_tests/test_running_identity_directory.py)
 for container_name in api api-b mcp mcp-b; do
     kubectl --context "${kube_context}" logs deployment/umbod-core --container "${container_name}" \
         | python3 "${script_directory}/check_secret_logs.py"

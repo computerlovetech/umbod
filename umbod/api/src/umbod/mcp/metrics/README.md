@@ -7,7 +7,7 @@ description: "Invocation and protocol observation contracts with application-own
 # Files
 
 - [__init__.py](./__init__.py) — Package exports.
-- [http_server.py](./http_server.py) — Metrics listener lifecycle.
+- [http_server.py](./http_server.py) — Metrics listener lifecycle, startup failure cleanup, and process signal ownership isolation.
 - [in_memory.py](./in_memory.py) — In-memory recorder.
 - [models.py](./models.py) — Invocation observation models.
 - [prometheus.py](./prometheus.py) — Prometheus adapter.

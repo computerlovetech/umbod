@@ -70,6 +70,10 @@ core:
         memory: 512Mi
   mcp:
     port: 8011
+    administrator:
+      hosting: separate
+      port: 8013
+      baseUrl: http://localhost:8013
     env: {}
     resources:
       requests:

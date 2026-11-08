@@ -1,3 +1,8 @@
+import asyncio
+import signal
+import socket
+from unittest.mock import Mock
+
 import httpx
 import pytest
 from starlette.testclient import TestClient
@@ -55,3 +60,30 @@ async def test_metrics_server_starts_and_stops_on_configured_port(
         await server.stop()
 
     assert not listener.is_serving()
+
+
+@pytest.mark.asyncio
+async def test_metrics_listener_never_replaces_process_signal_handlers(monkeypatch: pytest.MonkeyPatch) -> None:
+    install_handler = Mock(wraps=signal.signal)
+    monkeypatch.setattr(signal, 'signal', install_handler)
+    server = McpMetricsHttpServer(PrometheusMcpMetricsRecorder(), 0, host='127.0.0.1')
+    await server.start()
+    try:
+        install_handler.assert_not_called()
+    finally:
+        await server.stop()
+    install_handler.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_metrics_bind_failure_is_reported_and_cleans_background_task() -> None:
+    initial_tasks = asyncio.all_tasks()
+    with socket.socket() as occupied:
+        occupied.bind(('127.0.0.1', 0))
+        occupied.listen()
+        port = occupied.getsockname()[1]
+        server = McpMetricsHttpServer(PrometheusMcpMetricsRecorder(), port, host='127.0.0.1')
+        with pytest.raises(RuntimeError, match='MCP metrics listener startup failed'):
+            await server.start()
+        await server.stop()
+    assert asyncio.all_tasks() == initial_tasks

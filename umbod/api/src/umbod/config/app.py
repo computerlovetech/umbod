@@ -172,6 +172,27 @@ class McpConfig(ConfigModel):
     stateless_http: bool = False
 
 
+class McpAdministratorConfig(ConfigModel):
+    hosting: Literal["shared", "separate"] = "separate"
+    host: str = "127.0.0.1"
+    port: int = 8013
+    base_url: str = "http://localhost:8013"
+
+    def validate_dedicated_settings(self) -> None:
+        if not self.host.strip():
+            raise ValueError("MCP administrator host must not be blank")
+        if not 1 <= self.port <= 65535:
+            raise ValueError("MCP administrator port must be between 1 and 65535")
+        try:
+            origin = validate_collector_base_url(self.base_url)
+            if not origin or urlsplit(self.base_url).path not in ("", "/"):
+                raise ValueError("Invalid origin")
+        except ValueError as error:
+            raise ValueError(
+                "MCP administrator base URL must be an absolute HTTP(S) origin without credentials, path, query, or fragment; HTTP requires loopback"
+            ) from error
+
+
 class OidcConfig(ConfigModel):
     provider: Literal["google", "azure_entra_id", "auth0"] = "google"
     config_url: str = ""
@@ -403,6 +424,9 @@ class AppConfig(ConfigModel):
         default_factory=TelemetryAnalyticsConfig
     )
     mcp: McpConfig = Field(default_factory=McpConfig)
+    mcp_administrator: McpAdministratorConfig = Field(
+        default_factory=McpAdministratorConfig
+    )
     oidc: OidcConfig = Field(default_factory=OidcConfig)
     oauth_storage: OAuthStorageConfig = Field(default_factory=OAuthStorageConfig)
     connector_security: ConnectorSecurityConfig = Field(
@@ -422,6 +446,29 @@ class AppConfig(ConfigModel):
     personal_connections: PersonalConnectionsConfig = Field(
         default_factory=PersonalConnectionsConfig
     )
+
+    @model_validator(mode="after")
+    def validate_mcp_administrator_hosting(self) -> "AppConfig":
+        administrator = self.mcp_administrator
+        if (
+            not self.feature_toggles.mcp_administrator_enabled
+            or administrator.hosting != "separate"
+        ):
+            return self
+        administrator.validate_dedicated_settings()
+        reserved_ports = {
+            self.rest.port,
+            self.rest.metrics_port,
+            self.mcp.port,
+            self.mcp.metrics_port,
+        }
+        if self.otlp_receiver.enabled:
+            reserved_ports.add(self.otlp_receiver.port)
+        if administrator.port in reserved_ports:
+            raise ValueError(
+                "MCP administrator port must be distinct from REST, MCP, metrics, and enabled collector ports"
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_telemetry_analytics_storage(self) -> "AppConfig":

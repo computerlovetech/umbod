@@ -1,0 +1,19 @@
+{{- if and .Values.config.features.mcp.administratorEnabled (eq .Values.core.mcp.administrator.hosting "separate") }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "umbod.fullname" . }}-mcp-administrator
+  labels:
+    {{- include "umbod.labels" . | nindent 4 }}
+    app.kubernetes.io/component: mcp-administrator
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "umbod.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: core
+  ports:
+    - name: http
+      port: {{ .Values.core.mcp.administrator.port }}
+      targetPort: mcp-admin
+      protocol: TCP
+{{- end }}

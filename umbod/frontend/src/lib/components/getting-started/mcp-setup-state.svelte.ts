@@ -12,10 +12,4 @@ export class McpSetupState {
   private get shellEndpoint(): string {
     return `'${this.endpoint().replaceAll("'", "'\\''")}'`;
   }
-
-  get copilotConfiguration(): string {
-    return JSON.stringify({
-      mcpServers: { umbod: { type: 'http', url: this.endpoint() } }
-    }, null, 2);
-  }
 }

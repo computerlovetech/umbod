@@ -17,7 +17,7 @@ from starlette.routing import Route
 from typer.testing import CliRunner
 
 import umbod.hosting as hosting
-from umbod.config import AppConfig
+from umbod.config import AppConfig, McpAdministratorConfig
 from umbod.hosting import rest_service
 
 
@@ -56,7 +56,7 @@ async def test_mcp_service_defers_composition_and_owns_forwarding_lifespan(
         return JSONResponse({"status": "ok"})
 
     application = Starlette(routes=[Route("/system/health", health)], lifespan=lifespan)
-    settings = AppConfig()
+    settings = AppConfig(mcp_administrator=McpAdministratorConfig(hosting="shared"))
     load = Mock(return_value=settings)
     configure = Mock()
     build = AsyncMock(return_value=application, side_effect=RuntimeError("construction failed") if failure else None)
@@ -95,6 +95,23 @@ async def test_mcp_service_defers_composition_and_owns_forwarding_lifespan(
         sys.modules.pop("umbod.mcp.main", None)
 
 
+@pytest.mark.asyncio
+async def test_single_asgi_entrypoint_rejects_requested_separate_admin_listener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from umbod.hosting import mcp_service
+
+    settings = AppConfig(mcp_administrator=McpAdministratorConfig(hosting="separate"))
+    build = AsyncMock()
+    monkeypatch.setattr(mcp_service, "load_server_app_config", Mock(return_value=settings))
+    monkeypatch.setattr(mcp_service, "configure_logging", Mock())
+    monkeypatch.setattr(mcp_service, "create_mcp_app", build)
+    with pytest.raises(ValueError, match="requires umbod mcp serve"):
+        async with mcp_service.app.router.lifespan_context(mcp_service.app):
+            pytest.fail("Separate listeners require the supervised host")
+    build.assert_not_awaited()
+
+
 def test_fresh_process_uvicorn_serves_mcp_public_health(tmp_path: Path) -> None:
     program = '''
 import asyncio
@@ -122,6 +139,7 @@ async def verify() -> None:
     settings = umbod.config.AppConfig.model_validate({
         "mcp": {"auth_mode": "none", "metrics_enabled": False, "messaging_transport": "sql"},
         "connector_store": {"type": "inmemory"},
+        "mcp_administrator": {"hosting": "shared"},
         "telemetry_analytics": {"enabled": False},
     })
     umbod.config.load_server_app_config = lambda path: settings

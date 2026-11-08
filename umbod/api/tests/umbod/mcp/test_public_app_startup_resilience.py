@@ -47,10 +47,12 @@ def adapters(monkeypatch: pytest.MonkeyPatch) -> Mock:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize('failure', [URLError('source unavailable'), ValueError('invalid projection')])
-async def test_failed_projection_bootstrap_never_enters_ready_lifespan_and_closes_persistence(context: SimpleNamespace, adapters: Mock, failure: Exception) -> None:
+@pytest.mark.parametrize('owns_persistence', [True, False])
+async def test_failed_projection_bootstrap_never_enters_ready_lifespan_and_respects_persistence_ownership(context: SimpleNamespace, adapters: Mock, failure: Exception, owns_persistence: bool) -> None:
     reader = SimpleNamespace(list_after=AsyncMock(side_effect=failure))
     adapters.create_projection_reader.return_value = reader
-    app = await public_app.build_starlette_app(context)
+    factory = public_app.build_starlette_app if owns_persistence else public_app.build_starlette_app_with_shared_persistence
+    app = await factory(context)
     initial_tasks = asyncio.all_tasks()
     with pytest.raises(type(failure)):
         async with app.router.lifespan_context(app):
@@ -60,11 +62,12 @@ async def test_failed_projection_bootstrap_never_enters_ready_lifespan_and_close
     reader.list_after.assert_awaited_once()
     assert asyncio.all_tasks() == initial_tasks
     context.mcp.downstream_mcp_discovery_coordinator.initialize_native_capabilities.assert_not_awaited()
-    context.persistence_runtime.shutdown.assert_awaited_once()
+    assert context.persistence_runtime.shutdown.await_count == int(owns_persistence)
 
 
 @pytest.mark.asyncio
-async def test_lifespan_cancels_its_projection_consumer_before_closing_persistence(context: SimpleNamespace, adapters: Mock) -> None:
+@pytest.mark.parametrize('owns_persistence', [True, False])
+async def test_lifespan_cancels_its_projection_consumer_and_respects_persistence_ownership(context: SimpleNamespace, adapters: Mock, owns_persistence: bool) -> None:
     started = asyncio.Event()
     cancelled = asyncio.Event()
 
@@ -84,11 +87,12 @@ async def test_lifespan_cancels_its_projection_consumer_before_closing_persisten
     reader = SimpleNamespace(list_after=AsyncMock(side_effect=read))
     adapters.create_projection_reader.return_value = reader
     context.persistence_runtime.shutdown.side_effect = shutdown
-    app = await public_app.build_starlette_app(context)
+    factory = public_app.build_starlette_app if owns_persistence else public_app.build_starlette_app_with_shared_persistence
+    app = await factory(context)
     async with app.router.lifespan_context(app):
         await asyncio.wait_for(started.wait(), timeout=1)
         assert context.mcp.runtime_projection_health.ready
         context.persistence_runtime.shutdown.assert_not_awaited()
     assert cancelled.is_set()
     context.mcp.downstream_mcp_discovery_coordinator.reconcile_native_capabilities.assert_awaited_once()
-    context.persistence_runtime.shutdown.assert_awaited_once()
+    assert context.persistence_runtime.shutdown.await_count == int(owns_persistence)

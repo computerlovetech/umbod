@@ -98,10 +98,11 @@ async def identity_authorize(request: Request) -> Response:
         claims = jwt.decode(token, key.key, algorithms=["RS256"], audience="kind-client", issuer="https://identity.personal-runtime.kind.invalid/")
     except jwt.InvalidTokenError:
         return JSONResponse({"error": "invalid_token"}, status_code=401)
-    if parameters.get("client_id") != "kind-client" or parameters.get("redirect_uri") != "https://mcp.umbod.example.invalid/auth/callback" or claims["sub"] not in ("kind-ci", "kind-ci-b"):
+    redirect_uris = json.loads(Path("/fixture/identity-redirect-uris.json").read_text())
+    if parameters.get("client_id") != "kind-client" or parameters.get("redirect_uri") not in redirect_uris or claims["sub"] not in ("kind-ci", "kind-ci-b", "kind-member"):
         return JSONResponse({"error": "invalid_request"}, status_code=400)
     code = secrets.token_urlsafe(32)
-    identity_codes[code] = {**parameters, "sub": claims["sub"]}
+    identity_codes[code] = {**parameters, "sub": claims["sub"], "groups": json.dumps(claims.get("groups", []))}
     return RedirectResponse(parameters["redirect_uri"] + "?" + urlencode({"code": code, "state": parameters["state"]}), status_code=302)
 
 
@@ -121,7 +122,7 @@ async def identity_exchange(request: Request) -> Response:
         if saved.get("code_challenge_method") != "S256" or digest != saved["code_challenge"]:
             return JSONResponse({"error": "invalid_grant"}, status_code=400)
     issued = int(time.time())
-    token = jwt.encode({"sub": saved["sub"], "email": saved["sub"] + "@example.invalid", "groups": ["admin"], "scope": "openid profile email groups", "iss": "https://identity.personal-runtime.kind.invalid/", "aud": "kind-client", "iat": issued, "exp": issued + 3600}, Path("/identity/identity.key").read_bytes(), algorithm="RS256", headers={"kid": "kind-personal-jwt"})
+    token = jwt.encode({"sub": saved["sub"], "email": saved["sub"] + "@example.invalid", "groups": json.loads(saved["groups"]), "scope": "openid profile email groups", "iss": "https://identity.personal-runtime.kind.invalid/", "aud": "kind-client", "iat": issued, "exp": issued + 3600}, Path("/identity/identity.key").read_bytes(), algorithm="RS256", headers={"kid": "kind-personal-jwt"})
     return JSONResponse({"access_token": token, "token_type": "Bearer", "expires_in": 3600, "scope": "openid profile email groups"})
 
 

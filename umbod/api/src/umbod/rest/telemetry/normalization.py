@@ -16,7 +16,12 @@ from umbod.core.telemetry.analytics import (
     PresentDimensionValue,
     UnownedLog,
 )
-from umbod.core.telemetry.analytics.activity import ActivityOutcome, ToolOrigin, classify_activity
+from umbod.core.telemetry.analytics.activity import (
+    ActivityOutcome,
+    ToolOrigin,
+    classify_activity,
+    classify_declared_activity,
+)
 from umbod.rest.telemetry.validation import parse_message
 
 
@@ -81,14 +86,40 @@ def _dimensions(record: LogRecord, resource: dict[str, str]) -> dict[LogDimensio
         dimensions[LogDimension.EVENT_NAME] = record.event_name
     if record.severity_text:
         dimensions[LogDimension.SEVERITY] = record.severity_text
-    dimensions.update(classify_activity(
-        source=dimensions.get(LogDimension.SOURCE, ""),
-        event=dimensions.get(LogDimension.EVENT_NAME, ""),
-        tool=dimensions.get(LogDimension.TOOL_NAME, ""),
-        outcome=_outcome(record.attributes),
-        tool_origin=_tool_origin(attributes),
-    ))
+    declared_activity = classify_declared_activity(
+        kind=attributes.get("umbod.activity.kind", ""),
+        outcome=_declared_outcome(record.attributes),
+    )
+    activity = declared_activity
+    if not activity:
+        for event in (
+            attributes.get("event.name", ""),
+            dimensions.get(LogDimension.EVENT_NAME, ""),
+        ):
+            activity = classify_activity(
+                source=dimensions.get(LogDimension.SOURCE, ""),
+                event=event,
+                tool=dimensions.get(LogDimension.TOOL_NAME, ""),
+                outcome=_outcome(record.attributes),
+                tool_origin=_tool_origin(attributes),
+            )
+            if activity:
+                break
+    dimensions.update(activity)
     return dimensions
+
+
+def _declared_outcome(attributes: Iterable[KeyValue]) -> ActivityOutcome:
+    outcome = _outcome(attributes)
+    for attribute in attributes:
+        if attribute.key != "umbod.activity.outcome":
+            continue
+        outcome = "unknown"
+        if attribute.value.WhichOneof("value") == "string_value":
+            value = attribute.value.string_value
+            if value in ("success", "failure", "unknown"):
+                outcome = cast(ActivityOutcome, value)
+    return outcome
 
 
 def _outcome(attributes: Iterable[KeyValue]) -> ActivityOutcome:

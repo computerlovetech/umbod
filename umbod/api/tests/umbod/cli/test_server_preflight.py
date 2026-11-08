@@ -35,7 +35,7 @@ def test_serve_rejects_blank_root_before_logging_or_listener_binding(
     if service == "api":
         monkeypatch.setattr(api, "run_api_server", run)
     else:
-        monkeypatch.setattr(mcp.uvicorn, "run", run)
+        monkeypatch.setattr(mcp, "run_mcp_server", run)
     monkeypatch.setattr(module, "configure_logging", configure)
     monkeypatch.setattr("socket.socket.bind", bind)
     monkeypatch.setattr("umbod.rest.metrics.RestMetricsHttpServer.start", metrics)
@@ -64,7 +64,7 @@ def test_valid_root_reports_unrelated_port_error_without_disclosing_root_or_bind
     if service == "api":
         monkeypatch.setattr(api, "run_api_server", run)
     else:
-        monkeypatch.setattr("uvicorn.run", run)
+        monkeypatch.setattr(mcp, "run_mcp_server", run)
     monkeypatch.setattr("socket.socket.bind", bind)
     result = CliRunner().invoke(app, [service, "serve", "--reload"])
     assert result.exit_code == 1

@@ -22,8 +22,11 @@ Open the administration interface at [http://localhost:3000](http://localhost:30
 | `umbod-api` | 8000 |
 | `umbod-mcp` | 8011 |
 | `umbod-telemetry` (when `telemetry.enabled=true`) | 4318 |
+| `umbod-mcp-administrator` (administrator enabled and separate hosting) | 8013 |
 
 The optional telemetry Service targets the private collector listener in the existing API container, not a separate Deployment. Docker Compose forwards this listener only on `127.0.0.1:14318` to container port `4318`; public REST remains on host port `18010`.
+
+The administrator Service is enabled by default and targets the MCP process, never API. It has no public ingress. Explicit shared hosting creates no administrator listener or Service. Compose publishes the default administrator port only on `127.0.0.1:8013`; its shared-hosting override removes that publication. See [administrator MCP deployment](../operations/admin-mcp.md#hosting-and-deployment) for settings and exact commands.
 
 The core Pod also declares API metrics port `8001` and MCP metrics port `8012`. These metrics ports are internal workload ports and are not exposed by the chart's Services.
 

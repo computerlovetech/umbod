@@ -13,6 +13,11 @@ from umbod.logging import configure_logging
 async def lifespan(service: Starlette) -> AsyncIterator[None]:
     settings = load_server_app_config(".env")
     configure_logging(settings.runtime.app_name, settings.runtime.log_level)
+    if (
+        settings.feature_toggles.mcp_administrator_enabled
+        and settings.mcp_administrator.hosting == "separate"
+    ):
+        raise ValueError("Separate administrator MCP hosting requires umbod mcp serve")
     application = await create_mcp_app(settings, auth_provider=None, group_permission_runtime_state=None, invocation_log_sink=None)
     async with application.router.lifespan_context(application):
         mount = Mount("/", app=application)

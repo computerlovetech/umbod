@@ -1,11 +1,12 @@
 import type { Dimension, LogCountQuery } from './domain/schemas';
 
-export type ReportId = 'tools' | 'files' | 'skills' | 'custom';
+export type ReportId = 'tools' | 'files' | 'skills' | 'logs' | 'custom';
 
 export const reportOptions: { value: ReportId; label: string }[] = [
   { value: 'tools', label: 'Tool calls' },
   { value: 'files', label: 'File activity' },
   { value: 'skills', label: 'Skill activity' },
+  { value: 'logs', label: 'Log classifications' },
   { value: 'custom', label: 'Custom log query' }
 ];
 export type ActivityReportId = Exclude<ReportId, 'custom'>;
@@ -19,6 +20,13 @@ interface ReportDefinition {
 }
 
 export const reports: Record<ActivityReportId, ReportDefinition> = {
+  logs: {
+    label: 'Log classifications',
+    countLabel: 'Log records',
+    explanation: 'Includes diagnostics and other stored logs. Unclassified logs have no nonempty activity classification; they are not necessarily missed activity.',
+    activities: [],
+    groups: ['activity_kind', 'source', 'event_name', 'tool_name', 'session_id']
+  },
   tools: {
     label: 'Tool calls',
     countLabel: 'Reported tool calls',
@@ -46,7 +54,7 @@ export function resolveReport(report: ActivityReportId, timeRange: LogCountQuery
   const definition = reports[report];
   return {
     time_range: timeRange,
-    filters: [{ dimension: 'activity_kind', values: [...definition.activities] }],
+    filters: definition.activities.length ? [{ dimension: 'activity_kind', values: [...definition.activities] }] : [],
     group_by: [...definition.groups],
     bucketing: { kind: 'none' },
     pagination: { limit: 100, offset: 0 }
@@ -55,6 +63,7 @@ export function resolveReport(report: ActivityReportId, timeRange: LogCountQuery
 
 export function reportValue(dimension: Dimension, value: string): string {
   if (dimension === 'outcome') return ({ success: 'Successful', failure: 'Failed', unknown: 'Unknown outcome' })[value] ?? value;
-  if (dimension === 'activity_kind') return ({ file_read: 'Read-tool calls', file_edit: 'Edit-tool calls' })[value] ?? value;
+  if (dimension === 'activity_kind' && value === '') return 'Unclassified';
+  if (dimension === 'activity_kind') return ({ tool_call: 'Tool calls', skill_activation: 'Skill activations', file_read: 'Read-tool calls', file_edit: 'Edit-tool calls' })[value] ?? value;
   return value === '' ? 'Not reported' : value;
 }

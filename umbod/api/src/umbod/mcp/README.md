@@ -7,7 +7,7 @@ description: "MCP application composition, capability exposure, authentication a
 # Files
 
 - [__init__.py](./__init__.py) — Package exports.
-- [administrator/](./administrator/) — Administrator capabilities.
+- [administrator/](./administrator/README.md) — Shared administrator tools and the dedicated administrator-only HTTP application.
 - [agent_instructions.py](./agent_instructions.py) — Agent setup guidance resource.
 - [assets/](./assets/) — MCP assets.
 - [auth/](./auth/) — Authentication and caller capture.
@@ -25,7 +25,7 @@ description: "MCP application composition, capability exposure, authentication a
 - [middleware/](./middleware/README.md) — Protocol middleware.
 - [proxies.py](./proxies.py) — Deferred runtime bindings.
 - [http_transport.py](./http_transport.py) — Startup-scoped compatibility adapter for bounded HTTP bodies, preserving FastMCP authentication and sessions.
-- [public_app.py](./public_app.py) — Application assembly and lifespan.
+- [public_app.py](./public_app.py) — Public application assembly, shared administrator eligibility, and explicit persistence lifecycle ownership.
 - [responses/](./responses/README.md) — Built-in outcome metadata, safe argument issues, and explicit operation progress.
 - [runtime_adapters.py](./runtime_adapters.py) — Explicit production construction for injected invocation adapters.
 - [runtime_options.py](./runtime_options.py) — Runtime composition options.

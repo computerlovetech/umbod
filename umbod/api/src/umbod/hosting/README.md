@@ -11,7 +11,8 @@ description: "Supported composition boundary for REST, MCP, telemetry services a
 - [applications.py](./applications.py) — Application composition.
 - [contracts.py](./contracts.py) — Supported hosting contracts.
 - [listeners.py](./listeners.py) — Supervised HTTP listeners, parent-owned ASGI lifespans, readiness and shutdown.
-- [mcp_service.py](./mcp_service.py) — MCP service entrypoint.
+- [mcp_server.py](./mcp_server.py) — Supervised shared or separate administrator MCP listeners with shared persistence and development reload.
+- [mcp_service.py](./mcp_service.py) — Single-listener MCP ASGI entrypoint for shared hosting.
 - [rest_service.py](./rest_service.py) — REST service entrypoint.
 - [shutdown.py](./shutdown.py) — Lightweight process shutdown deadline independent of application composition.
 - [telemetry_service.py](./telemetry_service.py) — Independent telemetry service entrypoint without REST startup dependencies.

@@ -8,7 +8,7 @@ from contextlib import AsyncExitStack, asynccontextmanager, contextmanager
 from dataclasses import dataclass
 
 import uvicorn
-from fastapi import FastAPI
+from starlette.applications import Starlette
 from starlette.responses import Response
 from starlette.types import Receive, Scope, Send
 
@@ -21,7 +21,7 @@ _READINESS_PATHS = frozenset({"/system/health", "/api/system/health", "/ready"})
 @dataclass(frozen=True)
 class HttpListener:
     name: str
-    app: FastAPI
+    app: Starlette
     host: str
     port: int
     log_level: str
@@ -30,7 +30,7 @@ class HttpListener:
 class _ListenerApp:
     def __init__(
         self,
-        app: FastAPI,
+        app: Starlette,
         state: Mapping[str, object],
         ready: asyncio.Event,
         shutdown_requested: asyncio.Event,
@@ -103,13 +103,32 @@ def _check_servers(tasks: list[asyncio.Task[None]]) -> None:
 
 
 @asynccontextmanager
-async def _bounded_lifespan(app: FastAPI) -> AsyncIterator[Mapping[str, object]]:
-    lifespan = app.router.lifespan_context(app)
-    state = await lifespan.__aenter__()
+async def _bounded_lifespan(app: Starlette) -> AsyncIterator[Mapping[str, object]]:
+    started: asyncio.Future[Mapping[str, object]] = asyncio.get_running_loop().create_future()
+    stopping = asyncio.Event()
+
+    async def run() -> None:
+        try:
+            async with app.router.lifespan_context(app) as state:
+                if not started.done():
+                    started.set_result(state or {})
+                await stopping.wait()
+        except BaseException as error:
+            if not started.done():
+                started.set_exception(error)
+            raise
+
+    task = asyncio.create_task(run())
     try:
-        yield state or {}
+        try:
+            state = await started
+        except BaseException:
+            task.cancel()
+            raise
+        yield state
     finally:
-        await _wait_cleanup(lifespan.__aexit__(None, None, None))
+        stopping.set()
+        await _wait_cleanup(task)
 
 
 def _consume_result(task: asyncio.Future[object]) -> None:

@@ -66,6 +66,24 @@ _SECRET_FIELDS: tuple[tuple[str, str], ...] = (
 )
 
 _CATALOG: tuple[ConfigurationCatalogEntry, ...] = (
+    *tuple(
+        ConfigurationCatalogEntry(
+            "mcp_administrator",
+            "MCP administrator",
+            "mcp_administrator",
+            field,
+            f"UMBOD_MCP_ADMINISTRATOR_{field.upper()}",
+            label,
+            description,
+            value_type,
+        )
+        for field, label, description, value_type in (
+            ("hosting", "Hosting", "Shared MCP hosting or a separate administrator listener.", "string"),
+            ("host", "Host", "Bind address for the separate administrator listener.", "string"),
+            ("port", "Port", "Port for the separate administrator listener.", "integer"),
+            ("base_url", "Base URL", "Public origin of the separate administrator listener.", "string"),
+        )
+    ),
     ConfigurationCatalogEntry(
         "telemetry_analytics",
         "Telemetry analytics",

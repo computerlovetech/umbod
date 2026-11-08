@@ -63,6 +63,7 @@ Need a custom integration? **[Build a connector →](https://umbod.ai/docs/plugi
 | | |
 | --- | --- |
 | [Installation](https://umbod.ai/docs/getting-started/kubernetes-installation/) | Install locally or configure a shared cluster. |
+| [Codex CLI plugin](umbod/docs/using-umbod/codex-plugin.md) | Install Umbod's connection and connected-app skill through a local marketplace. |
 | [Files](https://umbod.ai/docs/using-umbod/files/) | Upload, share, and access files through the workspace or MCP. |
 | [Architecture](https://umbod.ai/docs/operations/service-topology/) | Understand the services, data flow, and storage. |
 | [Configuration](https://umbod.ai/docs/operations/configuration/) | Configure authentication, public origins, and persistence. |

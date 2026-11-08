@@ -1,0 +1,9 @@
+services:
+  api:
+    environment:
+      - UMBOD_MCP_ADMINISTRATOR_HOSTING=shared
+  mcp:
+    environment:
+      - UMBOD_MCP_ADMINISTRATOR_HOSTING=shared
+    ports: !override
+      - "8011:8011"

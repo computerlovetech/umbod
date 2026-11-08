@@ -43,6 +43,8 @@ No `.env` file is required for the default local development profile. The stack 
 - API health: `http://localhost:18010/system/health`
 - MCP server: `http://localhost:8011`
 
+Administrator MCP defaults to the separate endpoint `http://localhost:8013/mcp`, published only on loopback by Compose. See [administrator MCP deployment](docs/operations/admin-mcp.md#hosting-and-deployment) for private Helm access and explicit shared hosting.
+
 Stop the stack with `docker compose down`. Use `docker compose down --volumes` when the local SQLite data and plugin volumes should also be removed.
 
 Production authentication can be exercised with `docker compose --profile auth up -d` after configuring the Auth0 values from `.env.example`.

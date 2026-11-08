@@ -3,6 +3,7 @@ import { AuthenticationRequiredError, HttpError } from '../infrastructure/transp
 import type { LogCountSource } from './port';
 import type { LogCountQuery, LogCountResponse } from './domain/schemas';
 import { QueryDraft, dimensionLabels } from './query-draft.svelte';
+import { ActivityCoverage } from './activity-coverage.svelte';
 import { FilterChoices } from './filter-choices.svelte';
 import { reportOptions, reports, reportValue, resolveReport, type ReportId } from './reports';
 
@@ -25,6 +26,7 @@ export class AnalyticsState {
   readonly reportRange = new QueryDraft();
   private reportValue = $state<ReportId>('tools');
   readonly choices: FilterChoices;
+  readonly coverage: ActivityCoverage;
   private resultValue = $state.raw<SubmittedResult | undefined>();
   private pendingValue = $state(false);
   private errorValue = $state('');
@@ -36,13 +38,14 @@ export class AnalyticsState {
   private controller: AbortController | undefined;
 
   constructor(private readonly source: LogCountSource, private readonly now: () => Date = () => new Date()) {
+    this.coverage = new ActivityCoverage(source, this.loseAccess);
     this.choices = new FilterChoices(this.draft, source, now, this.loseAccess);
   }
 
   get report(): ReportId { return this.reportValue; }
   get custom(): boolean { return this.report === 'custom'; }
   get formDraft(): QueryDraft { return this.custom ? this.draft : this.reportRange; }
-  get fingerprint(): string { return JSON.stringify([this.report, this.custom ? this.draft.fingerprint : this.reportRange.fingerprint]); }
+  get fingerprint(): string { return this.formDraft.fingerprint; }
   get narrowedSession(): string | undefined {
     return this.submittedReport ? this.resultValue?.query.filters.find((filter) => filter.dimension === 'session_id')?.values[0] : undefined;
   }
@@ -80,7 +83,7 @@ export class AnalyticsState {
   get error(): string { return this.errorValue; }
   get validation(): string { return this.validationValue; }
   get accessLost(): boolean { return this.accessLostValue; }
-  get changed(): boolean { return this.resultValue !== undefined && this.fingerprint !== this.resultValue.fingerprint; }
+  get changed(): boolean { return this.resultValue !== undefined && (this.report !== this.resultValue.report || this.fingerprint !== this.resultValue.fingerprint); }
   get total(): number { return this.resultValue?.response.rows.reduce((total, row) => total + row.count, 0) ?? 0; }
   get groupCount(): number {
     if (this.total === 0) return 0;
@@ -127,6 +130,20 @@ export class AnalyticsState {
     if (this.narrowedSession !== undefined) await this.changeSessionScope(undefined);
   }
 
+  async inspectClassifications(): Promise<void> {
+    const result = this.resultValue;
+    if (!result || !this.submittedReport || this.pending || this.accessLost || this.disposed) return;
+    this.setReport('logs');
+    await this.submit({
+      report: 'logs',
+      fingerprint: result.fingerprint,
+      query: {
+        ...resolveReport('logs', result.query.time_range),
+        filters: result.query.filters.filter((filter) => filter.dimension !== 'activity_kind')
+      }
+    });
+  }
+
   private async changeSessionScope(session: string | undefined): Promise<void> {
     const result = this.resultValue;
     if (!result || !this.submittedReport || this.pending) return;
@@ -167,6 +184,8 @@ export class AnalyticsState {
       const response = await this.source.query(query, this.controller.signal);
       if (this.disposed || generation !== this.generation) return;
       this.resultValue = { query, response, fingerprint, report };
+      if (report === 'custom') this.coverage.clear();
+      else void this.coverage.load(query);
     } catch (failure) {
       if (this.disposed || generation !== this.generation) return;
       this.failedSubmission = { query, fingerprint, report };
@@ -194,9 +213,11 @@ export class AnalyticsState {
     this.accessLostValue = true;
     this.errorValue = 'Administration access is no longer available. Sign in again or contact your administrator.';
     this.choices.dispose();
+    this.coverage.dispose();
   };
 
   dispose(): void {
+    this.coverage.dispose();
     this.choices.dispose();
     this.disposed = true;
     this.failedSubmission = undefined;

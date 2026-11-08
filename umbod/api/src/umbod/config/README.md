@@ -7,7 +7,7 @@ description: "Operator settings, validation and conversion into runtime applicat
 # Files
 
 - [__init__.py](./__init__.py) — Package exports.
-- [app.py](./app.py) — Runtime models, validated advertised collector URLs, and filesystem content selection.
+- [app.py](./app.py) — Runtime models, conditional dedicated MCP administrator validation, advertised collector URLs, and filesystem content selection.
 - [build.py](./build.py) — Operator-to-runtime assembly, S3 backend selection, and local content directory normalization.
 - [defaults.py](./defaults.py) — Configuration defaults.
 - [derive.py](./derive.py) — Configuration loading.

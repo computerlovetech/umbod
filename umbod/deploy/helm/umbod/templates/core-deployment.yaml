@@ -1,6 +1,12 @@
 {{- if and .Values.telemetry.enabled (has (.Values.telemetry.port | toString) (list (.Values.core.api.port | toString) (.Values.core.mcp.port | toString) "8001" "8012")) }}
 {{- fail "telemetry.port must differ from API, MCP, and metrics ports" }}
 {{- end }}
+{{- if and .Values.config.features.mcp.administratorEnabled (eq .Values.core.mcp.administrator.hosting "separate") }}
+{{- $port := .Values.core.mcp.administrator.port | toString }}
+{{- if or (has $port (list (.Values.core.api.port | toString) (.Values.core.mcp.port | toString) "8001" "8012")) (and .Values.telemetry.enabled (eq $port (.Values.telemetry.port | toString))) }}
+{{- fail "core.mcp.administrator.port must differ from API, MCP, metrics, and enabled telemetry ports" }}
+{{- end }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -92,6 +98,11 @@ spec:
               containerPort: {{ $.Values.telemetry.port }}
               protocol: TCP
             {{- end }}
+            {{- if and (eq $name "mcp") $.Values.config.features.mcp.administratorEnabled (eq $.Values.core.mcp.administrator.hosting "separate") }}
+            - name: mcp-admin
+              containerPort: {{ $.Values.core.mcp.administrator.port }}
+              protocol: TCP
+            {{- end }}
           env:
             {{- if $.Values.plugins.image.repository }}
             - name: PYTHONPATH
@@ -109,10 +120,22 @@ spec:
               value: {{ $.Values.config.publicOrigins.api | quote }}
             - name: UMBOD_PUBLIC_MCP_ORIGIN
               value: {{ $.Values.config.publicOrigins.mcp | quote }}
+            - name: UMBOD_MCP_ADMINISTRATOR_HOSTING
+              value: {{ $.Values.core.mcp.administrator.hosting | quote }}
+            - name: UMBOD_MCP_ADMINISTRATOR_HOST
+              value: "0.0.0.0"
+            - name: UMBOD_MCP_ADMINISTRATOR_PORT
+              value: {{ $.Values.core.mcp.administrator.port | quote }}
+            - name: UMBOD_MCP_ADMINISTRATOR_BASE_URL
+              value: {{ $.Values.core.mcp.administrator.baseUrl | quote }}
+            - name: UMBOD_REST_PORT
+              value: {{ $.Values.core.api.port | quote }}
+            - name: UMBOD_MCP_PORT
+              value: {{ $.Values.core.mcp.port | quote }}
             - name: UMBOD_FEATURE_MCP_ADMINISTRATOR_ENABLED
               value: {{ $.Values.config.features.mcp.administratorEnabled | quote }}
             - name: UMBOD_INTERNAL_API_ORIGIN
-              value: http://127.0.0.1:{{ $.Values.services.api.port }}
+              value: http://127.0.0.1:{{ $.Values.core.api.port }}
             - name: UMBOD_DATA_DIR
               value: /app/data
             - name: UMBOD_CONNECTOR_STORE

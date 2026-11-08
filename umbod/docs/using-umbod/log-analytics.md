@@ -19,8 +19,19 @@ Select a session in the results to focus the report on that exact session ID. Se
 - **Tool calls** counts recognized completed-tool events, including file-tool calls, grouped by source, session and outcome. Successful, failed and unknown outcomes are separate rows; permission decisions are not completed calls. Outcomes come from explicit result attributes, never log severity.
 - **File activity** counts recognized read-tool and edit-tool calls, grouped by source and session. These are calls, not distinct files or necessarily successful operations. Repeated calls count again, and one edit may affect multiple files. Shell commands, implicit reads and unrecognized tools are not classified as file activity.
 - **Skill activity** counts dedicated skill activation or invocation events by source and session. It does not count distinct skills, skill installations, reads of skill files, or the Skill tool as a substitute for activation events.
+- **Log classifications** includes all stored logs, grouped by activity kind, source, event name, tool name and session. It is an inspection view, not a count of tool activity. Missing or empty activity kinds appear as **Unclassified**.
 
 Missing source or session attributes are shown as **Not reported**. Missing or empty session IDs cannot be selected for drill-down. An empty report means no matching activity was reported; it does not establish that the agent performed none. Client versions and exporter settings determine which events are available. See [supported telemetry mappings](../reference/telemetry-ingestion.md#normalized-activity-fields).
+
+## Log classification coverage
+
+Standard reports also show how many logs were recognized as activity and how many remain other or unclassified logs. These counts cover all log types in the executed time range and selected session, not just the current report category or table page. Unclassified logs may be ordinary diagnostics, test records or exports without enough information to identify an activity; they are not evidence of missing tool calls.
+
+Select **Inspect log classifications** to open the underlying classifications using the executed time range and session. The action preserves custom query settings and starts at the first page. Source-location event names and tool names alone do not establish that an activity occurred.
+
+Classification counts are separate live reads. They may differ from table counts if late records arrive. Paging reuses counts for the same scope. An unavailable classification count is shown as unavailable, not zero, and can be retried without losing the report.
+
+Producers can supply the explicit normalized activity contract described in [telemetry ingestion](../reference/telemetry-ingestion.md), or use supported producer event formats. Historical records can only be classified from retained information. Discarded result attributes and tool provenance cannot be reconstructed, and unrelated logs are not converted into activity to fill a report.
 
 ## Time range and pagination
 

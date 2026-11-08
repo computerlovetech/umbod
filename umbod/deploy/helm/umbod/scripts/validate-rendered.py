@@ -89,7 +89,10 @@ def main() -> None:
     ingress = next((document for document in documents if re.search(r"^kind: Ingress$", document, re.MULTILINE)), "")
     helm_tests = [document for document in documents if '"helm.sh/hook": test' in document]
     require(len(deployments) == 2, "expected exactly two Deployments")
-    require(len(services) == 3, "expected exactly three Services")
+    require(len(services) == 4, "expected API, public MCP, administrator MCP, and frontend Services")
+    administrator = [service for service in services if "targetPort: mcp-admin" in service]
+    require(len(administrator) == 1, "default hosting must include one private administrator Service")
+    require("port: 8013" in administrator[0], "default administrator Service must use port 8013")
     require(not secrets, "chart must not render Secrets")
     require(all("type: ClusterIP" in service for service in services), "all Services must be ClusterIP")
     require("apiVersion: networking.k8s.io/v1\nkind: Ingress" in rendered, "CI render must include a v1 Ingress")

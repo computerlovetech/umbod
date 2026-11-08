@@ -30,6 +30,11 @@ def validate_listener_ports(settings: AppConfig, port: int) -> None:
         settings.rest.metrics_port,
         settings.mcp.metrics_port,
     }
+    if (
+        settings.feature_toggles.mcp_administrator_enabled
+        and settings.mcp_administrator.hosting == "separate"
+    ):
+        reserved_ports.add(settings.mcp_administrator.port)
     if port in reserved_ports:
         raise ValueError("REST listener port must differ from MCP and metrics ports")
     if (

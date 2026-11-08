@@ -56,7 +56,11 @@ def main() -> None:
     (directory / "extensions").write_text("subjectAltName=DNS:personal-runtime.kind.invalid,DNS:identity.personal-runtime.kind.invalid,IP:127.0.0.1\nextendedKeyUsage=serverAuth\nbasicConstraints=critical,CA:FALSE\nsubjectKeyIdentifier=hash\nauthorityKeyIdentifier=keyid:always,issuer\nkeyUsage=critical,digitalSignature,keyEncipherment\n")
     subprocess.run(["openssl", "x509", "-req", "-in", str(directory / "server.csr"), "-CA", str(directory / "ca.crt"), "-CAkey", str(directory / "ca.key"), "-CAcreateserial", "-out", str(directory / "tls.crt"), "-days", "2", "-extfile", str(directory / "extensions")], check=True, capture_output=True)
     apply({"apiVersion": "v1", "kind": "Secret", "metadata": {"name": "personal-runtime-tls"}, "type": "kubernetes.io/tls", "stringData": {name: (directory / name).read_text() for name in ("tls.crt", "tls.key")}})
-    apply({"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "personal-runtime"}, "data": {"ca.crt": (directory / "ca.crt").read_text(), "personal_fixture.py": (source / "personal_fixture.py").read_text(), "jwks.json": json.dumps(jwks)}})
+    redirect_uris = [
+        "https://mcp.umbod.example.invalid/auth/callback",
+        os.environ["UMBOD_TEST_ADMIN_MCP_URL"].removesuffix("/mcp") + "/auth/callback",
+    ]
+    apply({"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "personal-runtime"}, "data": {"ca.crt": (directory / "ca.crt").read_text(), "personal_fixture.py": (source / "personal_fixture.py").read_text(), "jwks.json": json.dumps(jwks), "identity-redirect-uris.json": json.dumps(redirect_uris)}})
     deployment = json.loads(kubectl("get", "deployment", "umbod-core", "-o", "json"))
     pod = deployment["spec"]["template"]["spec"]
     primary = next(container for container in pod["containers"] if container["name"] == "mcp")
@@ -70,8 +74,12 @@ def main() -> None:
     pod["volumes"].append({"name": "personal-ca", "configMap": {"name": "personal-runtime", "items": [{"key": "ca.crt", "path": "ca.crt"}]}})
     secondary = copy.deepcopy(primary)
     secondary["name"] = "mcp-b"
-    secondary["env"] = [entry for entry in secondary["env"] if entry["name"] not in ("UMBOD_MCP_TEST_BEARER_TOKEN", "UMBOD_MCP_PORT", "UMBOD_MCP_METRICS_PORT", "PORT")]
+    secondary["env"] = [entry for entry in secondary["env"] if entry["name"] not in ("UMBOD_MCP_TEST_BEARER_TOKEN", "UMBOD_MCP_PORT", "UMBOD_MCP_METRICS_PORT", "UMBOD_MCP_ADMINISTRATOR_PORT", "UMBOD_MCP_ADMINISTRATOR_BASE_URL", "PORT")]
     secondary["env"].extend([{"name": "UMBOD_MCP_PORT", "value": "8013"}, {"name": "UMBOD_MCP_METRICS_PORT", "value": "8014"}, {"name": "UMBOD_MCP_TEST_BEARER_TOKEN", "valueFrom": {"secretKeyRef": {"name": "umbod-ci", "key": "UMBOD_MCP_TEST_BEARER_TOKEN_B"}}}])
+    secondary["env"].extend([
+        {"name": "UMBOD_MCP_ADMINISTRATOR_PORT", "value": "8018"},
+        {"name": "UMBOD_MCP_ADMINISTRATOR_BASE_URL", "value": "http://127.0.0.1:8018"},
+    ])
     secondary["ports"] = [{"name": "http-mcp-b", "containerPort": 8013}, {"name": "metrics-mcp-b", "containerPort": 8014}]
     for probe in ("startupProbe", "readinessProbe", "livenessProbe"):
         secondary[probe]["httpGet"]["port"] = "http-mcp-b"

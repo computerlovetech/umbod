@@ -11,7 +11,7 @@ description: "Service startup, configuration inspection, connector validation an
 - [config.py](./config.py) — Configuration inspection commands.
 - [connectors.py](./connectors.py) — Connector validation commands.
 - [main.py](./main.py) — Command registration.
-- [mcp.py](./mcp.py) — MCP service commands.
+- [mcp.py](./mcp.py) — MCP startup, effective listener-port validation and supervised hosting delegation.
 - [migrate.py](./migrate.py) — Offline, verified local-to-S3 file-content migration.
 - [telemetry.py](./telemetry.py) — Standalone Uvicorn telemetry receiver command.
 

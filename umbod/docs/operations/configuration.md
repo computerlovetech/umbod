@@ -24,6 +24,10 @@ Set origins without a trailing path:
 
 These values drive API and MCP URLs, allowed browser origins, OIDC metadata, and authentication redirects. They must match the URLs visible to users and MCP clients.
 
+## Administrator MCP hosting
+
+`core.mcp.administrator.hosting` defaults to `separate`, hosting privileged tools on the private MCP-owned listener; select `shared` to place them on the public MCP endpoint. Its `port` defaults to `8013` and `baseUrl` to `http://localhost:8013`. `config.features.mcp.administratorEnabled` independently controls availability and must be enabled to start the separate listener. Helm manages the administrator environment variables consistently in API and MCP for inspection and validation; only MCP starts the listener, binds inside the container to `0.0.0.0`, and creates no public ingress. See [administrator MCP](admin-mcp.md#hosting-and-deployment) for environment defaults, port collision checks, Compose shared-hosting opt-in and private access.
+
 ## Persistence
 
 Umbod uses SQLite for development and evaluation. Persistence is disabled by default, so data is lost when the core Pod is replaced.

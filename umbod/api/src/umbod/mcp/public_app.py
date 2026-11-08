@@ -22,13 +22,8 @@ from umbod.core.configuration.persistence.factories import create_encrypted_conn
 from umbod.core.publishing.factories import ConfiguredConnectorPublishingStoreFactory
 from umbod.core.activation.factories import create_capability_activation_store
 from umbod.core.activation import ActivationStatus, CapabilityRef
-from umbod.core.permissions.factories import create_group_permission_store
 from umbod.core.connectors.downstream_mcp.stores import create_downstream_mcp_stores
 from umbod.core.connectors.openapi.stores.factories import ConfiguredOpenApiConnectorStoreFactory
-from umbod.core.administrator.connector_configuration import AdministratorConnectorConfigurationService
-from umbod.core.administrator.connector_configuration.reader import CatalogAdministratorConnectorConfigurationReader
-from umbod.mcp.administrator.catalog import AdministratorConfigurationCatalog
-from umbod.core.administrator.connector_configuration.mutation import CatalogAdministratorConfigurationMutation
 from umbod.infrastructure import ContentConfig, ConfiguredPersistenceRuntimeProvider, create_content_driver
 
 from collections.abc import AsyncIterator
@@ -59,7 +54,7 @@ from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntim
 from umbod_sdk.connectors.discovery import load_connector_plugins
 from umbod.mcp.agent_instructions import register_agent_instructions
 from umbod.mcp.http_transport import MAX_MCP_REQUEST_BODY_BYTES, create_mcp_http_app
-from umbod.mcp.administrator import register_administrator_connector_configuration_tools
+from umbod.mcp.administrator.composition import register_configured_administrator_tools
 from umbod.mcp.auth import MCPAuthProviderFactory
 from umbod.mcp.auth.consent_screen import install_umbod_consent_screen
 from umbod.mcp.auth.factory import MCPAuthProvider
@@ -180,43 +175,9 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     mcp.openapi_outbound_http_client_factory = openapi_adapters.outbound_http_client_factory
     mcp.include_openapi_in_connector_search = settings.mcp.connector_tool_exposure_mode in OPENAPI_CODEMODE_DISCOVERY_EXPOSURE_MODES
     mcp.capability_description_overrides = await ConfiguredConnectorCapabilityDescriptionOverrideStoreFactory(persistence_runtime.database).create()
-    if settings.feature_toggles.mcp_administrator_enabled:
-        group_permission_store = await create_group_permission_store(persistence_runtime.database)
-        openapi_connector_store = await mcp.openapi_connector_store_factory.create()
-        downstream_stores = await create_downstream_mcp_stores(
-            downstream_mcp_infrastructure_settings_from_app_config(settings).credential_secret,
-            persistence_runtime.database,
-        )
-        catalog = AdministratorConfigurationCatalog(
-            partial(InMemoryConnectorRegistry, runtime.connector_registrations,
-                [str(registration['id']) for registration in runtime.connector_registrations]),
-            openapi_connector_store,
-            downstream_stores.definitions,
-            downstream_stores.catalogs,
-        )
-        openapi_administrator_configuration = CatalogAdministratorConnectorConfigurationReader(
-            catalog,
-            mcp.capability_activation_store,
-            invocation_policy_store,
-            mcp.capability_description_overrides,
-            group_permission_store,
-        )
-        openapi_administrator_mutation = CatalogAdministratorConfigurationMutation(
-            persistence_runtime.database,
-            catalog,
-            openapi_administrator_configuration,
-            mcp.capability_description_overrides,
-            group_permission_store,
-        )
-        administrator_connector_configuration = AdministratorConnectorConfigurationService(
-            openapi_administrator_configuration,
-            openapi_administrator_mutation,
-        )
-        register_administrator_connector_configuration_tools(
-            McpObservedToolRegistrar(mcp, publisher),
-            administrator_connector_configuration,
-            settings.admin_authentication.membership_claim,
-            settings.admin_authentication.required_membership,
+    if settings.feature_toggles.mcp_administrator_enabled and settings.mcp_administrator.hosting == 'shared':
+        await register_configured_administrator_tools(
+            McpObservedToolRegistrar(mcp, publisher), settings, runtime, persistence_runtime,
         )
     filesystem_content = create_content_driver(
         TypeAdapter(ContentConfig).validate_python(settings.filesystem.content.model_dump())
@@ -413,6 +374,14 @@ class DynamicPublicMcpDispatcher:
             reset_request_connector_scope(token)
 
 async def build_starlette_app(context: PublicAppRuntimeContext) -> Starlette:
+    return await _build_starlette_app(context, owns_persistence=True)
+
+
+async def build_starlette_app_with_shared_persistence(context: PublicAppRuntimeContext) -> Starlette:
+    return await _build_starlette_app(context, owns_persistence=False)
+
+
+async def _build_starlette_app(context: PublicAppRuntimeContext, *, owns_persistence: bool) -> Starlette:
     remote_url = f"{context.settings.endpoints.mcp_base_url.rstrip('/')}{_MCP_HTTP_PATH}"
     health = RuntimeProjectionHealth()
     context.mcp.runtime_projection_health = health
@@ -423,7 +392,7 @@ async def build_starlette_app(context: PublicAppRuntimeContext) -> Starlette:
         return JSONResponse({'status': 'unavailable', 'runtime_synchronization_failed': health.failed, 'runtime_last_applied_sequence': health.last_applied_sequence}, status_code=503)
 
     server_card: dict[str, object] = {'$schema': 'https://static.modelcontextprotocol.io/schemas/v1/server-card.schema.json', 'name': 'tech.computerlove/umbod', 'title': 'Umbod MCP', 'version': UMBOD_RELEASE, 'description': 'Umbod MCP server for connector-backed tools.', 'remotes': [{'type': 'streamable-http', 'url': remote_url, 'supportedProtocolVersions': ['2025-06-18']}]}
-    return HttpMetadataStarlette(routes=[Route(_HEALTH_ROUTE, runtime_health_response, methods=['GET']), Route('/.well-known/mcp/server-card.json', lambda _request: JSONResponse(server_card, headers=_CORS_HEADERS), methods=['GET']), Route(_LOGO_ROUTE, lambda _request: FileResponse(_LOGO_FILE, media_type='image/png'), methods=['GET']), Mount('/', app=DynamicPublicMcpDispatcher(context.http_app, context.mcp.downstream_mcp_discovery_runtime, health))], lifespan=_create_public_http_lifespan(context))
+    return HttpMetadataStarlette(routes=[Route(_HEALTH_ROUTE, runtime_health_response, methods=['GET']), Route('/.well-known/mcp/server-card.json', lambda _request: JSONResponse(server_card, headers=_CORS_HEADERS), methods=['GET']), Route(_LOGO_ROUTE, lambda _request: FileResponse(_LOGO_FILE, media_type='image/png'), methods=['GET']), Mount('/', app=DynamicPublicMcpDispatcher(context.http_app, context.mcp.downstream_mcp_discovery_runtime, health))], lifespan=_create_public_http_lifespan(context, owns_persistence=owns_persistence))
 
 async def create_production_app() -> Starlette:
     from umbod.hosting import create_mcp_app
@@ -479,7 +448,7 @@ def create_group_permission_runtime_synchronizer(context: PublicAppRuntimeContex
     reader = HttpGroupPermissionReader(f"{api_base_url.rstrip('/')}/system") if _uses_http_runtime_data_readers(context) else DatabaseGroupPermissionReader(context.persistence_runtime.database)
     return RuntimeGroupPermissionSynchronizer(permission_state_reloader=GroupPermissionStateReloader(permission_reader=reader, runtime_permissions=runtime_permissions), client_notifier=notifier)
 
-def _create_public_http_lifespan(context: PublicAppRuntimeContext) -> object:
+def _create_public_http_lifespan(context: PublicAppRuntimeContext, *, owns_persistence: bool) -> object:
 
     @asynccontextmanager
     async def lifespan(_app: Starlette) -> AsyncIterator[None]:
@@ -512,7 +481,8 @@ def _create_public_http_lifespan(context: PublicAppRuntimeContext) -> object:
                         await synchronizer_task
                     flush_logging()
         finally:
-            await context.persistence_runtime.shutdown()
+            if owns_persistence:
+                await context.persistence_runtime.shutdown()
     return lifespan
 
 def _create_runtime_projection_synchronizer(context: PublicAppRuntimeContext) -> RuntimeProjectionSynchronizer:

@@ -44,6 +44,7 @@ nav:
       - Overview: getting-started/index.md
       - Kubernetes installation: getting-started/kubernetes-installation.md
   - Using Umbod:
+      - Codex CLI plugin: using-umbod/codex-plugin.md
       - Shared and Personal connectors: using-umbod/connectors.md
       - Files: using-umbod/files.md
       - Log analytics: using-umbod/log-analytics.md

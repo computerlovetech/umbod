@@ -5,7 +5,7 @@ from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import httpx2
 import jwt
@@ -332,12 +332,18 @@ class AdminConnectorConfigurationJourneyFactory:
         *telemetry_bundles: McpTelemetryDependencies,
         include_memberships: bool = True,
         mcp_administrator_enabled: bool = True,
+        administrator_hosting: Literal['shared', 'separate'] = 'shared',
     ) -> AdminConnectorConfigurationJourney:
         if len(telemetry_bundles) > 1:
             raise TypeError("At most one telemetry bundle may be supplied")
         app_settings, token = self.prepare_settings(
             principal, include_memberships, mcp_administrator_enabled
         )
+        app_settings = app_settings.model_copy(update={
+            'mcp_administrator': app_settings.mcp_administrator.model_copy(update={
+                'hosting': administrator_hosting,
+            }),
+        })
         config = await self.prepare_config(app_settings, *telemetry_bundles)
         async with self.admin_client(config) as admin:
             connector = await prepare_connector(admin)
@@ -345,6 +351,11 @@ class AdminConnectorConfigurationJourneyFactory:
 
     async def isolation(self) -> ConnectorIsolationArrangement:
         app_settings, token = self.prepare_settings(administrator(), True, True)
+        app_settings = app_settings.model_copy(update={
+            'mcp_administrator': app_settings.mcp_administrator.model_copy(update={
+                'hosting': 'shared',
+            }),
+        })
         config = await self.prepare_config(app_settings)
         async with self.admin_client(config) as admin:
             connector = await prepare_connector(admin)
@@ -1105,3 +1116,14 @@ async def test_disabled_feature_hides_administration_tools_from_administrator(
         )
     )
     assert {READ_TOOL, UPSERT_TOOL}.isdisjoint(await configuration.available_tools())
+
+
+@pytest.mark.asyncio
+async def test_separate_hosting_removes_administrator_tools_from_public_even_for_administrator(
+    create_journey: AdminConnectorConfigurationJourneyFactory,
+) -> None:
+    journey = await create_journey(administrator(), administrator_hosting='separate')
+    configuration = AdminConnectorConfigurationDsl(journey)
+    assert {READ_TOOL, UPSERT_TOOL}.isdisjoint(await configuration.available_tools())
+    assert (await configuration.read()).is_error
+    assert (await configuration.upsert_raw({'operations': []})).is_error

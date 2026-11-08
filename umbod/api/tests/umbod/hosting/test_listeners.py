@@ -3,6 +3,7 @@ import signal
 import socket
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from dataclasses import FrozenInstanceError
 from typing import Optional
 
@@ -73,6 +74,33 @@ def test_listener_is_immutable_data() -> None:
     listener = _listener("first", FastAPI())
     with pytest.raises(FrozenInstanceError):
         listener.port = 1234
+
+
+@pytest.mark.asyncio
+async def test_listener_lifespan_enters_and_exits_in_its_own_task_context(
+    addresses: list[tuple[str, int]],
+) -> None:
+    context: ContextVar[str] = ContextVar("listener-context")
+    completed: list[str] = []
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        token = context.set(app.title)
+        owner = asyncio.current_task()
+        try:
+            yield
+        finally:
+            assert asyncio.current_task() is owner
+            assert context.get() == app.title
+            context.reset(token)
+            completed.append(app.title)
+
+    apps = tuple(FastAPI(title=name, lifespan=lifespan) for name in ("public", "admin"))
+    async with _running(tuple(_listener(app.title, app) for app in apps)):
+        for index in range(2):
+            assert (await _response(addresses, index, "/missing")).status_code == 404
+    assert set(completed) == {"public", "admin"}
+    _assert_released(addresses)
 
 
 @pytest.mark.asyncio

@@ -28,21 +28,20 @@ describe('Getting started MCP instructions', () => {
     expect(body).toContain('codex mcp login umbod');
     expect(body).toContain('claude mcp add --transport http --scope user umbod');
     expect(body).toContain('Telemetry tokens do not authenticate MCP connections.');
-    expect(body).toContain('Add custom MCP server');
-    expect(body).toContain('Developer mode is not required');
-    expect(body).not.toContain('Security →');
-    for (const client of ['ChatGPT', 'Claude Code', 'Claude and Cowork', 'GitHub Copilot', 'Codex']) {
+    for (const client of ['Other MCP clients', 'ChatGPT', 'Claude and Cowork', 'GitHub Copilot']) {
+      expect(body).not.toContain(client);
+    }
+    for (const client of ['Claude Code', 'Codex']) {
       expect(body).toContain(client);
     }
   });
 
-  test('configuration reads the latest endpoint and escapes JSON and shell arguments', (): void => {
+  test('commands read the latest endpoint and escape shell arguments', (): void => {
     let endpoint = 'https://umbod.test/mcp';
     const state = new McpSetupState(() => endpoint);
-    expect(JSON.parse(state.copilotConfiguration).mcpServers.umbod.url).toBe(endpoint);
     expect(state.codexCommand).toBe("codex mcp add umbod --url 'https://umbod.test/mcp'");
     endpoint = 'https://umbod.test/\"next\"';
-    expect(JSON.parse(state.copilotConfiguration).mcpServers.umbod.url).toBe(endpoint);
+    expect(state.codexCommand).toBe(`codex mcp add umbod --url 'https://umbod.test/"next"'`);
     endpoint = "https://umbod.test/it's";
     expect(state.claudeCommand).toBe("claude mcp add --transport http --scope user umbod 'https://umbod.test/it'\\''s'");
   });

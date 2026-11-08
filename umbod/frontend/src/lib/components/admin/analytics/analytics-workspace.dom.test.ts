@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import AnalyticsWorkspace from './AnalyticsWorkspace.svelte';
 import { AnalyticsState } from '$lib/admin/analytics/analytics-state.svelte';
-import { InMemoryLogCounts } from '$lib/admin/analytics/in-memory.test-support';
+import { InMemoryLogCounts, isClassificationQuery } from '$lib/admin/analytics/in-memory.test-support';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 
 let component: ReturnType<typeof mount> | undefined;
@@ -71,6 +71,56 @@ async function renderCustom(): Promise<InMemoryLogCounts> {
 }
 
 describe('analytics reports interaction', () => {
+  it('shows scope-wide classifications for empty activity results and inspects the frozen session without losing custom edits', async (): Promise<void> => {
+    const source = render();
+    source.classificationResponse = { rows: [{ groups: [{ dimension: 'activity_kind', value: { kind: 'missing' } }], count: 28, bucket: { kind: 'none' } }], has_more: false };
+    source.response = { rows: [{ groups: [{ dimension: 'session_id', value: { kind: 'present', value: 'selected' } }], count: 2, bucket: { kind: 'none' } }], has_more: false };
+    button('Run report').click();
+    await vi.waitFor(() => expect(document.querySelector('[aria-label="Scope log classifications"]')?.textContent).toContain('28'));
+    source.response = { rows: [], has_more: false };
+    button('View session selected').click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain('There are stored logs in this scope'));
+    const submitted = source.reportQueries[1];
+    await select('Report', 'Custom log query');
+    await select('Time range', 'Last 7 days');
+    await select('Report', 'Tool calls');
+    await select('Time range', 'Last 24 hours');
+    source.response = { rows: [
+      { groups: [{ dimension: 'activity_kind', value: { kind: 'missing' } }], count: 18, bucket: { kind: 'none' } },
+      { groups: [{ dimension: 'activity_kind', value: { kind: 'present', value: '' } }], count: 10, bucket: { kind: 'none' } }
+    ], has_more: false };
+    button('Inspect log classifications').click();
+    await vi.waitFor(() => expect(document.querySelector('h2')?.textContent).toBe('Log classifications'));
+    expect([...document.querySelectorAll('button')].map((entry) => entry.textContent?.trim())).not.toContain('Inspect log classifications');
+    expect(source.reportQueries[2]).toMatchObject({ time_range: submitted.time_range, filters: [{ dimension: 'session_id', values: ['selected'] }], pagination: { limit: 100, offset: 0 }, group_by: ['activity_kind', 'source', 'event_name', 'tool_name', 'session_id'] });
+    expect(document.querySelector('tbody')?.textContent).toContain('Unclassified');
+    expect(document.querySelector('dt')?.textContent).toBe('Log records on this page');
+    expect(document.body.textContent).toContain('Report settings changed');
+    expect(source.coverageQueries).toHaveLength(2);
+    await select('Report', 'Custom log query');
+    expect(document.body.textContent).toContain('Last 7 days');
+    button('Run query').click();
+    await vi.waitFor(() => expect(document.querySelector('h2')?.textContent).toBe('Results'));
+    expect(document.querySelector('[aria-label="Scope log classifications"]')).toBeNull();
+    expect(document.body.textContent).not.toContain('Inspect log classifications');
+  });
+
+  it('keeps report results usable during count failure and retries only counts', async (): Promise<void> => {
+    const source = render();
+    source.handler = async (query) => {
+      if (isClassificationQuery(query)) throw new Error('offline');
+      return source.response;
+    };
+    button('Run report').click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Log classification counts could not be loaded'));
+    expect(document.querySelector('table')).not.toBeNull();
+    expect([...document.querySelectorAll('button')].map((entry) => entry.textContent?.trim())).not.toContain('Retry query');
+    source.handler = undefined;
+    button('Retry counts').click();
+    await vi.waitFor(() => expect(document.querySelector('[aria-label="Scope log classifications"] [role="alert"]')).toBeNull());
+    expect(source.reportQueries).toHaveLength(1);
+    expect(source.coverageQueries).toHaveLength(2);
+  });
   it.each([
     ['Tool calls', ['tool_call', 'file_read', 'file_edit'], ['source', 'session_id', 'outcome'], 'Reported tool calls'],
     ['File activity', ['file_read', 'file_edit'], ['source', 'session_id', 'activity_kind'], 'Read/edit-tool calls'],
@@ -80,12 +130,12 @@ describe('analytics reports interaction', () => {
     await select('Report', report);
     await select('Time range', 'Last 24 hours');
     expect(document.getElementById('analytics-session')).toBeNull();
-    expect(source.queries).toHaveLength(0);
+    expect(source.reportQueries).toHaveLength(0);
     expect(document.querySelector('fieldset')).toBeNull();
     source.response = { has_more: false, rows: [] };
     button('Run report').click();
     await vi.waitFor(() => expect(document.querySelector('h2')?.textContent).toBe(report));
-    expect(source.queries[0]).toMatchObject({
+    expect(source.reportQueries[0]).toMatchObject({
       filters: [{ dimension: 'activity_kind', values: activities }],
       group_by: groups, bucketing: { kind: 'none' },
       time_range: { start: '2026-10-30T12:00:00.000Z', end: '2026-10-31T12:00:00.000Z' }
@@ -143,13 +193,13 @@ describe('analytics reports interaction', () => {
     source.response = { has_more: true, rows: [{ groups: [{ dimension: 'session_id', value: { kind: 'present', value: ' exact session ' } }], count: 3, bucket: { kind: 'none' } }] };
     button('Run report').click();
     await vi.waitFor(() => expect(document.querySelector('table')).not.toBeNull());
-    const submitted = source.queries[0];
+    const submitted = source.reportQueries[0];
     button('Next').click();
     await vi.waitFor(() => expect(document.querySelector('nav')?.textContent).toContain('Page 2'));
     await select('Report', 'Custom log query');
     await select('Time range', 'Last 7 days');
     let complete!: (response: typeof source.response) => void;
-    source.handler = () => new Promise((resolve) => { complete = resolve; });
+    source.handler = (query) => isClassificationQuery(query) ? Promise.resolve(source.classificationResponse) : new Promise((resolve) => { complete = resolve; });
     button('View session  exact session ').click();
     await tick();
     expect(button('View session  exact session ').disabled).toBe(true);
@@ -157,14 +207,14 @@ describe('analytics reports interaction', () => {
     expect(button('Next').disabled).toBe(true);
     complete({ has_more: false, rows: [] });
     await vi.waitFor(() => expect(document.querySelector('.submitted-filters')?.textContent).toBe('Session ID:  exact session '));
-    expect(source.queries[2]).toEqual({ ...submitted, filters: [...submitted.filters, { dimension: 'session_id', values: [' exact session '] }] });
+    expect(source.reportQueries[2]).toEqual({ ...submitted, filters: [...submitted.filters, { dimension: 'session_id', values: [' exact session '] }] });
     expect(document.querySelector('h2')?.textContent).toBe('Tool calls');
     expect(document.querySelector('nav')?.textContent).toContain('Page 1');
     expect(document.body.textContent).toContain('No reported matching activity');
     source.handler = undefined;
     button('All sessions').click();
     await vi.waitFor(() => expect(document.querySelector('.submitted-filters')).toBeNull());
-    expect(source.queries[3]).toEqual(submitted);
+    expect(source.reportQueries[3]).toEqual(submitted);
     expect(document.body.textContent).toContain('Last 7 days');
     expect(document.querySelector('h2')?.textContent).toBe('Tool calls');
     expect(document.querySelector('nav')?.textContent).toContain('Page 1');
@@ -207,12 +257,12 @@ describe('analytics reports interaction', () => {
     expect(button('Add session filter').disabled).toBe(true);
     button('Run query').click();
     await vi.waitFor(() => expect(document.querySelector('h2')?.textContent).toBe('Results'));
-    expect(source.queries[2].filters).toEqual([{ dimension: 'session_id', values: [' exact session '] }]);
+    expect(source.reportQueries[2].filters).toEqual([{ dimension: 'session_id', values: [' exact session '] }]);
     await select('Report', 'Tool calls');
     expect(document.getElementById('analytics-session')).toBeNull();
     button('Run report').click();
     await vi.waitFor(() => expect(document.querySelector('h2')?.textContent).toBe('Tool calls'));
-    expect(source.queries[3].filters).toEqual([{ dimension: 'activity_kind', values: ['tool_call', 'file_read', 'file_edit'] }]);
+    expect(source.reportQueries[3].filters).toEqual([{ dimension: 'activity_kind', values: ['tool_call', 'file_read', 'file_edit'] }]);
   });
 
   it('retains custom interval, range and grouping across report draft changes', async (): Promise<void> => {
@@ -228,8 +278,8 @@ describe('analytics reports interaction', () => {
     await select('Report', 'Custom log query');
     expect(document.body.textContent).toContain('Last 7 days');
     button('Run query').click();
-    await vi.waitFor(() => expect(source.queries).toHaveLength(1));
-    expect(source.queries[0]).toMatchObject({
+    await vi.waitFor(() => expect(source.reportQueries).toHaveLength(1));
+    expect(source.reportQueries[0]).toMatchObject({
       group_by: ['severity', 'outcome'], filters: [], bucketing: { kind: 'fixed', width: 'day' },
       time_range: { start: '2026-10-24T12:00:00.000Z', end: '2026-10-31T12:00:00.000Z' }
     });
@@ -240,7 +290,7 @@ describe('analytics reports interaction', () => {
     source.response = { has_more: true, rows: [{ groups: [{ dimension: 'outcome', value: { kind: 'present', value: 'unknown' } }], count: 4, bucket: { kind: 'none' } }] };
     button('Run report').click();
     await vi.waitFor(() => expect(document.querySelector('table')).not.toBeNull());
-    const submitted = source.queries[0];
+    const submitted = source.reportQueries[0];
     await select('Report', 'Custom log query');
     await select('Time range', 'Last 7 days');
     source.failure = new Error('offline');
@@ -252,13 +302,13 @@ describe('analytics reports interaction', () => {
     source.failure = undefined;
     button('Retry query').click();
     await vi.waitFor(() => expect(document.querySelector('nav')?.textContent).toContain('Page 2'));
-    expect(source.queries[2]).toEqual({ ...submitted, pagination: { limit: 100, offset: 100 } });
+    expect(source.reportQueries[2]).toEqual({ ...submitted, pagination: { limit: 100, offset: 100 } });
     expect(document.querySelector('h2')?.textContent).toBe('Tool calls');
     expect(document.querySelector('dt')?.textContent).toBe('Reported tool calls on this page');
     expect(document.querySelector('tbody')?.textContent).toContain('Unknown outcome');
     button('Previous').click();
-    await vi.waitFor(() => expect(source.queries).toHaveLength(4));
-    expect(source.queries[3]).toEqual(submitted);
+    await vi.waitFor(() => expect(source.reportQueries).toHaveLength(4));
+    expect(source.reportQueries[3]).toEqual(submitted);
   });
 
   it('removes report controls and results on access loss', async (): Promise<void> => {
@@ -286,7 +336,7 @@ describe('analytics query interaction', () => {
     checkbox!.click();
     await tick();
     let complete!: (response: typeof source.response) => void;
-    source.handler = () => new Promise((resolve) => { complete = resolve; });
+    source.handler = (query) => isClassificationQuery(query) ? Promise.resolve(source.classificationResponse) : new Promise((resolve) => { complete = resolve; });
     button('Next').click();
     await tick();
     expect(button('Next').disabled).toBe(true);

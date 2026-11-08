@@ -53,7 +53,7 @@ async def test_admin_mcp_write_changes_running_connector_tool_visibility(runtime
     assert await _wait_until(lambda: _mcp_tool_is_absent(runtime_endpoints)) is True
 
     transport = StreamableHttpTransport(
-        runtime_endpoints.mcp_url,
+        runtime_endpoints.admin_mcp_url,
         headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"},
     )
     async with Client(transport) as administrator:
