@@ -31,5 +31,5 @@ def query() -> LogCountQuery:
         filters=(),
         group_by=(),
         bucketing=NoTimeBuckets(kind="none"),
-        max_groups=1000,
+        pagination={"limit": 1000, "offset": 0},
     )

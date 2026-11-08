@@ -11,9 +11,8 @@ description: "Actor-independent presentation and interaction mechanics."
 - [action-menu.test.ts](./action-menu.test.ts) — Keyboard movement, focus restoration, outside dismissal and administration compatibility tests.
 - [DateTimeView.svelte](./DateTimeView.svelte) — Date and time display.
 - [dialogs](./dialogs/README.md) — Native dialog lifecycle and focus mechanics.
-- [mcp-setup/](./mcp-setup/) — Endpoint-driven client setup instructions.
 - [tools](./tools/README.md) — Neutral tool cards and schema presenters.
-- [workspace/](./workspace/) — Navigation, account and logout shell.
+- [Workspace](./workspace/README.md) — Application shell and neutral subpage containers and navigation.
 
 # Architecture
 

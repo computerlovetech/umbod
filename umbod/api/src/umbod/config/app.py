@@ -21,11 +21,57 @@ class RuntimeConfig(ConfigModel):
     auth: str = "dev"
 
 
+def validate_collector_base_url(value: str) -> str:
+    if any(category(character) == "Cc" for character in value):
+        raise ValueError("Public collector base URL must not contain controls")
+    if not value.strip():
+        return ""
+    if any(character.isspace() for character in value) or "\\" in value:
+        raise ValueError("Public collector base URL must not contain whitespace or controls")
+    parsed = urlsplit(value)
+    port = parsed.port
+    hostname = parsed.hostname
+    if (
+        parsed.scheme not in ("https", "http")
+        or not hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or "?" in value
+        or "#" in value
+        or not re.fullmatch(r"(?:\[[0-9A-Fa-f:.]+\]|[^:\[\]]+)(?::[0-9]+)?", parsed.netloc)
+        or (port is not None and port == 0)
+    ):
+        raise ValueError("Public collector base URL must be absolute HTTP(S) without credentials, query, or fragment")
+    try:
+        address = ipaddress.ip_address(hostname)
+    except ValueError:
+        labels = hostname.encode("idna").decode("ascii").rstrip(".").split(".")
+        if len(hostname) > 253 or any(
+            not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?", label)
+            for label in labels
+        ):
+            raise ValueError("Public collector base URL has an invalid host") from None
+        loopback = hostname.lower() == "localhost"
+    else:
+        if "%" in hostname:
+            raise ValueError("Public collector base URL has an invalid host")
+        loopback = address.is_loopback
+    if parsed.scheme == "http" and not loopback:
+        raise ValueError("Public collector base URL requires HTTPS outside loopback")
+    return value.rstrip("/")
+
+
 class EndpointsConfig(ConfigModel):
     site_base_url: str = defaults.PUBLIC_SITE_ORIGIN
     api_base_url: str = defaults.PUBLIC_API_ORIGIN
     private_api_base_url: str = defaults.INTERNAL_API_ORIGIN
     mcp_base_url: str = defaults.PUBLIC_MCP_ORIGIN
+    collector_base_url: str = ""
+
+    @field_validator("collector_base_url")
+    @classmethod
+    def validate_collector_url(cls, value: str) -> str:
+        return validate_collector_base_url(value)
 
     @field_validator("api_base_url")
     @classmethod

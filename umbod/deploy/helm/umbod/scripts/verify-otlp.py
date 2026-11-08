@@ -37,10 +37,10 @@ def main() -> None:
     source = "helm-cohost-" + uuid4().hex
     payload = json.dumps({"resourceLogs": [{"resource": {"attributes": [{"key": "service.name", "value": {"stringValue": source}}]}, "scopeLogs": [{"logRecords": [{"timeUnixNano": "1767226200000000000", "body": {"stringValue": "shared analytics check"}}]}]}]}).encode()
     assert request(collector_base, "/v1/logs", token, payload, True)[0] == 200
-    query = json.dumps({"time_range": {"start": "2026-01-01T00:00:00Z", "end": "2026-01-02T00:00:00Z"}, "filters": [{"dimension": "source", "values": [source]}], "group_by": [], "bucketing": {"kind": "none"}, "max_groups": 10}).encode()
+    query = json.dumps({"time_range": {"start": "2026-01-01T00:00:00Z", "end": "2026-01-02T00:00:00Z"}, "filters": [{"dimension": "source", "values": [source]}], "group_by": [], "bucketing": {"kind": "none"}, "pagination": {"limit": 10, "offset": 0}}).encode()
     status, body = request(public_base, "/api/admin/telemetry/log-counts", os.environ["UMBOD_MCP_TEST_BEARER_TOKEN"], query, True)
     assert status == 200, (status, body)
-    assert json.loads(body) == {"rows": [{"groups": [], "count": 1, "bucket": {"kind": "none"}}]}
+    assert json.loads(body) == {"rows": [{"groups": [], "count": 1, "bucket": {"kind": "none"}}], "has_more": False}
 
 
 if __name__ == "__main__":

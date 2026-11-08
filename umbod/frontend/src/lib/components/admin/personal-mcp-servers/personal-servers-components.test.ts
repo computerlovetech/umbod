@@ -181,7 +181,6 @@ describe('personal server administration presentation', () => {
   });
   test('registration uncertainty keeps its dialog mounted and exposes full workspace reload after close', () => {
     const page = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
-    const header = readFileSync('src/lib/components/admin/connectors/ConnectorPageHeader.svelte', 'utf8');
     expect(page).toContain('state.operations.loseAccess, state.operations.setRegistrationLocked');
     expect(page).toContain("state.modal === 'personal' && !state.operations.authenticationLost");
     expect(page).not.toContain("state.modal === 'personal' && !state.operations.locked");
@@ -190,12 +189,12 @@ describe('personal server administration presentation', () => {
     expect(page).toContain('{#if !state.operations.registrationLocked}');
     expect(page).toContain('if (registration.blocked) window.location.reload()');
     expect(page).toContain('disabled={state.operations.locked}');
-    expect(header).toContain('<Button {disabled}');
+    expect(page).toContain('<Button aria-label="Add MCP connector" disabled={state.operations.locked}');
   });
   test('the old route has no UI and the surviving workspace owns both mode choices', () => {
     const workspace = readFileSync('src/lib/components/admin/downstream-mcp-connectors/DownstreamMcpPageContent.svelte', 'utf8');
     const shell = readFileSync('src/lib/components/admin/AdminShell.svelte', 'utf8');
-    expect(workspace).toContain('onadd={(trigger) => state.beginCreate(registration.availability, trigger)}');
+    expect(workspace).toContain('onclick={(event) => state.beginCreate(registration.availability, event.currentTarget)}');
     expect(workspace).toContain('Both options are organisation-managed.');
     expect(workspace).toContain('Choose shared authorization or personal authorization, where each user authorizes access using their own account.');
     expect(workspace).not.toContain('User-managed');

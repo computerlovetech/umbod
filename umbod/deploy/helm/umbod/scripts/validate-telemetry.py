@@ -30,13 +30,19 @@ def main() -> None:
     require(not document(baseline.stdout, "telemetry.yaml"), "disabled collector must not have a service")
     require("otlp-http" not in baseline.stdout, "disabled collector must not have a port")
     require("path: /v1" not in document(baseline.stdout, "ingress.yaml"), "public ingress must not expose OTLP")
-    for port, service_port in ((4318, 4318), (14318, 14319)):
-        result = render(chart, {"ingress": {"enabled": True}, "telemetry": {"enabled": True, "port": port, "servicePort": service_port, "bearerTokenSecret": {"name": "collector-secret", "key": "token"}}})
+    configured_disabled = render(chart, {"ingress": {"enabled": True}, "telemetry": {"publicBaseUrl": "https://collector.example/otlp"}})
+    require(configured_disabled.returncode == 0, configured_disabled.stderr)
+    require(not document(configured_disabled.stdout, "telemetry.yaml"), "advertising a collector URL must not enable its service")
+    require("otlp-http" not in configured_disabled.stdout, "advertising a collector URL must not enable its listener")
+    require(document(configured_disabled.stdout, "ingress.yaml") == document(baseline.stdout, "ingress.yaml"), "advertising a collector URL must not expose ingestion")
+    for port, service_port, public_base in ((4318, 4318, "https://collector.example/otlp"), (14318, 14319, "http://localhost:14319")):
+        result = render(chart, {"ingress": {"enabled": True}, "telemetry": {"enabled": True, "publicBaseUrl": public_base, "port": port, "servicePort": service_port, "bearerTokenSecret": {"name": "collector-secret", "key": "token"}}})
         require(result.returncode == 0, result.stderr)
         core = document(result.stdout, "core-deployment.yaml")
         api, mcp = core.split("        - name: mcp\n")
         require(f"containerPort: {port}" in api and "name: otlp-http" in api, "collector must share API container")
         require('command: ["umbod", "api", "serve"]' in api, "API must own collector lifecycle")
+        require(re.search(rf'name: UMBOD_OTLP_PUBLIC_BASE_URL\s+value: "{re.escape(public_base)}"', api) is not None, "API must receive the operator-declared public collector base URL")
         for key, value in (("ENABLED", "true"), ("HOST", "0.0.0.0"), ("PORT", str(port))):
             require(re.search(rf'name: UMBOD_OTLP_{key}\s+value: "{value}"', api) is not None, f"collector {key} mismatch")
         require('name: "collector-secret"' in api and 'key: "token"' in api and "secretKeyRef:" in api, "API must use dedicated token secret")
@@ -49,6 +55,7 @@ def main() -> None:
         subprocess.run(["kubeconform", "-strict", "-summary"], input=result.stdout, text=True, check=True)
     invalid = [
         {"enabled": "true"}, {"enabled": True},
+        *[{"publicBaseUrl": value} for value in (None, 4318, "relative", "http://collector.example", "https://user:pass@collector.example", "https://collector.example?x=1", "https://collector.example#fragment", "https://collector.example/with space")],
         {"enabled": True, "bearerTokenSecret": {"name": " "}},
         {"port": 0}, {"port": 65536}, {"servicePort": 0}, {"servicePort": 65536},
         {"bearerTokenSecret": {"key": ""}}, {"bearerTokenSecret": {"key": "bad/key"}},
@@ -63,7 +70,7 @@ def main() -> None:
         values["telemetry"]["enabled"] = False
         require(render(chart, values).returncode == 0, "disabled collector must not reserve its port")
     for component in ("api", "mcp"):
-        for key in ("UMBOD_OTLP_ENABLED", "UMBOD_OTLP_HOST", "UMBOD_OTLP_PORT", "UMBOD_OTLP_BEARER_TOKEN", "UMBOD_REST_METRICS_PORT", "UMBOD_MCP_METRICS_PORT"):
+        for key in ("UMBOD_OTLP_ENABLED", "UMBOD_OTLP_HOST", "UMBOD_OTLP_PORT", "UMBOD_OTLP_BEARER_TOKEN", "UMBOD_OTLP_PUBLIC_BASE_URL", "UMBOD_REST_METRICS_PORT", "UMBOD_MCP_METRICS_PORT"):
             require(render(chart, {"core": {component: {"env": {key: "override"}}}}).returncode != 0, "managed listener settings must reject environment overrides")
     for component in ("api", "mcp", "frontend", "telemetry"):
         require(render(chart, {"ingress": {"paths": {component: "/v1"}}}).returncode != 0, "ingress must reject OTLP path overrides")

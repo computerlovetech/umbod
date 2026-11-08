@@ -5,7 +5,8 @@
   import { parseConnectorCapability } from '$lib/admin/connector-capabilities';
   import type { OpenApiConnectorCreateAction, OpenApiConnectorListPageData } from '$lib/admin/openapi-connectors';
   import AdminShell from '$lib/components/admin/AdminShell.svelte';
-  import ConnectorPageHeader from '$lib/components/admin/connectors/ConnectorPageHeader.svelte';
+  import SubpageContainer from '$lib/components/shared/workspace/SubpageContainer.svelte';
+  import Button from '$lib/components/admin/shared/Button.svelte';
   import ConnectorTabs from '$lib/components/admin/connectors/ConnectorTabs.svelte';
   import OpenApiConnectorList from '$lib/components/admin/openapi-connectors/OpenApiConnectorList.svelte';
   import OpenApiConnectorSetupModal from '$lib/components/admin/openapi-connectors/OpenApiConnectorSetupModal.svelte';
@@ -44,17 +45,16 @@
 <svelte:head><title>OpenAPI connectors</title></svelte:head>
 
 <AdminShell activeItem="connectors" accountIdentity={data.accountIdentity ?? fallbackAccountIdentity} contentWidth="wide">
-  <div class="admin-page">
-    <ConnectorPageHeader
-      title="OpenAPI connectors"
-      lede="Review registered OpenAPI connectors, import catalogs, and manage operation activation."
-      addLabel="Add OpenAPI connector"
-      onadd={(trigger) => setupState.showCreate(trigger)}
-    />
-    <ConnectorTabs activeTab="openapi" capability={parseConnectorCapability(page.url.searchParams.get('capability'))} />
+  <SubpageContainer title="OpenAPI connectors" lede="Review registered OpenAPI connectors, import catalogs, and manage operation activation.">
+    {#snippet actions()}
+      <Button aria-label="Add OpenAPI connector" onclick={(event) => setupState.showCreate(event.currentTarget)}><span aria-hidden="true">+</span> Add OpenAPI connector</Button>
+    {/snippet}
+    {#snippet navigation()}
+      <ConnectorTabs activeTab="openapi" capability={parseConnectorCapability(page.url.searchParams.get('capability'))} />
+    {/snippet}
     {#key data}
       <OpenApiConnectorList {data} form={listForm} onretry={retry} onconfigure={(event, connector) => { if (event.currentTarget instanceof HTMLElement) void setupState.showConfigure(event.currentTarget, connector.id, connector.name, connector.toolNamePrefix, connector.capabilityDescription); }} />
     {/key}
     <OpenApiConnectorSetupModal state={setupState} />
-  </div>
+  </SubpageContainer>
 </AdminShell>

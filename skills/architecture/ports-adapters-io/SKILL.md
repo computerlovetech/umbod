@@ -117,7 +117,7 @@ export class InMemoryUserStore implements UserStore {
 ## Relation to other skills
 
 - **HTTP / frontend API clients**: Follow [api-client-architecture](../api-client-architecture/SKILL.md) for Zod-at-the-transport and route layout.
-- **Python tests**: Prefer interface-level examples in tests per [python-test-practices](../python-test-practices/SKILL.md).
+- **Python tests**: Prefer interface-level examples in tests per [test-writing](../../../skills/development/test-writing/SKILL.md).
 
 ## Anti-patterns
 

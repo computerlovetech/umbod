@@ -69,51 +69,38 @@
         {/if}
       </section>
     {/if}
-    <details class="advanced">
-      <summary>Advanced</summary>
-      <div class="advanced-content">
-        <label class="field limit" for="analytics-limit">Maximum groups<input id="analytics-limit" type="number" min="1" max="1000" step="1" required value={state.draft.limit} oninput={(event) => state.draft.setLimit(event.currentTarget.value)} /><small>1–1,000. Queries exceeding this limit return an error, not partial totals.</small></label>
-        {#if state.draft.groupBy.length > 1}
-          <div><span class="filter-label">Grouping order</span>
-            <ol class="group-order" aria-label="Grouping order">
-              {#each state.draft.groupBy as dimension, index (dimension)}
-                <li><span>{index + 1}. {dimensionLabels[dimension]}</span><Button variant="quiet" size="compact" aria-label={`Move ${dimensionLabels[dimension]} earlier`} disabled={index === 0} onclick={() => state.draft.moveGroup(dimension, -1)}>↑</Button><Button variant="quiet" size="compact" aria-label={`Move ${dimensionLabels[dimension]} later`} disabled={index === state.draft.groupBy.length - 1} onclick={() => state.draft.moveGroup(dimension, 1)}>↓</Button></li>
-              {/each}
-            </ol>
-          </div>
-        {/if}
-        <p class="hint">All times use UTC. Ranges include the start and exclude the end. Presets end when you run the query. Uncheck all groups for a single total.</p>
-        <p class="hint">Custom dates use the fixed UTC offset entered above. Query daylight-saving periods separately. Multiple values within a filter match any; different filters apply together.</p>
-      </div>
-    </details>
     {#if state.validation}<div class="admin-message admin-message--error" role="alert">{state.validation}</div>{/if}
     {#if state.pending || state.changed}<p class="hint" role="status">{state.pending ? 'Running query…' : 'Filters or settings changed. Run query to update results.'}</p>{/if}
   </form>
   {#if state.error}
-    <div class="admin-message admin-message--error failure" role="alert"><span>{state.error}</span><Button variant="secondary" disabled={state.pending} onclick={() => state.run()}>Retry query</Button></div>
+    <div class="admin-message admin-message--error failure" role="alert"><span>{state.error}</span><Button variant="secondary" disabled={state.pending} onclick={() => state.retry()}>Retry query</Button></div>
   {/if}
   {#if state.result}
     <section class="admin-panel results" aria-label="Query results" aria-busy={state.pending}>
       <div class="section-heading"><h2>Results</h2>{#if state.changed}<span>Previous query</span>{/if}</div>
       <p class="range"><DateTimeView value={state.result.query.time_range.start} /> → <DateTimeView value={state.result.query.time_range.end} /></p>
       {#if state.result.query.filters.length > 0}<ul class="submitted-filters">{#each state.result.query.filters as filter (filter.dimension)}<li>{dimensionLabels[filter.dimension]}: {filter.values.map((value) => value === '' ? 'Empty value' : value).join(', ')}</li>{/each}</ul>{/if}
-      <dl class="stats"><div><dt>Matching logs</dt><dd>{state.total.toLocaleString('en')}</dd></div><div><dt>Groups</dt><dd>{state.groupCount.toLocaleString('en')}</dd></div></dl>
+      <dl class="stats"><div><dt>Logs on this page</dt><dd>{state.total.toLocaleString('en')}</dd></div><div><dt>Groups on this page</dt><dd>{state.groupCount.toLocaleString('en')}</dd></div></dl>
       {#if state.result.response.rows.length === 0}
-        <p class="empty" role="status">No logs matched this query. Try a wider time range or fewer filters.</p>
+        <p class="empty" role="status">No logs on this page. Try a wider time range or fewer filters.</p>
       {:else}
         <div class="table-scroll" role="region" aria-label="Log-count results table">
-          <table><caption><a href="#analytics-query">Edit query</a> · {state.groupingLabel} · {state.bucketLabel} · Maximum {state.result.query.max_groups} groups. Only observed groups and time buckets are shown.</caption><thead><tr>{#if state.result.query.bucketing.kind === 'fixed'}<th scope="col">Bucket start (UTC)</th>{/if}{#each state.result.query.group_by as dimension (dimension)}<th scope="col">{dimensionLabels[dimension]}</th>{/each}<th scope="col" class="count">Log count</th></tr></thead><tbody>
+          <table><caption><a href="#analytics-query">Edit query</a> · {state.groupingLabel} · {state.bucketLabel} · Page {state.page}. Only observed groups and time buckets are shown.</caption><thead><tr>{#if state.result.query.bucketing.kind === 'fixed'}<th scope="col">Bucket start (UTC)</th>{/if}{#each state.result.query.group_by as dimension (dimension)}<th scope="col">{dimensionLabels[dimension]}</th>{/each}<th scope="col" class="count">Log count</th></tr></thead><tbody>
             {#each state.tableRows as row (JSON.stringify([row.bucket, row.groups]))}
               <tr>{#if row.bucket.kind === 'bucket'}<td><DateTimeView value={row.bucket.start} /></td>{/if}{#each row.groups as group (group.dimension)}<td>{#if group.value.kind === 'missing'}<span class="missing">Missing attribute</span>{:else if group.value.value === ''}<span class="missing">Empty string</span>{:else}<span class="exact-value">{group.value.value}</span>{/if}</td>{/each}<td class="count">{row.count.toLocaleString('en')}</td></tr>
             {/each}
           </tbody></table>
         </div>
       {/if}
+      <nav class="pagination" aria-label="Results pagination">
+        <Button variant="secondary" disabled={!state.canGoPrevious} onclick={() => state.previous()}>Previous</Button>
+        <span aria-live="polite">Page {state.page}</span>
+        <Button variant="secondary" disabled={!state.canGoNext} onclick={() => state.next()}>Next</Button>
+      </nav>
     </section>
   {:else if !state.pending && !state.error}
     <div class="admin-panel empty">Run a query to see log activity.</div>
   {/if}
-  <details class="about"><summary>About these logs</summary><p class="hint">Includes accepted OTLP log exports, not application stdout, metrics, or traces. Configure clients to export logs to this instance’s authenticated /v1/logs receiver. Results refresh only when you run a query.</p></details>
 {/if}
 
 <style>
@@ -122,28 +109,23 @@
   .toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 1rem; align-items: end; }
   .section-heading, .failure, .picker-feedback { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
   h2 { font-size: 1.05rem; margin: 0; }
-  .section-heading > span, .hint, small, .picker-feedback { font-size: .8125rem; color: var(--admin-muted); }
+  .section-heading > span, .hint, .picker-feedback { font-size: .8125rem; color: var(--admin-muted); }
   .range-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
   .field { display: grid; gap: .35rem; min-width: 0; }
   label, legend, .filter-label { font-size: .8125rem; font-weight: 600; }
   input:not([type='checkbox']) { min-width: 0; width: 100%; box-sizing: border-box; min-height: 2.75rem; border: 1px solid var(--admin-border); border-radius: 6px; padding: .65rem .7rem; color: var(--admin-ink); background: var(--admin-panel); font: inherit; }
-  small { font-weight: 400; }
   fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
   legend { padding: 0; margin-bottom: .35rem; }
   .hint { margin: 0; line-height: 1.6; }
   .choices { display: flex; flex-wrap: wrap; gap: .5rem 1.25rem; }
   .choice { display: flex; gap: .5rem; align-items: center; min-height: 2rem; }
   .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; border-top: 1px solid var(--admin-border); padding-top: 1rem; }
-  .group-order, .values { display: flex; gap: .5rem; flex-wrap: wrap; list-style: none; padding: 0; margin: 0; min-width: 0; }
-  .group-order { margin-top: .5rem; }
-  .group-order li, .values li { display: flex; align-items: center; background: var(--admin-soft); border-radius: 6px; padding-left: .6rem; min-width: 0; max-width: 100%; font-size: .8125rem; }
+  .values { display: flex; gap: .5rem; flex-wrap: wrap; list-style: none; padding: 0; margin: 0; min-width: 0; }
+  .values li { display: flex; align-items: center; background: var(--admin-soft); border-radius: 6px; padding-left: .6rem; min-width: 0; max-width: 100%; font-size: .8125rem; }
   .values li > span { overflow-wrap: anywhere; min-width: 0; }
   .exact-value { white-space: pre-wrap; overflow-wrap: anywhere; }
   .filter-picker { display: grid; gap: .75rem; padding: 1rem; border: 1px solid var(--admin-border); border-radius: 8px; background: var(--admin-soft); }
   .picker-fields { display: grid; grid-template-columns: minmax(9rem, 1fr) minmax(0, 2fr); gap: 1rem; }
-  summary { cursor: pointer; font-size: .8125rem; color: var(--admin-muted); width: fit-content; }
-  .advanced-content { display: grid; gap: 1rem; margin-top: 1rem; }
-  .limit { max-width: 24rem; }
   .failure { margin-bottom: 1.25rem; }
   .range { font-size: .8125rem; color: var(--admin-muted); margin: 0; }
   .submitted-filters { margin: 0; padding-left: 1.25rem; font-size: .8125rem; overflow-wrap: anywhere; white-space: pre-wrap; }
@@ -161,6 +143,7 @@
   .count { min-width: 5rem; text-align: right; font-variant-numeric: tabular-nums; position: sticky; right: 0; background: var(--admin-panel); }
   th.count { background: var(--admin-soft); z-index: 2; }
   .missing { color: var(--admin-muted); font-style: italic; }
-  .about > p { margin-top: .75rem; max-width: 48rem; }
+  .pagination { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .75rem; }
+  .pagination span { color: var(--admin-muted); font-size: .875rem; }
   @media (max-width: 700px) { .toolbar, .range-grid, .picker-fields { grid-template-columns: 1fr; } .query, .results { padding: 1rem; } .stats { gap: .5rem; } .stats div { padding: .65rem; } dd { font-size: 1.25rem; } }
 </style>

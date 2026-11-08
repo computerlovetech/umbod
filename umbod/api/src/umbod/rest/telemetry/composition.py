@@ -26,6 +26,7 @@ from umbod.rest.telemetry.dependencies import (
 from umbod.rest.telemetry.errors import TelemetryHttpError
 from umbod.rest.telemetry.responses import telemetry_error_response
 from umbod.rest.telemetry.routes import router
+from umbod.rest.telemetry.token_authentication import install_unavailable_telemetry_token_verifier
 
 
 def install_telemetry_receiver(app: FastAPI, config: AppConfig | TelemetryAppConfig) -> None:
@@ -55,6 +56,7 @@ def install_telemetry_receiver_with_registry(
         return config.otlp_receiver
 
     install_analytics_dependencies(app, create_disabled_analytics_runtime())
+    install_unavailable_telemetry_token_verifier(app)
     app.dependency_overrides[get_receiver_config] = provide_receiver_config
     app.add_exception_handler(TelemetryHttpError, telemetry_error_response)
     app.include_router(router)

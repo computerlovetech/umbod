@@ -63,7 +63,7 @@ def configuration(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AppConfig:
 def query_body() -> dict[str, object]:
     return {
         "time_range": {"start": "2026-01-01T00:00:00Z", "end": "2026-01-02T00:00:00Z"},
-        "filters": [], "group_by": [], "bucketing": {"kind": "none"}, "max_groups": 100,
+        "filters": [], "group_by": [], "bucketing": {"kind": "none"}, "pagination": {"limit": 100, "offset": 0},
     }
 
 

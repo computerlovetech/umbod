@@ -7,7 +7,7 @@
   import ConnectorCatalogModal from '$lib/components/admin/connectors/ConnectorCatalogModal.svelte';
   import ConnectorListEmptyState from '$lib/components/admin/connectors/ConnectorListEmptyState.svelte';
   import ConnectorList from '$lib/components/admin/connectors/ConnectorList.svelte';
-  import ConnectorPageHeader from '$lib/components/admin/connectors/ConnectorPageHeader.svelte';
+  import SubpageContainer from '$lib/components/shared/workspace/SubpageContainer.svelte';
   import { ConnectorCatalogState } from '$lib/components/admin/connectors/connector-catalog-state.svelte';
   import ConnectorTabs from '$lib/components/admin/connectors/ConnectorTabs.svelte';
   import { emptyPromptCatalog, emptyResourceCatalog, type PromptCatalog, type ResourceCatalog } from '$lib/admin/capability-catalogs';
@@ -58,15 +58,13 @@
 </svelte:head>
 
 <AdminShell activeItem="connectors" accountIdentity={data.accountIdentity ?? fallbackAccountIdentity} contentWidth="wide">
-  <div class="admin-page">
-    <ConnectorPageHeader
-      title="Connectors"
-      lede="Review available and registered connectors."
-      addLabel="Add connector"
-      onadd={() => catalogState.show()}
-    />
-
-    <ConnectorTabs activeTab="catalog" capability={parseConnectorCapability(page.url.searchParams.get('capability'))} />
+  <SubpageContainer title="Connectors" lede="Review available and registered connectors.">
+    {#snippet actions()}
+      <Button aria-label="Add connector" onclick={() => catalogState.show()}><span aria-hidden="true">+</span> Add connector</Button>
+    {/snippet}
+    {#snippet navigation()}
+      <ConnectorTabs activeTab="catalog" capability={parseConnectorCapability(page.url.searchParams.get('capability'))} />
+    {/snippet}
 
     {#if data.status === 'ready'}
       {#key data}
@@ -95,7 +93,7 @@
         onselect={selectCatalogConnector}
       />
     {/if}
-  </div>
+  </SubpageContainer>
 </AdminShell>
 
 <style>

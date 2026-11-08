@@ -26,6 +26,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [messaging](./messaging/) — Events and stream contracts.
 - [network](./network/) — Shared network validation.
 - [permissions](./permissions/README.md) — Group grants and runtime access.
+- [personal_access_tokens](./personal_access_tokens/README.md) — Owner-scoped bearer-token issuance, validation and revocation.
 - [persistence](./persistence/README.md) — Database ports and read plans.
 - [publishing](./publishing/README.md) — Connector publication.
 - [responses](./responses/README.md) — Immutable tool outcome metadata, recovery guidance, and transport-neutral construction.

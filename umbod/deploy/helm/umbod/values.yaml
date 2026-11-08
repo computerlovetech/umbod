@@ -81,6 +81,7 @@ core:
 
 telemetry:
   enabled: false
+  publicBaseUrl: ""
   port: 4318
   servicePort: 4318
   bearerTokenSecret:

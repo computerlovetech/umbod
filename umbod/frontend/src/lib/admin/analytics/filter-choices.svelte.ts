@@ -93,21 +93,28 @@ export class FilterChoices {
     this.pendingValue = 'Loading existing values…';
     this.controller = new AbortController();
     try {
-      const response = await this.source.query({ time_range, group_by: [dimension], bucketing: { kind: 'none' }, max_groups: 1000, filters: [] }, this.controller.signal);
-      if (this.disposed || generation !== this.generation) return;
-      this.entries = response.rows.flatMap((row): Choice[] => {
-        const attribute = row.groups.find((group) => group.dimension === dimension)?.value;
-        return attribute?.kind === 'present'
-          ? [{ value: JSON.stringify(attribute.value), label: `${attribute.value === '' ? 'Empty value' : attribute.value} (${row.count})` }]
-          : [];
-      });
+      const entries: Choice[] = [];
+      let offset = 0;
+      while (true) {
+        const response = await this.source.query({ time_range, group_by: [dimension], bucketing: { kind: 'none' }, pagination: { limit: 1000, offset }, filters: [] }, this.controller.signal);
+        if (this.disposed || generation !== this.generation) return;
+        entries.push(...response.rows.flatMap((row): Choice[] => {
+          const attribute = row.groups.find((group) => group.dimension === dimension)?.value;
+          return attribute?.kind === 'present'
+            ? [{ value: JSON.stringify(attribute.value), label: `${attribute.value === '' ? 'Empty value' : attribute.value} (${row.count})` }]
+            : [];
+        }));
+        if (!response.has_more) break;
+        offset += 1000;
+      }
+      this.entries = [...new Map<string, Choice>(entries.map((entry) => [entry.value, entry])).values()];
     } catch (failure) {
       if (this.disposed || generation !== this.generation) return;
       if (failure instanceof AuthenticationRequiredError || (failure instanceof HttpError && [401, 403].includes(failure.status))) {
         this.onAccessLost();
       } else {
         this.errorValue = failure instanceof HttpError && failure.status === 422
-          ? 'Too many existing values. Choose a narrower time range and refresh.'
+          ? 'Existing values could not be loaded. Check the time range and query settings, then refresh.'
           : 'Existing values could not be loaded. Check your settings or connection and try again.';
       }
     } finally {

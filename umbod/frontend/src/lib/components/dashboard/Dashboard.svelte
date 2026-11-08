@@ -15,11 +15,9 @@
   import { browserAuthorizationBrowser } from '$lib/personal-connections/infrastructure/browser-authorization-browser';
   import { browserPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/personal-connections-api';
   import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
-  import McpSetupGuide from '$lib/components/shared/mcp-setup/McpSetupGuide.svelte';
   import ConnectorWorkspace from './ConnectorWorkspace.svelte';
 
   let {
-    mcpEndpoint,
     createWorkspaceApi = workspaceApi,
     accountIdentity = { kind: 'hidden' },
     createApi = browserDashboardApi,
@@ -27,7 +25,6 @@
     createAuthorizationBrowser = browserAuthorizationBrowser,
     signIn = navigateToSignIn
   }: {
-    mcpEndpoint: string;
     createWorkspaceApi?: () => WorkspaceApi;
     accountIdentity?: HeaderAccountIdentityState;
     createApi?: () => DashboardApi;
@@ -97,9 +94,6 @@
         <ConnectorWorkspace {state} canManage={workspaceAccess.adminAccess === 'allowed'} />
       {/if}
     </section>
-    <section class="setup" aria-label="MCP client setup">
-      <McpSetupGuide {mcpEndpoint} compact />
-    </section>
   </div>
   {/if}
 </WorkspaceShell>
@@ -110,7 +104,6 @@
   .catalogue { margin-top: 1.75rem; }
   h2 { font-size: 1rem; margin: 0; }
   .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
-  .setup { margin-top: 2rem; }
   .feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
   p { color: var(--admin-muted); line-height: 1.6; }
   [role='alert'] { color: var(--admin-danger); }

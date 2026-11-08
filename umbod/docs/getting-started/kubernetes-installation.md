@@ -56,7 +56,7 @@ In a second terminal, forward the MCP Service:
 kubectl port-forward service/umbod-mcp 8011:8011
 ```
 
-Open [http://localhost:3000](http://localhost:3000) and keep both port-forwards running. In the administration interface, open **MCP setup guide** to copy `http://localhost:8011/mcp` and follow the instructions for your desktop agent. Configure it as a remote HTTP MCP server; the agent and the port-forwards must run on the same computer. After configuring a connector, publish its tools and grant access before checking the agent's available tools.
+Open [http://localhost:3000](http://localhost:3000) and keep both port-forwards running. In the workspace navigation, open **Getting started** to copy `http://localhost:8011/mcp` and follow the instructions for your desktop agent. Configure it as a remote HTTP MCP server; the agent and the port-forwards must run on the same computer. After configuring a connector, publish its tools and grant access before checking the agent's available tools.
 
 The local setup uses development authentication. Hosted agents cannot reach your computer's `localhost`; use an HTTPS Ingress and production authentication for agents running elsewhere.
 

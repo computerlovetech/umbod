@@ -42,6 +42,7 @@ async def test_empty_sqlite_database_gets_current_schema_and_indexes(tmp_path: P
         definition_indexes = {str(row[1]) for row in await definition_index_cursor.fetchall()}
         await definition_index_cursor.close()
     assert "openapi_connector_catalogs" not in table_names
+    assert "personal_access_tokens" in table_names
     assert "messaging_events_type_sequence_idx" in event_indexes
     assert "downstream_mcp_connector_definitions_public_path_uq" in definition_indexes
 

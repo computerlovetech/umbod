@@ -1,4 +1,4 @@
-from .errors import AnalyticsResultLimitExceeded, TelemetryAnalyticsUnavailable
+from .errors import TelemetryAnalyticsUnavailable
 from .models import (
     BucketWidth,
     DimensionFilter,
@@ -12,6 +12,7 @@ from .models import (
     MissingDimensionValue,
     NoTimeBuckets,
     OwnersScope,
+    PaginationQuery,
     PresentDimensionValue,
     TimeBucket,
     TimeRange,
@@ -26,7 +27,6 @@ from .write_models import AnalyticsLogRecord, LogWriteBatch, OwnedLog, UnownedLo
 
 __all__ = [
     "AnalyticsLogRecord",
-    "AnalyticsResultLimitExceeded",
     "LogWriteBatch",
     "OwnedLog",
     "UnownedLog",
@@ -44,6 +44,7 @@ __all__ = [
     "MissingDimensionValue",
     "NoTimeBuckets",
     "OwnersScope",
+    "PaginationQuery",
     "PresentDimensionValue",
     "TelemetryAnalyticsReader",
     "TelemetryAnalyticsUnavailable",

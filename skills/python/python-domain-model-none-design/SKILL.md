@@ -109,4 +109,4 @@ Even in these cases, prefer naming the boundary model clearly and prevent the No
 
 - Use `ports-adapters-io` when None originates from network, file, database, or external-service I/O.
 - Use `fastapi-dependency-lifetime` when validation or normalization belongs in FastAPI routes or dependencies.
-- Use `python-test-practices` when adding regression tests for redesigned model states.
+- Use `test-writing` and its pytest reference when adding regression tests for redesigned model states.

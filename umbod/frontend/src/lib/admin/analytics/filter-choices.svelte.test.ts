@@ -1,11 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { AnalyticsState } from './analytics-state.svelte';
 import { AuthenticationRequiredError, HttpError } from '../infrastructure/transport';
 import type { Dimension, LogCountQuery, LogCountResponse } from './domain/schemas';
 import type { LogCountSource } from './port';
 
 function values(dimension: Dimension = 'source'): LogCountResponse {
-  return { rows: [
+  return { has_more: false, rows: [
     { groups: [{ dimension, value: { kind: 'missing' } }], count: 8, bucket: { kind: 'none' } },
     ...['', ' Alpha ', 'alpha', 'Beta'].map((value, index) => ({ groups: [{ dimension, value: { kind: 'present' as const, value } }], count: index + 1, bucket: { kind: 'none' as const } }))
   ] };
@@ -39,14 +39,62 @@ function deferred(): { promise: Promise<LogCountResponse>; resolve: (response: L
 }
 
 describe('existing filter choices', () => {
+  it('collects every server page before exposing choices within a fixed resolved range', async (): Promise<void> => {
+    const { source, state } = setup();
+    const final = deferred();
+    source.response = { ...values(), has_more: true };
+    source.handler = async (): Promise<LogCountResponse> => {
+      if (source.queries.length === 1) return source.response;
+      return final.promise;
+    };
+    const loading = state.choices.show();
+    await vi.waitFor(() => expect(source.queries).toHaveLength(2));
+    expect(source.queries.map((query) => query.pagination)).toEqual([{ limit: 1000, offset: 0 }, { limit: 1000, offset: 1000 }]);
+    expect(source.queries[1].time_range).toEqual(source.queries[0].time_range);
+    expect(state.choices.options).toEqual([]);
+    expect(state.choices.pending).not.toBe('');
+    final.resolve({ has_more: false, rows: [{ groups: [{ dimension: 'source', value: { kind: 'present', value: 'last' } }], count: 1, bucket: { kind: 'none' } }] });
+    await loading;
+    expect(state.choices.options).toHaveLength(5);
+    expect(state.choices.options.at(-1)?.label).toBe('last (1)');
+  });
+
+  it('keeps repeated live-page values unique with the latest observed count', async (): Promise<void> => {
+    const { source, state } = setup();
+    source.handler = async (): Promise<LogCountResponse> => source.queries.length === 1
+      ? { ...values(), has_more: true }
+      : { has_more: false, rows: [{ groups: [{ dimension: 'source', value: { kind: 'present', value: 'Beta' } }], count: 5, bucket: { kind: 'none' } }] };
+    await state.choices.show();
+    expect(source.queries).toHaveLength(2);
+    expect(state.choices.options).toHaveLength(4);
+    expect(state.choices.options.filter((entry) => entry.value === '"Beta"')).toEqual([{ value: '"Beta"', label: 'Beta (5)' }]);
+    state.choices.choose('"Beta"');
+    expect(state.draft.filters.source).toEqual(['Beta']);
+    expect(state.choices.options).toHaveLength(3);
+  });
+
+  it('aborts discovery between pages without displaying partial choices', async (): Promise<void> => {
+    const { source, state } = setup();
+    const final = deferred();
+    source.handler = async (): Promise<LogCountResponse> => source.queries.length === 1
+      ? { ...values(), has_more: true } : final.promise;
+    const loading = state.choices.show();
+    await vi.waitFor(() => expect(source.queries).toHaveLength(2));
+    state.choices.close();
+    expect(source.signals[1]?.aborted).toBe(true);
+    final.resolve({ ...values(), has_more: true });
+    await loading;
+    expect(source.queries).toHaveLength(2);
+    expect(state.choices.options).toEqual([]);
+  });
+
   it('discovers unfiltered values for one dimension and preserves exact blank, whitespace and case', async (): Promise<void> => {
     const { source, state } = setup();
     state.draft.selectFilter('severity', 'INFO');
     state.draft.setBucket('hour');
-    state.draft.setLimit('2');
     await state.choices.show();
     expect(state.choices.dimension).toBe('source');
-    expect(source.queries[0]).toEqual({ time_range: { start: '2026-10-31T11:00:00.000Z', end: '2026-10-31T12:00:00.000Z' }, filters: [], group_by: ['source'], bucketing: { kind: 'none' }, max_groups: 1000 });
+    expect(source.queries[0]).toEqual({ time_range: { start: '2026-10-31T11:00:00.000Z', end: '2026-10-31T12:00:00.000Z' }, filters: [], group_by: ['source'], bucketing: { kind: 'none' }, pagination: { limit: 1000, offset: 0 } });
     expect(state.choices.options).toEqual([
       { value: '""', label: 'Empty value (1)' }, { value: '" Alpha "', label: ' Alpha  (2)' },
       { value: '"alpha"', label: 'alpha (3)' }, { value: '"Beta"', label: 'Beta (4)' }
@@ -61,15 +109,6 @@ describe('existing filter choices', () => {
     choose('not json');
     expect(state.draft.filters.source).toEqual(['', ' Alpha ', 'alpha']);
     expect(state.choices.options).toEqual([{ value: '"Beta"', label: 'Beta (4)' }]);
-  });
-
-  it.each(['', '0', '1001', '1.5'])('discovers values independently of invalid main-query limit %s', async (limit: string): Promise<void> => {
-    const { source, state } = setup();
-    state.draft.setLimit(limit);
-    await state.choices.show();
-    expect(state.choices.error).toBe('');
-    expect(state.choices.options).toHaveLength(4);
-    expect(source.queries[0].max_groups).toBe(1000);
   });
 
   it('requires a valid time range before making a discovery request', async (): Promise<void> => {
@@ -107,14 +146,14 @@ describe('existing filter choices', () => {
 
   it('distinguishes no present attributes from an empty value', async (): Promise<void> => {
     const { source, state } = setup();
-    source.response = { rows: [values().rows[0], { groups: [], count: 4, bucket: { kind: 'none' } }] };
+    source.response = { has_more: false, rows: [values().rows[0], { groups: [], count: 4, bucket: { kind: 'none' } }] };
     await state.choices.show();
     expect(state.choices.options).toEqual([]);
     expect(state.choices.emptyMessage).toContain('No unselected');
   });
 
   it.each([
-    [new HttpError(422, 'Limit', { detail: 'unsafe partial values' }), 'narrower time range'],
+    [new HttpError(422, 'Invalid query', {}), 'query settings'],
     [new Error('offline'), 'try again'],
     [new HttpError(503, 'Unavailable', {}), 'try again']
   ])('clears old options on failure and supports refresh', async (failure: Error, message: string): Promise<void> => {
@@ -131,14 +170,13 @@ describe('existing filter choices', () => {
     expect(state.choices.options).toHaveLength(4);
   });
 
-  it('uses time configuration rather than the clock, buckets, groups, limits or filters for freshness', async (): Promise<void> => {
+  it('uses time configuration rather than the clock, buckets, groups or filters for freshness', async (): Promise<void> => {
     const source = new Source();
     let clock = new Date('2026-10-31T12:00:00Z');
     const state = new AnalyticsState(source, () => clock);
     await state.choices.show();
     clock = new Date('2026-11-01T12:00:00Z');
     state.draft.setBucket('day');
-    state.draft.setLimit('1');
     state.draft.toggleGroup('source');
     state.draft.selectFilter('severity', 'INFO');
     expect(state.choices.stale).toBe(false);
@@ -161,7 +199,7 @@ describe('existing filter choices', () => {
     const loading = state.choices.show();
     expect(state.choices.pending).not.toBe('');
     source.handler = undefined;
-    source.response = { rows: [] };
+    source.response = { has_more: false, rows: [] };
     if (action === 'close') state.choices.close();
     if (action === 'dispose') state.dispose();
     if (action === 'dimension') await state.choices.setDimension('severity');

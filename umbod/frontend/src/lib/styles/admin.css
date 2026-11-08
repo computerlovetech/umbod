@@ -86,14 +86,6 @@
   max-width: 42rem;
 }
 
-.connector-page-header {
-  margin-bottom: 32px;
-}
-
-.connector-page-header .admin-lede {
-  max-width: 48rem;
-}
-
 .connector-page-heading {
   align-items: center;
   display: flex;

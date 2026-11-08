@@ -13,6 +13,7 @@ from umbod.core.telemetry.analytics import (
     FixedTimeBuckets,
     InstanceScope,
     LogCountQuery,
+    PaginationQuery,
     LogDimension,
     LogWriteBatch,
     NoTimeBuckets,
@@ -40,7 +41,7 @@ def query() -> LogCountQuery:
         filters=(),
         group_by=(),
         bucketing=NoTimeBuckets(kind="none"),
-        max_groups=1000,
+        pagination={"limit": 1000, "offset": 0},
     )
 
 
@@ -75,7 +76,7 @@ async def test_invalid_query_is_rejected_before_filesystem_io(
 ) -> None:
     path = tmp_path / "analytics.sqlite3"
     runtime = create_sqlite_analytics_runtime(path, ())
-    invalid = query.model_copy(update={"max_groups": 0})
+    invalid = query.model_copy(update={"pagination": PaginationQuery.model_construct(limit=0, offset=0)})
     with pytest.raises(
         TelemetryAnalyticsUnavailable, match="^Telemetry analytics is unavailable$"
     ):

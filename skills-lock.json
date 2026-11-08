@@ -69,17 +69,12 @@
     "ports-adapters-io": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "ad8090fdd247c151d316de5e87cb4dbe77525662f06c30a0ce22bf7c32f564a9"
+      "computedHash": "6003ed614e6bc0e54023c690d389c00d67a49974758399bb5828e8dfa82d60ad"
     },
     "python-domain-model-none-design": {
       "source": "./skills",
       "sourceType": "local",
-      "computedHash": "510812e8b4c14b94ded36115445fc6c7e216f0a870580f143ca6bfde9ca06e9b"
-    },
-    "python-test-practices": {
-      "source": "./skills",
-      "sourceType": "local",
-      "computedHash": "5127ab834d0f582827418b94fc0c360fc86877ca6a93c6c3859185fd904f73dc"
+      "computedHash": "4fee1c2b595599975a0f983aac5ebaea7da6928a62dc39ccc3408d9a260d78a4"
     },
     "release-umbod": {
       "source": "./skills",
@@ -95,6 +90,11 @@
       "source": "./skills",
       "sourceType": "local",
       "computedHash": "7545fe39a3d7666f0deb87966369e6eb6a0d3b49f1e2f357e21e19625a864dcb"
+    },
+    "test-writing": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "4ab5e977ad03ef2c36721327221fbf27e1e69157a904353077ab67234f9a8f01"
     },
     "write-adr": {
       "source": "./skills",

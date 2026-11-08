@@ -10,7 +10,7 @@ description: "Static SvelteKit SPA layouts, browser loaders and page composition
 - [+layout.svelte](./+layout.svelte) — Application layout.
 - [+layout.ts](./+layout.ts) — SPA configuration loader.
 - [+page.ts](./+page.ts) — Dashboard entry redirect.
-- [admin/](./admin/) — Administration routes and capability-checked profile layout.
+- [admin/](./admin/) — Administration routes and capability-checked profile layout; the root redirects to Connectors.
 - [Admin layout tests](./admin/layout.test.ts) — Explicit capability denial, authenticated identity and preserved HTTP failures.
 - [Log analytics](./admin/analytics/README.md) — Instance-wide log-count query route.
 - [Groups](./admin/groups/README.md) — Central administrator group catalogue route.
@@ -18,6 +18,7 @@ description: "Static SvelteKit SPA layouts, browser loaders and page composition
 - [dashboard/](./dashboard/) — User catalogue page.
 - [error.test.ts](./error.test.ts) — Route error presentation tests.
 - [files/](./files/) — User filesystem page.
+- [Getting started](./getting-started/README.md) — Single destination for MCP and telemetry onboarding.
 - [navigation.test.ts](./navigation.test.ts) — Route navigation tests.
 
 # Context not available from the code

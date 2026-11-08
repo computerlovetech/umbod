@@ -72,7 +72,7 @@ def _count(client: httpx.Client, origin: str) -> int:
             "filters": [],
             "group_by": [],
             "bucketing": {"kind": "none"},
-            "max_groups": 10,
+            "pagination": {"limit": 10, "offset": 0},
         },
         timeout=3,
     )

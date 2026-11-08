@@ -14,11 +14,12 @@ from umbod.hosting.listeners import (
     serve_listeners,
 )
 from umbod.hosting.shutdown import ProcessShutdownDeadline
-from umbod.infrastructure import create_configured_analytics_runtime
+from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider, create_configured_analytics_runtime
 from umbod.logging import configure_logging
-from umbod.rest.main import create_app_with_shared_metrics
+from umbod.rest.main import create_app_with_shared_persistence
 from umbod.rest.metrics import PrometheusRestMetricsRecorder
 from umbod.rest.telemetry.application import create_receiver_app_with_registry
+from umbod.rest.telemetry.token_authentication import install_telemetry_token_verifier
 
 
 def validate_listener_ports(settings: AppConfig, port: int) -> None:
@@ -48,14 +49,16 @@ async def serve_api(
 ) -> None:
     validate_listener_ports(settings, port)
     runtime = create_configured_analytics_runtime(settings)
+    persistence = ConfiguredPersistenceRuntimeProvider(settings.connector_store).create()
     try:
         async with asyncio.timeout(30):
             await runtime.ensure_ready()
+            await persistence.readiness.ensure_ready()
         if shutdown_requested.is_set():
             return
         metrics_recorder = PrometheusRestMetricsRecorder()
-        api = create_app_with_shared_metrics(
-            runtime, metrics_recorder, settings=settings,
+        api = create_app_with_shared_persistence(
+            persistence, runtime, metrics_recorder, settings=settings,
         )
         listeners = [
             HttpListener(
@@ -73,6 +76,7 @@ async def serve_api(
                 telemetry_analytics=settings.telemetry_analytics,
             )
             collector = create_receiver_app_with_registry(collector_settings, runtime, metrics_recorder.registry)
+            install_telemetry_token_verifier(collector, persistence, settings)
             listeners.append(
                 HttpListener(
                     name="collector",
@@ -86,7 +90,10 @@ async def serve_api(
     finally:
         shutdown_requested.set()
         async with asyncio.timeout(10):
-            await runtime.shutdown()
+            try:
+                await runtime.shutdown()
+            finally:
+                await persistence.shutdown()
 
 
 async def _serve_with_signals(

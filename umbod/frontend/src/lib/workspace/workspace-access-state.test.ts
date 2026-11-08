@@ -25,12 +25,12 @@ describe('independent workspace access', () => {
     expect(dashboard.phase).toBe('ready');
     expect(dashboard.connectors.length).toBeGreaterThan(0);
     expect(access.adminAccess).toBe('checking');
-    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/files']);
+    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/files', '/getting-started']);
     complete(user);
     await readingAccess;
     expect(access.accountIdentity).toMatchObject({ kind: 'visible', name: 'Alex' });
     expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual([
-      '/dashboard', '/files', '/admin', '/admin/analytics', '/admin/connectors', '/admin/groups', '/admin/group-permissions/connectors', '/admin/instance-configuration'
+      '/dashboard', '/files', '/getting-started', '/admin/analytics', '/admin/connectors', '/admin/groups', '/admin/group-permissions/connectors', '/admin/instance-configuration'
     ]);
     dashboard.dispose();
     access.dispose();
@@ -41,7 +41,7 @@ describe('independent workspace access', () => {
     await access.load();
     expect(access.adminAccess).toBe(status === 403 ? 'denied' : 'unavailable');
     expect(access.accountIdentity).toEqual({ kind: 'hidden' });
-    expect(workspaceNavigation(access.adminAccess === 'allowed')).toHaveLength(2);
+    expect(workspaceNavigation(access.adminAccess === 'allowed')).toHaveLength(3);
   });
 
   test('ordinary profile keeps visible identity without administration navigation', async (): Promise<void> => {
@@ -49,7 +49,7 @@ describe('independent workspace access', () => {
     await access.load();
     expect(access.accountIdentity).toMatchObject({ kind: 'visible', name: 'Alex' });
     expect(access.adminAccess).toBe('denied');
-    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/files']);
+    expect(workspaceNavigation(access.adminAccess === 'allowed').map((item) => item.href)).toEqual(['/dashboard', '/files', '/getting-started']);
     access.dispose();
   });
 

@@ -5,4 +5,4 @@
   let { data }: { data: PageData } = $props();
 </script>
 
-<Dashboard mcpEndpoint={data.mcpEndpoint} accountIdentity={data.accountIdentity} />
+<Dashboard accountIdentity={data.accountIdentity} />

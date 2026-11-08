@@ -111,7 +111,7 @@ async def test_admin_reader_queries_private_collector_records_after_application_
     finally:
         await persistence.shutdown()
     assert response.status_code == 200
-    assert response.json() == {"rows": [{
+    assert response.json() == {"has_more": False, "rows": [{
         "groups": [
             {"dimension": "source", "value": {"kind": "present", "value": "codex"}},
             {"dimension": "event_name", "value": {"kind": "present", "value": "tool_result"}},

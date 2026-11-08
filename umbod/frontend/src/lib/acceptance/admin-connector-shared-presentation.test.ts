@@ -12,7 +12,7 @@ const nativeState = readFileSync('src/lib/components/admin/connectors/connector-
 const openApiState = readFileSync('src/lib/components/admin/openapi-connectors/openapi-connector-list-state.svelte.ts', 'utf8');
 const downstreamState = readFileSync('src/lib/components/admin/downstream-mcp-connectors/downstream-mcp-workspace-state.svelte.ts', 'utf8');
 const selectionController = readFileSync('src/lib/components/admin/shared/selection-detail-controller.svelte.ts', 'utf8');
-const pageHeader = readFileSync('src/lib/components/admin/connectors/ConnectorPageHeader.svelte', 'utf8');
+const gettingStarted = readFileSync('src/lib/components/getting-started/GettingStarted.svelte', 'utf8');
 const sidebarList = readFileSync('src/lib/components/admin/connectors/ConnectorSidebarList.svelte', 'utf8');
 const publicationAction = readFileSync('src/lib/components/admin/connectors/ConnectorPublicationMenuAction.svelte', 'utf8');
 const detailSummary = readFileSync('src/lib/components/admin/connectors/ConnectorDetailSummary.svelte', 'utf8');
@@ -21,19 +21,13 @@ const connectorPages = [connectorPage, openApiPage, downstreamMcpPage];
 const connectorLists = [connectorList, openApiConnectorList];
 
 describe('admin connector shared presentation', () => {
-  test('all connector pages compose the shared page header', () => {
-    for (const page of connectorPages) {
-      expect(page).toContain('import ConnectorPageHeader');
-      expect(page).toContain('<ConnectorPageHeader');
+  test('connector and getting started pages compose the same neutral subpage container', (): void => {
+    for (const page of [...connectorPages, gettingStarted]) {
+      expect(page).toContain('import SubpageContainer');
+      expect(page).toContain('<SubpageContainer');
+      expect(page).toContain('{#snippet navigation()}');
       expect(page).not.toContain('<div class="connector-page-header"');
-      expect(page).not.toContain('class="add"');
     }
-
-    expect(pageHeader).toContain('class="connector-page-header"');
-    expect(pageHeader).toContain('aria-label={addLabel}');
-    expect(pageHeader).toContain('onclick={(event) => onadd(event.currentTarget)}');
-    expect(pageHeader).toContain("import Button from '$lib/components/admin/shared/Button.svelte'");
-    expect(pageHeader).toContain('<Button');
   });
 
   test('all connector list empty branches compose the shared presenter', () => {

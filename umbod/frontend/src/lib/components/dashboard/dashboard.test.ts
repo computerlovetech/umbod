@@ -37,7 +37,6 @@ describe('dashboard presentation', () => {
   test('hides privileged navigation until the independent current-user read completes', (): void => {
     const currentUser = vi.fn();
     const body = render(Dashboard, { props: {
-      mcpEndpoint: 'https://umbod.test/mcp',
       createWorkspaceApi: () => ({ profile: { get: currentUser } }),
       createApi: (): DashboardApi => new InMemoryDashboardApi(catalogue),
       createPersonalApi: (): PersonalConnectionsApi => new InMemoryPersonalConnectionsApi([])
@@ -59,7 +58,6 @@ describe('dashboard presentation', () => {
     const list = vi.spyOn(api.catalogue, 'list');
     const personalList = vi.spyOn(personal.connections, 'list');
     const body = render(Dashboard, { props: {
-      mcpEndpoint: 'https://umbod.test/mcp',
       createApi: (): DashboardApi => api,
       createPersonalApi: (): PersonalConnectionsApi => personal
     } }).body;

@@ -12,7 +12,7 @@ export const logCountQuerySchema = z.strictObject({
     z.strictObject({ kind: z.literal('none') }),
     z.strictObject({ kind: z.literal('fixed'), width: z.enum(['minute', 'hour', 'day']) })
   ]),
-  max_groups: z.number().int().min(1).max(1000)
+  pagination: z.strictObject({ limit: z.number().int().min(1).max(1000), offset: z.number().int().nonnegative() })
 });
 export const logCountResponseSchema = z.strictObject({
   rows: z.array(z.strictObject({
@@ -28,7 +28,8 @@ export const logCountResponseSchema = z.strictObject({
       z.strictObject({ kind: z.literal('none') }),
       z.strictObject({ kind: z.literal('bucket'), start: timestamp })
     ])
-  })).max(1000)
+  })).max(1000),
+  has_more: z.boolean()
 });
 export type LogCountQuery = z.infer<typeof logCountQuerySchema>;
 export type LogCountResponse = z.infer<typeof logCountResponseSchema>;

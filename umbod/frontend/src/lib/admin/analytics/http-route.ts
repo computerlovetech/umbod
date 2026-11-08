@@ -10,11 +10,11 @@ export class AnalyticsRoute implements LogCountSource {
       method: 'POST', path: '/admin/telemetry/log-counts',
       requestBody: { kind: 'json', value: query, schema: logCountQuerySchema },
       outputSchema: logCountResponseSchema.refine((response) =>
-        response.rows.length <= query.max_groups && response.rows.every((row) =>
+        response.rows.length <= query.pagination.limit && response.rows.every((row) =>
           row.groups.length === query.group_by.length &&
           row.groups.every((group, index) => group.dimension === query.group_by[index]) &&
           row.bucket.kind === (query.bucketing.kind === 'fixed' ? 'bucket' : 'none')
-        ), 'Aggregate results must match the requested grouping, buckets and group limit'
+        ), 'Aggregate results must match the requested grouping, buckets and page limit'
       ), signal
     });
   }

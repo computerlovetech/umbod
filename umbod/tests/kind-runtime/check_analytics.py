@@ -33,10 +33,11 @@ async def verify_analytics() -> None:
             filters=(DimensionFilter(dimension=LogDimension.SOURCE, values=("umbod-otlp-runtime",)),),
             group_by=(LogDimension.SOURCE,),
             bucketing=NoTimeBuckets(kind="none"),
-            max_groups=10,
+            pagination={"limit": 10, "offset": 0},
         )
         reader = runtime.create_reader()
         result = await reader.count_logs(query)
+        assert result.has_more is False
         assert len(result.rows) == 1
         assert result.rows[0].count == 2
         owner_query = LogCountQuery.model_validate(query.model_dump() | {

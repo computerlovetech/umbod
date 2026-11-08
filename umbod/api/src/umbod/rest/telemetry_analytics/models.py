@@ -1,6 +1,6 @@
 from typing import Annotated, Self
 
-from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from umbod.core.telemetry.analytics import (
     DimensionFilter,
@@ -9,6 +9,7 @@ from umbod.core.telemetry.analytics import (
     LogCountQuery,
     LogDimension,
     NoTimeBuckets,
+    PaginationQuery,
     TimeRange,
 )
 
@@ -20,7 +21,7 @@ class LogCountRequest(BaseModel):
     filters: tuple[DimensionFilter, ...]
     group_by: tuple[LogDimension, ...]
     bucketing: Annotated[NoTimeBuckets | FixedTimeBuckets, Field(discriminator="kind")]
-    max_groups: Annotated[StrictInt, Field(ge=1, le=1000)]
+    pagination: PaginationQuery
 
     def to_query(self) -> LogCountQuery:
         return LogCountQuery(
@@ -29,7 +30,7 @@ class LogCountRequest(BaseModel):
             filters=self.filters,
             group_by=self.group_by,
             bucketing=self.bucketing,
-            max_groups=self.max_groups,
+            pagination=self.pagination,
         )
 
     @model_validator(mode="after")

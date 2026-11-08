@@ -165,7 +165,7 @@ def query() -> LogCountQuery:
             start=datetime(1970, 1, 1, tzinfo=timezone.utc),
             end=datetime(3000, 1, 1, tzinfo=timezone.utc),
         ),
-        filters=(), group_by=(), bucketing=NoTimeBuckets(kind="none"), max_groups=100,
+        filters=(), group_by=(), bucketing=NoTimeBuckets(kind="none"), pagination={"limit": 100, "offset": 0},
     )
 
 
@@ -233,7 +233,7 @@ async def test_shared_runtime_lifetime_is_owned_only_by_host(configuration: AppC
                 start=datetime(1970, 1, 1, tzinfo=timezone.utc),
                 end=datetime(3000, 1, 1, tzinfo=timezone.utc),
             ),
-            filters=(), group_by=(), bucketing=NoTimeBuckets(kind="none"), max_groups=10,
+            filters=(), group_by=(), bucketing=NoTimeBuckets(kind="none"), pagination={"limit": 10, "offset": 0},
         ))
 
 

@@ -3,7 +3,6 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from umbod.core.telemetry.analytics import (
-    AnalyticsResultLimitExceeded,
     BucketWidth,
     DimensionFilter,
     DimensionGroup,
@@ -38,7 +37,7 @@ async def test_empty_total_is_single_zero(
     reader_factory: ReaderFactory, query: LogCountQuery
 ) -> None:
     result = await reader_factory(()).count_logs(query)
-    assert result == LogCountResult(
+    assert result == LogCountResult(has_more=False,
         rows=(LogCountRow(groups=(), count=0, bucket=Unbucketed(kind="none")),)
     )
 
@@ -225,7 +224,7 @@ async def test_buckets_sort_before_dimensions_and_limit_counts_rows(
         query,
         group_by=(LogDimension.SOURCE,),
         bucketing=FixedTimeBuckets(kind="fixed", width=BucketWidth.HOUR),
-        max_groups=3,
+        pagination={"limit": 3, "offset": 0},
     )
     reader = reader_factory(logs)
     result = await reader.count_logs(query)
@@ -239,8 +238,9 @@ async def test_buckets_sort_before_dimensions_and_limit_counts_rows(
             PresentDimensionValue(kind="present", value="a"),
         ),
     )
-    with pytest.raises(AnalyticsResultLimitExceeded):
-        await reader.count_logs(_query(query, max_groups=2))
+    page = await reader.count_logs(_query(query, pagination={"limit": 2, "offset": 0}))
+    assert page.rows == result.rows[:2]
+    assert page.has_more is True
 
 
 @pytest.mark.asyncio
@@ -256,7 +256,7 @@ async def test_scope_and_filters_apply_before_aggregation_limit(
         scope=OwnersScope(kind="owners", owner_ids=("a",)),
         filters=(DimensionFilter(dimension=LogDimension.SOURCE, values=("keep",)),),
         group_by=(LogDimension.SOURCE,),
-        max_groups=1,
+        pagination={"limit": 1, "offset": 0},
     )
     result = await reader_factory(logs).count_logs(query)
     assert tuple(row.count for row in result.rows) == (1,)

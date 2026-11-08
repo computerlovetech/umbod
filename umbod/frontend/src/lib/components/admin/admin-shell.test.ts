@@ -17,7 +17,7 @@ describe('admin shell logout', () => {
     const logout = vi.fn<() => Promise<void>>().mockResolvedValue();
     const header = render(AppHeader, { props: { accountIdentity } });
     const shell = render(AdminShell, { props: {
-      activeItem: 'overview', accountIdentity, logout: { logout },
+      activeItem: 'connectors', accountIdentity, logout: { logout },
       children: createRawSnippet(() => ({ render: (): string => '<p>Content</p>' }))
     } });
     for (const { body } of [header, shell]) {
@@ -33,14 +33,15 @@ describe('admin shell logout', () => {
     expect(shell.body).toContain('aria-label="Workspace sidebar"');
     expect(shell.body).toContain('aria-label="Workspace navigation"');
     expect(shell.body).toContain('href="/dashboard"');
-    expect(shell.body).toContain('Administration</a>');
+    expect(shell.body).not.toContain('Administration</a>');
+    expect(shell.body).not.toContain('href="/admin"');
     expect(shell.body).toContain('href="/admin/analytics"');
     expect(shell.body).toContain('href="/admin/connectors"');
     expect(shell.body).toContain('href="/admin/group-permissions/connectors"');
     expect(shell.body).not.toContain('href="/admin/group-permissions"');
     expect(shell.body).not.toContain('href="/admin/filesystem"');
     expect(shell.body).not.toContain('Filesystem</a>');
-    expect(shell.body.indexOf('Dashboard</a>')).toBeLessThan(shell.body.indexOf('Administration</a>'));
+    expect(shell.body.indexOf('Dashboard</a>')).toBeLessThan(shell.body.indexOf('Connectors</a>'));
     expect(logout).not.toHaveBeenCalled();
   });
 
@@ -52,7 +53,7 @@ describe('admin shell logout', () => {
   test.each(['visible', 'hidden'] as const)('offers an explicit logout independent of %s identity without automatic navigation', (kind) => {
     const logout = vi.fn<() => Promise<void>>().mockResolvedValue();
     const { body } = render(AdminShell, { props: {
-      activeItem: 'overview',
+      activeItem: 'connectors',
       accountIdentity: kind === 'visible' ? { kind, name: 'Administrator', email: 'admin@example.test', picture: null, hiddenValues: { id: 'admin-id' } } : { kind },
       children: createRawSnippet(() => ({ render: (): string => '<p>Content</p>' })),
       logout: { logout }

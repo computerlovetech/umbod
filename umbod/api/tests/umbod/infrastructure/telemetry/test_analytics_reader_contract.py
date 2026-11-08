@@ -9,7 +9,6 @@ import pytest_asyncio
 
 from umbod.core.telemetry.analytics import (
     AnalyticsLogRecord,
-    AnalyticsResultLimitExceeded,
     BucketWidth,
     DimensionFilter,
     DimensionGroup,
@@ -99,7 +98,7 @@ def query() -> LogCountQuery:
         filters=(),
         group_by=(),
         bucketing=NoTimeBuckets(kind="none"),
-        max_groups=1000,
+        pagination={"limit": 1000, "offset": 0},
     )
 
 
@@ -162,7 +161,7 @@ async def test_owner_selection_excludes_null_and_preserves_case(
         if owners
         else InstanceScope(kind="instance")
     )
-    assert await reader.count_logs(_query(query, scope=scope)) == LogCountResult(
+    assert await reader.count_logs(_query(query, scope=scope)) == LogCountResult(has_more=False,
         rows=(_row(expected),)
     )
 
@@ -193,7 +192,7 @@ async def test_filters_combine_or_values_and_dimensions_with_binary_exactness(
             DimensionFilter(dimension=LogDimension.SEVERITY, values=("error",)),
         ),
     )
-    assert await reader.count_logs(filtered) == LogCountResult(rows=(_row(2),))
+    assert await reader.count_logs(filtered) == LogCountResult(has_more=False, rows=(_row(2),))
 
 
 @pytest.mark.asyncio
@@ -215,7 +214,7 @@ async def test_writer_column_mapping_preserves_missing_empty_and_present_values(
         records.append(_log(None, **dimensions))
     reader = await reader_factory(tuple(records))
     grouped = _query(query, group_by=(dimension,))
-    assert await reader.count_logs(grouped) == LogCountResult(
+    assert await reader.count_logs(grouped) == LogCountResult(has_more=False,
         rows=(
             _row(1, ((dimension, None),)),
             _row(1, ((dimension, ""),)),
@@ -226,7 +225,7 @@ async def test_writer_column_mapping_preserves_missing_empty_and_present_values(
         filtered = _query(
             grouped, filters=(DimensionFilter(dimension=dimension, values=(value,)),)
         )
-        assert await reader.count_logs(filtered) == LogCountResult(
+        assert await reader.count_logs(filtered) == LogCountResult(has_more=False,
             rows=(_row(count, ((dimension, value),)),)
         )
 
@@ -263,7 +262,7 @@ async def test_multidimension_rows_decode_in_query_order(
     )
     assert await reader.count_logs(
         _query(query, group_by=dimensions)
-    ) == LogCountResult(rows=expected)
+    ) == LogCountResult(has_more=False, rows=expected)
 
 
 @pytest.mark.asyncio
@@ -289,7 +288,7 @@ async def test_microsecond_range_includes_start_and_excludes_end(
         time_range=TimeRange(start=start, end=end),
         group_by=(LogDimension.SOURCE,),
     )
-    assert await reader.count_logs(selected) == LogCountResult(
+    assert await reader.count_logs(selected) == LogCountResult(has_more=False,
         rows=(
             _row(1, ((LogDimension.SOURCE, "inside"),)),
             _row(1, ((LogDimension.SOURCE, "start"),)),
@@ -329,9 +328,9 @@ async def test_epoch_floor_and_bucket_first_order_for_timezone_inputs(
         query,
         group_by=(LogDimension.SOURCE,),
         bucketing=FixedTimeBuckets(kind="fixed", width=width),
-        max_groups=5,
+        pagination={"limit": 5, "offset": 0},
     )
-    assert await reader.count_logs(selected) == LogCountResult(
+    assert await reader.count_logs(selected) == LogCountResult(has_more=False,
         rows=tuple(
             _row(1, ((LogDimension.SOURCE, value),), instant)
             for instant, value in (
@@ -344,8 +343,10 @@ async def test_epoch_floor_and_bucket_first_order_for_timezone_inputs(
         )
     )
 
-    with pytest.raises(AnalyticsResultLimitExceeded):
-        await reader.count_logs(_query(selected, max_groups=4))
+    page = await reader.count_logs(_query(selected, pagination={"limit": 4, "offset": 0}))
+    full = await reader.count_logs(selected)
+    assert page.rows == full.rows[:4]
+    assert page.has_more is True
 
 
 @pytest.mark.asyncio
@@ -367,26 +368,28 @@ async def test_empty_aggregation_has_only_an_unbucketed_total_row(
         else query.bucketing,
     )
     expected = () if grouped or bucketed else (_row(0),)
-    assert await reader.count_logs(selected) == LogCountResult(rows=expected)
+    assert await reader.count_logs(selected) == LogCountResult(has_more=False, rows=expected)
 
 
 @pytest.mark.asyncio
-async def test_exact_group_limit_succeeds_and_one_extra_group_overflows(
+async def test_exact_page_limit_succeeds_and_extra_group_sets_has_more(
     reader_factory: AsyncReaderFactory,
     query: LogCountQuery,
 ) -> None:
     reader = await reader_factory(
         (_log(None, source="b"), _log(None, source="a"), _log(None, source="a"))
     )
-    selected = _query(query, group_by=(LogDimension.SOURCE,), max_groups=2)
-    assert await reader.count_logs(selected) == LogCountResult(
+    selected = _query(query, group_by=(LogDimension.SOURCE,), pagination={"limit": 2, "offset": 0})
+    assert await reader.count_logs(selected) == LogCountResult(has_more=False,
         rows=(
             _row(2, ((LogDimension.SOURCE, "a"),)),
             _row(1, ((LogDimension.SOURCE, "b"),)),
         )
     )
-    with pytest.raises(AnalyticsResultLimitExceeded):
-        await reader.count_logs(_query(selected, max_groups=1))
+    page = await reader.count_logs(_query(selected, pagination={"limit": 1, "offset": 0}))
+    assert page == LogCountResult(
+        rows=(_row(2, ((LogDimension.SOURCE, "a"),)),), has_more=True
+    )
 
 
 @pytest.mark.asyncio
@@ -408,8 +411,83 @@ async def test_scope_and_filters_eliminate_groups_before_limit(
         scope=OwnersScope(kind="owners", owner_ids=("keep",)),
         filters=(DimensionFilter(dimension=LogDimension.SOURCE, values=("keep",)),),
         group_by=(LogDimension.TOOL_NAME,),
-        max_groups=1,
+        pagination={"limit": 1, "offset": 0},
     )
-    assert await reader.count_logs(selected) == LogCountResult(
+    assert await reader.count_logs(selected) == LogCountResult(has_more=False,
         rows=(_row(2, ((LogDimension.TOOL_NAME, "a"),)),)
     )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("limit", [1, 2, 3, 1000])
+async def test_pages_traverse_completed_aggregates_in_bucket_and_dimension_order(
+    reader_factory: AsyncReaderFactory, query: LogCountQuery, limit: int,
+) -> None:
+    source = LogDimension.SOURCE
+    logs = tuple(
+        _log("keep", **dimensions).model_copy(update={"occurred_at": instant})
+        for instant, dimensions in (
+            (EPOCH + timedelta(hours=1), {"source": "a"}),
+            (EPOCH, {"source": "z"}),
+            (EPOCH, {"source": ""}),
+            (EPOCH, {}),
+            (EPOCH, {"source": ""}),
+            (EPOCH + timedelta(hours=1), {}),
+        )
+    )
+    reader = await reader_factory(logs + (
+        _log("other", source="discard"),
+        _log("keep", source="filtered", severity="DEBUG"),
+        _log("keep", source="outside").model_copy(update={
+            "occurred_at": query.time_range.end,
+        }),
+    ))
+    selected = _query(
+        query, scope=OwnersScope(kind="owners", owner_ids=("keep",)),
+        filters=(DimensionFilter(dimension=source, values=("", "z", "a")),),
+        group_by=(source,),
+        bucketing=FixedTimeBuckets(kind="fixed", width=BucketWidth.HOUR),
+    )
+    expected = (
+        _row(2, ((source, ""),), EPOCH),
+        _row(1, ((source, "z"),), EPOCH),
+        _row(1, ((source, "a"),), EPOCH + timedelta(hours=1)),
+    )
+    traversed: list[LogCountRow] = []
+    for offset in range(0, len(expected), limit):
+        page = await reader.count_logs(_query(
+            selected, pagination={"limit": limit, "offset": offset},
+        ))
+        assert page.rows == expected[offset:offset + limit]
+        assert page.has_more is (offset + limit < len(expected))
+        traversed.extend(page.rows)
+    assert tuple(traversed) == expected
+    for offset in (len(expected), len(expected) + 1, 9007199254740991):
+        assert await reader.count_logs(_query(
+            selected, pagination={"limit": limit, "offset": offset},
+        )) == LogCountResult(rows=(), has_more=False)
+    unfiltered = _query(selected, filters=())
+    expected_missing = (
+        _row(1, ((source, None),), EPOCH),
+        _row(2, ((source, ""),), EPOCH),
+    )
+    for offset, expected_row in enumerate(expected_missing):
+        page = await reader.count_logs(_query(
+            unfiltered, pagination={"limit": 1, "offset": offset},
+        ))
+        assert page.rows == (expected_row,)
+        assert page.has_more is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("empty", [False, True])
+async def test_ungrouped_count_is_a_single_paginated_row(
+    reader_factory: AsyncReaderFactory, query: LogCountQuery, empty: bool,
+) -> None:
+    reader = await reader_factory(() if empty else (_log(None), _log(None)))
+    assert await reader.count_logs(_query(
+        query, pagination={"limit": 1, "offset": 0},
+    )) == LogCountResult(rows=(_row(0 if empty else 2),), has_more=False)
+    assert await reader.count_logs(_query(
+        query, pagination={"limit": 1, "offset": 1},
+    )) == LogCountResult(rows=(), has_more=False)

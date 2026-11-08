@@ -16,6 +16,7 @@ from umbod.core.telemetry.analytics import (
     MissingDimensionValue,
     NoTimeBuckets,
     OwnersScope,
+    PaginationQuery,
     PresentDimensionValue,
     TimeBucket,
     TimeRange,
@@ -39,11 +40,20 @@ from umbod.core.telemetry.analytics import (
         ("bucketing", {"kind": "fixed"}),
         ("bucketing", {"kind": "unknown"}),
         ("bucketing", {"kind": "none", "width": "hour"}),
-        ("max_groups", 0),
-        ("max_groups", 1001),
-        ("max_groups", True),
-        ("max_groups", 1.5),
-        ("max_groups", "1"),
+        ("pagination", {"limit": 0, "offset": 0}),
+        ("pagination", {"limit": 1001, "offset": 0}),
+        ("pagination", {"limit": True, "offset": 0}),
+        ("pagination", {"limit": 1.5, "offset": 0}),
+        ("pagination", {"limit": "1", "offset": 0}),
+        ("pagination", {"limit": 1, "offset": -1}),
+        ("pagination", {"limit": 1, "offset": True}),
+        ("pagination", {"limit": 1, "offset": "0"}),
+        ("pagination", {"limit": 1, "offset": 0.5}),
+        ("pagination", {"limit": 1, "offset": 9007199254740992}),
+        ("pagination", {"limit": 1}),
+        ("pagination", {"offset": 0}),
+        ("pagination", {"limit": 1, "offset": 0, "unknown": 1}),
+        ("pagination", None),
         ("filters", [{"dimension": "invalid", "values": ["a"]}]),
         ("filters", [{"dimension": "source", "values": []}]),
         ("filters", [{"dimension": "source", "values": ["a", "a"]}]),
@@ -80,10 +90,12 @@ def test_every_query_field_is_explicitly_required(query: LogCountQuery, field: s
         LogCountQuery.model_validate(payload)
 
 
-@pytest.mark.parametrize("max_groups", [1, 1000])
-def test_query_accepts_group_limit_boundaries(query: LogCountQuery, max_groups: int) -> None:
-    parsed = LogCountQuery.model_validate(query.model_dump() | {"max_groups": max_groups})
-    assert parsed.max_groups == max_groups
+@pytest.mark.parametrize("limit,offset", [(1, 0), (1000, 0), (1, 9007199254740991)])
+def test_query_accepts_pagination_boundaries(query: LogCountQuery, limit: int, offset: int) -> None:
+    parsed = LogCountQuery.model_validate(
+        query.model_dump() | {"pagination": {"limit": limit, "offset": offset}}
+    )
+    assert parsed.pagination == PaginationQuery(limit=limit, offset=offset)
 
 
 def test_times_normalize_to_utc() -> None:
@@ -98,6 +110,7 @@ def test_times_normalize_to_utc() -> None:
 
 
 MODEL_CASES: tuple[BaseModel, ...] = (
+    PaginationQuery(limit=1, offset=0),
     InstanceScope(kind="instance"),
     OwnersScope(kind="owners", owner_ids=("a",)),
     TimeRange(
@@ -113,7 +126,7 @@ MODEL_CASES: tuple[BaseModel, ...] = (
     Unbucketed(kind="none"),
     TimeBucket(kind="bucket", start=datetime(2025, 1, 1, tzinfo=timezone.utc)),
     LogCountRow(groups=(), count=0, bucket=Unbucketed(kind="none")),
-    LogCountResult(rows=()),
+    LogCountResult(has_more=False, rows=()),
 )
 
 
@@ -129,7 +142,7 @@ def test_all_models_forbid_extra_fields_and_are_frozen(model: BaseModel) -> None
 def test_query_is_frozen_and_roundtrips_as_json(query: LogCountQuery) -> None:
     assert LogCountQuery.model_validate_json(query.model_dump_json()) == query
     with pytest.raises(ValidationError):
-        query.max_groups = 2
+        query.pagination = PaginationQuery(limit=2, offset=0)
 
 
 @pytest.mark.parametrize(
@@ -156,6 +169,7 @@ def test_rows_reject_invalid_counts_buckets_and_dimension_values(payload: dict[s
 
 def test_results_and_nested_collections_are_immutable_tuples() -> None:
     result = LogCountResult.model_validate({
+        "has_more": False,
         "rows": [{
             "groups": [{"dimension": "source", "value": {"kind": "present", "value": ""}}],
             "count": 1,
@@ -169,7 +183,7 @@ def test_results_and_nested_collections_are_immutable_tuples() -> None:
 
 def test_public_exports_are_exact() -> None:
     expected = {
-        "AnalyticsResultLimitExceeded", "BucketWidth", "DimensionFilter", "DimensionGroup",
+        "PaginationQuery", "BucketWidth", "DimensionFilter", "DimensionGroup",
         "FixedTimeBuckets", "InstanceScope", "LogCountQuery", "LogCountResult", "LogCountRow",
         "LogDimension", "MissingDimensionValue", "NoTimeBuckets", "OwnersScope",
         "PresentDimensionValue", "TelemetryAnalyticsReader", "TelemetryAnalyticsUnavailable",

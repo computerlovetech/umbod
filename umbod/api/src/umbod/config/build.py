@@ -220,6 +220,7 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
             auth=auth_recipe,
         ),
         endpoints=EndpointsConfig(
+            collector_base_url=operator.otlp_public_base_url,
             site_base_url=operator.public_site_origin,
             api_base_url=operator.public_api_origin,
             private_api_base_url=operator.internal_api_origin,

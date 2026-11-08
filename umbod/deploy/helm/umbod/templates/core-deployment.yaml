@@ -142,6 +142,8 @@ spec:
             {{- if eq $name "api" }}
             - name: UMBOD_OTLP_ENABLED
               value: {{ $.Values.telemetry.enabled | quote }}
+            - name: UMBOD_OTLP_PUBLIC_BASE_URL
+              value: {{ $.Values.telemetry.publicBaseUrl | quote }}
             {{- if $.Values.telemetry.enabled }}
             - name: UMBOD_OTLP_HOST
               value: "0.0.0.0"

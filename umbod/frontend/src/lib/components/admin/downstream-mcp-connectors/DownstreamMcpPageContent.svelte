@@ -12,7 +12,7 @@
   import type { PromptCatalog, ResourceCatalog } from '$lib/admin/capability-catalogs';
   import type { InvocationPolicyTool } from '$lib/admin/invocation-policy';
   import AdminShell from '$lib/components/admin/AdminShell.svelte';
-  import ConnectorPageHeader from '$lib/components/admin/connectors/ConnectorPageHeader.svelte';
+  import SubpageContainer from '$lib/components/shared/workspace/SubpageContainer.svelte';
   import ConnectorTabs from '$lib/components/admin/connectors/ConnectorTabs.svelte';
   import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
   import { BrowserSelectionUrlAdapter } from '$lib/components/admin/shared/selection-url-port';
@@ -70,10 +70,13 @@
 </script>
 
 <AdminShell activeItem="connectors" accountIdentity={data.accountIdentity ?? fallbackAccountIdentity} contentWidth="wide">
-  <div class="admin-page">
-    <ConnectorPageHeader headingId="mcp-workspace-heading" title="MCP connectors" lede="Manage your MCP connections." addLabel="Add MCP connector" disabled={state.operations.locked} onadd={(trigger) => state.beginCreate(registration.availability, trigger)} />
-
-    <ConnectorTabs activeTab="downstream-mcp" capability={parseConnectorCapability(page.url.searchParams.get('capability'))} />
+  <SubpageContainer headingId="mcp-workspace-heading" title="MCP connectors" lede="Manage your MCP connections.">
+    {#snippet actions()}
+      <Button aria-label="Add MCP connector" disabled={state.operations.locked} onclick={(event) => state.beginCreate(registration.availability, event.currentTarget)}><span aria-hidden="true">+</span> Add MCP connector</Button>
+    {/snippet}
+    {#snippet navigation()}
+      <ConnectorTabs activeTab="downstream-mcp" capability={parseConnectorCapability(page.url.searchParams.get('capability'))} />
+    {/snippet}
     {#if registration.blocked && state.modal !== 'personal'}
       <p role="alert">{registration.message} All workspace changes remain blocked until a full server reload.</p>
       <Button variant="secondary" disabled={registration.busy || registration.authenticationLost} onclick={reloadRegistration}>Reload servers</Button>
@@ -81,7 +84,7 @@
     {#if !state.operations.registrationLocked}
     <DownstreamMcpWorkspace connectors={data.connectors} selected={state.bundle?.connector} catalog={state.bundle?.catalog} promptCatalog={state.bundle?.promptCatalog} resourceCatalog={state.bundle?.resourceCatalog} invocationPolicies={state.bundle?.invocationPolicies ?? []} {form} {state} />
     {/if}
-  </div>
+  </SubpageContainer>
 </AdminShell>
 
 {#if state.modal === 'choose' && !state.operations.locked}
@@ -99,7 +102,4 @@
 
 <style>
   .connector-mode-options { display: grid; flex-shrink: 0; gap: .75rem; }
-  @media (max-width: 600px) {
-    .admin-page { min-width: 0; overflow: hidden; }
-  }
 </style>

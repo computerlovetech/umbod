@@ -84,7 +84,7 @@ async def test_standalone_analytics_retains_records_across_application_reconstru
             start=datetime(1970, 1, 1, tzinfo=timezone.utc),
             end=datetime(3000, 1, 1, tzinfo=timezone.utc),
         ),
-        filters=(), group_by=(), bucketing=NoTimeBuckets(kind="none"), max_groups=10,
+        filters=(), group_by=(), bucketing=NoTimeBuckets(kind="none"), pagination={"limit": 10, "offset": 0},
     )
     persistence = create_inmemory_runtime()
     selected_settings: list[AppConfig | TelemetryAppConfig] = []

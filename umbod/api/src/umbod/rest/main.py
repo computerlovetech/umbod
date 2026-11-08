@@ -68,6 +68,8 @@ from umbod.rest.system import router as system_router
 from umbod.rest.system.routes import health
 from umbod.rest.system.schemas import HealthResponse
 from umbod.rest.telemetry_analytics import router as telemetry_analytics_router
+from umbod.rest.personal_access_tokens import router as personal_access_tokens_router
+from umbod.rest.telemetry_setup import router as telemetry_setup_router
 from umbod.rest.telemetry.composition import install_analytics_dependencies
 from umbod.rest.users import create_user_profile_router
 from umbod.rest.users.jwks import (
@@ -218,6 +220,8 @@ def _mount_personal_connections_app(
     user_router.include_router(create_user_profile_router())
     user_router.include_router(user_catalogue_router)
     user_router.include_router(identity_directory_personal_router)
+    user_router.include_router(personal_access_tokens_router)
+    user_router.include_router(telemetry_setup_router)
     user_router.include_router(filesystem_router)
     if settings.personal_connections.enabled:
         user_router.include_router(personal_connections_router)
@@ -282,7 +286,7 @@ def _create_lifespan(
     analytics_runtime: TelemetryAnalyticsRuntime,
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[dict[str, SigningKeyResolver]]]:
 
-    return _create_configured_lifespan(metrics_server, persistence_runtime, settings, True, analytics_runtime, True)
+    return _create_configured_lifespan(metrics_server, persistence_runtime, settings, True, analytics_runtime, True, True)
 
 
 def _create_configured_lifespan(
@@ -292,6 +296,7 @@ def _create_configured_lifespan(
     metrics_enabled: bool,
     analytics_runtime: TelemetryAnalyticsRuntime,
     manage_analytics: bool,
+    manage_persistence: bool,
 ) -> Callable[[FastAPI], AbstractAsyncContextManager[dict[str, SigningKeyResolver]]]:
 
     @asynccontextmanager
@@ -334,7 +339,8 @@ def _create_configured_lifespan(
                 if manage_analytics:
                     await analytics_runtime.shutdown()
             finally:
-                await persistence_runtime.shutdown()
+                if manage_persistence:
+                    await persistence_runtime.shutdown()
 
     return lifespan
 
@@ -359,7 +365,7 @@ def create_app_with_dependency_factories(
     return _assemble_application(
         create_app_arguments, app_settings,
         create_configured_analytics_runtime(app_settings), True,
-        PrometheusRestMetricsRecorder(), dependency_factories,
+        PrometheusRestMetricsRecorder(), dependency_factories, True,
     )
 
 
@@ -381,6 +387,24 @@ def create_app_with_shared_metrics(
     return _create_application(create_app_arguments, app_settings, analytics_runtime, False, metrics_recorder)
 
 
+def create_app_with_shared_persistence(
+    persistence_runtime: PersistenceRuntime,
+    analytics_runtime: TelemetryAnalyticsRuntime,
+    metrics_recorder: PrometheusRestMetricsRecorder,
+    *args: Any,
+    **kwargs: Any,
+) -> FastAPI:
+    arguments = _resolve_create_app_arguments(*args, **kwargs)
+    settings = arguments.settings or load_server_app_config(".env")
+    settings.validate_rest_authentication()
+    factories = ConnectorApiDependencyFactories.from_settings(
+        settings, persistence_runtime, arguments.connector_registrations,
+    )
+    return _assemble_application(
+        arguments, settings, analytics_runtime, False, metrics_recorder, factories, False,
+    )
+
+
 def _create_application(
     create_app_arguments: _CreateAppArguments,
     app_settings: APISettings,
@@ -397,7 +421,7 @@ def _create_application(
     )
     return _assemble_application(
         create_app_arguments, app_settings, analytics_runtime, manage_analytics,
-        metrics_recorder, dependency_factories,
+        metrics_recorder, dependency_factories, True,
     )
 
 
@@ -408,6 +432,7 @@ def _assemble_application(
     manage_analytics: bool,
     metrics_recorder: PrometheusRestMetricsRecorder,
     dependency_factories: ConnectorApiDependencyFactories,
+    manage_persistence: bool,
 ) -> FastAPI:
     app_settings.validate_rest_authentication()
     persistence_runtime = dependency_factories.persistence_runtime
@@ -417,7 +442,7 @@ def _assemble_application(
     )
     app = LifespanRootApiAppFactory(
         app_settings,
-        lifespan=_create_configured_lifespan(metrics_server, persistence_runtime, app_settings, app_settings.rest.metrics_enabled, analytics_runtime, manage_analytics),
+        lifespan=_create_configured_lifespan(metrics_server, persistence_runtime, app_settings, app_settings.rest.metrics_enabled, analytics_runtime, manage_analytics, manage_persistence),
     ).create()
     verifier_factory = (
         SuppliedJwtVerifierFactory(create_app_arguments.admin_verifier)

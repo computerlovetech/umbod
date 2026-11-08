@@ -8,7 +8,7 @@ description: "Administrator-only aggregate log reads through the independent ana
 
 - [__init__.py](./__init__.py) — Router export.
 - [models.py](./models.py) — Validated count requests with server-owned instance scope.
-- [routes.py](./routes.py) — Aggregate delivery with safe availability and group-limit failures.
+- [routes.py](./routes.py) — Paginated aggregate delivery with safe availability failures.
 
 # Related links
 

@@ -1,7 +1,6 @@
 from pydantic import ValidationError
 
 from umbod.core.telemetry.analytics import (
-    AnalyticsResultLimitExceeded,
     BucketWidth,
     DimensionGroup,
     FixedTimeBuckets,
@@ -80,14 +79,13 @@ class SqliteAnalyticsReader:
             if columns:
                 positions = ", ".join(str(index + 1) for index in range(len(columns)))
                 statement += " GROUP BY " + positions + " ORDER BY " + positions
-            statement += " LIMIT ?"
-            parameters.append(query.max_groups + 1)
+            statement += " LIMIT ? OFFSET ?"
+            parameters.extend((query.pagination.limit + 1, query.pagination.offset))
             async with connection.execute(statement, parameters) as cursor:
                 records = await cursor.fetchall()
-            if len(records) > query.max_groups:
-                raise AnalyticsResultLimitExceeded("Log count exceeds max_groups")
+            has_more = len(records) > query.pagination.limit
             rows = []
-            for record in records:
+            for record in records[:query.pagination.limit]:
                 bucketed = isinstance(query.bucketing, FixedTimeBuckets)
                 offset = int(bucketed)
                 groups = tuple(
@@ -112,4 +110,4 @@ class SqliteAnalyticsReader:
                         else Unbucketed(kind="none"),
                     )
                 )
-            return LogCountResult(rows=tuple(rows))
+            return LogCountResult(rows=tuple(rows), has_more=has_more)

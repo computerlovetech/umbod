@@ -93,7 +93,7 @@ async def test_standalone_collector_retains_protobuf_logs_across_application_rec
             LogDimension.TOOL_NAME,
         ),
         bucketing=NoTimeBuckets(kind="none"),
-        max_groups=10,
+        pagination={"limit": 10, "offset": 0},
     )
     persistence = create_inmemory_runtime()
     selected_settings: list[AppConfig | TelemetryAppConfig] = []

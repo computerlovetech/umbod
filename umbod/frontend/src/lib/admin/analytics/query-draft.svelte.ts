@@ -21,7 +21,6 @@ export class QueryDraft {
   private endValue = $state('');
   private offsetValue = $state('+00:00');
   private bucketValue = $state<BucketWidth>('none');
-  private limitValue = $state('100');
   private grouping = $state.raw<readonly Dimension[]>(['severity']);
   private filterValues = $state.raw<Record<Dimension, readonly string[]>>({ source: [], event_name: [], severity: [], session_id: [], tool_name: [] });
 
@@ -30,18 +29,16 @@ export class QueryDraft {
   get end(): string { return this.endValue; }
   get offset(): string { return this.offsetValue; }
   get bucket(): BucketWidth { return this.bucketValue; }
-  get limit(): string { return this.limitValue; }
   get groupBy(): readonly Dimension[] { return this.grouping; }
   get filters(): Readonly<Record<Dimension, readonly string[]>> { return this.filterValues; }
   get fingerprint(): string {
-    return JSON.stringify([this.preset, this.start, this.end, this.offset, this.bucket, this.limit, this.groupBy, this.filters]);
+    return JSON.stringify([this.preset, this.start, this.end, this.offset, this.bucket, this.groupBy, this.filters]);
   }
   setPreset(value: string): void { if (rangeOptions.some((option) => option.value === value)) this.presetValue = value as RangePreset; }
   setStart(value: string): void { this.startValue = value; }
   setEnd(value: string): void { this.endValue = value; }
   setOffset(value: string): void { this.offsetValue = value; }
   setBucket(value: string): void { if (bucketOptions.some((option) => option.value === value)) this.bucketValue = value as BucketWidth; }
-  setLimit(value: string): void { this.limitValue = value; }
   selectFilter(dimension: Dimension, value: string): void {
     if (!this.filterValues[dimension].includes(value)) this.filterValues = { ...this.filterValues, [dimension]: [...this.filterValues[dimension], value] };
   }
@@ -50,14 +47,6 @@ export class QueryDraft {
   }
   toggleGroup(dimension: Dimension): void {
     this.grouping = this.grouping.includes(dimension) ? this.grouping.filter((entry) => entry !== dimension) : [...this.grouping, dimension];
-  }
-  moveGroup(dimension: Dimension, direction: -1 | 1): void {
-    const next = [...this.grouping];
-    const index = next.indexOf(dimension);
-    const target = index + direction;
-    if (index < 0 || target < 0 || target >= next.length) return;
-    [next[index], next[target]] = [next[target], next[index]];
-    this.grouping = next;
   }
   resolveTimeRange(now: Date): LogCountQuery['time_range'] {
     const durations = { hour: 3600000, day: 86400000, week: 604800000 };
@@ -74,9 +63,9 @@ export class QueryDraft {
       filters: dimensions.filter((dimension) => this.filters[dimension].length > 0).map((dimension) => ({ dimension, values: [...this.filters[dimension]] })),
       group_by: [...this.groupBy],
       bucketing: this.bucket === 'none' ? { kind: 'none' } : { kind: 'fixed', width: this.bucket },
-      max_groups: Number(this.limit)
+      pagination: { limit: 100, offset: 0 }
     });
-    if (!result.success) throw new Error('Choose a valid range with start before end and a whole-number group limit from 1 to 1,000.');
+    if (!result.success) throw new Error('Choose a valid range with start before end.');
     return result.data;
   }
   private customInstant(value: string): string {

@@ -32,6 +32,7 @@ services:
       - UMBOD_REST_METRICS_PORT=8001
       - UMBOD_TELEMETRY_ANALYTICS_ENABLED=${UMBOD_TELEMETRY_ANALYTICS_ENABLED:-true}
       - UMBOD_OTLP_ENABLED=${UMBOD_OTLP_ENABLED:-false}
+      - UMBOD_OTLP_PUBLIC_BASE_URL=${UMBOD_OTLP_PUBLIC_BASE_URL:-http://localhost:14318}
       - UMBOD_OTLP_HOST=0.0.0.0
       - UMBOD_OTLP_PORT=4318
       # Development-only token; deployments must supply their own credential.

@@ -27,7 +27,7 @@ function input(id: string, value: string): void {
 
 function render(): InMemoryLogCounts {
   const source = new InMemoryLogCounts();
-  source.response = { rows: [
+  source.response = { has_more: false, rows: [
     { groups: [{ dimension: 'severity', value: { kind: 'missing' } }], count: 0, bucket: { kind: 'none' } },
     { groups: [{ dimension: 'severity', value: { kind: 'present', value: '' } }], count: 7, bucket: { kind: 'none' } }
   ] };
@@ -51,28 +51,63 @@ async function chooseObservedValue(label: string): Promise<void> {
 }
 
 describe('analytics query interaction', () => {
-  it('starts with compact controls and keeps advanced settings and help collapsed', (): void => {
+  it('navigates server pages, preserves draft edits and retries the failed page', async (): Promise<void> => {
+    const source = render();
+    source.response = { ...source.response, has_more: true };
+    button('Run query').click();
+    await vi.waitFor(() => expect(document.querySelector('table')).not.toBeNull());
+    expect(button('Previous').disabled).toBe(true);
+    expect(button('Next').disabled).toBe(false);
+    const checkbox = document.querySelector<HTMLInputElement>('input[type="checkbox"]');
+    expect(checkbox).not.toBeNull();
+    checkbox!.click();
+    await tick();
+    let complete!: (response: typeof source.response) => void;
+    source.handler = () => new Promise((resolve) => { complete = resolve; });
+    button('Next').click();
+    await tick();
+    expect(button('Next').disabled).toBe(true);
+    expect(button('Previous').disabled).toBe(true);
+    expect(source.queries[1]).toEqual({ ...source.queries[0], pagination: { limit: 100, offset: 100 } });
+    complete({ rows: [{ groups: [{ dimension: 'severity', value: { kind: 'present', value: 'page two' } }], count: 2, bucket: { kind: 'none' } }], has_more: false });
+    await vi.waitFor(() => expect(document.querySelector('tbody')?.textContent).toContain('page two'));
+    expect(document.querySelector('nav[aria-label="Results pagination"]')?.textContent).toContain('Page 2');
+    expect(button('Next').disabled).toBe(true);
+    expect(button('Previous').disabled).toBe(false);
+    expect(checkbox!.checked).toBe(true);
+    expect(document.body.textContent).toContain('Filters or settings changed');
+    source.handler = undefined;
+    source.failure = new Error('offline');
+    button('Previous').click();
+    await vi.waitFor(() => expect(document.querySelector('[role="alert"]')).not.toBeNull());
+    expect(document.querySelector('tbody')?.textContent).toContain('page two');
+    source.failure = undefined;
+    source.response = { rows: [], has_more: true };
+    button('Retry query').click();
+    await vi.waitFor(() => expect(document.querySelector('nav[aria-label="Results pagination"]')?.textContent).toContain('Page 1'));
+    expect(source.queries[3]).toEqual(source.queries[2]);
+    expect(button('Previous').disabled).toBe(true);
+    button('Run query').click();
+    await vi.waitFor(() => expect(source.queries).toHaveLength(5));
+    expect(source.queries[4].pagination).toEqual({ limit: 100, offset: 0 });
+    expect(source.queries[4].group_by).toEqual(['severity', 'source']);
+  });
+
+  it('starts with compact controls without advanced settings or help sections', (): void => {
     render();
     expect(document.querySelector('h1')?.textContent).toBe('Log analytics');
-    expect(document.querySelector<HTMLDetailsElement>('details.advanced')?.open).toBe(false);
-    expect(document.querySelector<HTMLDetailsElement>('details.about')?.open).toBe(false);
+    expect(document.querySelector('details')).toBeNull();
+    expect(document.body.textContent).not.toContain('Advanced');
+    expect(document.body.textContent).not.toContain('About these logs');
+    expect(document.getElementById('analytics-limit')).toBeNull();
     expect(document.querySelector('[aria-label="Add a filter"]')).toBeNull();
     expect(document.querySelectorAll('input[type="text"]')).toHaveLength(0);
     expect(button('+ Add filter').getAttribute('aria-expanded')).toBe('false');
   });
 
-  it('shows validation even when an invalid advanced field is collapsed', async (): Promise<void> => {
-    const source = render();
-    input('analytics-limit', '0');
-    button('Run query').click();
-    await tick();
-    expect(document.querySelector('[role="alert"]')?.textContent).toContain('whole-number group limit');
-    expect(source.queries).toHaveLength(0);
-  });
-
   it('chooses observed values without typing exact matches and keeps submitted results separate from edits', async (): Promise<void> => {
     const source = render();
-    source.response = { rows: [
+    source.response = { has_more: false, rows: [
       { groups: [{ dimension: 'source', value: { kind: 'present', value: ' exact value ' } }], count: 3, bucket: { kind: 'none' } },
       { groups: [{ dimension: 'source', value: { kind: 'present', value: '' } }], count: 4, bucket: { kind: 'none' } }
     ] };
@@ -81,7 +116,7 @@ describe('analytics query interaction', () => {
     await chooseObservedValue('exact value');
     await chooseObservedValue('Empty value');
     expect(document.querySelector('[aria-label="Selected filters"]')?.textContent).toContain('Source:');
-    source.response = { rows: [
+    source.response = { has_more: false, rows: [
       { groups: [{ dimension: 'severity', value: { kind: 'missing' } }], count: 0, bucket: { kind: 'none' } },
       { groups: [{ dimension: 'severity', value: { kind: 'present', value: '' } }], count: 7, bucket: { kind: 'none' } }
     ] };
@@ -91,10 +126,10 @@ describe('analytics query interaction', () => {
     expect(document.querySelector('tbody')?.textContent).toContain('Missing attribute');
     expect(document.querySelector('tbody')?.textContent).toContain('Empty string');
     expect(document.querySelector('tbody')?.textContent).toContain('0');
-    input('analytics-limit', '20');
+    button('Remove Source value ""').click();
     await tick();
     expect(document.body.textContent).toContain('Filters or settings changed. Run query to update results.');
-    expect(document.body.textContent).toContain('Maximum 100 groups');
+    expect(document.body.textContent).toContain('Logs on this page');
     expect(source.queries).toHaveLength(2);
     button('Remove Source value " exact value "').click();
     await tick();
@@ -103,7 +138,7 @@ describe('analytics query interaction', () => {
 
   it('searches and selects observed values with the keyboard', async (): Promise<void> => {
     const source = render();
-    source.response = { rows: [
+    source.response = { has_more: false, rows: [
       { groups: [{ dimension: 'source', value: { kind: 'present', value: 'worker' } }], count: 2, bucket: { kind: 'none' } },
       { groups: [{ dimension: 'source', value: { kind: 'present', value: 'api' } }], count: 3, bucket: { kind: 'none' } }
     ] };
@@ -123,12 +158,12 @@ describe('analytics query interaction', () => {
 
   it('shows recoverable value-loading failures without submitting the main query', async (): Promise<void> => {
     const source = render();
-    source.failure = new HttpError(422, 'Too many groups', {});
+    source.failure = new HttpError(422, 'Invalid query', {});
     button('+ Add filter').click();
-    await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('narrower time range'));
+    await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('query settings'));
     expect(document.querySelector('table')).toBeNull();
     source.failure = undefined;
-    source.response = { rows: [] };
+    source.response = { has_more: false, rows: [] };
     button('Retry values').click();
     await vi.waitFor(() => expect(document.querySelector('[role="alert"]')).toBeNull());
     const field = document.querySelector<HTMLInputElement>('input[role="combobox"]')!;
@@ -147,18 +182,17 @@ describe('analytics query interaction', () => {
     expect(document.getElementById('analytics-query')?.tagName).toBe('FORM');
   });
 
-  it('routes checkbox and grouping order actions into the submitted query', async (): Promise<void> => {
+  it('uses checkbox selection order as the submitted grouping order', async (): Promise<void> => {
     const source = render();
     const sourceCheckbox = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find((field) => field.parentElement?.textContent === 'Source');
-    sourceCheckbox?.click();
+    expect(sourceCheckbox).toBeDefined();
+    sourceCheckbox!.click();
     await tick();
-    button('Move Source earlier').click();
-    await tick();
-    source.response = { rows: [{ groups: [{ dimension: 'source', value: { kind: 'present', value: 'api' } }, { dimension: 'severity', value: { kind: 'present', value: 'INFO' } }], count: 12, bucket: { kind: 'none' } }] };
+    source.response = { has_more: false, rows: [{ groups: [{ dimension: 'severity', value: { kind: 'present', value: 'INFO' } }, { dimension: 'source', value: { kind: 'present', value: 'api' } }], count: 12, bucket: { kind: 'none' } }] };
     button('Run query').click();
     await vi.waitFor(() => expect(source.queries).toHaveLength(1));
-    expect(source.queries[0].group_by).toEqual(['source', 'severity']);
-    await vi.waitFor(() => expect([...document.querySelectorAll('tbody td')].map((cell) => cell.textContent)).toEqual(['api', 'INFO', '12']));
+    expect(source.queries[0].group_by).toEqual(['severity', 'source']);
+    await vi.waitFor(() => expect([...document.querySelectorAll('tbody td')].map((cell) => cell.textContent)).toEqual(['INFO', 'api', '12']));
   });
 
   it('permits retry after service failure', async (): Promise<void> => {
@@ -167,9 +201,9 @@ describe('analytics query interaction', () => {
     button('Run query').click();
     await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain('disabled'));
     source.failure = undefined;
-    source.response = { rows: [] };
+    source.response = { has_more: false, rows: [] };
     button('Retry query').click();
-    await vi.waitFor(() => expect(document.body.textContent).toContain('No logs matched this query.'));
+    await vi.waitFor(() => expect(document.body.textContent).toContain('No logs on this page.'));
     expect(document.querySelector('[role="alert"]')).toBeNull();
   });
 
@@ -186,7 +220,7 @@ describe('analytics query interaction', () => {
     await tick();
     ([...document.querySelectorAll('[role="option"]')].find((entry) => entry.textContent?.trim() === 'Day') as HTMLElement).click();
     await tick();
-    source.response = { rows: [] };
+    source.response = { has_more: false, rows: [] };
     button('Run query').click();
     await vi.waitFor(() => expect(source.queries).toHaveLength(1));
     expect(source.queries[0].time_range).toEqual({ start: '2026-10-31T13:00:00.000Z', end: '2026-10-31T14:00:00.000Z' });

@@ -189,13 +189,14 @@ def test_running_protobuf_logs_are_queryable_in_analytics(
             "filters": [{"dimension": "source", "values": [source]}],
             "group_by": ["event_name", "session_id", "tool_name"],
             "bucketing": {"kind": "none"},
-            "max_groups": 10,
+            "pagination": {"limit": 10, "offset": 0},
         },
         headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"},
         timeout=10,
     )
     assert result.status_code == 200, result.text
     assert result.json() == {
+        "has_more": False,
         "rows": [
             {
                 "groups": [

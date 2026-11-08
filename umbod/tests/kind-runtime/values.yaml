@@ -9,6 +9,7 @@ core:
       UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE: "test:kind-personal-catalogue"
 telemetry:
   enabled: true
+  publicBaseUrl: https://collector.runtime.invalid/otlp
   bearerTokenSecret:
     name: umbod-collector-ci
     key: token

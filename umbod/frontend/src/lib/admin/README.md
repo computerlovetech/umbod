@@ -52,5 +52,4 @@ description: "Administration contracts, browser clients and feature state for co
 - [groups](./groups/README.md) — Shared group catalogue.
 - [infrastructure](./infrastructure/README.md) — Transport and API composition.
 - [operations](./operations/README.md) — Browser mutation dispatch.
-- [overview](./overview/README.md) — Administration overview summary.
 - [personal-mcp-servers/](./personal-mcp-servers/) — Personal server registration and policy.

@@ -7,7 +7,6 @@
 
   type AdminShellActiveItem =
     | 'analytics'
-    | 'overview'
     | 'connectors'
     | 'groups'
     | 'groupPermissions'

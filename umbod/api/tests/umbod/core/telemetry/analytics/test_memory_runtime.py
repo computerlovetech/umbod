@@ -16,10 +16,10 @@ from umbod.core.persistence import (
 )
 from umbod.core.telemetry.analytics import (
     AnalyticsLogRecord,
-    AnalyticsResultLimitExceeded,
     DimensionFilter,
     DimensionGroup,
     LogCountQuery,
+    PaginationQuery,
     LogDimension,
     LogWriteBatch,
     MissingDimensionValue,
@@ -117,8 +117,11 @@ async def test_memory_runtime_preserves_owner_and_all_dimension_states(
         DimensionFilter(dimension=LogDimension.SOURCE, values=("",)),
     )})
     assert (await reader.count_logs(filtered)).rows == (result.rows[1],)
-    with pytest.raises(AnalyticsResultLimitExceeded):
-        await reader.count_logs(grouped.model_copy(update={"max_groups": 1}))
+    page = await reader.count_logs(LogCountQuery.model_validate(
+        grouped.model_dump() | {"pagination": {"limit": 1, "offset": 0}}
+    ))
+    assert page.rows == result.rows[:1]
+    assert page.has_more is True
 
 
 @pytest.mark.asyncio
@@ -161,7 +164,7 @@ async def test_memory_runtime_revalidates_entire_batch_and_query(
     reader = analytics.create_reader()
     assert (await reader.count_logs(query)).rows[0].count == 1
     with pytest.raises(TelemetryAnalyticsUnavailable, match="^Telemetry analytics is unavailable$"):
-        await reader.count_logs(query.model_copy(update={"max_groups": 0}))
+        await reader.count_logs(query.model_copy(update={"pagination": PaginationQuery.model_construct(limit=0, offset=0)}))
     assert (await reader.count_logs(query)).rows[0].count == 1
 
 

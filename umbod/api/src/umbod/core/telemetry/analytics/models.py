@@ -95,13 +95,18 @@ class FixedTimeBuckets(AnalyticsModel):
     width: BucketWidth
 
 
+class PaginationQuery(AnalyticsModel):
+    limit: Annotated[StrictInt, Field(ge=1, le=1000)]
+    offset: Annotated[StrictInt, Field(ge=0, le=9007199254740991)]
+
+
 class LogCountQuery(AnalyticsModel):
     scope: Annotated[InstanceScope | OwnersScope, Field(discriminator="kind")]
     time_range: TimeRange
     filters: tuple[DimensionFilter, ...]
     group_by: tuple[LogDimension, ...]
     bucketing: Annotated[NoTimeBuckets | FixedTimeBuckets, Field(discriminator="kind")]
-    max_groups: Annotated[StrictInt, Field(ge=1, le=1000)]
+    pagination: PaginationQuery
 
     @model_validator(mode="after")
     def unique_dimensions(self) -> Self:
@@ -146,3 +151,4 @@ class LogCountRow(AnalyticsModel):
 
 class LogCountResult(AnalyticsModel):
     rows: tuple[LogCountRow, ...]
+    has_more: bool

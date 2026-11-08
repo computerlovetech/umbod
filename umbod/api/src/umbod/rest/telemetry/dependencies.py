@@ -2,12 +2,17 @@ import hmac
 from typing import Annotated
 
 from fastapi import Depends, Request
+from pydantic import SecretStr
 
 from umbod.config import OtlpReceiverConfig
 from umbod.core.telemetry import TelemetrySink
 from umbod.core.telemetry.analytics import TelemetryAnalyticsReader, TelemetryAnalyticsWriter
 from umbod.core.telemetry.adapters import StdoutTelemetrySink
 from umbod.rest.telemetry.errors import TelemetryHttpError
+from umbod.rest.telemetry.token_authentication import (
+    TelemetryPersonalAccessTokenVerifier,
+    get_telemetry_token_verifier,
+)
 
 
 def get_receiver_config() -> OtlpReceiverConfig:
@@ -26,22 +31,28 @@ def get_analytics_reader() -> TelemetryAnalyticsReader:
     raise RuntimeError("Telemetry analytics reader is not installed")
 
 
-def authenticate_export(
+async def authenticate_export(
     request: Request,
     config: Annotated[OtlpReceiverConfig, Depends(get_receiver_config)],
+    personal_tokens: Annotated[
+        TelemetryPersonalAccessTokenVerifier, Depends(get_telemetry_token_verifier)
+    ],
 ) -> None:
     if not config.enabled:
         raise TelemetryHttpError(503, "Telemetry ingestion is disabled")
     if config.allow_unauthenticated:
         return
-    if not config.bearer_token:
-        raise TelemetryHttpError(503, "Telemetry authentication is not configured")
     authorization_values = request.headers.getlist("authorization")
     if len(authorization_values) != 1:
         raise TelemetryHttpError(401, "Bearer authentication is required")
     scheme, separator, token = authorization_values[0].partition(" ")
     if scheme.lower() != "bearer" or not separator or not token:
         raise TelemetryHttpError(401, "Bearer authentication is required")
+    if token.startswith("umbod_pat_"):
+        await personal_tokens.verify(SecretStr(token))
+        return
+    if not config.bearer_token:
+        raise TelemetryHttpError(503, "Telemetry authentication is not configured")
     if not hmac.compare_digest(
         token.encode("utf-8"), config.bearer_token.encode("utf-8")
     ):

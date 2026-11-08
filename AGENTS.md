@@ -63,7 +63,7 @@ Run the checks applicable to the changed area.
 
 ### API/MCP runtime
 
-- For API or MCP application changes, run `bash umbod/tests/kind-runtime/run.sh` to verify running services in a disposable Kind cluster. Docker Compose is not a substitute.
+- For API or MCP application changes, run `bash umbod/tests/kind-runtime/run.sh` to verify running services in a disposable Kind cluster.
 - If Kind service integration tests fail, inspect the runner's pod diagnostics, report the failing assertions, and do not describe the integration suite as passing. The connector fixture and test-only values under `umbod/tests/kind-runtime/` must not enter the published chart or application images.
 
 ### Tests and static checks

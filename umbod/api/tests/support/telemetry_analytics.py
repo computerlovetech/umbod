@@ -6,7 +6,6 @@ from typing import Optional
 from pydantic import BaseModel, ConfigDict
 
 from umbod.core.telemetry.analytics import (
-    AnalyticsResultLimitExceeded,
     BucketWidth,
     DimensionGroup,
     FixedTimeBuckets,
@@ -59,13 +58,14 @@ class InMemoryTelemetryAnalyticsReader:
                 for dimension in query.group_by
             )
             counts[(self._bucket(log.occurred_at, query), groups)] += 1
-            if len(counts) > query.max_groups:
-                raise AnalyticsResultLimitExceeded("Log count exceeds max_groups")
         rows = tuple(
             LogCountRow(bucket=bucket, groups=groups, count=count)
             for (bucket, groups), count in counts.items()
         )
-        return LogCountResult(rows=tuple(sorted(rows, key=self._sort_key)))
+        ordered = tuple(sorted(rows, key=self._sort_key))
+        start = query.pagination.offset
+        end = start + query.pagination.limit
+        return LogCountResult(rows=ordered[start:end], has_more=len(ordered) > end)
 
     @staticmethod
     def _matches(log: NormalizedLog, query: LogCountQuery) -> bool:

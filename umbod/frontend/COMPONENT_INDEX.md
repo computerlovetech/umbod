@@ -41,8 +41,10 @@ tags:
 
 ## Layout and identity
 
+- [SubpageContainer](src/lib/components/shared/workspace/SubpageContainer.svelte) — Shared page heading, action slot and content frame; use with feature-owned navigation and selected subpage content.
+- [SubpageNavigation](src/lib/components/shared/workspace/SubpageNavigation.svelte) — Horizontal subpage links and loading feedback; parents supply routes, active selection and eligibility.
+
 - [AdminSplitWorkspace](src/lib/components/admin/shared/AdminSplitWorkspace.svelte) — Responsive master/detail surface; use for a labelled selector sidebar and detail pane across workspace features.
-- [AdminStatCard](src/lib/components/admin/shared/AdminStatCard.svelte) — Label/value metric surface; use for summary statistics within a definition list.
 - [CapabilityCatalogGrid](src/lib/components/admin/shared/CapabilityCatalogGrid.svelte) — Responsive list grid; use to arrange capability cards consistently, supplying list items as content.
 - [ScrollableToolCatalog](src/lib/components/admin/shared/ScrollableToolCatalog.svelte) — Height-bounded tool-list region; use for independently scrolling tool catalogues with a stable scrollbar gutter.
 - [WorkspaceShell](src/lib/components/shared/workspace/WorkspaceShell.svelte) — Application navigation, account, and logout frame; use for top-level workspace sections rather than a generic content container.
@@ -79,6 +81,8 @@ tags:
 - [Global baseline](src/app.css) — Application typography, page reset, and focus ring; use as the baseline rather than recreating global styles per feature.
 
 ## Scope and composition
+
+- [Getting started composition](src/lib/components/getting-started/README.md) — Feature-owned harness onboarding and personal-token workflows; reuse its neutral controls, not the complete page.
 
 - [Log analytics composition](src/lib/components/admin/analytics/README.md) — Feature-owned query form and result table; excluded from reusable controls because it owns administrator analytics workflows.
 

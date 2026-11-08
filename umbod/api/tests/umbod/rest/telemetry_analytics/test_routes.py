@@ -3,7 +3,6 @@ from datetime import datetime, timezone
 import pytest
 
 from umbod.core.telemetry.analytics import (
-    AnalyticsResultLimitExceeded,
     InstanceScope,
     LogCountQuery,
     LogCountResult,
@@ -22,7 +21,7 @@ def test_instance_count_includes_owned_and_unowned_logs(
 ) -> None:
     response = analytics_http.client.post(BASE, json=query_body)
     assert response.status_code == 200
-    assert response.json() == {"rows": [{"groups": [], "count": 3, "bucket": {"kind": "none"}}]}
+    assert response.json() == {"has_more": False, "rows": [{"groups": [], "count": 3, "bucket": {"kind": "none"}}]}
     assert analytics_http.reader.queries[0].scope == InstanceScope(kind="instance")
     assert response.headers["cache-control"] == "no-store"
 
@@ -74,7 +73,7 @@ def test_hourly_buckets_only_return_observed_intervals(
 ) -> None:
     response = analytics_http.client.post(BASE, json=query_body | {"bucketing": {"kind": "fixed", "width": "hour"}})
     assert response.status_code == 200
-    assert response.json() == {"rows": [
+    assert response.json() == {"has_more": False, "rows": [
         {"groups": [], "count": 2, "bucket": {"kind": "bucket", "start": "2026-01-01T00:00:00Z"}},
         {"groups": [], "count": 1, "bucket": {"kind": "bucket", "start": "2026-01-01T01:00:00Z"}},
     ]}
@@ -88,7 +87,7 @@ def test_no_matches_have_explicit_zero_or_empty_groups(
         "filters": [{"dimension": "source", "values": ["not-ingested"]}], "group_by": group_by,
     })
     assert response.status_code == 200
-    assert response.json() == {"rows": expected}
+    assert response.json() == {"has_more": False, "rows": expected}
 
 
 @pytest.mark.parametrize("patch", [
@@ -100,7 +99,16 @@ def test_no_matches_have_explicit_zero_or_empty_groups(
     {"filters": [{"dimension": "source", "values": ["codex", "codex"]}]},
     {"filters": [{"dimension": "source", "values": ["codex"]}, {"dimension": "source", "values": ["claude-code"]}]},
     {"filters": [{"dimension": "severity", "values": [42]}]},
-    {"max_groups": 0}, {"max_groups": 1001}, {"max_groups": True}, {"max_groups": "100"},
+    {"pagination": {"limit": 0, "offset": 0}}, {"pagination": {"limit": 1001, "offset": 0}}, {"pagination": {"limit": True, "offset": 0}}, {"pagination": {"limit": "100", "offset": 0}},
+    {"pagination": {"limit": 1, "offset": -1}},
+    {"pagination": {"limit": 1, "offset": True}},
+    {"pagination": {"limit": 1, "offset": "0"}},
+    {"pagination": {"limit": 1, "offset": 0.5}},
+    {"pagination": {"limit": 1, "offset": 9007199254740992}},
+    {"pagination": {"limit": 1}},
+    {"pagination": {"offset": 0}},
+    {"pagination": {"limit": 1, "offset": 0, "extra": 1}},
+    {"pagination": None},
     {"bucketing": {"kind": "fixed", "width": "week"}},
     {"bucketing": {"kind": "none", "width": "hour"}},
     {"time_range": {"start": "2026-01-01T00:00:00", "end": "2026-01-02T00:00:00Z"}},
@@ -115,13 +123,15 @@ def test_invalid_queries_are_rejected_before_reading(
     assert analytics_http.reader.queries == []
 
 
-def test_result_limit_error_does_not_return_partial_counts(
+def test_page_returns_completed_counts_and_has_more(
     analytics_http: AnalyticsHttp, query_body: dict[str, object],
 ) -> None:
-    response = analytics_http.client.post(BASE, json=query_body | {"group_by": ["source"], "max_groups": 1})
-    assert response.status_code == 422
-    assert "Too many result groups" in response.json()["detail"]
-    assert "rows" not in response.json()
+    response = analytics_http.client.post(BASE, json=query_body | {"group_by": ["source"], "pagination": {"limit": 1, "offset": 0}})
+    assert response.status_code == 200
+    assert response.json() == {"rows": [{
+        "groups": [{"dimension": "source", "value": {"kind": "present", "value": "claude-code"}}],
+        "count": 1, "bucket": {"kind": "none"},
+    }], "has_more": True}
     assert response.headers["cache-control"] == "no-store"
 
 
@@ -135,7 +145,6 @@ class FailingReader:
 
 @pytest.mark.parametrize("failure,status", [
     (TelemetryAnalyticsUnavailable("private database path"), 503),
-    (AnalyticsResultLimitExceeded("private SQL diagnostic"), 422),
     (RuntimeError("private implementation diagnostic"), 500),
 ])
 def test_backend_failures_do_not_expose_diagnostics_or_fabricate_zeroes(

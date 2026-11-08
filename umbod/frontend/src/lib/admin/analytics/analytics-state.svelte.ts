@@ -7,6 +7,11 @@ import { FilterChoices } from './filter-choices.svelte';
 
 type ReadonlyValue<T> = T extends object ? { readonly [Key in keyof T]: ReadonlyValue<T[Key]> } : T;
 
+interface Submission {
+  query: LogCountQuery;
+  fingerprint: string;
+}
+
 interface SubmittedResult {
   query: LogCountQuery;
   response: LogCountResponse;
@@ -23,6 +28,7 @@ export class AnalyticsState {
   private errorValue = $state('');
   private validationValue = $state('');
   private accessLostValue = $state(false);
+  private failedSubmission: Submission | undefined;
   private generation = 0;
   private disposed = false;
   private controller: AbortController | undefined;
@@ -36,6 +42,9 @@ export class AnalyticsState {
     return this.resultValue?.response.rows ?? [];
   }
   get pending(): boolean { return this.pendingValue; }
+  get page(): number { return Math.floor((this.resultValue?.query.pagination.offset ?? 0) / 100) + 1; }
+  get canGoPrevious(): boolean { return !this.pending && (this.resultValue?.query.pagination.offset ?? 0) > 0; }
+  get canGoNext(): boolean { return !this.pending && Boolean(this.resultValue?.response.has_more); }
   get error(): string { return this.errorValue; }
   get validation(): string { return this.validationValue; }
   get accessLost(): boolean { return this.accessLostValue; }
@@ -63,7 +72,34 @@ export class AnalyticsState {
       this.validationValue = failure instanceof Error ? failure.message : 'Check your query settings.';
       return;
     }
-    const fingerprint = this.draft.fingerprint;
+    await this.submit({ query, fingerprint: this.draft.fingerprint });
+  }
+
+  async previous(): Promise<void> {
+    if (this.canGoPrevious) await this.navigate(-100);
+  }
+
+  async next(): Promise<void> {
+    if (this.canGoNext) await this.navigate(100);
+  }
+
+  async retry(): Promise<void> {
+    if (!this.pending && this.failedSubmission) await this.submit(this.failedSubmission);
+  }
+
+  private async navigate(change: number): Promise<void> {
+    const result = this.resultValue;
+    if (!result) return;
+    await this.submit({
+      query: { ...result.query, pagination: { limit: 100, offset: result.query.pagination.offset + change } },
+      fingerprint: result.fingerprint
+    });
+  }
+
+  private async submit({ query, fingerprint }: Submission): Promise<void> {
+    if (this.disposed || this.accessLost) return;
+    this.failedSubmission = undefined;
+    this.validationValue = '';
     const generation = ++this.generation;
     this.controller?.abort();
     this.controller = new AbortController();
@@ -75,6 +111,7 @@ export class AnalyticsState {
       this.resultValue = { query, response, fingerprint };
     } catch (failure) {
       if (this.disposed || generation !== this.generation) return;
+      this.failedSubmission = { query, fingerprint };
       if (failure instanceof AuthenticationRequiredError || (failure instanceof HttpError && [401, 403].includes(failure.status))) {
         this.loseAccess();
       } else if (failure instanceof HttpError && failure.status === 503) {
@@ -95,6 +132,7 @@ export class AnalyticsState {
     this.controller?.abort();
     this.pendingValue = false;
     this.resultValue = undefined;
+    this.failedSubmission = undefined;
     this.accessLostValue = true;
     this.errorValue = 'Administration access is no longer available. Sign in again or contact your administrator.';
     this.choices.dispose();
@@ -103,6 +141,7 @@ export class AnalyticsState {
   dispose(): void {
     this.choices.dispose();
     this.disposed = true;
+    this.failedSubmission = undefined;
     this.generation++;
     this.controller?.abort();
     this.pendingValue = false;

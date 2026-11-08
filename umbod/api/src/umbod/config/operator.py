@@ -4,7 +4,7 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from umbod.config import defaults
-from umbod.config.app import validate_telemetry_analytics_sqlite_path
+from umbod.config.app import validate_collector_base_url, validate_telemetry_analytics_sqlite_path
 
 Profile = str
 AuthRecipe = str
@@ -35,6 +35,13 @@ class OperatorSettings(BaseSettings):
     personal_connections_identity_namespace: str = ""
     telemetry_analytics_enabled: bool = False
     telemetry_analytics_sqlite_path: str = defaults.TELEMETRY_ANALYTICS_SQLITE_PATH
+    otlp_public_base_url: str = ""
+
+    @field_validator("otlp_public_base_url")
+    @classmethod
+    def validate_public_collector_url(cls, value: str) -> str:
+        return validate_collector_base_url(value)
+
     otlp_host: str = "0.0.0.0"
     otlp_port: int = Field(default=4318, gt=0, le=65535)
     otlp_enabled: bool = False

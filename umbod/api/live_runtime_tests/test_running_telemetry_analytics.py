@@ -45,6 +45,7 @@ def analytics_source(runtime_endpoints: RuntimeEndpoints, otlp_bearer_token: str
         {"groups": [], "count": 1, "bucket": {"kind": "bucket", "start": "2026-01-01T01:00:00Z"}},
     ]),
 ])
+@pytest.mark.parametrize("limit", [1, 100])
 def test_running_analytics_reads_exports_in_multiple_aggregate_views(
     runtime_endpoints: RuntimeEndpoints,
     analytics_source: str,
@@ -52,16 +53,20 @@ def test_running_analytics_reads_exports_in_multiple_aggregate_views(
     filters: list[dict[str, JsonValue]],
     bucketing: dict[str, str],
     expected: list[dict[str, JsonValue]],
+    limit: int,
 ) -> None:
-    response = httpx.post(
-        f"{runtime_endpoints.api_base_url}/api/admin/telemetry/log-counts",
-        json={
-            "time_range": {"start": "2026-01-01T00:00:00Z", "end": "2026-01-02T00:00:00Z"},
-            "filters": [{"dimension": "source", "values": [analytics_source]}, *filters],
-            "group_by": group_by, "bucketing": bucketing, "max_groups": 100,
-        },
-        headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"}, timeout=10,
-    )
-    assert response.status_code == 200, response.text
-    assert response.headers["cache-control"] == "no-store"
-    assert response.json() == {"rows": expected}
+    for offset in range(0, len(expected), limit):
+        response = httpx.post(
+            f"{runtime_endpoints.api_base_url}/api/admin/telemetry/log-counts",
+            json={
+                "time_range": {"start": "2026-01-01T00:00:00Z", "end": "2026-01-02T00:00:00Z"},
+                "filters": [{"dimension": "source", "values": [analytics_source]}, *filters],
+                "group_by": group_by, "bucketing": bucketing, "pagination": {"limit": limit, "offset": offset},
+            },
+            headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"}, timeout=10,
+        )
+        assert response.status_code == 200, response.text
+        assert response.headers["cache-control"] == "no-store"
+        assert response.json() == {
+            "has_more": offset + limit < len(expected), "rows": expected[offset:offset + limit],
+        }
