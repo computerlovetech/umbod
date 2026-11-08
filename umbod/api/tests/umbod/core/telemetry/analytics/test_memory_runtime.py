@@ -30,6 +30,7 @@ from umbod.core.telemetry.analytics import (
     TelemetryAnalyticsUnavailable,
     UnownedLog,
 )
+from umbod.core.telemetry.normalization import UnavailableLogNormalization
 
 from tests.persistence_runtime import create_inmemory_runtime
 from tests.support.telemetry_runtime import InMemoryTelemetryAnalyticsRuntime
@@ -59,6 +60,7 @@ async def analytics(persistence: PersistenceRuntime) -> AsyncIterator[TelemetryA
 
 def _record(query: LogCountQuery) -> AnalyticsLogRecord:
     return AnalyticsLogRecord(
+        normalization=UnavailableLogNormalization(kind="unavailable", reason="legacy_or_unspecified"),
         occurred_at=query.time_range.start,
         owner=OwnedLog(kind="owned", owner_id="alice"),
         dimensions=tuple(

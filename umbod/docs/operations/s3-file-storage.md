@@ -10,7 +10,7 @@ Use S3 to store the bytes of [Umbod files](../using-umbod/files.md) separately f
 1. Provision a general-purpose S3 bucket and choose a region and optional object prefix. Umbod does not create buckets.
 2. Allow both API and MCP containers to reach the storage endpoint. Use HTTPS outside trusted local test networks.
 3. Provision credentials with `s3:GetObject`, `s3:PutObject`, and `s3:AbortMultipartUpload` permissions on the selected object prefix. Bucket creation and listing are not required. Add the permissions required by your encryption policy, including KMS access where applicable.
-4. For S3-compatible services, confirm support for the driver's object and multipart operations, including conditional publication with `If-None-Match: *`.
+4. For S3-compatible services, confirm support for SigV4 presigned PUT, signed content length and content type, and conditional publication with `If-None-Match: *`, alongside the driver's object and multipart operations. Conditional writes must remain enforced on the selected bucket; providers can restrict them for versioned buckets.
 5. Configure lifecycle cleanup for incomplete multipart uploads. Completed but unreferenced objects require a separate retention/cleanup plan.
 
 ## Configure Helm values
@@ -77,7 +77,19 @@ After upgrading, check that both backend containers start successfully without c
 3. Confirm that a user without a matching grant cannot read it.
 4. Restart the core Pod and confirm the same file is still listed and readable.
 
-Storage authentication can be lazy: healthy startup alone does not prove bucket access. A successful round trip exercises database publication and content storage together. Avoid logging credentials, authorization headers, or file content while diagnosing failures.
+Storage authentication can be lazy: healthy startup alone does not prove bucket access. A successful round trip exercises database publication and content storage together. Avoid logging credentials, authorization headers, presigned URLs, or file content while diagnosing failures.
+
+## Direct upload sessions
+
+When S3 is configured, REST upload-session creation and MCP `filesystem_begin_upload` return a short-lived presigned S3 PUT by default. The client sends the original bytes directly to the returned storage URL with the returned headers, without Umbod bearer credentials, browser cookies, or redirect following. The request must have the exact declared content length; browser clients derive it from the original `File`. API-based transfers remain available for local storage and existing API-transfer sessions. The inline MCP `filesystem_upload` tool continues to send bytes through Umbod.
+
+Completion still requires authenticated Umbod access. Umbod reads the stored object back with bounded streaming, verifies its size, content type and SHA-256, and checks current authorization before publishing a private file. A successful S3 PUT alone does not publish a node. The signed conditional write prevents the transfer URL from replacing an already uploaded object. Do not delete that object while the transfer URL is valid. A rejected immutable object cannot be corrected using the same key; start a new session after inspecting the failure.
+
+The transfer URL is a bearer capability. Keep the entire URL and required headers out of access logs, diagnostics, analytics and unrelated requests. Transfer expiry does not prevent completion of bytes already stored within the upload session lifetime. An uncertain PUT response must be reconciled through authenticated completion or session inspection before any retry; a session can remain pending until completion verifies its external content.
+
+The configured S3 endpoint must be reachable by clients as well as both backend services. Presigned URLs bind the endpoint hostname, path and signed headers: do not rewrite them through the Umbod API or an authentication gateway. Browsers require HTTPS and a bucket CORS policy permitting the actual frontend origin, PUT, and the returned request headers, including `Content-Type` and `If-None-Match`. Configure CORS separately using the storage provider; Umbod does not modify bucket policy or CORS. CORS is not authorization and is not needed by non-browser MCP clients.
+
+Direct transfers use a single PUT, not resumable or client-managed multipart uploads. The configured application limit and the storage service's single-PUT limit both apply. See [filesystem upload transfers](../reference/filesystem-upload-transfers.md) for the shared coordination and retry contract.
 
 ## Migrate existing local content
 
@@ -106,10 +118,10 @@ Do not resume writes against local storage after cutover and expect S3 to stay s
 
 ## Operational boundaries
 
-- **Transfers pass through Umbod.** S3 is a backend driver; there are no direct browser-to-S3 uploads, presigned URLs, or client-managed multipart/resumable transfers.
+- **Session transfers go directly to S3.** REST and MCP begin/complete sessions use presigned single PUTs by default. Inline MCP uploads and file downloads still pass through Umbod. Completion reads bytes from S3 for authoritative verification; direct upload does not mean zero backend read traffic. Client-managed multipart/resumable transfers remain unsupported.
 - **Back up metadata and content together.** Without persistence, replacing the core Pod loses namespace and permission records even if the bucket survives.
 - **No automatic migration or fallback.** Use the offline migration procedure above for local-to-S3 cutover. Other backend, bucket or prefix changes require a separate migration. Merely changing values makes existing content unavailable.
 - **No automatic physical cleanup.** Publication happens after content storage; failures can leave unreferenced immutable objects. File deletion removes namespace/policy records, not the stored object. Multipart abort is best effort, so process termination can leave incomplete parts. Lifecycle cleanup of multipart uploads does not reclaim completed orphan objects.
-- **Limits remain separate.** The default filesystem limit is 10 MiB. MCP upload and read tools have their own limits. The frontend nginx proxy caps request bodies at 12 MiB; raising the application limit also requires corresponding proxy/gateway changes. Direct API ingress bypasses that frontend proxy but may impose its own limits.
+- **Limits remain separate.** The default filesystem limit is 10 MiB. The inline MCP upload and resource-read tools have their own limits. Direct S3 transfers do not pass through the frontend's 12 MiB nginx body cap; API-proxied transfers still do. Raising limits for API transfers also requires corresponding proxy/gateway changes. S3 single-PUT limits remain independent.
 
 The backend change does not change file ownership, sharing, or publication rules. New files remain private, parent grants do not inherit, and uploads are invisible until explicit completion. See [Files](../using-umbod/files.md) for user and administrator behavior.

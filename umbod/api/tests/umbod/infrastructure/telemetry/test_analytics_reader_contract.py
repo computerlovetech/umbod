@@ -30,6 +30,7 @@ from umbod.core.telemetry.analytics import (
     Unbucketed,
     UnownedLog,
 )
+from umbod.core.telemetry.normalization import UnavailableLogNormalization
 from umbod.infrastructure import create_sqlite_analytics_runtime
 
 from tests.support.telemetry_analytics import (
@@ -66,6 +67,7 @@ async def reader_factory(
                     records=tuple(
                         AnalyticsLogRecord(
                             occurred_at=log.occurred_at,
+                            normalization=UnavailableLogNormalization(kind="unavailable", reason="legacy_or_unspecified"),
                             owner=UnownedLog(kind="unowned")
                             if log.owner_id is None
                             else OwnedLog(kind="owned", owner_id=log.owner_id),

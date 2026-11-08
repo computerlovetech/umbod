@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { browserTransport, SchemaValidationError } from '$lib/admin/infrastructure/transport';
 import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
-import { beginUploadSchema, rawUploadSchema, uploadSessionSchema, type UploadSession } from './domain/schemas';
+import { beginUploadSchema, rawUploadSchema, uploadSessionSchema, type SingleUploadTransfer, type UploadSession } from './domain/schemas';
 import { FilesApi } from './infrastructure/files-api';
 import { InMemoryFilesApi } from './infrastructure/in-memory-api.test-support';
 import { HttpUploadTransfer } from './infrastructure/upload-transfer';
@@ -11,7 +11,7 @@ const configuration = new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/ap
 const origin = (): string => 'https://umbod.test';
 const selected = { file: new File([], 'empty'), name: 'empty' };
 
-function session(): UploadSession {
+function session(): UploadSession & { transfer: SingleUploadTransfer } {
   return {
     id: fileId, expires_at: '2026-12-01T00:00:00Z', status: 'pending',
     transfer: { type: 'single', method: 'PUT', url: '/api/me/filesystem/uploads/' + fileId + '/content', headers: { 'Content-Type': 'application/octet-stream' }, authorization: { type: 'same_origin' } },
@@ -216,6 +216,57 @@ describe('upload instruction headers and configured bases', () => {
 });
 
 describe('credential-isolated external transfer', () => {
+  test.each(['expired', 'completed'] as const)('unavailable %s instructions reject transfer but permit authenticated completion', async (reason): Promise<void> => {
+    const value = uploadSessionSchema.parse({ ...session(), transfer: { type: 'unavailable', reason } });
+    const node = filesystemNode({ parent_id: rootId, kind: 'file', name: 'empty' });
+    const authenticated = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(node));
+    const external = vi.fn<typeof fetch>();
+    const api = client(authenticated, external);
+
+    await expect(api.filesystem.transferUpload(value, selected.file)).rejects.toMatchObject({ status: reason === 'expired' ? 410 : 409 });
+    expect(authenticated).not.toHaveBeenCalled();
+    expect(external).not.toHaveBeenCalled();
+    expect(await api.filesystem.completeUpload(value)).toEqual(node);
+    expect(authenticated).toHaveBeenCalledTimes(1);
+  });
+
+  test('uploads original file bytes to a presigned S3 URL and completes through Umbod', async (): Promise<void> => {
+    const file = new File([new Uint8Array([0, 255, 13, 10, 128])], 'binary.bin', { type: 'application/octet-stream' });
+    const value = session();
+    value.transfer.authorization = { type: 'none' };
+    value.transfer.url = 'https://storage.test/bucket/key?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=test%2Fregion%2Fs3%2Faws4_request&X-Amz-SignedHeaders=content-length%3Bcontent-type%3Bhost%3Bif-none-match&X-Amz-Signature=opaque';
+    value.transfer.headers = { 'Content-Type': 'application/octet-stream', 'If-None-Match': '*' };
+    const node = filesystemNode({ parent_id: rootId, kind: 'file', name: 'binary.bin' });
+    const authenticated = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(value)).mockResolvedValueOnce(Response.json(node));
+    const external = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 200 }));
+
+    expect(await client(authenticated, external).filesystem.uploadFile(rootId, { file, name: 'binary.bin' })).toEqual(node);
+    expect(external).toHaveBeenCalledExactlyOnceWith(value.transfer.url, {
+      method: 'PUT', body: file, headers: value.transfer.headers, credentials: 'omit', redirect: 'error', referrerPolicy: 'no-referrer'
+    });
+    const headers = new Headers(external.mock.calls[0][1]?.headers);
+    expect(headers.get('If-None-Match')).toBe('*');
+    expect(headers.get('Content-Length')).toBeNull();
+    expect(headers.get('Authorization')).toBeNull();
+    expect(headers.get('X-Umbod-Web-Request')).toBeNull();
+    expect(authenticated.mock.calls.map(([url]) => url)).toEqual([
+      '/api/me/filesystem/nodes/' + rootId + '/uploads', value.complete_url
+    ]);
+  });
+
+  test.each([403, 412])('S3 rejection %s does not retry PUT or publish the file', async (status): Promise<void> => {
+    const value = session();
+    value.transfer.authorization = { type: 'none' };
+    value.transfer.url = 'https://storage.test/bucket/key?X-Amz-Signature=opaque';
+    value.transfer.headers['If-None-Match'] = '*';
+    const authenticated = vi.fn<typeof fetch>().mockResolvedValueOnce(Response.json(value));
+    const external = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(null, { status }));
+
+    await expect(client(authenticated, external).filesystem.uploadFile(rootId, selected)).rejects.toMatchObject({ phase: 'transfer', cause: { status } });
+    expect(authenticated).toHaveBeenCalledTimes(1);
+    expect(external).toHaveBeenCalledTimes(1);
+  });
+
   test('none uses separate fetch without cookies, Umbod auth, referrers or redirects', async (): Promise<void> => {
     const value = session();
     value.transfer.authorization = { type: 'none' };

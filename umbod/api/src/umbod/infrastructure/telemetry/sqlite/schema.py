@@ -4,7 +4,7 @@ from umbod.core.telemetry.analytics import LogDimension
 from umbod.core.telemetry.analytics.activity import classify_activity
 
 APPLICATION_ID = 1431126350
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 LEGACY_COLUMNS = (
     ("occurred_at_us", "INTEGER", 1),
     ("owner_id", "TEXT", 0),
@@ -14,7 +14,8 @@ LEGACY_COLUMNS = (
     ("session_id", "TEXT", 0),
     ("tool_name", "TEXT", 0),
 )
-COLUMNS = LEGACY_COLUMNS + (("activity_kind", "TEXT", 0), ("outcome", "TEXT", 0))
+ACTIVITY_COLUMNS = LEGACY_COLUMNS + (("activity_kind", "TEXT", 0), ("outcome", "TEXT", 0))
+COLUMNS = ACTIVITY_COLUMNS + (("normalization_json", "TEXT", 0),)
 
 
 async def ensure_schema(connection: aiosqlite.Connection) -> None:
@@ -30,7 +31,8 @@ async def ensure_schema(connection: aiosqlite.Connection) -> None:
         await connection.execute(
             "CREATE TABLE analytics_logs (occurred_at_us INTEGER NOT NULL, "
             "owner_id TEXT, source TEXT, event_name TEXT, severity TEXT, "
-            "session_id TEXT, tool_name TEXT, activity_kind TEXT, outcome TEXT)"
+            "session_id TEXT, tool_name TEXT, activity_kind TEXT, outcome TEXT, "
+            "normalization_json TEXT)"
         )
         await connection.execute(
             "CREATE INDEX analytics_logs_time_owner "
@@ -38,7 +40,7 @@ async def ensure_schema(connection: aiosqlite.Connection) -> None:
         )
         await connection.execute(f"PRAGMA application_id = {APPLICATION_ID}")
         await connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-    elif application_id != APPLICATION_ID or version not in (1, SCHEMA_VERSION):
+    elif application_id != APPLICATION_ID or version not in (1, 2, SCHEMA_VERSION):
         raise ValueError("Unrecognized analytics database")
     async with connection.execute("PRAGMA table_info(analytics_logs)") as cursor:
         columns = tuple((row[1], row[2], row[3]) for row in await cursor.fetchall())
@@ -46,7 +48,16 @@ async def ensure_schema(connection: aiosqlite.Connection) -> None:
         if columns != LEGACY_COLUMNS:
             raise ValueError("Invalid analytics schema")
         await _migrate_activity(connection)
-    elif columns != COLUMNS:
+        version = 2
+        columns = ACTIVITY_COLUMNS
+    if version == 2:
+        if columns != ACTIVITY_COLUMNS:
+            raise ValueError("Invalid analytics schema")
+        await connection.execute("ALTER TABLE analytics_logs ADD COLUMN normalization_json TEXT")
+        await connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    async with connection.execute("PRAGMA table_info(analytics_logs)") as cursor:
+        columns = tuple((row[1], row[2], row[3]) for row in await cursor.fetchall())
+    if columns != COLUMNS:
         raise ValueError("Invalid analytics schema")
 
 
@@ -71,4 +82,4 @@ async def _migrate_activity(connection: aiosqlite.Connection) -> None:
                     source, event, tool,
                 ),
             )
-    await connection.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+    await connection.execute("PRAGMA user_version = 2")

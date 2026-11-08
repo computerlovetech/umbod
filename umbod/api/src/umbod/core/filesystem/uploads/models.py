@@ -77,7 +77,36 @@ class DelegatedTransfer(BaseModel):
     state: Annotated[Union[AvailableTransfer, ClaimedTransfer, ConsumedTransfer], Field(discriminator="status")]
 
 
-TransferGrant = Annotated[Union[NoDelegatedTransfer, DelegatedTransfer], Field(discriminator="kind")]
+class ExternalTransfer(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    kind: Literal["external"] = "external"
+    storage_key: str = Field(pattern=r"^[0-9a-f]{32}$")
+    expires_at: datetime
+
+
+class ExternalTransferRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    transfer: ExternalTransfer
+    size_bytes: int = Field(ge=0, strict=True)
+    content_type: str
+
+
+class ExternalTransferInstructions(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    url: str = Field(repr=False)
+    headers: dict[str, str] = Field(repr=False)
+
+
+class UnavailableExternalTransfer(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    reason: Literal["expired", "completed"]
+
+
+TransferGrant = Annotated[Union[NoDelegatedTransfer, DelegatedTransfer, ExternalTransfer], Field(discriminator="kind")]
 
 
 class PendingUpload(BaseModel):

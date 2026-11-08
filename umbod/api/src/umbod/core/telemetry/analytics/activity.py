@@ -1,20 +1,31 @@
 from collections.abc import Mapping
-from typing import Literal
+
+from umbod.core.telemetry.normalization.classification import (
+    ActivityClassification,
+    ClassifiedSkill,
+    ClassifiedTool,
+    ToolOrigin as ToolOrigin,
+    classify_activity as classify_canonical_activity,
+    classify_declared_activity as classify_canonical_declared_activity,
+)
+from umbod.core.telemetry.normalization.models import Outcome as ActivityOutcome
 
 from .models import LogDimension
 
-ActivityOutcome = Literal["success", "failure", "unknown"]
-ToolOrigin = Literal["native", "external", "unknown"]
 
-
-def classify_declared_activity(
-    kind: str, outcome: ActivityOutcome,
-) -> Mapping[LogDimension, str]:
-    if kind in ("tool_call", "file_read", "file_edit"):
-        return {LogDimension.ACTIVITY_KIND: kind, LogDimension.OUTCOME: outcome}
-    if kind == "skill_activation":
-        return {LogDimension.ACTIVITY_KIND: kind}
+def _dimensions(classification: ActivityClassification) -> Mapping[LogDimension, str]:
+    if isinstance(classification, ClassifiedTool):
+        return {
+            LogDimension.ACTIVITY_KIND: classification.activity_kind,
+            LogDimension.OUTCOME: classification.outcome,
+        }
+    if isinstance(classification, ClassifiedSkill):
+        return {LogDimension.ACTIVITY_KIND: "skill_activation"}
     return {}
+
+
+def classify_declared_activity(kind: str, outcome: ActivityOutcome) -> Mapping[LogDimension, str]:
+    return _dimensions(classify_canonical_declared_activity(kind, outcome))
 
 
 def classify_activity(
@@ -24,23 +35,4 @@ def classify_activity(
     outcome: ActivityOutcome,
     tool_origin: ToolOrigin,
 ) -> Mapping[LogDimension, str]:
-    claude_tool = event == "claude_code.tool_result" or (
-        source in ("claude-code", "claude-code-desktop") and event == "tool_result"
-    )
-    codex_tool = event == "codex.tool_result" or (
-        source == "codex" and event == "tool_result"
-    )
-    if claude_tool or codex_tool:
-        kind = "tool_call"
-        if claude_tool and tool == "Read" and tool_origin != "external":
-            kind = "file_read"
-        elif claude_tool and tool in ("Edit", "Write") and tool_origin != "external":
-            kind = "file_edit"
-        elif codex_tool and tool == "apply_patch" and tool_origin == "native":
-            kind = "file_edit"
-        return {LogDimension.ACTIVITY_KIND: kind, LogDimension.OUTCOME: outcome}
-    if event in ("claude_code.skill_activated", "codex.skill_invocation") or (
-        source in ("claude-code", "claude-code-desktop") and event == "skill_activated"
-    ):
-        return {LogDimension.ACTIVITY_KIND: "skill_activation"}
-    return {}
+    return _dimensions(classify_canonical_activity(source, event, tool, outcome, tool_origin))

@@ -27,10 +27,11 @@ from .errors import (
 from .models import (
     AvailableTransfer, ChecksumExpectation, ClaimedTransfer, CompletedUpload, ConsumedTransfer,
     DelegatedTransfer, DelegatedUpload, ExpectedChecksum, NoDelegatedTransfer,
+    ExternalTransfer, ExternalTransferRequest, ExternalTransferInstructions, UnavailableExternalTransfer,
     NoExpectedChecksum, PendingUpload, TransferGrant, UploadCompletion, UploadedContent,
     UploadSession, VerifiedReceipt,
 )
-from .ports import UploadClock, UploadTransaction, UploadTransactions
+from .ports import ExternalUploadTransfer, UploadClock, UploadTransaction, UploadTransactions
 
 
 class SystemUploadClock:
@@ -77,6 +78,46 @@ class UploadService:
             await self._identity(snapshot), parent_id, name, metadata, size_bytes,
             NoExpectedChecksum(), NoDelegatedTransfer(),
         )
+
+    @property
+    def supports_external_transfer(self) -> bool:
+        return isinstance(self._content, ExternalUploadTransfer)
+
+    async def begin_transfer(
+        self, snapshot: CallerSnapshot, parent_id: NodeId, name: str,
+        metadata: NodeMetadata, size_bytes: int, expected_checksum: ChecksumExpectation,
+    ) -> UploadSession:
+        grant: TransferGrant = NoDelegatedTransfer()
+        if isinstance(self._content, ExternalUploadTransfer):
+            if size_bytes > self._content.max_transfer_bytes:
+                raise UploadTooLarge()
+            grant = ExternalTransfer(
+                storage_key=uuid4().hex,
+                expires_at=self._clock.now() + min(self._ttl, timedelta(minutes=15)),
+            )
+        return await self._begin(
+            await self._identity(snapshot), parent_id, name, metadata, size_bytes,
+            expected_checksum, grant,
+        )
+
+    def _transfer_request(self, upload: UploadSession) -> ExternalTransferRequest:
+        if not isinstance(upload.delegated_transfer, ExternalTransfer):
+            raise UploadConflict()
+        content_type = upload.metadata.content_type
+        return ExternalTransferRequest(
+            transfer=upload.delegated_transfer, size_bytes=upload.size_bytes,
+            content_type=content_type if isinstance(content_type, str) else "application/octet-stream",
+        )
+
+    async def transfer_instructions(self, upload: UploadSession) -> ExternalTransferInstructions | UnavailableExternalTransfer:
+        if not isinstance(self._content, ExternalUploadTransfer):
+            raise UploadConflict()
+        request = self._transfer_request(upload)
+        if isinstance(upload.progress, CompletedUpload):
+            return UnavailableExternalTransfer(reason="completed")
+        if self._clock.now() >= request.transfer.expires_at:
+            return UnavailableExternalTransfer(reason="expired")
+        return await self._content.prepare_transfer(request)
 
     async def begin_delegated(
         self, snapshot: CallerSnapshot, parent_id: NodeId, name: str,
@@ -143,7 +184,7 @@ class UploadService:
         self, snapshot: CallerSnapshot, upload_id: UUID, content_type: str, data: ByteStream,
     ) -> None:
         upload = await self.get(snapshot, upload_id)
-        if isinstance(upload.delegated_transfer, DelegatedTransfer):
+        if not isinstance(upload.delegated_transfer, NoDelegatedTransfer):
             raise UploadConflict()
         if isinstance(upload.progress, CompletedUpload):
             raise UploadConflict()
@@ -267,9 +308,20 @@ class UploadService:
     async def _complete(
         self, snapshot: CallerSnapshot, upload_id: UUID, require_verified_receipt: bool,
     ) -> UploadCompletion:
+        initial = await self.get(snapshot, upload_id)
+        verified: UploadedContent | PendingUpload = PendingUpload()
+        if isinstance(initial.delegated_transfer, ExternalTransfer) and isinstance(initial.progress, PendingUpload):
+            if initial.size_bytes > self._max_upload_bytes:
+                raise UploadTooLarge()
+            if not isinstance(self._content, ExternalUploadTransfer):
+                raise UploadConflict()
+            verified = await self._content.verify_transfer(self._transfer_request(initial))
+            self._verify_checksum(initial, verified)
         identity = await self._identity(snapshot)
         async with self._transactions.transaction() as session:
             upload = await self._load(session, identity, upload_id)
+            if isinstance(upload.progress, PendingUpload) and isinstance(verified, UploadedContent):
+                upload = upload.model_copy(update={"progress": verified})
             if (
                 require_verified_receipt and isinstance(upload.progress, (UploadedContent, CompletedUpload))
                 and not isinstance(upload.progress.receipt, VerifiedReceipt)

@@ -18,6 +18,7 @@ from test_running_filesystem import (
     FILESYSTEM, checked_summary, node_identity, sharing_write_payload, tool_payload, wait_for_filesystem_tools,
 )
 from test_running_personal_mcp_execution import mcp_client, proxy_token
+from upload_transfer_support import assert_transfer_succeeded, transfer_upload
 
 
 @dataclass
@@ -146,8 +147,7 @@ async def test_upload_to_home_reports_current_permissions_and_direct_visibility(
     }))
     transfer = begun["transfer"]
     with httpx.Client(timeout=30, follow_redirects=False) as anonymous:
-        transferred = anonymous.put(transfer["url"], headers=transfer["headers"], content=data)
-        assert transferred.status_code == 204, transferred.text
+        assert_transfer_succeeded(transfer_upload(anonymous, transfer, data))
     await wait_for_filesystem_tools(runtime.second_client, {"filesystem_complete_upload"})
     receipt = tool_payload(await runtime.second_client.call_tool("filesystem_complete_upload", {"upload_id": begun["upload_id"]}))
     file = receipt["node"]

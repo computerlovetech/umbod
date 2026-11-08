@@ -23,6 +23,7 @@ from umbod.core.telemetry.analytics import (
     TimeRange,
     UnownedLog,
 )
+from umbod.core.telemetry.normalization import UnavailableLogNormalization
 from umbod.infrastructure.telemetry.composition import (
     create_disabled_analytics_runtime,
     create_sqlite_analytics_runtime,
@@ -51,6 +52,7 @@ def batch() -> LogWriteBatch:
         records=(
             AnalyticsLogRecord(
                 occurred_at=EPOCH - timedelta(microseconds=1),
+                normalization=UnavailableLogNormalization(kind="unavailable", reason="legacy_or_unspecified"),
                 owner=OwnedLog(kind="owned", owner_id="owner"),
                 dimensions=(
                     DimensionGroup(
@@ -63,6 +65,7 @@ def batch() -> LogWriteBatch:
             ),
             AnalyticsLogRecord(
                 occurred_at=EPOCH + timedelta(microseconds=1),
+                normalization=UnavailableLogNormalization(kind="unavailable", reason="legacy_or_unspecified"),
                 owner=UnownedLog(kind="unowned"),
                 dimensions=(),
             ),
@@ -389,6 +392,7 @@ def test_write_records_reject_duplicate_dimensions(batch: LogWriteBatch) -> None
     with pytest.raises(ValidationError, match="unique"):
         AnalyticsLogRecord(
             occurred_at=record.occurred_at,
+            normalization=record.normalization,
             owner=record.owner,
             dimensions=record.dimensions * 2,
         )

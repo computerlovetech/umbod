@@ -18,6 +18,7 @@ from test_running_filesystem import (
     FILESYSTEM, checked_root_browse, checked_summary, file_resource_link, file_resource_uri, tool_payload, wait_for_filesystem_tools,
 )
 from test_running_personal_mcp_execution import mcp_client, proxy_token
+from upload_transfer_support import assert_s3_transfer, assert_transfer_succeeded, s3_runtime, transfer_upload
 
 
 @dataclass
@@ -188,12 +189,9 @@ async def test_read_rejects_oversize_rest_file_without_changing_rest_downloads(
         "name": "larger-rest-file.bin", "size_bytes": len(data),
         "metadata": {"content_type": "application/octet-stream", "attributes": {}},
     })
-    assert begun.status_code == 201, begun.text
+    assert begun.status_code == 201, "Upload begin failed"
     session = begun.json()
-    transferred = runtime.api.put(
-        session["transfer"]["url"], content=data, headers=session["transfer"]["headers"],
-    )
-    assert transferred.status_code == 204, transferred.text
+    assert_transfer_succeeded(transfer_upload(runtime.api, session["transfer"], data))
     node = checked_summary(runtime.api.post(session["complete_url"]), 201)
     await wait_for_filesystem_tools(runtime.client, {"filesystem_delete_file"})
     with pytest.raises(MCPError):
@@ -235,12 +233,13 @@ async def test_upload_session_transfers_original_bytes_without_oauth_credentials
     transfer = begun["transfer"]
     assert begun["complete_tool"] == "filesystem_complete_upload"
     assert transfer["method"] == "PUT"
-    assert transfer["url"].startswith(runtime_endpoints.api_base_url + "/api/filesystem/uploads/")
+    if s3_runtime():
+        assert_s3_transfer(transfer)
+    else:
+        assert transfer["url"].startswith(runtime_endpoints.api_base_url + "/api/filesystem/uploads/")
     assert "Authorization" not in transfer["headers"]
     with httpx.Client(timeout=60, follow_redirects=False) as anonymous:
-        response = anonymous.put(transfer["url"], headers=transfer["headers"], content=data)
-        assert response.status_code == 204, response.text
-        assert response.headers["cache-control"] == "no-store"
+        assert_transfer_succeeded(transfer_upload(anonymous, transfer, data))
     completed = await runtime.client.call_tool("filesystem_complete_upload", {"upload_id": begun["upload_id"]})
     receipt = tool_payload(completed)
     node = receipt["node"]
@@ -262,6 +261,7 @@ async def test_upload_session_transfers_original_bytes_without_oauth_credentials
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(s3_runtime(), reason="API transfer capabilities apply only to local storage")
 async def test_upload_transfer_capability_does_not_authorize_other_operations_or_replay(
     native_upload_runtime: NativeUploadRuntime,
 ) -> None:
@@ -297,6 +297,7 @@ async def test_upload_transfer_capability_does_not_authorize_other_operations_or
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(s3_runtime(), reason="Local streaming transfer rejects mismatches before completion")
 async def test_upload_checksum_mismatch_can_retry_without_publishing_bad_content(
     native_upload_runtime: NativeUploadRuntime,
 ) -> None:

@@ -1,0 +1,102 @@
+{
+  "producer_source": "https://github.com/openai/codex/blob/5f2ce5e02c56905cebcb5781ec198b676f32f27c/codex-rs/otel/src/tool_result.rs",
+  "payload": {
+    "resourceLogs": [
+      {
+        "resource": {
+          "attributes": [
+            {
+              "key": "service.name",
+              "value": {
+                "stringValue": "codex_exec"
+              }
+            },
+            {
+              "key": "service.version",
+              "value": {
+                "stringValue": "fixture-build"
+              }
+            }
+          ]
+        },
+        "schemaUrl": "https://opentelemetry.io/schemas/1.30.0",
+        "scopeLogs": [
+          {
+            "scope": {
+              "name": "codex.otel",
+              "version": "fixture-scope"
+            },
+            "schemaUrl": "https://opentelemetry.io/schemas/1.30.0",
+            "logRecords": [
+              {
+                "timeUnixNano": "1001",
+                "observedTimeUnixNano": "2002",
+                "eventName": "event otel/src/events/session_telemetry.rs:375",
+                "severityText": "INFO",
+                "severityNumber": 9,
+                "traceId": "1234567890abcdef1234567890abcdef",
+                "spanId": "1234567890abcdef",
+                "attributes": [
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "codex.tool_result"
+                    }
+                  },
+                  {
+                    "key": "tool_name",
+                    "value": {
+                      "stringValue": "apply_patch"
+                    }
+                  },
+                  {
+                    "key": "tool_namespace",
+                    "value": {
+                      "stringValue": "functions"
+                    }
+                  },
+                  {
+                    "key": "call_id",
+                    "value": {
+                      "stringValue": "call-1"
+                    }
+                  },
+                  {
+                    "key": "duration_ms",
+                    "value": {
+                      "stringValue": "12"
+                    }
+                  },
+                  {
+                    "key": "success",
+                    "value": {
+                      "stringValue": "false"
+                    }
+                  },
+                  {
+                    "key": "mcp_server",
+                    "value": {
+                      "stringValue": ""
+                    }
+                  },
+                  {
+                    "key": "mcp_server_origin",
+                    "value": {
+                      "stringValue": ""
+                    }
+                  },
+                  {
+                    "key": "app.version",
+                    "value": {
+                      "stringValue": "fixture-app"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "kind": "normalized",
+  "schema_version": 1,
+  "source": {
+    "service": {
+      "kind": "text",
+      "value": "codex"
+    },
+    "service_version": {
+      "kind": "missing"
+    },
+    "app_version": {
+      "kind": "missing"
+    },
+    "scope_name": {
+      "kind": "text",
+      "value": ""
+    },
+    "scope_version": {
+      "kind": "text",
+      "value": ""
+    },
+    "resource_schema_url": {
+      "kind": "missing"
+    },
+    "scope_schema_url": {
+      "kind": "missing"
+    },
+    "record_event": {
+      "kind": "text",
+      "value": "source-location"
+    },
+    "semantic_event": {
+      "kind": "text",
+      "value": "codex.sse_event"
+    },
+    "severity_text": {
+      "kind": "text",
+      "value": ""
+    },
+    "severity_number": 0
+  },
+  "timestamps": {
+    "source_ns": 1001,
+    "observed_ns": 2002,
+    "receipt_ns": 1767225600000000000,
+    "effective_source": "source"
+  },
+  "evidence": {
+    "schema_version": 1,
+    "declared_kind": {
+      "kind": "missing"
+    },
+    "declared_outcome": {
+      "state": "missing",
+      "representation": "missing",
+      "reason": "missing"
+    },
+    "success": {
+      "state": "missing",
+      "representation": "missing",
+      "reason": "missing"
+    },
+    "tool_aliases": [],
+    "tool_provenance": {
+      "origin": "native",
+      "basis": "assumed",
+      "namespace": "missing",
+      "external_indicator": false
+    },
+    "correlations": [],
+    "duration": {
+      "kind": "missing"
+    },
+    "decision": "unknown",
+    "skill_trigger": "unknown",
+    "skill_invocation_type": "unknown"
+  },
+  "mapping": {
+    "producer": "codex",
+    "mapping_id": "unmapped",
+    "mapping_version": 1,
+    "recognition": "unmapped",
+    "authority": "producer_claim",
+    "service_conflict": false,
+    "declaration_event_conflict": false,
+    "event_identity_conflict": false
+  },
+  "selected_event": {
+    "kind": "text",
+    "value": "codex.sse_event"
+  },
+  "activity": {
+    "kind": "unmapped"
+  }
+}

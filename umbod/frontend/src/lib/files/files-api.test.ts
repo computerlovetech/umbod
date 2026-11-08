@@ -8,7 +8,7 @@ import { FilesApi as HttpFilesApi } from './infrastructure/files-api';
 import { InMemoryFilesApi } from './infrastructure/in-memory-api.test-support';
 import { fileId, filesystemFixture, filesystemNode, folderId, rootId } from './fixtures.test-support';
 
-function session(): import('./domain/schemas').UploadSession {
+function session(): import('./domain/schemas').UploadSession & { transfer: import('./domain/schemas').SingleUploadTransfer } {
   return {
     id: fileId, expires_at: '2026-12-01T00:00:00Z', status: 'pending',
     transfer: { type: 'single', method: 'PUT', url: '/api/me/filesystem/uploads/' + fileId + '/content', headers: { 'Content-Type': 'text/plain' }, authorization: { type: 'same_origin' } },

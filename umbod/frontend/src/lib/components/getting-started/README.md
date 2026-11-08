@@ -7,8 +7,10 @@ description: Feature-owned MCP connection guidance and personal telemetry setup.
 # Files
 
 - [GettingStarted.svelte](./GettingStarted.svelte) — Exclusive harness and telemetry subpages in the shared workspace and subpage container.
-- [McpSetupGuide.svelte](./McpSetupGuide.svelte) — Harness-specific remote MCP connection instructions.
-- [mcp-setup-state.svelte.ts](./mcp-setup-state.svelte.ts) — Endpoint-driven commands and Copilot configuration.
+- [McpSetupGuide.svelte](./McpSetupGuide.svelte) — Codex plugin ZIP downloads, copyable installation commands, and manual harness connection instructions.
+- [mcp-setup-state.svelte.ts](./mcp-setup-state.svelte.ts) — Endpoint-driven and shell-escaped manual MCP connection commands.
+- [codex-plugin-state.svelte.ts](./codex-plugin-state.svelte.ts) — Download lifecycle, installation commands, duplicate protection, and obsolete-result fencing.
+- [Codex package downloads](../../codex-plugin/README.md) — Canonical package templates, validated archives, and browser download adapters.
 - [mcp-endpoint.ts](./mcp-endpoint.ts) — Absolute MCP endpoint resolution for origins and existing endpoint paths.
 - [Telemetry setup API](../../telemetry-setup/README.md) — Instance-configured collector availability and endpoint discovery.
 - [TelemetrySetup.svelte](./TelemetrySetup.svelte) — Token list with expiry dates, right-aligned delete icons and modal creation.
@@ -17,6 +19,8 @@ description: Feature-owned MCP connection guidance and personal telemetry setup.
 - [telemetry-formatters.ts](./telemetry-formatters.ts) — Logs-only harness configuration using the server-provided endpoint.
 - [getting-started.test.ts](./getting-started.test.ts) — Exclusive subpage rendering, workspace headings and onboarding navigation.
 - [mcp-setup.test.ts](./mcp-setup.test.ts) — Client guidance, escaped configuration and endpoint resolution tests.
+- [codex-plugin-state.test.ts](./codex-plugin-state.test.ts) — Download success, failure, retry, disposal, endpoint changes, and safe installation commands.
+- [codex-plugin.dom.test.ts](./codex-plugin.dom.test.ts) — Download-button wiring, copyable installation commands, failure feedback, and manual setup fallback.
 - [telemetry-formatters.test.ts](./telemetry-formatters.test.ts) — Harness syntax and privacy settings tests.
 - [telemetry-setup-state.test.ts](./telemetry-setup-state.test.ts) — Token lifecycle, failures and obsolete-result fencing tests.
 - [telemetry-setup.dom.test.ts](./telemetry-setup.dom.test.ts) — Modal creation, copying, cancellation, active and revoked token deletion, and access eligibility interactions.

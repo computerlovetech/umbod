@@ -27,6 +27,9 @@ NODE_ID = "00000000-0000-0000-0000-000000000001"
         (FilesystemBeginUploadTool, "upload_sessions", "begin_delegated", {
             "parent_id": NODE_ID, "name": "file", "metadata": {"content_type": {}, "attributes": {}}, "size_bytes": 4,
         }),
+        (FilesystemBeginUploadTool, "upload_sessions", "begin_transfer", {
+            "parent_id": NODE_ID, "name": "file", "metadata": {"content_type": {}, "attributes": {}}, "size_bytes": 4,
+        }),
         (FilesystemCompleteUploadTool, "upload_sessions", "complete_verified", {"upload_id": NODE_ID}),
         (FilesystemUpdateNodeTool, "updates", "update_node", {
             "node_id": NODE_ID, "expected_revision": 1, "name": "renamed",
@@ -42,6 +45,8 @@ async def test_mutation_return_marks_completed_before_result_processing(
     services = Mock(spec=FilesystemServiceFactory)
     services.upload_api_origin.return_value = "https://api.example.test"
     service = Mock()
+    service.supports_external_transfer = mutation == "begin_transfer"
+    service.transfer_instructions = AsyncMock(side_effect=RuntimeError("SECRET instruction rendering failure"))
     service.begin = AsyncMock(return_value=Mock())
     service.put = AsyncMock()
     committed_result = Mock()

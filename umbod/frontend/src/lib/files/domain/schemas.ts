@@ -127,7 +127,12 @@ export const singleUploadTransferSchema = z.strictObject({
   headers: uploadHeadersSchema,
   authorization: uploadAuthorizationSchema
 });
-export const uploadTransferSchema = z.discriminatedUnion('type', [singleUploadTransferSchema]);
+export const unavailableUploadTransferSchema = z.strictObject({
+  type: z.literal('unavailable'),
+  reason: z.enum(['expired', 'completed'])
+});
+export const uploadTransferSchema = z.discriminatedUnion('type', [singleUploadTransferSchema, unavailableUploadTransferSchema]);
+export type SingleUploadTransfer = z.infer<typeof singleUploadTransferSchema>;
 export const beginUploadSchema = z.strictObject({
   name: fileNameSchema,
   metadata: z.strictObject({ content_type: z.string().min(1), attributes: z.record(z.string(), z.string()) }),

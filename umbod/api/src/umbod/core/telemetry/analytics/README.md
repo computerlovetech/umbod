@@ -6,9 +6,10 @@ description: Backend-neutral log counting contracts and validated aggregation mo
 
 # Files
 
-- [Activity](activity.py) — Explicit producer activity declarations and conservative legacy classification with provenance-aware file-tool mapping.
+- [Activity](activity.py) — Backwards-compatible dimension adapters for canonical activity classification.
+- [Projection](projection.py) — Canonical-record projection into existing analytics dimensions and occurrence timestamps.
 - [Public exports](__init__.py) — Supported analytics contract types and errors.
 - [Ports](ports.py) — Backend-neutral reader, writer, and runtime boundaries.
-- [Write models](write_models.py) — Validated log records, ownership, and atomic write batches.
+- [Write models](write_models.py) — Validated log records with required normalization evidence, ownership, and atomic write batches.
 - [Models](models.py) — Immutable paginated queries, dimensions, scopes, time buckets, and count results.
 - [Errors](errors.py) — Unavailable analytics readers.

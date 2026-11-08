@@ -5,8 +5,8 @@ from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ToolAnnotations
 from pydantic import PrivateAttr
 
-from umbod.core.filesystem.uploads.errors import UploadReceiptUnavailable
-from umbod.core.filesystem.uploads.models import ExpectedChecksum, NoExpectedChecksum, VerifiedReceipt
+from umbod.core.filesystem.uploads.errors import UploadExpired, UploadReceiptUnavailable
+from umbod.core.filesystem.uploads.models import ExpectedChecksum, NoExpectedChecksum, VerifiedReceipt, UnavailableExternalTransfer, ExternalTransfer
 
 from umbod.mcp.responses.progress import operation_completed
 
@@ -45,13 +45,15 @@ class FilesystemBeginUploadTool(Tool):
             name="filesystem_begin_upload",
             description=(
                 "Begin a private filesystem upload using the configured server size limit. "
-                "Transfer raw bytes once via the returned capability-only HTTP PUT, then call "
+                "Follow the returned PUT instructions: S3 uses a presigned storage URL; other backends use an API capability. "
+                "Treat the whole returned URL as sensitive. Transfer raw bytes once, then call "
                 "filesystem_complete_upload. Never send MCP bearer credentials or follow redirects. "
                 "Compute local file size and SHA256 programmatically; do not reproduce file bytes in model output. "
-                "Beginning is not idempotent. After a lost or uncertain transfer response, inspect session progress "
-                "with an authenticated HTTP GET to /api/filesystem/uploads/{upload_id} before replaying. "
-                "Complete a staged upload with the same upload ID; capability expiry does not imply session expiry. "
-                "A process crash during transfer leaves a conflict."
+                "Beginning is not idempotent. After an uncertain S3 PUT, call filesystem_complete_upload with the same "
+                "upload ID to verify stored bytes; S3 session status stays pending until verification. Never blindly replay "
+                "the PUT or begin a replacement. For API capability transfers, inspect progress with an authenticated "
+                "HTTP GET to /api/filesystem/uploads/{upload_id} before replaying. "
+                "Capability expiry does not imply session expiry. A process crash during API transfer leaves a conflict."
             ),
             parameters=BeginUploadCommand.model_json_schema(),
             output_schema=BeginUploadResult.model_json_schema(),
@@ -65,11 +67,26 @@ class FilesystemBeginUploadTool(Tool):
     async def run(self, arguments: dict[str, Any]) -> ToolResult:
         command = BeginUploadCommand.model_validate(arguments)
         with filesystem_operation():
-            origin = validated_api_origin(self._services.upload_api_origin())
             expected = NoExpectedChecksum() if command.expected_sha256 == "" else ExpectedChecksum(
                 sha256=command.expected_sha256,
             )
-            result = await self._services.upload_sessions().begin_delegated(
+            uploads = self._services.upload_sessions()
+            if uploads.supports_external_transfer:
+                session = await uploads.begin_transfer(
+                    self._callers.capture(), command.parent_id, command.name, command.metadata,
+                    command.size_bytes, expected,
+                )
+                operation_completed()
+                instructions = await uploads.transfer_instructions(session)
+                if isinstance(instructions, UnavailableExternalTransfer) or not isinstance(session.delegated_transfer, ExternalTransfer):
+                    raise UploadExpired()
+                response = BeginUploadResult(
+                    upload_id=session.id, expires_at=session.delegated_transfer.expires_at,
+                    transfer=CapabilityTransfer(url=instructions.url, headers=instructions.headers),
+                )
+                return ToolResult(structured_content=response.model_dump(mode="json"))
+            origin = validated_api_origin(self._services.upload_api_origin())
+            result = await uploads.begin_delegated(
                 self._callers.capture(), command.parent_id, command.name, command.metadata,
                 command.size_bytes, expected,
             )

@@ -17,6 +17,7 @@ export class HttpUploadTransfer implements UploadTransferPort {
     const body = rawUploadSchema.safeParse(file);
     if (!body.success) throw new SchemaValidationError('outbound', body.error.issues);
     const transfer = parsed.data;
+    if (transfer.type === 'unavailable') throw new HttpError(transfer.reason === 'expired' ? 410 : 409, 'Upload transfer unavailable', {});
     if (transfer.authorization.type === 'same_origin') {
       const protectedHeader = Object.keys(transfer.headers).some((name) => /^(authorization|proxy-.*|cookie|cookie2|set-cookie|host|origin|referer|csrf-token|xsrf-token|x-umbod-.*|x-csrf.*|x-xsrf.*|x-forwarded-.*|sec-.*)$/i.test(name));
       if (protectedHeader) throw new Error('Upload instructions cannot override application credentials');

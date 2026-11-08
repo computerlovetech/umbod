@@ -14,9 +14,9 @@ description: "Authenticated filesystem browsing, creation, transfers, typed reci
 - [deletion.py](./deletion.py) — Authorized permanent file DELETE requiring one strong quoted positive numeric If-Match revision.
 - [metadata.py](./metadata.py) — Per-operation node OPTIONS and atomic revision-checked metadata, rename and move PATCH for files and directories.
 - [downloads.py](./downloads.py) — Attachment delivery and storage-neutral download response contract.
-- [uploads.py](./uploads.py) — Authorized begin, raw PUT, session inspection and idempotent completion routes.
+- [uploads.py](./uploads.py) — Authorized S3-direct or API-transfer begin, no-store session instructions and idempotent verified completion.
 - [upload_transfers.py](./upload_transfers.py) — Capability-only PUT under /api/filesystem; request-local services and no-store success/error responses.
-- [models.py](./models.py) — Strict upload requests, single-transfer responses, metadata and child envelopes.
+- [models.py](./models.py) — Strict upload requests, explicit transfer authorization and unavailable descriptors, metadata and child envelopes.
 - [routes.py](./routes.py) — Enriched node and browse results, private caller home POST, visible breadcrumbs, directory creation and downloads.
 
 # Related links

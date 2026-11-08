@@ -10,7 +10,7 @@ description: Backend pytest runner, README validation, release metadata checks, 
 - [run_tests.py](./run_tests.py) — Directory-targeted backend pytest runner with automatic workers, optional slow-phase reports and argument forwarding.
 - [release_versions.py](./release_versions.py) — Release version conversion and committed metadata validation.
 - [stamp_sdk_version.py](./stamp_sdk_version.py) — SDK build-workspace stamping.
-- [build_codex_plugin.py](./build_codex_plugin.py) — Generates a deployment-specific Codex marketplace without changing client settings or embedding credentials.
+- [build_codex_plugin.py](./build_codex_plugin.py) — Generates deployment-specific Codex marketplaces and the canonical browser template without credentials.
 - [tests](./tests/) — Pytest runner, README checks, version, release workflow, and installed Codex package-loader contracts.
 
 # Operations

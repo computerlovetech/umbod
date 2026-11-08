@@ -61,14 +61,20 @@ class SameOriginAuthorization(BaseModel):
     type: Literal["same_origin"] = "same_origin"
 
 
+class NoAuthorization(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    type: Literal["none"] = "none"
+
+
 class SingleUploadTransfer(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     type: Literal["single"] = "single"
     method: Literal["PUT"] = "PUT"
-    url: str
-    headers: dict[str, str]
-    authorization: SameOriginAuthorization
+    url: str = Field(repr=False)
+    headers: dict[str, str] = Field(repr=False)
+    authorization: SameOriginAuthorization | NoAuthorization
 
     @field_validator("headers")
     @classmethod
@@ -80,13 +86,20 @@ class SingleUploadTransfer(BaseModel):
         return headers
 
 
+class UnavailableUploadTransfer(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    type: Literal["unavailable"] = "unavailable"
+    reason: Literal["expired", "completed"]
+
+
 class UploadResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     id: UUID
     expires_at: datetime
     status: Literal["pending", "uploaded", "completed"]
-    transfer: SingleUploadTransfer
+    transfer: SingleUploadTransfer | UnavailableUploadTransfer
     complete_url: str
 
 

@@ -1,0 +1,97 @@
+{
+  "source_url": "https://github.com/openai/codex/blob/5f2ce5e02c56905cebcb5781ec198b676f32f27c/codex-rs/otel/src/events/session_telemetry.rs",
+  "contract": "Source-derived completion usage fields, not a captured client export",
+  "payload": {
+    "resourceLogs": [
+      {
+        "resource": {
+          "attributes": [
+            {
+              "key": "service.name",
+              "value": {
+                "stringValue": "codex_exec"
+              }
+            }
+          ]
+        },
+        "scopeLogs": [
+          {
+            "logRecords": [
+              {
+                "eventName": "codex.sse_event",
+                "attributes": [
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "codex.sse_event"
+                    }
+                  },
+                  {
+                    "key": "event.kind",
+                    "value": {
+                      "stringValue": "response.completed"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "gpt-5"
+                    }
+                  },
+                  {
+                    "key": "slug",
+                    "value": {
+                      "stringValue": "gpt-5.1"
+                    }
+                  },
+                  {
+                    "key": "input_token_count",
+                    "value": {
+                      "stringValue": "1000"
+                    }
+                  },
+                  {
+                    "key": "output_token_count",
+                    "value": {
+                      "stringValue": "200"
+                    }
+                  },
+                  {
+                    "key": "cached_token_count",
+                    "value": {
+                      "intValue": "800"
+                    }
+                  },
+                  {
+                    "key": "cache_write_token_count",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "reasoning_token_count",
+                    "value": {
+                      "intValue": "50"
+                    }
+                  },
+                  {
+                    "key": "tool_token_count",
+                    "value": {
+                      "stringValue": "1200"
+                    }
+                  },
+                  {
+                    "key": "ttft_ms",
+                    "value": {
+                      "intValue": "15"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

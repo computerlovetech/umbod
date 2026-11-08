@@ -1,9 +1,24 @@
 <script lang="ts">
+  import { onDestroy, untrack } from 'svelte';
   import CopyableValue from '$lib/components/admin/connectors/CopyableValue.svelte';
+  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
+  import { BrowserCodexPluginDownloader, BrowserCodexPluginPackager } from '$lib/codex-plugin/browser-package';
+  import type { CodexPluginDownloader, CodexPluginPackager } from '$lib/codex-plugin/contracts';
   import { McpSetupState } from './mcp-setup-state.svelte';
+  import { CodexPluginState } from './codex-plugin-state.svelte';
 
-  let { mcpEndpoint }: { mcpEndpoint: string } = $props();
+  let {
+    mcpEndpoint,
+    pluginPackager = new BrowserCodexPluginPackager(),
+    pluginDownloader = new BrowserCodexPluginDownloader()
+  }: {
+    mcpEndpoint: string;
+    pluginPackager?: CodexPluginPackager;
+    pluginDownloader?: CodexPluginDownloader;
+  } = $props();
   const state = new McpSetupState(() => mcpEndpoint);
+  const plugin = untrack(() => new CodexPluginState(() => mcpEndpoint, pluginPackager, pluginDownloader));
+  onDestroy(plugin.dispose);
 </script>
 
 <section aria-labelledby="mcp-setup-heading">
@@ -18,14 +33,31 @@
   <div class="guides">
     <article class="guide-card">
       <div class="guide-heading"><span class="harness-icon"><img src="/icons/openai.svg" alt="" /></span><h3>Codex</h3></div>
-      <p>Run in your terminal to add Umbod to your user configuration:</p>
-      <CopyableValue value={state.codexCommand} />
+      <p>Download the plugin for this Umbod instance. It bundles the MCP connection and a connected-app discovery skill, without account credentials.</p>
+      <LoadingButton type="button" loading={plugin.pending} label="Download Codex plugin" loadingLabel="Preparing ZIP" onclick={plugin.download} />
+      {#if plugin.error}
+        <p role="alert">{plugin.error}</p>
+      {/if}
+      {#if plugin.installation}
+        <div class="plugin-installation">
+          <p role="status">Your browser was asked to save <strong>{plugin.installation.filename}</strong>. Extract the ZIP to a folder you want to keep, then open a terminal in the extracted marketplace folder containing <code>plugins</code> and run:</p>
+          <CopyableValue value={plugin.installation.command} />
+          <p>In Codex, open <code>/plugins</code> and install Umbod from the added marketplace. Keep the extracted folder in place.</p>
+        </div>
+      {/if}
+      <p>Requires a Codex CLI version with <code>codex plugin</code> support (verified with 0.167.0). The browser downloads the package; it cannot install Codex plugins directly.</p>
+      <p>If you already configured an <code>umbod</code> MCP server, inspect it before replacing it. Keep only one Umbod connection enabled; do not remove unrelated configuration.</p>
       <ol>
-        <li>Run <code>codex mcp login umbod</code> and complete browser sign-in if authentication is required.</li>
-        <li>Run <code>codex mcp list</code> to confirm the server is configured.</li>
-        <li>Start Codex and use <code>/mcp</code> to inspect the available server and tools.</li>
+        <li>After installation, run <code>codex mcp login umbod</code> and complete browser sign-in if authentication is required.</li>
+        <li>Start a new Codex session and use <code>/mcp</code> to inspect the connection.</li>
+        <li>Ask Codex to verify its Umbod connection and discover available connected apps. Installation alone does not verify app access.</li>
       </ol>
-      <a href="https://developers.openai.com/codex/mcp/" target="_blank" rel="noreferrer">Codex MCP documentation</a>
+      <details>
+        <summary>Manual MCP setup instead</summary>
+        <p>This connects MCP without installing the plugin's discovery skill:</p>
+        <CopyableValue value={state.codexCommand} />
+      </details>
+      <a href="https://developers.openai.com/codex/plugins" target="_blank" rel="noreferrer">Codex plugin documentation</a>
     </article>
 
     <article class="guide-card">

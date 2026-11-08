@@ -89,6 +89,27 @@ def render_package(endpoint: str, skill: str, license_text: str) -> Mapping[str,
     }
 
 
+def render_browser_template(skill: str, license_text: str) -> str:
+    endpoint = "https://umbod-template.invalid/mcp"
+    endpoint_placeholder = "__UMBOD_MCP_ENDPOINT__"
+    marketplace_placeholder = "__UMBOD_MARKETPLACE_NAME__"
+    files = dict(render_package(endpoint, skill, license_text))
+    files["plugins/umbod/.mcp.json"] = files["plugins/umbod/.mcp.json"].replace(
+        json.dumps(endpoint), json.dumps(endpoint_placeholder)
+    )
+    files[".agents/plugins/marketplace.json"] = files[".agents/plugins/marketplace.json"].replace(
+        json.dumps(marketplace_name(endpoint)), json.dumps(marketplace_placeholder)
+    )
+    return json.dumps(
+        {
+            "endpointPlaceholder": endpoint_placeholder,
+            "marketplacePlaceholder": marketplace_placeholder,
+            "files": files,
+        },
+        indent=2,
+    ) + "\n"
+
+
 def write_package(destination: Path, files: Mapping[str, str]) -> None:
     for name in files:
         relative = Path(name)
@@ -117,9 +138,27 @@ def build_package(endpoint: str, destination: Path) -> str:
 
 def main(arguments: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build an endpoint-specific Umbod marketplace for Codex CLI")
-    parser.add_argument("--endpoint", required=True, help="Umbod MCP URL or deployment origin")
-    parser.add_argument("--output", required=True, type=Path, help="New marketplace directory; existing paths are never replaced")
+    parser.add_argument("--endpoint", help="Umbod MCP URL or deployment origin")
+    parser.add_argument("--output", type=Path, help="New marketplace directory; existing paths are never replaced")
+    parser.add_argument("--browser-template", type=Path, help="Generated browser package template JSON file")
     options = parser.parse_args(arguments)
+    if options.browser_template is not None:
+        if options.endpoint is not None or options.output is not None:
+            parser.error("--browser-template cannot be combined with --endpoint or --output")
+        try:
+            template = render_browser_template(
+                SKILL_PATH.read_text(encoding="utf-8"),
+                (REPOSITORY_ROOT / "LICENSE").read_text(encoding="utf-8"),
+            )
+            template_path = options.browser_template.expanduser().resolve()
+            template_path.parent.mkdir(parents=True, exist_ok=True)
+            template_path.write_text(template, encoding="utf-8")
+        except (ValueError, OSError) as error:
+            parser.exit(1, f"Could not build the Codex plugin: {error}\n")
+        return 0
+    missing = [flag for flag, value in (("--endpoint", options.endpoint), ("--output", options.output)) if value is None]
+    if missing:
+        parser.error(f"the following arguments are required: {', '.join(missing)}")
     destination = options.output.expanduser().resolve()
     try:
         name = build_package(options.endpoint, destination)

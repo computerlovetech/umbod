@@ -2,6 +2,19 @@ import os
 from pathlib import Path
 import re
 import sys
+from urllib.parse import unquote
+
+
+S3_CREDENTIAL_MARKER = re.compile(r"x-amz-(?:signature|credential|security-token)", re.IGNORECASE)
+
+
+def decoded_log_line(line: str) -> str:
+    for _ in range(8):
+        decoded = unquote(line)
+        if decoded == line:
+            break
+        line = decoded
+    return line
 
 
 def sensitive_values() -> list[str]:
@@ -14,11 +27,19 @@ def sensitive_values() -> list[str]:
 
 
 def check_secret_logs(output: str) -> None:
-    if any(value in output for value in sensitive_values()) or re.search(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*", output):
+    if (
+        any(value in output for value in sensitive_values())
+        or re.search(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*", output)
+        or S3_CREDENTIAL_MARKER.search(decoded_log_line(output))
+    ):
         raise SystemExit("Sensitive credentials or OAuth parameters appeared in service stdout")
 
 
 def redacted_diagnostics(output: str) -> str:
+    output = "".join(
+        "[REDACTED S3 SIGNED REQUEST]\n" if S3_CREDENTIAL_MARKER.search(decoded_log_line(line)) else line
+        for line in output.splitlines(keepends=True)
+    )
     redacted = re.sub(r"-----BEGIN (?:RSA )?PRIVATE KEY-----[\s\S]*?-----END (?:RSA )?PRIVATE KEY-----", "[REDACTED PRIVATE KEY]", output)
     redacted = re.sub(r"eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*", "[REDACTED JWT]", redacted)
     redacted = re.sub(r"kind-personal-(?:downstream|refresh)-token-[A-Za-z0-9_-]+", "[REDACTED TOKEN]", redacted)

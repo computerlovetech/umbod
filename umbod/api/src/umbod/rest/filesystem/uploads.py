@@ -6,12 +6,14 @@ from fastapi import APIRouter, Depends, Request, Response
 from umbod.core.callers import CallerSnapshot
 from umbod.core.filesystem.access import CallerNodeSummary
 from umbod.core.filesystem.uploads import UploadService, UploadSession
+from umbod.core.filesystem.uploads.models import ExternalTransfer, NoExpectedChecksum, UnavailableExternalTransfer
 
 from .deps import get_filesystem_caller, get_filesystem_uploads, require_filesystem_identity
 from .access import Access
 from .errors import filesystem_errors
 from .models import (
-    BeginUploadRequest, SameOriginAuthorization, SingleUploadTransfer, UploadResponse,
+    BeginUploadRequest, NoAuthorization, SameOriginAuthorization, SingleUploadTransfer, UploadResponse,
+    UnavailableUploadTransfer,
 )
 
 UPLOAD_RESPONSES = {
@@ -41,6 +43,18 @@ def upload_response(request: Request, upload: UploadSession) -> UploadResponse:
     )
 
 
+async def transfer_response(request: Request, upload: UploadSession, uploads: UploadService) -> UploadResponse:
+    result = upload_response(request, upload)
+    if isinstance(upload.delegated_transfer, ExternalTransfer):
+        instructions = await uploads.transfer_instructions(upload)
+        if isinstance(instructions, UnavailableExternalTransfer):
+            return result.model_copy(update={"transfer": UnavailableUploadTransfer(reason=instructions.reason)})
+        return result.model_copy(update={"transfer": SingleUploadTransfer(
+            url=instructions.url, headers=instructions.headers, authorization=NoAuthorization(),
+        )})
+    return result
+
+
 @router.post(
     "/nodes/{parent_id}/uploads", response_model=UploadResponse, status_code=201,
     responses=UPLOAD_RESPONSES,
@@ -50,20 +64,22 @@ async def begin_upload(
     caller: Caller, uploads: Uploads,
 ) -> UploadResponse:
     with filesystem_errors():
-        upload = await uploads.begin(
-            caller, parent_id, body.name, body.metadata.to_core_metadata(), body.size_bytes,
+        upload = await uploads.begin_transfer(
+            caller, parent_id, body.name, body.metadata.to_core_metadata(), body.size_bytes, NoExpectedChecksum(),
         )
-    result = upload_response(request, upload)
+        result = await transfer_response(request, upload, uploads)
+    response.headers["Cache-Control"] = "no-store"
     response.headers["Location"] = result.complete_url.removesuffix("/complete")
     return result
 
 
 @router.get("/uploads/{upload_id}", response_model=UploadResponse, responses=UPLOAD_RESPONSES)
 async def get_upload(
-    upload_id: UUID, request: Request, caller: Caller, uploads: Uploads,
+    upload_id: UUID, request: Request, response: Response, caller: Caller, uploads: Uploads,
 ) -> UploadResponse:
+    response.headers["Cache-Control"] = "no-store"
     with filesystem_errors():
-        return upload_response(request, await uploads.get(caller, upload_id))
+        return await transfer_response(request, await uploads.get(caller, upload_id), uploads)
 
 
 @router.put(

@@ -38,13 +38,16 @@ class SqliteAnalyticsWriter:
                         if isinstance(record.owner, OwnedLog)
                         else None,
                         *(dimensions.get(dimension) for dimension in LogDimension),
+                        record.normalization.model_dump_json()
+                        if record.normalization.kind == "normalized"
+                        else None,
                     )
                 )
             await connection.execute("BEGIN")
             await connection.executemany(
                 "INSERT INTO analytics_logs "
-                "(occurred_at_us, owner_id, source, event_name, severity, session_id, tool_name, activity_kind, outcome) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "(occurred_at_us, owner_id, source, event_name, severity, session_id, tool_name, activity_kind, outcome, normalization_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 rows,
             )
             await connection.commit()

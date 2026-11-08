@@ -14,6 +14,7 @@ from test_running_filesystem import (
     sharing_write_payload, tool_payload, wait_for_filesystem_tools,
 )
 from test_running_personal_mcp_execution import mcp_client, proxy_token
+from upload_transfer_support import assert_transfer_succeeded, transfer_upload
 from user_sharing_support import assert_mcp_user_target_sharing, assert_rest_recipient_scopes, observed_recipient
 
 
@@ -24,10 +25,9 @@ def upload_private_file(client: httpx.Client, parent_id: str) -> dict[str, Any]:
         "metadata": {"content_type": "text/plain", "attributes": {}},
         "size_bytes": len(content),
     })
-    assert begun.status_code == 201, begun.text
+    assert begun.status_code == 201, "Upload begin failed"
     upload = begun.json()
-    transferred = client.put(upload["transfer"]["url"], content=content, headers=upload["transfer"]["headers"])
-    assert transferred.status_code == 204, transferred.text
+    assert_transfer_succeeded(transfer_upload(client, upload["transfer"], content))
     return checked_summary(client.post(upload["complete_url"]), 201)
 
 

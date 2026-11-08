@@ -1,0 +1,42 @@
+{
+  "source_url": "https://code.claude.com/docs/en/monitoring-usage#skill-activated-event",
+  "contract": "Documented invocation_trigger categories; producer version not specified",
+  "payload": {
+    "resourceLogs": [
+      {
+        "resource": {
+          "attributes": [
+            {"key": "service.name", "value": {"stringValue": "claude-code"}}
+          ]
+        },
+        "scopeLogs": [
+          {
+            "logRecords": [
+              {
+                "eventName": "claude_code.skill_activated",
+                "attributes": [
+                  {"key": "event.name", "value": {"stringValue": "skill_activated"}},
+                  {"key": "invocation_trigger", "value": {"stringValue": "user-slash"}}
+                ]
+              },
+              {
+                "eventName": "claude_code.skill_activated",
+                "attributes": [
+                  {"key": "event.name", "value": {"stringValue": "skill_activated"}},
+                  {"key": "invocation_trigger", "value": {"stringValue": "claude-proactive"}}
+                ]
+              },
+              {
+                "eventName": "claude_code.skill_activated",
+                "attributes": [
+                  {"key": "event.name", "value": {"stringValue": "skill_activated"}},
+                  {"key": "invocation_trigger", "value": {"stringValue": "nested-skill"}}
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

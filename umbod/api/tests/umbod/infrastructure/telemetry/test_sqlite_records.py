@@ -13,6 +13,7 @@ from umbod.core.telemetry.analytics import (
     PresentDimensionValue,
     UnownedLog,
 )
+from umbod.core.telemetry.normalization import UnavailableLogNormalization
 from umbod.infrastructure.telemetry.sqlite.database import SqliteAnalyticsRuntime
 
 
@@ -25,6 +26,7 @@ async def test_sqlite_analytics_record_columns_survive_runtime_recreation(tmp_pa
     records = (
         AnalyticsLogRecord(
             occurred_at=epoch - timedelta(microseconds=1),
+            normalization=UnavailableLogNormalization(kind="unavailable", reason="legacy_or_unspecified"),
             owner=OwnedLog(kind="owned", owner_id=owner_id),
             dimensions=tuple(
                 DimensionGroup(dimension=dimension, value=PresentDimensionValue(kind="present", value=value))
@@ -33,7 +35,7 @@ async def test_sqlite_analytics_record_columns_survive_runtime_recreation(tmp_pa
         ),
         AnalyticsLogRecord(
             occurred_at=epoch,
-            owner=UnownedLog(kind="unowned"),
+            normalization=UnavailableLogNormalization(kind="unavailable", reason="legacy_or_unspecified"),            owner=UnownedLog(kind="unowned"),
             dimensions=tuple(
                 DimensionGroup(dimension=dimension, value=MissingDimensionValue(kind="missing"))
                 for dimension in LogDimension
@@ -41,6 +43,7 @@ async def test_sqlite_analytics_record_columns_survive_runtime_recreation(tmp_pa
         ),
         AnalyticsLogRecord(
             occurred_at=epoch + timedelta(seconds=1, microseconds=234567),
+            normalization=UnavailableLogNormalization(kind="unavailable", reason="legacy_or_unspecified"),
             owner=OwnedLog(kind="owned", owner_id=owner_id),
             dimensions=tuple(
                 DimensionGroup(dimension=dimension, value=PresentDimensionValue(kind="present", value=""))

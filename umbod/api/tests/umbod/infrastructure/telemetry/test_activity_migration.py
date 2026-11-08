@@ -55,13 +55,14 @@ async def test_version_one_backfill_preserves_raw_rows_indexes_and_reopens_idemp
                 async with connection.execute("SELECT * FROM analytics_logs ORDER BY occurred_at_us") as cursor:
                     rows = await cursor.fetchall()
                 async with connection.execute("PRAGMA user_version") as cursor:
-                    assert (await cursor.fetchone())[0] == 2
+                    assert (await cursor.fetchone())[0] == 3
                 async with connection.execute("SELECT name, sql FROM sqlite_master WHERE type = 'index' ORDER BY name") as cursor:
                     assert [tuple(row) for row in await cursor.fetchall()] == original_indexes
         finally:
             await runtime.shutdown()
         assert [row[:7] for row in rows] == original_rows
-        assert [row[7:] for row in rows] == [
+        assert [row[9] for row in rows] == [None] * len(original_rows)
+        assert [row[7:9] for row in rows] == [
             ("file_read", "unknown"), ("tool_call", "unknown"),
             ("skill_activation", None), (None, None), (None, None),
             ("tool_call", "unknown"), ("skill_activation", None),
@@ -93,6 +94,7 @@ async def test_backfill_failure_rolls_back_added_columns_and_schema_version(tmp_
     (APPLICATION_ID, 1, True),
     (APPLICATION_ID + 1, 1, False),
     (APPLICATION_ID, 3, False),
+    (APPLICATION_ID, 4, False),
     (APPLICATION_ID, 0, False),
 ])
 async def test_invalid_legacy_database_is_not_mutated(

@@ -31,8 +31,8 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 - [update.py](./update.py) — Strict top-level revision-checked rename, move and metadata changes with shared REST validation.
 - [upload.py](./upload.py) — One-shot private uploads capped at 10,485,760 decoded bytes or the lower server limit; no chunking or idempotent retries.
 - [upload_models.py](./upload_models.py) — Bounded UTF-8 and canonical padded base64 inputs; results never echo content.
-- [upload_session_models.py](./upload_session_models.py) — Begin/complete inputs, capability-only single PUT instructions and verified publication receipts.
-- [upload_sessions.py](./upload_sessions.py) — Additive begin and idempotent complete tools using the configured public API origin and native resource links.
+- [upload_session_models.py](./upload_session_models.py) — Begin/complete inputs, sensitive single-PUT instructions and verified publication receipts.
+- [upload_sessions.py](./upload_sessions.py) — Default presigned S3 or delegated API begin instructions, durable progress markers and verified completion with native file links.
 
 # Related links
 

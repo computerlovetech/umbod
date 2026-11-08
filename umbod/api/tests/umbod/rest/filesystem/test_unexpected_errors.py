@@ -38,7 +38,7 @@ def test_unexpected_service_and_response_errors_are_safe_and_no_store(
     explorer = create_autospec(FilesystemBrowser, instance=True)
     creation = create_autospec(FilesystemCreation, instance=True)
     content = create_autospec(UploadService, instance=True)
-    service = explorer if operation == "browse_node" else content if operation == "begin" else creation if method == "POST" else browsing
+    service = explorer if operation == "browse_node" else content if operation == "begin_transfer" else creation if method == "POST" else browsing
     if failure == "service":
         getattr(service, operation).side_effect = RuntimeError("private storage/key credential")
     else:

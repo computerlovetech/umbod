@@ -82,7 +82,7 @@ tags:
 
 ## Scope and composition
 
-- [Getting started composition](src/lib/components/getting-started/README.md) — Feature-owned harness onboarding and personal-token workflows; reuse its neutral controls, not the complete page.
+- [Getting started composition](src/lib/components/getting-started/README.md) — Feature-owned Codex plugin downloads, harness onboarding and personal-token workflows; reuse its neutral controls, not the complete page.
 
 - [Log analytics composition](src/lib/components/admin/analytics/README.md) — Feature-owned reports, scope classifications and frozen inspection; excluded because it owns administrator analytics workflows.
 

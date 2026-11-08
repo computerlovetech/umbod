@@ -1,0 +1,127 @@
+{
+  "source_url": "https://code.claude.com/docs/en/monitoring-usage#api-request-event",
+  "contract": "Documentation-derived fields, not a captured client export",
+  "payload": {
+    "resourceLogs": [
+      {
+        "resource": {
+          "attributes": [
+            {
+              "key": "service.name",
+              "value": {
+                "stringValue": "claude-code"
+              }
+            },
+            {
+              "key": "service.version",
+              "value": {
+                "stringValue": "2.1.300"
+              }
+            }
+          ]
+        },
+        "scopeLogs": [
+          {
+            "logRecords": [
+              {
+                "eventName": "claude_code.api_request",
+                "attributes": [
+                  {
+                    "key": "event.name",
+                    "value": {
+                      "stringValue": "api_request"
+                    }
+                  },
+                  {
+                    "key": "model",
+                    "value": {
+                      "stringValue": "claude-sonnet-4-6"
+                    }
+                  },
+                  {
+                    "key": "duration_ms",
+                    "value": {
+                      "doubleValue": 12.5
+                    }
+                  },
+                  {
+                    "key": "input_tokens",
+                    "value": {
+                      "intValue": "100"
+                    }
+                  },
+                  {
+                    "key": "output_tokens",
+                    "value": {
+                      "intValue": "20"
+                    }
+                  },
+                  {
+                    "key": "cache_read_tokens",
+                    "value": {
+                      "intValue": "30"
+                    }
+                  },
+                  {
+                    "key": "cache_creation_tokens",
+                    "value": {
+                      "intValue": "40"
+                    }
+                  },
+                  {
+                    "key": "cache_creation_5m_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "cache_creation_1h_tokens",
+                    "value": {
+                      "intValue": "0"
+                    }
+                  },
+                  {
+                    "key": "cost_usd",
+                    "value": {
+                      "doubleValue": 0.0025
+                    }
+                  },
+                  {
+                    "key": "cost_usd_micros",
+                    "value": {
+                      "intValue": "2500"
+                    }
+                  },
+                  {
+                    "key": "request_id",
+                    "value": {
+                      "stringValue": "server-request"
+                    }
+                  },
+                  {
+                    "key": "client_request_id",
+                    "value": {
+                      "stringValue": "client-request"
+                    }
+                  },
+                  {
+                    "key": "speed",
+                    "value": {
+                      "stringValue": "normal"
+                    }
+                  },
+                  {
+                    "key": "effort",
+                    "value": {
+                      "stringValue": "high"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

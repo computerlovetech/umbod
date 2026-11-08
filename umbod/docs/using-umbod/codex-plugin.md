@@ -4,7 +4,21 @@ The Umbod plugin bundles a remote MCP connection and a skill for discovering and
 
 This local-marketplace installation is verified with Codex CLI 0.167.0. Update Codex if `codex plugin` is unavailable. It does not require an OpenAI public-directory submission or a ChatGPT desktop installation.
 
-## Build the marketplace
+## Download from the dashboard
+
+In **Getting started → Connect your harness**, select **Download Codex plugin**. The browser generates a marketplace ZIP for the current deployment using the same manifests, canonical skill, and license as the terminal builder. No account credentials, browser cookies, or telemetry tokens enter the archive.
+
+Once the download finishes, extract the ZIP to a folder you want to keep. Open a terminal in the extracted marketplace folder containing `plugins` and the hidden `.agents` directory, then register it with Codex:
+
+```sh
+codex plugin marketplace add .
+```
+
+In Codex, open `/plugins` and install Umbod from the added marketplace. Keep the extracted folder in place. The dashboard does not assume where your browser saved the ZIP or how you extract it.
+
+The browser cannot install local Codex plugins directly or confirm that a download finished. Follow the authentication and connection checks below after running the terminal command. **Manual MCP setup instead** remains available on the dashboard without the plugin skill.
+
+## Build the marketplace from a checkout
 
 Use a checkout of the Umbod repository and Python 3.10 or newer. From the repository root, copy the MCP endpoint from **Getting started** in your Umbod dashboard, then enter it when the first command waits for input:
 
@@ -25,7 +39,7 @@ The package contains no account tokens. Do not put credentials, token query para
 
 Before installation, inspect any existing `umbod` connection with `codex mcp get umbod`. A manually configured server with the same name can shadow or conflict with the bundled server. If replacing a manual connection, record its configuration first and explicitly remove it with `codex mcp remove umbod`. Do not remove other servers. Keep only one Umbod plugin connection enabled at a time.
 
-Run the two commands printed by the builder. They register the local marketplace and install its `umbod` plugin. You can also inspect and manage the installation through `/plugins` in Codex CLI.
+For a dashboard download, register the extracted marketplace and install Umbod through `/plugins` as described above. For the terminal builder, run its two printed commands to register the marketplace and install the plugin. You can inspect and manage either installation through `/plugins` in Codex CLI.
 
 Verify the configured endpoint:
 
@@ -58,6 +72,17 @@ To stop using the plugin, disable or uninstall it through `/plugins`. Do not del
 - **No skill appears:** start a new session and confirm the plugin is enabled in `/plugins`.
 - **No tools match:** verify that the administrator published tools and granted your account access. Do not work around missing permissions using another access method.
 - **Server unavailable:** restore connectivity to the configured deployment. Plugin installation does not start Umbod or establish a tunnel.
+
+## Maintain the browser package template
+
+The Python packager is the authority for the plugin manifests, file paths, version, skill, and license. The frontend consumes a committed generated template so its standalone Docker build does not need Python or files outside the frontend context. After changing packaging, the canonical skill, or the license, regenerate it from the repository root:
+
+```sh
+python3 umbod/scripts/build_codex_plugin.py \
+  --browser-template umbod/frontend/src/lib/codex-plugin/package-template.json
+```
+
+The packaging tests reject a stale generated template. Frontend archive tests verify the canonical skill and license and endpoint-specific ZIP contents. Edit `skills/integrations/umbod-connected-apps/SKILL.md`, not the generated skill text inside the template.
 
 ## References
 

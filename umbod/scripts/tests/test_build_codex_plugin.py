@@ -11,11 +11,13 @@ from pathlib import Path
 import pytest
 from scripts.build_codex_plugin import (
     PLUGIN_VERSION,
+    REPOSITORY_ROOT,
     SKILL_PATH,
     build_package,
     main,
     marketplace_name,
     normalize_endpoint,
+    render_browser_template,
     render_package,
     write_package,
 )
@@ -117,6 +119,78 @@ def test_cli_rejects_secret_url_without_creating_output_or_echoing_secret(tmp_pa
     assert caught.value.code == 1
     assert "private-token" not in capsys.readouterr().err
     assert not destination.exists()
+
+
+def test_checked_in_browser_template_matches_canonical_sources() -> None:
+    template_path = REPOSITORY_ROOT / "umbod/frontend/src/lib/codex-plugin/package-template.json"
+    template = render_browser_template(
+        SKILL_PATH.read_text(encoding="utf-8"),
+        (REPOSITORY_ROOT / "LICENSE").read_text(encoding="utf-8"),
+    )
+    assert template_path.read_text(encoding="utf-8") == template
+    assert template == json.dumps(json.loads(template), indent=2) + "\n"
+
+
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "https://umbod.test",
+        "https://umbod.test/team/mcp/",
+        "https://umbod.test/nested/deployment/",
+        'https://umbod.test/team"quoted/mcp',
+        "http://[::1]:8011/team/mcp",
+    ],
+)
+def test_browser_template_substitution_matches_rendered_package(endpoint: str) -> None:
+    skill = 'canonical skill https://umbod-template.invalid/mcp "__UMBOD_MCP_ENDPOINT__"\n'
+    license_text = f'license {marketplace_name("https://umbod-template.invalid/mcp")}\n'
+    template = json.loads(render_browser_template(skill, license_text))
+    assert template["endpointPlaceholder"] == "__UMBOD_MCP_ENDPOINT__"
+    assert template["marketplacePlaceholder"] == "__UMBOD_MARKETPLACE_NAME__"
+    files = template["files"]
+    files["plugins/umbod/.mcp.json"] = files["plugins/umbod/.mcp.json"].replace(
+        json.dumps(template["endpointPlaceholder"]), json.dumps(normalize_endpoint(endpoint))
+    )
+    files[".agents/plugins/marketplace.json"] = files[".agents/plugins/marketplace.json"].replace(
+        json.dumps(template["marketplacePlaceholder"]), json.dumps(marketplace_name(endpoint))
+    )
+    assert files == render_package(endpoint, skill, license_text)
+
+
+def test_cli_writes_browser_template_without_install_commands(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    destination = tmp_path / "nested" / "package-template.json"
+    assert main(["--browser-template", str(destination)]) == 0
+    assert destination.read_text(encoding="utf-8") == render_browser_template(
+        SKILL_PATH.read_text(encoding="utf-8"),
+        (REPOSITORY_ROOT / "LICENSE").read_text(encoding="utf-8"),
+    )
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("arguments", [["--endpoint", "https://umbod.test"], ["--output", "marketplace"]])
+def test_cli_rejects_combining_browser_template_with_package_arguments(tmp_path: Path, arguments: list[str]) -> None:
+    destination = tmp_path / "package-template.json"
+    with pytest.raises(SystemExit) as caught:
+        main(["--browser-template", str(destination), *arguments])
+    assert caught.value.code == 2
+    assert not destination.exists()
+
+
+@pytest.mark.parametrize("arguments", [[], ["--endpoint", "https://umbod.test"], ["--output", "marketplace"]])
+def test_cli_requires_endpoint_and_output_in_package_mode(arguments: list[str]) -> None:
+    with pytest.raises(SystemExit) as caught:
+        main(arguments)
+    assert caught.value.code == 2
+
+
+def test_cli_preserves_existing_package_destination(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    destination = tmp_path / "marketplace"
+    destination.mkdir()
+    with pytest.raises(SystemExit) as caught:
+        main(["--endpoint", "https://umbod.test", "--output", str(destination)])
+    assert caught.value.code == 1
+    assert "Could not build the Codex plugin" in capsys.readouterr().err
+    assert list(destination.iterdir()) == []
 
 
 def loaded_codex_skills(directory: Path, environment: dict[str, str]) -> list[dict[str, object]]:

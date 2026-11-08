@@ -23,7 +23,7 @@ OPERATIONS = [
     ("GET", "/nodes/{id}", "get_node"),
     ("GET", "/nodes/{id}/children", "list_children"),
     ("GET", "/nodes/{id}/breadcrumbs", "get_breadcrumbs"),
-    ("POST", "/nodes/{id}/uploads", "begin"),
+    ("POST", "/nodes/{id}/uploads", "begin_transfer"),
     ("POST", "/nodes/{id}/directories", "create_directory"),
 ]
 
@@ -44,7 +44,7 @@ def test_port_delegation_and_fixed_error_translation(
     explorer = create_autospec(FilesystemBrowser, instance=True)
     creation = create_autospec(FilesystemCreation, instance=True)
     content = create_autospec(UploadService, instance=True)
-    service = explorer if operation == "browse_node" else content if operation == "begin" else creation if method == "POST" else browsing
+    service = explorer if operation == "browse_node" else content if operation == "begin_transfer" else creation if method == "POST" else browsing
     getattr(service, operation).side_effect = error("secret storage/key owner credential")
 
     def provide_explorer() -> FilesystemBrowser:
@@ -66,7 +66,7 @@ def test_port_delegation_and_fixed_error_translation(
     identifier = uuid4()
     response = filesystem_http.client.request(
         method, BASE + path.format(id=identifier),
-        **creation_payload("uploads" if operation == "begin" else "directories", BODY),
+        **creation_payload("uploads" if operation == "begin_transfer" else "directories", BODY),
     )
     assert response.status_code == status
     assert response.json() == {"detail": {"code": code, "message": message}}
@@ -78,7 +78,7 @@ def test_port_delegation_and_fixed_error_translation(
     assert arguments[1] == identifier and isinstance(arguments[1], UUID)
     if method == "POST":
         assert arguments[2:4] == ("child", NodeMetadata.model_validate(BODY["metadata"]))
-    if operation == "begin":
+    if operation == "begin_transfer":
         assert arguments[4] == 0
 
 

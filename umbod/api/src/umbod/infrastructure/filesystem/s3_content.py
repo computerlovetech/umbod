@@ -16,6 +16,7 @@ from .s3.edge import (
     UploadCreated,
 )
 from .s3.lifecycle import client_scope, finish, settle
+from .s3.uploads import S3UploadTransfer
 
 PART_SIZE = 8 * 1024 * 1024
 MAX_PARTS = 10000
@@ -95,8 +96,9 @@ class MultipartWrite:
                 pass
 
 
-class S3Content:
+class S3Content(S3UploadTransfer):
     def __init__(self, config: S3ContentConfig, provider: ClientProvider) -> None:
+        super().__init__(config, provider)
         self._config = config
         self._provider = provider
 

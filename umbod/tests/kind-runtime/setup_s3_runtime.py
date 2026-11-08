@@ -1,10 +1,14 @@
 import asyncio
+import base64
+import http.client
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
 from typing import Any
+from urllib.parse import urlsplit
+import xml.etree.ElementTree as ET
 
 
 BUCKET = "umbod-runtime-content"
@@ -98,9 +102,54 @@ async def inspect_storage(operation: str) -> None:
         sys.stdout.write(json.dumps(objects))
 
 
+def transfer() -> None:
+    connection = http.client.HTTPConnection("umbod-runtime-s3", 5000, timeout=60)
+    try:
+        payload = json.load(sys.stdin)
+        parsed = urlsplit(payload["url"])
+        if parsed.scheme != "http" or parsed.netloc != "umbod-runtime-s3:5000" or parsed.fragment:
+            raise ValueError
+        headers = payload["headers"]
+        lowered = {name.lower(): value for name, value in headers.items()}
+        if {"authorization", "cookie"} & lowered.keys():
+            raise ValueError
+        content = base64.b64decode(payload["content_base64"], validate=True)
+        target = parsed.path + ("?" + parsed.query if parsed.query else "")
+        connection.putrequest(payload["method"], target, skip_accept_encoding=True, skip_host="host" in lowered)
+        for name, value in headers.items():
+            connection.putheader(name, value)
+        if "content-length" not in lowered:
+            connection.putheader("Content-Length", str(len(content)))
+        connection.endheaders(content)
+        response = connection.getresponse()
+        body = response.read(4096)
+        code = ""
+        if body:
+            try:
+                candidate = ET.fromstring(body).findtext("Code", "")
+                code = candidate if candidate in {
+                    "AccessDenied", "SignatureDoesNotMatch", "PreconditionFailed", "InvalidRequest",
+                    "BadDigest", "NoSuchKey", "InvalidAccessKeyId", "ConditionalRequestConflict",
+                } else "redacted"
+            except ET.ParseError:
+                code = "redacted"
+        evidence = {
+            "status": response.status, "code": code,
+            "headers": {name: value for name in ("ETag", "Content-Length") if (value := response.getheader(name)) is not None},
+            "request": {"original_url": True, "authorization": False, "cookie": False, "headers_preserved": True},
+        }
+    except Exception:
+        evidence = {"error": "S3 transfer failed"}
+    finally:
+        connection.close()
+    sys.stdout.write(json.dumps(evidence))
+
+
 def main() -> None:
     if len(sys.argv) == 1:
         provision()
+    elif sys.argv[1] == "transfer":
+        transfer()
     else:
         asyncio.run(inspect_storage(sys.argv[1]))
 

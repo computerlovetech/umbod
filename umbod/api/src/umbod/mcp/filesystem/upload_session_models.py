@@ -34,9 +34,9 @@ class CapabilityTransfer(BaseModel):
 
     type: Literal["single"] = "single"
     method: Literal["PUT"] = "PUT"
-    url: str
+    url: str = Field(repr=False)
     headers: dict[str, str] = Field(repr=False)
-    instructions: str = "Send raw bytes with only these required headers. Do not follow redirects. Do not send MCP bearer credentials or cookies."
+    instructions: str = "Treat the whole URL as sensitive. Send exactly the declared bytes with these required headers; host clients must send the exact Content-Length and browsers set it from the file. Do not follow redirects. Do not send MCP bearer credentials or cookies."
 
 
 class BeginUploadResult(BaseModel):

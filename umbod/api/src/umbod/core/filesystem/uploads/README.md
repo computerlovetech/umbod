@@ -7,10 +7,10 @@ description: "Persisted upload staging, authorization and atomic file publicatio
 # Files
 
 - [__init__.py](./__init__.py) — Public upload service and persistence contracts.
-- [models.py](./models.py) — Legacy-compatible receipts, checksum expectations, bounded delegated identities and transfer claim states.
-- [ports.py](./ports.py) — Session storage, combined transactions and injectable clock.
+- [models.py](./models.py) — Legacy-compatible receipts, checksums, delegated claims and server-owned external transfer keys and deadlines.
+- [ports.py](./ports.py) — Session storage, combined transactions, injectable clock and validated external transfer capability.
 - [errors.py](./errors.py) — Expiry, lifecycle conflicts and transfer validation failures.
-- [service.py](./service.py) — Streaming hashes, atomic capability claims, immutable staging and idempotent publication; crashed claims are not recovered.
+- [service.py](./service.py) — Internal streaming, external readback verification outside transactions, bounded authority and atomic idempotent publication.
 
 # Related links
 

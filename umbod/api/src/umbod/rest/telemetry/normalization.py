@@ -1,150 +1,82 @@
 from collections.abc import Iterable
-from datetime import datetime, timedelta, timezone
-from typing import cast
+from datetime import datetime, timezone
+from typing import cast, get_args
 
 from opentelemetry.proto.collector.logs.v1.logs_service_pb2 import ExportLogsServiceRequest
-from opentelemetry.proto.common.v1.common_pb2 import KeyValue
-from opentelemetry.proto.logs.v1.logs_pb2 import LogRecord
+from opentelemetry.proto.common.v1.common_pb2 import AnyValue, KeyValue
 from pydantic import JsonValue
 
 from umbod.core.telemetry import TelemetrySignal
-from umbod.core.telemetry.analytics import (
-    AnalyticsLogRecord,
-    DimensionGroup,
-    LogDimension,
-    LogWriteBatch,
-    PresentDimensionValue,
-    UnownedLog,
+from umbod.core.telemetry.analytics import LogWriteBatch
+from umbod.core.telemetry.normalization.decoding import (
+    DecodedAttribute, DecodedBoolean, DecodedInteger, DecodedInvalid, DecodedNumber, DecodedString,
+    DecodedValue, ProducerKey,
 )
-from umbod.core.telemetry.analytics.activity import (
-    ActivityOutcome,
-    ToolOrigin,
-    classify_activity,
-    classify_declared_activity,
+from umbod.core.telemetry.normalization.evidence import (
+    LEGACY_KEYS, attribute_text, bounded_text_evidence, capture_producer_evidence,
+    schema_url_evidence, text_evidence,
 )
+from umbod.core.telemetry.normalization.mapping import normalize_log
+from umbod.core.telemetry.normalization.models import CorrelationKey, InvalidValue, SourceEvidence, TimestampEvidence
+from umbod.core.telemetry.analytics.projection import project_analytics_log
 from umbod.rest.telemetry.validation import parse_message
 
 
-_DIMENSION_ATTRIBUTES: dict[LogDimension, tuple[str, ...]] = {
-    LogDimension.EVENT_NAME: ("event.name",),
-    LogDimension.SESSION_ID: ("session.id", "session_id", "conversation.id", "conversation_id", "mcp.session.id"),
-    LogDimension.TOOL_NAME: ("tool.name", "tool_name", "mcp.tool.name"),
-}
+_APPROVED_KEYS = frozenset((*get_args(ProducerKey), *get_args(CorrelationKey))) - frozenset(("trace_id", "span_id"))
+_ERROR_INDICATOR_KEYS = frozenset(("error", "error.message"))
+_INDICATOR_KEYS = frozenset(("mcp_server", "mcp_server_origin", "mcp.server.name")) | _ERROR_INDICATOR_KEYS
+_RESOURCE_KEYS = frozenset(("service.name", "service.version"))
 
 
-def normalize_analytics_logs(
-    payload: dict[str, JsonValue], received_at: datetime
-) -> LogWriteBatch:
+def normalize_analytics_logs(payload: dict[str, JsonValue], received_at: datetime) -> LogWriteBatch:
     request = cast(ExportLogsServiceRequest, parse_message(TelemetrySignal.LOGS, payload))
-    records: list[AnalyticsLogRecord] = []
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    delta = received_at.astimezone(timezone.utc) - epoch
+    receipt_ns = (delta.days * 86400 + delta.seconds) * 1_000_000_000 + delta.microseconds * 1000
+    records = []
     for resource in request.resource_logs:
-        resource_attributes = _string_attributes(resource.resource.attributes)
+        resource_attributes = _attributes(resource.resource.attributes, _RESOURCE_KEYS)
         for scope in resource.scope_logs:
             for record in scope.log_records:
-                dimensions = _dimensions(record, resource_attributes)
-                timestamp = record.time_unix_nano or record.observed_time_unix_nano
-                occurred_at = (
-                    datetime(1970, 1, 1, tzinfo=timezone.utc)
-                    + timedelta(microseconds=timestamp // 1000)
-                    if timestamp
-                    else received_at
+                attributes = _attributes(record.attributes, _APPROVED_KEYS | frozenset(("event.name",)))
+                source = SourceEvidence(
+                    service=attribute_text(resource_attributes, "service.name"),
+                    service_version=attribute_text(resource_attributes, "service.version"),
+                    app_version=attribute_text(attributes, "app.version"),
+                    scope_name=bounded_text_evidence(scope.scope.name), scope_version=bounded_text_evidence(scope.scope.version),
+                    resource_schema_url=schema_url_evidence(resource.schema_url), scope_schema_url=schema_url_evidence(scope.schema_url),
+                    record_event=text_evidence(record.event_name), semantic_event=attribute_text(attributes, "event.name"),
+                    severity_text=text_evidence(record.severity_text), severity_number=record.severity_number if 0 <= record.severity_number <= 24 else InvalidValue(kind="invalid", reason="out_of_range"),
                 )
-                records.append(AnalyticsLogRecord(
-                    occurred_at=occurred_at,
-                    owner=UnownedLog(kind="unowned"),
-                    dimensions=tuple(
-                        DimensionGroup(
-                            dimension=dimension,
-                            value=PresentDimensionValue(kind="present", value=value),
-                        )
-                        for dimension, value in dimensions.items()
-                    ),
-                ))
+                decoded = tuple(DecodedAttribute.model_validate({"key": key, "value": value}) for key, value in attributes.items() if key in _APPROVED_KEYS)
+                decoded += tuple(DecodedAttribute.model_validate({"key": key, "value": DecodedString(kind="string", value=value.hex())}) for key, value in (("trace_id", record.trace_id), ("span_id", record.span_id)) if value)
+                timestamps = TimestampEvidence(
+                    source_ns=record.time_unix_nano, observed_ns=record.observed_time_unix_nano,
+                    receipt_ns=receipt_ns,
+                    effective_source="source" if record.time_unix_nano else "observed" if record.observed_time_unix_nano else "receipt",
+                )
+                records.append(project_analytics_log(normalize_log(source, timestamps, capture_producer_evidence(decoded))))
     return LogWriteBatch(records=tuple(records))
 
 
-def _string_attributes(attributes: Iterable[KeyValue]) -> dict[str, str]:
-    values: dict[str, str] = {}
-    for attribute in attributes:
-        values.pop(attribute.key, None)
-        if attribute.value.WhichOneof("value") == "string_value":
-            values[attribute.key] = attribute.value.string_value
-    return values
+def _attributes(attributes: Iterable[KeyValue], approved: frozenset[str]) -> dict[str, DecodedValue]:
+    return {attribute.key: _decode(attribute.key, attribute.value) for attribute in attributes if attribute.key in approved}
 
 
-def _dimensions(record: LogRecord, resource: dict[str, str]) -> dict[LogDimension, str]:
-    attributes = _string_attributes(record.attributes)
-    dimensions: dict[LogDimension, str] = {}
-    if "service.name" in resource:
-        dimensions[LogDimension.SOURCE] = resource["service.name"]
-    for dimension, keys in _DIMENSION_ATTRIBUTES.items():
-        for key in keys:
-            if key in attributes:
-                dimensions[dimension] = attributes[key]
-                break
-    if record.event_name:
-        dimensions[LogDimension.EVENT_NAME] = record.event_name
-    if record.severity_text:
-        dimensions[LogDimension.SEVERITY] = record.severity_text
-    declared_activity = classify_declared_activity(
-        kind=attributes.get("umbod.activity.kind", ""),
-        outcome=_declared_outcome(record.attributes),
-    )
-    activity = declared_activity
-    if not activity:
-        for event in (
-            attributes.get("event.name", ""),
-            dimensions.get(LogDimension.EVENT_NAME, ""),
-        ):
-            activity = classify_activity(
-                source=dimensions.get(LogDimension.SOURCE, ""),
-                event=event,
-                tool=dimensions.get(LogDimension.TOOL_NAME, ""),
-                outcome=_outcome(record.attributes),
-                tool_origin=_tool_origin(attributes),
-            )
-            if activity:
-                break
-    dimensions.update(activity)
-    return dimensions
-
-
-def _declared_outcome(attributes: Iterable[KeyValue]) -> ActivityOutcome:
-    outcome = _outcome(attributes)
-    for attribute in attributes:
-        if attribute.key != "umbod.activity.outcome":
-            continue
-        outcome = "unknown"
-        if attribute.value.WhichOneof("value") == "string_value":
-            value = attribute.value.string_value
-            if value in ("success", "failure", "unknown"):
-                outcome = cast(ActivityOutcome, value)
-    return outcome
-
-
-def _outcome(attributes: Iterable[KeyValue]) -> ActivityOutcome:
-    outcome: ActivityOutcome = "unknown"
-    for attribute in attributes:
-        if attribute.key != "success":
-            continue
-        outcome = "unknown"
-        value_type = attribute.value.WhichOneof("value")
-        if value_type == "bool_value":
-            outcome = "success" if attribute.value.bool_value else "failure"
-        elif value_type == "string_value":
-            if attribute.value.string_value == "true":
-                outcome = "success"
-            elif attribute.value.string_value == "false":
-                outcome = "failure"
-    return outcome
-
-
-def _tool_origin(attributes: dict[str, str]) -> ToolOrigin:
-    external = any(
-        attributes.get(key, "").strip()
-        for key in ("mcp_server", "mcp_server_origin", "mcp.server.name", "mcp.tool.name")
-    ) or any(
-        attributes.get(key) in ("mcp", "custom")
-        for key in ("tool_type", "tool.type", "tool_kind", "tool.kind", "tool_origin", "tool_namespace")
-    )
-    return "external" if external else "native"
+def _decode(key: str, value: AnyValue) -> DecodedValue:
+    value_type = value.WhichOneof("value")
+    if value_type == "string_value":
+        if key in _ERROR_INDICATOR_KEYS:
+            return DecodedBoolean(kind="boolean", value=True)
+        if key in _INDICATOR_KEYS:
+            return DecodedBoolean(kind="boolean", value=bool(value.string_value.strip()))
+        if key not in LEGACY_KEYS and len(value.string_value) > 1024:
+            return DecodedInvalid(kind="invalid", reason="oversize")
+        return DecodedString(kind="string", value=value.string_value)
+    if value_type == "bool_value":
+        return DecodedBoolean(kind="boolean", value=value.bool_value) if key not in _INDICATOR_KEYS else DecodedInvalid(kind="invalid", reason="wrong_type")
+    if value_type == "int_value":
+        return DecodedInteger(kind="integer", value=value.int_value)
+    if value_type == "double_value":
+        return DecodedNumber(kind="number", value=value.double_value)
+    return DecodedInvalid(kind="invalid", reason="wrong_type")

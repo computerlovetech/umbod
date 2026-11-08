@@ -90,6 +90,87 @@ def test_running_canonical_activity_reports_preserve_raw_events(
         ]}
 
 
+def test_running_model_usage_and_estimated_cost_logs_do_not_become_tool_activity(
+    runtime_endpoints: RuntimeEndpoints, otlp_bearer_token: str,
+) -> None:
+    source = f"model-usage-{uuid4().hex}"
+    records = []
+    for event, attributes in (
+        ("claude_code.api_request", (
+            ("model", {"stringValue": "claude-sonnet-4-6"}),
+            ("input_tokens", {"intValue": "100"}),
+            ("output_tokens", {"intValue": "20"}),
+            ("cache_read_tokens", {"intValue": "30"}),
+            ("cache_creation_tokens", {"intValue": "40"}),
+            ("cost_usd_micros", {"intValue": "2500"}),
+        )),
+        ("claude_code.api_error", (
+            ("attempt", {"intValue": "2"}),
+            ("status_code", {"intValue": "429"}),
+            ("duration_ms", {"stringValue": "NaN"}),
+        )),
+        ("codex.sse_event", (
+            ("event.kind", {"stringValue": "response.completed"}),
+            ("input_token_count", {"stringValue": "9007199254741000"}),
+            ("cached_token_count", {"intValue": "9007199254740993"}),
+            ("output_token_count", {"stringValue": "200"}),
+            ("tool_token_count", {"stringValue": "9007199254741200"}),
+        )),
+        ("codex.sse_event", (
+            ("event.kind", {"stringValue": "response.completed"}),
+            ("error.message", {"stringValue": "synthetic-stream-diagnostic"}),
+        )),
+        ("codex.turn_cost", (
+            ("usage.estimated_usd", {"stringValue": "0.123456789012345678"}),
+            ("turn.interrupted", {"boolValue": True}),
+        )),
+        ("codex.api_request", (
+            ("http.response.status_code", {"intValue": "500"}),
+            ("attempt", {"intValue": "1"}),
+        )),
+        ("codex.websocket_request", (
+            ("success", {"stringValue": "false"}),
+            ("duration_ms", {"stringValue": "12.5"}),
+        )),
+    ):
+        records.append({
+            "timeUnixNano": "1767226200000000123",
+            "eventName": "codex.tool_result" if event == "codex.api_request" else "source-location",
+            "attributes": [
+                {"key": "event.name", "value": {"stringValue": event}},
+                {"key": "tool_name", "value": {"stringValue": "exec_command"}},
+                *({"key": key, "value": value} for key, value in attributes),
+            ],
+        })
+    ingestion = httpx.post(
+        f"{runtime_endpoints.otlp_base_url}/v1/logs",
+        json={"resourceLogs": [{
+            "resource": {"attributes": [{"key": "service.name", "value": {"stringValue": source}}]},
+            "scopeLogs": [{"logRecords": records}],
+        }]},
+        headers={"Authorization": f"Bearer {otlp_bearer_token}"}, timeout=10,
+    )
+    assert ingestion.status_code == 200, ingestion.text
+    response = httpx.post(
+        f"{runtime_endpoints.api_base_url}/api/admin/telemetry/log-counts",
+        json={
+            "time_range": {"start": "2026-01-01T00:00:00Z", "end": "2026-01-02T00:00:00Z"},
+            "filters": [{"dimension": "source", "values": [source]}],
+            "group_by": ["activity_kind", "outcome"], "bucketing": {"kind": "none"},
+            "pagination": {"limit": 100, "offset": 0},
+        },
+        headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"}, timeout=10,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"has_more": False, "rows": [{
+        "groups": [
+            {"dimension": "activity_kind", "value": {"kind": "missing"}},
+            {"dimension": "outcome", "value": {"kind": "missing"}},
+        ],
+        "count": len(records), "bucket": {"kind": "none"},
+    }]}
+
+
 def test_running_another_harness_declares_activity_and_outcomes(
     runtime_endpoints: RuntimeEndpoints, otlp_bearer_token: str,
 ) -> None:
@@ -145,6 +226,81 @@ def test_running_another_harness_declares_activity_and_outcomes(
             ("skill_activation", {"kind": "missing"}),
             ("tool_call", {"kind": "present", "value": "success"}),
         )
+    ]}
+
+
+def test_running_unified_normalization_keeps_approvals_out_of_execution_counts(
+    runtime_endpoints: RuntimeEndpoints, otlp_bearer_token: str,
+) -> None:
+    source = f"unified-normalization-{uuid4().hex}"
+    records = []
+    for event in (
+        "codex.tool_result", "codex.tool_decision", "claude_code.tool_decision",
+        "claude_code.skill_activated", "unsupported.event",
+    ):
+        records.append({
+            "timeUnixNano": "1767226200000000123",
+            "observedTimeUnixNano": "1767226200000000456",
+            "eventName": "codex.tool_result" if event == "codex.tool_decision" else "source-location",
+            "severityNumber": 17,
+            "traceId": "0123456789abcdef0123456789abcdef",
+            "spanId": "0123456789abcdef",
+            "attributes": [
+                {"key": "event.name", "value": {"stringValue": event}},
+                {"key": "session.id", "value": {"stringValue": "producer-session"}},
+                {"key": "conversation.id", "value": {"stringValue": "conversation"}},
+                {"key": "mcp.session.id", "value": {"stringValue": "transport-session"}},
+                {"key": "tool_name", "value": {"stringValue": "exec_command"}},
+                {"key": "call_id", "value": {"stringValue": "reported-call"}},
+                {"key": "tool_use_id", "value": {"stringValue": "reported-tool-use"}},
+                {"key": "success", "value": {"stringValue": "false"}},
+                {"key": "duration_ms", "value": {"stringValue": "NaN"}},
+                {"key": "decision", "value": {"stringValue": "accept"}},
+                {"key": "app.version", "value": {"boolValue": False}},
+            ],
+        })
+    ingestion = httpx.post(
+        f"{runtime_endpoints.otlp_base_url}/v1/logs",
+        json={"resourceLogs": [{
+            "resource": {"attributes": [
+                {"key": "service.name", "value": {"stringValue": source}},
+                {"key": "service.version", "value": {"stringValue": "fixture-version"}},
+            ]},
+            "scopeLogs": [{"scope": {"name": "fixture-scope"}, "logRecords": records}],
+        }]},
+        headers={"Authorization": f"Bearer {otlp_bearer_token}"}, timeout=10,
+    )
+    assert ingestion.status_code == 200, ingestion.text
+    response = httpx.post(
+        f"{runtime_endpoints.api_base_url}/api/admin/telemetry/log-counts",
+        json={
+            "time_range": {"start": "2026-01-01T00:00:00Z", "end": "2026-01-02T00:00:00Z"},
+            "filters": [{"dimension": "source", "values": [source]}],
+            "group_by": ["activity_kind", "outcome"], "bucketing": {"kind": "none"},
+            "pagination": {"limit": 100, "offset": 0},
+        },
+        headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"}, timeout=10,
+    )
+    assert response.status_code == 200, response.text
+    assert response.json() == {"has_more": False, "rows": [
+        {
+            "groups": [
+                {"dimension": "activity_kind", "value": {"kind": "missing"}},
+                {"dimension": "outcome", "value": {"kind": "missing"}},
+            ], "count": 3, "bucket": {"kind": "none"},
+        },
+        {
+            "groups": [
+                {"dimension": "activity_kind", "value": {"kind": "present", "value": "skill_activation"}},
+                {"dimension": "outcome", "value": {"kind": "missing"}},
+            ], "count": 1, "bucket": {"kind": "none"},
+        },
+        {
+            "groups": [
+                {"dimension": "activity_kind", "value": {"kind": "present", "value": "tool_call"}},
+                {"dimension": "outcome", "value": {"kind": "present", "value": "failure"}},
+            ], "count": 1, "bucket": {"kind": "none"},
+        },
     ]}
 
 

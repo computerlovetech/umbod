@@ -17,6 +17,7 @@ from mcp.types import BlobResourceContents, ResourceLink, TextResourceContents
 
 from conftest import RuntimeEndpoints
 from test_running_personal_mcp_execution import mcp_client, proxy_token
+from upload_transfer_support import assert_transfer_succeeded, s3_runtime, transfer_upload
 
 
 FILESYSTEM = "/api/me/filesystem"
@@ -309,12 +310,9 @@ async def check_mcp_file_deletion(
         "metadata": {"content_type": "text/plain", "attributes": {}},
         "size_bytes": len(data),
     })
-    assert started.status_code == 201, started.text
+    assert started.status_code == 201, "Upload begin failed"
     upload = started.json()
-    transferred = alice_second.put(
-        upload["transfer"]["url"], content=data, headers=upload["transfer"]["headers"],
-    )
-    assert transferred.status_code == 204, transferred.text
+    assert_transfer_succeeded(transfer_upload(alice_second, upload["transfer"], data))
     node = checked_summary(alice_second.post(upload["complete_url"]), 201)
     node_path = FILESYSTEM + "/nodes/" + node["id"]
     await wait_for_filesystem_tools(alice_mcp, {"filesystem_delete_file"})
@@ -431,10 +429,9 @@ async def test_cross_worker_discovery_distinguishes_root_creation_from_direct_fi
                     "name": "direct-read.txt", "size_bytes": 0,
                     "metadata": {"content_type": "text/plain", "attributes": {}},
                 })
-                assert begun.status_code == 201, begun.text
+                assert begun.status_code == 201, "Upload begin failed"
                 upload = begun.json()
-                transferred = alice.put(upload["transfer"]["url"], content=b"", headers=upload["transfer"]["headers"])
-                assert transferred.status_code == 204, transferred.text
+                assert_transfer_succeeded(transfer_upload(alice, upload["transfer"], b""))
                 file = checked_summary(alice.post(upload["complete_url"]), 201)
                 access_path = FILESYSTEM + "/nodes/" + file["id"] + "/access?recipient_type=group"
                 initial = alice.get(access_path)
@@ -541,25 +538,22 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
         assert denied_upload.status_code == 403
         assert denied_upload.json()["detail"]["code"] == "filesystem_permission_denied"
         begun = alice.post(uploads_path, json=upload_request)
-        assert begun.status_code == 201, begun.text
+        assert begun.status_code == 201, "Upload begin failed"
         assert begun.headers["cache-control"] == "no-store"
         upload = begun.json()
         assert upload["transfer"]["type"] == "single"
         assert upload["transfer"]["method"] == "PUT"
-        assert upload["transfer"]["authorization"] == {"type": "same_origin"}
+        assert upload["transfer"]["authorization"] == {"type": "none" if s3_runtime() else "same_origin"}
         session = alice_second.get(begun.headers["location"])
         assert session.status_code == 200, session.text
         assert session.json()["status"] == "pending"
         assert bob.get(begun.headers["location"]).status_code == 403
-        assert bob.put(upload["transfer"]["url"], content=uploaded_bytes).status_code == 403
+        if not s3_runtime():
+            assert bob.put(upload["transfer"]["url"], content=uploaded_bytes).status_code == 403
         assert bob.post(upload["complete_url"]).status_code == 403
         assert alice_second.post(upload["complete_url"]).status_code == 409
-        transferred = alice_second.put(
-            upload["transfer"]["url"], content=uploaded_bytes,
-            headers=upload["transfer"]["headers"],
-        )
-        assert transferred.status_code == 204, transferred.text
-        assert alice.get(begun.headers["location"]).json()["status"] == "uploaded"
+        assert_transfer_succeeded(transfer_upload(alice_second, upload["transfer"], uploaded_bytes))
+        assert alice.get(begun.headers["location"]).json()["status"] == ("pending" if s3_runtime() else "uploaded")
         assert alice.get(FILESYSTEM + "/nodes/" + alice_directory["id"] + "/children").json()["nodes"] == []
         completed = alice.post(upload["complete_url"])
         uploaded = checked_summary(completed, 201)
@@ -590,10 +584,7 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             [root, alice_directory, uploaded], True,
         )
         assert alice_second.get(begun.headers["location"]).json()["status"] == "completed"
-        assert alice.put(
-            upload["transfer"]["url"], content=uploaded_bytes,
-            headers=upload["transfer"]["headers"],
-        ).status_code == 409
+        assert transfer_upload(alice, upload["transfer"], uploaded_bytes).status_code == (412 if s3_runtime() else 409)
         downloaded = alice_second.get(FILESYSTEM + "/nodes/" + uploaded["id"] + "/content")
         assert downloaded.status_code == 200
         assert downloaded.content == uploaded_bytes

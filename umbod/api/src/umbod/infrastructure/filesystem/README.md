@@ -15,7 +15,7 @@ description: "Filesystem composition and concrete content storage over the appli
 - [migration/](./migration/README.md) — Verified immutable local-to-S3 migration and dry-run planning.
 - [objects.py](./objects.py) — Trusted content directory operations.
 - [keys.py](./keys.py) — Canonical logical content key validation without host filesystem dependencies.
-- [s3_content.py](./s3_content.py) — Immutable S3 byte storage with bounded multipart writes and operation-scoped clients.
+- [s3_content.py](./s3_content.py) — Immutable S3 storage, default direct single-PUT upload capability and operation-scoped clients.
 - [S3 infrastructure edge](./s3/README.md) — SDK protocols, response validation, provider configuration, and cancellation-safe resource cleanup.
 
 # Related links

@@ -18,6 +18,7 @@ description: Test-only adapters and acceptance drivers for backend behavior test
 - [icons.py](./icons.py) — Scripted favicon HTTP and discovery adapters.
 - [messaging.py](./messaging.py) — In-memory event stream, factory, and database event append failure injection.
 - [native_tool_states.py](./native_tool_states.py) — Native tool state test support.
+- [normalized_log_v1.json](./normalized_log_v1.json) — Frozen canonical version-1 evidence for backward-read, replay and persistence checks.
 - [persistence_contracts.py](./persistence_contracts.py) — Backend-neutral records, schemas and operations shared by kernel and adapter contracts.
 - [persistence_processes.py](./persistence_processes.py) — Spawn-safe SQLite claim and insert workers for process coordination checks.
 - [personal_oauth.py](./personal_oauth.py) — Real memory persistence and explicit OAuth policy with production REST assembly.
