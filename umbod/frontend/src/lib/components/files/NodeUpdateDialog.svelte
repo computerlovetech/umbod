@@ -56,11 +56,14 @@
   <form aria-label={state.moving ? 'Move item' : 'Rename item'} onsubmit={(event) => { event.preventDefault(); void state.submit(); }}>
     <div class="dialog-body">
       {#if state.moving}
+        <p>{state.moveWarning}</p>
+        {#if !state.reviewingDrop}
         <div class="folder-picker" role="region" aria-label="Destination folders" aria-busy={state.destinations.loading}>
           <ul aria-label="Choose destination">{@render folders(state.destinations.folders)}</ul>
           {#if state.destinations.loading && state.destinations.folders.length === 0}<p class="branch-message" role="status">Loading folders…</p>{/if}
         </div>
         {#if state.destinations.canRetry}<Button variant="secondary" type="button" onclick={state.destinations.retry} disabled={state.pending}>Retry folders</Button>{/if}
+        {/if}
       {:else}
         <label for="node-rename">Name</label>
         <input id="node-rename" value={state.draft} oninput={(event) => state.changeName(event.currentTarget.value)} disabled={state.pending || state.needsReload} required />

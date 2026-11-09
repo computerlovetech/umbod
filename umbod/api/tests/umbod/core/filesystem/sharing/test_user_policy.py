@@ -87,7 +87,7 @@ async def test_user_share_unions_and_repeats_without_changing_ownership_or_node(
     grants = await context.policies.list_grants(context.node.id)
     assert grants == [AccessGrant(
         node_id=context.node.id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id=" recipient "),
-        permissions={Permission.READ, Permission.WRITE}, recursive=False,
+        permissions={Permission.READ, Permission.WRITE}, recursive=True,
     )]
     summary = (await asyncio.wait_for(context.service.summarize_nodes(caller(), (context.node.id,)), 3)).nodes[0]
     assert summary.can_share
@@ -101,7 +101,7 @@ async def test_user_share_unions_and_repeats_without_changing_ownership_or_node(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("recursive,permissions", [(True, {Permission.READ}), (False, set())])
+@pytest.mark.parametrize("recursive,permissions", [(True, set()), (False, set())])
 async def test_known_protected_user_collisions_block_share_and_summary(user_context: UserContext, recursive: bool, permissions: set[Permission]) -> None:
     context = user_context
     user_id = await observe(context.directory, "issuer", "recipient")

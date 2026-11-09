@@ -145,7 +145,7 @@ def test_sharing_requires_precondition_and_rejects_multiple_headers(
     {"groups": []}, {"grants": [], "issuer": "evil"}, {"grants": [], "users": []},
     {"grants": [], "recursive": True}, {"grants": [], "expected_revision": "abc"},
     {"grants": [{"recipient": {"type": "group", "group_id": "team"}, "permissions": ["read"], "issuer": "evil"}]},
-    {"grants": [{"recipient": {"type": "group", "group_id": "team"}, "permissions": ["read"], "recursive": True}]},
+    {"grants": [{"recipient": {"type": "group", "group_id": "team"}, "permissions": ["read"], "recursive": "invalid"}]},
     {"grants": [{"recipient": {"type": "group", "group_id": "team"}, "permissions": []}]},
     {"grants": [{"recipient": {"type": "group", "group_id": " "}, "permissions": ["read"]}]},
     {"grants": [{"recipient": {"type": "group", "group_id": "team"}, "permissions": ["read"]}] * 2},
@@ -162,6 +162,23 @@ def test_canonical_request_rejects_obsolete_or_extra_authority_without_writes(
     assert response.status_code == 422
     assert response.headers["cache-control"] == "no-store"
     assert sharing_http.client.get(path).json() == before.json()
+
+
+@pytest.mark.parametrize("recursive", [True, False])
+def test_recursive_scope_roundtrips_and_omission_preserves_existing_scope(
+    sharing_http: FilesystemHttp, private_node: dict[str, object], recursive: bool,
+) -> None:
+    path = access_path(private_node)
+    before = sharing_http.client.get(path)
+    grant = {"recipient": {"type": "group", "group_id": "team"}, "permissions": ["read"], "recursive": recursive}
+    saved = sharing_http.client.put(path, params={"recipient_type": "group"}, json={"grants": [grant]}, headers={"If-Match": before.headers["etag"]})
+    assert saved.status_code == 200
+    assert saved.json()["grants"][0]["recursive"] is recursive
+    omitted = {key: value for key, value in grant.items() if key != "recursive"}
+    unchanged = sharing_http.client.put(path, params={"recipient_type": "group"}, json={"grants": [omitted]}, headers={"If-Match": saved.headers["etag"]})
+    assert unchanged.status_code == 200
+    assert unchanged.json()["grants"][0]["recursive"] is recursive
+    assert unchanged.headers["etag"] == saved.headers["etag"]
 
 
 def test_group_ids_are_exact_registered_recipients_without_automatic_creation(
@@ -237,7 +254,7 @@ def test_blank_configured_issuer_fails_closed(sharing_http: FilesystemHttp, issu
     assert response.json()["detail"]["code"] == "filesystem_policy_unavailable"
 
 
-def test_group_replacement_preserves_foreign_user_and_recursive_grants(
+def test_group_replacement_preserves_foreign_user_and_empty_grants(
     sharing_http: FilesystemHttp, private_node: dict[str, object],
 ) -> None:
     driver = create_access_control_driver(database=sharing_http.factories.persistence_runtime.database)
@@ -245,7 +262,7 @@ def test_group_replacement_preserves_foreign_user_and_recursive_grants(
     protected = [AccessGrant(
         node_id=identifier,
         principal=Principal(type=kind, issuer=issuer, id=group_id),
-        permissions={Permission.READ}, recursive=recursive,
+        permissions=set() if recursive else {Permission.READ}, recursive=recursive,
     ) for kind, issuer, group_id, recursive in (
         (PrincipalType.USER, "issuer", "bob", False),
         (PrincipalType.GROUP, "foreign", "team", False),
@@ -349,7 +366,7 @@ class RecordingSharing:
             node_id=node_id, revision="after", grants=tuple(
                 SharingGrantSummary.model_validate({
                     "recipient": {**grant.recipient.model_dump(), "label": "Authoritative label"},
-                    "permissions": grant.permissions,
+                    "permissions": grant.permissions, "recursive": grant.recursive,
                 }) for grant in command.grants
             ),
             blocked_recipients=(GroupSharingTarget(type="group", group_id="protected"),),
@@ -395,7 +412,7 @@ def test_routes_use_sharing_port_and_return_its_authoritative_projection(
     assert len(service.commands) == 1
     assert service.commands[0].model_dump(mode="json") == {
         "recipient_type": recipient_type, "expected_revision": "before",
-        "grants": [{"recipient": recipient, "permissions": ["read"]}],
+        "grants": [{"recipient": recipient, "permissions": ["read"], "recursive": True}],
     }
 
 
@@ -457,7 +474,7 @@ def test_recipient_search_excludes_protected_collisions(
     sharing_http.client.portal.call(driver.add_grant, AccessGrant(
         node_id=UUID(str(private_node["id"])),
         principal=Principal(type=kind, issuer="issuer", id=subject),
-        permissions={Permission.READ}, recursive=True,
+        permissions=set(), recursive=True,
     ))
     response = sharing_http.client.get(access_path(private_node) + "/recipients", params={
         "query": "reader", "recipient_type": kind.value,
@@ -527,8 +544,8 @@ def test_get_returns_canonical_labeled_recipients_with_one_global_revision(
     params = {} if recipient_type == "both" else {"recipient_type": recipient_type}
     response = sharing_http.client.get(path, params=params)
     expected = [
-        {"recipient": {"type": "group", "group_id": "team", "label": "team"}, "permissions": ["discover", "read"]},
-        {"recipient": {"type": "user", "user_id": observed_user, "label": "Bob Reader"}, "permissions": ["discover", "read"]},
+        {"recipient": {"type": "group", "group_id": "team", "label": "team"}, "permissions": ["discover", "read"], "recursive": True},
+        {"recipient": {"type": "user", "user_id": observed_user, "label": "Bob Reader"}, "permissions": ["discover", "read"], "recursive": True},
     ]
     assert response.status_code == 200
     assert response.json() == {
@@ -686,7 +703,7 @@ def test_observed_user_id_binds_to_subject_for_direct_authorization_and_revocati
     assert stored == [AccessGrant(
         node_id=UUID(str(private_node["id"])),
         principal=Principal(type=PrincipalType.USER, issuer="issuer", id="bob"),
-        permissions={Permission.DISCOVER, Permission.SHARE}, recursive=False,
+        permissions={Permission.DISCOVER, Permission.SHARE}, recursive=True,
     )]
     bob = {"Authorization": "Bearer bob"}
     assert sharing_http.client.get(path, headers=bob).status_code == 200
@@ -719,7 +736,7 @@ def test_inspection_passes_explicit_sharing_scope_to_port(
     assert service.commands == []
 
 
-def test_user_replacement_preserves_recursive_foreign_and_unobserved_grants(
+def test_user_replacement_preserves_empty_foreign_and_unobserved_grants(
     sharing_http: FilesystemHttp, private_node: dict[str, object], observed_user: str,
 ) -> None:
     driver = create_access_control_driver(database=sharing_http.factories.persistence_runtime.database)
@@ -727,7 +744,7 @@ def test_user_replacement_preserves_recursive_foreign_and_unobserved_grants(
     protected = [
         AccessGrant(
             node_id=identifier, principal=Principal(type=PrincipalType.USER, issuer=issuer, id=subject),
-            permissions={Permission.READ}, recursive=recursive,
+            permissions=set() if recursive else {Permission.READ}, recursive=recursive,
         )
         for issuer, subject, recursive in (
             ("issuer", "bob", True), ("foreign", "bob", False),

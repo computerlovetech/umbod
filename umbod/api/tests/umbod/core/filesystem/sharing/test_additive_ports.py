@@ -68,7 +68,7 @@ async def test_public_share_unions_permissions_and_skips_repeat_and_subset_write
     read = command("team", Permission.READ)
     discover = command("team", Permission.DISCOVER)
     first = await service.share(caller(), node_id, read)
-    assert first == ShareNodeResult(node_id=node_id, recipient=read.recipient, permissions=read.permissions, changed=True)
+    assert first == ShareNodeResult(node_id=node_id, recipient=read.recipient, permissions=read.permissions, recursive=True, changed=True)
     added = await service.share(caller(), node_id, discover)
     assert added.permissions == read.permissions | discover.permissions
     assert added.changed
@@ -106,17 +106,17 @@ async def test_repeat_still_checks_current_authority_and_registration() -> None:
 def test_result_rejects_invalid_fields(overrides: dict[str, object]) -> None:
     payload: dict[str, object] = {
         "node_id": initial_root().id, "recipient": {"type": "group", "group_id": " Team "},
-        "permissions": [Permission.READ], "changed": True,
+        "permissions": [Permission.READ], "recursive": True, "changed": True,
     }
     with pytest.raises(ValidationError):
         ShareNodeResult.model_validate(payload | overrides)
 
 
-@pytest.mark.parametrize("missing", ["node_id", "recipient", "permissions", "changed"])
+@pytest.mark.parametrize("missing", ["node_id", "recipient", "permissions", "recursive", "changed"])
 def test_result_requires_all_fields(missing: str) -> None:
     payload: dict[str, object] = {
         "node_id": initial_root().id, "recipient": {"type": "group", "group_id": "team"},
-        "permissions": [Permission.READ], "changed": True,
+        "permissions": [Permission.READ], "recursive": True, "changed": True,
     }
     del payload[missing]
     with pytest.raises(ValidationError):
@@ -127,7 +127,7 @@ def test_result_is_frozen_preserves_exact_id_and_sorts_json_permissions() -> Non
     result = ShareNodeResult(
         node_id=initial_root().id, recipient=GroupSharingTarget(type="group", group_id=" Team "),
         permissions=frozenset({Permission.WRITE, Permission.DISCOVER, Permission.READ}),
-        changed=False,
+        changed=False, recursive=True,
     )
     assert result.recipient.group_id == " Team "
     assert result.model_dump(mode="json")["permissions"] == ["discover", "read", "write"]

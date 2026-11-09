@@ -9,7 +9,6 @@ from umbod.core.filesystem import (
     AccessGrant,
     MissingNode,
     NamespaceDriver,
-    Node,
     Ownership,
     OwnershipNotFound,
     Permission,
@@ -25,6 +24,7 @@ from umbod.core.filesystem.authorization import (
     ResolvedIdentity,
     UnresolvedIdentity,
 )
+from umbod.core.filesystem.namespace import ROOT_ID, initial_root
 from tests.support.filesystem.authorization import caller, principal
 
 
@@ -80,7 +80,9 @@ def resolver() -> Mock:
 
 @pytest.fixture
 def namespace() -> Mock:
-    return create_autospec(NamespaceDriver, instance=True, spec_set=True)
+    namespace = create_autospec(NamespaceDriver, instance=True, spec_set=True)
+    namespace.get_node.return_value = initial_root()
+    return namespace
 
 
 @pytest.fixture
@@ -110,7 +112,7 @@ async def test_resolver_and_storage_failures_propagate_without_becoming_denials(
     }
     methods[source].side_effect = failure
     with pytest.raises(type(failure)) as caught:
-        await getattr(authorization, operation)(caller("alice"), uuid4(), Permission.READ)
+        await getattr(authorization, operation)(caller("alice"), ROOT_ID, Permission.READ)
     assert caught.value is failure
 
 
@@ -135,11 +137,11 @@ async def test_unresolved_identity_denies_without_using_storage(
 
 
 @pytest.mark.asyncio
-async def test_evaluation_only_reads_target_node_owner_and_direct_grants(
+async def test_root_evaluation_reads_target_node_owner_and_direct_grants(
     authorization: FilesystemAuthorization, namespace: Mock, policies: Mock,
 ) -> None:
-    node_id = uuid4()
-    namespace.get_node.return_value = create_autospec(Node, instance=True)
+    node_id = ROOT_ID
+    namespace.get_node.return_value = initial_root()
     policies.get_owner.return_value = Ownership(
         node_id=node_id, owner=principal("other", PrincipalType.USER, "provider"),
     )

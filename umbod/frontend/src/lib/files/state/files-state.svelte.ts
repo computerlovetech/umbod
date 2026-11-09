@@ -97,6 +97,10 @@ export class FilesState {
       const loadedNode = result.node;
       const known = this.updatedNodes.get(loadedNode.id)?.node;
       const node = known && known.revision > loadedNode.revision ? known : loadedNode;
+      if (!node.permissions.can_discover) {
+        this.phase = 'missing';
+        return;
+      }
       const capabilities = new Map(result.capabilities.map((capability) => [capability.node_id, capability]));
       const current = capabilities.get(node.id)!;
       this.node = node;
@@ -126,14 +130,14 @@ export class FilesState {
     for (const [id, cached] of this.updatedNodes) {
       const listed = merged.get(id);
       if (listed) {
-        if (listed.revision > cached.node.revision) this.updatedNodes.set(id, { node: listed, sequence: cached.sequence });
+        if (listed.revision > cached.node.revision || authoritative && listed.revision === cached.node.revision && cached.sequence <= listingStartSequence) this.updatedNodes.set(id, { node: listed, sequence: cached.sequence });
         else merged.set(id, cached.node);
       } else if (cached.node.parent_id === parentId) {
         if (cached.sequence > listingStartSequence) merged.set(id, cached.node);
         else if (authoritative) this.updatedNodes.delete(id);
       }
     }
-    const reconciled = Array.from(merged.values()).filter((child) => child.parent_id === parentId && !this.confirmedDeletedIds.has(child.id));
+    const reconciled = Array.from(merged.values()).filter((child) => child.parent_id === parentId && child.permissions.can_discover && !this.confirmedDeletedIds.has(child.id));
     return reconciled.length === children.length && reconciled.every((child, index) => child === children[index]) ? children : reconciled;
   };
 
@@ -158,12 +162,33 @@ export class FilesState {
     const previousParent = typeof this.node.parent_id === 'string' ? this.node.parent_id : undefined;
     const nextParent = typeof node.parent_id === 'string' ? node.parent_id : undefined;
     const parentChanged = previousParent !== nextParent;
+    if (!node.permissions.can_discover) {
+      ++this.generation;
+      this.controller?.abort();
+      this.dragMove.reset();
+      this.update.reset();
+      this.description.reset();
+      this.deletion.reset();
+      this.rowEditing.reset();
+      this.rowDeletion.reset();
+      this.sharing.reset();
+      this.navigation.reset();
+      this.node = undefined;
+      this.children = [];
+      this.uploadAvailability = 'hidden';
+      this.createDirectoryAllowed = false;
+      this.phase = 'missing';
+      return;
+    }
+    if (parentChanged) {
+      void this.load(this.target);
+      return;
+    }
     this.node = node;
     this.description.acceptUpdatedNode(node);
     this.update.acceptUpdatedNode(node);
     if (node.kind === 'file') this.deletion.acceptUpdatedNode(node);
-    if (parentChanged) void this.navigation.select(node);
-    else this.navigation.acceptUpdatedNode(node);
+    this.navigation.acceptUpdatedNode(node);
   };
 
   private acceptDescription = (node: NodeSummary): void => { this.acceptUpdate(node); };

@@ -142,15 +142,14 @@ async def test_exact_issuer_user_and_group_grants_and_revocation(
 
 
 @pytest.mark.asyncio
-async def test_recursive_ancestor_grant_does_not_authorize_target(breadcrumbs: BreadcrumbContext) -> None:
+async def test_recursive_ancestor_grant_authorizes_target(breadcrumbs: BreadcrumbContext) -> None:
     nodes = await path(breadcrumbs, NodeKind.FILE)
     await own(breadcrumbs, nodes[-1].id, "bob")
     await breadcrumbs.authorization.policies.add_grant(AccessGrant(
         node_id=nodes[-2].id, principal=principal("alice", PrincipalType.USER, "issuer"),
         permissions={Permission.DISCOVER}, recursive=True,
     ))
-    with pytest.raises(PermissionDenied):
-        await breadcrumbs.browsing.get_breadcrumbs(caller("alice"), nodes[-1].id)
+    assert (await breadcrumbs.browsing.get_breadcrumbs(caller("alice"), nodes[-1].id)).complete
 
 
 class GatedBreadcrumbTransactions:

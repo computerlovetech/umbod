@@ -218,7 +218,7 @@ async def test_repeated_browsing_observes_revocation_and_caller_isolation(
     assert len(await context.browsing.list_children(caller("alice"), root.id)) == 1
     assert list(await context.browsing.list_children(caller("bob"), root.id)) == []
     await set_owner(context, node.id, "bob")
-    assert list(await context.browsing.list_children(caller("alice"), root.id)) == []
+    assert [item.id for item in await context.browsing.list_children(caller("alice"), root.id)] == [node.id]
     await context.authorization.policies.remove_grant(root.id, principal("alice", PrincipalType.USER, "provider"))
     with pytest.raises(PermissionDenied):
         await context.browsing.get_root(caller("alice"))

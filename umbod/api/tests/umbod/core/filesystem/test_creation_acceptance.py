@@ -126,7 +126,7 @@ async def test_parent_requires_both_discover_and_write(creation_context: Creatio
 
 
 @pytest.mark.asyncio
-async def test_group_parent_grant_allows_creation_without_inheritance(creation_context: CreationContext) -> None:
+async def test_recursive_group_parent_grant_allows_creation_without_copying_policy(creation_context: CreationContext) -> None:
     context = creation_context
     team = Principal(type=PrincipalType.GROUP, issuer="issuer", id="team")
     await context.policies.remove_grant(ROOT_ID, user("alice"))
@@ -134,7 +134,7 @@ async def test_group_parent_grant_allows_creation_without_inheritance(creation_c
     child = await context.creation.create_directory(snapshot("alice", "issuer", ("team",)), ROOT_ID, "group-created", metadata())
     assert (await context.policies.get_owner(child.id)).owner == user("alice")
     assert await context.policies.list_grants(child.id) == []
-    assert not (await context.authorization.decide(snapshot("bob", "issuer", ("team",)), child.id, Permission.DISCOVER)).allowed
+    assert (await context.authorization.decide(snapshot("bob", "issuer", ("team",)), child.id, Permission.DISCOVER)).allowed
     with pytest.raises(PermissionDenied):
         await context.creation.create_file(snapshot("alice", "issuer", ()), ROOT_ID, "revoked-group", metadata())
 

@@ -8,22 +8,32 @@ import { fileId } from './fixtures.test-support';
 import { nodeAccessSchema, nodeAccessWriteSchema, replaceAccessSchema, type NodeAccessWrite, type NodeAccess, type ReplaceAccess, type SharingRecipientType, type SharingRecipient } from './domain/sharing';
 
 const configuration = new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' });
-const view: NodeAccess = { node_id: fileId, revision: 'opaque-abc123', grants: [{ recipient: { type: 'group', group_id: ' Team A ', label: 'Team A' }, permissions: ['discover', 'share'] }], blocked_recipients: [{ type: 'group', group_id: 'blocked' }] };
+const view: NodeAccess = { node_id: fileId, revision: 'opaque-abc123', grants: [{ recipient: { type: 'group', group_id: ' Team A ', label: 'Team A' }, recursive: false, permissions: ['discover', 'share'] }], blocked_recipients: [{ type: 'group', group_id: 'blocked' }] };
 
 describe('node sharing adapters', (): void => {
+  test.each([undefined, null, 1, 'true'])('requires explicit persisted boolean scope rather than %s', (recursive): void => {
+    expect(nodeAccessSchema.safeParse({ ...view, grants: [{ ...view.grants[0], recursive }] }).success).toBe(false);
+    expect(replaceAccessSchema.safeParse({ grants: [{ recipient: { type: 'group', group_id: 'a' }, permissions: ['read'], recursive }] }).success).toBe(false);
+  });
+
+  test.each([false, true])('preserves persisted scope %s on reads and writes', (recursive): void => {
+    expect(nodeAccessSchema.parse({ ...view, grants: [{ ...view.grants[0], recursive }] }).grants[0].recursive).toBe(recursive);
+    expect(replaceAccessSchema.parse({ grants: [{ recipient: { type: 'group', group_id: 'a' }, permissions: ['read'], recursive }] }).grants[0].recursive).toBe(recursive);
+  });
+
   test('in-memory default denies; configured access preserves exact IDs and revisions', async (): Promise<void> => {
     const sharing = new InMemoryNodeSharing();
     await expect(sharing.inspectAccess(fileId)).rejects.toMatchObject({ status: 403 });
     sharing.configure(view, [{ type: 'group', group_id: ' Team A ', label: 'Team A' }, { type: 'group', group_id: 'blocked', label: 'Blocked' }]);
     expect(await sharing.searchRecipients(fileId, 'team')).toEqual({ recipients: [{ type: 'group', group_id: ' Team A ', label: 'Team A' }], has_more: false });
     await expect(sharing.replaceAccess(fileId, 'stale', { grants: [] }, 'group')).rejects.toMatchObject({ status: 412 });
-    await expect(sharing.replaceAccess(fileId, view.revision, { grants: [{ recipient: { type: 'group', group_id: 'unknown' }, permissions: ['read'] }] }, 'group')).rejects.toMatchObject({ status: 422 });
+    await expect(sharing.replaceAccess(fileId, view.revision, { grants: [{ recipient: { type: 'group', group_id: 'unknown' }, recursive: false, permissions: ['read'] }] }, 'group')).rejects.toMatchObject({ status: 422 });
     expect(await sharing.replaceAccess(fileId, view.revision, { grants: [] }, 'group')).toMatchObject({ grants: [], blocked_recipients: [{ type: 'group', group_id: 'blocked' }] });
   });
 
   test('mixed policy reads filter recipients without changing the global revision and group replacement preserves users', async (): Promise<void> => {
     const sharing = new InMemoryNodeSharing();
-    const user = { recipient: { type: 'user' as const, user_id: 'user-a', label: 'Person A' }, permissions: ['read' as const] };
+    const user = { recipient: { type: 'user' as const, user_id: 'user-a', label: 'Person A' }, recursive: false, permissions: ['read' as const] };
     const blockedUser = { type: 'user' as const, user_id: 'protected-user' };
     const mixed = { ...view, grants: [...view.grants, user], blocked_recipients: [...view.blocked_recipients, blockedUser] };
     sharing.configure(mixed, [{ type: 'group', group_id: ' Team A ', label: 'Team A' }, user.recipient]);
@@ -75,10 +85,10 @@ describe('node sharing adapters', (): void => {
     const blocked: SharingRecipient = { type: 'user', user_id: 'protected', label: 'Protected' };
     sharing.configure({ ...view, blocked_recipients: [...view.blocked_recipients, { type: 'user', user_id: blocked.user_id }] }, [view.grants[0].recipient, user, blocked]);
     for (const user_id of ['unknown', blocked.user_id]) {
-      await expect(sharing.replaceAccess(fileId, view.revision, { grants: [{ recipient: { type: 'user', user_id }, permissions: ['read'] }] }, 'user')).rejects.toMatchObject({ status: 422 });
+      await expect(sharing.replaceAccess(fileId, view.revision, { grants: [{ recipient: { type: 'user', user_id }, recursive: false, permissions: ['read'] }] }, 'user')).rejects.toMatchObject({ status: 422 });
     }
-    const saved = await sharing.replaceAccess(fileId, view.revision, { grants: [{ recipient: { type: 'user', user_id: user.user_id }, permissions: ['read'] }] }, 'user');
-    expect(saved.grants).toEqual([{ recipient: user, permissions: ['read'] }]);
+    const saved = await sharing.replaceAccess(fileId, view.revision, { grants: [{ recipient: { type: 'user', user_id: user.user_id }, recursive: false, permissions: ['read'] }] }, 'user');
+    expect(saved.grants).toEqual([{ recipient: user, recursive: false, permissions: ['read'] }]);
     expect((await sharing.inspectAccess(fileId, 'group')).grants).toEqual(view.grants);
   });
 
@@ -131,14 +141,14 @@ describe('node sharing adapters', (): void => {
   });
 
   test('HTTP writes user targets without labels and rejects invalid or missing scope before transport', async (): Promise<void> => {
-    const result: NodeAccess = { ...view, grants: [{ recipient: { type: 'user', user_id: 'user-a', label: 'Person A' }, permissions: ['read'] }], blocked_recipients: [] };
+    const result: NodeAccess = { ...view, grants: [{ recipient: { type: 'user', user_id: 'user-a', label: 'Person A' }, recursive: false, permissions: ['read'] }], blocked_recipients: [] };
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ ...result, visible_to: { type: 'unavailable' } }));
     const api = new FilesApi(browserTransport({ fetch, configuration }));
     for (const invalid of [undefined, '', 'other', 'group&recipient_type=user']) {
       expect(() => api.sharing.replaceAccess(fileId, view.revision, { grants: [] }, invalid as SharingRecipientType)).toThrow(SchemaValidationError);
       if (invalid !== undefined) expect(() => api.sharing.inspectAccess(fileId, invalid as SharingRecipientType)).toThrow(SchemaValidationError);
     }
-    const body: ReplaceAccess = { grants: [{ recipient: { type: 'user', user_id: 'user-a' }, permissions: ['read'] }] };
+    const body: ReplaceAccess = { grants: [{ recipient: { type: 'user', user_id: 'user-a' }, permissions: ['read'], recursive: false }] };
     await expect(api.sharing.replaceAccess(fileId, view.revision, body, 'group')).rejects.toMatchObject({ direction: 'outbound' });
     expect(fetch).not.toHaveBeenCalled();
     expect(await api.sharing.replaceAccess(fileId, view.revision, body, 'user')).toEqual(result);
@@ -147,23 +157,23 @@ describe('node sharing adapters', (): void => {
 
   test.each([
     { groups: [] },
-    { grants: [{ recipient: { type: 'group', group_id: 'a', label: 'No outbound labels' }, permissions: ['read'] }] },
-    { grants: [{ recipient: { type: 'user', group_id: 'a' }, permissions: ['read'] }] },
-    { grants: [{ recipient: { type: 'user', user_id: 'a', group_id: 'b' }, permissions: ['read'] }] },
-    { grants: [{ recipient: { type: 'user', user_id: '' }, permissions: ['read'] }] },
-    { grants: [{ recipient: { type: 'user', user_id: 'a' }, permissions: [] }] },
-    { grants: [{ recipient: { type: 'user', user_id: 'a' }, permissions: ['read', 'read'] }] },
-    { grants: Array.from({ length: 2 }, () => ({ recipient: { type: 'user', user_id: 'a' }, permissions: ['read'] })) }
+    { grants: [{ recipient: { type: 'group', group_id: 'a', label: 'No outbound labels' }, recursive: false, permissions: ['read'] }] },
+    { grants: [{ recipient: { type: 'user', group_id: 'a' }, recursive: false, permissions: ['read'] }] },
+    { grants: [{ recipient: { type: 'user', user_id: 'a', group_id: 'b' }, recursive: false, permissions: ['read'] }] },
+    { grants: [{ recipient: { type: 'user', user_id: '' }, recursive: false, permissions: ['read'] }] },
+    { grants: [{ recipient: { type: 'user', user_id: 'a' }, recursive: false, permissions: [] }] },
+    { grants: [{ recipient: { type: 'user', user_id: 'a' }, recursive: false, permissions: ['read', 'read'] }] },
+    { grants: Array.from({ length: 2 }, () => ({ recipient: { type: 'user', user_id: 'a' }, recursive: false, permissions: ['read'] })) }
   ])('rejects malformed outbound grants %j', (body): void => {
     expect(replaceAccessSchema.safeParse(body).success).toBe(false);
   });
 
   test.each([
     { ...view, groups: [] },
-    { ...view, grants: [{ recipient: { type: 'user', user_id: 'a' }, permissions: ['read'] }] },
-    { ...view, grants: [{ recipient: { type: 'user', user_id: 'a', label: 'A', group_id: 'b' }, permissions: ['read'] }] },
+    { ...view, grants: [{ recipient: { type: 'user', user_id: 'a' }, recursive: false, permissions: ['read'] }] },
+    { ...view, grants: [{ recipient: { type: 'user', user_id: 'a', label: 'A', group_id: 'b' }, recursive: false, permissions: ['read'] }] },
     { ...view, blocked_recipients: [{ type: 'group', group_id: 'a', label: 'Forbidden' }] },
-    { ...view, blocked_recipients: [{ type: 'user', user_id: 'a', permissions: ['read'] }] },
+    { ...view, blocked_recipients: [{ type: 'user', user_id: 'a', recursive: false, permissions: ['read'] }] },
     { ...view, blocked_recipients: [{ type: 'unknown', user_id: 'a' }] }
   ])('rejects legacy or malformed inbound views %j', (body): void => {
     expect(nodeAccessSchema.safeParse(body).success).toBe(false);
@@ -175,11 +185,11 @@ describe('node sharing adapters', (): void => {
     const signal = new AbortController().signal;
     expect(await api.sharing.inspectAccess(fileId, 'group', signal)).toEqual(view);
     expect(await api.sharing.searchRecipients(fileId, ' Team ', 'group', signal)).toEqual({ recipients: [{ type: 'group', group_id: ' Team A ', label: 'Friendly' }], has_more: false });
-    expect(await api.sharing.replaceAccess(fileId, view.revision, { grants: [{ recipient: { type: 'group', group_id: ' Team A ' }, permissions: ['discover', 'share'] }] }, 'group')).toMatchObject({ revision: 'new-hash' });
+    expect(await api.sharing.replaceAccess(fileId, view.revision, { grants: [{ recipient: { type: 'group', group_id: ' Team A ' }, recursive: false, permissions: ['discover', 'share'] }] }, 'group')).toMatchObject({ revision: 'new-hash' });
     expect(fetch.mock.calls[0]).toEqual(['/api/me/filesystem/nodes/' + fileId + '/access?recipient_type=group', expect.objectContaining({ signal })]);
     expect(fetch.mock.calls[1]).toEqual(['/api/me/filesystem/nodes/' + fileId + '/access/recipients?query=Team&recipient_type=group', expect.objectContaining({ signal })]);
     expect(fetch.mock.calls[2][0]).toBe('/api/me/filesystem/nodes/' + fileId + '/access?recipient_type=group');
-    expect(fetch.mock.calls[2][1]).toMatchObject({ redirect: 'error', method: 'PUT', headers: { 'If-Match': '"opaque-abc123"', 'content-type': 'application/json' }, body: JSON.stringify({ grants: [{ recipient: { type: 'group', group_id: ' Team A ' }, permissions: ['discover', 'share'] }] }) });
+    expect(fetch.mock.calls[2][1]).toMatchObject({ redirect: 'error', method: 'PUT', headers: { 'If-Match': '"opaque-abc123"', 'content-type': 'application/json' }, body: JSON.stringify({ grants: [{ recipient: { type: 'group', group_id: ' Team A ' }, permissions: ['discover', 'share'], recursive: false }] }) });
   });
 
   test.each([

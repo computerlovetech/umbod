@@ -199,16 +199,19 @@ async def test_read_sharing_projects_current_exact_recipients_and_protects_other
     node = next(node for node in nodes if node["id"] == target_node)
     expected_grants = [{
         "recipient": {"type": "group", "group_id": identifier, "label": label},
-        "permissions": ["discover", "read"],
+        "permissions": ["discover", "read"], "recursive": False,
+    }, {
+        "recipient": {"type": "group", "group_id": "recursive", "label": "recursive"},
+        "permissions": ["read"], "recursive": True,
     }]
     if target_node == root:
         expected_grants.append({
             "recipient": {"type": "group", "group_id": "writers", "label": "writers"},
-            "permissions": ["discover", "write"],
+            "permissions": ["discover", "write"], "recursive": False,
         })
     expected_grants.append({
         "recipient": {"type": "user", "user_id": user_id, "label": 'Bob "Reader"'},
-        "permissions": ["read"],
+        "permissions": ["read"], "recursive": False,
     })
     assert node["sharing"] == (
         {"can_share": False} if node["visible_to"]["type"] == "unavailable"

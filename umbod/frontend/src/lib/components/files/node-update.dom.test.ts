@@ -73,6 +73,7 @@ describe('selected node update controls', (): void => {
       document.body.append(target);
       component = mount(NodeUpdateDialog, { target, props: { state } });
       await tick();
+      expect(document.querySelector('dialog')?.textContent).toContain('Moving this item may change inherited access. Direct sharing remains unchanged.');
       const picker = document.querySelector('[aria-label="Destination folders"]')!;
       expect(picker.querySelectorAll('button')).toHaveLength(1);
       expect(namedButton('Select Home').disabled).toBe(true);

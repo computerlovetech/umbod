@@ -73,8 +73,8 @@ async def test_batch_reverse_lookup_reads_once_for_all_authorized_nodes_only() -
     users = CountingUsers()
     ports.users = users
     root = initial_root()
-    second = root.model_copy(update={"id": uuid4()})
-    restricted = root.model_copy(update={"id": uuid4()})
+    second = root.model_copy(update={"id": uuid4(), "parent_id": root.id})
+    restricted = root.model_copy(update={"id": uuid4(), "parent_id": root.id})
     for node in (second, restricted):
         ports.namespace.nodes[node.id] = node
     ports.policies.owners[second.id] = ports.policies.owners[root.id].model_copy(update={"node_id": second.id})

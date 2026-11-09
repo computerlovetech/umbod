@@ -213,7 +213,7 @@ async def test_absent_or_unowned_nodes_cannot_supply_visibility_witness(owned: b
     callers.current.set(caller_snapshot("alice", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED))
     reader = Mock()
     reader.read = AsyncMock(return_value=FilesystemAuthorizationSnapshot(
-        nodes=(AuthorizationNode(node_id=node_id, kind=NodeKind.FILE),) if present else (),
+        nodes=(AuthorizationNode(node_id=node_id, kind=NodeKind.FILE, parent_id=uuid4()),) if present else (),
         ownerships=(Ownership(node_id=node_id, owner=Principal(
             type=PrincipalType.USER, issuer="https://issuer", id="alice",
         )),) if owned else (), grants=(AuthorizationGrant(

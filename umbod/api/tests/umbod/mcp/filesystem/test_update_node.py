@@ -6,13 +6,52 @@ from fastmcp import Client
 from jsonschema import validate
 from mcp.types import ResourceLink
 
-from umbod.core.filesystem import Permission
+from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
+from umbod.infrastructure import create_access_control_driver
 from .conftest import FilesystemMcp
 from .test_browsing import create_node
 from .test_tools import root_id
 from .test_visibility import grant, listed_tools, private_node, select_caller
 
 TOOL = "update_filesystem_node"
+
+
+@pytest.mark.asyncio
+async def test_move_completes_without_resource_links_when_mover_loses_inherited_access(
+    filesystem_invocation_mcp: FilesystemMcp,
+) -> None:
+    filesystem = filesystem_invocation_mcp
+    async with Client(filesystem.server) as client:
+        root = await root_id(client)
+        source = await create_node(client, root, "inherited-source", "directory")
+        destination = await create_node(client, root, "direct-destination", "directory")
+        node_id = await create_node(client, source, "moving-file", "file")
+    policies = create_access_control_driver(database=filesystem.database)
+    principal = Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob")
+    for parent_id, recursive in ((source, True), (destination, False)):
+        await policies.add_grant(AccessGrant(
+            node_id=UUID(parent_id), principal=principal,
+            permissions={Permission.DISCOVER, Permission.WRITE}, recursive=recursive,
+        ))
+    select_caller(filesystem, "bob")
+    async with Client(filesystem.server) as client:
+        result = await client.call_tool(TOOL, {
+            "node_id": node_id, "parent_id": destination, "expected_revision": 1,
+        })
+        assert not result.is_error
+        assert result.structured_content["parent_id"] == destination
+        assert result.structured_content["revision"] == 2
+        assert result.structured_content["permissions"]["can_discover"] is False
+        assert result.structured_content["visible_to"] == {"type": "restricted"}
+        assert result.structured_content["sharing"] == {"can_share": False}
+        assert not any(isinstance(item, ResourceLink) for item in result.content)
+        denied = await client.call_tool("get_filesystem_node", {"node_id": node_id}, raise_on_error=False)
+        assert denied.is_error
+    select_caller(filesystem, "alice", ("writers",))
+    async with Client(filesystem.server) as client:
+        inspected = await client.call_tool("get_filesystem_node", {"node_id": node_id})
+        assert inspected.structured_content["parent_id"] == destination
+        assert inspected.structured_content["revision"] == 2
 
 
 @pytest.mark.asyncio
@@ -34,6 +73,8 @@ async def test_node_update_schema_description_browsing_clearing_and_stale_revisi
         assert descriptor.annotations.destructive_hint is False
         assert descriptor.annotations.idempotent_hint is False
         assert descriptor.annotations.open_world_hint is False
+        assert "inherited access may change" in descriptor.description
+        assert "can_discover=false" in descriptor.description
         arguments = {
             "node_id": node_id, "metadata": {"attributes": {"description": description, "team": "research"}},
             "expected_revision": 1,

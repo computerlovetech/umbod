@@ -14,8 +14,8 @@ export const sharingRecipientSchema = z.discriminatedUnion('type', [
   z.strictObject({ type: z.literal('group'), group_id: groupIdSchema, label: z.string() }),
   z.strictObject({ type: z.literal('user'), user_id: z.string().min(1), label: z.string() })
 ]);
-const outboundGrantSchema = z.strictObject({ recipient: sharingRecipientTargetSchema, permissions: permissionsSchema });
-const inboundGrantSchema = z.strictObject({ recipient: sharingRecipientSchema, permissions: permissionsSchema });
+const outboundGrantSchema = z.strictObject({ recipient: sharingRecipientTargetSchema, permissions: permissionsSchema, recursive: z.boolean() });
+const inboundGrantSchema = z.strictObject({ recipient: sharingRecipientSchema, permissions: permissionsSchema, recursive: z.boolean() });
 export const replaceAccessSchema = z.strictObject({ grants: z.array(outboundGrantSchema) }).refine((body) => new Set(body.grants.map(({ recipient }) => JSON.stringify(recipient))).size === body.grants.length);
 export const nodeAccessSchema = z.strictObject({ node_id: nodeIdSchema, revision: sharingRevisionSchema, grants: z.array(inboundGrantSchema), blocked_recipients: z.array(sharingRecipientTargetSchema) });
 export const nodeAccessWriteSchema = nodeAccessSchema.extend({ visible_to: nodeVisibilitySchema });

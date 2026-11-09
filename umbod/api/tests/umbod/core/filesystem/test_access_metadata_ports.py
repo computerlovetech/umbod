@@ -11,7 +11,7 @@ from umbod.core.filesystem.browsing import summary
 from umbod.core.filesystem.models import (
     AccessGrant, NodeKind, NodeMetadata, Ownership, Permission, Principal, PrincipalType,
 )
-from umbod.core.filesystem.namespace import ROOT_ID, new_node
+from umbod.core.filesystem.namespace import ROOT_ID, initial_root, new_node
 from umbod.core.filesystem.ports import AccessControlDriver, NamespaceDriver
 from umbod.core.filesystem.transactions import FilesystemSession
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
@@ -37,7 +37,7 @@ async def test_unrepresentable_policy_is_unavailable_not_private(updates: dict[s
     node = new_node(ROOT_ID, "node", NodeKind.FILE, NodeMetadata(content_type={}, attributes={}))
     owner = Principal(type=PrincipalType.USER, issuer="issuer", id="alice")
     namespace = Mock(spec=NamespaceDriver)
-    namespace.get_node = AsyncMock(return_value=node)
+    namespace.get_node = AsyncMock(side_effect=lambda node_id: initial_root() if node_id == ROOT_ID else node)
     policies = Mock(spec=AccessControlDriver)
     policies.get_owner = AsyncMock(return_value=Ownership(node_id=node.id, owner=owner))
     grant = AccessGrant(

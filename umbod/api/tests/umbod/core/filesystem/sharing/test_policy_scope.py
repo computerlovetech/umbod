@@ -60,7 +60,7 @@ async def test_replacement_changes_selected_type_only_and_empty_clear_preserves_
         permissions=set(group.permissions), recursive=False,
     ))
     protected = tuple(AccessGrant(
-        node_id=context.node.id, principal=principal, permissions={Permission.READ}, recursive=recursive,
+        node_id=context.node.id, principal=principal, permissions=set(), recursive=recursive,
     ) for principal, recursive in (
         (Principal(type=PrincipalType.USER, issuer="foreign", id=" recipient "), False),
         (Principal(type=PrincipalType.USER, issuer="issuer", id="unknown"), False),
@@ -94,7 +94,7 @@ async def test_replacement_changes_selected_type_only_and_empty_clear_preserves_
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("recursive,permissions", [(True, {Permission.READ}), (False, set())])
+@pytest.mark.parametrize("recursive,permissions", [(True, set()), (False, set())])
 async def test_user_replacement_reports_and_rejects_known_protected_collisions(
     user_context: UserContext, recursive: bool, permissions: set[Permission],
 ) -> None:

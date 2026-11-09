@@ -34,9 +34,13 @@ class FilesystemUpdateNodeTool(Tool):
                 "Provide at least one of name, parent_id or metadata; empty updates are invalid. "
                 "Omitted fields, bytes, ownership and grants are preserved. Requires discover and write on the item; "
                 "moving also requires discover and write on both current and destination directories. "
+                "Before moving, warn the user that inherited access may change while direct sharing remains unchanged. "
+                "A move replaces source-folder inheritance with destination-folder inheritance for the item and its contents. "
                 "Root metadata may change, but root cannot be renamed or moved. "
-                "An empty attributes.description clears the description. Returns current file resource links. "
-                "Permissions and visibility reflect the committed update transaction; later policy changes require fresh inspection."
+                "An empty attributes.description clears the description. Returns file resource links when discover access remains. "
+                "Permissions and visibility reflect the committed update transaction; later policy changes require fresh inspection. "
+                "A successful move may return can_discover=false when the caller loses inherited access; "
+                "the move is complete and must not be retried for that reason."
             ),
             parameters=UpdateNodeCommand.model_json_schema(),
             output_schema=FilesystemNodeSummary.model_json_schema(),
@@ -56,4 +60,6 @@ class FilesystemUpdateNodeTool(Tool):
             )
             operation_completed()
             result = (await enrich_projected_nodes(self._services.sharing(), caller, [node]))[0]
-            return file_link_result(result, [result], result.model_dump_json())
+            return file_link_result(
+                result, [result] if result.permissions.can_discover else [], result.model_dump_json(),
+            )

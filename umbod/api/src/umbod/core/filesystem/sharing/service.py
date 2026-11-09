@@ -11,7 +11,7 @@ from ..authorization import (
     UnresolvedIdentity, allows_resolved,
 )
 from ..errors import RevisionConflict
-from ..models import AccessGrant, NodeId, Permission, Principal, PrincipalType
+from ..models import AccessGrant, NodeId, NodeKind, Permission, Principal, PrincipalType
 from .errors import InvalidSharingPolicy, SharingPolicyUnavailable
 from .models import (
     EligibleSharingGroup, EligibleSharingGroups, NodePolicyView, NodePolicyState,
@@ -231,15 +231,19 @@ class SharingService:
                 raise InvalidSharingPolicy()
             current = frozenset(permission for grant in grants for permission in grant.permissions)
             permissions = current | command.permissions
-            changed = permissions != current
+            recursive = state.node.kind == NodeKind.DIRECTORY and (
+                any(grant.recursive for grant in grants)
+                or (command.recursive if "recursive" in command.model_fields_set or not grants else False)
+            )
+            changed = permissions != current or recursive != any(grant.recursive for grant in grants)
             if changed:
                 await session.grants.upsert(AccessGrant(
                     node_id=node_id, principal=principal,
-                    permissions=set(permissions), recursive=False,
+                    permissions=set(permissions), recursive=recursive,
                 ))
             return ShareNodeResult(
                 node_id=node_id, recipient=command.recipient,
-                permissions=permissions, changed=changed,
+                permissions=permissions, recursive=recursive, changed=changed,
             )
 
     async def _user_principal(
@@ -274,7 +278,12 @@ class SharingService:
                     raise InvalidSharingPolicy()
                 resolved.append(AccessGrant(
                     node_id=node_id, principal=principal,
-                    permissions=set(requested.permissions), recursive=False,
+                    permissions=set(requested.permissions),
+                    recursive=state.node.kind == NodeKind.DIRECTORY and (
+                        requested.recursive if "recursive" in requested.model_fields_set else next(
+                            (grant.recursive for grant in state.grants if grant.principal == principal), True,
+                        )
+                    ),
                 ))
             for principal in projection.editable_principals:
                 if principal.type.value == command.recipient_type:

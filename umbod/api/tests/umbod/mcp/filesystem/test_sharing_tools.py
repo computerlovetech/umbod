@@ -70,7 +70,12 @@ async def test_advertised_schemas_and_annotations_are_exact(filesystem_invocatio
             (legacy, {"node_id", "group_id", "permissions"}),
         ):
             expected = fields | ({"changed", "visible_to"} if schema is share.output_schema else set())
-            assert set(definitions[name]["properties"]) == set(definitions[name]["required"]) == expected
+            assert set(definitions[name]["properties"]) == expected | {"recursive"}
+            assert set(definitions[name]["required"]) == expected | ({"recursive"} if schema is share.output_schema else set())
+            assert definitions[name]["properties"]["recursive"]["type"] == "boolean"
+            if schema is share.input_schema:
+                assert "default" not in definitions[name]["properties"]["recursive"]
+                assert "Omission preserves existing scope" in definitions[name]["properties"]["recursive"]["description"]
             assert definitions[name]["additionalProperties"] is False
             assert definitions[name]["properties"]["permissions"]["minItems"] == 1
     for recipient in ({"type": "group", "group_id": "writers"}, {"type": "user", "user_id": "observed"}):
@@ -111,8 +116,8 @@ async def test_additive_union_retry_preserves_other_grants_and_exact_ids(
         second = await client.call_tool(SHARE, {"node_id": node_id, "group_id": group_id, "permissions": ["discover"]})
         retry = await client.call_tool(SHARE, {"node_id": node_id, "group_id": group_id, "permissions": ["discover"]})
         descriptor = next(tool for tool in await client.list_tools() if tool.name == SHARE)
-    assert {key: value for key, value in first.structured_content.items() if key != "visible_to"} == {"node_id": node_id, "group_id": group_id, "permissions": ["read"], "changed": True}
-    assert {key: value for key, value in second.structured_content.items() if key != "visible_to"} == {"node_id": node_id, "group_id": group_id, "permissions": ["discover", "read"], "changed": True}
+    assert {key: value for key, value in first.structured_content.items() if key != "visible_to"} == {"node_id": node_id, "group_id": group_id, "permissions": ["read"], "recursive": kind == "directory", "changed": True}
+    assert {key: value for key, value in second.structured_content.items() if key != "visible_to"} == {"node_id": node_id, "group_id": group_id, "permissions": ["discover", "read"], "recursive": kind == "directory", "changed": True}
     assert retry.structured_content == {**second.structured_content, "changed": False}
     for result in (first, second, retry):
         validate(result.structured_content, descriptor.output_schema)
@@ -138,7 +143,7 @@ async def test_eligible_groups_use_current_metadata_and_exclude_protected_collis
         node_id = await create_node(client, await root_id(client), "owned", "file")
         await create_access_control_driver(database=filesystem_invocation_mcp.database).add_grant(AccessGrant(
             node_id=UUID(node_id), principal=Principal(type=PrincipalType.GROUP, issuer="https://issuer", id="writers"),
-            permissions={Permission.READ}, recursive=True,
+            permissions=set(), recursive=True,
         ))
         result = await client.call_tool(LIST, {"node_id": node_id, "query": "Current", "recipient_type": "group"})
         descriptor = next(tool for tool in await client.list_tools() if tool.name == LIST)
@@ -227,7 +232,7 @@ async def test_discovery_has_no_io_and_each_invocation_captures_and_calls_once(
         else GroupSharingTarget(type="group", group_id="writers")
     )
     authoritative = ShareNodeResult(
-        node_id=node_id, recipient=recipient, permissions={Permission.READ, Permission.DISCOVER}, changed=False,
+        node_id=node_id, recipient=recipient, permissions={Permission.READ, Permission.DISCOVER}, recursive=False, changed=False,
     )
     service.share = AsyncMock(return_value=authoritative)
     factory = Mock(return_value=service)
@@ -382,8 +387,8 @@ async def test_canonical_recipients_union_retry_and_direct_node_access(
         first = await client.call_tool(SHARE, {**command, "permissions": ["read"]})
         second = await client.call_tool(SHARE, {**command, "permissions": ["discover"]})
         retry = await client.call_tool(SHARE, {**command, "permissions": ["discover"]})
-        assert {key: value for key, value in first.structured_content.items() if key != "visible_to"} == {**command, "permissions": ["read"], "changed": True}
-        assert {key: value for key, value in second.structured_content.items() if key != "visible_to"} == {**command, "permissions": ["discover", "read"], "changed": True}
+        assert {key: value for key, value in first.structured_content.items() if key != "visible_to"} == {**command, "permissions": ["read"], "recursive": kind == "directory", "changed": True}
+        assert {key: value for key, value in second.structured_content.items() if key != "visible_to"} == {**command, "permissions": ["discover", "read"], "recursive": kind == "directory", "changed": True}
         assert retry.structured_content == {**second.structured_content, "changed": False}
         for response in (first, second, retry):
             validate(response.structured_content, descriptor.output_schema)
@@ -394,8 +399,8 @@ async def test_canonical_recipients_union_retry_and_direct_node_access(
         ))
         assert not (await client.call_tool("get_filesystem_node", {"node_id": node_id})).is_error
         if child_id:
-            denied = await client.call_tool("get_filesystem_node", {"node_id": child_id}, raise_on_error=False)
-            assert denied.is_error
+            inherited = await client.call_tool("get_filesystem_node", {"node_id": child_id}, raise_on_error=False)
+            assert not inherited.is_error
 
 
 @pytest.mark.asyncio
@@ -427,9 +432,34 @@ async def test_malformed_recipient_never_captures_or_invokes_core(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("legacy", [True, False])
+async def test_omitted_scope_preserves_legacy_grant_until_explicit_upgrade(
+    filesystem_invocation_mcp: FilesystemMcp, legacy: bool,
+) -> None:
+    policies = create_access_control_driver(database=filesystem_invocation_mcp.database)
+    async with Client(filesystem_invocation_mcp.server) as client:
+        node_id = await create_node(client, await root_id(client), "legacy", "directory")
+        await policies.add_grant(AccessGrant(
+            node_id=UUID(node_id), principal=Principal(type=PrincipalType.GROUP, issuer="https://issuer", id="writers"),
+            permissions={Permission.READ}, recursive=False,
+        ))
+        target = {"group_id": "writers"} if legacy else {"recipient": {"type": "group", "group_id": "writers"}}
+        payload = {"node_id": node_id, "permissions": ["read"], **target}
+        repeated = await client.call_tool(SHARE, payload)
+        assert repeated.structured_content["recursive"] is False
+        assert repeated.structured_content["changed"] is False
+        upgraded = await client.call_tool(SHARE, {**payload, "recursive": True})
+        assert upgraded.structured_content["recursive"] is True
+        assert upgraded.structured_content["changed"] is True
+        preserved = await client.call_tool(SHARE, {**payload, "recursive": False})
+        assert preserved.structured_content["recursive"] is True
+        assert preserved.structured_content["changed"] is False
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("patch", [
     {"group_id": "writers"}, {"user_id": "observed"}, {"issuer": "SECRET"},
-    {"subject": "SECRET"}, {"recursive": True}, {"permissions": []}, {"permissions": [True]},
+    {"subject": "SECRET"}, {"recursive": "invalid"}, {"permissions": []}, {"permissions": [True]},
     {"recipient": {"type": "group", "group_id": ""}},
     {"recipient": {"type": "group", "group_id": " \n"}},
 ])

@@ -60,7 +60,7 @@ async def test_batch_resolves_once_and_reads_catalogue_only_once_if_authorized(a
     resolver = CountingResolver()
     service: FilesystemSharing = SharingService(resolver, ports, "issuer")
     root = initial_root()
-    second = root.model_copy(update={"id": uuid4()})
+    second = root.model_copy(update={"id": uuid4(), "parent_id": root.id})
     ports.namespace.nodes[second.id] = second
     ports.policies.owners[second.id] = ports.policies.owners[root.id].model_copy(update={"node_id": second.id})
     actor = caller() if authorized else snapshot("bob", "issuer", ())
@@ -121,7 +121,7 @@ async def test_protected_same_principal_collision_does_not_leak_manageable_grant
     root = initial_root()
     principal = Principal(type=PrincipalType.GROUP, issuer="issuer", id="team")
     editable = AccessGrant(node_id=root.id, principal=principal, permissions={Permission.READ}, recursive=False)
-    protected = editable.model_copy(update={"recursive": True})
+    protected = editable.model_copy(update={"permissions": set()})
 
     async def grants(node_id: NodeId) -> list[AccessGrant]:
         return [editable, protected]

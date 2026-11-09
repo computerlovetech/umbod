@@ -149,8 +149,9 @@ async def test_unresolved_identity_and_absent_grants_deny_without_administrator_
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("ancestor_owner", [False, True])
-async def test_ancestor_ownership_and_recursive_grants_never_authorize_descendants(
-    authorization_context: AuthorizationContext, ancestor_owner: bool,
+@pytest.mark.parametrize("recursive", [False, True])
+async def test_only_recursive_grants_not_ancestor_ownership_authorize_descendants(
+    authorization_context: AuthorizationContext, ancestor_owner: bool, recursive: bool,
 ) -> None:
     context = authorization_context
     root = await context.namespace.get_root()
@@ -163,10 +164,12 @@ async def test_ancestor_ownership_and_recursive_grants_never_authorize_descendan
     ))
     await context.policies.set_owner(Ownership(node_id=child.id, owner=principal("other", PrincipalType.USER, "provider")))
     await context.policies.add_grant(AccessGrant(
-        node_id=root.id, principal=principal("alice", PrincipalType.USER, "provider"), permissions=set(Permission), recursive=True,
+        node_id=root.id, principal=principal("alice", PrincipalType.USER, "provider"), permissions=set(Permission), recursive=recursive,
     ))
     for permission in Permission:
-        assert not (await context.authorization.decide(caller("alice"), child.id, permission)).allowed
+        assert (await context.authorization.decide(caller("alice"), child.id, permission)).allowed is recursive
+    await context.policies.remove_grant(root.id, principal("alice", PrincipalType.USER, "provider"))
+    assert not (await context.authorization.decide(caller("alice"), child.id, Permission.READ)).allowed
 
 
 @pytest.mark.asyncio

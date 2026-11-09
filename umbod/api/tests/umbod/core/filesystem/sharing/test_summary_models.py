@@ -33,7 +33,7 @@ def test_summary_grant_rejects_empty_permissions() -> None:
     with pytest.raises(ValidationError):
         SharingGrantSummary(
             recipient=GroupSharingRecipient(type="group", group_id="team", label="Team"),
-            permissions=frozenset(),
+            permissions=frozenset(), recursive=False,
         )
 
 
@@ -41,7 +41,7 @@ def test_summary_serialization_sorts_permissions_and_omits_restricted_grants() -
     node_id = uuid4()
     grant = SharingGrantSummary(
         recipient=GroupSharingRecipient(type="group", group_id="team", label="Team"),
-        permissions=frozenset(Permission),
+        permissions=frozenset(Permission), recursive=False,
     )
     result = NodeSharingSummaries(nodes=(
         ShareableNodeSharingSummary(node_id=node_id, can_share=True, grants=(grant,)),

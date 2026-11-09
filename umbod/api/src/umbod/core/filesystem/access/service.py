@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from umbod.core.callers import CallerSnapshot
 
 from ..authorization import FilesystemIdentityResolver, PermissionDenied, ResolvedIdentity, UnresolvedIdentity
-from ..authorization.discovery import effective_permissions
+from ..authorization.service import resolved_permissions
 from ..browsing import NodeSummary
 from ..errors import MissingNode, OwnershipNotFound, PolicyDecodingFailure
 from ..models import AccessGrant, NodeId, NodeKind, Permission, Principal, PrincipalType
@@ -34,24 +34,31 @@ def representable_grant(grant: AccessGrant, node_id: NodeId) -> bool:
 async def project_node_access(
     session: FilesystemSession, identity: ResolvedIdentity, node: NodeSummary,
 ) -> CallerNodeSummary:
+    result = await project_mutation_result_access(session, identity, node)
+    if not result.permissions.can_discover:
+        raise PermissionDenied()
+    return result
+
+
+async def project_mutation_result_access(
+    session: FilesystemSession, identity: ResolvedIdentity, node: NodeSummary,
+) -> CallerNodeSummary:
     try:
         current = await session.namespace.get_node(node.id)
         ownership = await session.access_control.get_owner(node.id)
     except (MissingNode, OwnershipNotFound):
         raise PermissionDenied() from None
+    permissions = await resolved_permissions(identity, node.id, session.namespace, session.access_control)
     policy_decodable = True
     try:
-        grants = tuple(await session.access_control.list_grants(node.id))
+        grants = tuple(await session.access_control.list_grants(node.id)) if Permission.DISCOVER in permissions else ()
     except PolicyDecodingFailure:
         if ownership.owner not in identity.principals:
             raise PermissionDenied() from None
         grants = ()
         policy_decodable = False
-    permissions = effective_permissions(identity.principals, node.id, (ownership,), grants)
-    if Permission.DISCOVER not in permissions:
-        raise PermissionDenied()
     visibility: Visibility = RestrictedVisibility(type="restricted")
-    if Permission.SHARE in permissions:
+    if {Permission.DISCOVER, Permission.SHARE}.issubset(permissions):
         if policy_decodable and representable_principal(ownership.owner) and all(
             representable_grant(grant, node.id) for grant in grants
         ):
@@ -64,7 +71,7 @@ async def project_node_access(
     return CallerNodeSummary(
         **node.model_dump(exclude={"permissions", "visible_to", "sharing"}),
         permissions=CallerPermissions(
-            can_discover=True, can_read=Permission.READ in permissions,
+            can_discover=Permission.DISCOVER in permissions, can_read=Permission.READ in permissions,
             can_write=Permission.WRITE in permissions,
             can_delete=current.kind == NodeKind.FILE and Permission.DELETE in permissions,
             can_share=Permission.SHARE in permissions,

@@ -8,7 +8,7 @@ description: Personal upload destinations and caller-specific permission and vis
 
 ## Choosing a destination for an agent upload
 
-When the user says “upload it to Umbod” without choosing a destination, use the `home` operation of `filesystem_browse`. This operation takes no target, path, user, or issuer. It resolves the authenticated caller's home and provisions it privately on first use. It returns the home node and permission-safe breadcrumbs; use `ls` with the returned node UUID to list its contents.
+When the user says “upload it to Umbod” without choosing a destination, use the `home` operation of `filesystem_browse`. This operation takes no target, path, user, or issuer. It resolves the authenticated caller's home and provisions it with caller ownership and no direct grants on first use. It returns the home node and permission-safe breadcrumbs; use `ls` with the returned node UUID to list its contents.
 
 First-use provisioning changes tool eligibility through the existing event-synchronized runtime. Refresh tool discovery when upload tools have not yet appeared; do not interpret that reconciliation delay as a denial of the returned home permissions.
 
@@ -26,7 +26,7 @@ Home identity is bound to the exact authenticated issuer and user identifier. Th
 
 Repeated and concurrent home requests resolve the same directory. Lookup never adopts an existing folder merely because its name resembles a home. Missing or inconsistent ownership and binding state fails closed instead of selecting another user's folder or silently replacing policy.
 
-Shared-root browsing filters each child independently. Administrator status or access to the root does not reveal another user's unshared home. A user can explicitly share their home under the existing sharing rules; home lookup does not reset those choices. These are application authorization guarantees, not encryption against operators of the underlying storage.
+Shared-root browsing filters each child independently. Administrator status or a folder-only root grant does not reveal another user's unshared home. An explicitly recursive root grant does apply to homes and their contents. A user can explicitly share their home under the existing sharing rules; home lookup does not reset those choices. These are application authorization guarantees, not encryption against operators of the underlying storage.
 
 The web Files page opens directly into the caller's home, provisioning it on first use, and presents it as **Files** rather than a separate `Home-<UUID>` folder. Breadcrumbs and move destinations stop at this personal root and keep its internal name out of headings, upload destinations and sharing dialogs. This presentation follows the durable home binding even after a rename. Explicit node links outside the home remain available under existing permissions; the canonical root is labelled **Shared files** and retains its explicit node UUID link. No existing nodes are moved or renamed.
 
@@ -34,7 +34,7 @@ REST exposes the same caller-only operation through POST `/api/me/filesystem/hom
 
 ## Caller permissions
 
-Full node summaries include a `permissions` object with `can_discover`, `can_read`, `can_write`, `can_delete`, and `can_share`. Values describe the current caller, including matching direct user and group grants and ownership. Directory deletion remains unsupported, so directories report `can_delete` as false.
+Full node summaries include a `permissions` object with `can_discover`, `can_read`, `can_write`, `can_delete`, and `can_share`. Values describe the current caller, combining matching direct user/group grants, recursive ancestor grants, and ownership of that node. Directory deletion remains unsupported, so directories report `can_delete` as false.
 
 These fields are separate from MCP `sharing` metadata, which describes the direct user and group grants that the caller can manage. Being unable to manage sharing does not imply being unable to write. Conversely, sharing authority does not grant write permission.
 
@@ -48,10 +48,10 @@ Permission metadata accompanies full node summaries returned by browsing, creati
 - `restricted` means the caller cannot inspect the policy. This is not evidence of owner-only access.
 - `unavailable` means the policy cannot be represented reliably. It must not be replaced by an empty audience.
 
-An available policy includes direct principals even when those principals are not present in the manageable sharing projection. An empty manageable-grant list alone never establishes privacy. An available owner-only policy with no actual grants describes the default state of newly created private homes and files.
+An available policy includes direct principals even when those principals are not present in the manageable sharing projection. An empty manageable-grant list alone never establishes privacy. An available owner-only direct policy with no grants does not rule out inherited access. Homes and newly created files receive no copied grants, but applicable recursive ancestor shares still apply.
 
 `group_members_expanded` is false: group grants identify groups, not a complete enumeration of their members. Discover permission governs node metadata; reading file content additionally requires read permission. Effective rights can combine grants for multiple principals belonging to the same caller, so the policy is not a complete list of individual readers.
 
-Parent grants are not inherited. A shared root or shared home does not automatically share newly uploaded files. Any stored recursive flag remains a policy fact, not a promise that recursive inheritance is implemented. Administrator membership supplies no implicit filesystem override.
+Recursive directory grants apply to existing and future descendants, including new uploads. Folder-only grants do not inherit, and existing false scopes are not automatically widened. Ownership remains node-local. Administrator membership supplies no implicit filesystem override. The direct-only `visible_to` projection is not a complete effective audience; do not infer privacy from an empty direct policy.
 
 Visibility returned after a write describes that node's policy. A repeated upload completion retains its verified byte receipt while resolving current caller permissions and visibility, rather than claiming the original audience remains unchanged.

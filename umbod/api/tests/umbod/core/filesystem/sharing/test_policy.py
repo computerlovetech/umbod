@@ -127,7 +127,7 @@ async def test_protected_grants_are_preserved_and_same_principal_collisions_reje
         (alice(), {Permission.READ}, False),
         (SYSTEM_ROOT_OWNER, {Permission.SHARE}, False),
         (Principal(type=PrincipalType.GROUP, issuer="foreign", id="foreign"), {Permission.READ}, False),
-        (principal("recursive"), {Permission.READ}, True),
+        (principal("recursive"), set(), True),
         (principal("empty"), set(), False),
         (principal("  "), set(), False),
     ):
@@ -168,10 +168,10 @@ async def test_registering_orphan_changes_revision_but_unrelated_group_metadata_
 
 
 @pytest.mark.asyncio
-async def test_directory_grants_do_not_inherit_and_file_access_needs_no_ancestor_access(context: SharingContext) -> None:
+async def test_direct_only_directory_grants_do_not_inherit_and_file_access_needs_no_ancestor_access(context: SharingContext) -> None:
     child = await context.namespace.create_node(context.node.id, "child", NodeKind.FILE, metadata())
     await context.policies.set_owner(Ownership(node_id=child.id, owner=alice()))
-    await context.policies.add_grant(AccessGrant(node_id=context.node.id, principal=principal("team"), permissions={Permission.DISCOVER, Permission.SHARE}, recursive=True))
+    await context.policies.add_grant(AccessGrant(node_id=context.node.id, principal=principal("team"), permissions={Permission.DISCOVER, Permission.SHARE}, recursive=False))
     actor = snapshot("bob", "issuer", ("team",))
     with pytest.raises(PermissionDenied):
         await context.service.inspect(actor, child.id, GROUP_SCOPE)

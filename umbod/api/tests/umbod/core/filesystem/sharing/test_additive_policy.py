@@ -73,10 +73,10 @@ async def test_direct_delegate_can_share_without_ancestor_access(context: Sharin
 
 
 @pytest.mark.asyncio
-async def test_ancestor_authority_does_not_allow_sharing_child(context: SharingContext) -> None:
+async def test_direct_only_ancestor_authority_does_not_allow_sharing_child(context: SharingContext) -> None:
     child = await context.namespace.create_node(context.node.id, "child", NodeKind.FILE, metadata())
     await context.policies.set_owner(Ownership(node_id=child.id, owner=alice()))
-    await context.policies.add_grant(AccessGrant(node_id=context.node.id, principal=principal("delegates"), permissions={Permission.DISCOVER, Permission.SHARE}, recursive=True))
+    await context.policies.add_grant(AccessGrant(node_id=context.node.id, principal=principal("delegates"), permissions={Permission.DISCOVER, Permission.SHARE}, recursive=False))
     with pytest.raises(PermissionDenied):
         await context.service.share(snapshot("bob", "issuer", ("delegates",)), child.id, command("unknown", Permission.READ))
 
@@ -106,7 +106,7 @@ async def test_unknown_or_deleted_recipient_is_not_registered_or_granted(context
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("recursive,permissions", [(True, {Permission.READ}), (False, set())])
+@pytest.mark.parametrize("recursive,permissions", [(True, set()), (False, set())])
 async def test_protected_recipient_collision_is_not_overwritten(context: SharingContext, recursive: bool, permissions: set[Permission]) -> None:
     await context.policies.add_grant(AccessGrant(node_id=context.node.id, principal=principal("team"), permissions=permissions, recursive=recursive))
     before = await context.service.inspect(caller(), context.node.id, GROUP_SCOPE)

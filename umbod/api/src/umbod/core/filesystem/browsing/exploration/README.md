@@ -10,7 +10,7 @@ description: "Transport-neutral inspection, directory listing and bounded tree c
 - [models.py](./models.py) — Strict targets, required limits and safe summary-only results.
 - [ports.py](./ports.py) — Caller-supplied exploration operations without transport dependencies.
 - [service.py](./service.py) — Shared inspection, complete folder/file browsing, bounded listings and deterministic depth-first traversal.
-- [scoped.py](./scoped.py) — Request-local authorization and operation eligibility over scoped facts without content reads.
+- [scoped.py](./scoped.py) — Request-local indexed ancestry authorization and operation eligibility without content reads.
 
 # Related links
 

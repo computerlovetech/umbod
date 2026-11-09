@@ -107,7 +107,7 @@ async def test_only_registered_nonblank_unblocked_recipients_are_returned(contex
         result = await context.service.search_recipients(caller(), context.node.id, group_search(query))
         assert not result.has_more
         recipients.update(recipient.group_id for recipient in result.recipients)
-    assert recipients == {"editable", "foreign", "system", "user"}
+    assert recipients == {"editable", "foreign", "recursive", "system", "user"}
 
 
 @pytest.mark.asyncio

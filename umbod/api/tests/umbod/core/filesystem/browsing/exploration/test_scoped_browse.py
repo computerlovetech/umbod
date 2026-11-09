@@ -59,13 +59,13 @@ async def test_direct_file_access_keeps_partial_ancestry_and_does_not_require_pa
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("reason", ["missing", "unowned", "wrong-issuer", "no-discover", "unresolved", "ancestor-grant"])
+@pytest.mark.parametrize("reason", ["missing", "unowned", "wrong-issuer", "no-discover", "unresolved"])
 async def test_scoped_browse_fails_closed_without_disclosing_target(reason: str) -> None:
     root = initial_root()
     target = child(root.id, "target", NodeKind.FILE)
     recipient = principal("alice", PrincipalType.USER, "other" if reason == "wrong-issuer" else "issuer")
     grant = AccessGrant(
-        node_id=root.id if reason == "ancestor-grant" else target.id,
+        node_id=target.id,
         principal=recipient, permissions={Permission.WRITE} if reason == "no-discover" else set(Permission),
         recursive=True,
     )
@@ -94,7 +94,7 @@ async def test_discoverable_invalid_ancestry_is_rejected(corruption: str) -> Non
         root = root.model_copy(update={"name": "invalid"})
     nodes = [root, parent, target]
     service = ScopedBrowsingExplorer(MemoryScopeReader(scope_for(nodes, nodes, [])), CountingIdentityResolver(True), True)
-    with pytest.raises(StorageFailure, match="Invalid filesystem ancestry"):
+    with pytest.raises(StorageFailure if corruption == "invalid-root" else PermissionDenied):
         await service.browse_node(caller("alice"), target.id)
 
 

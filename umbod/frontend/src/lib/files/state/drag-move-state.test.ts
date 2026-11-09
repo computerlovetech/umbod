@@ -59,6 +59,12 @@ function start(files: FilesState): MutableTransfer {
   return data;
 }
 
+async function confirmDrop(files: FilesState): Promise<void> {
+  const update = files.rowEditing.controllers.get(fileId)!.update;
+  await vi.waitFor(() => expect(update.canSubmit).toBe(true));
+  void update.submit();
+}
+
 describe('file drag moves', (): void => {
   test('moves once with the authoritative revision and removes the row without reloading', async (): Promise<void> => {
     const { api, files } = await setup();
@@ -73,6 +79,7 @@ describe('file drag moves', (): void => {
     expect(data.dropEffect).toBe('move');
     files.dragMove.drop(destinationId, drag(data));
     files.dragMove.drop(destinationId, drag(data));
+    await confirmDrop(files);
     await vi.waitFor((): void => expect(files.dragMove.pending).toBe(false));
     expect(patch).toHaveBeenCalledExactlyOnceWith(fileId, 1, { parent_id: destinationId });
     expect(files.children.map((node): string => node.id)).toEqual([destinationId, otherFileId]);
@@ -167,6 +174,7 @@ describe('file drag moves', (): void => {
     const patch = vi.spyOn(api.filesystem, 'updateNode').mockReturnValueOnce(response.promise);
     const data = start(files);
     files.dragMove.drop(destinationId, drag(data));
+    await confirmDrop(files);
     await vi.waitFor((): void => expect(patch).toHaveBeenCalledOnce());
     expect(files.dragMove.pending).toBe(true);
     expect(files.dragMove.canDrag(fileId)).toBe(false);
@@ -188,10 +196,12 @@ describe('file drag moves', (): void => {
     await api.filesystem.createFolder(destinationId, { name: 'Notes.txt', metadata: { content_type: {}, attributes: {} } });
     const patch = vi.spyOn(api.filesystem, 'updateNode');
     files.dragMove.drop(destinationId, drag(start(files)));
+    await confirmDrop(files);
     await vi.waitFor((): void => expect(files.dragMove.error).toContain('conflicts'));
     expect(patch).toHaveBeenCalledOnce();
     expect(files.children.some((node): boolean => node.id === fileId)).toBe(true);
     expect(files.dragMove.needsReload).toBe(false);
+    files.rowEditing.controllers.get(fileId)!.update.cancel();
     expect(files.dragMove.canDrag(fileId)).toBe(true);
   });
 
@@ -232,6 +242,7 @@ describe('file drag moves', (): void => {
       return original(id, revision, input);
     });
     files.dragMove.drop(destinationId, drag(start(files)));
+    await confirmDrop(files);
     await vi.waitFor((): void => expect(patch).toHaveBeenCalledOnce());
     await files.load(destinationId);
     expect(files.children).toEqual([]);

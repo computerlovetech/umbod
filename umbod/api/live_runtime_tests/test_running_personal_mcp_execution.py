@@ -455,6 +455,7 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
             checked(alice.delete(f"/api/admin/connectors/mcp/{connector_id}/publication"))
             await denied(b, name, fixture)
             checked(alice.put(f"/api/admin/connectors/mcp/{connector_id}/publication"))
+            assert await find_tool(b, "echo_owner") == name
             await owner_result(b, name, "bob")
         for token in (None, "invalid-user"):
             headers = {} if token is None else {"Authorization": "Bearer " + token}

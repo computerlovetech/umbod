@@ -5,7 +5,7 @@ import type { NodeSummary } from '../domain/schemas';
 import { nodeAccessSchema, replaceAccessSchema, sharingPermissions, type NodeAccess, type ReplaceAccess, type SharingRecipient, type SharingRecipientType, type SharingPermission } from '../domain/sharing';
 import { RecipientSearchState } from './recipient-search-state.svelte';
 
-type DraftRecipient = { readonly recipient: Readonly<SharingRecipient>; readonly id: string; readonly label: string; readonly permissions: readonly SharingPermission[] };
+type DraftRecipient = { readonly recipient: Readonly<SharingRecipient>; readonly id: string; readonly label: string; readonly permissions: readonly SharingPermission[]; readonly recursive: boolean };
 
 function recipientId(recipient: SharingRecipient): string { return recipient.type === 'group' ? recipient.group_id : recipient.user_id; }
 
@@ -19,6 +19,7 @@ export class SharingDialogState {
   private blocked: string[] = [];
   private revision = '';
   private original = '';
+  private originalScopes = new Map<string, boolean>();
   private banner = $state('');
   private recovery = $state(false);
   private announcement = $state('');
@@ -50,6 +51,8 @@ export class SharingDialogState {
   get editable(): boolean { return this.stage === 'ready' && !this.saving && !this.recovery && !this.confirmingSwitch && !this.search.unavailable; }
   get canSave(): boolean { return this.editable && replaceAccessSchema.safeParse(this.body()).success; }
   get dirty(): boolean { return JSON.stringify(this.body()) !== this.original; }
+  get folder(): boolean { return this.target?.kind === 'directory'; }
+  get wideningContents(): boolean { return this.folder && this.draft.some((entry) => entry.recursive && this.originalScopes.get(entry.id) === false); }
   get pickerLabel(): string { return this.scope === 'group' ? 'Add group' : 'Add user'; }
   get searchPlaceholder(): string { return this.scope === 'group' ? 'Search groups by name or ID' : 'Search users by name'; }
   get saveLabel(): string { return this.scope === 'group' ? 'Save group sharing' : 'Save user sharing'; }
@@ -120,7 +123,7 @@ export class SharingDialogState {
     if (!this.editable) return;
     const recipient = this.availableRecipients.find((entry) => recipientId(entry) === id);
     if (!recipient) return;
-    this.draft = Object.freeze([...this.draft, Object.freeze({ recipient, id, label: recipient.label || id, permissions: Object.freeze(['discover', 'read'] as SharingPermission[]) })]);
+    this.draft = Object.freeze([...this.draft, Object.freeze({ recipient, id, label: recipient.label || id, recursive: this.folder, permissions: Object.freeze(['discover', 'read'] as SharingPermission[]) })]);
     this.search.changeQuery('');
   };
 
@@ -131,6 +134,11 @@ export class SharingDialogState {
   changePermission = (id: string, permission: SharingPermission, enabled: boolean): void => {
     if (!this.editable) return;
     this.draft = Object.freeze(this.draft.map((entry) => entry.id === id ? Object.freeze({ ...entry, permissions: Object.freeze(enabled ? [...new Set([...entry.permissions, permission])] : entry.permissions.filter((value) => value !== permission)) }) : entry));
+  };
+
+  changeRecursive = (id: string, recursive: boolean): void => {
+    if (!this.editable || !this.folder) return;
+    this.draft = Object.freeze(this.draft.map((entry) => entry.id === id ? Object.freeze({ ...entry, recursive }) : entry));
   };
 
   save = async (): Promise<void> => {
@@ -196,6 +204,7 @@ export class SharingDialogState {
     this.blocked = [];
     this.revision = '';
     this.original = '';
+    this.originalScopes.clear();
   };
 
   dispose = (): void => { this.disposed = true; this.reset(); };
@@ -221,7 +230,7 @@ export class SharingDialogState {
   }
 
   private body(): ReplaceAccess {
-    return { grants: this.draft.map(({ recipient, permissions }) => ({ recipient: recipient.type === 'group' ? { type: 'group', group_id: recipient.group_id } : { type: 'user', user_id: recipient.user_id }, permissions: [...permissions] })) };
+    return { grants: this.draft.map(({ recipient, permissions, recursive }) => ({ recipient: recipient.type === 'group' ? { type: 'group', group_id: recipient.group_id } : { type: 'user', user_id: recipient.user_id }, permissions: [...permissions], recursive })) };
   }
 
   private current(generation: number): boolean { return !this.disposed && generation === this.generation && (typeof window === 'undefined' || window.location.href === this.location); }
@@ -229,7 +238,8 @@ export class SharingDialogState {
   private accept(view: NodeAccess): void {
     this.revision = view.revision;
     this.blocked = view.blocked_recipients.flatMap((recipient) => recipient.type === this.scope ? [recipient.type === 'group' ? recipient.group_id : recipient.user_id] : []);
-    this.draft = Object.freeze(view.grants.flatMap(({ recipient, permissions }) => recipient.type !== this.scope ? [] : [Object.freeze({ recipient: Object.freeze(recipient), id: recipientId(recipient), label: recipient.label || recipientId(recipient), permissions: Object.freeze([...permissions]) })]));
+    this.draft = Object.freeze(view.grants.flatMap(({ recipient, permissions, recursive }) => recipient.type !== this.scope ? [] : [Object.freeze({ recipient: Object.freeze(recipient), id: recipientId(recipient), label: recipient.label || recipientId(recipient), permissions: Object.freeze([...permissions]), recursive })]));
+    this.originalScopes = new Map(this.draft.map((entry) => [entry.id, entry.recursive]));
     this.original = JSON.stringify(this.body());
   }
 

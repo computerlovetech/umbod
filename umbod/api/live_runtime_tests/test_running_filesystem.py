@@ -84,6 +84,9 @@ def check_access_metadata(node: dict[str, Any]) -> None:
         assert visibility["scope"] == "direct_node_policy"
         assert visibility["group_members_expanded"] is False
         assert all(grant["node_id"] == node["id"] for grant in visibility["grants"])
+        assert all(type(grant["recursive"]) is bool for grant in visibility["grants"])
+        if node["kind"] == "file":
+            assert all(grant["recursive"] is False for grant in visibility["grants"])
 
 
 def node_identity(node: dict[str, Any]) -> dict[str, Any]:
@@ -97,6 +100,8 @@ def sharing_write_payload(result: CallToolResult) -> dict[str, Any]:
     assert visibility["scope"] == "direct_node_policy"
     assert visibility["group_members_expanded"] is False
     assert all(grant["node_id"] == payload["node_id"] for grant in visibility["grants"])
+    assert all(type(grant["recursive"]) is bool for grant in visibility["grants"])
+    assert type(payload["recursive"]) is bool
     return {key: value for key, value in payload.items() if key != "visible_to"}
 
 

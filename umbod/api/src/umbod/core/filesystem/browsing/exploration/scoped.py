@@ -3,7 +3,7 @@ from typing import Optional
 from umbod.core.callers import CallerSnapshot
 
 from ...authorization import FilesystemIdentityResolver, PermissionDenied, ResolvedIdentity, UnresolvedIdentity
-from ...authorization.discovery import effective_permissions
+from ...authorization.discovery import AuthorizationNode, EffectivePermissionEvaluator
 from ...models import NodeId, NodeKind, Permission
 from ...namespace import ROOT_ID
 from ..ancestry import discoverable_breadcrumbs
@@ -17,15 +17,9 @@ from .service import BrowsingExplorer
 class ScopedBrowsing:
     def __init__(self, scope: BrowseScope, identity: ResolvedIdentity) -> None:
         self.nodes = {node.id: summary(node) for node in scope.nodes}
-        owners = {owner.node_id: (owner,) for owner in scope.ownerships}
-        grants = {}
-        for grant in scope.grants:
-            grants.setdefault(grant.node_id, []).append(grant)
-        self.permissions = {
-            node_id: effective_permissions(identity.principals, node_id, owners.get(node_id, ()),
-                                            grants.get(node_id, ()))
-            for node_id in self.nodes
-        }
+        ancestry = tuple(AuthorizationNode(node_id=node.id, kind=node.kind, parent_id=node.parent_id) for node in scope.nodes)
+        evaluator = EffectivePermissionEvaluator(identity.principals, ancestry, scope.ownerships, scope.grants)
+        self.permissions = {node_id: evaluator.permissions(node_id) for node_id in self.nodes}
 
     async def _discover(self, node_id: NodeId) -> Optional[NodeSummary]:
         if Permission.DISCOVER not in self.permissions.get(node_id, ()):

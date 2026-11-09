@@ -1,7 +1,7 @@
 ---
 type: Software Module
 title: Caller filesystem homes
-description: Stable caller-owned upload destinations without ancestor grants.
+description: Stable caller-owned upload destinations with explicit home bindings.
 ---
 
 # Files
@@ -10,4 +10,4 @@ description: Stable caller-owned upload destinations without ancestor grants.
 
 - [models.py](./models.py) — Exact issuer/user bindings to stable node identities.
 - [ports.py](./ports.py) — Atomic home binding, namespace and ownership transaction contracts.
-- [service.py](./service.py) — Idempotent private-home provisioning through an injected identity resolver, with fail-closed binding and root ownership checks.
+- [service.py](./service.py) — Idempotent caller-owned home provisioning with injected identity resolution and fail-closed binding and root ownership checks.

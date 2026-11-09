@@ -69,7 +69,39 @@ function begin(): DataTransfer {
   return data;
 }
 
+async function confirmDrop(): Promise<void> {
+  await vi.waitFor(() => expect(document.querySelector('dialog form')).not.toBeNull());
+  await tick();
+  expect(document.querySelector('dialog')?.textContent).toContain('Moving this item may change inherited access. Direct sharing remains unchanged.');
+  const confirm = document.querySelector<HTMLButtonElement>('dialog button[type="submit"]');
+  expect(confirm).not.toBeNull();
+  await vi.waitFor(() => expect(confirm!.disabled).toBe(false));
+  confirm!.click();
+  await tick();
+}
+
 describe('file row drag move UI', (): void => {
+  test.each(['Cancel', 'Escape'])('reviews a native drop without PATCH and %s discards it without failure', async (action): Promise<void> => {
+    const { api, files } = await setup();
+    const patch = vi.spyOn(api.filesystem, 'updateNode');
+    dispatch(row(destinationId), 'drop', begin());
+    await vi.waitFor(() => expect(document.querySelector('dialog')).not.toBeNull());
+    await tick();
+    expect(document.querySelector('dialog')?.textContent).toContain('Moving this item may change inherited access. Direct sharing remains unchanged.');
+    expect(patch).not.toHaveBeenCalled();
+    if (action === 'Escape') document.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true }));
+    else {
+      const cancel = Array.from(document.querySelectorAll<HTMLButtonElement>('dialog button')).find((entry) => entry.textContent?.trim() === 'Cancel');
+      expect(cancel).toBeDefined();
+      cancel!.click();
+    }
+    await vi.waitFor(() => expect(files.dragMove.pending).toBe(false));
+    expect(patch).not.toHaveBeenCalled();
+    expect(files.dragMove.error).toBe('');
+    expect(files.dragMove.status).toBe('');
+    expect(files.children.some((node) => node.id === fileId)).toBe(true);
+  });
+
   test('shows the dragged file icon and name beside the pointer instead of the native row image', async (): Promise<void> => {
     await setup();
     const data = new DataTransfer();
@@ -138,6 +170,7 @@ describe('file row drag move UI', (): void => {
     expect(document.querySelector('.page-file-drop')).toBeNull();
     dispatch(destination, 'drop', data);
     dispatch(destination, 'drop', data);
+    await confirmDrop();
     await vi.waitFor((): void => expect(files.dragMove.status).toBe('Moved “Notes.txt” to “Archive”.'));
     await tick();
     expect(patch).toHaveBeenCalledExactlyOnceWith(fileId, 1, { parent_id: destinationId });
@@ -158,6 +191,7 @@ describe('file row drag move UI', (): void => {
     await setup();
     row(fileId).querySelector<HTMLAnchorElement>('a')!.focus();
     dispatch(row(destinationId), 'drop', begin());
+    await confirmDrop();
     await vi.waitFor((): void => expect(document.querySelector(`tbody a[href="/files?node=${fileId}"]`)).toBeNull());
     await vi.waitFor((): void => expect(document.activeElement).toBe(row(destinationId).querySelector('a')));
   });
@@ -250,10 +284,11 @@ describe('file row drag move UI', (): void => {
     const response = deferred<NodeSummary>();
     const patch = vi.spyOn(api.filesystem, 'updateNode').mockReturnValueOnce(response.promise);
     dispatch(row(destinationId), 'drop', begin());
+    await confirmDrop();
     await vi.waitFor((): void => expect(patch).toHaveBeenCalledOnce());
     await tick();
     expect(row(fileId).getAttribute('draggable')).toBe('false');
-    expect(document.querySelector('.drag-status')?.textContent).toContain('Moving');
+    expect(document.querySelector('dialog')).not.toBeNull();
     response.reject(new Error('Disconnected'));
     await vi.waitFor((): void => expect(files.dragMove.needsReload).toBe(true));
     await tick();

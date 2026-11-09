@@ -17,7 +17,7 @@ from umbod.core.filesystem.authorization import (
     permitted_operations,
 )
 from umbod.core.filesystem.models import (
-    AccessGrant, NodeKind, Ownership, Permission, Principal, PrincipalType,
+    AccessGrant, NodeKind, Ownership, Permission, Principal, PrincipalType, RootParent,
 )
 from umbod.core.filesystem.namespace import ROOT_ID
 from umbod.core.filesystem.stores import DatabaseFilesystemAuthorizationReader
@@ -46,7 +46,9 @@ def snapshot(
     node_id: UUID, kind: NodeKind, permissions: frozenset[Permission]
 ) -> FilesystemAuthorizationSnapshot:
     return FilesystemAuthorizationSnapshot(
-        nodes=(AuthorizationNode(node_id=node_id, kind=kind),),
+        nodes=(AuthorizationNode(node_id=ROOT_ID, kind=NodeKind.DIRECTORY, parent_id=RootParent()),) + (
+            (AuthorizationNode(node_id=node_id, kind=kind, parent_id=ROOT_ID),) if node_id != ROOT_ID else ()
+        ),
         ownerships=(Ownership(node_id=node_id, owner=principal("owner")),),
         grants=(AuthorizationGrant(
             node_id=node_id, principal=identity().user,
@@ -87,7 +89,7 @@ def test_missing_nodes_and_unowned_nodes_are_denied(absent: str) -> None:
 def test_owner_has_all_permissions_without_grants() -> None:
     node_id = uuid4()
     projection = FilesystemAuthorizationSnapshot(
-        nodes=(AuthorizationNode(node_id=node_id, kind=NodeKind.FILE),),
+        nodes=snapshot(node_id, NodeKind.FILE, frozenset()).nodes,
         ownerships=(Ownership(node_id=node_id, owner=identity().user),),
         grants=(),
     )

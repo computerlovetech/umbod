@@ -43,11 +43,11 @@ export class InMemoryNodeSharing implements NodeSharingApi {
     const current = await this.inspectAccess(id);
     const parsed = replaceAccessSchema.parse(body);
     if (revision !== current.revision) throw new HttpError(412, 'Conflict', {});
-    const grants = parsed.grants.map(({ recipient, permissions }) => {
+    const grants = parsed.grants.map(({ recipient, permissions, recursive }) => {
       if (recipient.type !== recipientType || current.blocked_recipients.some((blocked) => JSON.stringify(blocked) === JSON.stringify(recipient))) throw new HttpError(422, 'Invalid recipient', {});
       const known = this.recipients.find((candidate) => candidate.type === recipient.type && (candidate.type === 'group' && recipient.type === 'group' ? candidate.group_id === recipient.group_id : candidate.type === 'user' && recipient.type === 'user' && candidate.user_id === recipient.user_id));
       if (!known) throw new HttpError(422, 'Invalid recipient', {});
-      return { recipient: known, permissions };
+      return { recipient: known, permissions, recursive };
     });
     const result = nodeAccessSchema.parse({ ...current, grants: [...current.grants.filter((grant) => grant.recipient.type !== recipientType), ...grants], revision: current.revision + '-next' });
     this.access.set(id, result);

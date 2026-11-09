@@ -20,7 +20,91 @@ async function selectDestination(state: NodeUpdateState, id: string): Promise<vo
   await state.destinations.select(id);
 }
 
+async function confirmMove(state: NodeUpdateState, destination: NodeSummary): Promise<boolean | undefined> {
+  const moving = state.moveTo(destination);
+  await vi.waitFor(() => expect(state.canSubmit || !state.open).toBe(true));
+  if (state.canSubmit) await state.submit();
+  return moving;
+}
+
 describe('selected node updates', (): void => {
+  test('restores a moved row from a fresh listing after same-revision access restoration', async (): Promise<void> => {
+    const { api, files } = await setup(folderId);
+    try {
+      const source = files.rowEditing.controllers.get(fileId)!.update;
+      await vi.waitFor(() => expect(source.canMove).toBe(true));
+      const originalUpdate = api.filesystem.updateNode;
+      vi.spyOn(api.filesystem, 'updateNode').mockImplementationOnce(async (id, revision, body): Promise<NodeSummary> => {
+        const moved = await originalUpdate(id, revision, body);
+        return { ...moved, permissions: { ...moved.permissions, can_discover: false, can_write: false, can_share: false } };
+      });
+      expect(await confirmMove(source, await api.filesystem.getNode(rootId))).toBe(true);
+      expect(files.children.some((node) => node.id === fileId)).toBe(false);
+      await files.load(rootId);
+      expect(files.children.find((node) => node.id === fileId)).toMatchObject({
+        id: fileId, revision: 2, parent_id: rootId, permissions: { can_discover: true }
+      });
+    } finally { files.dispose(); }
+  });
+
+  test('treats a confirmed move with lost discovery as success and clears private state without ancestor requests', async (): Promise<void> => {
+    const { api, files } = await setup();
+    try {
+      const original = files.node!;
+      const destination = await api.filesystem.getNode(rootId);
+      const moved = { ...original, parent_id: rootId, revision: 2, permissions: { ...original.permissions, can_discover: false, can_write: false, can_share: false } };
+      const patch = vi.spyOn(api.filesystem, 'updateNode').mockResolvedValueOnce(moved);
+      const ancestors = vi.spyOn(api.filesystem, 'getBreadcrumbs');
+      const browse = vi.spyOn(api.filesystem, 'browse');
+      expect(await confirmMove(files.update, destination)).toBe(true);
+      expect(patch).toHaveBeenCalledOnce();
+      expect(files.phase).toBe('missing');
+      expect(files.node).toBeUndefined();
+      expect(files.children).toEqual([]);
+      expect(files.navigation.path).toBeUndefined();
+      expect(files.update.canRename).toBe(false);
+      expect(files.update.canMove).toBe(false);
+      expect(files.description.available).toBe(false);
+      expect(files.deletion.available).toBe(false);
+      expect(files.sharing.available(fileId)).toBe(false);
+      expect(ancestors).not.toHaveBeenCalled();
+      expect(browse).not.toHaveBeenCalled();
+      expect(files.update.needsReload).toBe(false);
+    } finally { files.dispose(); }
+  });
+
+  test('refreshes moved selection capabilities without ancestor probes and revokes stale mutation controls', async (): Promise<void> => {
+    const { api, files } = await setup();
+    try {
+      const original = files.node!;
+      const destination = await api.filesystem.getNode(rootId);
+      const moved = { ...original, parent_id: rootId, revision: 2, permissions: { ...original.permissions, can_write: false, can_share: false, can_delete: false } };
+      vi.spyOn(api.filesystem, 'updateNode').mockResolvedValueOnce(moved);
+      const gate = deferred<Awaited<ReturnType<typeof api.filesystem.browse>>>();
+      const browse = vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(gate.promise);
+      const ancestors = vi.spyOn(api.filesystem, 'getBreadcrumbs');
+      expect(await confirmMove(files.update, destination)).toBe(true);
+      expect(files.update.canRename).toBe(false);
+      expect(files.description.available).toBe(false);
+      expect(files.sharing.available(fileId)).toBe(false);
+      expect(ancestors).not.toHaveBeenCalled();
+      gate.resolve({
+        node: moved, entries: [], truncated: false,
+        breadcrumbs: { items: [{ id: fileId, name: moved.name, kind: 'file' }], complete: false },
+        capabilities: [{ node_id: fileId, rename: false, move: false, edit_description: false, delete: false, share: false, upload: false, create_directory: false }]
+      });
+      await vi.waitFor(() => expect(files.phase).toBe('ready'));
+      expect(files.node).toEqual(moved);
+      expect(files.update.canRename).toBe(false);
+      expect(files.update.canMove).toBe(false);
+      expect(files.description.available).toBe(false);
+      expect(files.deletion.available).toBe(false);
+      expect(files.sharing.available(fileId)).toBe(false);
+      expect(browse).toHaveBeenCalledExactlyOnceWith(fileId, expect.any(AbortSignal));
+      expect(ancestors).not.toHaveBeenCalled();
+    } finally { files.dispose(); }
+  });
+
   test('keeps the renamed home boundary in the picker while retaining raw ancestors for descendant checks', async (): Promise<void> => {
     const api = new InMemoryFilesApi(rootId, filesystemFixture);
     let personalRoot = folderId;
@@ -53,13 +137,13 @@ describe('selected node updates', (): void => {
     }
   });
 
-  test('moves directly to an authorized folder without opening a dialog', async (): Promise<void> => {
+  test('moves to an authorized folder after explicit confirmation', async (): Promise<void> => {
     const { api, files } = await setup();
     const destination = await api.filesystem.getNode(rootId);
     const update = vi.spyOn(api.filesystem, 'updateNode');
-    expect(await files.update.moveTo(destination)).toBe(true);
+    expect(await confirmMove(files.update, destination)).toBe(true);
     expect(update).toHaveBeenCalledWith(fileId, 1, { parent_id: rootId });
-    expect(files.node).toMatchObject({ id: fileId, parent_id: rootId, revision: 2 });
+    await vi.waitFor(() => expect(files.node).toMatchObject({ id: fileId, parent_id: rootId, revision: 2 }));
     expect(files.update.open).toBe(false);
     expect(files.update.pending).toBe(false);
     files.dispose();
@@ -77,38 +161,29 @@ describe('selected node updates', (): void => {
     expect(files.update.canRename).toBe(true);
     expect(files.update.needsReload).toBe(false);
     expect(files.update.pending).toBe(false);
-    expect(await files.update.moveTo(destination)).toBe(true);
+    expect(await confirmMove(files.update, destination)).toBe(true);
     files.dispose();
   });
 
-  test('blocks overlapping checks, mutations and dialogs throughout a direct move', async (): Promise<void> => {
+  test('stages native moves without saving, prevents duplicate reviews and cancels cleanly', async (): Promise<void> => {
     const { api, files } = await setup();
-    const destination = await api.filesystem.getNode(rootId);
-    const eligibility = deferred<void>();
-    const response = deferred<NodeSummary>();
-    const check = vi.spyOn(api.filesystem, 'checkUpdateEligibility').mockReturnValueOnce(eligibility.promise);
-    const update = vi.spyOn(api.filesystem, 'updateNode').mockReturnValueOnce(response.promise);
-    const moving = files.update.moveTo(destination);
-    expect(files.update.pending).toBe(true);
-    expect(await files.update.moveTo(destination)).toBe(false);
-    files.update.showRename();
-    files.update.showMove();
-    await files.update.submit();
-    expect(files.update.open).toBe(false);
-    expect(files.update.canSubmit).toBe(false);
-    expect(update).not.toHaveBeenCalled();
-    eligibility.resolve();
-    await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(1));
-    expect(files.update.pending).toBe(true);
-    expect(await files.update.moveTo(destination)).toBe(false);
-    files.update.showRename();
-    files.update.showMove();
-    expect(files.update.open).toBe(false);
-    expect(check).toHaveBeenCalledTimes(1);
-    response.resolve({ ...files.node!, parent_id: rootId, revision: 2 });
-    expect(await moving).toBe(true);
-    expect(files.update.pending).toBe(false);
-    files.dispose();
+    try {
+      const destination = await api.filesystem.getNode(rootId);
+      const patch = vi.spyOn(api.filesystem, 'updateNode');
+      const moving = files.update.moveTo(destination);
+      await vi.waitFor(() => expect(files.update.canSubmit).toBe(true));
+      expect(files.update.pending).toBe(false);
+      expect(files.update.open).toBe(true);
+      expect(files.update.moveWarning).toBe('Moving this item may change inherited access. Direct sharing remains unchanged.');
+      expect(await files.update.moveTo(destination)).toBe(false);
+      files.update.showRename();
+      expect(files.update.moving).toBe(true);
+      expect(patch).not.toHaveBeenCalled();
+      files.update.cancel();
+      expect(await moving).toBeUndefined();
+      expect(files.update.error).toBe('');
+      expect(patch).not.toHaveBeenCalled();
+    } finally { files.dispose(); }
   });
 
   test.each(['navigation', 'disposal'])('does not mutate after %s during destination authorization', async (action): Promise<void> => {
@@ -120,20 +195,20 @@ describe('selected node updates', (): void => {
     const moving = files.update.moveTo(destination);
     if (action === 'navigation') await files.load(folderId);
     else files.dispose();
+    expect(await moving).toBeUndefined();
     eligibility.resolve();
-    expect(await moving).toBe(false);
     expect(update).not.toHaveBeenCalled();
     expect(files.update.pending).toBe(false);
     files.dispose();
   });
 
-  test('returns false for a stale direct move while reconciling its confirmed result', async (): Promise<void> => {
+  test('returns success for a stale direct move while reconciling its confirmed result', async (): Promise<void> => {
     const { api, files } = await setup();
     const original = files.node!;
     const destination = await api.filesystem.getNode(rootId);
     const response = deferred<NodeSummary>();
     const update = vi.spyOn(api.filesystem, 'updateNode').mockReturnValueOnce(response.promise);
-    const moving = files.update.moveTo(destination);
+    const moving = confirmMove(files.update, destination);
     await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(1));
     await files.load(folderId);
     await files.load(fileId);
@@ -141,8 +216,8 @@ describe('selected node updates', (): void => {
     expect(files.update.pending).toBe(true);
     expect(await files.update.moveTo(destination)).toBe(false);
     response.resolve({ ...original, parent_id: rootId, revision: 2 });
-    expect(await moving).toBe(false);
-    expect(files.node).toMatchObject({ id: fileId, parent_id: rootId, revision: 2 });
+    expect(await moving).toBe(true);
+    await vi.waitFor(() => expect(files.node).toMatchObject({ id: fileId, parent_id: rootId, revision: 2 }));
     expect(files.update.pending).toBe(false);
     expect(update).toHaveBeenCalledTimes(1);
     files.dispose();
@@ -152,16 +227,17 @@ describe('selected node updates', (): void => {
     const { api, files } = await setup();
     const destination = await api.filesystem.getNode(rootId);
     const update = vi.spyOn(api.filesystem, 'updateNode').mockRejectedValueOnce(new HttpError(status, 'Failed', {}));
-    expect(await files.update.moveTo(destination)).toBe(false);
+    expect(await confirmMove(files.update, destination)).toBe(false);
     expect(files.update.needsReload).toBe(status !== 409);
-    expect(files.update.open).toBe(false);
+    expect(files.update.open).toBe(true);
+    files.update.cancel();
     expect(files.update.pending).toBe(false);
     if (status !== 409) {
-      expect(await files.update.moveTo(destination)).toBe(false);
+      expect(await confirmMove(files.update, destination)).toBe(false);
       expect(update).toHaveBeenCalledTimes(1);
       await files.update.reload();
     }
-    expect(await files.update.moveTo(destination)).toBe(true);
+    expect(await confirmMove(files.update, destination)).toBe(true);
     files.dispose();
   });
 
@@ -170,7 +246,7 @@ describe('selected node updates', (): void => {
     const original = files.node!;
     const destination = await api.filesystem.getNode(rootId);
     vi.spyOn(api.filesystem, 'updateNode').mockResolvedValueOnce({ ...original, revision: 2 });
-    if (mode === 'direct') expect(await files.update.moveTo(destination)).toBe(false);
+    if (mode === 'direct') expect(await confirmMove(files.update, destination)).toBe(false);
     else {
       files.update.showMove();
       await selectDestination(files.update, rootId);
@@ -233,7 +309,7 @@ describe('selected node updates', (): void => {
     await selectDestination(files.update, rootId);
     expect(files.update.canSubmit).toBe(true);
     await files.update.submit();
-    expect(files.node).toMatchObject({ id: fileId, parent_id: rootId, revision: 2 });
+    await vi.waitFor(() => expect(files.node).toMatchObject({ id: fileId, parent_id: rootId, revision: 2 }));
     await vi.waitFor(() => expect(files.navigation.parent?.id).toBe(rootId));
     await files.load(folderId);
     await vi.waitFor(() => expect(files.update.canMove).toBe(true));
@@ -394,7 +470,7 @@ describe('selected node updates', (): void => {
     files.update.showMove();
     await selectDestination(files.update, rootId);
     await files.update.submit();
-    expect(files.node?.parent_id).toBe(rootId);
+    await vi.waitFor(() => expect(files.node?.parent_id).toBe(rootId));
     const list = vi.spyOn(api.filesystem, 'listChildren').mockResolvedValue([filesystemFixture[1]]);
     await files.load(rootId);
     expect(files.children.map((child) => child.id)).toEqual([folderId]);

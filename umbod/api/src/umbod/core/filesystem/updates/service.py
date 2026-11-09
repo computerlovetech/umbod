@@ -5,7 +5,7 @@ from ..authorization import (
     allows_resolved,
 )
 from ..access import CallerNodeSummary
-from ..access.service import project_node_access
+from ..access.service import project_mutation_result_access
 from ..browsing import summary
 from ..errors import RootMutation, WrongNodeKind
 from ..models import Node, NodeId, NodeKind, NodeMetadata, NodeUpdate, Permission, RootParent, UnchangedContentType
@@ -85,4 +85,4 @@ class NodeUpdateService:
             updated = await session.namespace.update_details(
                 node_id, details=details, expected_revision=expected_revision,
             )
-            return await project_node_access(session, identity, summary(updated))
+            return await project_mutation_result_access(session, identity, summary(updated))

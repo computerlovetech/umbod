@@ -18,7 +18,7 @@ description: "User filesystem browsing, accessible node sharing, folder creation
 - [node-actions-state.test.ts](./node-actions-state.test.ts) — Discover-only eligibility, live authoritative node reads, menu dismissal and explicit details closure.
 - [node-actions-state.svelte.ts](./node-actions-state.svelte.ts) — Live details selection, menu eligibility, action dispatch and persistent-trigger focus restoration.
 - [NodeDescriptionDialog.svelte](./NodeDescriptionDialog.svelte) — Native description editor with pending guards and explicit conflict recovery.
-- [NodeUpdateDialog.svelte](./NodeUpdateDialog.svelte) — Feature-owned rename and move dialogs with expandable folders, explicit destination selection and reload recovery.
+- [NodeUpdateDialog.svelte](./NodeUpdateDialog.svelte) — Files-owned rename and picker/native move reviews with inherited-access warnings and explicit confirmation.
 - [node-update.dom.test.ts](./node-update.dom.test.ts) — Rename, destination selection, branch retries, cancellation and empty-folder keyboard focus interactions.
 - [folder-picker-focus-state.svelte.ts](./folder-picker-focus-state.svelte.ts) — Keeps focused folder disclosures mounted until blur when asynchronous loading reveals an empty branch.
 
@@ -31,13 +31,13 @@ description: "User filesystem browsing, accessible node sharing, folder creation
 - [file-type-icons.ts](./file-type-icons.ts) — Common format groups and explicit home SVGs; specific MIME types precede extensions, with safe generic and text fallbacks.
 - [file-type-icons.test.ts](./file-type-icons.test.ts) — Grouped extensions, MIME precedence, normalization, unknown formats and directory overrides.
 - [file-type-icon.dom.test.ts](./file-type-icon.dom.test.ts) — Accessible category rendering and in-place row icon changes after a filename extension is renamed.
-- [file-drag-move.dom.test.ts](./file-drag-move.dom.test.ts) — Drag preview identity and positioning, targeting, reconciliation, focus, recovery and external upload isolation.
+- [file-drag-move.dom.test.ts](./file-drag-move.dom.test.ts) — Drag previews, move review confirmation/cancellation, reconciliation, focus, recovery and external upload isolation.
 - [FileUploadForm.svelte](./FileUploadForm.svelte) — Native upload modal, file picker, drop target and server-validated upload feedback.
 - [file-upload-form.test.ts](./file-upload-form.test.ts) — Modal semantics, accessible selection, validation and pending states.
 - [FileDeletionDialog.svelte](./FileDeletionDialog.svelte) — Files-owned permanent removal confirmation using shared native-dialog mechanics.
 - [file-deletion.test.ts](./file-deletion.test.ts) — Row and details eligibility, accessible filename-specific confirmation and danger action presentation tests.
 - [NodeShareButton.svelte](./NodeShareButton.svelte) — Filename-labelled, authority-confirmed sharing entrypoints with one decorative share icon.
-- [NodeSharingDialog.svelte](./NodeSharingDialog.svelte) — Sharing modal with Groups/Users selection, unified recipient search, guarded draft switching and explicit permissions.
+- [NodeSharingDialog.svelte](./NodeSharingDialog.svelte) — Sharing modal with recipient search, explicit permissions, Include contents scope and widening warnings.
 - [node-sharing.dom.test.ts](./node-sharing.dom.test.ts) — Searchable recipient selection, action visibility, draft editing, pending guards and focus recovery tests.
 - [FilesPage.svelte](./FilesPage.svelte) — Files composition with independent neutral profile loading.
 - [FilesNavigation.svelte](./FilesNavigation.svelte) — Consistent home and child path rows, known-ancestor overflow and confirmed mobile parent links.

@@ -62,21 +62,22 @@ async def test_summary_matches_inspect_protected_scope_and_current_exact_labels(
     summary = (await context.service.summarize_nodes(caller(), (context.node.id,))).nodes[0]
     assert isinstance(summary, ShareableNodeSharingSummary)
     assert summary.grants == view.grants
-    assert [grant.recipient.group_id for grant in summary.grants] == [" Team ", "Team", "a/b", "team"]
+    assert [grant.recipient.group_id for grant in summary.grants] == [" Team ", "Team", "a/b", "recursive", "team"]
     assert summary.grants[0].recipient.label == "Current label"
     assert set(summary.model_dump()) == {"node_id", "can_share", "grants"}
     assert all(set(grant.recipient.model_dump()) == {"type", "group_id", "label"} for grant in summary.grants)
 
 
 @pytest.mark.asyncio
-async def test_summary_grants_and_authority_do_not_inherit(context: SharingContext) -> None:
+async def test_summary_direct_only_grants_and_authority_do_not_inherit(context: SharingContext) -> None:
     child = await context.namespace.create_node(context.node.id, "child", NodeKind.FILE, metadata())
     await context.policies.set_owner(Ownership(node_id=child.id, owner=alice()))
     await context.policies.add_grant(AccessGrant(
         node_id=context.node.id, principal=Principal(type=PrincipalType.GROUP, issuer="issuer", id="team"),
-        permissions={Permission.DISCOVER, Permission.SHARE}, recursive=True,
+        permissions={Permission.DISCOVER, Permission.SHARE}, recursive=False,
     ))
     result = await context.service.summarize_nodes(snapshot("bob", "issuer", ("team",)), (context.node.id, child.id))
     assert [node.can_share for node in result.nodes] == [True, False]
     assert isinstance(result.nodes[0], ShareableNodeSharingSummary)
-    assert result.nodes[0].grants == ()
+    assert result.nodes[0].grants[0].recursive is False
+    assert result.nodes[0].grants[0].permissions == frozenset({Permission.DISCOVER, Permission.SHARE})

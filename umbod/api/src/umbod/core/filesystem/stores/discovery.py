@@ -28,7 +28,7 @@ class DatabaseFilesystemAuthorizationReader:
             )
             return FilesystemAuthorizationSnapshot(
                 nodes=tuple(
-                    AuthorizationNode(node_id=node.payload.id, kind=node.payload.kind)
+                    AuthorizationNode(node_id=node.payload.id, kind=node.payload.kind, parent_id=node.payload.parent_id)
                     for node in nodes
                 ),
                 ownerships=tuple(owner.payload for owner in owners),

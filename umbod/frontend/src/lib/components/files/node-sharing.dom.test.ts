@@ -24,7 +24,7 @@ afterEach(async (): Promise<void> => {
   vi.restoreAllMocks();
 });
 
-const view: NodeAccess = { node_id: fileId, revision: 'opaque', grants: [{ recipient: { type: 'group', group_id: ' Provider Team ', label: 'Design' }, permissions: ['write', 'share'] }, { recipient: { type: 'user', user_id: 'person-a', label: 'Hidden person' }, permissions: ['read'] }], blocked_recipients: [{ type: 'group', group_id: 'blocked' }, { type: 'user', user_id: 'protected-person' }] };
+const view: NodeAccess = { node_id: fileId, revision: 'opaque', grants: [{ recipient: { type: 'group', group_id: ' Provider Team ', label: 'Design' }, recursive: false, permissions: ['write', 'share'] }, { recipient: { type: 'user', user_id: 'person-a', label: 'Hidden person' }, recursive: false, permissions: ['read'] }], blocked_recipients: [{ type: 'group', group_id: 'blocked' }, { type: 'user', user_id: 'protected-person' }] };
 const recipients: SharingRecipient[] = [{ type: 'group', group_id: ' Provider Team ', label: 'Design' }, { type: 'group', group_id: 'second', label: 'Readers' }, { type: 'user', user_id: 'person-a', label: 'Hidden person' }, { type: 'user', user_id: 'person-b', label: 'New person' }];
 
 async function setup(id: string = folderId, configure = true): Promise<{ api: InMemoryFilesApi; state: FilesState; signIn: ReturnType<typeof vi.fn> }> {
@@ -85,6 +85,31 @@ async function search(query: string): Promise<HTMLInputElement> {
 function submit(): void { document.querySelector('dialog form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true })); }
 
 describe('Files group sharing UI', (): void => {
+  test('renders truthful folder scopes, warns before widening and cancels without a write', async (): Promise<void> => {
+    const { api, state } = await setup(rootId);
+    const patch = vi.spyOn(api.sharing, 'replaceAccess');
+    await open('Share “Projects”');
+    const label = Array.from(document.querySelectorAll('label')).find((entry) => entry.textContent === 'Include contents');
+    expect(label).toBeDefined();
+    const checkbox = label!.querySelector('input')!;
+    expect(checkbox.checked).toBe(false);
+    checkbox.click();
+    await tick();
+    expect(document.querySelector('dialog')?.textContent).toContain('Saving will extend this sharing to existing and future contents.');
+    expect(document.querySelector('dialog')?.textContent).toContain('Removing a direct grant may leave inherited access unchanged.');
+    expect(patch).not.toHaveBeenCalled();
+    button('Cancel').click();
+    await tick();
+    expect(patch).not.toHaveBeenCalled();
+    expect(state.sharing.dialog.open).toBe(false);
+    await open('Share “Projects”');
+    const reopened = Array.from(document.querySelectorAll('label')).find((entry) => entry.textContent === 'Include contents')!.querySelector('input')!;
+    expect(reopened.checked).toBe(false);
+    await select('Readers');
+    const scopes = Array.from(document.querySelectorAll('label')).filter((entry) => entry.textContent === 'Include contents').map((entry) => entry.querySelector('input')!.checked);
+    expect(scopes).toEqual([false, true]);
+  });
+
   test('uses the home label for the share button, dialog heading and saved announcement after a canonical rename', async (): Promise<void> => {
     const api = new InMemoryFilesApi(rootId, filesystemFixture);
     const home = { ...filesystemFixture[1], name: 'Renamed home' };
@@ -186,7 +211,7 @@ describe('Files group sharing UI', (): void => {
     await tick();
     submit();
     await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
-    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'opaque', { grants: [{ recipient: { type: 'group', group_id: 'second' }, permissions: ['discover', 'read', 'delete'] }] }, 'group');
+    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'opaque', { grants: [{ recipient: { type: 'group', group_id: 'second' }, recursive: false, permissions: ['discover', 'read', 'delete'] }] }, 'group');
     expect((await api.sharing.inspectAccess(fileId, 'user')).grants).toEqual([view.grants[1]]);
     expect(document.querySelector('h1')).toBe(heading);
     expect(state.node?.id).toBe(folderId);
@@ -234,7 +259,7 @@ describe('Files group sharing UI', (): void => {
     submit();
     await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
     expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'opaque', {
-      grants: [{ recipient: { type: 'group', group_id: ' Provider Team ' }, permissions: ['discover', 'read'] }]
+      grants: [{ recipient: { type: 'group', group_id: ' Provider Team ' }, recursive: false, permissions: ['discover', 'read'] }]
     }, 'group');
   });
 
@@ -388,7 +413,7 @@ describe('Files group sharing UI', (): void => {
     const replace = vi.spyOn(api.sharing, 'replaceAccess');
     button('Save user sharing').click();
     await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
-    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'opaque', { grants: [{ recipient: { type: 'user', user_id: 'person-b' }, permissions: ['discover', 'read', 'write'] }] }, 'user');
+    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'opaque', { grants: [{ recipient: { type: 'user', user_id: 'person-b' }, recursive: false, permissions: ['discover', 'read', 'write'] }] }, 'user');
     expect((await api.sharing.inspectAccess(fileId, 'group')).grants).toEqual([view.grants[0]]);
   });
 

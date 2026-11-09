@@ -1,6 +1,6 @@
 ---
 type: Software Module
-title: "Direct-node sharing"
+title: "Filesystem sharing"
 description: "Caller-authorized group and observed-user sharing with combined browsing summaries."
 ---
 
@@ -11,7 +11,7 @@ description: "Caller-authorized group and observed-user sharing with combined br
 - [models.py](./models.py) — Typed recipients, scoped recipient search, additive commands, summaries and policy views.
 - [ports.py](./ports.py) — Sharing operations and session-bound recipient and grant collaborators.
 - [projection.py](./projection.py) — Shared manageable-recipient projection, protected collisions and scope-independent policy revisions.
-- [service.py](./service.py) — Direct authority, bounded eligible-recipient search, additive sharing, summaries and protected replacement.
+- [service.py](./service.py) — Effective sharing authority, bounded recipient search, normalized recursive scope, additive sharing and scoped replacement.
 
 # Related links
 

@@ -1,9 +1,9 @@
 from umbod.core.callers import CallerSnapshot
 
-from ..errors import MissingNode, OwnershipNotFound
-from ..models import NodeId, Permission
+from ..errors import MissingNode, OwnershipNotFound, PolicyDecodingFailure
+from ..models import NodeId, Permission, RootParent
 from ..ports import AccessControlDriver, NamespaceDriver
-from .discovery import effective_permissions
+from .discovery import AuthorizationNode, effective_permissions
 from .errors import PermissionDenied
 from .models import AuthorizationDecision, ResolvedIdentity, UnresolvedIdentity
 from .ports import FilesystemIdentityResolver
@@ -51,15 +51,35 @@ async def allows_resolved(
     namespace: NamespaceDriver,
     access_control: AccessControlDriver,
 ) -> bool:
+    return permission in await resolved_permissions(identity, node_id, namespace, access_control)
+
+
+async def resolved_permissions(
+    identity: ResolvedIdentity,
+    node_id: NodeId,
+    namespace: NamespaceDriver,
+    access_control: AccessControlDriver,
+) -> frozenset[Permission]:
+    nodes: list[AuthorizationNode] = []
+    visited: set[NodeId] = set()
+    current_id = node_id
     try:
-        await namespace.get_node(node_id)
         ownership = await access_control.get_owner(node_id)
-    except (MissingNode, OwnershipNotFound):
-        return False
-    principals = identity.principals
-    if permission in effective_permissions(principals, node_id, (ownership,), ()):
-        return True
-    grants = await access_control.list_grants(node_id)
-    return permission in effective_permissions(
-        principals, node_id, (ownership,), grants,
-    )
+        while current_id not in visited:
+            visited.add(current_id)
+            node = await namespace.get_node(current_id)
+            if node.id != current_id:
+                return frozenset()
+            nodes.append(AuthorizationNode(node_id=node.id, kind=node.kind, parent_id=node.parent_id))
+            if isinstance(node.parent_id, RootParent):
+                break
+            current_id = node.parent_id
+        owner_permissions = effective_permissions(identity.principals, node_id, (ownership,), (), nodes)
+        if owner_permissions:
+            return owner_permissions
+        grants = []
+        for node in nodes:
+            grants.extend(await access_control.list_grants(node.node_id))
+        return effective_permissions(identity.principals, node_id, (ownership,), grants, nodes)
+    except (MissingNode, OwnershipNotFound, PolicyDecodingFailure):
+        return frozenset()

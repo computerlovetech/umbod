@@ -83,13 +83,19 @@ async def test_direct_grants_allow_delete_without_parent_write_and_revocation_is
 
 
 @pytest.mark.asyncio
-async def test_parent_recursive_grant_and_foreign_issuer_do_not_authorize(content_context: ContentContext) -> None:
+@pytest.mark.parametrize("recursive", [False, True])
+async def test_only_recursive_parent_grant_not_foreign_issuer_authorizes(content_context: ContentContext, recursive: bool) -> None:
     context = content_context
     node = await context.creation.create_file(caller(), ROOT_ID, "file", metadata())
-    await context.policies.add_grant(AccessGrant(node_id=ROOT_ID, principal=bob(), permissions=set(Permission), recursive=True))
+    await context.policies.add_grant(AccessGrant(node_id=ROOT_ID, principal=bob(), permissions=set(Permission), recursive=recursive))
     await context.policies.add_grant(AccessGrant(node_id=node.id, principal=Principal(type=PrincipalType.USER, issuer="other", id="bob"), permissions=set(Permission), recursive=True))
-    with pytest.raises(PermissionDenied):
+    if recursive:
         await deletion(context).delete_file(snapshot("bob", "issuer", ()), node.id, expected_revision=node.revision)
+        with pytest.raises(MissingNode):
+            await context.namespace.get_node(node.id)
+    else:
+        with pytest.raises(PermissionDenied):
+            await deletion(context).delete_file(snapshot("bob", "issuer", ()), node.id, expected_revision=node.revision)
 
 
 @pytest.mark.asyncio

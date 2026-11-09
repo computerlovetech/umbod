@@ -113,7 +113,7 @@ async def test_home_binding_corruption_never_replaces_or_adopts(
 
 
 @pytest.mark.asyncio
-async def test_ancestor_grants_and_admin_membership_do_not_disclose_home(
+async def test_explicit_recursive_group_grant_discloses_home(
     filesystem_runtime: PersistenceRuntime,
 ) -> None:
     database = filesystem_runtime.database
@@ -125,9 +125,8 @@ async def test_ancestor_grants_and_admin_membership_do_not_disclose_home(
     ))
     browsing = create_filesystem_browsing(database=database, resolver=VerifiedIdentityResolver())
     other = snapshot("bob", "issuer", ("administrators",))
-    assert await browsing.list_children(other, ROOT_ID) == []
-    with pytest.raises(PermissionDenied):
-        await browsing.get_node(other, home.id)
+    assert [node.id for node in await browsing.list_children(other, ROOT_ID)] == [home.id]
+    assert (await browsing.get_node(other, home.id)).id == home.id
 
 
 @pytest.mark.asyncio

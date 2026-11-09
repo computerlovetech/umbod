@@ -249,6 +249,8 @@ describe('coherent filesystem browse', (): void => {
       return updateNode(id, revision, input);
     });
     const moving = files.update.moveTo(filesystemFixture[0]);
+    await vi.waitFor(() => expect(files.update.canSubmit).toBe(true));
+    void files.update.submit();
     await vi.waitFor(() => expect(update).toHaveBeenCalledOnce());
     const pending = deferred<BrowseResult>();
     vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(pending.promise);

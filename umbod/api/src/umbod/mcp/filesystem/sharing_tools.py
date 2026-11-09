@@ -31,7 +31,7 @@ class FilesystemSearchSharingRecipientsTool(Tool):
             name="filesystem_search_sharing_recipients",
             description=(
                 "Search eligible registered groups and observed users for direct sharing of a file or directory. "
-                "Requires current direct-node discover and share authority. User discovery requires verified "
+                "Requires current discover and share authority, direct or inherited from recursive directory grants. User discovery requires verified "
                 "authentication under the configured issuer. Query matches group IDs or labels and observed "
                 "user names as a case-insensitive literal substring, with normalized whitespace. "
                 "Query must be nonblank and at most 200 characters. Omit recipient_type to search both types. "
@@ -78,11 +78,14 @@ class FilesystemShareTool(Tool):
                 "Add explicit permissions for one registered group or observed user on a file or directory. "
                 "Unions permissions with the recipient's existing manageable direct grant; "
                 "preserves other permissions and recipients. Retrying is idempotent. "
-                "Requires current direct-node discover and share authority on every invocation. "
+                "Requires current discover and share authority, direct or inherited, on every invocation. "
                 "Request discover and read together for normal read access. "
-                "Applies only to this node, not descendants; never transfers ownership. "
+                "New directory grants default to recursive=true, applying to current and future descendants. "
+                "Omitting recursive preserves the scope of an existing grant. "
+                "Set recursive=false for this node only; file grants always return recursive=false. "
+                "Additive sharing preserves existing recursive scope and never transfers ownership. "
                 "Find recipients with filesystem_search_sharing_recipients. Use the returned type and "
-                "group_id or user_id in recipient, omitting the display label. No inheritance or recursive sharing. "
+                "group_id or user_id in recipient, omitting the display label. "
                 "Legacy top-level group_id requests retain their original response shape."
             ),
             parameters={"type": "object", **SHARE_COMMAND.json_schema()},
@@ -102,7 +105,10 @@ class FilesystemShareTool(Tool):
                 GroupSharingTarget(type="group", group_id=command.group_id)
                 if isinstance(command, ShareNodeGroupCommand) else command.recipient
             )
-            policy = ShareNodePolicy(recipient=recipient, permissions=command.permissions)
+            policy = ShareNodePolicy.model_validate({
+                "recipient": recipient, "permissions": command.permissions,
+                **({"recursive": command.recursive} if "recursive" in command.model_fields_set else {}),
+            })
             result = await self._services.sharing().share(snapshot, command.node_id, policy)
             operation_completed()
             try:
@@ -114,7 +120,7 @@ class FilesystemShareTool(Tool):
             if isinstance(command, ShareNodeGroupCommand):
                 result = LegacyShareNodeGroupResult(
                     node_id=result.node_id, group_id=command.group_id,
-                    permissions=result.permissions, changed=result.changed, visible_to=visible_to,
+                    permissions=result.permissions, recursive=result.recursive, changed=result.changed, visible_to=visible_to,
                 )
             return ToolResult(
                 content=result.model_dump_json(),

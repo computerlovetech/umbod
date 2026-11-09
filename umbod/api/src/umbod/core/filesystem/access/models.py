@@ -20,7 +20,7 @@ class AvailableVisibility(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     type: Literal["available"]
-    scope: Literal["direct_node_policy"] = Field(description="Owner and complete direct-node grants only; no inherited grants or administrator override. Recursive flags do not imply inheritance.")
+    scope: Literal["direct_node_policy"] = Field(description="Owner and complete direct-node grants only; inherited grants are excluded from this policy projection.")
     owner: Principal
     grants: tuple[AccessGrant, ...]
     group_members_expanded: Literal[False] = Field(description="Group grants are represented as principals, never as an expanded audience.")
@@ -53,5 +53,5 @@ Visibility = Annotated[
 
 
 class CallerNodeSummary(NodeSummary):
-    permissions: CallerPermissions = Field(description="Effective direct-node rights after discover authorization; flags do not promise operation support.")
+    permissions: CallerPermissions = Field(description="Effective node rights including recursive ancestor grants; mutation results may report lost discovery. Flags do not promise operation support.")
     visible_to: Visibility

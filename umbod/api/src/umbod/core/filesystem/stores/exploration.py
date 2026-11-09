@@ -3,7 +3,7 @@ from umbod.core.persistence import (
 )
 
 from ..authorization import PermissionDenied, ResolvedIdentity
-from ..authorization.discovery import effective_permissions
+from ..authorization.discovery import AuthorizationNode, effective_permissions
 from ..browsing.exploration.models import BrowseScope
 from ..browsing.service import discover_denied
 from ..errors import StorageFailure
@@ -49,13 +49,7 @@ class DatabaseBrowseScopeReader:
                 if record is None:
                     raise discover_denied(node_id)
                 target = record.payload
-                ownerships, grants = await scoped_policies(session, (node_id,))
-                if Permission.DISCOVER not in effective_permissions(
-                    identity.principals, node_id, ownerships, grants,
-                ):
-                    raise discover_denied(node_id)
                 nodes: dict[NodeId, Node] = {target.id: target}
-                policy_ids = {target.id}
                 current = target
                 while not isinstance(current.parent_id, RootParent) and current.parent_id not in nodes:
                     record = await session.find_one(
@@ -66,14 +60,16 @@ class DatabaseBrowseScopeReader:
                         break
                     current = record.payload
                     nodes[current.id] = current
-                    ancestor_owners, ancestor_grants = await scoped_policies(session, (current.id,))
-                    policy_ids.add(current.id)
-                    ownerships += ancestor_owners
-                    grants += ancestor_grants
-                    if Permission.DISCOVER not in effective_permissions(
-                        identity.principals, current.id, ancestor_owners, ancestor_grants,
-                    ):
-                        break
+                policy_ids = set(nodes)
+                ownerships, grants = await scoped_policies(session, tuple(nodes))
+                ancestry = tuple(
+                    AuthorizationNode(node_id=node.id, kind=node.kind, parent_id=node.parent_id)
+                    for node in nodes.values()
+                )
+                if Permission.DISCOVER not in effective_permissions(
+                    identity.principals, node_id, ownerships, grants, ancestry,
+                ):
+                    raise discover_denied(node_id)
                 if target.kind == NodeKind.DIRECTORY:
                     children = await session.find_many(
                         NODE_TABLE, Query(filter=Equals(NODE_PARENT, str(node_id)),

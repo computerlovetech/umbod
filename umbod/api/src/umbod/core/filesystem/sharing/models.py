@@ -24,9 +24,14 @@ SharingTarget = Annotated[
 ]
 
 
+def default_recursive_scope() -> bool:
+    return True
+
+
 class ShareNodePolicy(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    recursive: bool = Field(default_factory=default_recursive_scope, strict=True, description="Directory grants apply to descendants when true. Omission preserves existing scope, defaults true for new directories; files always normalize false.")
     recipient: SharingTarget
     permissions: frozenset[Permission] = Field(min_length=1)
 
@@ -36,6 +41,7 @@ class ShareNodePolicy(BaseModel):
 
 
 class ShareNodeResult(ShareNodePolicy):
+    recursive: bool = Field(..., strict=True)
     node_id: NodeId
     changed: bool
 
@@ -56,6 +62,7 @@ SharingRecipient = Annotated[
 class SharingGrantSummary(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
+    recursive: bool
     recipient: SharingRecipient
     permissions: frozenset[Permission] = Field(min_length=1)
 

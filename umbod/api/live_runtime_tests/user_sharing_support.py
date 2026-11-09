@@ -27,12 +27,12 @@ async def assert_mcp_user_target_sharing(
 ) -> None:
     target = {"type": "user", "user_id": recipient["user_id"]}
     command = {"node_id": node_id, "recipient": target, "permissions": ["discover", "read"]}
-    assert sharing_write_payload(await alice.call_tool("filesystem_share", command)) == {**command, "changed": True}
-    assert sharing_write_payload(await alice.call_tool("filesystem_share", command)) == {**command, "changed": False}
+    assert sharing_write_payload(await alice.call_tool("filesystem_share", command)) == {**command, "recursive": False, "changed": True}
+    assert sharing_write_payload(await alice.call_tool("filesystem_share", command)) == {**command, "recursive": False, "changed": False}
     inspected = tool_payload(await alice.call_tool("get_filesystem_node", {"node_id": node_id}))
     assert inspected["sharing"] == {
         "can_share": True,
-        "grants": [{"recipient": {**target, "label": recipient["label"]}, "permissions": ["discover", "read"]}],
+        "grants": [{"recipient": {**target, "label": recipient["label"]}, "permissions": ["discover", "read"], "recursive": False}],
     }
     received = tool_payload(await bob.call_tool("get_filesystem_node", {"node_id": node_id}))
     assert received["id"] == node_id
@@ -63,7 +63,7 @@ def assert_rest_recipient_scopes(
     assert {grant["recipient"]["type"] for grant in groups.json()["grants"]} == {"group"}
     assert users.json()["grants"] == [{
         "recipient": {"type": "user", "user_id": recipient["user_id"], "label": recipient["label"]},
-        "permissions": ["discover", "read"],
+        "permissions": ["discover", "read"], "recursive": False,
     }]
     user = {"recipient": {"type": "user", "user_id": recipient["user_id"]}, "permissions": ["discover"]}
     changed = alice.put(user_path, json={"grants": [user]}, headers={"If-Match": users.headers["etag"]})

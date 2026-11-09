@@ -15,7 +15,7 @@ const recipients: SharingRecipient[] = [
   { type: 'user', user_id: 'person-a', label: 'Hidden person' },
   { type: 'user', user_id: 'person-b', label: 'New person' }
 ];
-const access: NodeAccess = { node_id: fileId, revision: 'hash-1', grants: [{ recipient: { type: 'group', group_id: ' Team A ', label: 'Friendly team' }, permissions: ['write', 'share'] }, { recipient: { type: 'user', user_id: 'person-a', label: 'Hidden person' }, permissions: ['read'] }], blocked_recipients: [{ type: 'group', group_id: 'blocked' }, { type: 'user', user_id: 'protected-person' }] };
+const access: NodeAccess = { node_id: fileId, revision: 'hash-1', grants: [{ recipient: { type: 'group', group_id: ' Team A ', label: 'Friendly team' }, recursive: false, permissions: ['write', 'share'] }, { recipient: { type: 'user', user_id: 'person-a', label: 'Hidden person' }, recursive: false, permissions: ['read'] }], blocked_recipients: [{ type: 'group', group_id: 'blocked' }, { type: 'user', user_id: 'protected-person' }] };
 
 function fixture(): { api: InMemoryFilesApi; state: SharingDialogState; revoke: ReturnType<typeof vi.fn>; recheck: ReturnType<typeof vi.fn> } {
   const api = new InMemoryFilesApi(rootId, filesystemFixture);
@@ -26,6 +26,38 @@ function fixture(): { api: InMemoryFilesApi; state: SharingDialogState; revoke: 
 }
 
 describe('sharing eligibility', (): void => {
+  test('preserves folder legacy scopes, defaults new recipients to contents and discards widening on cancel', async (): Promise<void> => {
+    const { api, state } = fixture();
+    const folder = filesystemFixture.find((node) => node.id === folderId)!;
+    api.sharing.configure({ ...access, node_id: folderId }, recipients);
+    try {
+      const replace = vi.spyOn(api.sharing, 'replaceAccess');
+      await state.show(folder);
+      expect(state.recipients[0].recursive).toBe(false);
+      expect(state.dirty).toBe(false);
+      state.changeRecursive(' Team A ', true);
+      expect(state.wideningContents).toBe(true);
+      await state.close();
+      expect(replace).not.toHaveBeenCalled();
+      await state.show(folder);
+      expect(state.recipients[0].recursive).toBe(false);
+      expect(state.wideningContents).toBe(false);
+      state.changeFilter('Team B');
+      await state.search.refresh();
+      state.add('team-b');
+      expect(state.recipients.find((entry) => entry.id === 'team-b')?.recursive).toBe(true);
+      await state.save();
+      const saved = await api.sharing.inspectAccess(folderId);
+      expect(saved.grants.find((grant) => grant.recipient.type === 'group' && grant.recipient.group_id === ' Team A ')?.recursive).toBe(false);
+      expect(saved.grants.find((grant) => grant.recipient.type === 'group' && grant.recipient.group_id === 'team-b')?.recursive).toBe(true);
+      expect(saved.grants.find((grant) => grant.recipient.type === 'user')).toEqual(access.grants[1]);
+      await state.show(folder);
+      state.changeRecursive(' Team A ', true);
+      await state.save();
+      expect((await api.sharing.inspectAccess(folderId, 'group')).grants.every((grant) => grant.recursive)).toBe(true);
+    } finally { state.dispose(); }
+  });
+
   test('resolves renamed home labels by ID for buttons, dialog and saved announcement without renaming nodes', async (): Promise<void> => {
     const { api } = fixture();
     const home = filesystemNode({ id: folderId, parent_id: rootId, name: 'Renamed home' });
@@ -128,7 +160,7 @@ describe('sharing dialog state', (): void => {
     const replace = vi.spyOn(api.sharing, 'replaceAccess');
     await state.show(filesystemFixture[2]);
     expect(inspect.mock.calls[0]).toEqual([fileId, 'group', expect.any(AbortSignal)]);
-    expect(state.recipients).toEqual([{ recipient: access.grants[0].recipient, id: ' Team A ', permissions: access.grants[0].permissions, label: 'Friendly team' }]);
+    expect(state.recipients).toEqual([{ recipient: access.grants[0].recipient, id: ' Team A ', recursive: false, permissions: access.grants[0].permissions, label: 'Friendly team' }]);
     expect(state.canSave).toBe(true);
     state.changeFilter('Team B');
     await state.search.refresh();
@@ -137,7 +169,7 @@ describe('sharing dialog state', (): void => {
     state.changePermission('team-b', 'delete', true);
     state.remove(' Team A ');
     await state.save();
-    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'hash-1', { grants: [{ recipient: { type: 'group', group_id: 'team-b' }, permissions: ['discover', 'read', 'delete'] }] }, 'group');
+    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'hash-1', { grants: [{ recipient: { type: 'group', group_id: 'team-b' }, recursive: false, permissions: ['discover', 'read', 'delete'] }] }, 'group');
     expect(state.open).toBe(false);
     expect(state.status).toContain('Notes.txt');
     expect(revoke).toHaveBeenCalledWith(fileId);
@@ -328,7 +360,7 @@ describe('sharing dialog state', (): void => {
     state.remove('person-a');
     const replace = vi.spyOn(api.sharing, 'replaceAccess');
     await state.save();
-    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'hash-1', { grants: [{ recipient: { type: 'user', user_id: 'person-b' }, permissions: ['discover', 'read', 'share'] }] }, 'user');
+    expect(replace).toHaveBeenCalledExactlyOnceWith(fileId, 'hash-1', { grants: [{ recipient: { type: 'user', user_id: 'person-b' }, recursive: false, permissions: ['discover', 'read', 'share'] }] }, 'user');
     expect((await api.sharing.inspectAccess(fileId, 'group')).grants).toEqual([access.grants[0]]);
   });
 

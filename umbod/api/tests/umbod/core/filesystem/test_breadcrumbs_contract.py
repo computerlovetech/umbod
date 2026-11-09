@@ -84,12 +84,12 @@ async def test_corrupt_ancestry_fails_instead_of_returning_partial_or_looping(co
     elif corruption == "noncanonical-root":
         target = target.model_copy(update={"parent_id": RootParent()})
     elif corruption == "root-parent":
-        root = root.model_copy(update={"parent_id": uuid4()})
+        root = root.model_copy(update={"parent_id": target.id})
     elif corruption == "file-ancestor":
         parent = root.model_copy(update={"id": uuid4(), "parent_id": root.id, "name": "file", "kind": NodeKind.FILE})
         target = target.model_copy(update={"parent_id": parent.id})
         context.namespace.get_node.side_effect = {target.id: target, parent.id: parent, root.id: root}.__getitem__
-        with pytest.raises(StorageFailure, match="^Invalid filesystem ancestry$"):
+        with pytest.raises(PermissionDenied):
             await context.service.get_breadcrumbs(caller("alice"), context.target.id)
         return
     elif corruption == "root-kind":
@@ -99,7 +99,7 @@ async def test_corrupt_ancestry_fails_instead_of_returning_partial_or_looping(co
     else:
         target = target.model_copy(update={"id": uuid4()})
     context.namespace.get_node.side_effect = {context.target.id: target, root.id: root}.__getitem__
-    with pytest.raises(StorageFailure, match="^Invalid filesystem ancestry$"):
+    with pytest.raises(StorageFailure if corruption == "root-name" else PermissionDenied):
         await context.service.get_breadcrumbs(caller("alice"), context.target.id)
 
 
@@ -107,19 +107,18 @@ async def test_corrupt_ancestry_fails_instead_of_returning_partial_or_looping(co
 @pytest.mark.parametrize("phase", ["target", "ancestor"])
 async def test_missing_node_after_successful_authorization_is_storage_failure(context: BreadcrumbMocks, phase: str) -> None:
     context.namespace.get_node.side_effect = (
-        [context.target, MissingNode("private")]
-        if phase == "target" else [context.target, context.target, context.root, MissingNode("private")]
+        [context.target, context.root, MissingNode("private")]
+        if phase == "target" else [context.target, context.root, context.target, context.root, MissingNode("private")]
     )
     with pytest.raises(StorageFailure, match="^Invalid filesystem ancestry$"):
         await context.service.get_breadcrumbs(caller("alice"), context.target.id)
 
 
 @pytest.mark.asyncio
-async def test_missing_ancestor_before_authorization_returns_only_visible_suffix(context: BreadcrumbMocks) -> None:
-    context.namespace.get_node.side_effect = [context.target, context.target, MissingNode("private")]
-    result = await context.service.get_breadcrumbs(caller("alice"), context.target.id)
-    assert result.complete is False
-    assert [item.id for item in result.items] == [context.target.id]
+async def test_missing_ancestor_before_authorization_denies_target(context: BreadcrumbMocks) -> None:
+    context.namespace.get_node.side_effect = [context.target, MissingNode("private")]
+    with pytest.raises(PermissionDenied):
+        await context.service.get_breadcrumbs(caller("alice"), context.target.id)
 
 
 @pytest.mark.asyncio

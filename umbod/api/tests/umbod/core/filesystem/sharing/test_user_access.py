@@ -36,7 +36,7 @@ async def test_recipient_can_read_after_user_share_with_exact_issuer(context: Sh
 
 
 @pytest.mark.asyncio
-async def test_user_directory_sharing_is_not_inherited_and_adds_no_implicit_permissions(context: SharingContext) -> None:
+async def test_user_directory_sharing_inherits_but_adds_no_implicit_permissions(context: SharingContext) -> None:
     child = await context.namespace.create_node(context.node.id, "child", NodeKind.FILE, metadata())
     await context.policies.set_owner(Ownership(node_id=child.id, owner=alice()))
     user_id = await observe(DatabaseIdentityDirectory(context.database), "issuer", "recipient")
@@ -47,5 +47,4 @@ async def test_user_directory_sharing_is_not_inherited_and_adds_no_implicit_perm
             await context.service.inspect(actor, node_id, GROUP_SCOPE)
     await context.service.share(caller(), context.node.id, user_command(user_id, Permission.DISCOVER))
     assert (await context.service.summarize_nodes(actor, (context.node.id,))).nodes[0].can_share
-    with pytest.raises(PermissionDenied):
-        await context.service.inspect(actor, child.id, GROUP_SCOPE)
+    assert (await context.service.inspect(actor, child.id, GROUP_SCOPE)).node_id == child.id

@@ -26,9 +26,9 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 - [rendering.py](./rendering.py) — Readable listings with JSON-escaped untrusted descriptions, explicit visibility and expansion limits.
 - [runtime.py](./runtime.py) — Caller-neutral authorization snapshots hydrated at startup and reconciled through durable events.
 - [sharing.py](./sharing.py) — Invocation-local core access and manageable-sharing enrichment for full node results.
-- [sharing_models.py](./sharing_models.py) — Strict unified recipient-search scopes and sharing inputs with legacy group mutation compatibility.
-- [sharing_tools.py](./sharing_tools.py) — Node-authorized group/user recipient search and idempotent additive direct-node sharing.
-- [update.py](./update.py) — Strict top-level revision-checked rename, move and metadata changes with shared REST validation.
+- [sharing_models.py](./sharing_models.py) — Strict recipient-search scopes and recursive sharing inputs/results with legacy group mutation compatibility.
+- [sharing_tools.py](./sharing_tools.py) — Authorized group/user recipient search and additive sharing with normalized, preserved recursive scope.
+- [update.py](./update.py) — Revision-checked updates, inherited-access move guidance and successful moves that remove caller access.
 - [upload.py](./upload.py) — One-shot private uploads capped at 10,485,760 decoded bytes or the lower server limit; no chunking or idempotent retries.
 - [upload_models.py](./upload_models.py) — Bounded UTF-8 and canonical padded base64 inputs; results never echo content.
 - [upload_session_models.py](./upload_session_models.py) — Begin/complete inputs, sensitive single-PUT instructions and verified publication receipts.

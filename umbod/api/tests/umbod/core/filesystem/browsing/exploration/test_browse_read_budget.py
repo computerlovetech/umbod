@@ -79,7 +79,7 @@ async def test_complete_scoped_listing_has_one_read_only_session_and_bounded_pol
 @pytest.mark.asyncio
 @pytest.mark.parametrize("depth", [1, 40, 100])
 @pytest.mark.parametrize("kind", [NodeKind.FILE, NodeKind.DIRECTORY])
-async def test_shared_target_below_hidden_parent_does_not_read_deeper_ancestry(
+async def test_shared_target_reads_hidden_ancestry_without_disclosing_it(
     filesystem_runtime: PersistenceRuntime, depth: int, kind: NodeKind,
 ) -> None:
     user = principal("alice", PrincipalType.USER, "issuer")
@@ -121,8 +121,8 @@ async def test_shared_target_below_hidden_parent_does_not_read_deeper_ancestry(
     assert result.capabilities[0].move is False
     assert counts.sessions == resolver.calls == 1
     assert counts.reads == {
-        "filesystem_nodes": 3 if kind == NodeKind.DIRECTORY else 2,
-        "filesystem_ownership": 2, "filesystem_grants": 2,
+        "filesystem_nodes": depth + (3 if kind == NodeKind.DIRECTORY else 2),
+        "filesystem_ownership": 1, "filesystem_grants": 1,
     }
     assert counts.writes == {}
 

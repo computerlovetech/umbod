@@ -15,7 +15,7 @@ from .models import (
 
 def manageable_direct_grant(grant: AccessGrant) -> bool:
     return (
-        grant.recursive is False
+        isinstance(grant.recursive, bool)
         and bool(grant.permissions)
         and all(isinstance(permission, Permission) for permission in grant.permissions)
     )
@@ -69,7 +69,7 @@ def project_policy(
             blocked.append(UserSharingTarget(type="user", user_id=recipients[principal].user_id))
     grants = tuple(sorted(
         (
-            SharingGrantSummary(recipient=recipients[grant.principal], permissions=frozenset(grant.permissions))
+            SharingGrantSummary(recipient=recipients[grant.principal], permissions=frozenset(grant.permissions), recursive=grant.recursive)
             for grant in state.grants if grant.principal in editable
         ),
         key=lambda grant: (

@@ -99,7 +99,7 @@ def test_user_share_policy_rejects_invalid_permissions(permissions: list[str]) -
 
 def test_user_result_is_frozen_preserves_exact_identifier_and_sorts_permissions() -> None:
     result = ShareNodeResult(
-        node_id=initial_root().id, recipient=UserSharingTarget(type="user", user_id=" exact "), changed=False,
+        node_id=initial_root().id, recipient=UserSharingTarget(type="user", user_id=" exact "), recursive=True, changed=False,
         permissions=frozenset({Permission.WRITE, Permission.READ, Permission.DISCOVER}),
     )
     assert result.recipient.user_id == " exact "

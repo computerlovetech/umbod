@@ -44,6 +44,7 @@
           <p class="search-status" role="status">{state.refreshing ? 'Loading sharing…' : state.search.loading ? 'Searching…' : state.search.hasMore ? 'Refine search for more matches.' : ''}</p>
           {#if state.search.error}<p class="error" role="alert">{state.search.error}</p>{#if !state.search.unavailable}<Button type="button" variant="secondary" disabled={!state.editable} onclick={() => { void state.search.refresh(); }}>Retry search</Button>{/if}{/if}
         </div>
+        <p class="search-status">Removing a direct grant may leave inherited access unchanged.</p>
         {#each state.recipients as entry (entry.id)}
           <section class="recipient" aria-label={entry.label}>
             <div class="recipient-heading"><div><h3>{entry.label}</h3>{#if entry.label !== entry.id}<p class="provider-id">{entry.id}</p>{/if}</div><Button variant="quiet" size="compact" type="button" aria-label={`Remove ${entry.label}`} onclick={() => state.remove(entry.id)}>Remove</Button></div>
@@ -52,11 +53,13 @@
                 <label class="permission"><input type="checkbox" checked={entry.permissions.includes(permission.value)} onchange={(event) => state.changePermission(entry.id, permission.value, event.currentTarget.checked)} />{permission.label}</label>
               {/each}
             </div>
+            {#if state.folder}<label class="permission scope"><input type="checkbox" checked={entry.recursive} onchange={(event) => state.changeRecursive(entry.id, event.currentTarget.checked)} />Include contents</label>{/if}
             {#if entry.permissions.length === 0}<p class="error" role="alert">Choose at least one permission or remove this recipient.</p>{/if}
           </section>
         {/each}
       </fieldset>
     {/if}
+    {#if state.wideningContents}<p class="scope-warning" role="alert">Saving will extend this sharing to existing and future contents.</p>{/if}
     {#if state.error}<p class="error" role="alert">{state.error}</p>{/if}
     {#if state.needsReload || state.phase === 'error'}<LoadingButton label="Reload latest access" loading={false} variant="secondary" disabled={state.pending} onclick={state.reloadLatest} />{/if}
     {#if state.phase === 'sign-in'}<LoadingButton label="Sign in" loading={false} variant="secondary" onclick={signIn} />{/if}
@@ -81,6 +84,8 @@
   .recipient-heading > div { min-width: 0; }
   .provider-id { white-space: pre-wrap; overflow-wrap: anywhere; }
   .permissions { display: flex; flex-wrap: wrap; gap: 0.75rem 1rem; margin-top: 0.85rem; }
+  .scope { margin-top: 0.85rem; }
+  .scope-warning { margin-top: 0.75rem; }
   .permission { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.85rem; }
   input[type='checkbox'] { accent-color: var(--admin-accent); width: 1rem; height: 1rem; }
   .error { padding: 0.65rem; border-radius: var(--admin-radius); background: var(--admin-danger-bg); color: var(--admin-danger-text); font-size: 0.85rem; }

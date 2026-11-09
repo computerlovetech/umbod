@@ -84,7 +84,7 @@ async def test_group_matching_is_normalized_literal_id_or_label_and_reuses_eligi
         await context.groups.register_group_metadata(RegisterGroupMetadata(group_id=identifier, label=label, description=""))
     await context.policies.add_grant(AccessGrant(
         node_id=context.node.id, principal=Principal(type=PrincipalType.GROUP, issuer="issuer", id="blocked"),
-        permissions={Permission.READ}, recursive=True,
+        permissions=set(), recursive=True,
     ))
     result = await context.service.search_recipients(caller(), context.node.id, search(text, GROUP))
     assert tuple(recipient.group_id for recipient in result.recipients) == expected
@@ -161,7 +161,7 @@ async def test_fifty_protected_duplicate_names_do_not_hide_eligible_fifty_first_
         if index < 50:
             await context.policies.add_grant(AccessGrant(
                 node_id=context.node.id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id=subject),
-                permissions={Permission.READ}, recursive=True,
+                permissions=set(), recursive=True,
             ))
     before = await context.policies.list_grants(context.node.id)
     result = await context.service.search_recipients(caller(), context.node.id, search("duplicate", USER))
@@ -227,7 +227,7 @@ async def test_search_reads_directory_once_without_resolving_results_or_writing_
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("recursive,permissions", [(True, {Permission.READ}), (False, set()), (False, {"invalid"}), (0, {Permission.READ})])
+@pytest.mark.parametrize("recursive,permissions", [(True, set()), (False, set()), (False, {"invalid"}), (0, {Permission.READ})])
 async def test_protected_user_collision_is_excluded_but_foreign_principal_does_not_block(
     recursive: object, permissions: set[object],
 ) -> None:

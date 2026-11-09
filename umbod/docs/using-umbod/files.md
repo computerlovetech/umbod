@@ -15,7 +15,7 @@ Open **Files** in the workspace navigation. Browse directories using the file li
 - Use the upload control or drop a file into an eligible directory. Dropping starts the upload immediately; the UI handles one file at a time.
 - Wait for completion before expecting a new file in the directory. Umbod first creates an upload session, transfers the bytes, and then publishes the file.
 
-A new file is private to its creator. Directory sharing does not automatically share new files or subfolders. Duplicate names are rejected rather than overwritten; an upload can fail at completion if another file has taken the same name. Zero-byte files are allowed.
+A new file is owned by its creator and inherits applicable folder shares. With **Include contents** enabled, a folder share applies to existing and future files and subfolders. Duplicate names are rejected rather than overwritten; an upload can fail at completion if another file has taken the same name. Zero-byte files are allowed.
 
 The default maximum upload is **10 MiB**, configurable by the operator. An upload session expires after one hour; it is not a resumable upload. A configured byte limit is a per-upload limit, not a user storage quota.
 
@@ -33,7 +33,7 @@ Open a file or folder and choose **Rename** or **Move**. Renaming requires `disc
 
 REST node PATCH and MCP `update_filesystem_node` accept `name` for renaming, `parent_id` for moving and `metadata` for descriptive changes. These are separate top-level fields and may be combined in one atomic update with one expected node revision. Omitted fields stay unchanged; empty requests, explicit nulls and unknown fields are rejected. Use the node UUID returned by browsing, not a path, for updates.
 
-A move preserves the item's ID, content, ownership and direct sharing grants. Moving a folder carries its subtree without rewriting descendant IDs or revisions. Permissions do not inherit from either folder, so changing location does not grant or revoke access. Existing UUID-based file resource links remain valid.
+A move preserves the item's ID, content, ownership and direct sharing grants. Moving a folder carries its subtree without rewriting descendant IDs or revisions. Inherited access follows the destination hierarchy: a move can give people access or remove access inherited from the source. Both the move picker and native file dragging warn before confirmation. Direct sharing remains unchanged. Existing UUID-based file resource links identify the same file, but reading still requires current access. A move can succeed even if the mover loses access afterward.
 
 The root cannot be renamed or moved, but is a valid destination when authorized. Duplicate sibling names, non-directory destinations and moves into the item itself or its descendants are rejected. A failed combined update leaves every field unchanged. Revision conflicts require reloading the item before retrying.
 
@@ -49,7 +49,7 @@ For nodes you may share, open the sharing dialog and choose **Groups** or **User
 | `delete` | Delete a file; directories and root cannot currently be deleted |
 | `share` | Manage access grants |
 
-Permissions apply directly to the selected node. They do not inherit from a parent folder. A share on a folder is therefore not a recursive share of its contents. Owners have authority over their nodes; other users need matching grants. Sharing requires current `discover` and `share` authority on that node. For normal file reading, grant both `discover` and `read`; `read` alone does not make a file visible.
+New folder shares enable **Include contents** by default. Clear it for folder-only access. Existing folder-only shares stay unchanged until you explicitly include contents and save. Direct grants and recursive ancestor grants add permissions together: a direct read grant cannot reduce inherited write access, and removing a direct grant may leave inherited access intact. Ownership applies only to the owned node. Sharing requires current `discover` and `share` authority on that node. For normal file reading, grant both `discover` and `read`; `read` alone does not make a file visible.
 
 ### Share with an observed user
 
@@ -59,7 +59,7 @@ Umbod's user directory records users observed during verified authentication. It
 
 A recipient can access a directly shared file by its node ID without access to the parent directory. Sharing does not send notifications or provide a dedicated shared-files listing. Communicate the node ID or MCP resource URI separately when the recipient cannot find it by browsing.
 
-Sharing summaries describe manageable direct grants, not every source of effective access. An empty summary is not proof that nobody else has access. Protected grants, including recursive, unresolved, malformed, and foreign-issuer grants, are not rewritten by the sharing editor.
+Sharing summaries describe manageable direct grants, not every source of effective access. An empty summary is not proof that nobody else has access. Representable recursive grants can be edited. Unresolved, malformed, and foreign-issuer grants remain protected from the sharing editor.
 
 ### Read and delete
 
