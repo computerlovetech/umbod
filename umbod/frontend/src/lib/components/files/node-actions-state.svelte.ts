@@ -6,16 +6,32 @@ import type { DeletionState } from '$lib/files/state/deletion-state.svelte';
 
 export class NodeActionsState {
   private expanded = $state(false);
+  private detailsId = $state<string | undefined>(undefined);
   private element: HTMLElement | undefined;
   private fallbackFocus: HTMLElement | null = null;
 
-  constructor(private readonly inputs: () => { update: NodeUpdateState; description: DescriptionState; node?: NodeSummary; sharing?: SharingEligibilityState; deletion?: DeletionState }) {}
+  constructor(private readonly inputs: () => { update: NodeUpdateState; description: DescriptionState; node?: NodeSummary; sharing?: SharingEligibilityState; deletion?: DeletionState; mutationsAllowed?: boolean }) {}
 
   get open(): boolean { return this.expanded; }
   get available(): boolean {
     const { update, description } = this.inputs();
-    return this.canShare || this.inputs().deletion?.available === true || this.inputs().deletion?.pending === true || update.canRename || update.canMove || update.probeFailed || update.needsReload || description.available || description.eligibility === 'error' || description.eligibility === 'sign-in' || description.needsReload;
+    return this.canViewDetails || this.mutationsAllowed && (this.canShare || this.inputs().deletion?.available === true || this.inputs().deletion?.pending === true || update.canRename || update.canMove || update.probeFailed || update.needsReload || description.available || description.eligibility === 'error' || description.eligibility === 'sign-in' || description.needsReload);
   }
+  get mutationsAllowed(): boolean { return this.inputs().mutationsAllowed !== false; }
+  get canViewDetails(): boolean { return this.inputs().node?.permissions.can_discover === true; }
+  get detailsNode(): NodeSummary | undefined {
+    const { node } = this.inputs();
+    return this.canViewDetails && node?.id === this.detailsId ? node : undefined;
+  }
+
+  showDetails = (): void => {
+    if (this.canViewDetails) this.run((): void => { this.detailsId = this.inputs().node?.id; });
+  };
+
+  closeDetails = (): void => { this.detailsId = undefined; };
+
+  attachDetails = (_element: HTMLElement): (() => void) => this.closeDetails;
+
   get busy(): boolean { return this.inputs().update.pending || this.inputs().description.pending || this.inputs().deletion?.pending === true; }
   get canShare(): boolean {
     const { node, sharing } = this.inputs();

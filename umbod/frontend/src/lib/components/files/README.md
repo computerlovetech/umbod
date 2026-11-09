@@ -6,10 +6,17 @@ description: "User filesystem browsing, accessible node sharing, folder creation
 
 # Files
 
-- [NodeActions.svelte](./NodeActions.svelte) — Files-owned icon-labelled action menus with row sharing, editing, moving and deletion, plus persistent dialogs.
+- [NodeActions.svelte](./NodeActions.svelte) — Files-owned detail, sharing and mutation menus with authoritative live-node dialogs and persistent focus restoration.
+- [NodeDetailsDialog.svelte](./NodeDetailsDialog.svelte) — Feature-owned read-only node metadata and the caller’s five explicit permissions, without ownership or grant policy.
+- [PermissionBadge.svelte](./PermissionBadge.svelte) — Neutral permissions-only badge shared by current-node titles and row names.
+- [permission-label.ts](./permission-label.ts) — Exact caller permission combinations summarized without implying unsupported operations.
+- [permission-label.test.ts](./permission-label.test.ts) — Read-only, editable, discover-only and custom permission label cases.
+- [node-details.dom.test.ts](./node-details.dom.test.ts) — Details eligibility, fields, live updates, access loss, navigation cleanup, personal root protection and focus restoration.
+- [node-details-inputs.svelte.test-support.ts](./node-details-inputs.svelte.test-support.ts) — Reactive live node inputs for isolated details interaction tests.
 - [NodeActionIcon.svelte](./NodeActionIcon.svelte) — Decorative icons for filesystem menu actions and recovery entries.
 - [node-actions.dom.test.ts](./node-actions.dom.test.ts) — Single row trigger, icon-labelled actions, sharing eligibility and deletion lifecycle interactions.
-- [node-actions-state.svelte.ts](./node-actions-state.svelte.ts) — Menu visibility, action dispatch and persistent-trigger focus restoration.
+- [node-actions-state.test.ts](./node-actions-state.test.ts) — Discover-only eligibility, live authoritative node reads, menu dismissal and explicit details closure.
+- [node-actions-state.svelte.ts](./node-actions-state.svelte.ts) — Live details selection, menu eligibility, action dispatch and persistent-trigger focus restoration.
 - [NodeDescriptionDialog.svelte](./NodeDescriptionDialog.svelte) — Native description editor with pending guards and explicit conflict recovery.
 - [NodeUpdateDialog.svelte](./NodeUpdateDialog.svelte) — Feature-owned rename and move dialogs with expandable folders, explicit destination selection and reload recovery.
 - [node-update.dom.test.ts](./node-update.dom.test.ts) — Rename, destination selection, branch retries, cancellation and empty-folder keyboard focus interactions.

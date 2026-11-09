@@ -67,7 +67,7 @@ function dialogButton(label: string): HTMLButtonElement {
 }
 
 describe('Files row actions menu', (): void => {
-  test('closed rows expose only the ellipsis trigger and open five decorated menu entries', async (): Promise<void> => {
+  test('closed rows expose only the ellipsis trigger and open six decorated menu entries', async (): Promise<void> => {
     await setup();
     await vi.waitFor(() => expect(files?.rowDeletion.controllers.get(fileId)?.available).toBe(true));
     const buttons = document.querySelectorAll('tbody button');
@@ -79,7 +79,7 @@ describe('Files row actions menu', (): void => {
     expect(document.querySelector('tbody [aria-label="Delete “Notes.txt”"]')).toBeNull();
     await openMenu();
     const entries = Array.from(document.querySelectorAll('[role="menuitem"]'));
-    expect(entries.map((entry) => entry.textContent?.trim())).toEqual(['Share', 'Rename', 'Edit description', 'Move', 'Delete']);
+    expect(entries.map((entry) => entry.textContent?.trim())).toEqual(['View details', 'Share', 'Rename', 'Edit description', 'Move', 'Delete']);
     for (const entry of entries) {
       expect(entry.querySelectorAll('svg')).toHaveLength(1);
       expect(entry.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
@@ -149,7 +149,7 @@ describe('Files row actions menu', (): void => {
     });
     const remove = vi.spyOn(api.filesystem, 'deleteFile');
     await openMenu();
-    expect(Array.from(document.querySelectorAll('[role="menuitem"]')).map((entry) => entry.textContent?.trim())).toEqual(['Share', 'Rename', 'Edit description', 'Move']);
+    expect(Array.from(document.querySelectorAll('[role="menuitem"]')).map((entry) => entry.textContent?.trim())).toEqual(['View details', 'Share', 'Rename', 'Edit description', 'Move']);
     expect(document.querySelector('[aria-label="Delete “Notes.txt”"]')).toBeNull();
     expect(remove).not.toHaveBeenCalled();
   });
@@ -164,7 +164,7 @@ describe('Files row actions menu', (): void => {
     });
     expect(document.querySelectorAll('tbody button')).toHaveLength(1);
     await openMenu();
-    expect(Array.from(document.querySelectorAll('[role="menuitem"]')).map((entry) => entry.textContent?.trim())).toEqual(['Share']);
+    expect(Array.from(document.querySelectorAll('[role="menuitem"]')).map((entry) => entry.textContent?.trim())).toEqual(['View details', 'Share']);
     menuitem('Share').click();
     await tick();
     expect(document.querySelector('[role="menu"]')).toBeNull();

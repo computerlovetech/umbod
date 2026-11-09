@@ -4,6 +4,7 @@
   import type { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
   import type { UploadState } from '$lib/files/state/upload-state.svelte';
   import { FileDropState } from '$lib/files/state/file-drop-state.svelte';
+  import PermissionBadge from './PermissionBadge.svelte';
   import NodeActions from './NodeActions.svelte';
   import NodeShareButton from './NodeShareButton.svelte';
   import NodeSharingDialog from './NodeSharingDialog.svelte';
@@ -76,8 +77,11 @@
 
 <FilesContainer>
   {#snippet identity()}
-    <h1 id="files-heading" class="admin-title" tabindex="-1" {@attach state.rowDeletion.attachFocus}>{state.locationName}</h1>
-    {#if state.phase === 'ready' && state.node && !state.atPersonalRoot}<NodeActions update={state.update} description={state.description} name={state.node.name} {signIn} />{/if}
+    <div class="node-identity">
+      <h1 id="files-heading" class="admin-title" tabindex="-1" {@attach state.rowDeletion.attachFocus}>{state.locationName}</h1>
+      {#if state.phase === 'ready' && state.node}<PermissionBadge permissions={state.node.permissions} />{/if}
+    </div>
+    {#if state.phase === 'ready' && state.node}<NodeActions update={state.update} description={state.description} name={state.locationName} displayName={state.atPersonalRoot ? state.locationName : undefined} node={state.node} mutationsAllowed={!state.atPersonalRoot} {signIn} />{/if}
   {/snippet}
   {#snippet navigation()}
     {#if state.node}<FilesNavigation state={state.navigation} {signIn} />{/if}
@@ -136,15 +140,15 @@
               {@const presentation = state.nodePresentation(item)}
               <tr class={['item-row', presentation.isHome && 'home-row', state.dragMove.isSource(item.id) && 'drag-source', state.dragMove.isTarget(item.id) && 'drop-target']} draggable={state.dragMove.canDrag(item.id)} {@attach state.dragMove.attachRow(item.id)} ondragstart={(event) => state.dragMove.start(item.id, event)} ondragover={(event) => state.dragMove.over(item.id, event)} ondragleave={(event) => state.dragMove.leave(item.id, event)} ondrop={(event) => state.dragMove.drop(item.id, event)}>
                 <td>
-                  <a class="item-name" href={filesHref(item.id)} title={presentation.name} draggable="false">
+                  <div class="row-name"><a class="item-name" href={filesHref(item.id)} title={presentation.name} draggable="false">
                     <FileTypeIcon kind={presentation.iconKind} name={presentation.name} contentType={item.metadata.content_type} />
                     <span class="item-name-label">{presentation.name}</span>
-                  </a>
+                  </a><PermissionBadge permissions={item.permissions} /></div>
                 </td>
                 <td>{item.kind === 'directory' ? 'Folder' : 'File'}</td>
                 <td><time datetime={item.updated_at}>{updatedAt(item.updated_at)}</time></td>
                 <td class="row-actions">
-                  {#if editing}<NodeActions update={editing.update} description={editing.description} name={presentation.name} node={item} sharing={state.sharing} {deletion} onconfirm={() => { void state.rowDeletion.confirm(item.id); }} {signIn} />{/if}
+                  {#if editing}<NodeActions update={editing.update} description={editing.description} name={presentation.name} displayName={presentation.isHome ? presentation.name : undefined} node={item} sharing={state.sharing} {deletion} onconfirm={() => { void state.rowDeletion.confirm(item.id); }} {signIn} />{/if}
                   {#if item.kind === 'file' && deletion}
                     {#if deletion.pending}<span class="visually-hidden" role="status">Deleting “{item.name}”…</span>{/if}
                     {#if deletion.message}<p role="alert">{deletion.message}</p>{/if}
@@ -199,6 +203,8 @@
   .drag-status:not(:empty) { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 30; max-width: calc(100vw - 3rem); box-sizing: border-box; margin: 0; padding: 0.75rem 1rem; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-ink); box-shadow: var(--admin-shadow); pointer-events: none; }
   .upload-status:not(:empty) { color: var(--admin-ink); }
   .availability-error { font-size: 0.9rem; }
+  .node-identity { min-width: 0; }
+  .node-identity h1 { margin-bottom: 0.35rem; }
   h1 { min-width: 0; overflow-wrap: anywhere; }
   a { color: var(--admin-accent); overflow-wrap: anywhere; }
   :focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
@@ -222,7 +228,8 @@
   .row-actions > :global(button) { position: relative; z-index: 1; }
   .item-name-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .items time { white-space: nowrap; }
-  .item-name { display: flex; align-items: center; gap: 0.6rem; }
+  .row-name { display: flex; align-items: center; gap: 0.6rem; }
+  .item-name { min-width: 0; display: flex; align-items: center; gap: 0.6rem; }
   .item-name::after { content: ''; position: absolute; inset: 0; cursor: pointer; }
   svg { flex-shrink: 0; }
   p, dt { color: var(--admin-muted); }

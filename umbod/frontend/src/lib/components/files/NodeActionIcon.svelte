@@ -1,9 +1,11 @@
 <script lang="ts">
-  let { action }: { action: 'share' | 'rename' | 'description' | 'move' | 'delete' | 'retry' | 'sign-in' } = $props();
+  let { action }: { action: 'details' | 'share' | 'rename' | 'description' | 'move' | 'delete' | 'retry' | 'sign-in' } = $props();
 </script>
 
 <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-  {#if action === 'share'}
+  {#if action === 'details'}
+    <circle cx="12" cy="12" r="9" /><path d="M12 11v6m0-10v1" />
+  {:else if action === 'share'}
     <circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="m8.6 10.5 6.8-4M8.6 13.5l6.8 4" />
   {:else if action === 'rename'}
     <path d="m15 4 5 5M4 20l5-1L21 7a2.1 2.1 0 0 0-5-5L4 14zM4 20h16" />

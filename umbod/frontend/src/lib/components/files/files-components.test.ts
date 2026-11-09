@@ -46,7 +46,7 @@ describe('Files user composition', () => {
     expect(body).toContain('Notes.txt');
     expect(body).not.toContain(home.name);
     expect(body).toContain('aria-label="File path"');
-    expect(body).not.toContain('Actions for “Files”');
+    expect(body).toContain('Actions for “Files”');
     expect(body).toContain('Upload file');
     expect(body).toContain('New folder');
     upload.dispose();

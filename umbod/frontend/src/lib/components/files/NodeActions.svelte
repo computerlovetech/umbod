@@ -9,10 +9,11 @@
   import NodeUpdateDialog from './NodeUpdateDialog.svelte';
   import NodeDescriptionDialog from './NodeDescriptionDialog.svelte';
   import FileDeletionDialog from './FileDeletionDialog.svelte';
+  import NodeDetailsDialog from './NodeDetailsDialog.svelte';
   import NodeActionIcon from './NodeActionIcon.svelte';
 
-  let { update, description, name, signIn, node, sharing, deletion, onconfirm }: { update: NodeUpdateState; description: DescriptionState; name: string; signIn: () => void; node?: NodeSummary; sharing?: SharingEligibilityState; deletion?: DeletionState; onconfirm?: () => void } = $props();
-  const menuState = new NodeActionsState(() => ({ update, description, node, sharing, deletion }));
+  let { update, description, name, signIn, node, sharing, deletion, onconfirm, mutationsAllowed = true, displayName }: { update: NodeUpdateState; description: DescriptionState; name: string; signIn: () => void; node?: NodeSummary; sharing?: SharingEligibilityState; deletion?: DeletionState; onconfirm?: () => void; mutationsAllowed?: boolean; displayName?: string } = $props();
+  const menuState = new NodeActionsState(() => ({ update, description, node, sharing, deletion, mutationsAllowed }));
 </script>
 
 {#if menuState.available}
@@ -22,6 +23,8 @@
         <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
       {/snippet}
       {#snippet menu()}
+        {#if menuState.canViewDetails}<button role="menuitem" onclick={menuState.showDetails}><span class="action-label"><NodeActionIcon action="details" />View details</span></button>{/if}
+        {#if menuState.mutationsAllowed}
         {#if menuState.canShare}<button role="menuitem" aria-label={`Share “${name}”`} disabled={menuState.busy} onclick={menuState.share}><span class="action-label"><NodeActionIcon action="share" />Share</span></button>{/if}
         {#if update.canRename}<button role="menuitem" disabled={menuState.busy || update.open || description.open} onclick={() => menuState.run(update.showRename)}><span class="action-label"><NodeActionIcon action="rename" />Rename</span></button>{/if}
         {#if description.available}<button role="menuitem" disabled={menuState.busy || update.open || description.open} onclick={() => menuState.run(description.show)}><span class="action-label"><NodeActionIcon action="description" />Edit description</span></button>{/if}
@@ -32,9 +35,15 @@
         {#if description.needsReload && !description.open}<button role="menuitem" disabled={menuState.busy} onclick={() => menuState.run(description.reload)}><span class="action-label"><NodeActionIcon action="retry" />Reload description</span></button>{/if}
         {#if description.eligibility === 'sign-in'}<button role="menuitem" onclick={() => menuState.run(signIn)}><span class="action-label"><NodeActionIcon action="sign-in" />Sign in</span></button>{/if}
         {#if deletion && (deletion.available || deletion.pending)}<button role="menuitem" class="danger" aria-label={`Delete “${name}”`} aria-busy={deletion.pending} disabled={menuState.busy || !!deletion.confirmation} onclick={() => menuState.run(deletion!.show)}><span class="action-label"><NodeActionIcon action="delete" />{deletion.pending ? 'Deleting…' : 'Delete'}</span></button>{/if}
+        {/if}
       {/snippet}
     </ActionMenu>
   </div>
+{/if}
+{#if menuState.detailsNode}
+  {#key menuState.detailsNode.id}
+    <div {@attach menuState.restoreAfterDialog} {@attach menuState.attachDetails}><NodeDetailsDialog node={menuState.detailsNode} {displayName} close={menuState.closeDetails} /></div>
+  {/key}
 {/if}
 {#if update.open}<div {@attach menuState.restoreAfterDialog}><NodeUpdateDialog state={update} /></div>{/if}
 {#if description.open}<div {@attach menuState.restoreAfterDialog}><NodeDescriptionDialog state={description} {name} /></div>{/if}
