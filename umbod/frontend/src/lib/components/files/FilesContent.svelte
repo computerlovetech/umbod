@@ -133,17 +133,18 @@
             {#each state.children as item (item.id)}
               {@const deletion = state.rowDeletion.controllers.get(item.id)}
               {@const editing = state.rowEditing.controllers.get(item.id)}
-              <tr class={['item-row', state.dragMove.isSource(item.id) && 'drag-source', state.dragMove.isTarget(item.id) && 'drop-target']} draggable={state.dragMove.canDrag(item.id)} {@attach state.dragMove.attachRow(item.id)} ondragstart={(event) => state.dragMove.start(item.id, event)} ondragover={(event) => state.dragMove.over(item.id, event)} ondragleave={(event) => state.dragMove.leave(item.id, event)} ondrop={(event) => state.dragMove.drop(item.id, event)}>
+              {@const presentation = state.nodePresentation(item)}
+              <tr class={['item-row', presentation.isHome && 'home-row', state.dragMove.isSource(item.id) && 'drag-source', state.dragMove.isTarget(item.id) && 'drop-target']} draggable={state.dragMove.canDrag(item.id)} {@attach state.dragMove.attachRow(item.id)} ondragstart={(event) => state.dragMove.start(item.id, event)} ondragover={(event) => state.dragMove.over(item.id, event)} ondragleave={(event) => state.dragMove.leave(item.id, event)} ondrop={(event) => state.dragMove.drop(item.id, event)}>
                 <td>
-                  <a class="item-name" href={filesHref(item.id)} title={item.name} draggable="false">
-                    <FileTypeIcon kind={item.kind} name={item.name} contentType={item.metadata.content_type} />
-                    <span class="item-name-label">{item.name}</span>
+                  <a class="item-name" href={filesHref(item.id)} title={presentation.name} draggable="false">
+                    <FileTypeIcon kind={presentation.iconKind} name={presentation.name} contentType={item.metadata.content_type} />
+                    <span class="item-name-label">{presentation.name}</span>
                   </a>
                 </td>
                 <td>{item.kind === 'directory' ? 'Folder' : 'File'}</td>
                 <td><time datetime={item.updated_at}>{updatedAt(item.updated_at)}</time></td>
                 <td class="row-actions">
-                  {#if editing}<NodeActions update={editing.update} description={editing.description} name={item.name} node={item} sharing={state.sharing} {deletion} onconfirm={() => { void state.rowDeletion.confirm(item.id); }} {signIn} />{/if}
+                  {#if editing}<NodeActions update={editing.update} description={editing.description} name={presentation.name} node={item} sharing={state.sharing} {deletion} onconfirm={() => { void state.rowDeletion.confirm(item.id); }} {signIn} />{/if}
                   {#if item.kind === 'file' && deletion}
                     {#if deletion.pending}<span class="visually-hidden" role="status">Deleting “{item.name}”…</span>{/if}
                     {#if deletion.message}<p role="alert">{deletion.message}</p>{/if}
@@ -211,6 +212,8 @@
   .item-row { position: relative; }
   .item-row:nth-child(even) { background: var(--admin-soft); }
   .item-row:hover, .item-row:focus-within { background: var(--admin-accent-soft); }
+  .item-row.home-row { background: var(--admin-accent-soft); box-shadow: inset 3px 0 var(--admin-accent); }
+  .home-row .item-name { font-weight: 600; }
   .item-row.drag-source { opacity: 0.6; }
   .item-row.drop-target { background: var(--admin-accent-soft); box-shadow: inset 0 0 0 2px var(--admin-accent); }
   .item-row[draggable='true'] .item-name { cursor: grab; }

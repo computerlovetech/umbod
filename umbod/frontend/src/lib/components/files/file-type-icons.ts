@@ -1,4 +1,4 @@
-export type FileIconKind = 'file' | 'folder' | 'image' | 'audio' | 'video' | 'pdf' | 'document' | 'spreadsheet' | 'presentation' | 'text' | 'code' | 'archive';
+export type FileIconKind = 'home' | 'file' | 'folder' | 'image' | 'audio' | 'video' | 'pdf' | 'document' | 'spreadsheet' | 'presentation' | 'text' | 'code' | 'archive';
 
 export interface FileIconDefinition {
   readonly kind: FileIconKind;
@@ -15,6 +15,7 @@ interface FileFormatGroup {
 const fileOutline = 'M6 3h8l4 4v14H6zM14 3v5h4';
 const genericFile: FileIconDefinition = { kind: 'file', label: 'File', paths: [fileOutline] };
 const folder: FileIconDefinition = { kind: 'folder', label: 'Folder', paths: ['M3 6h7l2 3h9v11H3z'] };
+const home: FileIconDefinition = { kind: 'home', label: 'Home folder', paths: ['M3 10l9-7 9 7M5 9v12h14V9M9 21v-8h6v8'] };
 const textFile: FileIconDefinition = { kind: 'text', label: 'Text file', paths: [fileOutline, 'M9 11h6M9 14h6M9 17h6'] };
 
 const formatGroups: readonly FileFormatGroup[] = [
@@ -74,7 +75,8 @@ const extensionIcons = new Map(formatGroups.flatMap(({ icon, extensions }) => ex
 const contentTypeIcons = new Map(formatGroups.flatMap(({ icon, contentTypes }) => contentTypes.map((contentType): [string, FileIconDefinition] => [contentType, icon])));
 const mediaIcons = new Map(formatGroups.filter(({ icon }) => ['image', 'audio', 'video'].includes(icon.kind)).map(({ icon }): [string, FileIconDefinition] => [icon.kind, icon]));
 
-export function fileTypeIcon(kind: 'file' | 'directory', name: string, contentType: unknown): FileIconDefinition {
+export function fileTypeIcon(kind: 'file' | 'directory' | 'home', name: string, contentType: unknown): FileIconDefinition {
+  if (kind === 'home') return home;
   if (kind === 'directory') return folder;
   const normalizedContentType = typeof contentType === 'string' ? contentType.split(';', 1)[0].trim().toLowerCase() : '';
   const mediaType = normalizedContentType.match(/^(image|audio|video)\/[^/\s]+$/u)?.[1] ?? '';

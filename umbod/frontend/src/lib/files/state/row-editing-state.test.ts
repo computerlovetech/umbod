@@ -33,7 +33,7 @@ describe('table row editing', (): void => {
       const update = state.controllers.get(fileId)!.update;
       update.showMove();
       await vi.waitFor(() => expect(update.destinations.loading).toBe(false));
-      expect(update.destinations.folders).toMatchObject([{ id: folderId, name: 'Files', current: true }]);
+      expect(update.destinations.folders).toMatchObject([{ id: folderId, name: 'Home', current: true }]);
       expect(update.destinations.folders).toHaveLength(1);
       await update.destinations.select(rootId);
       expect(update.destinations.selected).toBeUndefined();

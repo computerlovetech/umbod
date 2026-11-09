@@ -58,6 +58,12 @@ describe('file format icon mapping', (): void => {
     expect(fileTypeIcon('file', 'download', contentType).kind).toBe('file');
   });
 
+  test('home is an explicit presentation kind rather than a name inference', (): void => {
+    expect(fileTypeIcon('home', 'Renamed storage', {}).kind).toBe('home');
+    expect(fileTypeIcon('home', 'Renamed storage', {}).label).toBe('Home folder');
+    expect(fileTypeIcon('directory', 'Home-internal-identity', {}).kind).toBe('folder');
+  });
+
   test('a directory is always a folder even when its name and MIME resemble a file', (): void => {
     expect(fileTypeIcon('directory', 'photos.zip', 'application/pdf').kind).toBe('folder');
   });

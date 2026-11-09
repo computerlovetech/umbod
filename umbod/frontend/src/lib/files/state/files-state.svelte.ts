@@ -183,6 +183,11 @@ export class FilesState {
     if (selectedId === node.parent_id) this.acceptDeleted(node);
   };
 
+  nodePresentation = (node: NodeSummary): Readonly<{ name: string; isHome: boolean; iconKind: 'home' | 'file' | 'directory' }> => {
+    const isHome = node.kind === 'directory' && node.id === this.rootId;
+    return { name: isHome ? 'Home' : node.name, isHome, iconKind: isHome ? 'home' : node.kind };
+  };
+
   get atPersonalRoot(): boolean {
     return !!this.node && this.node.id === this.rootId;
   }

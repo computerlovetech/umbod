@@ -21,27 +21,38 @@ function fixture(canRead: (node: NodeSummary) => boolean = () => true): { api: I
 }
 
 describe('compact file navigation', () => {
-  test('home retains the same path bar with a plain current Files label and no parent link', async (): Promise<void> => {
+  test('home at the canonical root retains a plain Home label and no parent link', async (): Promise<void> => {
     const { state } = fixture();
     await state.select(filesystemFixture[0]);
     const document = documentFor(state);
     expect(document.querySelector('.desktop-path[aria-label="File path"]')).not.toBeNull();
-    expect(document.querySelector('.desktop-path [aria-current="page"]')?.textContent).toBe('Files');
-    expect(document.querySelector('.mobile-path [aria-current="page"]')?.textContent).toBe('Files');
+    expect(document.querySelector('.desktop-path [aria-current="page"]')?.textContent).toBe('Home');
+    expect(document.querySelector('.mobile-path [aria-current="page"]')?.textContent).toBe('Home');
     expect(document.querySelector('.partial')).toBeNull();
     expect(document.querySelector('a, button')).toBeNull();
   });
 
-  test('a nested personal home uses Files rather than its stored name or system ancestors', async (): Promise<void> => {
-    const { api } = fixture();
+  test.each([true, false])('a nested home shows only authorized root navigation when root visibility is %s', async (rootVisible): Promise<void> => {
+    const { api } = fixture((node) => rootVisible || node.id !== rootId);
     const state = new FilesNavigationState(api.filesystem, () => folderId);
     await state.select(filesystemFixture[1]);
     const document = documentFor(state);
-    expect(document.querySelector('.desktop-path [aria-current="page"]')?.textContent).toBe('Files');
-    expect(document.querySelector('.mobile-path [aria-current="page"]')?.textContent).toBe('Files');
+    expect(document.querySelector('.desktop-path [aria-current="page"]')?.textContent).toBe('Home');
     expect(document.body.textContent).not.toContain('Projects');
-    expect(document.body.textContent).not.toContain('Shared files');
-    expect(document.querySelector('a, button')).toBeNull();
+    const rootHref = '/files?node=' + rootId;
+    if (rootVisible) {
+      expect(document.querySelector('.desktop-path a')?.getAttribute('href')).toBe(rootHref);
+      expect(document.querySelector('.desktop-path a')?.textContent).toBe('Root');
+      expect(document.querySelector('.mobile-path a')?.getAttribute('href')).toBe(rootHref);
+      expect(document.querySelector('.mobile-path a')?.textContent).toBe('‹Root');
+      expect(document.querySelector('.partial')).toBeNull();
+    } else {
+      expect(document.querySelector('a, button')).toBeNull();
+      expect(document.body.innerHTML).not.toContain(rootId);
+      expect(document.body.textContent).not.toContain('Root');
+      expect(document.querySelector('.partial')?.textContent).toContain('Earlier folders unavailable');
+    }
+    state.dispose();
   });
 
   test('ancestors are native links, the current item is plain and separators are hidden', async (): Promise<void> => {
@@ -65,7 +76,7 @@ describe('compact file navigation', () => {
     await state.select(filesystemFixture[1]);
     const link = documentFor(state).querySelector('.mobile-path a');
     expect(link?.getAttribute('href')).toBe('/files');
-    expect(link?.textContent).toBe('‹Files');
+    expect(link?.textContent).toBe('‹Home');
   });
 
   test('partial paths disclose unavailable ancestors without names, ids or fabricated links', async (): Promise<void> => {

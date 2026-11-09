@@ -42,7 +42,7 @@ describe('move destination picker', (): void => {
     const api = new InMemoryFilesApi(rootId, filesystemFixture);
     const state = picker(api);
     await state.open(await api.filesystem.getNode(fileId));
-    expect(state.folders).toMatchObject([{ id: rootId, name: 'Files', expanded: true, children: [{ id: folderId, name: 'Projects', current: true, selectable: false, expandable: false }] }]);
+    expect(state.folders).toMatchObject([{ id: rootId, name: 'Home', expanded: true, children: [{ id: folderId, name: 'Projects', current: true, selectable: false, expandable: false }] }]);
     expect(state.selected).toBeUndefined();
     expect(state.canSubmit).toBe(false);
     await state.select(folderId);

@@ -14,15 +14,11 @@ export class FilesNavigationState {
   constructor(private readonly api: FilesystemApi, private readonly personalRoot: () => string | undefined = () => undefined) {}
 
   get displayItems(): BreadcrumbItem[] {
-    const items = this.path?.items ?? [];
-    const root = this.personalRoot();
-    const index = items.findIndex((item) => item.id === root);
-    return index < 0 ? items : items.slice(index);
+    return this.path?.items ?? [];
   }
 
   get displayComplete(): boolean {
-    const first = this.displayItems[0];
-    return this.path?.complete === true || !!first && this.isPersonalRoot(first);
+    return this.path?.complete === true;
   }
 
   private isPersonalRoot(item: BreadcrumbItem): boolean {
@@ -94,10 +90,10 @@ export class FilesNavigationState {
 
   get atRoot(): boolean {
     const items = this.displayItems;
-    return items.length === 1 && items[0].kind === 'directory' && (this.isPersonalRoot(items[0]) || this.isCanonicalRoot(items[0]));
+    return items.length === 1 && items[0].kind === 'directory' && this.isCanonicalRoot(items[0]);
   }
 
-  label = (item: BreadcrumbItem): string => this.isPersonalRoot(item) ? 'Files' : this.isCanonicalRoot(item) ? 'Shared files' : item.name;
+  label = (item: BreadcrumbItem): string => this.isPersonalRoot(item) ? 'Home' : this.isCanonicalRoot(item) ? 'Root' : item.name;
 
   href = (item: BreadcrumbItem): string => this.isPersonalRoot(item) ? '/files' : '/files?node=' + encodeURIComponent(item.id);
 

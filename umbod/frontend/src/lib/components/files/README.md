@@ -20,8 +20,8 @@ description: "User filesystem browsing, accessible node sharing, folder creation
 - [files-description.dom.test.ts](./files-description.dom.test.ts) — Description editing, clear, cancel, pending, denied, conflict and creation input interactions.
 - [FilesContainer.svelte](./FilesContainer.svelte) — Shared home, folder and file layout with stable heading height, navigation, actions and description slots.
 - [FilesContent.svelte](./FilesContent.svelte) — File and folder composition with common actions and descriptions, compact listings, metadata, drag previews and upload drops.
-- [FileTypeIcon.svelte](./FileTypeIcon.svelte) — Accessible grouped format icons shared by list rows and filename-based drag previews.
-- [file-type-icons.ts](./file-type-icons.ts) — Common format groups and inline SVGs; specific MIME types precede extensions, with safe generic and text fallbacks.
+- [FileTypeIcon.svelte](./FileTypeIcon.svelte) — Accessible format, folder and explicit home icons shared by list rows and filename-based drag previews.
+- [file-type-icons.ts](./file-type-icons.ts) — Common format groups and explicit home SVGs; specific MIME types precede extensions, with safe generic and text fallbacks.
 - [file-type-icons.test.ts](./file-type-icons.test.ts) — Grouped extensions, MIME precedence, normalization, unknown formats and directory overrides.
 - [file-type-icon.dom.test.ts](./file-type-icon.dom.test.ts) — Accessible category rendering and in-place row icon changes after a filename extension is renamed.
 - [file-drag-move.dom.test.ts](./file-drag-move.dom.test.ts) — Drag preview identity and positioning, targeting, reconciliation, focus, recovery and external upload isolation.

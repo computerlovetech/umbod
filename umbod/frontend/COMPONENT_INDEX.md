@@ -52,7 +52,7 @@ tags:
 
 ## Files presentation
 
-- [FileTypeIcon](src/lib/components/files/FileTypeIcon.svelte) — Accessible file-format and folder SVGs; groups common MIME types and extensions with a generic fallback, without loading file contents.
+- [FileTypeIcon](src/lib/components/files/FileTypeIcon.svelte) — Accessible file-format, folder and explicit home SVGs; groups MIME types and extensions without loading file contents.
 - [FilesContainer](src/lib/components/files/FilesContainer.svelte) — Common file/folder frame with fixed identity, navigation, sharing, action and description slots; callers own eligibility and content.
 
 ## Connector and catalogue presentation

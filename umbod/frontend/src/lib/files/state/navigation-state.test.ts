@@ -22,7 +22,7 @@ describe('authoritative file navigation', () => {
     expect(files.navigation.path).toEqual(path);
     expect(files.navigation.parent?.id).toBe(folderId);
     expect(files.navigation.href(path.items[0])).toBe('/files');
-    expect(files.navigation.label(path.items[0])).toBe('Files');
+    expect(files.navigation.label(path.items[0])).toBe('Home');
     await files.reload();
     expect(read).toHaveBeenCalledTimes(2);
     await files.load(folderId);

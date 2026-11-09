@@ -54,6 +54,39 @@ describe('Files user composition', () => {
     state.dispose();
   });
 
+  test.each(['Home-internal-identity', 'Renamed storage'])('root presents the resolved home independently of its stored name %s', async (name): Promise<void> => {
+    const home = filesystemNode({ id: folderId, parent_id: rootId, name });
+    const other = filesystemNode({ id: fileId, parent_id: rootId, name: 'Home-not-my-folder' });
+    const api = new InMemoryFilesApi(rootId, [filesystemFixture[0], home, other]);
+    vi.spyOn(api.filesystem, 'getHome').mockImplementation((signal) => api.filesystem.getNode(folderId, signal));
+    const state = new FilesState(api);
+    const folder = new NewFolderState(api, state);
+    const upload = new UploadState(api, state);
+    try {
+      await state.load(rootId);
+      const document = new Window().document;
+      document.body.innerHTML = content(state, folder, upload);
+      const link = document.querySelector(`tbody a[href="${filesHref(folderId)}"]`);
+      expect(link).not.toBeNull();
+      expect(link?.textContent?.trim()).toBe('Home');
+      expect(link?.getAttribute('title')).toBe('Home');
+      expect(link?.querySelector('svg')?.getAttribute('aria-label')).toBe('Home folder');
+      expect(link?.closest('tr')?.classList.contains('home-row')).toBe(true);
+      expect(link?.closest('tr')?.querySelector('button')?.getAttribute('aria-label')).toBe('Actions for “Home”');
+      expect(document.body.innerHTML).not.toContain(name);
+      const ordinary = document.querySelector(`tbody a[href="${filesHref(fileId)}"]`);
+      expect(ordinary?.textContent?.trim()).toBe(other.name);
+      expect(ordinary?.querySelector('svg')?.getAttribute('aria-label')).toBe('Folder');
+      expect(ordinary?.closest('tr')?.classList.contains('home-row')).toBe(false);
+      expect(state.children.find((node) => node.id === folderId)?.name).toBe(name);
+      expect((await api.filesystem.getNode(folderId)).name).toBe(name);
+    } finally {
+      upload.dispose();
+      folder.dispose();
+      state.dispose();
+    }
+  });
+
   test('Files navigation exists for both regular and administrator workspaces', (): void => {
     for (const allowed of [false, true]) {
       expect(workspaceNavigation(allowed)).toContainEqual({ id: 'files', label: 'Files', href: '/files', icon: 'files' });

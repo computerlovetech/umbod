@@ -40,7 +40,7 @@ export class MoveDestinationState {
   private generation = 0;
   private selectionGeneration = 0;
 
-  constructor(private readonly api: FilesystemApi, personalRoot: () => string | undefined, private readonly locked: () => boolean) {
+  constructor(private readonly api: FilesystemApi, private readonly personalRoot: () => string | undefined, private readonly locked: () => boolean) {
     this.navigation = new FilesNavigationState(api, personalRoot);
   }
 
@@ -82,7 +82,9 @@ export class MoveDestinationState {
       await this.navigation.select(parent);
       if (generation !== this.generation) return;
       if (this.navigation.phase !== 'ready') throw new Error('Destination path unavailable');
-      const path = this.navigation.displayItems;
+      const items = this.navigation.displayItems;
+      const homeIndex = items.findIndex((item) => item.id === this.personalRoot());
+      const path = homeIndex < 0 ? items : items.slice(homeIndex);
       for (const node of path) {
         this.branches.set(node.id, { node, children: [], phase: 'idle', expanded: true, writable: node.id === parent.id ? parent.permissions.can_write : true });
       }

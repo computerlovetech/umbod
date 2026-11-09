@@ -2,7 +2,7 @@
   import { fileTypeIcon } from './file-type-icons';
 
   let { kind, name, contentType, size = 20 }: {
-    kind: 'file' | 'directory';
+    kind: 'file' | 'directory' | 'home';
     name: string;
     contentType?: unknown;
     size?: number;

@@ -30,7 +30,7 @@ describe('selected node updates', (): void => {
       await state.select(await api.filesystem.getNode(fileId), { rename: true, move: true });
       state.showMove();
       await vi.waitFor(() => expect(state.destinations.loading).toBe(false));
-      expect(state.destinations.folders).toMatchObject([{ id: folderId, name: 'Files', current: true, selectable: false }]);
+      expect(state.destinations.folders).toMatchObject([{ id: folderId, name: 'Home', current: true, selectable: false }]);
       expect(state.destinations.selected).toBeUndefined();
       await state.destinations.select(folderId);
       expect(state.canSubmit).toBe(false);
@@ -44,7 +44,7 @@ describe('selected node updates', (): void => {
       await state.select(await api.filesystem.getNode(folderId), { rename: true, move: true });
       state.showMove();
       await vi.waitFor(() => expect(state.destinations.loading).toBe(false));
-      expect(state.destinations.folders[0]).toMatchObject({ id: rootId, name: 'Shared files', children: [{ id: child.id, name: 'Files', selectable: true }] });
+      expect(state.destinations.folders[0]).toMatchObject({ id: rootId, name: 'Root', children: [{ id: child.id, name: 'Home', selectable: true }] });
       await state.destinations.select(child.id);
       expect(state.destinations.selected).toBeUndefined();
       expect(state.canSubmit).toBe(false);
@@ -223,7 +223,7 @@ describe('selected node updates', (): void => {
     const { files } = await setup();
     files.update.showMove();
     await vi.waitFor(() => expect(files.update.destinations.loading).toBe(false));
-    expect(files.update.destinations.folders).toMatchObject([{ id: rootId, name: 'Files', children: [{ id: folderId, current: true, selectable: false }] }]);
+    expect(files.update.destinations.folders).toMatchObject([{ id: rootId, name: 'Home', children: [{ id: folderId, current: true, selectable: false }] }]);
     expect(files.update.destinations.selected).toBeUndefined();
     expect(files.update.canSubmit).toBe(false);
     expect(files.navigation.path?.items.at(-1)?.id).toBe(fileId);
