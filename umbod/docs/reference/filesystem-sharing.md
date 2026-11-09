@@ -2,7 +2,7 @@
 
 These contracts manage grants stored directly on a file or directory. New directory grants default to `recursive: true` when scope is omitted. Omitting scope on an existing grant preserves its persisted value; explicit true is required to widen a legacy false grant. Recursive directory grants apply to current and future descendants. Explicit `recursive: false` grants affect only the selected node; file grants always normalize to false. Effective permissions add direct and recursive ancestor grants without subtracting other grants. Ownership never inherits or transfers, and sharing does not initialize root access. Every operation checks current `discover` and `share` authority on the selected node, whether direct or inherited; administrator membership alone is insufficient. See [Files](../using-umbod/files.md) for the workspace controls and permission meanings.
 
-Acceptance contracts: [Inherited folder access](../../project/specifications/filesystem/inherited-folder-access.feature) and [Move access effects](../../project/specifications/filesystem/move-access-effects.feature). Moves immediately reevaluate inherited access from the destination ancestry while retaining the moved subtree's direct grants and ownership; no grant copies or move-preview APIs are involved.
+Moves immediately reevaluate inherited access from the destination ancestry while retaining the moved subtree's direct grants and ownership; no grant copies or move-preview APIs are involved.
 
 Full node summaries separately report caller permissions and direct-policy visibility. These are not the manageable sharing projection described below. See [Homes and permissions](filesystem-homes-and-permissions.md) for private default upload destinations and the meaning of `visible_to`.
 
