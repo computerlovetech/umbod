@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastmcp import Client, FastMCP
-from jsonschema import validate
+from jsonschema import FormatChecker, ValidationError as SchemaValidationError, validate
 
 from umbod.core.callers import AuthenticationProvenance
 from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
@@ -63,8 +63,23 @@ async def test_browse_discovery_declares_operations_without_constructing_service
     branches = descriptor.input_schema["oneOf"]
     assert {branch["properties"]["operation"]["const"] for branch in branches} == {"ls", "tree", "stat", "home"}
     assert all(branch["additionalProperties"] is False for branch in branches)
-    assert all(branch["properties"]["target"] == {} for branch in branches if "target" in branch["properties"])
+    assert all(len(branch["properties"]["target"]["oneOf"]) == 3 for branch in branches if "target" in branch["properties"])
+    assert "target" not in next(branch for branch in branches if branch["properties"]["operation"]["const"] == "home")["properties"]
     assert len(descriptor.input_schema["properties"]["target"]["oneOf"]) == 3
+    for branch in branches:
+        operation = branch["properties"]["operation"]["const"]
+        if operation == "home":
+            validate({"operation": operation}, branch)
+            with pytest.raises(SchemaValidationError):
+                validate({"operation": operation, "target": ROOT}, branch)
+            continue
+        for target in (ROOT, {"type": "path", "path": "/projects"},
+                       {"type": "node", "node_id": str(uuid4())}):
+            validate({"operation": operation, "target": target}, branch, format_checker=FormatChecker())
+        for target in ({}, {"type": "node", "node_id": "bad"},
+                       {"type": "path", "path": "relative"}, {"type": "root", "extra": True}):
+            with pytest.raises(SchemaValidationError):
+                validate({"operation": operation, "target": target}, branch, format_checker=FormatChecker())
     assert descriptor.annotations.read_only_hint is False
     assert descriptor.annotations.destructive_hint is False
     assert descriptor.annotations.idempotent_hint is True

@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic.json_schema import SkipJsonSchema
 from uuid import UUID
 
-from ..models import MetadataPatch, UnchangedContentType, UnspecifiedContentType
+from ..models import InputName, MetadataPatch, UnchangedContentType, UnspecifiedContentType
 
 
 class Unchanged:
@@ -20,7 +20,14 @@ class NodePatch(BaseModel):
 
 
 class MetadataChanges(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    model_config = ConfigDict(
+        extra="forbid", frozen=True, strict=True,
+        json_schema_extra={
+            "description": "Provide content_type or nonempty attribute changes; an empty patch is invalid.",
+            "if": {"not": {"required": ["content_type"]}},
+            "then": {"required": ["attributes"], "properties": {"attributes": {"minProperties": 1}}},
+        },
+    )
 
     attributes: dict[str, str] = Field(default_factory=dict, description=(
         "Attribute changes merge with existing attributes. The description key explains what is here "
@@ -48,9 +55,16 @@ class MetadataChanges(BaseModel):
 
 
 class NodeChanges(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, arbitrary_types_allowed=True)
+    model_config = ConfigDict(
+        extra="forbid", frozen=True, strict=True, arbitrary_types_allowed=True,
+        json_schema_extra={
+            "description": "Provide at least one node change: name, parent_id, or metadata. Omitted fields are preserved.",
+            "if": {"not": {"anyOf": [{"required": ["name"]}, {"required": ["parent_id"]}]}},
+            "then": {"required": ["metadata"]},
+        },
+    )
 
-    name: Union[str, SkipJsonSchema[Unchanged]] = Field(default_factory=Unchanged)
+    name: Union[InputName, SkipJsonSchema[Unchanged]] = Field(default_factory=Unchanged)
     parent_id: Union[Annotated[UUID, Field(strict=False)], SkipJsonSchema[Unchanged]] = Field(default_factory=Unchanged)
     metadata: Union[MetadataChanges, SkipJsonSchema[Unchanged]] = Field(default_factory=Unchanged)
 

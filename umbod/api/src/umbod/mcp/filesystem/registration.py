@@ -4,6 +4,7 @@ from fastmcp.tools import FunctionTool
 from fastmcp.tools.base import ToolResult
 from mcp.types import ToolAnnotations
 
+from umbod.core.filesystem.models import InputName
 from umbod.mcp.tools import McpObservedToolRegistrar
 from umbod.mcp.tools.registration import tool_result_is_error
 
@@ -72,7 +73,7 @@ def register_filesystem_tools(
             return file_link_result(result, result.nodes, result.model_dump_json())
 
     async def create_filesystem_file(
-        parent_id: UUID, name: str, metadata: FilesystemNodeMetadata
+        parent_id: UUID, name: InputName, metadata: FilesystemNodeMetadata
     ) -> ToolResult:
         with filesystem_operation():
             snapshot = callers.capture()
@@ -82,7 +83,7 @@ def register_filesystem_tools(
             return file_link_result(result, [result], result.model_dump_json())
 
     async def create_filesystem_directory(
-        parent_id: UUID, name: str, metadata: FilesystemNodeMetadata
+        parent_id: UUID, name: InputName, metadata: FilesystemNodeMetadata
     ) -> FilesystemNodeSummary:
         with filesystem_operation():
             snapshot = callers.capture()
@@ -99,7 +100,7 @@ def register_filesystem_tools(
     ):
         tool = FunctionTool.from_function(
             function, name=function.__name__, description=(
-                description + " Includes manageable direct group sharing only, not a full effective-access audit."
+                description + " Includes manageable direct group and user sharing only, not a full effective-access audit."
                 if readonly else description
             ), auth=visibility.authorize, tags=set(), meta={},
         )

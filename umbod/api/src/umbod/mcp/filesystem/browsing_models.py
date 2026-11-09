@@ -34,30 +34,30 @@ class FilesystemDirectoryTree(DirectoryTree):
 class ResolveHome(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    operation: Literal["home"]
+    operation: Literal["home"] = Field(description="Resolve the caller home directory; no target is accepted.")
 
 
 class BrowseCommand(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    target: BrowseTarget
+    target: BrowseTarget = Field(description="Select the filesystem root, an absolute path, or a node UUID.")
 
 
 class BoundedBrowseCommand(BrowseCommand):
-    max_entries: int = Field(default=100, ge=1, le=1000, strict=True)
+    max_entries: int = Field(default=100, ge=1, le=1000, strict=True, description="Maximum returned entries, from 1 to 1000; truncated results are indicated.")
 
 
 class ListDirectory(BoundedBrowseCommand):
-    operation: Literal["ls"]
+    operation: Literal["ls"] = Field(description="List immediate directory children.")
 
 
 class ReadTree(BoundedBrowseCommand):
-    operation: Literal["tree"]
-    depth: int = Field(default=2, ge=1, le=16, strict=True)
+    operation: Literal["tree"] = Field(description="Read a bounded directory tree.")
+    depth: int = Field(default=2, ge=1, le=16, strict=True, description="Maximum descendant depth, from 1 to 16.")
 
 
 class InspectNode(BrowseCommand):
-    operation: Literal["stat"]
+    operation: Literal["stat"] = Field(description="Inspect one node and its breadcrumbs without reading file bytes.")
 
 
 FilesystemBrowseCommand = Annotated[
@@ -107,8 +107,4 @@ def browse_input_schema() -> dict[str, Any]:
     definitions = schema["$defs"]
     schema["type"] = "object"
     schema["properties"] = {"target": definitions["ListDirectory"]["properties"]["target"]}
-    for reference in schema["oneOf"]:
-        definition = definitions[reference["$ref"].rsplit("/", 1)[1]]
-        if "target" in definition["properties"]:
-            definition["properties"]["target"] = {}
     return schema

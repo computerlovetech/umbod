@@ -31,6 +31,7 @@ class FilesystemUpdateNodeTool(Tool):
             name="update_filesystem_node",
             description=(
                 "Atomically update a file or directory name, parent or metadata with its current revision. "
+                "Provide at least one of name, parent_id or metadata; empty updates are invalid. "
                 "Omitted fields, bytes, ownership and grants are preserved. Requires discover and write on the item; "
                 "moving also requires discover and write on both current and destination directories. "
                 "Root metadata may change, but root cannot be renamed or moved. "

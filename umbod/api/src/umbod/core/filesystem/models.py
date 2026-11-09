@@ -1,12 +1,21 @@
 from datetime import datetime
 from enum import StrEnum
-from typing import Union
+from typing import Annotated, Union
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, WithJsonSchema
 
 NodeId = UUID
 StorageKey = str
+InputName = Annotated[
+    str,
+    WithJsonSchema({
+        "type": "string",
+        "minLength": 1,
+        "pattern": r"^(?!\.{1,2}(?![\s\S]))[^/\\\u0000]+(?![\s\S])",
+        "description": "A nonempty valid UTF-8 name, not . or .., without slash, backslash, or NUL.",
+    }),
+]
 
 
 class PrincipalType(StrEnum):
@@ -90,7 +99,9 @@ class ContentRef(BaseModel):
 class NodeMetadata(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    content_type: Union[str, UnspecifiedContentType]
+    content_type: Union[str, UnspecifiedContentType] = Field(
+        description="A content type string, or exactly {} when unspecified.",
+    )
     attributes: dict[str, str] = Field(description=(
         "Freeform string attributes. The reserved description key describes what is here and "
         "when to read it, for files and directories. Absent or empty means no description; "

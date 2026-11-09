@@ -7,6 +7,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from umbod.core.filesystem.content.errors import UploadTooLarge
 
+from umbod.core.filesystem.models import InputName
+
 from .models import FilesystemNodeMetadata
 
 MAX_UPLOAD_BYTES = 10_485_760
@@ -63,6 +65,6 @@ class UploadCommand(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     parent_id: UUID
-    name: str
+    name: InputName
     metadata: FilesystemNodeMetadata
     content: Annotated[Utf8Content | Base64Content, Field(discriminator="encoding")]

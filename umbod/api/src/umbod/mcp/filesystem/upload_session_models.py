@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from umbod.core.filesystem.models import InputName
+
 from .models import FilesystemNodeMetadata, FilesystemNodeSummary
 
 
@@ -11,7 +13,7 @@ class BeginUploadCommand(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     parent_id: UUID
-    name: str
+    name: InputName
     metadata: FilesystemNodeMetadata
     size_bytes: int = Field(
         ge=0, strict=True,

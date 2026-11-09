@@ -35,7 +35,9 @@ def test_mcp_target_and_revision_do_not_count_as_node_changes() -> None:
 def test_wire_schema_excludes_null_and_unchanged_marker() -> None:
     schema = UpdateNodeCommand.model_json_schema()
     assert schema["required"] == ["node_id", "expected_revision"]
-    assert schema["properties"]["name"] == {"title": "Name", "type": "string"}
+    assert schema["properties"]["name"]["type"] == "string"
+    assert schema["properties"]["name"]["minLength"] == 1
+    assert "UTF-8" in schema["properties"]["name"]["description"]
     assert schema["properties"]["parent_id"]["type"] == "string"
     assert schema["properties"]["parent_id"]["format"] == "uuid"
     assert "Unchanged" not in json.dumps(schema)

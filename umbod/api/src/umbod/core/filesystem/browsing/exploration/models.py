@@ -16,7 +16,11 @@ class RootTarget(ExplorationModel):
 
 class PathTarget(ExplorationModel):
     type: Literal["path"]
-    path: str = Field(max_length=4096)
+    path: str = Field(
+        max_length=4096,
+        json_schema_extra={"pattern": r"^/[^\u0000]*$"},
+        description="Absolute filesystem path of at most 4096 characters and 64 nonempty slash-separated segments. No . or .. segments or NUL. Repeated and trailing slashes are allowed.",
+    )
 
     @field_validator("path")
     @classmethod
