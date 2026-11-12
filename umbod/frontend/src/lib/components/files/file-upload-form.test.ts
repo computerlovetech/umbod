@@ -83,14 +83,17 @@ describe('upload form server-rendered accessibility', () => {
     expect(document.querySelector('.selected-file strong')?.textContent).toBe('Original.txt');
     expect(document.querySelector('.selected-file span')?.textContent).toBe(size === 0 ? '0 bytes' : '1 KiB');
     const picker = document.querySelector('input[type="file"]');
-    expect(document.querySelector(`label[for="${picker?.id}"]`)?.textContent).toBe('Choose a different file');
+    expect(document.querySelector(`label[for="${picker?.id}"]`)?.textContent).toBe('Change file');
+    expect(document.querySelector('.selected-badge')?.textContent).toBe('File selected');
+    expect(document.querySelector('.drop-title')).toBeNull();
+    expect(document.querySelector('.has-selection')).not.toBeNull();
     const name = document.querySelector('input[autocomplete="off"]');
     expect(name?.getAttribute('value')).toBe('Renamed.txt');
     expect(name?.hasAttribute('required')).toBe(true);
     expect(document.querySelector(`label[for="${name?.id}"]`)?.textContent).toBe('File name');
     expect(document.getElementById(name?.getAttribute('aria-describedby') ?? '')?.textContent).toContain('Existing files are never overwritten');
     expect(document.querySelector('dialog [role="status"]')?.textContent).toBe(upload.status);
-    expect(document.querySelector('.selection button')?.textContent).toBe('Remove file');
+    expect(document.querySelector('button[aria-label="Remove file"]')).not.toBeNull();
     expect(document.querySelector('button[type="submit"]')?.hasAttribute('disabled')).toBe(false);
   });
 

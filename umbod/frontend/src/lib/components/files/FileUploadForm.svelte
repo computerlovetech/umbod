@@ -1,5 +1,7 @@
 <script lang="ts">
   import Button from '$lib/components/admin/shared/Button.svelte';
+  import FileTypeIcon from './FileTypeIcon.svelte';
+  import { FileThumbnailState } from './file-thumbnail-state.svelte';
   import { tick } from 'svelte';
   import ModalShell from '$lib/components/shared/ModalShell.svelte';
   import { FileDropState } from '$lib/files/state/file-drop-state.svelte';
@@ -7,6 +9,7 @@
 
   let { state, destination, signIn }: { state: UploadState; destination: string; signIn: () => void } = $props();
   const id = $props.id();
+  const thumbnail = new FileThumbnailState(() => state.file);
   const drop = new FileDropState((files) => state.select(files), (message) => state.rejectSelection(message), () => state.pending || state.uncertain);
 
   function choose(input: HTMLInputElement): void {
@@ -18,8 +21,9 @@
     (document.getElementById('upload-file-button') ?? document.getElementById('files-heading'))?.focus();
   }
 
-  function remove(): void {
+  async function remove(): Promise<void> {
     state.remove();
+    await tick();
     document.getElementById(id + '-file')?.focus();
   }
 
@@ -55,20 +59,35 @@
   </div>
   <fieldset disabled={state.pending || state.uncertain}>
     <legend class="visually-hidden">Choose a file to upload</legend>
-    <div class={['drop-zone', { 'drag-active': drop.active }]} role="group" aria-label="File drop area" aria-describedby={id + '-hint'} ondragenter={drop.enter} ondragover={drop.over} ondragleave={drop.leave} ondrop={drop.drop}>
-      <svg aria-hidden="true" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6" /></svg>
-      <p class="drop-title">{drop.active ? 'Drop your file here' : 'Drag and drop a file here'}</p>
+    <div class={['drop-zone', { 'has-selection': !!state.file, 'drag-active': drop.active }]} role="group" aria-label="File drop area" aria-describedby={id + '-hint'} ondragenter={drop.enter} ondragover={drop.over} ondragleave={drop.leave} ondrop={drop.drop}>
+      {#if state.file}
+        <div class="selection-heading">
+          <span class="selected-badge"><svg aria-hidden="true" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9" /><path d="m8 12 3 3 5-6" /></svg>File selected</span>
+          <Button variant="quiet" size="compact" iconOnly type="button" aria-label="Remove file" onclick={remove}><svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m7 7 10 10M17 7 7 17" /></svg></Button>
+        </div>
+        <div id={id + '-selection'} class="selection">
+          <div class="thumbnail">
+            {#key state.file}
+              {#if thumbnail.visible}
+                <img {@attach thumbnail.attach} alt="Selected file preview" />
+              {:else}
+                <FileTypeIcon kind="file" name={state.file.name} contentType={state.file.type} size={32} />
+              {/if}
+            {/key}
+          </div>
+          <div class="selected-file"><strong>{state.file.name}</strong><span>{formatFileSize(state.file.size)}</span></div>
+        </div>
+      {:else}
+        <svg aria-hidden="true" viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6" /></svg>
+        <p class="drop-title">{drop.active ? 'Drop your file here' : 'Drag and drop a file here'}</p>
+      {/if}
       <div class="file-picker">
-        <label for={id + '-file'}>{state.file ? 'Choose a different file' : 'Choose file'}</label>
+        <label for={id + '-file'}>{#if state.file}<svg aria-hidden="true" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8h15m-4-4 4 4-4 4M20 16H5m4-4-4 4 4 4" /></svg>{/if}{state.file ? 'Change file' : 'Choose file'}</label>
         <input id={id + '-file'} class="visually-hidden" type="file" aria-describedby={id + '-hint' + (state.file ? ' ' + id + '-selection' : '') + (state.error ? ' ' + id + '-error' : '')} onchange={(event) => choose(event.currentTarget)} />
       </div>
-      <p id={id + '-hint'} class="hint">Or use the file picker. Any file type, including empty files. Folders and multiple files are not supported.</p>
+      <p id={id + '-hint'} class={['hint', { 'visually-hidden': !!state.file }]}>Or use the file picker. Any file type, including empty files. Folders and multiple files are not supported.</p>
     </div>
     {#if state.file}
-      <div id={id + '-selection'} class="selection">
-        <div class="selected-file"><strong>{state.file.name}</strong><span>{formatFileSize(state.file.size)}</span></div>
-        <Button variant="quiet" size="compact" type="button" onclick={remove}>Remove file</Button>
-      </div>
       <div class="name-field">
         <label for={id + '-name'}>File name</label>
         <input id={id + '-name'} value={state.name} oninput={(event) => state.changeName(event.currentTarget.value)} aria-describedby={id + '-name-hint' + (state.error ? ' ' + id + '-error' : '')} required autocomplete="off" />
@@ -111,9 +130,17 @@
   .file-picker:focus-within { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
   fieldset:disabled .file-picker label { cursor: default; opacity: 0.6; }
   .hint { line-height: 1.5; }
-  .selection { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 0; }
+  .has-selection { align-items: stretch; gap: 1rem; padding: 1.25rem; border: 1px solid var(--admin-accent-border); background: var(--admin-accent-soft); text-align: left; }
+  .selection-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+  .selected-badge { display: inline-flex; align-items: center; gap: 0.4rem; color: var(--admin-accent); font-size: 0.8rem; font-weight: 600; }
+  .selection { display: flex; align-items: center; gap: 1rem; min-width: 0; }
+  .thumbnail { display: grid; place-items: center; flex-shrink: 0; width: 5rem; height: 5rem; overflow: hidden; border: 1px solid var(--admin-accent-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-accent); }
+  .thumbnail img { width: 100%; height: 100%; object-fit: cover; }
+  .has-selection .file-picker { display: flex; justify-content: flex-end; border-top: 1px solid var(--admin-accent-border); border-radius: 0; padding-top: 0.8rem; }
+  .has-selection .file-picker label { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.2rem; border: 0; color: var(--admin-accent); font-size: 0.85rem; font-weight: 600; }
+  .has-selection.drag-active { border-color: var(--admin-accent); outline: 2px solid var(--admin-accent); outline-offset: 3px; }
   .selected-file { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; overflow-wrap: anywhere; }
-  .name-field { display: grid; gap: 0.5rem; }
+  .name-field { display: grid; gap: 0.5rem; margin-top: 1rem; }
   .name-field label { font-size: 0.9rem; font-weight: 500; }
   textarea { resize: vertical; }
   input:not([type='file']), textarea { border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-ink); font: inherit; padding: 0.6rem 0.9rem; min-width: 0; }
@@ -123,5 +150,5 @@
   progress { width: 100%; accent-color: var(--admin-accent); }
   :focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }
   .visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
-  @media (max-width: 480px) { .selection { flex-wrap: wrap; } }
+  @media (max-width: 480px) { .has-selection { padding: 1rem; } .thumbnail { width: 4rem; height: 4rem; } }
 </style>

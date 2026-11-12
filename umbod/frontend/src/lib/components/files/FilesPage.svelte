@@ -23,6 +23,8 @@
   import { markdownPreviewAdapter } from './preview/markdown-adapter';
   import { pdfPreviewAdapter } from './preview/pdf-adapter';
   import { imagePreviewAdapter } from './preview/image-adapter';
+  import { textPreviewAdapter } from './preview/text-adapter';
+  import { csvPreviewAdapter } from './preview/csv-adapter';
 
   let {
     createApi = browserFilesApi,
@@ -47,7 +49,7 @@
   }
 
   function createPreview(): FilePreviewState {
-    return new FilePreviewState(createContentSource(configuration), new PreviewRegistry([markdownPreviewAdapter, pdfPreviewAdapter, imagePreviewAdapter]), configuration);
+    return new FilePreviewState(createContentSource(configuration), new PreviewRegistry([markdownPreviewAdapter, pdfPreviewAdapter, imagePreviewAdapter, csvPreviewAdapter, textPreviewAdapter]), configuration);
   }
 
   const api = createFilesApi();

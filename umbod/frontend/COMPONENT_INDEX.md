@@ -52,6 +52,10 @@ tags:
 
 ## Files presentation
 
+- [CsvPreview](src/lib/components/files/preview/CsvPreview.svelte) — Content-only comma-separated table; shows up to 200 rows and 50 columns without header guessing, with plain text fallback for malformed CSV.
+
+- [TextPreview](src/lib/components/files/preview/TextPreview.svelte) — Content-only read-only plain text; preserves whitespace, wraps long lines and never interprets HTML or Markdown.
+
 - [ImagePreview](src/lib/components/files/preview/ImagePreview.svelte) — Content-only responsive raster image; use with a prepared image data URL and an optional decode-failure callback.
 
 - [PdfPreview](src/lib/components/files/preview/PdfPreview.svelte) — Content-only PDF frame; use with a prepared PDF data URL and a browser with built-in PDF viewing.

@@ -34,7 +34,9 @@ description: "User filesystem browsing, accessible node sharing, folder creation
 - [file-type-icons.test.ts](./file-type-icons.test.ts) — Grouped extensions, MIME precedence, normalization, unknown formats and directory overrides.
 - [file-type-icon.dom.test.ts](./file-type-icon.dom.test.ts) — Accessible category rendering and in-place row icon changes after a filename extension is renamed.
 - [file-drag-move.dom.test.ts](./file-drag-move.dom.test.ts) — Drag previews, move review confirmation/cancellation, reconciliation, focus, recovery and external upload isolation.
-- [FileUploadForm.svelte](./FileUploadForm.svelte) — Native upload modal, file picker, drop target and server-validated upload feedback.
+- [FileUploadForm.svelte](./FileUploadForm.svelte) — Native upload modal with distinct selected-file card, thumbnail, replacement picker and server-validated feedback.
+- [file-thumbnail-state.svelte.ts](./file-thumbnail-state.svelte.ts) — Scoped raster thumbnail URLs with decode-failure fallback and attachment cleanup.
+- [file-upload-form.dom.test.ts](./file-upload-form.dom.test.ts) — Selection, replacement, removal focus, thumbnail cleanup and locked upload interactions.
 - [file-upload-form.test.ts](./file-upload-form.test.ts) — Modal semantics, accessible selection, validation and pending states.
 - [FileDeletionDialog.svelte](./FileDeletionDialog.svelte) — Files-owned permanent removal confirmation using shared native-dialog mechanics.
 - [file-deletion.test.ts](./file-deletion.test.ts) — Row and details eligibility, accessible filename-specific confirmation and danger action presentation tests.

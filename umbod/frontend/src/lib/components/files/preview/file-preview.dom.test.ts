@@ -9,7 +9,7 @@ import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/p
 import { browserTransport } from '$lib/admin/infrastructure/transport';
 import { FileContentRoute } from '$lib/files/infrastructure/file-content-route';
 import FilePreview from './FilePreview.svelte';
-import PlainPreview from './PlainPreview.test-support.svelte';
+import { textPreviewAdapter } from './text-adapter';
 import { markdownPreviewAdapter } from './markdown-adapter';
 import { pdfPreviewAdapter } from './pdf-adapter';
 
@@ -27,8 +27,8 @@ afterEach(async (): Promise<void> => {
 test('renders markdown and replaces the component using an injected filetype adapter', async (): Promise<void> => {
   const source = new InMemoryFileContent(async (): Promise<string> => '# Heading');
   state = new FilePreviewState(source, new PreviewRegistry([
-    { component: PlainPreview, supports: (node): boolean => node.name.endsWith('.txt'), read: (source, id, signal): Promise<string> => source.readText(id, signal) },
-    markdownPreviewAdapter
+    markdownPreviewAdapter,
+    textPreviewAdapter
   ]), new InMemoryPreviewConfiguration(257));
   component = mount(FilePreview, { target: document.body, props: { state, signIn: vi.fn() } });
   const file = filesystemNode({ name: 'notes.md', kind: 'file' });
@@ -38,7 +38,7 @@ test('renders markdown and replaces the component using an injected filetype ada
   await state.select({ ...file, name: 'notes.txt' });
   await tick();
   expect(document.querySelector('article')).toBeNull();
-  expect(document.querySelector('pre[aria-label="Plain content"]')?.textContent).toBe('# Heading');
+  expect(document.querySelector('pre[aria-label="Text content"]')?.textContent).toBe('# Heading');
 });
 
 test('embeds PDF bytes and removes the viewer when selection changes', async (): Promise<void> => {
@@ -87,9 +87,9 @@ test('too-large text reflects the same resolved limit used by the content route'
   const configuration = new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: 1031 });
   const request = vi.fn<typeof fetch>().mockResolvedValue(new Response('x'.repeat(1032)));
   const source = new FileContentRoute(browserTransport({ fetch: request, configuration }), configuration);
-  state = new FilePreviewState(source, new PreviewRegistry([markdownPreviewAdapter]), configuration);
+  state = new FilePreviewState(source, new PreviewRegistry([textPreviewAdapter]), configuration);
   component = mount(FilePreview, { target: document.body, props: { state, signIn: vi.fn() } });
-  await state.select(filesystemNode({ name: 'notes.md', kind: 'file' }));
+  await state.select(filesystemNode({ name: 'notes.txt', kind: 'file' }));
   await tick();
   expect(state.phase).toBe('too-large');
   expect(document.body.textContent).toContain('Preview is available for files up to 1031 bytes.');
