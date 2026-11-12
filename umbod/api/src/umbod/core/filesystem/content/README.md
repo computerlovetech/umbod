@@ -1,7 +1,7 @@
 ---
 type: Software Module
 title: "Filesystem content"
-description: "Authorized streaming uploads and downloads over independent content storage."
+description: "Authorized uploads, streaming reads and direct-download delivery over independent content storage."
 ---
 
 # Files
@@ -9,5 +9,6 @@ description: "Authorized streaming uploads and downloads over independent conten
 - [__init__.py](./__init__.py) — Public content operation exports.
 - [ports.py](./ports.py) — Caller-aware upload and download contract.
 - [models.py](./models.py) — Download summary, byte stream and size.
-- [service.py](./service.py) — Bounded uploads and atomic authorized namespace publication.
+- [delivery.py](./delivery.py) — Optional external download port with validated, immutable requests and private URL instructions.
+- [service.py](./service.py) — Authorized streaming reads and storage-neutral download delivery, bounded uploads and namespace publication.
 - [errors.py](./errors.py) — Upload byte-limit failure.

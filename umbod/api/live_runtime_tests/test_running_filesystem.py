@@ -287,7 +287,7 @@ async def check_filesystem_node_updates(
         assert collision.json()["detail"]["code"] == "filesystem_name_collision"
         assert checked_summary(alice_second.get(path), 200) == updated
         if kind == "file":
-            assert alice_second.get(path + "/content").content == b"Stable bytes after rename and move."
+            assert alice_second.get(path + "/content?delivery=stream").content == b"Stable bytes after rename and move."
             contents = await alice_mcp.read_resource(file_resource_uri(created["id"]))
             assert isinstance(contents[0], TextResourceContents)
             assert contents[0].text == "Stable bytes after rename and move."
@@ -352,7 +352,7 @@ async def check_mcp_file_deletion(
     }, raise_on_error=False)
     assert stale.is_error
     assert "filesystem_revision_conflict" in stale.content[0].text
-    assert alice.get(node_path + "/content").content == data
+    assert alice.get(node_path + "/content?delivery=stream").content == data
     directory = await alice_mcp.call_tool("filesystem_delete_file", {
         "node_id": parent_id, "expected_revision": 1,
     }, raise_on_error=False)
@@ -366,7 +366,7 @@ async def check_mcp_file_deletion(
     assert approvals.count == 1
     for worker in (alice, alice_second):
         assert checked_summary(worker.get(node_path), 200) == node
-        retained = worker.get(node_path + "/content")
+        retained = worker.get(node_path + "/content?delivery=stream")
         assert retained.status_code == 200
         assert retained.content == data
     retained_contents = await alice_mcp.read_resource(uri)
@@ -590,7 +590,7 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
         )
         assert alice_second.get(begun.headers["location"]).json()["status"] == "completed"
         assert transfer_upload(alice, upload["transfer"], uploaded_bytes).status_code == (412 if s3_runtime() else 409)
-        downloaded = alice_second.get(FILESYSTEM + "/nodes/" + uploaded["id"] + "/content")
+        downloaded = alice_second.get(FILESYSTEM + "/nodes/" + uploaded["id"] + "/content?delivery=stream")
         assert downloaded.status_code == 200
         assert downloaded.content == uploaded_bytes
         assert downloaded.headers["cache-control"] == "no-store"
@@ -722,7 +722,7 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             assert hidden_delete.json() == absent_delete.json()
             stale_delete = alice_second.delete(uploaded_path, headers={"If-Match": '"' + str(uploaded["revision"] + 1) + '"'})
             assert stale_delete.status_code == 412, stale_delete.text
-            assert alice.get(uploaded_path + "/content").content == uploaded_bytes
+            assert alice.get(uploaded_path + "/content?delivery=stream").content == uploaded_bytes
             directory_path = FILESYSTEM + "/nodes/" + alice_directory["id"]
             directory_options = alice.options(directory_path)
             assert directory_options.status_code == 204

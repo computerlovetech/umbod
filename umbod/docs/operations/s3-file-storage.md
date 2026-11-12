@@ -10,7 +10,7 @@ Use S3 to store the bytes of [Umbod files](../using-umbod/files.md) separately f
 1. Provision a general-purpose S3 bucket and choose a region and optional object prefix. Umbod does not create buckets.
 2. Allow both API and MCP containers to reach the storage endpoint. Use HTTPS outside trusted local test networks.
 3. Provision credentials with `s3:GetObject`, `s3:PutObject`, and `s3:AbortMultipartUpload` permissions on the selected object prefix. Bucket creation and listing are not required. Add the permissions required by your encryption policy, including KMS access where applicable.
-4. For S3-compatible services, confirm support for SigV4 presigned PUT, signed content length and content type, and conditional publication with `If-None-Match: *`, alongside the driver's object and multipart operations. Conditional writes must remain enforced on the selected bucket; providers can restrict them for versioned buckets.
+4. For S3-compatible services, confirm support for SigV4 presigned GET with response-header overrides, presigned PUT, signed content length and content type, and conditional publication with `If-None-Match: *`, alongside the driver's object and multipart operations. Conditional writes must remain enforced on the selected bucket; providers can restrict them for versioned buckets.
 5. Configure lifecycle cleanup for incomplete multipart uploads. Completed but unreferenced objects require a separate retention/cleanup plan.
 
 ## Configure Helm values
@@ -91,6 +91,16 @@ The configured S3 endpoint must be reachable by clients as well as both backend 
 
 Direct transfers use a single PUT, not resumable or client-managed multipart uploads. The configured application limit and the storage service's single-PUT limit both apply. See [filesystem upload transfers](../reference/filesystem-upload-transfers.md) for the shared coordination and retry contract.
 
+## Direct downloads
+
+With S3 configured, authenticated `GET /api/me/filesystem/nodes/{id}/content` checks discover and read permissions, then returns `307 Temporary Redirect` to a presigned S3 GET valid for at most five minutes. Object bytes do not pass through Umbod. The signed request overrides the response MIME type, attachment filename and `Cache-Control: no-store`, including for older objects without MIME metadata. Upload sessions already store the declared `Content-Type` in S3.
+
+The redirect response is not cacheable and sets `Referrer-Policy: no-referrer`. Treat its Location as a bearer capability: anyone holding it can download the object until expiry, even after Umbod access is revoked. Never log, persist or share signed URLs, and never forward Umbod authorization headers or cookies to the storage endpoint. The bucket remains private; do not grant anonymous object access. Temporary AWS credential expiry can shorten the URL lifetime.
+
+Clients must be able to reach the configured storage endpoint. Normal browser attachment navigation does not require CORS; JavaScript fetching directly from storage requires HTTPS and bucket CORS allowing GET from the frontend origin. This change does not enable direct browser previews: the Markdown preview explicitly requests `?delivery=stream` and retains bounded authenticated API streaming. That query is also available to other clients needing API-proxied bytes. Local and in-memory backends continue streaming by default; empty files with no stored object also stream. MCP resource reads remain embedded and unchanged.
+
+Signing does not read or verify the object. Missing objects and storage access failures after redirection are returned by S3, not mapped to Umbod API errors. A signing failure itself returns a sanitized API failure rather than silently proxying bytes.
+
 ## Migrate existing local content
 
 Use `umbod migrate files-to-s3` from an image containing the migration command. This is an offline, non-destructive content copy, not a database migration or an automatic configuration cutover.
@@ -118,7 +128,7 @@ Do not resume writes against local storage after cutover and expect S3 to stay s
 
 ## Operational boundaries
 
-- **Session transfers go directly to S3.** REST and MCP begin/complete sessions use presigned single PUTs by default. Inline MCP uploads and file downloads still pass through Umbod. Completion reads bytes from S3 for authoritative verification; direct upload does not mean zero backend read traffic. Client-managed multipart/resumable transfers remain unsupported.
+- **Session transfers and REST downloads go directly to S3.** REST and MCP begin/complete sessions use presigned single PUTs by default; REST downloads redirect to presigned GETs. Inline MCP uploads, MCP resource reads and explicit streamed downloads still pass through Umbod. Completion reads bytes from S3 for authoritative verification; direct upload does not mean zero backend read traffic. Client-managed multipart/resumable transfers remain unsupported.
 - **Back up metadata and content together.** Without persistence, replacing the core Pod loses namespace and permission records even if the bucket survives.
 - **No automatic migration or fallback.** Use the offline migration procedure above for local-to-S3 cutover. Other backend, bucket or prefix changes require a separate migration. Merely changing values makes existing content unavailable.
 - **No automatic physical cleanup.** Publication happens after content storage; failures can leave unreferenced immutable objects. File deletion removes namespace/policy records, not the stored object. Multipart abort is best effort, so process termination can leave incomplete parts. Lifecycle cleanup of multipart uploads does not reclaim completed orphan objects.

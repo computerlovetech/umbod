@@ -6,6 +6,8 @@ description: "User filesystem browsing, accessible node sharing, folder creation
 
 # Files
 
+- [preview/README.md](./preview/README.md) — Filetype-adapted content previews, initially safe Markdown, with loading and recovery presentation.
+
 - [NodeActions.svelte](./NodeActions.svelte) — Files-owned detail, sharing and mutation menus with authoritative live-node dialogs and persistent focus restoration.
 - [NodeDetailsDialog.svelte](./NodeDetailsDialog.svelte) — Feature-owned read-only node metadata and the caller’s five explicit permissions, without ownership or grant policy.
 - [PermissionBadge.svelte](./PermissionBadge.svelte) — Neutral permissions-only badge shared by current-node titles and row names.

@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import Depends, Request
 from fastapi.exceptions import RequestValidationError
@@ -37,7 +37,7 @@ from umbod.core.filesystem.homes import HomeService
 from umbod.infrastructure import create_filesystem_access, create_filesystem_homes
 
 from .errors import filesystem_errors
-from .models import BrowseNodeQuery
+from .models import BrowseNodeQuery, DownloadQuery
 
 
 def get_filesystem_caller(
@@ -100,6 +100,15 @@ def get_filesystem_browsing(
     resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
 ) -> FilesystemBrowsing:
     return create_filesystem_browsing(database=database, resolver=resolver)
+
+
+def get_filesystem_download_delivery(request: Request) -> Literal["auto", "stream"]:
+    try:
+        return DownloadQuery.model_validate({"delivery": request.query_params.get("delivery", "auto")}).delivery
+    except ValidationError as error:
+        raise RequestValidationError([
+            {**entry, "loc": ("query", *entry["loc"])} for entry in error.errors()
+        ]) from error
 
 
 def get_filesystem_browse_node_id(request: Request) -> NodeId:

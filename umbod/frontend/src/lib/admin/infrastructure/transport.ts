@@ -20,7 +20,7 @@ export interface TransportRequest<TOut> {
   inputSchema?: z.ZodType<unknown>;
   signal?: AbortSignal;
   redirect?: 'error';
-  responseBody?: 'headers';
+  responseBody?: 'headers' | { kind: 'text' | 'bytes'; maxBytes: number };
   conditionalHeaders?: z.infer<typeof conditionalHeadersSchema>;
   apiEndpoint?: { method: HttpMethod; path: string };
 }
@@ -47,6 +47,13 @@ export class HttpError extends Error {
   ) {
     super(`HTTP ${status}: ${statusText}`);
     this.name = 'HttpError';
+  }
+}
+
+export class ResponseTooLargeError extends Error {
+  constructor(readonly maxBytes: number) {
+    super(`Response exceeds ${maxBytes} bytes`);
+    this.name = 'ResponseTooLargeError';
   }
 }
 
@@ -81,6 +88,9 @@ class HttpTransport implements Transport {
   constructor(private readonly config: BrowserTransportConfig) {}
 
   async request<TOut>(opts: TransportRequest<TOut>): Promise<TOut> {
+    if (typeof opts.responseBody === 'object' && (!Number.isInteger(opts.responseBody.maxBytes) || opts.responseBody.maxBytes <= 0)) {
+      throw new RangeError('Response maxBytes must be a positive integer');
+    }
     const init = this.buildRequestInit(opts);
     const configuration = await (this.config.configuration ?? publicConfigurationProvider).get();
     const url = this.requestUrl(opts, configuration.apiBaseUrl);
@@ -106,13 +116,68 @@ class HttpTransport implements Transport {
       return undefined as TOut;
     }
 
-    const payload = opts.responseBody === 'headers' ? { allow: response.headers.get('Allow') } : await response.json();
+    const payload = opts.responseBody === 'headers'
+      ? { allow: response.headers.get('Allow') }
+      : typeof opts.responseBody === 'object'
+        ? opts.responseBody.kind === 'bytes'
+          ? await this.readBytes(response, opts.responseBody.maxBytes)
+          : await this.readText(response, opts.responseBody.maxBytes)
+        : await response.json();
     const parsed = opts.outputSchema.safeParse(payload);
     if (!parsed.success) {
       throw new SchemaValidationError('inbound', parsed.error.issues);
     }
 
     return parsed.data;
+  }
+
+  private async readText(response: Response, maxBytes: number): Promise<string> {
+    const decoder = new TextDecoder('utf-8', { fatal: true });
+    const parts: string[] = [];
+    return this.readBounded(response, maxBytes, (chunk): void => {
+      parts.push(decoder.decode(chunk, { stream: true }));
+    }, (): string => {
+      parts.push(decoder.decode());
+      return parts.join('');
+    });
+  }
+
+  private async readBytes(response: Response, maxBytes: number): Promise<Uint8Array> {
+    const parts: Uint8Array[] = [];
+    return this.readBounded(response, maxBytes, (chunk): void => {
+      parts.push(chunk.slice());
+    }, (bytesRead: number): Uint8Array => {
+      const bytes = new Uint8Array(bytesRead);
+      let offset = 0;
+      for (const part of parts) {
+        bytes.set(part, offset);
+        offset += part.byteLength;
+      }
+      return bytes;
+    });
+  }
+
+  private async readBounded<T>(response: Response, maxBytes: number, consume: (chunk: Uint8Array) => void, complete: (bytesRead: number) => T): Promise<T> {
+    const reader = response.body?.getReader();
+    try {
+      const contentLength = response.headers.get('Content-Length');
+      if (contentLength !== null && Number(contentLength) > maxBytes) throw new ResponseTooLargeError(maxBytes);
+      if (reader === undefined) return complete(0);
+      let bytesRead = 0;
+      while (true) {
+        const chunk = await reader.read();
+        if (chunk.done) break;
+        bytesRead += chunk.value.byteLength;
+        if (bytesRead > maxBytes) throw new ResponseTooLargeError(maxBytes);
+        consume(chunk.value);
+      }
+      return complete(bytesRead);
+    } catch (error) {
+      await reader?.cancel().catch(() => undefined);
+      throw error;
+    } finally {
+      reader?.releaseLock();
+    }
   }
 
   private requestUrl(opts: TransportRequest<unknown>, base: string): string {

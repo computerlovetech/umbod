@@ -1,3 +1,4 @@
+import type { FilePreviewState } from '../preview/file-preview-state.svelte';
 import { NodeUpdateState } from './node-update-state.svelte';
 import { DescriptionState } from './description-state.svelte';
 import { SharingEligibilityState } from './sharing-eligibility-state.svelte';
@@ -40,7 +41,7 @@ export class FilesState {
   readonly dragMove: DragMoveState;
   readonly sharing: SharingEligibilityState;
 
-  constructor(private readonly api: FilesApi, openParent?: (id: string) => Promise<void>) {
+  constructor(private readonly api: FilesApi, openParent?: (id: string) => Promise<void>, readonly preview?: FilePreviewState) {
     this.update = new NodeUpdateState(api.filesystem, this.acceptUpdate, this.reload, () => this.rootId);
     this.description = new DescriptionState(api.filesystem, this.acceptDescription, this.reload);
     this.rowEditing = new RowEditingState(api.filesystem, this.acceptUpdate, this.reload, () => this.rootId);
@@ -58,6 +59,7 @@ export class FilesState {
 
   load = async (target: string | null): Promise<void> => {
     if (this.disposed) return;
+    this.preview?.reset();
     this.dragMove.reset();
     this.update.reset();
     this.description.reset();
@@ -110,6 +112,7 @@ export class FilesState {
       this.children = node.kind === 'directory' ? this.reconcileChildren(node.id, result.entries, listingStartSequence, true) : [];
       this.sharing.seed(result.capabilities);
       this.phase = 'ready';
+      void this.preview?.select(node);
       void this.update.select(node, node.id === this.rootId ? { rename: false, move: false } : current);
       void this.description.select(node, current.edit_description);
       this.sharing.select(this.children);
@@ -173,6 +176,7 @@ export class FilesState {
       this.rowDeletion.reset();
       this.sharing.reset();
       this.navigation.reset();
+      this.preview?.reset();
       this.node = undefined;
       this.children = [];
       this.uploadAvailability = 'hidden';
@@ -185,6 +189,7 @@ export class FilesState {
       return;
     }
     this.node = node;
+    void this.preview?.select(node);
     this.description.acceptUpdatedNode(node);
     this.update.acceptUpdatedNode(node);
     if (node.kind === 'file') this.deletion.acceptUpdatedNode(node);
@@ -197,6 +202,7 @@ export class FilesState {
     if (this.disposed) return;
     this.confirmedDeletedIds.add(node.id);
     this.sharing.remove(node.id);
+    if (this.node?.id === node.id) this.preview?.reset();
     this.children = this.children.filter((child) => child.id !== node.id);
     this.mutationNotice = `“${node.name}” was deleted from the workspace.`;
   };
@@ -249,6 +255,7 @@ export class FilesState {
 
   dispose = (): void => {
     this.disposed = true;
+    this.preview?.dispose();
     this.dragMove.dispose();
     this.update.dispose();
     this.description.dispose();

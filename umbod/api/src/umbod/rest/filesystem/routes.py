@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Response
@@ -17,6 +17,7 @@ from .access import Access, CallerBrowseResult
 from .deps import (
     get_filesystem_browsing, get_filesystem_caller, get_filesystem_creation, get_filesystem_homes,
     get_filesystem_content, get_filesystem_explorer, get_filesystem_browse_node_id,
+    get_filesystem_download_delivery,
 )
 from .deletion import router as deletion_router
 from .metadata import router as metadata_router
@@ -79,10 +80,21 @@ async def list_children(parent_id: UUID, caller: Caller, browsing: Browsing, acc
 
 @router.get(
     "/nodes/{node_id}/content", response_class=StreamingResponse, responses=DOWNLOAD_RESPONSES,
+    openapi_extra={"parameters": [{
+        "name": "delivery", "in": "query", "required": False,
+        "description": "Use auto for storage redirects when available, or stream for authorized API-proxied content.",
+        "schema": {"type": "string", "enum": ["auto", "stream"], "default": "auto"},
+    }]},
 )
-async def get_content(node_id: UUID, caller: Caller, content: Content) -> StreamingResponse:
+async def get_content(
+    node_id: UUID, caller: Caller, content: Content,
+    delivery: Annotated[Literal["auto", "stream"], Depends(get_filesystem_download_delivery)],
+) -> Response:
     with filesystem_errors():
-        download = await content.open_download(caller, node_id)
+        download = (
+            await content.open_download(caller, node_id)
+            if delivery == "stream" else await content.prepare_download(caller, node_id)
+        )
     return await download_response(download)
 
 

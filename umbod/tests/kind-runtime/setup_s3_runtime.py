@@ -122,9 +122,9 @@ def transfer() -> None:
             connection.putheader("Content-Length", str(len(content)))
         connection.endheaders(content)
         response = connection.getresponse()
-        body = response.read(4096)
+        body = response.read() if payload["method"] == "GET" and response.status == 200 else response.read(4096)
         code = ""
-        if body:
+        if body and response.status >= 400:
             try:
                 candidate = ET.fromstring(body).findtext("Code", "")
                 code = candidate if candidate in {
@@ -133,11 +133,16 @@ def transfer() -> None:
                 } else "redacted"
             except ET.ParseError:
                 code = "redacted"
+        response_headers = ("ETag", "Content-Length")
+        if payload["method"] == "GET":
+            response_headers += ("Content-Type", "Content-Disposition", "Cache-Control")
         evidence = {
             "status": response.status, "code": code,
-            "headers": {name: value for name in ("ETag", "Content-Length") if (value := response.getheader(name)) is not None},
+            "headers": {name: value for name in response_headers if (value := response.getheader(name)) is not None},
             "request": {"original_url": True, "authorization": False, "cookie": False, "headers_preserved": True},
         }
+        if payload["method"] == "GET" and response.status == 200:
+            evidence["content_base64"] = base64.b64encode(body).decode("ascii")
     except Exception:
         evidence = {"error": "S3 transfer failed"}
     finally:

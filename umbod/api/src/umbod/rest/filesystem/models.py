@@ -26,6 +26,10 @@ class FilesystemNodeMetadata(NodeMetadata):
         return NodeMetadata(content_type=self.content_type, attributes=self.attributes)
 
 
+class DownloadQuery(BaseModel):
+    delivery: Literal["auto", "stream"]
+
+
 class BrowseNodeQuery(BaseModel):
     node_id: UUID
 

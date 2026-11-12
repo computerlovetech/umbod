@@ -106,7 +106,7 @@ async def test_native_upload_is_readable_through_rest_and_private_across_workers
     assert node["metadata"]["content_type"] == content_type
     path = FILESYSTEM + "/nodes/" + node["id"]
     assert checked_summary(runtime.api.get(path), 200) == node
-    response = runtime.api.get(path + "/content")
+    response = runtime.api.get(path + "/content?delivery=stream")
     assert response.status_code == 200
     assert response.headers["content-type"].split(";")[0] == content_type
     assert response.content == expected
@@ -196,7 +196,7 @@ async def test_read_rejects_oversize_rest_file_without_changing_rest_downloads(
     await wait_for_filesystem_tools(runtime.client, {"filesystem_delete_file"})
     with pytest.raises(MCPError):
         await runtime.client.read_resource(file_resource_uri(node["id"]))
-    downloaded = runtime.api.get(FILESYSTEM + "/nodes/" + node["id"] + "/content")
+    downloaded = runtime.api.get(FILESYSTEM + "/nodes/" + node["id"] + "/content?delivery=stream")
     assert downloaded.status_code == 200
     assert downloaded.content == data
 
@@ -247,7 +247,7 @@ async def test_upload_session_transfers_original_bytes_without_oauth_credentials
     assert receipt["size_bytes"] == len(data)
     assert receipt["sha256"] == digest
     assert node["parent_id"] == runtime.directory_id
-    downloaded = runtime.api.get(FILESYSTEM + "/nodes/" + node["id"] + "/content")
+    downloaded = runtime.api.get(FILESYSTEM + "/nodes/" + node["id"] + "/content?delivery=stream")
     assert downloaded.status_code == 200
     assert downloaded.content == data
     repeated = tool_payload(await runtime.client.call_tool("filesystem_complete_upload", {"upload_id": begun["upload_id"]}))

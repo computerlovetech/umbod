@@ -158,7 +158,7 @@ async def test_upload_to_home_reports_current_permissions_and_direct_visibility(
     assert file["visible_to"]["type"] == "available"
     assert file["visible_to"]["grants"] == []
     path = FILESYSTEM + "/nodes/" + file["id"]
-    assert runtime.api.get(path + "/content").content == data
+    assert runtime.api.get(path + "/content?delivery=stream").content == data
     restore_admin_root_access(runtime.api)
     assert runtime.other_api.get(path).status_code == 403
     await wait_for_filesystem_tools(runtime.client, {"filesystem_share"})

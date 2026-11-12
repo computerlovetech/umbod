@@ -5,7 +5,7 @@ import os
 import ssl
 import subprocess
 from typing import Any
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qs, urlsplit, urlunsplit
 
 import httpx
 import pytest
@@ -82,10 +82,10 @@ async def test_s3_direct_put_publishes_only_after_completion_and_survives_worker
         assert key not in completed.text
         assert "umbod-runtime-content" not in completed.text
         path = FILESYSTEM + "/nodes/" + node["id"]
-        downloaded = primary.get(path + "/content")
+        downloaded = primary.get(path + "/content?delivery=stream")
         assert downloaded.status_code == 200
         assert downloaded.content == content
-    reopened = runtime.api.get(path + "/content")
+    reopened = runtime.api.get(path + "/content?delivery=stream")
     assert reopened.status_code == 200
     assert reopened.content == content
     if len(content) <= 1_048_576:
@@ -108,7 +108,63 @@ async def test_s3_direct_put_publishes_only_after_completion_and_survives_worker
     late = transfer_upload(runtime.api, session["transfer"], content)
     assert late.status_code == 412
     assert storage_objects()[key] == staged[key]
-    assert runtime.api.get(path + "/content").content == content
+    assert runtime.api.get(path + "/content?delivery=stream").content == content
+
+
+async def test_s3_content_redirect_is_private_get_only_and_preserves_stream_and_mcp_reads(
+    native_upload_runtime: NativeUploadRuntime,
+) -> None:
+    runtime = native_upload_runtime
+    content = bytes(range(256)) * 32 + b"\x00\xffdirect S3 download\r\n"
+    filename = "download.bin"
+    disposition = "attachment; filename=\"download\"; filename*=UTF-8''download.bin"
+    session = upload_request(runtime, filename, len(content))
+    assert_transfer_succeeded(transfer_upload(runtime.api, session["transfer"], content))
+    node = checked_summary(runtime.api.post(session["complete_url"]), 201)
+    path = FILESYSTEM + "/nodes/" + node["id"] + "/content"
+
+    redirected = runtime.api.get(path, follow_redirects=False)
+    assert redirected.status_code == 307
+    assert redirected.headers["cache-control"] == "no-store"
+    assert redirected.headers["referrer-policy"] == "no-referrer"
+    location = redirected.headers["location"]
+    parsed = urlsplit(location)
+    assert parsed.scheme == "http"
+    assert parsed.netloc == "umbod-runtime-s3:5000"
+    query = parse_qs(parsed.query)
+    assert query["X-Amz-Algorithm"] == ["AWS4-HMAC-SHA256"]
+    assert query["X-Amz-Expires"] == ["300"]
+    assert query["X-Amz-Signature"]
+    assert query["X-Amz-SignedHeaders"] == ["host"]
+    assert query["response-content-type"] == ["application/octet-stream"]
+    assert query["response-content-disposition"] == [disposition]
+    assert query["response-cache-control"] == ["no-store"]
+
+    transfer = {"url": location, "headers": {}}
+    downloaded = raw_s3_request(transfer, b"", method="GET")
+    assert downloaded.status_code == 200
+    assert downloaded.content == content
+    assert downloaded.headers["content-type"] == "application/octet-stream"
+    assert downloaded.headers["content-disposition"] == disposition
+    assert downloaded.headers["cache-control"] == "no-store"
+    assert raw_s3_request(transfer, b"", method="PUT").status_code == 403
+    unsigned = {"url": urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", "")), "headers": {}}
+    assert raw_s3_request(unsigned, b"", method="GET").status_code == 403
+    denied = runtime.other_api.get(path, follow_redirects=False)
+    assert denied.status_code == 403
+    assert "location" not in denied.headers
+
+    streamed = runtime.api.get(path, params={"delivery": "stream"}, follow_redirects=False)
+    assert streamed.status_code == 200
+    assert streamed.content == content
+    assert "location" not in streamed.headers
+    await wait_for_filesystem_tools(runtime.client, {"filesystem_delete_file"})
+    resources = await runtime.client.read_resource(file_resource_uri(node["id"]))
+    assert len(resources) == 1
+    assert isinstance(resources[0], BlobResourceContents)
+    assert base64.b64decode(resources[0].blob) == content
+    assert resources[0].mime_type == "application/octet-stream"
+    assert resources[0].meta == {"revision": node["revision"], "size_bytes": len(content)}
 
 
 async def test_s3_pending_transfer_cannot_complete_or_publish(
@@ -150,10 +206,10 @@ async def test_s3_direct_put_is_private_and_cannot_overwrite_or_authorize_comple
     assert receipt["sha256"] == hashlib.sha256(b"abc").hexdigest()
     assert receipt["size_bytes"] == 3
     path = FILESYSTEM + "/nodes/" + receipt["node"]["id"]
-    assert runtime.api.get(path + "/content").content == b"abc"
+    assert runtime.api.get(path + "/content?delivery=stream").content == b"abc"
     assert runtime.other_api.get(path + "/content").status_code == 403
     assert raw_s3_request(transfer, b"xyz").status_code == 412
-    assert runtime.api.get(path + "/content").content == b"abc"
+    assert runtime.api.get(path + "/content?delivery=stream").content == b"abc"
 
 
 @pytest.mark.parametrize("completion", ["rest", "mcp"])

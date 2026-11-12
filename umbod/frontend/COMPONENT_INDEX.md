@@ -52,6 +52,10 @@ tags:
 
 ## Files presentation
 
+- [PdfPreview](src/lib/components/files/preview/PdfPreview.svelte) — Content-only PDF frame; use with a prepared PDF data URL and a browser with built-in PDF viewing.
+
+- [MarkdownPreview](src/lib/components/files/preview/MarkdownPreview.svelte) — Content-only Markdown article; escapes raw HTML, omits images and allows only HTTP(S) and mailto links.
+
 - [PermissionBadge](src/lib/components/files/PermissionBadge.svelte) — Neutral caller-permission summary for files titles and rows; accepts permissions only, without ownership or operation eligibility.
 - [FileTypeIcon](src/lib/components/files/FileTypeIcon.svelte) — Accessible file-format, folder and explicit home SVGs; groups MIME types and extensions without loading file contents.
 - [FilesContainer](src/lib/components/files/FilesContainer.svelte) — Common file/folder frame with fixed identity, navigation, sharing, action and description slots; callers own eligibility and content.

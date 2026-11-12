@@ -10,12 +10,13 @@ from ..authorization import (
 from ..browsing import NodeSummary, summary
 from ..creation.service import require_unowned_unshared_node
 from ..errors import NameCollision, WrongNodeKind
-from ..models import EmptyContent, NodeId, NodeKind, NodeMetadata, Ownership, Permission
+from ..models import ContentRef, EmptyContent, NodeId, NodeKind, NodeMetadata, Ownership, Permission
 from ..namespace import require_directory, validate_name
 from ..ports import ByteStream, ContentDriver
 from ..transactions import FilesystemSession, FilesystemTransactions
 from .errors import UploadTooLarge
 from .models import ContentDownload
+from .delivery import ExternalDownloadInstructions, ExternalDownloadRequest, ExternalDownloadTransfer
 
 
 async def empty_stream() -> ByteStream:
@@ -91,9 +92,9 @@ class ContentService:
             result = summary(updated)
         return result
 
-    async def open_download(
+    async def _download_source(
         self, snapshot: CallerSnapshot, node_id: NodeId,
-    ) -> ContentDownload:
+    ) -> tuple[NodeSummary, ContentRef | EmptyContent]:
         identity = await self._identity(snapshot)
         async with self._transactions.transaction() as session:
             await self._require(session, identity, node_id, (Permission.DISCOVER, Permission.READ))
@@ -102,6 +103,25 @@ class ContentService:
                 raise WrongNodeKind(str(node_id))
             result = summary(node)
             content = node.content
+        return result, content
+
+    def _stream_download(self, node: NodeSummary, content: ContentRef | EmptyContent) -> ContentDownload:
         if isinstance(content, EmptyContent):
-            return ContentDownload(node=result, data=empty_stream(), size=0)
-        return ContentDownload(node=result, data=self._content.get(content.key), size=content.size)
+            return ContentDownload(node=node, data=empty_stream(), size=0)
+        return ContentDownload(node=node, data=self._content.get(content.key), size=content.size)
+
+    async def open_download(
+        self, snapshot: CallerSnapshot, node_id: NodeId,
+    ) -> ContentDownload:
+        node, content = await self._download_source(snapshot, node_id)
+        return self._stream_download(node, content)
+
+    async def prepare_download(
+        self, snapshot: CallerSnapshot, node_id: NodeId,
+    ) -> ContentDownload | ExternalDownloadInstructions:
+        node, content = await self._download_source(snapshot, node_id)
+        if isinstance(content, ContentRef) and isinstance(self._content, ExternalDownloadTransfer):
+            return await self._content.prepare_download(ExternalDownloadRequest(
+                content=content, name=node.name, metadata=node.metadata,
+            ))
+        return self._stream_download(node, content)

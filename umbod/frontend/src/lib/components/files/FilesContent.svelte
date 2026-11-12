@@ -15,6 +15,7 @@
   import FilesContainer from './FilesContainer.svelte';
   import FileTypeIcon from './FileTypeIcon.svelte';
   import NewFolderForm from './NewFolderForm.svelte';
+  import FilePreview from './preview/FilePreview.svelte';
 
   let { state, folder, upload, signIn }: { state: FilesState; folder: NewFolderState; upload: UploadState; signIn: () => void } = $props();
 
@@ -169,6 +170,7 @@
       {#if state.deletion.message}<p role="alert">{state.deletion.message}</p>{/if}
       {#if state.deletion.needsReload}<Button variant="secondary" onclick={state.deletion.reconcile}>{state.deletion.mutationSucceeded ? 'Reload parent folder' : 'Reload file'}</Button>{/if}
       {#if state.deletion.signInRequired}<Button variant="secondary" onclick={signIn}>Sign in</Button>{/if}
+      {#if state.preview}<FilePreview state={state.preview} {signIn} />{/if}
       <section class="metadata" aria-label="Metadata">
         <h2>Metadata</h2>
         <dl>

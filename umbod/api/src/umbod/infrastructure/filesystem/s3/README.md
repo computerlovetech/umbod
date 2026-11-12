@@ -9,6 +9,7 @@ description: "SDK-specific client, response, and cancellation boundaries for imm
 - [__init__.py](./__init__.py) — Internal package boundary without concrete driver exports.
 - [edge.py](./edge.py) — Client provider protocol, validated SDK responses, lazy default credential chain, and bounded SDK retries.
 - [uploads.py](./uploads.py) — Conditional exact-length presigning, signed-header guards and bounded SHA256 readback with sanitized SDK failures.
+- [downloads.py](./downloads.py) — Short-lived GET signing with safe attachment overrides and validated external URLs.
 - [lifecycle.py](./lifecycle.py) — Settled SDK operations and operation-scoped clients under repeated cancellation.
 
 # Related links

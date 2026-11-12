@@ -13,14 +13,23 @@
   import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
   import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
   import FilesContent from './FilesContent.svelte';
+  import { browserTransport } from '$lib/admin/infrastructure/transport';
+  import { FileContentRoute } from '$lib/files/infrastructure/file-content-route';
+  import type { FileContentPort } from '$lib/files/preview/ports';
+  import { PreviewRegistry } from '$lib/files/preview/ports';
+  import { FilePreviewState } from '$lib/files/preview/file-preview-state.svelte';
+  import { markdownPreviewAdapter } from './preview/markdown-adapter';
+  import { pdfPreviewAdapter } from './preview/pdf-adapter';
 
   let {
     createApi = browserFilesApi,
     createWorkspaceApi = workspaceApi,
+    createContentSource = (): FileContentPort => new FileContentRoute(browserTransport()),
     signIn = navigateToSignIn
   }: {
     createApi?: () => FilesApi;
     createWorkspaceApi?: () => WorkspaceApi;
+    createContentSource?: () => FileContentPort;
     signIn?: () => void;
   } = $props();
 
@@ -32,14 +41,19 @@
     return new WorkspaceAccessState(createWorkspaceApi());
   }
 
+  function createPreview(): FilePreviewState {
+    return new FilePreviewState(createContentSource(), new PreviewRegistry([markdownPreviewAdapter, pdfPreviewAdapter]));
+  }
+
   const api = createFilesApi();
-  const state = new FilesState(api, async (id: string): Promise<void> => { await goto(filesHref(id)); });
+  const preview = createPreview();
+  const state = new FilesState(api, async (id: string): Promise<void> => { await goto(filesHref(id)); }, preview);
   const folder = new NewFolderState(api, state);
   const upload = new UploadState(api, state);
   const access = createAccess();
 
   afterNavigate(({ to }) => {
-    if (to?.url.pathname !== '/files') { state.deletion.reset(); state.rowDeletion.reset(); state.sharing.reset(); return; }
+    if (to?.url.pathname !== '/files') { preview.reset(); state.deletion.reset(); state.rowDeletion.reset(); state.sharing.reset(); return; }
     folder.navigate();
     upload.navigate();
     void state.load(to.url.searchParams.get('node'));

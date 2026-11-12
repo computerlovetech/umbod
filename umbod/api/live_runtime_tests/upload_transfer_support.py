@@ -50,6 +50,11 @@ def raw_s3_request(transfer: dict[str, Any], content: bytes, method: str = "PUT"
     assert "error" not in evidence, "In-cluster S3 transfer failed"
     assert evidence["request"] == {"original_url": True, "authorization": False, "cookie": False,
                                    "headers_preserved": True}
+    if "content_base64" in evidence:
+        return httpx.Response(
+            evidence["status"], headers=evidence["headers"],
+            content=base64.b64decode(evidence["content_base64"], validate=True),
+        )
     return httpx.Response(evidence["status"], headers=evidence["headers"], json={"code": evidence["code"]})
 
 

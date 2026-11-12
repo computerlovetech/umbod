@@ -6,6 +6,9 @@ description: Filesystem session API, secure raw-byte transfers and in-memory per
 
 # Files
 
+- [file-content-route.ts](./file-content-route.ts) — Explicit API-streamed, authenticated bounded UTF-8 preview reads with redirects rejected.
+- [file-content-route.test.ts](./file-content-route.test.ts) — Content request, cancellation, size limit and outbound node validation tests.
+
 - [sharing-route.ts](./sharing-route.ts) — Unified typed recipient search, filtered policy reads and scoped revision-conditioned replacement over shared transport.
 - [in-memory-sharing.test-support.ts](./in-memory-sharing.test-support.ts) — Mixed-policy test adapter with filtered reads, scoped replacement and whole-policy revisions.
 - [files-api.ts](./files-api.ts) — Browser composition and injectable transport, origin and external transfer fetch.

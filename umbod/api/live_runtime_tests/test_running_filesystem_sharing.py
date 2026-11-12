@@ -162,7 +162,7 @@ async def test_signed_direct_node_group_sharing_and_revocation(runtime_endpoints
             assert reader_node["permissions"]["can_write"] is False
             assert reader_node["visible_to"] == {"type": "restricted"}
             file = checked_summary(alice.get(node_path), 200)
-            assert bob.get(node_path + "/content").content == b"direct-node sharing runtime"
+            assert bob.get(node_path + "/content?delivery=stream").content == b"direct-node sharing runtime"
             async with mcp_client(runtime_endpoints.mcp_url, alice_token) as alice_mcp, mcp_client(
                 os.environ["UMBOD_TEST_MCP_B_URL"], bob_token,
             ) as bob_mcp:
@@ -298,7 +298,7 @@ async def test_signed_recursive_directory_sharing_tracks_descendants_moves_and_l
             recipient = next(entry for entry in recipients.json()["recipients"] if entry["group_id"] == "admin")
             direct_policy = replace_group_grants(alice, direct["id"], [group])
             assert direct_policy["grants"] == [{**group, "recipient": recipient, "recursive": False}]
-            assert bob.get(FILESYSTEM + "/nodes/" + direct["id"] + "/content").status_code == 200
+            assert bob.get(FILESYSTEM + "/nodes/" + direct["id"] + "/content?delivery=stream").status_code == 200
             for node in (source, shared, nested, destination, existing, moving):
                 assert bob.get(FILESYSTEM + "/nodes/" + node["id"]).status_code == 403
             async with mcp_client(runtime_endpoints.mcp_url, alice_token) as alice_mcp, mcp_client(
@@ -335,7 +335,7 @@ async def test_signed_recursive_directory_sharing_tracks_descendants_moves_and_l
                 for node in (existing, direct, later):
                     path = FILESYSTEM + "/nodes/" + node["id"]
                     for reader in (bob, bob_other_worker):
-                        content = reader.get(path + "/content")
+                        content = reader.get(path + "/content?delivery=stream")
                         assert content.status_code == 200, content.text
                         assert content.content == b"direct-node sharing runtime"
                         view = checked_summary(reader.get(path), 200)
@@ -374,8 +374,8 @@ async def test_signed_recursive_directory_sharing_tracks_descendants_moves_and_l
                 moved_in = checked_summary(alice.patch(moving_path, headers={"If-Match": f'"{moving["revision"]}"'}, json={
                     "parent_id": nested["id"],
                 }), 200)
-                assert bob.get(moving_path + "/content").status_code == 200
-                assert bob_other_worker.get(moving_path + "/content").status_code == 200
+                assert bob.get(moving_path + "/content?delivery=stream").status_code == 200
+                assert bob_other_worker.get(moving_path + "/content?delivery=stream").status_code == 200
                 await assert_mcp_sharing_metadata(bob_mcp, checked_summary(bob.get(moving_path), 200), {"can_share": False})
                 checked_summary(alice.patch(moving_path, headers={"If-Match": f'"{moved_in["revision"]}"'}, json={
                     "parent_id": destination["id"],
@@ -399,7 +399,7 @@ async def test_signed_recursive_directory_sharing_tracks_descendants_moves_and_l
                 for reader in (bob, bob_other_worker):
                     direct_view = checked_summary(reader.get(direct_path), 200)
                     assert direct_view["permissions"]["can_read"] is True
-                    assert reader.get(direct_path + "/content").status_code == 200
+                    assert reader.get(direct_path + "/content?delivery=stream").status_code == 200
                 await assert_mcp_sharing_metadata(bob_mcp, direct_view, {"can_share": False})
                 assert alice.get(direct_path + "/access?recipient_type=group").json() == direct_policy
         finally:
@@ -468,7 +468,7 @@ async def test_signed_observed_user_and_group_targets_use_existing_sharing_tool(
                 await wait_for_filesystem_tools(bob_mcp, {"get_filesystem_node"})
                 recipient = await observed_recipient(alice_mcp, file["id"], bob_claims["name"])
                 await assert_mcp_user_target_sharing(alice_mcp, bob_mcp, file["id"], recipient)
-                assert bob.get(node_path + "/content").content == b"direct-node sharing runtime"
+                assert bob.get(node_path + "/content?delivery=stream").content == b"direct-node sharing runtime"
                 assert bob.get(FILESYSTEM + "/nodes/" + folder["id"]).status_code == 403
                 group_command = {
                     "node_id": file["id"], "recipient": {"type": "group", "group_id": "admin"},
@@ -483,7 +483,7 @@ async def test_signed_observed_user_and_group_targets_use_existing_sharing_tool(
                 assert {grant["recipient"]["type"] for grant in current_groups.json()["grants"]} == {"group"}
                 replaced = alice.put(group_access, json={"grants": []}, headers={"If-Match": current_groups.headers["etag"]})
                 assert replaced.status_code == 200, replaced.text
-                assert bob.get(node_path + "/content").status_code == 200
+                assert bob.get(node_path + "/content?delivery=stream").status_code == 200
                 assert checked_summary(alice.get(node_path), 200)["revision"] == file["revision"]
                 remaining = tool_payload(await alice_mcp.call_tool("get_filesystem_node", {"node_id": file["id"]}))["sharing"]
                 assert remaining == {

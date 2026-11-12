@@ -47,6 +47,35 @@ def test_raw_transfer_preserves_signed_target_and_binary_without_authentication(
     assert output.err == ""
 
 
+def test_raw_get_preserves_complete_content_beyond_error_body_limit(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    content = bytes(range(256)) * 32
+    connection = Mock(spec=["putrequest", "putheader", "endheaders", "getresponse", "close"])
+    response = connection.getresponse.return_value
+    response.status = 200
+    response.read.side_effect = io.BytesIO(content).read
+    headers = {
+        "ETag": '"tag"', "Content-Length": str(len(content)), "Content-Type": "application/octet-stream",
+        "Content-Disposition": "attachment", "Cache-Control": "no-store",
+    }
+    response.getheader.side_effect = headers.get
+    monkeypatch.setattr(setup_s3_runtime.http.client, "HTTPConnection", Mock(return_value=connection))
+    monkeypatch.setattr(setup_s3_runtime.sys, "stdin", io.StringIO(json.dumps({
+        "url": "http://umbod-runtime-s3:5000/bucket/object?X-Amz-Signature=secret",
+        "method": "GET", "headers": {}, "content_base64": "",
+    })))
+    setup_s3_runtime.transfer()
+    output = capsys.readouterr()
+    evidence = json.loads(output.out)
+    assert evidence["status"] == 200
+    assert evidence["headers"] == headers
+    assert base64.b64decode(evidence["content_base64"], validate=True) == content
+    assert "secret" not in output.out
+    assert output.err == ""
+    connection.close.assert_called_once_with()
+
+
 @pytest.mark.parametrize("forbidden_header", ["Authorization", "Cookie"])
 def test_raw_transfer_rejects_credentials_without_leaking_input(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], forbidden_header: str,

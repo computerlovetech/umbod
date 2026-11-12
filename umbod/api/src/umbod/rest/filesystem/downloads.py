@@ -4,10 +4,10 @@ from collections.abc import AsyncIterator, Mapping
 from starlette.types import Receive, Scope, Send
 from urllib.parse import quote
 
-from fastapi.responses import StreamingResponse
+from fastapi.responses import RedirectResponse, Response, StreamingResponse
 
 from umbod.core.filesystem import ByteStream
-from umbod.core.filesystem.content import ContentDownload
+from umbod.core.filesystem.content import ContentDownload, ExternalDownloadInstructions
 
 from .errors import filesystem_errors
 
@@ -48,7 +48,12 @@ class AttachmentResponse(StreamingResponse):
             await close_stream(self._source)
 
 
-async def download_response(download: ContentDownload) -> StreamingResponse:
+async def download_response(download: ContentDownload | ExternalDownloadInstructions) -> Response:
+    if isinstance(download, ExternalDownloadInstructions):
+        return RedirectResponse(
+            download.url, status_code=307,
+            headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff"},
+        )
     try:
         with filesystem_errors():
             first = await anext(download.data, b"")

@@ -6,6 +6,8 @@ description: "User filesystem browsing, scoped group and user sharing, directory
 
 # Files
 
+- [preview/README.md](./preview/README.md) — Injected content and renderer ports with cancellable read-only preview state.
+
 - [state/drag-move-state.svelte.ts](./state/drag-move-state.svelte.ts) — Internal file drags, cursor previews, staged move reviews, cancellation, move feedback and focus recovery.
 - [state/drag-move-state.test.ts](./state/drag-move-state.test.ts) — Transfer validation, move eligibility, cancellation, uncertain outcomes and navigation-race tests.
 - [state/row-editing-state.svelte.ts](./state/row-editing-state.svelte.ts) — Per-row editing controllers with browse-seeded eligibility, bounded checks for new rows and retained drafts.

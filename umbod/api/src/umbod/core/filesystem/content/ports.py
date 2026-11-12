@@ -6,6 +6,7 @@ from ..browsing import NodeSummary
 from ..models import NodeId, NodeMetadata
 from ..ports import ByteStream
 from .models import ContentDownload
+from .delivery import ExternalDownloadInstructions
 
 
 class FilesystemContent(Protocol):
@@ -15,6 +16,10 @@ class FilesystemContent(Protocol):
         self, snapshot: CallerSnapshot, parent_id: NodeId, name: str,
         metadata: NodeMetadata, data: ByteStream,
     ) -> NodeSummary: ...
+
+    async def prepare_download(
+        self, snapshot: CallerSnapshot, node_id: NodeId,
+    ) -> ContentDownload | ExternalDownloadInstructions: ...
 
     async def open_download(
         self, snapshot: CallerSnapshot, node_id: NodeId,

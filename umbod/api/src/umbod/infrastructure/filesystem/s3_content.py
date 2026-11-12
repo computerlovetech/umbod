@@ -4,9 +4,11 @@ from contextlib import aclosing
 from uuid import uuid4
 
 from umbod.core.filesystem import ByteStream, ContentRef, StorageFailure, StorageKey
+from umbod.core.filesystem.content.delivery import ExternalDownloadInstructions, ExternalDownloadRequest
 
 from .config import S3ContentConfig
 from .keys import validate_key
+from .s3.downloads import prepare_download
 from .s3.edge import (
     ClientProvider,
     ObjectMetadata,
@@ -104,6 +106,9 @@ class S3Content(S3UploadTransfer):
 
     def _object_key(self, key: StorageKey) -> str:
         return f"{self._config.prefix}/{key}" if self._config.prefix else key
+
+    async def prepare_download(self, request: ExternalDownloadRequest) -> ExternalDownloadInstructions:
+        return await prepare_download(self._config, self._provider, request)
 
     async def put(self, data: ByteStream) -> ContentRef:
         return await self.put_at(uuid4().hex, data)
