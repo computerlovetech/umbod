@@ -112,6 +112,12 @@ describe('node details', (): void => {
     expect(remove).not.toHaveBeenCalled();
   });
 
+  test('opening details focuses the close control instead of the non-editable title', async (): Promise<void> => {
+    await setup();
+    await details(document.querySelector('tbody')!);
+    expect(document.activeElement).toBe(button('Close', document.querySelector('dialog')!));
+  });
+
   test.each(['Close', 'Escape'])('%s restores focus to the same row menu trigger', async (method): Promise<void> => {
     await setup();
     const trigger = await details(document.querySelector('tbody')!);

@@ -7,7 +7,7 @@
   const id = $props.id();
 </script>
 
-<ModalShell title="Details" titleId={id + '-title'} {close} initialFocus="[data-dialog-title]" --modal-overflow="auto">
+<ModalShell title="Details" titleId={id + '-title'} {close} initialFocus={'button[aria-label="Close"]'} --modal-overflow="auto">
   <dl aria-label="Item details">
     <dt>Name</dt><dd>{displayName ?? node.name}</dd>
     <dt>Type</dt><dd>{node.kind === 'directory' ? 'Folder' : 'File'}</dd>
