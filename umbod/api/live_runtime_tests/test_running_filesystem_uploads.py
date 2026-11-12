@@ -1,7 +1,9 @@
 import base64
 import hashlib
+import json
 import os
 import ssl
+import subprocess
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from uuid import uuid4
@@ -72,6 +74,49 @@ async def native_upload_runtime(runtime_endpoints: RuntimeEndpoints) -> AsyncIte
             assert restored.status_code == 200, restored.text
 
 
+@pytest.mark.asyncio
+async def test_deployed_browser_and_mcp_advertise_the_same_configured_preview_limit(
+    native_upload_runtime: NativeUploadRuntime, filesystem_preview_max_bytes: int,
+) -> None:
+    result = subprocess.run([
+        "kubectl", "--context", os.environ["UMBOD_TEST_KUBE_CONTEXT"],
+        "exec", "deployment/umbod-frontend", "--", "wget", "-qO-",
+        "http://127.0.0.1:3000/app-config.json",
+    ], check=True, capture_output=True, text=True, timeout=30)
+    assert json.loads(result.stdout)["filesystemPreviewMaxBytes"] == filesystem_preview_max_bytes
+    templates = await native_upload_runtime.client.list_resource_templates()
+    template = next(item for item in templates if str(item.uri_template) == "umbod://filesystem/files/{node_id}")
+    assert f"{filesystem_preview_max_bytes} bytes" in template.description
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("extra_bytes", [0, 1], ids=["at-configured-limit", "above-configured-limit"])
+async def test_deployed_preview_limit_preserves_full_rest_downloads(
+    native_upload_runtime: NativeUploadRuntime, filesystem_preview_max_bytes: int, extra_bytes: int,
+) -> None:
+    runtime = native_upload_runtime
+    data = b"p" * (filesystem_preview_max_bytes + extra_bytes)
+    uploaded = await runtime.client.call_tool("filesystem_upload", {
+        "parent_id": runtime.directory_id, "name": "preview-boundary.txt",
+        "metadata": {"content_type": "text/plain", "attributes": {}},
+        "content": {"encoding": "utf-8", "text": data.decode("ascii")},
+    })
+    node = tool_payload(uploaded)
+    uri = file_resource_link(uploaded, node["id"])
+    downloaded = runtime.api.get(FILESYSTEM + "/nodes/" + node["id"] + "/content?delivery=stream")
+    assert downloaded.status_code == 200
+    assert downloaded.content == data
+    await wait_for_filesystem_tools(runtime.client, {"filesystem_delete_file"})
+    if extra_bytes:
+        with pytest.raises(MCPError, match="filesystem_read_too_large"):
+            await runtime.client.read_resource(uri)
+    else:
+        contents = await runtime.client.read_resource(uri)
+        assert len(contents) == 1
+        assert isinstance(contents[0], TextResourceContents)
+        assert contents[0].text.encode("utf-8") == data
+
+
 PNG_BYTES = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"
 )
@@ -90,9 +135,10 @@ PNG_BYTES = base64.b64decode(
     ({"encoding": "base64", "data": base64.b64encode(PNG_BYTES).decode("ascii")}, PNG_BYTES, "image/png"),
     ({"encoding": "base64", "data": base64.b64encode(b"x" * 1_048_576).decode("ascii")}, b"x" * 1_048_576, "application/octet-stream"),
     ({"encoding": "base64", "data": base64.b64encode(b"x" * 10_485_760).decode("ascii")}, b"x" * 10_485_760, "application/octet-stream"),
-], ids=["unicode-text", "json", "json-suffix", "xml", "xml-suffix", "binary", "unknown-mime", "empty", "png-image", "resource-limit", "maximum-size"])
+], ids=["unicode-text", "json", "json-suffix", "xml", "xml-suffix", "binary", "unknown-mime", "empty", "png-image", "large-binary", "maximum-size"])
 async def test_native_upload_is_readable_through_rest_and_private_across_workers(
     native_upload_runtime: NativeUploadRuntime, content: dict[str, str], expected: bytes, content_type: str,
+    filesystem_preview_max_bytes: int,
 ) -> None:
     runtime = native_upload_runtime
     result = await runtime.client.call_tool("filesystem_upload", {
@@ -111,7 +157,7 @@ async def test_native_upload_is_readable_through_rest_and_private_across_workers
     assert response.headers["content-type"].split(";")[0] == content_type
     assert response.content == expected
     await wait_for_filesystem_tools(runtime.client, {"filesystem_delete_file"})
-    if len(expected) <= 1_048_576:
+    if len(expected) <= filesystem_preview_max_bytes:
         contents = await runtime.client.read_resource(uri)
         assert len(contents) == 1
         resource = contents[0]
@@ -181,10 +227,10 @@ async def test_native_oversize_upload_does_not_publish_a_file(
 
 @pytest.mark.asyncio
 async def test_read_rejects_oversize_rest_file_without_changing_rest_downloads(
-    native_upload_runtime: NativeUploadRuntime,
+    native_upload_runtime: NativeUploadRuntime, filesystem_preview_max_bytes: int,
 ) -> None:
     runtime = native_upload_runtime
-    data = b"x" * 1_048_577
+    data = b"x" * (filesystem_preview_max_bytes + 1)
     begun = runtime.api.post(FILESYSTEM + "/nodes/" + runtime.directory_id + "/uploads", json={
         "name": "larger-rest-file.bin", "size_bytes": len(data),
         "metadata": {"content_type": "application/octet-stream", "attributes": {}},
@@ -221,6 +267,7 @@ async def test_native_upload_cannot_write_another_callers_directory(
 ], ids=["empty", "binary", "above-inline-limit"])
 async def test_upload_session_transfers_original_bytes_without_oauth_credentials(
     native_upload_runtime: NativeUploadRuntime, runtime_endpoints: RuntimeEndpoints, data: bytes,
+    filesystem_preview_max_bytes: int,
 ) -> None:
     runtime = native_upload_runtime
     await wait_for_filesystem_tools(runtime.client, {"filesystem_begin_upload", "filesystem_complete_upload"})
@@ -253,7 +300,7 @@ async def test_upload_session_transfers_original_bytes_without_oauth_credentials
     repeated = tool_payload(await runtime.client.call_tool("filesystem_complete_upload", {"upload_id": begun["upload_id"]}))
     assert repeated == receipt
     assert runtime.other_api.get(FILESYSTEM + "/nodes/" + node["id"]).status_code == 403
-    if len(data) <= 1_048_576:
+    if len(data) <= filesystem_preview_max_bytes:
         resources = await runtime.client.read_resource(uri)
         assert len(resources) == 1
         assert isinstance(resources[0], BlobResourceContents)

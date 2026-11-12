@@ -197,6 +197,7 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     filesystem_services = DatabaseFilesystemServiceFactory(
         persistence_runtime.database, filesystem_content, settings.filesystem.upload_max_bytes,
         filesystem_managed_issuer(settings), settings.endpoints.api_base_url,
+        settings.filesystem.preview_max_bytes,
     )
     register_filesystem_tools(
         McpObservedToolRegistrar(mcp, publisher), filesystem_callers,

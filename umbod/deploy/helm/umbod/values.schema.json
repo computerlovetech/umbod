@@ -157,7 +157,9 @@
                         "UMBOD_MCP_ADMINISTRATOR_BASE_URL",
                         "UMBOD_FEATURE_MCP_ADMINISTRATOR_ENABLED",
                         "UMBOD_REST_PORT",
-                        "UMBOD_MCP_PORT"
+                        "UMBOD_MCP_PORT",
+                        "UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES",
+                        "UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES"
                       ]
                     }
                   }
@@ -190,7 +192,9 @@
                         "UMBOD_MCP_ADMINISTRATOR_BASE_URL",
                         "UMBOD_FEATURE_MCP_ADMINISTRATOR_ENABLED",
                         "UMBOD_REST_PORT",
-                        "UMBOD_MCP_PORT"
+                        "UMBOD_MCP_PORT",
+                        "UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES",
+                        "UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES"
                       ]
                     }
                   }
@@ -434,6 +438,7 @@
       "required": [
         "profile",
         "logLevel",
+        "filesystem",
         "telemetryAnalytics",
         "authentication",
         "authorization",
@@ -448,6 +453,26 @@
         "logLevel": {
           "type": "string",
           "minLength": 1
+        },
+        "filesystem": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "uploadMaxBytes",
+            "previewMaxBytes"
+          ],
+          "properties": {
+            "uploadMaxBytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "previewMaxBytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            }
+          }
         },
         "telemetryAnalytics": {
           "type": "object",

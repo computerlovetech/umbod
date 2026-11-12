@@ -21,8 +21,7 @@ async def test_external_mcp_begin_needs_no_api_origin_and_inline_remains_interna
 
     content = MemoryExternalContent(filesystem_state.content, inspect_namespace)
     services = DatabaseFilesystemServiceFactory(
-        filesystem_state.database, content, 1024, "https://issuer", "invalid-api-origin",
-    )
+        filesystem_state.database, content, 1024, "https://issuer", "invalid-api-origin", max_read_bytes=1_048_576)
     assert services.upload_sessions() is not services.upload_sessions()
     assert services.upload_sessions().supports_external_transfer
     server = FastMCP()

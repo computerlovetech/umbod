@@ -1,5 +1,6 @@
 import { dev } from '$app/environment';
 import { z } from 'zod';
+import { previewConfigurationSchema } from '$lib/files/preview/configuration';
 
 const publicBaseSchema = z.string().refine((value) => {
   if (value.startsWith('/') && !value.startsWith('//')) return !value.includes('?') && !value.includes('#');
@@ -22,6 +23,7 @@ export const logoutConfigurationSchema = z.object({
 export type LogoutConfiguration = z.infer<typeof logoutConfigurationSchema>;
 
 export const publicConfigurationSchema = z.object({
+  filesystemPreviewMaxBytes: previewConfigurationSchema.shape.filesystemPreviewMaxBytes.default(1048576),
   apiBaseUrl: publicBaseSchema,
   mcpBaseUrl: publicBaseSchema,
   logout: logoutConfigurationSchema.nullable().optional()
@@ -33,7 +35,7 @@ export interface PublicConfigurationProvider {
 }
 
 export class InMemoryPublicConfigurationProvider implements PublicConfigurationProvider {
-  constructor(private readonly configuration: PublicConfiguration) {}
+  constructor(private readonly configuration: z.input<typeof publicConfigurationSchema>) {}
   async get(): Promise<PublicConfiguration> { return publicConfigurationSchema.parse(this.configuration); }
 }
 
@@ -46,7 +48,7 @@ export class BrowserPublicConfigurationProvider implements PublicConfigurationPr
   }
   private async load(): Promise<PublicConfiguration> {
     const response = await this.request('/app-config.json', { credentials: 'same-origin', cache: 'no-store' });
-    if (response.status === 404 && dev) return { apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' };
+    if (response.status === 404 && dev) return publicConfigurationSchema.parse({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' });
     if (!response.ok) throw new Error('Public application configuration could not be loaded');
     return publicConfigurationSchema.parse(await response.json());
   }

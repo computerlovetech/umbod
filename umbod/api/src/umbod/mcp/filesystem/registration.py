@@ -54,7 +54,7 @@ def register_filesystem_tools(
             node = await services.browsing().get_root(snapshot)
             operation_completed()
             result = (await enrich_nodes(services.sharing(), snapshot, [node], services.access()))[0]
-            return file_link_result(result, [result], result.model_dump_json())
+            return file_link_result(result, [result], result.model_dump_json(), services.read_max_bytes())
 
     async def get_filesystem_node(node_id: UUID) -> ToolResult:
         with filesystem_operation():
@@ -62,7 +62,7 @@ def register_filesystem_tools(
             node = await services.browsing().get_node(snapshot, node_id)
             operation_completed()
             result = (await enrich_nodes(services.sharing(), snapshot, [node], services.access()))[0]
-            return file_link_result(result, [result], result.model_dump_json())
+            return file_link_result(result, [result], result.model_dump_json(), services.read_max_bytes())
 
     async def list_filesystem_children(parent_id: UUID) -> ToolResult:
         with filesystem_operation():
@@ -70,7 +70,7 @@ def register_filesystem_tools(
             nodes = await services.browsing().list_children(snapshot, parent_id)
             operation_completed()
             result = FilesystemChildren(nodes=await enrich_nodes(services.sharing(), snapshot, nodes, services.access()))
-            return file_link_result(result, result.nodes, result.model_dump_json())
+            return file_link_result(result, result.nodes, result.model_dump_json(), services.read_max_bytes())
 
     async def create_filesystem_file(
         parent_id: UUID, name: InputName, metadata: FilesystemNodeMetadata
@@ -80,7 +80,7 @@ def register_filesystem_tools(
             node = await services.creation().create_file(snapshot, parent_id, name, metadata)
             operation_completed()
             result = (await enrich_nodes(services.sharing(), snapshot, [node], services.access()))[0]
-            return file_link_result(result, [result], result.model_dump_json())
+            return file_link_result(result, [result], result.model_dump_json(), services.read_max_bytes())
 
     async def create_filesystem_directory(
         parent_id: UUID, name: InputName, metadata: FilesystemNodeMetadata

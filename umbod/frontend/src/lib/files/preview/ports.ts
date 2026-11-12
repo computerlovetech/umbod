@@ -17,6 +17,7 @@ export interface FileContentPort {
 
 export interface PreviewProps {
   content: string;
+  onError?: () => void;
 }
 
 export interface FilePreviewAdapter {

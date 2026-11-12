@@ -13,6 +13,9 @@ existingSecret: ""
 config:
   profile: production
   logLevel: info
+  filesystem:
+    uploadMaxBytes: 10485760
+    previewMaxBytes: 1048576
   telemetryAnalytics:
     enabled: false
     sqlitePath: /app/data/analytics.sqlite3

@@ -36,18 +36,18 @@ describe('personal access token routes', (): void => {
   });
   it('blocks invalid outbound payloads and rejects malformed responses', async (): Promise<void> => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response('{}'));
-    const api = new PersonalAccessTokensApi(browserTransport({ fetch: request, configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' }) } }));
+    const api = new PersonalAccessTokensApi(browserTransport({ fetch: request, configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: 257 }) } }));
     await expect(api.tokens.create({ ...input, name: '' })).rejects.toBeInstanceOf(SchemaValidationError);
     expect(request).not.toHaveBeenCalled();
     await expect(api.tokens.create(input)).rejects.toBeInstanceOf(SchemaValidationError);
   });
   it.each([401, 403])('maps HTTP %s without navigation', async (status: number): Promise<void> => {
-    const api = new PersonalAccessTokensApi(browserTransport({ fetch: async (): Promise<Response> => new Response(null, { status }), configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' }) } }));
+    const api = new PersonalAccessTokensApi(browserTransport({ fetch: async (): Promise<Response> => new Response(null, { status }), configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: 257 }) } }));
     await expect(api.tokens.list()).rejects.toBeInstanceOf(status === 401 ? AuthenticationRequiredError : HttpError);
   });
   it('uses web request protection and accepts empty revocation responses', async (): Promise<void> => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status: 204 }));
-    const api = new PersonalAccessTokensApi(browserTransport({ fetch: request, configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' }) } }));
+    const api = new PersonalAccessTokensApi(browserTransport({ fetch: request, configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: 257 }) } }));
     await api.tokens.revoke('a'.repeat(32));
     expect(request).toHaveBeenCalledWith('/api/me/personal-access-tokens/' + 'a'.repeat(32), expect.objectContaining({ method: 'DELETE', headers: expect.objectContaining({ 'X-Umbod-Web-Request': '1' }) }));
   });

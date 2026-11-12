@@ -10,6 +10,7 @@ cluster_name="${UMBOD_TEST_KIND_CLUSTER_NAME:-umbod-runtime-tests}"
 kube_context="kind-${cluster_name}"
 release_name="umbod"
 cluster_created=false
+export UMBOD_TEST_FILESYSTEM_PREVIEW_MAX_BYTES="${UMBOD_TEST_FILESYSTEM_PREVIEW_MAX_BYTES:-2097152}"
 export UMBOD_TEST_CONTENT_BACKEND="${UMBOD_TEST_CONTENT_BACKEND:-local}"
 if [[ "${UMBOD_TEST_CONTENT_BACKEND}" != "local" && "${UMBOD_TEST_CONTENT_BACKEND}" != "s3" ]]; then
     printf '%s\n' 'UMBOD_TEST_CONTENT_BACKEND must be local or s3' >&2
@@ -119,6 +120,7 @@ kubectl --context "${kube_context}" create secret generic umbod-collector-ci \
 helm --kube-context "${kube_context}" install "${release_name}" "${chart_directory}" \
     --values "${chart_directory}/ci/kind-values.yaml" \
     --values "${script_directory}/values.yaml" \
+    --set "config.filesystem.previewMaxBytes=${UMBOD_TEST_FILESYSTEM_PREVIEW_MAX_BYTES}" \
     --set-string "core.mcp.administrator.baseUrl=${UMBOD_TEST_ADMIN_MCP_URL%/mcp}" \
     --wait --timeout 5m
 helm --kube-context "${kube_context}" test "${release_name}" --logs --timeout 2m

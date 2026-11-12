@@ -20,9 +20,6 @@ from .links import FILE_RESOURCE_TEMPLATE, file_resource_uri
 from .ports import ClosableByteStream, FilesystemCallerCapture, FilesystemServiceFactory
 
 
-MAX_READ_BYTES = 1_048_576
-
-
 def ensure_resource_scope() -> None:
     if _REQUEST_CONNECTOR_SCOPE.get():
         raise ResourceError(FILESYSTEM_ACCESS_DENIED)
@@ -34,15 +31,15 @@ async def close_stream(stream: ByteStream) -> None:
             await stream.aclose()
 
 
-async def bounded_content(download: ContentDownload) -> str | bytes:
+async def bounded_content(download: ContentDownload, max_bytes: int) -> str | bytes:
     try:
         if download.size < 0:
             raise StorageFailure("Invalid stored content size")
-        if download.size > MAX_READ_BYTES:
+        if download.size > max_bytes:
             raise ReadTooLarge()
         data = bytearray()
         async for chunk in download.data:
-            if len(data) + len(chunk) > MAX_READ_BYTES:
+            if len(data) + len(chunk) > max_bytes:
                 raise ReadTooLarge()
             data.extend(chunk)
         if len(data) != download.size:
@@ -83,7 +80,10 @@ class FilesystemFileResource(Resource):
     _node_id: UUID = PrivateAttr()
 
     def __init__(self, node_id: UUID, callers: FilesystemCallerCapture, services: FilesystemServiceFactory) -> None:
-        super().__init__(uri=file_resource_uri(node_id), name="filesystem_file", mime_type="application/octet-stream")
+        super().__init__(
+            uri=file_resource_uri(node_id), name="filesystem_file", mime_type="application/octet-stream",
+            description=f"Current authorized file content, complete reads up to {services.read_max_bytes()} bytes.",
+        )
         self._node_id = node_id
         self._callers = callers
         self._services = services
@@ -93,7 +93,7 @@ class FilesystemFileResource(Resource):
         with filesystem_resource_operation():
             caller = self._callers.capture()
             download = await self._services.content().open_download(caller, self._node_id)
-            data = await bounded_content(download)
+            data = await bounded_content(download, self._services.read_max_bytes())
             mime_type = normalized_mime_type(download.node.metadata.content_type)
             return ResourceResult([ResourceContent(
                 data, mime_type=mime_type,
@@ -108,7 +108,7 @@ class FilesystemFileResourceTemplate(ResourceTemplate):
     def __init__(self, callers: FilesystemCallerCapture, services: FilesystemServiceFactory) -> None:
         super().__init__(
             name="filesystem_file", uri_template=FILE_RESOURCE_TEMPLATE,
-            description="Current authorized file content, complete reads up to 1 MiB.",
+            description=f"Current authorized file content, complete reads up to {services.read_max_bytes()} bytes.",
             mime_type="application/octet-stream",
             parameters={"type": "object", "properties": {"node_id": {"type": "string", "format": "uuid"}}, "required": ["node_id"]},
         )

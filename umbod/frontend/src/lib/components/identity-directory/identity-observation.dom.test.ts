@@ -9,7 +9,7 @@ it.each([401, 403])('keeps observation HTTP %s failures background-safe and retr
   const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(null, { status }));
   const api = new IdentityDirectoryApi(browserTransport({
     fetch: request,
-    configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' }) }
+    configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: 257 }) }
   }));
   const target = document.createElement('div');
   document.body.append(target);

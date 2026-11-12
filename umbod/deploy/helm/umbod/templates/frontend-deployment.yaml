@@ -50,6 +50,8 @@ spec:
               containerPort: {{ .Values.frontend.port }}
               protocol: TCP
           env:
+            - name: UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES
+              value: {{ .Values.config.filesystem.previewMaxBytes | int64 | quote }}
             - name: API_PROXY_ORIGIN
               value: http://{{ include "umbod.fullname" . }}-api.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.services.api.port }}
             - name: PUBLIC_API_BASE_URL

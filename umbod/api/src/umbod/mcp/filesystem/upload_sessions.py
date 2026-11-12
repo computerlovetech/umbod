@@ -142,4 +142,4 @@ class FilesystemCompleteUploadTool(Tool):
             response = CompleteUploadResult(
                 node=node, size_bytes=result.receipt.size_bytes, sha256=result.receipt.sha256,
             )
-            return file_link_result(response, [node], response.model_dump_json())
+            return file_link_result(response, [node], response.model_dump_json(), self._services.read_max_bytes())

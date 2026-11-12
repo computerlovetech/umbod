@@ -61,9 +61,23 @@ Authenticated ordinary users discover the backend-derived full logs endpoint thr
 
 The application environment contract selects local or S3 file-content storage independently of the application database backend. Local storage remains the default for operator deployments. Namespace, ownership and grants use the existing application database; content storage does not create another database runtime. Embedded hosts constructing `AppConfig` directly default to in-memory content.
 
+### File size limits
+
 | Environment variable | Default | Contract |
 | --- | --- | --- |
 | `UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES` | `10485760` | Positive maximum filesystem upload size in bytes; independent of the MCP connector file-input limit |
+| `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES` | `1048576` | Maximum raw bytes for browser previews and complete MCP resource reads; positive integer up to `9007199254740991` |
+
+Upload and preview/read limits are grouped as **Filesystem limits** in Instance settings. They remain independent: the upload limit controls accepted file size, while the preview/read limit bounds browser previews and complete MCP resource reads. Full REST downloads are not capped by the preview limit.
+
+Helm groups both values under `config.filesystem.uploadMaxBytes` and `config.filesystem.previewMaxBytes`, with defaults matching the environment contract. Both chart values require positive integers up to `9007199254740991` so byte counts remain exact during rendering. These managed settings apply consistently to API and MCP workers; the frontend receives the preview limit only. Per-service overrides through `core.api.env` or `core.mcp.env` are rejected. The former flat `config.filesystemPreviewMaxBytes` key is no longer accepted. Environment variable names are unchanged.
+
+The frontend exposes its validated numeric preview limit through `/app-config.json`; preview messages and MCP discovery descriptions reflect that value. Restart affected services and reload the browser after changes.
+
+### Content storage
+
+| Environment variable | Default | Contract |
+| --- | --- | --- |
 | `UMBOD_FILESYSTEM_CONTENT_BACKEND` | `local` | Content driver: `local` or `s3` |
 | `UMBOD_FILESYSTEM_CONTENT_DIRECTORY` | derived | Nonblank local directory override; otherwise `filesystem-content` beneath `UMBOD_DATA_DIR`, whose default is `.data`. Ignored by S3 storage; retained as the migration source |
 | `UMBOD_FILESYSTEM_S3_BUCKET` | empty | Required pre-existing general-purpose bucket when selecting S3 |
@@ -72,11 +86,11 @@ The application environment contract selects local or S3 file-content storage in
 | `UMBOD_FILESYSTEM_S3_PREFIX` | empty | Optional relative prefix without leading/trailing slashes, empty segments, or dot segments |
 | `UMBOD_FILESYSTEM_S3_ADDRESSING_STYLE` | `auto` | `auto`, `virtual`, or `path`; compatible services may require `path` |
 
-Directory configuration is normalized during operator-to-runtime assembly, preserving relative paths and expanding the home directory. Configuration does not create directories or inspect their contents. Retain the content directory alongside the application database to preserve file references across restarts. Workers sharing a namespace database must also share the same content directory. Instance configuration inspection exposes the upload limit but omits the host directory. These are application environment settings, not dedicated Helm values.
+Directory configuration is normalized during operator-to-runtime assembly, preserving relative paths and expanding the home directory. Configuration does not create directories or inspect their contents. Retain the content directory alongside the application database to preserve file references across restarts. Workers sharing a namespace database must also share the same content directory. Instance configuration inspection exposes upload and preview limits but omits the host directory. Content storage settings remain application environment settings without dedicated Helm values.
 
 For S3, configure identical bucket, region, endpoint, prefix, and addressing style for API and MCP workers. Credentials use the AWS SDK provider chain; environment access keys, profiles, and workload identities are not copied into Umbod configuration. Provision the bucket, encryption policy, and permissions separately. Application credentials need `s3:GetObject`, `s3:PutObject`, and `s3:AbortMultipartUpload` on the selected object prefix; bucket encryption may require additional KMS permissions. The driver does not require bucket creation or listing. Use HTTPS outside trusted local test networks. An explicit local directory may remain configured with S3; normal S3 storage ignores it. Nondefault S3 settings cannot be combined with local storage. For local-to-S3 cutover, stop both services, run the [offline migration](s3-file-storage.md#migrate-existing-local-content), then configure both services for S3 and restart them. Other backend, bucket or prefix changes require a separately planned content migration preserving existing logical keys; there is no automatic migration or fallback.
 
-Supply application settings through both `core.api.env` and `core.mcp.env` in Helm, and provider credentials through the shared `existingSecret` or externally managed workload identity. Docker Compose forwards content settings and AWS access-key, secret-key, and session-token environment variables to both services. S3 does not replace the application database or its persistence requirements. See [S3 file-content storage](s3-file-storage.md) for Helm configuration, credentials, and operational boundaries.
+Supply content storage settings through both `core.api.env` and `core.mcp.env` in Helm, and provider credentials through the shared `existingSecret` or externally managed workload identity. Docker Compose forwards content settings and AWS access-key, secret-key, and session-token environment variables to both services. S3 does not replace the application database or its persistence requirements. See [S3 file-content storage](s3-file-storage.md) for Helm configuration, credentials, and operational boundaries.
 
 REST uploads create an authenticated session, transfer raw bytes, and explicitly complete publication. Zero-byte uploaded files are allowed. Files remain invisible until completion and duplicate names are rejected without overwriting. New files are owned by their creator and inherit applicable recursive ancestor grants; folder-only grants do not inherit. S3 remains a low-level driver: transfers still pass through Umbod, without presigned URLs or client-side multipart coordination. The byte limit is not a storage quota. Content is stored before namespace publication, so failed publication can leave unreferenced immutable objects; automatic garbage collection is not implemented. Configure bucket lifecycle rules for abandoned multipart uploads because process termination or failed abort requests may leave incomplete parts.
 

@@ -68,7 +68,7 @@ def _echo_connector() -> Connector:
 
 async def _build_public_app(runtime_resources: AsyncExitStack, exposure_mode: Literal['flat', 'gateway', 'codemode']='flat') -> tuple[Starlette, str, PublicAppRuntimeContext, ConnectorPublishingStoreService]:
     token = jwt.encode({'email': 'agent@example.com', 'groups': ['agents']}, key='', algorithm='none')
-    settings = MCPAppSettings(rest={'metrics_enabled': False}, mcp=MCPSettings(metrics_enabled=False, auth_mode='single_test_user', test_bearer_token=token, connector_tool_exposure_mode=exposure_mode, downstream_discovery_enabled=False, stateless_http=True, _env_file=None), endpoints={'mcp_base_url': 'http://localhost'}, connector_store=InMemoryConnectorStoreConfig(), connector_security={'configuration_secret': 'test-secret', 'approval_state_key': 'integration-approval-state-key-with-sufficient-entropy'}, _env_file=None)
+    settings = MCPAppSettings(filesystem={'preview_max_bytes': 37}, rest={'metrics_enabled': False}, mcp=MCPSettings(metrics_enabled=False, auth_mode='single_test_user', test_bearer_token=token, connector_tool_exposure_mode=exposure_mode, downstream_discovery_enabled=False, stateless_http=True, _env_file=None), endpoints={'mcp_base_url': 'http://localhost'}, connector_store=InMemoryConnectorStoreConfig(), connector_security={'configuration_secret': 'test-secret', 'approval_state_key': 'integration-approval-state-key-with-sufficient-entropy'}, _env_file=None)
     persistence_runtime = create_inmemory_runtime()
     runtime_resources.push_async_callback(persistence_runtime.shutdown)
     await persistence_runtime.readiness.ensure_ready()
@@ -162,6 +162,15 @@ async def test_agent_without_valid_authentication_is_rejected_during_http_initia
     assert isinstance(error, MCPError)
     assert error.code == -32603
     assert error.message == 'Server returned an error response'
+
+@pytest.mark.asyncio
+async def test_public_application_wires_configured_filesystem_resource_limit(runtime_resources: AsyncExitStack) -> None:
+    _app, _token, context, _publishing_store = await _build_public_app(runtime_resources)
+    templates = await context.mcp.list_resource_templates(run_middleware=False)
+    filesystem_template = next(template for template in templates if template.name == "filesystem_file")
+    assert context.settings.filesystem.preview_max_bytes == 37
+    assert filesystem_template.description == "Current authorized file content, complete reads up to 37 bytes."
+
 
 @pytest.mark.asyncio
 async def test_development_mode_handles_sequential_requests_without_session_id(runtime_resources: AsyncExitStack) -> None:

@@ -4,11 +4,11 @@ import { nodeIdSchema } from '../domain/schemas';
 import { PreviewReadError, type FileContentPort } from '../preview/ports';
 import { readFailure } from '../errors';
 
-export const previewByteLimit = 1024 * 1024;
+import type { PreviewConfigurationProvider } from '../preview/configuration';
 const previewTextSchema = z.string();
 
 export class FileContentRoute implements FileContentPort {
-  constructor(private readonly transport: Transport) {}
+  constructor(private readonly transport: Transport, private readonly configuration: PreviewConfigurationProvider) {}
 
   readText(id: string, signal: AbortSignal): Promise<string> {
     return this.read(id, signal, 'text', previewTextSchema);
@@ -21,11 +21,13 @@ export class FileContentRoute implements FileContentPort {
   private async read<T>(id: string, signal: AbortSignal, kind: 'text' | 'bytes', outputSchema: z.ZodType<T>): Promise<T> {
     const nodeId = nodeIdSchema.parse(id);
     try {
+      const { filesystemPreviewMaxBytes } = await this.configuration.get();
+      signal.throwIfAborted();
       return await this.transport.request({
         method: 'GET',
         path: '/me/filesystem/nodes/' + encodeURIComponent(nodeId) + '/content?delivery=stream',
         outputSchema,
-        responseBody: { kind, maxBytes: previewByteLimit },
+        responseBody: { kind, maxBytes: filesystemPreviewMaxBytes },
         redirect: 'error',
         signal
       });

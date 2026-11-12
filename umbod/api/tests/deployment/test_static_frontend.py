@@ -11,10 +11,10 @@ FRONTEND_ROOT = Path(__file__).parents[3] / "frontend"
 @pytest.mark.parametrize(
     "public_environment,expected",
     [
-        ({}, {"apiBaseUrl": "/api", "mcpBaseUrl": "/mcp", "logout": None}),
+        ({}, {"apiBaseUrl": "/api", "mcpBaseUrl": "/mcp", "filesystemPreviewMaxBytes": 1048576, "logout": None}),
         (
             {"PUBLIC_API_BASE_URL": '/api/"quoted"\\path\nnext', "PUBLIC_MCP_BASE_URL": 'https://mcp.invalid/\t"value"'},
-            {"apiBaseUrl": '/api/"quoted"\\path\nnext', "mcpBaseUrl": 'https://mcp.invalid/\t"value"', "logout": None},
+            {"apiBaseUrl": '/api/"quoted"\\path\nnext', "mcpBaseUrl": 'https://mcp.invalid/\t"value"', "filesystemPreviewMaxBytes": 1048576, "logout": None},
         ),
     ],
 )

@@ -34,6 +34,24 @@ describe('instance settings view', () => {
     expect(body).not.toContain('MCP setup guide');
   });
 
+  it('renders both filesystem limits together outside advanced deployment details', (): void => {
+    const { body } = render(InstanceConfigurationView, { props: { state: { status: 'ready', configuration: { groups: [{ id: 'filesystem', label: 'Filesystem', entries: [
+      { variable: 'UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES', label: 'Maximum preview size', description: 'Configured preview and read size', type: 'integer', value: 3145728 },
+      { variable: 'UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES', label: 'Maximum upload size', description: 'Configured upload size', type: 'integer', value: 17825792 }
+    ] }] } } } });
+    const section = body.match(/<section[^>]*aria-labelledby="section-filesystem"[^>]*>([\s\S]*?)<\/section>/)?.[1];
+    expect(section).toBeDefined();
+    expect(section).toContain('Filesystem limits');
+    expect(section).toContain('Upload size limit');
+    expect(section).toContain('Preview and read size limit');
+    expect(section).toContain('17 MiB');
+    expect(section).toContain('3 MiB');
+    expect(section!.indexOf('Upload size limit')).toBeLessThan(section!.indexOf('Preview and read size limit'));
+    expect(body).not.toContain('id="advanced-filesystem"');
+    expect(body.indexOf('id="section-filesystem"')).toBeLessThan(body.indexOf('Advanced deployment details'));
+    expect(body).not.toMatch(/<(input|select|textarea)\b/);
+  });
+
   it('preserves the failed state and retry route', () => {
     const { body } = render(InstanceConfigurationView, { props: { state: { status: 'failed', message: 'Unavailable', retryLabel: 'Try again' } } });
     expect(body).toContain('Unavailable');

@@ -1,7 +1,6 @@
 core:
   api:
     env:
-      UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES: "11534336"
       UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE: "test:kind-personal-catalogue"
   mcp:
     administrator:
@@ -9,7 +8,6 @@ core:
       port: 8017
       baseUrl: http://127.0.0.1:28017
     env:
-      UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES: "11534336"
       UMBOD_PERSONAL_CONNECTIONS_IDENTITY_NAMESPACE: "test:kind-personal-catalogue"
 telemetry:
   enabled: true
@@ -18,6 +16,8 @@ telemetry:
     name: umbod-collector-ci
     key: token
 config:
+  filesystem:
+    uploadMaxBytes: 11534336
   features:
     mcp:
       administratorEnabled: true

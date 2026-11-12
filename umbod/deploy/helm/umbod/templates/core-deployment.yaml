@@ -114,6 +114,10 @@ spec:
               value: {{ $.Values.config.authentication.mode | quote }}
             - name: UMBOD_LOG_LEVEL
               value: {{ $.Values.config.logLevel | quote }}
+            - name: UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES
+              value: {{ $.Values.config.filesystem.uploadMaxBytes | int64 | quote }}
+            - name: UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES
+              value: {{ $.Values.config.filesystem.previewMaxBytes | int64 | quote }}
             - name: UMBOD_PUBLIC_SITE_ORIGIN
               value: {{ $.Values.config.publicOrigins.site | quote }}
             - name: UMBOD_PUBLIC_API_ORIGIN

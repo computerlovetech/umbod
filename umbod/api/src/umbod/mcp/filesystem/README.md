@@ -21,7 +21,7 @@ description: "MCP adapters for authorized filesystem browsing, content reads, cr
 - [links.py](./links.py) — Canonical current-file URIs and native resource links alongside structured tool results.
 - [models.py](./models.py) — Required authorized/restricted sharing projections, enriched nodes, child envelopes, and deletion contracts.
 - [ports.py](./ports.py) — Caller, service factory and mandatory deletion approval contracts.
-- [resources.py](./resources.py) — Authorized current-file resources with MIME-aware text/blob content, captured revisions, and complete reads capped at 1 MiB.
+- [resources.py](./resources.py) — Authorized current-file resources with MIME-aware text/blob content, captured revisions and the configured preview read limit.
 - [registration.py](./registration.py) — Built-in response metadata, explicit output schemas, observed filesystem tools, and native file links.
 - [rendering.py](./rendering.py) — Readable listings with JSON-escaped untrusted descriptions, explicit visibility and expansion limits.
 - [runtime.py](./runtime.py) — Caller-neutral authorization snapshots hydrated at startup and reconciled through durable events.

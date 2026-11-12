@@ -180,6 +180,7 @@ def test_static_frontend_receives_only_public_configuration_and_proxy_target() -
             "PUBLIC_API_BASE_URL",
             "PUBLIC_MCP_BASE_URL",
             "API_PROXY_ORIGIN",
+            "UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES",
             "PUBLIC_AUTH0_DOMAIN",
             "PUBLIC_AUTH0_CLIENT_ID",
             "PUBLIC_LOGOUT_RETURN_URL",

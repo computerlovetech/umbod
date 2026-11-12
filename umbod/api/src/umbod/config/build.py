@@ -266,6 +266,7 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
         filesystem=FilesystemRuntimeConfig(
             content=_filesystem_content(operator),
             upload_max_bytes=operator.filesystem_upload_max_bytes,
+            preview_max_bytes=operator.filesystem_preview_max_bytes,
         ),
         openapi_connectors=OpenApiConnectorConfig(
             json_import_max_bytes=operator.openapi_json_import_max_bytes,

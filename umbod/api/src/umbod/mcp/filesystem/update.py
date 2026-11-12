@@ -61,5 +61,5 @@ class FilesystemUpdateNodeTool(Tool):
             operation_completed()
             result = (await enrich_projected_nodes(self._services.sharing(), caller, [node]))[0]
             return file_link_result(
-                result, [result] if result.permissions.can_discover else [], result.model_dump_json(),
+                result, [result] if result.permissions.can_discover else [], result.model_dump_json(), self._services.read_max_bytes(),
             )

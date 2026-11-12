@@ -16,9 +16,12 @@ from umbod.core.filesystem.content.models import ContentDownload
 from umbod.core.filesystem.errors import StorageFailure
 from umbod.core.filesystem.models import NodeKind, NodeMetadata
 from umbod.mcp.filesystem.ports import FilesystemCallerCapture, FilesystemServiceFactory
-from umbod.mcp.filesystem.resources import FilesystemFileResource, MAX_READ_BYTES
+from umbod.mcp.filesystem.resources import FilesystemFileResource
 
 from .conftest import caller_snapshot
+
+
+READ_LIMIT = 37
 
 
 TOO_LARGE = "filesystem_read_too_large: Filesystem file exceeds read limit. Use an authorized HTTP download instead of resources/read."
@@ -105,6 +108,7 @@ class ReadHarness:
         self.callers = Mock(spec=FilesystemCallerCapture)
         self.callers.capture.return_value = self.snapshot
         self.services = Mock(spec=FilesystemServiceFactory)
+        self.services.read_max_bytes.return_value = READ_LIMIT
         self.content = Mock(spec=FilesystemContent)
         self.services.content.return_value = self.content
         self.resource = FilesystemFileResource(self.node_id, self.callers, self.services)
@@ -122,8 +126,8 @@ def harness() -> ReadHarness:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("size", [0, 1, MAX_READ_BYTES])
-async def test_complete_read_at_fixed_boundary(harness: ReadHarness, size: int) -> None:
+@pytest.mark.parametrize("size", [0, 1, READ_LIMIT])
+async def test_complete_read_at_configured_boundary(harness: ReadHarness, size: int) -> None:
     stream = FakeStream([b"a" * size])
     result = await harness.read(stream, size)
     assert result.contents[0].content == "a" * size
@@ -136,7 +140,7 @@ async def test_complete_read_at_fixed_boundary(harness: ReadHarness, size: int) 
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("size,message", [(MAX_READ_BYTES + 1, TOO_LARGE), (-1, STORAGE_FAILURE)])
+@pytest.mark.parametrize("size,message", [(READ_LIMIT + 1, TOO_LARGE), (-1, STORAGE_FAILURE)])
 async def test_invalid_advertised_size_closes_without_iteration(
     harness: ReadHarness, size: int, message: str,
 ) -> None:
@@ -148,9 +152,9 @@ async def test_invalid_advertised_size_closes_without_iteration(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("advertised", [0, MAX_READ_BYTES])
+@pytest.mark.parametrize("advertised", [0, READ_LIMIT])
 async def test_stream_overrun_never_truncates(harness: ReadHarness, advertised: int) -> None:
-    stream = FakeStream([b"x" * MAX_READ_BYTES, b"x", b"unread"])
+    stream = FakeStream([b"x" * READ_LIMIT, b"x", b"unread"])
     with pytest.raises(ResourceError, match=TOO_LARGE):
         await harness.read(stream, advertised)
     assert len(stream.read_chunks) == 2
@@ -269,7 +273,7 @@ async def test_preflight_failure_in_cancelled_scope_closes_stream(harness: ReadH
         with anyio.CancelScope() as scope:
             scope.cancel()
             with pytest.raises(ResourceError, match=TOO_LARGE):
-                await harness.read(stream, MAX_READ_BYTES + 1)
+                await harness.read(stream, READ_LIMIT + 1)
     assert stream.iterations == 0
     assert stream.close_completed
     assert stream.close_tasks == [caller_task]
@@ -294,5 +298,5 @@ async def test_cleanup_cancellation_preserves_primary_rejection(harness: ReadHar
     stream = FakeStream([b"unread"])
     stream.close_failures.append(asyncio.CancelledError())
     with pytest.raises(ResourceError, match=TOO_LARGE):
-        await harness.read(stream, MAX_READ_BYTES + 1)
+        await harness.read(stream, READ_LIMIT + 1)
     assert stream.close_count == 1

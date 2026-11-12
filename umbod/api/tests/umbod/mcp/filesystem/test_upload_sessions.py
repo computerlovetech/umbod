@@ -118,8 +118,7 @@ async def test_shared_inmemory_local_storage_mcp_begin_capability_only_rest_put_
             ),
         )))
         services = DatabaseFilesystemServiceFactory(
-            runtime.database, create_content_driver(content_config), 20_971_520, "https://issuer", "http://localhost",
-        )
+            runtime.database, create_content_driver(content_config), 20_971_520, "https://issuer", "http://localhost", max_read_bytes=1_048_576)
         callers = ScopedCallerCapture()
         callers.current.set(caller_snapshot("alice", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED))
         server = FastMCP()

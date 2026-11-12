@@ -27,6 +27,7 @@ def test_embedded_filesystem_defaults_to_inmemory_content() -> None:
     assert config.filesystem.model_dump() == {
         "content": {"type": "inmemory"},
         "upload_max_bytes": 10 * 1024 * 1024,
+        "preview_max_bytes": 1_048_576,
     }
 
 

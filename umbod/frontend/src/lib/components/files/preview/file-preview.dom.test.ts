@@ -1,9 +1,13 @@
+import { InMemoryPreviewConfiguration } from '$lib/files/preview/in-memory-configuration.test-support';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mount, tick, unmount } from 'svelte';
 import { deferred, filesystemNode } from '$lib/files/fixtures.test-support';
 import { FilePreviewState } from '$lib/files/preview/file-preview-state.svelte';
 import { PreviewRegistry } from '$lib/files/preview/ports';
 import { InMemoryFileContent } from '$lib/files/preview/in-memory-content.test-support';
+import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
+import { browserTransport } from '$lib/admin/infrastructure/transport';
+import { FileContentRoute } from '$lib/files/infrastructure/file-content-route';
 import FilePreview from './FilePreview.svelte';
 import PlainPreview from './PlainPreview.test-support.svelte';
 import { markdownPreviewAdapter } from './markdown-adapter';
@@ -25,7 +29,7 @@ test('renders markdown and replaces the component using an injected filetype ada
   state = new FilePreviewState(source, new PreviewRegistry([
     { component: PlainPreview, supports: (node): boolean => node.name.endsWith('.txt'), read: (source, id, signal): Promise<string> => source.readText(id, signal) },
     markdownPreviewAdapter
-  ]));
+  ]), new InMemoryPreviewConfiguration(257));
   component = mount(FilePreview, { target: document.body, props: { state, signIn: vi.fn() } });
   const file = filesystemNode({ name: 'notes.md', kind: 'file' });
   await state.select(file);
@@ -39,7 +43,7 @@ test('renders markdown and replaces the component using an injected filetype ada
 
 test('embeds PDF bytes and removes the viewer when selection changes', async (): Promise<void> => {
   const source = new InMemoryFileContent(async (): Promise<string> => '%PDF-1.7\nPreview');
-  state = new FilePreviewState(source, new PreviewRegistry([pdfPreviewAdapter, markdownPreviewAdapter]));
+  state = new FilePreviewState(source, new PreviewRegistry([pdfPreviewAdapter, markdownPreviewAdapter]), new InMemoryPreviewConfiguration(257));
   component = mount(FilePreview, { target: document.body, props: { state, signIn: vi.fn() } });
   const file = filesystemNode({ name: 'report.pdf', kind: 'file' });
   await state.select(file);
@@ -62,7 +66,7 @@ test('shows loading, forwards retry and never exposes failure details', async ()
   state = new FilePreviewState(new InMemoryFileContent(async (): Promise<string> => {
     if (++attempts === 1) throw new Error('private-token');
     return pending.promise;
-  }), new PreviewRegistry([markdownPreviewAdapter]));
+  }), new PreviewRegistry([markdownPreviewAdapter]), new InMemoryPreviewConfiguration(257));
   component = mount(FilePreview, { target: document.body, props: { state, signIn: vi.fn() } });
   await state.select(filesystemNode({ name: 'notes.md', kind: 'file' }));
   await tick();
@@ -77,4 +81,17 @@ test('shows loading, forwards retry and never exposes failure details', async ()
   await tick();
   expect(document.body.textContent).toContain('Recovered');
   expect(document.body.textContent).not.toContain('private-token');
+});
+
+test('too-large text reflects the same resolved limit used by the content route', async (): Promise<void> => {
+  const configuration = new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: 1031 });
+  const request = vi.fn<typeof fetch>().mockResolvedValue(new Response('x'.repeat(1032)));
+  const source = new FileContentRoute(browserTransport({ fetch: request, configuration }), configuration);
+  state = new FilePreviewState(source, new PreviewRegistry([markdownPreviewAdapter]), configuration);
+  component = mount(FilePreview, { target: document.body, props: { state, signIn: vi.fn() } });
+  await state.select(filesystemNode({ name: 'notes.md', kind: 'file' }));
+  await tick();
+  expect(state.phase).toBe('too-large');
+  expect(document.body.textContent).toContain('Preview is available for files up to 1031 bytes.');
+  expect(document.body.textContent).not.toContain('1 MiB');
 });

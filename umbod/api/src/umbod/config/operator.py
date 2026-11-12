@@ -69,6 +69,19 @@ class OperatorSettings(BaseSettings):
     filesystem_upload_max_bytes: int = Field(
         default=defaults.FILESYSTEM_UPLOAD_MAX_BYTES, gt=0
     )
+    filesystem_preview_max_bytes: int = Field(
+        default=defaults.FILESYSTEM_PREVIEW_MAX_BYTES, gt=0, le=9_007_199_254_740_991
+    )
+
+    @field_validator("filesystem_preview_max_bytes", mode="before")
+    @classmethod
+    def validate_filesystem_preview_max_bytes(cls, value: object) -> int:
+        if isinstance(value, str) and value.isascii() and value.isdecimal() and not value.startswith("0"):
+            return int(value)
+        if type(value) is int:
+            return value
+        raise ValueError("Filesystem preview limit must be an integer number of bytes")
+
     filesystem_content_directory: Optional[str] = None
     filesystem_content_backend: Literal["local", "s3"] = "local"
     filesystem_s3_bucket: str = ""

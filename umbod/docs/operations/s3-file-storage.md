@@ -15,7 +15,7 @@ Use S3 to store the bytes of [Umbod files](../using-umbod/files.md) separately f
 
 ## Configure Helm values
 
-The chart has **no dedicated `filesystem` or `s3` values block**. Pass non-secret application settings through **both** `core.api.env` and `core.mcp.env`. Each environment variable below is a key in each map, with its configured value as a scalar string.
+The chart groups size limits under `config.filesystem.uploadMaxBytes` and `config.filesystem.previewMaxBytes`. S3 storage settings have no dedicated values block: pass them through **both** `core.api.env` and `core.mcp.env`. Each environment variable below is a key in each map, with its configured value as a scalar string.
 
 | Environment key in both maps | Required setting or default |
 | --- | --- |
@@ -25,7 +25,6 @@ The chart has **no dedicated `filesystem` or `s3` values block**. Pass non-secre
 | `UMBOD_FILESYSTEM_S3_PREFIX` | Optional object prefix; default empty |
 | `UMBOD_FILESYSTEM_S3_ENDPOINT_URL` | Leave empty for AWS endpoint resolution, or set the S3-compatible service's endpoint |
 | `UMBOD_FILESYSTEM_S3_ADDRESSING_STYLE` | `auto` by default; `virtual` or `path` also supported |
-| `UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES` | Optional positive upload limit; default `10485760` bytes |
 
 A prefix must be relative, with no leading/trailing slash, empty path segments, or dot segments. Endpoints must not contain credentials, query strings, or fragments. S3-compatible services may require `path` addressing.
 
@@ -37,12 +36,14 @@ Set these chart values alongside the two environment maps:
 | --- | --- |
 | `core.image.repository` | Repository containing the S3-capable Umbod core image |
 | `core.image.tag` | Immutable tag for that image, used by both API and MCP |
+| `config.filesystem.uploadMaxBytes` | Shared maximum upload size in bytes; default `10485760` |
+| `config.filesystem.previewMaxBytes` | Shared browser preview and MCP resource read size in bytes; default `1048576` |
 | `existingSecret` | Name of a separately provisioned Kubernetes Secret in the release namespace |
 | `persistence.enabled` | `true` to retain the application database across Pod replacement |
 | `persistence.size`, `persistence.storageClass` | Size and storage class suitable for the database; no longer the capacity for S3 file bytes |
 | `persistence.existingClaim` | Optional existing ReadWriteOnce claim instead of creating one |
 
-Keep backend, bucket, region, endpoint, prefix, addressing style, and upload-limit settings identical in API and MCP. The Helm schema accepts the environment maps but does not validate S3 semantics or equality between containers; application validation happens at startup.
+Keep backend, bucket, region, endpoint, prefix and addressing style identical in API and MCP. The grouped size limits are shared automatically; per-service upload or preview limit overrides are rejected. The Helm schema accepts the storage environment maps but does not validate S3 semantics or equality between containers; application validation happens at startup.
 
 Apply your values file using the [Helm installation workflow](../getting-started/kubernetes-installation.md#configure-a-shared-installation). Consult the [Helm values reference](../reference/helm-values.md) for chart constraints. The chart runs API and MCP together in one fixed, single-replica core Pod.
 

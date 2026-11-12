@@ -7,7 +7,7 @@ import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ResourceError
 from mcp.shared.exceptions import MCPError
-from mcp.types import BlobResourceContents, TextResourceContents
+from mcp.types import BlobResourceContents, ResourceLink, TextResourceContents
 
 from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSnapshot, GroupMembership, UnavailableSubject
 from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
@@ -15,15 +15,19 @@ from umbod.core.filesystem.content import FilesystemContent
 from umbod.infrastructure import create_access_control_driver, create_namespace_driver
 from umbod.core.filesystem.models import StorageKey
 from umbod.core.filesystem.ports import ByteStream
-from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory
+from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory, register_filesystem_resources
 from umbod.mcp.connectors.downstream_mcp.provider import reset_request_connector_scope, set_request_connector_scope
 from umbod.mcp.filesystem.links import FILE_RESOURCE_TEMPLATE, file_resource_uri
 from umbod.mcp.filesystem.ports import FilesystemServiceFactory
-from umbod.mcp.filesystem.resources import FilesystemFileResource, FilesystemFileResourceTemplate, MAX_READ_BYTES
+from umbod.mcp.filesystem.resources import FilesystemFileResource, FilesystemFileResourceTemplate
 
 from .conftest import FilesystemMcp, caller_snapshot
 from .test_browsing import create_node
 from .test_tools import root_id
+from .test_upload_limits import server_for
+
+
+READ_LIMIT = 1_048_576
 
 
 DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions. Creating files requires discover and write on the parent directory; filesystem_browse with operation home resolves your private upload destination."
@@ -48,7 +52,7 @@ async def publish(client: Client, payload: bytes, mime_type: object) -> dict[str
     (b"\x00\xff", "image/png", False, "image/png"),
     (b"\xff", {}, False, "application/octet-stream"),
     (b"", "text/plain", True, "text/plain"),
-    (b"x" * MAX_READ_BYTES, "application/octet-stream", False, "application/octet-stream"),
+    (b"x" * READ_LIMIT, "application/octet-stream", False, "application/octet-stream"),
 ])
 async def test_resource_roundtrips_content_and_revision_metadata(
     filesystem_invocation_mcp: FilesystemMcp, payload: bytes, mime_type: object,
@@ -186,6 +190,7 @@ async def test_reads_create_fresh_services_and_capture_each_caller(filesystem_in
         published = await publish(client, b"hello", "text/plain")
     node_id = UUID(published["id"])
     factory = Mock(spec=FilesystemServiceFactory)
+    factory.read_max_bytes.return_value = READ_LIMIT
     services = [Mock(spec=FilesystemContent), Mock(spec=FilesystemContent)]
     for service in services:
         service.open_download = AsyncMock(side_effect=filesystem_invocation_mcp.files.open_download)
@@ -254,8 +259,7 @@ async def test_resource_read_cap_is_independent_of_upload_limit(filesystem_invoc
     async with Client(filesystem_invocation_mcp.server) as client:
         published = await publish(client, b"readable", "text/plain")
     factory = DatabaseFilesystemServiceFactory(
-        filesystem_invocation_mcp.database, filesystem_invocation_mcp.content, 0, "https://issuer", "https://api.example",
-    )
+        filesystem_invocation_mcp.database, filesystem_invocation_mcp.content, 0, "https://issuer", "https://api.example", max_read_bytes=1_048_576)
     result = await FilesystemFileResource(
         UUID(published["id"]), filesystem_invocation_mcp.callers, factory,
     ).read()
@@ -271,8 +275,35 @@ async def test_directory_resource_is_not_readable(filesystem_invocation_mcp: Fil
 
 
 @pytest.mark.asyncio
+async def test_nondefault_read_limit_controls_descriptions_links_and_complete_reads(
+    filesystem_invocation_mcp: FilesystemMcp,
+) -> None:
+    filesystem = filesystem_invocation_mcp
+    services = DatabaseFilesystemServiceFactory(
+        filesystem.database, filesystem.content, 1024, "https://issuer", "https://api.example",
+        max_read_bytes=37,
+    )
+    server = server_for(filesystem, services)
+    register_filesystem_resources(server, filesystem.callers, services)
+    async with Client(server) as client:
+        tools = {tool.name: tool for tool in await client.list_tools()}
+        assert "maximum 37 bytes" in tools["filesystem_browse"].description
+        assert "up to 37 bytes" in tools["filesystem_upload"].description
+        templates = await client.list_resource_templates()
+        assert "up to 37 bytes" in templates[0].description
+        published = await publish(client, b"x" * 37, "text/plain")
+        result = await client.call_tool("get_filesystem_node", {"node_id": published["id"]})
+        link = next(block for block in result.content if isinstance(block, ResourceLink))
+        assert "maximum 37 bytes" in link.description
+        assert (await client.read_resource(str(link.uri)))[0].text == "x" * 37
+        oversized = await publish(client, b"x" * 38, "text/plain")
+        with pytest.raises(MCPError, match="filesystem_read_too_large"):
+            await client.read_resource(file_resource_uri(UUID(oversized["id"])))
+
+
+@pytest.mark.asyncio
 async def test_oversize_resource_has_no_partial_response(filesystem_invocation_mcp: FilesystemMcp) -> None:
     async with Client(filesystem_invocation_mcp.server) as client:
-        published = await publish(client, b"x" * (MAX_READ_BYTES + 1), "text/plain")
+        published = await publish(client, b"x" * (READ_LIMIT + 1), "text/plain")
         with pytest.raises(MCPError, match="filesystem_read_too_large"):
             await client.read_resource(file_resource_uri(UUID(published["id"])))

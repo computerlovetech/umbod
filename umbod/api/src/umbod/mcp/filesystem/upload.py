@@ -33,7 +33,7 @@ class FilesystemUploadTool(Tool):
                 "Maximum 10485760 decoded bytes (10 MiB); lower server limits apply. "
                 "One-shot upload, without chunking or resumability. Retrying is not idempotent. "
                 "Returns file metadata and an MCP resource link, never uploaded content. "
-                "Use resources/read for current content up to 1 MiB; larger files require an HTTP download."
+                f"Use resources/read for current content up to {services.read_max_bytes()} bytes; larger files require an HTTP download."
             ),
             parameters=UploadCommand.model_json_schema(),
             output_schema=CallerNodeSummary.model_json_schema(),
@@ -74,4 +74,4 @@ class FilesystemUploadTool(Tool):
             result = await uploads.complete(caller, session.id)
             operation_completed()
             node = (await self._services.access().enrich_nodes(caller, [result.node]))[0]
-            return file_link_result(node, [node], "File uploaded successfully.\n" + node.model_dump_json())
+            return file_link_result(node, [node], "File uploaded successfully.\n" + node.model_dump_json(), self._services.read_max_bytes())

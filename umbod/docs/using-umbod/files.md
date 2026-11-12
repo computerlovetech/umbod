@@ -63,7 +63,7 @@ Sharing summaries describe manageable direct grants, not every source of effecti
 
 ### Read and delete
 
-The current Files view provides file metadata and permission-dependent actions, but does not yet provide a download/open-content control. Authenticated clients can download through the REST node-content endpoint; agents can read supported files through native MCP resources.
+The Files view provides file metadata, permission-dependent actions, and previews for Markdown, PDF and supported raster images. Preview size is controlled by `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES`, shared with complete-file MCP resource reads. Authenticated clients can download larger files through the REST node-content endpoint; this preview setting does not cap full downloads.
 
 Deletion requires permission and confirmation. It removes the file's namespace entry and access policy; it does not currently guarantee physical removal of the stored bytes. Do not treat deletion as secure erasure or immediate recovery of storage space.
 
@@ -79,7 +79,7 @@ Files have canonical resource URIs of the form `umbod://filesystem/files/{node_i
 
 Read a file through MCP `resources/read` using its URI. The URI identifies current content, not a historical revision; the response includes the captured `revision` and `size_bytes` in content metadata. Umbod advertises a parameterized file template through `resources/templates/list`, rather than enumerating every file in `resources/list`. Template visibility requires an eligible read operation; each read independently checks current access.
 
-Known textual MIME types return UTF-8 text; binary or unspecified MIME types return MCP base64 blobs. Text types include `text/*`, JSON, XML, and their structured suffixes. Invalid UTF-8 in a declared text file fails rather than being replaced or silently decoded. Reads return at most **1 MiB of raw content**, with no partial results or silent truncation. Use an authenticated REST download for larger files.
+Known textual MIME types return UTF-8 text; binary or unspecified MIME types return MCP base64 blobs. Text types include `text/*`, JSON, XML, and their structured suffixes. Invalid UTF-8 in a declared text file fails rather than being replaced or silently decoded. Reads are bounded by `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES`, with no partial results or silent truncation; resource descriptions advertise the configured byte limit. Use an authenticated REST download for larger files.
 
 Resource links are locators, not access grants. Reads require current `discover` and `read` permissions, including when following a retained link after sharing changes. A direct file grant does not require access to its ancestors. Client applications decide how to display links and load resources; a link is not an automatic download.
 
@@ -87,7 +87,7 @@ The beta `filesystem_read_file` tool has been removed, without a compatibility a
 
 Recipient discovery uses `filesystem_search_sharing_recipients`; the former `filesystem_list_sharing_groups` and `search_users` tools are no longer available. `filesystem_share` accepts a typed `recipient`, with legacy top-level `group_id` requests still supported. Refresh cached tool schemas: search and share expose alternative schema branches, and REST access-policy updates have a breaking request change. See [Filesystem sharing](../reference/filesystem-sharing.md).
 
-MCP uploads have a maximum of 10 MiB, or the configured filesystem limit if lower. Complete-file MCP resource reads are limited to 1 MiB. These limits are separate from browser/API upload and proxy limits.
+MCP uploads have a maximum of 10 MiB, or the configured filesystem limit if lower. Complete-file MCP resource reads and browser previews share `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES`; see [filesystem runtime configuration](../operations/configuration.md#filesystem-runtime). Upload and proxy limits remain separate.
 
 ## For administrators and operators
 

@@ -3,10 +3,10 @@ import { BrowserPublicConfigurationProvider, InMemoryPublicConfigurationProvider
 
 describe('public browser configuration', () => {
   test('loads validated public deployment keys once for concurrent consumers', async () => {
-    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ apiBaseUrl: '/api', mcpBaseUrl: 'https://mcp.example.test' }));
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ apiBaseUrl: '/api', mcpBaseUrl: 'https://mcp.example.test', filesystemPreviewMaxBytes: 257 }));
     const provider = new BrowserPublicConfigurationProvider(request);
     const configurations = await Promise.all([provider.get(), provider.get()]);
-    expect(configurations).toEqual([{ apiBaseUrl: '/api', mcpBaseUrl: 'https://mcp.example.test' }, { apiBaseUrl: '/api', mcpBaseUrl: 'https://mcp.example.test' }]);
+    expect(configurations).toEqual([{ apiBaseUrl: '/api', mcpBaseUrl: 'https://mcp.example.test', filesystemPreviewMaxBytes: 257 }, { apiBaseUrl: '/api', mcpBaseUrl: 'https://mcp.example.test', filesystemPreviewMaxBytes: 257 }]);
     expect(request).toHaveBeenCalledOnce();
     expect(request).toHaveBeenCalledWith('/app-config.json', expect.objectContaining({ credentials: 'same-origin', cache: 'no-store' }));
   });
@@ -23,6 +23,15 @@ describe('public browser configuration', () => {
     expect(publicConfigurationSchema.safeParse({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', logout }).success).toBe(false);
   });
   test('in-memory configuration satisfies the same validated port', async () => {
-    expect(await new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }).get()).toEqual({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' });
+    expect(await new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }).get()).toEqual({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011', filesystemPreviewMaxBytes: 1048576 });
   });
+});
+
+test.each([0, -1, 1.5, 9007199254740992, '257', null, '', Infinity, NaN])('rejects invalid preview configuration %s', async (filesystemPreviewMaxBytes: unknown): Promise<void> => {
+  const provider = new BrowserPublicConfigurationProvider(vi.fn<typeof fetch>().mockResolvedValue(Response.json({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes })));
+  await expect(provider.get()).rejects.toThrow();
+});
+
+test.each([1, 257, Number.MAX_SAFE_INTEGER])('accepts safe positive preview limits %s', (filesystemPreviewMaxBytes: number): void => {
+  expect(publicConfigurationSchema.parse({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes }).filesystemPreviewMaxBytes).toBe(filesystemPreviewMaxBytes);
 });

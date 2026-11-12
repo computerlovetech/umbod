@@ -1,6 +1,6 @@
 import type { InstanceConfiguration, InstanceConfigurationEntry } from '$lib/admin/instance-configuration';
 
-export type SettingSection = 'access' | 'tools' | 'addresses' | 'advanced';
+export type SettingSection = 'access' | 'tools' | 'filesystem' | 'addresses' | 'advanced';
 export type PresentedSetting = {
   entry: InstanceConfigurationEntry;
   label: string;
@@ -12,6 +12,7 @@ export type SettingsPresentation = {
   essentials: { variable: string; label: string; value: string }[];
   access: PresentedSetting[];
   tools: PresentedSetting[];
+  filesystem: PresentedSetting[];
   addresses: PresentedSetting[];
   advanced: { id: string; label: string; entries: PresentedSetting[] }[];
 };
@@ -40,6 +41,8 @@ define('tools', 'MCP_DOWNSTREAM_DISCOVERY_ENABLED', 'Connected server discovery'
 define('tools', 'OPENAPI_JSON_IMPORT_MAX_BYTES', 'OpenAPI import size limit', 'The largest OpenAPI JSON document accepted for import.');
 define('tools', 'OPENAPI_URL_RETRIEVAL_TIMEOUT_SECONDS', 'OpenAPI retrieval limit', 'How long fetching an OpenAPI document may take.');
 define('tools', 'OPENAPI_EXECUTION_READ_TIMEOUT_SECONDS', 'OpenAPI response wait limit', 'How long a connector waits to read a response.');
+define('filesystem', 'FILESYSTEM_UPLOAD_MAX_BYTES', 'Upload size limit', 'The largest file accepted for storage in the filesystem.');
+define('filesystem', 'FILESYSTEM_PREVIEW_MAX_BYTES', 'Preview and read size limit', 'The largest file loaded in browser previews or complete MCP resource reads.');
 define('addresses', 'PUBLIC_SITE_ORIGIN', 'Web address', 'The configured public address for the web interface.');
 define('addresses', 'PUBLIC_API_ORIGIN', 'API address', 'The configured public address for the REST API.');
 define('addresses', 'PUBLIC_MCP_ORIGIN', 'MCP address', 'The configured public address for MCP clients.');
@@ -74,7 +77,7 @@ const durationVariables = new Set([
   'OPENAPI_EXECUTION_READ_TIMEOUT_SECONDS', 'OPENAPI_EXECUTION_WRITE_TIMEOUT_SECONDS',
   'OPENAPI_EXECUTION_POOL_TIMEOUT_SECONDS'
 ].map((suffix: string): string => `UMBOD_${suffix}`));
-const byteVariables = new Set(['OTLP_MAX_REQUEST_BYTES', 'MCP_MAXIMUM_UPLOADED_FILE_BYTES', 'OPENAPI_JSON_IMPORT_MAX_BYTES'].map((suffix: string): string => `UMBOD_${suffix}`));
+const byteVariables = new Set(['OTLP_MAX_REQUEST_BYTES', 'MCP_MAXIMUM_UPLOADED_FILE_BYTES', 'OPENAPI_JSON_IMPORT_MAX_BYTES', 'FILESYSTEM_UPLOAD_MAX_BYTES', 'FILESYSTEM_PREVIEW_MAX_BYTES'].map((suffix: string): string => `UMBOD_${suffix}`));
 
 export function displayValues(entry: InstanceConfigurationEntry): string[] {
   if (entry.type === 'string_list') return entry.value.length ? entry.value : ['None configured'];
@@ -98,7 +101,7 @@ export function displayValues(entry: InstanceConfigurationEntry): string[] {
 }
 
 export function presentConfiguration(configuration: InstanceConfiguration): SettingsPresentation {
-  const result: SettingsPresentation = { essentials: [], access: [], tools: [], addresses: [], advanced: [] };
+  const result: SettingsPresentation = { essentials: [], access: [], tools: [], filesystem: [], addresses: [], advanced: [] };
   const allEntries = configuration.groups.flatMap((group) => group.entries);
   const summaryFields = [
     ['UMBOD_APP_NAME', 'Instance name'], ['UMBOD_PROFILE', 'Environment'],
@@ -126,7 +129,7 @@ export function presentConfiguration(configuration: InstanceConfiguration): Sett
     if (advancedEntries.length) result.advanced.push({ id: group.id, label: group.label, entries: advancedEntries });
   }
   const orderedVariables = Object.keys(definitions);
-  for (const section of ['access', 'tools', 'addresses'] as const) {
+  for (const section of ['access', 'tools', 'filesystem', 'addresses'] as const) {
     result[section].sort((first, second): number => orderedVariables.indexOf(first.entry.variable) - orderedVariables.indexOf(second.entry.variable));
   }
   return result;

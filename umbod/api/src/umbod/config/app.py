@@ -355,6 +355,9 @@ FilesystemContentConfig = Annotated[
 
 
 class FilesystemRuntimeConfig(ConfigModel):
+    preview_max_bytes: int = Field(
+        default=defaults.FILESYSTEM_PREVIEW_MAX_BYTES, gt=0, le=9_007_199_254_740_991, strict=True
+    )
     content: FilesystemContentConfig = Field(
         default_factory=InMemoryFilesystemContentConfig
     )

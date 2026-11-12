@@ -9,8 +9,8 @@ description: "Read-only instance settings presentation and clipboard feedback."
 - [instance-configuration-copy-state.svelte.ts](./instance-configuration-copy-state.svelte.ts) — Raw-value clipboard feedback.
 - [instance-configuration-copy-state.test.ts](./instance-configuration-copy-state.test.ts) — Clipboard state tests.
 - [instance-settings-state.svelte.ts](./instance-settings-state.svelte.ts) — Settings presentation state.
-- [InstanceConfigurationView.svelte](./InstanceConfigurationView.svelte) — Settings page composition.
+- [InstanceConfigurationView.svelte](./InstanceConfigurationView.svelte) — Read-only settings page with a dedicated filesystem upload and preview/read limits section.
 - [InstanceConfigurationView.test.ts](./InstanceConfigurationView.test.ts) — Settings view tests.
-- [presentation.ts](./presentation.ts) — Setting labels and value formatting.
+- [presentation.ts](./presentation.ts) — Setting groups, labels and byte formatting, keeping filesystem limits separate from connector input limits.
 - [presentation.test.ts](./presentation.test.ts) — Setting presentation tests.
 - [SettingRow.svelte](./SettingRow.svelte) — Setting value and technical disclosure.

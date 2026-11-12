@@ -55,6 +55,7 @@ def children(runtime: NativeUploadRuntime) -> list[dict[str, Any]]:
 @pytest.mark.parametrize("content", [b"", b"\x00\xff\x80\r\n", bytes(range(256)) * 36864], ids=["empty", "binary", "single-put-9mib"])
 async def test_s3_direct_put_publishes_only_after_completion_and_survives_worker_reopen(
     native_upload_runtime: NativeUploadRuntime, runtime_endpoints: RuntimeEndpoints, content: bytes,
+    filesystem_preview_max_bytes: int,
 ) -> None:
     runtime = native_upload_runtime
     before = storage_objects()
@@ -88,7 +89,7 @@ async def test_s3_direct_put_publishes_only_after_completion_and_survives_worker
     reopened = runtime.api.get(path + "/content?delivery=stream")
     assert reopened.status_code == 200
     assert reopened.content == content
-    if len(content) <= 1_048_576:
+    if len(content) <= filesystem_preview_max_bytes:
         await wait_for_filesystem_tools(runtime.client, {"filesystem_delete_file"})
         uri = file_resource_uri(node["id"])
         read = await runtime.client.read_resource(uri)

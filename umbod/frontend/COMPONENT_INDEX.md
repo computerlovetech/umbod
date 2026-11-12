@@ -52,6 +52,8 @@ tags:
 
 ## Files presentation
 
+- [ImagePreview](src/lib/components/files/preview/ImagePreview.svelte) — Content-only responsive raster image; use with a prepared image data URL and an optional decode-failure callback.
+
 - [PdfPreview](src/lib/components/files/preview/PdfPreview.svelte) — Content-only PDF frame; use with a prepared PDF data URL and a browser with built-in PDF viewing.
 
 - [MarkdownPreview](src/lib/components/files/preview/MarkdownPreview.svelte) — Content-only Markdown article; escapes raw HTML, omits images and allows only HTTP(S) and mailto links.

@@ -2,14 +2,14 @@ import { expect, test, vi } from 'vitest';
 import { browserTransport } from '$lib/admin/infrastructure/transport';
 import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
 import { fileId } from '../fixtures.test-support';
-import { FileContentRoute, previewByteLimit } from './file-content-route';
+import { FileContentRoute } from './file-content-route';
 import type { PreviewReadFailure } from '../preview/ports';
 
+const previewByteLimit = 257;
+
 function route(request: typeof fetch): FileContentRoute {
-  return new FileContentRoute(browserTransport({
-    fetch: request,
-    configuration: new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' })
-  }));
+  const configuration = new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: previewByteLimit });
+  return new FileContentRoute(browserTransport({ fetch: request, configuration }), configuration);
 }
 
 test('reads content through authenticated, redirect-rejecting transport with cancellation', async (): Promise<void> => {
@@ -56,4 +56,35 @@ test.each<[number, PreviewReadFailure]>([[401, 'sign-in'], [403, 'denied'], [404
 test('rejects files exceeding the preview byte limit', async (): Promise<void> => {
   const request = vi.fn<typeof fetch>().mockResolvedValue(new Response('x'.repeat(previewByteLimit + 1)));
   await expect(route(request).readText(fileId, new AbortController().signal)).rejects.toMatchObject({ reason: 'too-large' });
+});
+
+test.each(['text', 'bytes'] as const)('accepts the exact configured %s byte boundary', async (kind: 'text' | 'bytes'): Promise<void> => {
+  const request = vi.fn<typeof fetch>().mockResolvedValue(new Response('x'.repeat(previewByteLimit), { headers: { 'Content-Length': String(previewByteLimit) } }));
+  const source = route(request);
+  const result = kind === 'text' ? await source.readText(fileId, new AbortController().signal) : await source.readBytes(fileId, new AbortController().signal);
+  expect(result).toHaveLength(previewByteLimit);
+});
+
+test.each(['text', 'bytes'] as const)('rejects oversized advertised %s content before consuming it', async (kind: 'text' | 'bytes'): Promise<void> => {
+  const cancel = vi.fn<() => void>();
+  const body = new ReadableStream<Uint8Array>({ cancel });
+  const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { headers: { 'Content-Length': String(previewByteLimit + 1) } }));
+  const source = route(request);
+  await expect(kind === 'text' ? source.readText(fileId, new AbortController().signal) : source.readBytes(fileId, new AbortController().signal)).rejects.toMatchObject({ reason: 'too-large' });
+  expect(cancel).toHaveBeenCalledOnce();
+});
+
+test.each(['text', 'bytes'] as const)('rejects %s streaming beyond a smaller advertised size', async (kind: 'text' | 'bytes'): Promise<void> => {
+  const cancel = vi.fn<() => void>();
+  const body = new ReadableStream<Uint8Array>({
+    start(controller): void {
+      controller.enqueue(new Uint8Array(previewByteLimit));
+      controller.enqueue(new Uint8Array(1));
+    },
+    cancel
+  });
+  const request = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { headers: { 'Content-Length': '1' } }));
+  const source = route(request);
+  await expect(kind === 'text' ? source.readText(fileId, new AbortController().signal) : source.readBytes(fileId, new AbortController().signal)).rejects.toMatchObject({ reason: 'too-large' });
+  expect(cancel).toHaveBeenCalledOnce();
 });

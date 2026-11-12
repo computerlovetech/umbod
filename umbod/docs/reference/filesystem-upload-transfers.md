@@ -18,7 +18,7 @@ The client computes the local file's exact byte size and, preferably, its SHA-25
 
 The client streams the original file with the returned headers, without redirect following, cookies, or MCP bearer credentials. Direct S3 PUTs require the exact declared content length; browser clients derive it from the original `File`, while other clients must send a known-length body. File bytes do not belong in either MCP tool call. Session uploads use the configured filesystem upload limit and the selected transfer service's limits; the existing inline tool retains its separate 10 MiB ceiling.
 
-Complete requires the authenticated caller that owns the session. Publication remains private and atomic. The result includes node metadata, the verified byte count, SHA-256, and an MCP resource link. The receipt describes the bytes published by that upload. Resource reads resolve current authorized content and retain their separate 1 MiB limit; larger files require HTTP download.
+Complete requires the authenticated caller that owns the session. Publication remains private and atomic. The result includes node metadata, the verified byte count, SHA-256, and an MCP resource link. The receipt describes the bytes published by that upload. Resource reads resolve current authorized content and use `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES`, shared with browser previews and separate from upload limits; larger files require HTTP download.
 
 ## Transfer authority
 

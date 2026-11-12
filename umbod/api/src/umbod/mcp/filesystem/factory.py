@@ -23,13 +23,17 @@ from .upload_models import MAX_UPLOAD_BYTES
 class DatabaseFilesystemServiceFactory:
     def __init__(
         self, database: Database, content: ContentDriver, max_upload_bytes: int, managed_issuer: str,
-        api_base_url: str,
+        api_base_url: str, max_read_bytes: int,
     ) -> None:
         self._database = database
         self._managed_issuer = managed_issuer
         self._content = content
         self._max_upload_bytes = max_upload_bytes
         self._api_base_url = api_base_url
+        self._max_read_bytes = max_read_bytes
+
+    def read_max_bytes(self) -> int:
+        return self._max_read_bytes
 
     def homes(self) -> HomeService:
         return create_filesystem_homes(database=self._database, resolver=VerifiedIdentityResolver())

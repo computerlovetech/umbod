@@ -13,6 +13,8 @@
   import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
   import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
   import FilesContent from './FilesContent.svelte';
+  import { publicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
+  import type { PreviewConfigurationProvider } from '$lib/files/preview/configuration';
   import { browserTransport } from '$lib/admin/infrastructure/transport';
   import { FileContentRoute } from '$lib/files/infrastructure/file-content-route';
   import type { FileContentPort } from '$lib/files/preview/ports';
@@ -20,16 +22,19 @@
   import { FilePreviewState } from '$lib/files/preview/file-preview-state.svelte';
   import { markdownPreviewAdapter } from './preview/markdown-adapter';
   import { pdfPreviewAdapter } from './preview/pdf-adapter';
+  import { imagePreviewAdapter } from './preview/image-adapter';
 
   let {
     createApi = browserFilesApi,
     createWorkspaceApi = workspaceApi,
-    createContentSource = (): FileContentPort => new FileContentRoute(browserTransport()),
+    configuration = publicConfigurationProvider,
+    createContentSource = (configuration: PreviewConfigurationProvider): FileContentPort => new FileContentRoute(browserTransport(), configuration),
     signIn = navigateToSignIn
   }: {
     createApi?: () => FilesApi;
     createWorkspaceApi?: () => WorkspaceApi;
-    createContentSource?: () => FileContentPort;
+    configuration?: PreviewConfigurationProvider;
+    createContentSource?: (configuration: PreviewConfigurationProvider) => FileContentPort;
     signIn?: () => void;
   } = $props();
 
@@ -42,7 +47,7 @@
   }
 
   function createPreview(): FilePreviewState {
-    return new FilePreviewState(createContentSource(), new PreviewRegistry([markdownPreviewAdapter, pdfPreviewAdapter]));
+    return new FilePreviewState(createContentSource(configuration), new PreviewRegistry([markdownPreviewAdapter, pdfPreviewAdapter, imagePreviewAdapter]), configuration);
   }
 
   const api = createFilesApi();

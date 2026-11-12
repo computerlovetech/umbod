@@ -13,7 +13,7 @@ description: "Operator settings, validation and conversion into runtime applicat
 - [derive.py](./derive.py) — Configuration loading.
 - [identity_policy.py](./identity_policy.py) — Shared local identity eligibility and filesystem managed-issuer selection.
 - [inspection.py](./inspection.py) — Redacted inspection.
-- [operator.py](./operator.py) — Operator-facing settings, public collector URL validation, and fail-closed filesystem backend combinations.
+- [operator.py](./operator.py) — Operator settings, validated preview byte limits, public collector URLs and fail-closed filesystem backend combinations.
 - [personal_connection_policy.py](./personal_connection_policy.py) — Personal identity and OAuth policy resolution.
 - [secret_derivation.py](./secret_derivation.py) — Secret derivation.
 - [server_settings.py](./server_settings.py) — Server root-secret preflight.

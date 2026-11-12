@@ -28,8 +28,7 @@ async def test_undecodable_policy_browse_and_update_return_unavailable_not_priva
         await create_access_control_driver(database=database).add_grant(grant)
         fail_stored_grant_decoding(database, home.id, monkeypatch)
         services = DatabaseFilesystemServiceFactory(
-            database, create_content_driver(InMemoryContentConfig(type="inmemory")), 1024, "issuer", "http://localhost",
-        )
+            database, create_content_driver(InMemoryContentConfig(type="inmemory")), 1024, "issuer", "http://localhost", max_read_bytes=1_048_576)
         server = FastMCP()
         server.add_tool(FilesystemBrowseTool(callers, services))
         server.add_tool(FilesystemUpdateNodeTool(callers, services))

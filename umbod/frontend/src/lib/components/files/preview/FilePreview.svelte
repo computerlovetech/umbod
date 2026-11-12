@@ -9,7 +9,7 @@
   <section class="file-preview" aria-label="File preview" aria-busy={state.phase === 'loading'}>
     {#if state.phase === 'ready' && state.adapter}
       {@const Renderer = state.adapter.component}
-      <Renderer content={state.content} />
+      <Renderer content={state.content} onError={state.createRenderErrorHandler()} />
     {:else if state.phase === 'loading'}
       <p role="status">Loading preview…</p>
     {:else if state.phase === 'empty'}
@@ -17,7 +17,7 @@
     {:else if state.phase === 'unsupported'}
       <p>Preview is not available for this file type.</p>
     {:else if state.phase === 'too-large'}
-      <p>Preview is available for files up to 1 MiB.</p>
+      <p>Preview is available for files up to {state.formattedMaxSize}.</p>
     {:else if state.phase === 'denied'}
       <p role="alert">You don't have access to this file's content.</p>
     {:else if state.phase === 'missing'}

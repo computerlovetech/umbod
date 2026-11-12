@@ -16,7 +16,7 @@ describe('identity directory port and HTTP validation', () => {
   });
   it('uses shared transport for a bodyless observation and server-scoped search', async (): Promise<void> => {
     const request = vi.fn<typeof fetch>().mockResolvedValueOnce(new Response(null, { status: 204 })).mockResolvedValueOnce(Response.json(directory));
-    const api = new IdentityDirectoryApi(browserTransport({ fetch: request, configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' }) } }));
+    const api = new IdentityDirectoryApi(browserTransport({ fetch: request, configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: 257 }) } }));
     await api.observations.observe();
     expect(request.mock.calls[0][0]).toBe('/api/me/identity-observations');
     expect(request.mock.calls[0][1]?.body).toBeUndefined();
@@ -28,7 +28,7 @@ describe('identity directory port and HTTP validation', () => {
   });
   it.each([{ ...directory, groups: [{ ...directory.groups[0], last_seen_at: 'invalid' }] }, { ...directory, has_more: 'false' }])('rejects malformed responses', async (payload): Promise<void> => {
     const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json(payload));
-    const api = new IdentityDirectoryApi(browserTransport({ fetch: request, configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' }) } }));
+    const api = new IdentityDirectoryApi(browserTransport({ fetch: request, configuration: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: 257 }) } }));
     await expect(api.groups.list({ query: '', limit: 50 })).rejects.toBeInstanceOf(SchemaValidationError);
   });
 });

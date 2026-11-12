@@ -1,3 +1,5 @@
+x-filesystem-preview-limit: &filesystem-preview-limit UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES=${UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES-1048576}
+
 services:
   api:
     image: umbod
@@ -24,6 +26,7 @@ services:
       - traefik.http.routers.umbod-upload-transfer.service=umbod-browser-api
       - traefik.http.services.umbod-browser-api.loadbalancer.server.port=8000
     environment:
+      - *filesystem-preview-limit
       - UMBOD_PROFILE=${UMBOD_PROFILE:-local}
       - UMBOD_AUTH=${UMBOD_AUTH:-dev}
       - UMBOD_MCP_DOWNSTREAM_OAUTH_ENABLED=${UMBOD_MCP_DOWNSTREAM_OAUTH_ENABLED:-false}
@@ -113,6 +116,7 @@ services:
       - traefik.http.routers.umbod-mcp.middlewares=umbod-forward-proto@docker
       - traefik.http.services.umbod-mcp.loadbalancer.server.port=8011
     environment:
+      - *filesystem-preview-limit
       - UMBOD_PROFILE=${UMBOD_PROFILE:-local}
       - UMBOD_AUTH=${UMBOD_AUTH:-dev}
       - UMBOD_MCP_DOWNSTREAM_OAUTH_ENABLED=${UMBOD_MCP_DOWNSTREAM_OAUTH_ENABLED:-false}
@@ -251,6 +255,7 @@ services:
       - PUBLIC_AUTH0_DOMAIN=${PUBLIC_AUTH0_DOMAIN:-}
       - PUBLIC_AUTH0_CLIENT_ID=${PUBLIC_AUTH0_CLIENT_ID:-}
       - PUBLIC_LOGOUT_RETURN_URL=${PUBLIC_LOGOUT_RETURN_URL:-}
+      - *filesystem-preview-limit
       - PUBLIC_API_BASE_URL=${PUBLIC_API_BASE_URL:-/api}
       - PUBLIC_MCP_BASE_URL=${UMBOD_PUBLIC_MCP_ORIGIN:-http://localhost:8011}
       - API_PROXY_ORIGIN=http://api:8000

@@ -12,19 +12,19 @@ afterEach((): void => { vi.restoreAllMocks(); });
 
 describe('groups route', () => {
   it('loads validated metadata without loading permission inventories', async (): Promise<void> => {
-    vi.spyOn(publicConfigurationProvider, 'get').mockResolvedValue({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' });
+    vi.spyOn(publicConfigurationProvider, 'get').mockResolvedValue({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: 257 });
     const groups = [{ group_id: ' /../exact ', label: 'Operators', description: 'Report owners', revision: 2 }];
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(JSON.stringify({ groups })));
     await expect(load({ fetch } as never)).resolves.toEqual({ groups });
     expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/admin/groups', expect.objectContaining({ method: 'GET' }));
   });
   it('rejects malformed catalogue responses', async (): Promise<void> => {
-    vi.spyOn(publicConfigurationProvider, 'get').mockResolvedValue({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' });
+    vi.spyOn(publicConfigurationProvider, 'get').mockResolvedValue({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: 257 });
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(JSON.stringify({ groups: [{ group_id: 'exact', label: 'Label', description: '', revision: 0 }] })));
     await expect(load({ fetch } as never)).rejects.toBeInstanceOf(SchemaValidationError);
   });
   it.each([401, 403])('preserves authorization failure %s', async (status): Promise<void> => {
-    vi.spyOn(publicConfigurationProvider, 'get').mockResolvedValue({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' });
+    vi.spyOn(publicConfigurationProvider, 'get').mockResolvedValue({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp', filesystemPreviewMaxBytes: 257 });
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response('{}', { status }));
     if (status === 401) await expect(load({ fetch } as never)).rejects.toBeInstanceOf(AuthenticationRequiredError);
     else await expect(load({ fetch } as never)).rejects.toMatchObject({ status: 403 });

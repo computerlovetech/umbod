@@ -3,6 +3,13 @@ from dataclasses import dataclass, field
 
 import pytest
 
+from umbod.config import defaults
+
+
+@pytest.fixture
+def filesystem_preview_max_bytes() -> int:
+    return int(os.environ.get("UMBOD_TEST_FILESYSTEM_PREVIEW_MAX_BYTES", str(defaults.FILESYSTEM_PREVIEW_MAX_BYTES)))
+
 
 @dataclass(frozen=True)
 class RuntimeEndpoints:

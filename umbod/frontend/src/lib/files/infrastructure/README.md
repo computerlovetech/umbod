@@ -6,7 +6,7 @@ description: Filesystem session API, secure raw-byte transfers and in-memory per
 
 # Files
 
-- [file-content-route.ts](./file-content-route.ts) — Explicit API-streamed, authenticated bounded UTF-8 preview reads with redirects rejected.
+- [file-content-route.ts](./file-content-route.ts) — Authenticated text and binary preview reads bounded by runtime configuration, with redirects rejected.
 - [file-content-route.test.ts](./file-content-route.test.ts) — Content request, cancellation, size limit and outbound node validation tests.
 
 - [sharing-route.ts](./sharing-route.ts) — Unified typed recipient search, filtered policy reads and scoped revision-conditioned replacement over shared transport.

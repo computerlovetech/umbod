@@ -16,7 +16,7 @@ def file_resource_uri(node_id: UUID) -> str:
     return FILE_RESOURCE_TEMPLATE.format(node_id=node_id)
 
 
-def file_links(nodes: Sequence[NodeSummary]) -> list[ResourceLink]:
+def file_links(nodes: Sequence[NodeSummary], max_read_bytes: int) -> list[ResourceLink]:
     links: list[ResourceLink] = []
     seen: set[UUID] = set()
     for node in nodes:
@@ -27,14 +27,14 @@ def file_links(nodes: Sequence[NodeSummary]) -> list[ResourceLink]:
         links.append(ResourceLink(
             type="resource_link", uri=file_resource_uri(node.id), name=node.name,
             mimeType=content_type if isinstance(content_type, str) else "application/octet-stream",
-            description="Current file content. Reading requires current discover and read permissions; maximum 1 MiB.",
+            description=f"Current file content. Reading requires current discover and read permissions; maximum {max_read_bytes} bytes.",
             annotations={"lastModified": node.updated_at.isoformat()},
         ))
     return links
 
 
-def file_link_result(result: BaseModel, nodes: Sequence[NodeSummary], rendered: str) -> ToolResult:
+def file_link_result(result: BaseModel, nodes: Sequence[NodeSummary], rendered: str, max_read_bytes: int) -> ToolResult:
     return ToolResult(
-        content=[TextContent(type="text", text=rendered), *file_links(nodes)],
+        content=[TextContent(type="text", text=rendered), *file_links(nodes, max_read_bytes)],
         structured_content=result.model_dump(mode="json"),
     )
