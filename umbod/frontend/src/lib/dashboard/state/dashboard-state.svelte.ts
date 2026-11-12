@@ -1,3 +1,4 @@
+import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
 import type { AttemptScheduler } from '$lib/personal-connections/attempt-scheduler';
@@ -18,6 +19,8 @@ export class DashboardState implements DashboardController {
   personalCards = $state.raw<ConnectionState[]>([]);
   selectedId = $state('');
   identityKey = $state('');
+  private observedAccount: string | undefined;
+  private identitySourceAvailable = true;
   private active = true;
   private revision = 0;
   private personalRevision = 0;
@@ -27,11 +30,21 @@ export class DashboardState implements DashboardController {
   private identityTrusted = false;
 
   constructor(
-    private readonly api: DashboardApi,
+    private readonly api: Pick<DashboardApi, 'catalogue'>,
     private readonly personalApi: PersonalConnectionsApi,
     private readonly authorizationBrowser?: AuthorizationBrowser,
     private readonly attemptScheduler?: AttemptScheduler
   ) {}
+
+  observeAccountIdentity = (identity: HeaderAccountIdentityState, sourceChanged = false): void => {
+    const account = identity.kind === 'visible' ? identity.hiddenValues.id : '';
+    const previous = this.observedAccount;
+    this.observedAccount = account;
+    if (!this.active || previous === undefined || (previous === account && !sourceChanged)) return;
+    this.identitySourceAvailable = account !== '';
+    this.authenticationLost();
+    if (account) void this.loadCatalogue();
+  };
 
   get selectedConnector(): CatalogueConnector | undefined {
     return this.connectors.find((connector) => catalogueConnectorId(connector) === this.selectedId);
@@ -82,7 +95,7 @@ export class DashboardState implements DashboardController {
   };
 
   loadCatalogue = async (): Promise<void> => {
-    if (!this.active) return;
+    if (!this.active || !this.identitySourceAvailable) return;
     this.identityTrusted = false;
     this.releaseIdentityValidation();
     let releaseValidation: () => void = (): void => {};
@@ -124,6 +137,7 @@ export class DashboardState implements DashboardController {
       if (!this.active || revision !== this.revision) return;
       if (requiresSignIn(error)) this.authenticationLost();
       else if (error instanceof HttpError && error.status === 403) {
+        this.identityKey = '';
         this.connectors = [];
         this.selectedId = '';
         this.clearPersonal();
@@ -150,7 +164,7 @@ export class DashboardState implements DashboardController {
   };
 
   loadPersonal = async (): Promise<void> => {
-    if (!this.active || this.phase !== 'ready') return;
+    if (!this.active || !this.identitySourceAvailable || this.phase !== 'ready') return;
     const revision = ++this.personalRevision;
     this.personalPhase = 'loading';
     try {

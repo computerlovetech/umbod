@@ -1,0 +1,44 @@
+.dv-success, .dv-tool { --dv-color: var(--chart-success, #278367); }
+.dv-failure { --dv-color: var(--chart-failure, #d46b55); }
+.dv-cancelled { --dv-color: var(--chart-cancelled, #a9b7af); }
+.dv-resource { --dv-color: var(--chart-resource, #9abfae); }
+.dv-prompt { --dv-color: var(--chart-prompt, #cfded5); }
+.dv-success, .dv-failure, .dv-cancelled, .dv-tool, .dv-resource, .dv-prompt { background: var(--dv-color); stroke: var(--dv-color); }
+.dv-muted { color: var(--admin-muted); font-size: 12px; }
+.dv-outcomes { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; min-height: 150px; }
+.dv-ring { width: 140px; height: 140px; flex-shrink: 0; }
+.dv-ring-value { font-size: 25px; font-weight: 550; fill: var(--admin-ink); letter-spacing: -1px; }
+.dv-percent { font-size: 14px; }
+.dv-ring-caption { font-size: 10px; fill: var(--admin-muted); }
+.dv-outcome-legend { flex: 1; min-width: 180px; margin: 0; }
+.dv-outcome-legend > div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; padding: 9px 0; font-size: 12px; font-variant-numeric: tabular-nums; }
+.dv-outcome-legend dt, .dv-mix-legend dt, .dv-chart-legend span { display: flex; align-items: center; gap: 6px; }
+.dv-outcome-legend dd, .dv-mix-legend dd { margin: 0; }
+.dv-outcome-legend i, .dv-mix-legend i, .dv-chart-legend i { display: inline-block; width: 7px; height: 7px; flex-shrink: 0; border-radius: 1px; }
+.dv-mix-bar { display: flex; height: 24px; margin: 24px 0; background: var(--admin-soft); border-radius: 3px; }
+.dv-mix-bar > div { width: var(--share); }
+.dv-mix-legend { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; font-size: 12px; }
+.dv-mix-legend > div { display: grid; gap: 8px; }
+.dv-chart-legend { display: flex; flex-wrap: wrap; gap: 16px; color: var(--admin-muted); font-size: 12px; margin-bottom: 20px; }
+.dv-plot { display: flex; gap: 10px; height: 240px; }
+.dv-y-axis { display: flex; flex-direction: column; justify-content: space-between; min-width: 28px; text-align: right; font-size: 12px; color: var(--admin-muted); }
+.dv-plot-body { position: relative; flex: 1; min-width: 0; }
+.dv-grid-line { position: absolute; width: 100%; border-top: 1px dashed var(--admin-border); }
+.dv-top { top: 0; } .dv-middle { top: 50%; } .dv-bottom { bottom: 0; border-top-style: solid; }
+.dv-bars { position: absolute; inset: 0; display: flex; justify-content: space-around; gap: 4px; padding: 0 4px; }
+.dv-bar-column { flex: 1; height: 100%; max-width: 36px; }
+.dv-bar { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: end; }
+.dv-bar > div { height: var(--segment); flex-shrink: 0; }
+.dv-x-axis, .dv-activity-footer { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--admin-muted); margin-top: 12px; }
+.dv-x-axis { margin-left: 38px; }
+.tool-ranking { list-style: none; margin: 0; padding: 0; }
+.tool-ranking li { display: flex; align-items: center; gap: 12px; padding: 15px 0; }
+.tool-ranking li + li { border-top: 1px solid var(--admin-soft); }
+.dv-rank { font-size: 12px; color: var(--admin-muted); min-width: 10px; }
+.dv-ranked-tool { flex: 1; min-width: 0; }
+.dv-tool-identity { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.dv-tool-name { font-family: var(--admin-mono); font-size: 13px; overflow-wrap: anywhere; }
+.dv-tool-connector { color: var(--admin-muted); font-size: 12px; }
+.dv-rank-track { height: 4px; background: var(--admin-soft); border-radius: 2px; }
+.dv-rank-track > div { width: var(--width); height: 100%; background: var(--chart-success, #278367); border-radius: inherit; }
+.dv-tool-count { font-size: 13px; text-align: right; font-variant-numeric: tabular-nums; }

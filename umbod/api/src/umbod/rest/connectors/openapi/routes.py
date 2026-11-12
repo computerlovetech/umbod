@@ -17,6 +17,7 @@ from umbod.core.invocation import (
 from umbod.core.invocation.tools.configuration import AlwaysPublishActivationEvents
 from umbod.core.invocation.tools.configuration_mutation import ConnectorToolConfigurationMutationPort
 from umbod.core.activation import (
+    ActivationListFilter,
     ActivationPort,
 )
 from umbod.core.connectors.openapi.errors import (
@@ -53,7 +54,7 @@ from umbod.rest.connectors.schemas import (
     ConnectorToolInvocationPolicyConflictResponse,
     OverriddenInitialCapabilityDescriptionOverride,
 )
-from umbod.rest.connectors.tool_activation import list_tool_activations, put_tool_activations
+from umbod.rest.connectors.tool_activation import ListedActivationNames, default_unknown_tool_error, list_tool_activations, put_tool_activations
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.connectors.openapi.dependencies import (
@@ -107,7 +108,7 @@ ToolConfigurationMutation = Annotated[
     ConnectorToolConfigurationMutationPort,
     Depends(get_connector_tool_configuration_mutation_port),
 ]
-ConnectorEventStream = Annotated[EventStream | None, Depends(get_connector_event_stream)]
+ConnectorEventStream = Annotated[EventStream, Depends(get_connector_event_stream)]
 
 
 async def get_capability_description_override_store(
@@ -472,8 +473,8 @@ async def get_tool_activations(
         connector_id=connector_id,
         activation_port=activation,
         policy_store=policy_store,
-        operation_names=None,
-        activation_filter=None,
+        operation_names=ListedActivationNames(),
+        activation_filter=ActivationListFilter(),
     )
 
 
@@ -499,7 +500,7 @@ async def set_tool_activations(
         mutation_port=mutation_port,
         event_stream=event_stream,
         activation_event_policy=AlwaysPublishActivationEvents(),
-        unknown_tool_error=None,
+        unknown_tool_error=default_unknown_tool_error,
     )
 
 

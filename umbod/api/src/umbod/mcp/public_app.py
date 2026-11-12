@@ -5,6 +5,8 @@ import secrets
 import time
 
 from umbod.config.identity_policy import filesystem_managed_issuer
+from umbod.core.diagnostics import PublishingSignalFailureHandler
+from umbod.mcp.middleware.capability_completion import McpCapabilityCompletionMiddleware
 
 from umbod.core.connectors.downstream_mcp.adapters.composition import create_downstream_mcp_discovery, create_downstream_mcp_probe
 from umbod.mcp.connectors.downstream_mcp.ports import DownstreamClientFactory
@@ -115,6 +117,7 @@ from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
 from umbod.config import AppConfig, InMemoryConnectorStoreConfig, SQLiteConnectorStoreConfig, load_server_app_config
 from umbod.logging import flush_logging
 from umbod.mcp.settings import MCPAppSettings
+from umbod.mcp.usage import McpUsageRuntime, create_mcp_usage_runtime
 from umbod.mcp.messaging import McpMessagingAdapterFactory, RuntimeProjectionHealth, RuntimeProjectionSynchronizer
 _CORS_HEADERS = {'Access-Control-Allow-Origin': '*'}
 _MCP_HTTP_PATH = '/mcp'
@@ -139,8 +142,9 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
     metrics_recorder = telemetry.metrics_recorder
     invocation_log_sink = telemetry.invocation_log_sink
     signals = create_mcp_signals(invocation_log_sink, metrics_recorder, audit_recorder, telemetry.application_failures)
+    usage_runtime = create_mcp_usage_runtime(settings, persistence_runtime.database, signals, telemetry.application_failures)
     publisher = McpInvocationPublisher(signals)
-    middleware: list[Middleware] = [McpResponseMetadataMiddleware(), McpProtocolMetricsMiddleware(metrics_recorder, clock=time.monotonic), McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
+    middleware: list[Middleware] = [McpCapabilityCompletionMiddleware(signals.capability_completed, McpAuditIdentityAdapter(), PublishingSignalFailureHandler(telemetry.application_failures), time.monotonic, time.time_ns), McpResponseMetadataMiddleware(), McpProtocolMetricsMiddleware(metrics_recorder, clock=time.monotonic), McpAuditMiddleware(recorder=audit_recorder, identity_source=McpAuditIdentityAdapter(), exposure_mode=settings.mcp.connector_tool_exposure_mode)]
     if group_permission_runtime_state is not None:
         auth_check = personal_tool_permission_check(connector_tool_permission_check(group_permission_runtime_state))
         if settings.mcp.auth_debug_enabled:
@@ -152,9 +156,11 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
         if settings.admin_authentication.environment == 'production':
             raise ValueError('Connector approval state key is required in production')
         approval_state_key = secrets.token_urlsafe(48)
-    mcp = FastMCP(name=settings.runtime.app_name, version=UMBOD_RELEASE, auth=auth_provider, middleware=middleware, request_state_security=RequestStateSecurity(keys=[approval_state_key], ttl=300.0, audience=f'{settings.runtime.app_name}:connector-approval'))
+    mcp = FastMCP(name=settings.runtime.app_name, version=UMBOD_RELEASE, auth=auth_provider, middleware=middleware, lifespan=usage_runtime.lifespan, request_state_security=RequestStateSecurity(keys=[approval_state_key], ttl=300.0, audience=f'{settings.runtime.app_name}:connector-approval'))
     invocation_policy_store = DatabaseConnectorInvocationPolicyStore(persistence_runtime.database)
     invocation_policy = McpConnectorInvocationApprovalPolicy(StoredConnectorInvocationPolicy(invocation_policy_store), nonce_store=DatabaseApprovalNonceStore(persistence_runtime.database), state_codec=ApprovalStateCodec(clock=time.time, random_token=random_approval_token, ttl_seconds=APPROVAL_TTL_SECONDS), caller_capture=CurrentInvocationApprovalCallerCapture())
+    mcp.usage_runtime = usage_runtime
+    mcp.usage_identity_issuer = settings.oidc.issuer_url
     mcp.connector_invocation_policy = invocation_policy
     mcp.invocation_signals = signals
     mcp.execution_pipelines = SignalToolExecutionPipelineFactory(signals, invocation_policy)
@@ -482,8 +488,12 @@ def _create_public_http_lifespan(context: PublicAppRuntimeContext, *, owns_persi
                         await synchronizer_task
                     flush_logging()
         finally:
-            if owns_persistence:
-                await context.persistence_runtime.shutdown()
+            usage_runtime: McpUsageRuntime = context.mcp.usage_runtime
+            try:
+                await usage_runtime.stop()
+            finally:
+                if owns_persistence:
+                    await context.persistence_runtime.shutdown()
     return lifespan
 
 def _create_runtime_projection_synchronizer(context: PublicAppRuntimeContext) -> RuntimeProjectionSynchronizer:

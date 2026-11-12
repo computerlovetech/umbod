@@ -5,6 +5,7 @@ from io import StringIO
 import pytest
 from pydantic import SecretStr
 
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoInvocationFailureDiagnostic
 from umbod.core.invocation.failure_evidence import (
     InvocationExceptionEvidence,
     InvocationFailureOrigin,
@@ -114,6 +115,31 @@ def test_exception_group_exports_safe_nested_types(
     assert "OSError" in stacktrace
     assert "ValueError" in stacktrace
     assert "sentinel" not in json.dumps(record)
+
+
+@pytest.mark.parametrize(
+    ("diagnostic", "expected_attributes"),
+    [
+        (NoInvocationFailureDiagnostic(), {}),
+        (InvocationFailureDiagnostic(execution_mode="personal", stage="runtime", reason="runtime_failure"), {
+            "mcp.failure.stage": "runtime",
+            "mcp.failure.reason": "runtime_failure",
+            "mcp.execution_mode": "personal",
+            "mcp.downstream.response_received": False,
+        }),
+    ],
+)
+def test_diagnostic_state_preserves_field_omission_and_severity(
+    failed_invocation: McpToolInvocationFailed,
+    diagnostic: InvocationFailureDiagnostic | NoInvocationFailureDiagnostic,
+    expected_attributes: dict[str, object],
+) -> None:
+    record = _export(replace(failed_invocation, diagnostic=diagnostic))
+    attributes = record["attributes"]
+    diagnostic_keys = {"mcp.failure.stage", "mcp.failure.reason", "mcp.execution_mode", "mcp.downstream.response_received"}
+    assert {key: attributes[key] for key in diagnostic_keys if key in attributes} == expected_attributes
+    assert record["severity_text"] == "ERROR"
+    assert "mcp.downstream.http.status_code" not in attributes
 
 
 def test_exception_snapshot_does_not_retain_live_exception() -> None:

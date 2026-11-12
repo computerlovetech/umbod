@@ -29,6 +29,7 @@ from umbod.rest.authentication.middleware import SuppliedJwtVerifierFactory
 from umbod.rest.authentication.rest_middleware import RestAuthenticationMiddleware
 from umbod.rest.admin_overview import router as admin_overview_router
 from umbod.rest.user_catalogue import router as user_catalogue_router
+from umbod.rest.personal_usage import router as personal_usage_router
 from umbod.rest.filesystem import router as filesystem_router
 from umbod.rest.filesystem.upload_transfers import router as filesystem_transfer_router
 from umbod.rest.filesystem_administration import router as filesystem_administration_router
@@ -219,6 +220,7 @@ def _mount_personal_connections_app(
     user_router = APIRouter()
     user_router.include_router(create_user_profile_router())
     user_router.include_router(user_catalogue_router)
+    user_router.include_router(personal_usage_router)
     user_router.include_router(identity_directory_personal_router)
     user_router.include_router(personal_access_tokens_router)
     user_router.include_router(telemetry_setup_router)

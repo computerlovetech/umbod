@@ -57,7 +57,9 @@ def capture_application_failure(
     if event is ApplicationFailureKind.SIGNAL_RECEIVER and isinstance(context, SignalFailureContext):
         known_receivers = {
             "mcp.invocation.logging", "mcp.invocation.metrics",
-            "mcp.invocation.audit", "mcp.inventory.metrics", "application.failure.logging",
+            "mcp.invocation.audit", "mcp.inventory.metrics", "mcp.capability.logging",
+            "mcp.invocation.usage", "mcp.capability.usage",
+            "application.failure.logging",
         }
         if context.receiver_name in known_receivers:
             attributes["receiver.name"] = context.receiver_name

@@ -27,6 +27,7 @@ description: "FastAPI delivery for administration, authenticated users, system e
 - [telemetry/](./telemetry/README.md) — OTLP receiver.
 - [telemetry_setup/](./telemetry_setup/README.md) — Authenticated discovery of the instance-configured public logs endpoint.
 - [telemetry_analytics/](./telemetry_analytics/README.md) — Administrator-only aggregate log counts.
+- [personal_usage/](./personal_usage/README.md) — Authenticated owner-only daily MCP usage summaries from application persistence.
 - [personal_access_tokens/](./personal_access_tokens/README.md) — General token issuance with explicit resource permissions and owner-scoped lifecycle management.
 - [user_catalogue/](./user_catalogue/README.md) — Cross-kind user catalogue.
 - [users/](./users/) — Unified authenticated profile, UI capabilities and profile enrichment.

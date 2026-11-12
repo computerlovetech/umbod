@@ -63,8 +63,9 @@ class SQLiteConnectionDriver:
 
     async def reset(self, connection: aiosqlite.Connection) -> None:
         await connection.rollback()
-        cursor = await connection.execute("PRAGMA query_only=OFF")
-        await cursor.close()
+        for statement in ("PRAGMA query_only=OFF", "PRAGMA busy_timeout=5000"):
+            cursor = await connection.execute(statement)
+            await cursor.close()
         connection.row_factory = aiosqlite.Row
 
     async def close(self, connection: aiosqlite.Connection) -> None:

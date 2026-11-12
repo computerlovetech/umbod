@@ -13,6 +13,7 @@ from umbod.core.persistence.query import (
     GreaterThan,
     InsertCommand,
     KeyT,
+    LessThan,
     NoFilter,
     NonReusingIntegerKeyCodec,
     Not,
@@ -173,9 +174,9 @@ class SQLiteCompiler:
     def _predicate(self, predicate: Predicate[RowT]) -> tuple[str, tuple[object, ...]]:
         if isinstance(predicate, NoFilter):
             return "1", ()
-        if isinstance(predicate, (Equals, GreaterThan)):
+        if isinstance(predicate, (Equals, GreaterThan, LessThan)):
             value = predicate.field.codec.encode(predicate.value)
-            operator = "=" if isinstance(predicate, Equals) else ">"
+            operator = {Equals: "=", GreaterThan: ">", LessThan: "<"}[type(predicate)]
             return f"({self._quote(predicate.field.name)} {operator} ?)", (
                 self._mapper.bind(predicate.field.codec.column_type, value),
             )

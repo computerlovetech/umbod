@@ -13,6 +13,7 @@ description: "Actor-independent presentation and interaction mechanics."
 - [ModalShell.svelte](./ModalShell.svelte) — Native modal with a shared heading, close control, guarded dismissal, and initial focus.
 - [Modal DOM tests](./modal-shell.dom.test.ts) — Accessible close control, native cancellation guards, backdrop hit testing, and initial focus.
 - [Modal test harness](./modal-shell.test-support.svelte) — Mounted modal form for dismissal and reactive guard checks.
+- [Dashboard presentation](./dashboard/README.md) — Responsive container, rows, columns and visual panel surfaces without data-loading dependencies.
 - [dialogs](./dialogs/README.md) — Native dialog lifecycle and focus mechanics.
 - [tools](./tools/README.md) — Neutral tool cards and schema presenters.
 - [Workspace](./workspace/README.md) — Application shell and neutral subpage containers and navigation.

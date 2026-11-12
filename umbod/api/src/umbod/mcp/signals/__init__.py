@@ -1,3 +1,4 @@
+from umbod.mcp.signals.capabilities import McpCapabilityCompleted, McpCapabilityMethod, McpCapabilityOutcome
 from umbod.mcp.signals.channels import McpSignals
 from umbod.mcp.signals.context import McpInvocationContext, current_mcp_invocation_context, reset_mcp_invocation_context, set_mcp_invocation_context
 from umbod.mcp.signals.events import (
@@ -19,6 +20,7 @@ from typing import Any
 
 __all__ = [
     "McpSignals", "McpInvocationPublisher", "McpInvocationContext",
+    "McpCapabilityCompleted", "McpCapabilityMethod", "McpCapabilityOutcome",
     "McpToolExecutionPipelineFactory", "SignalToolExecutionPipelineFactory", "ConnectorInvocationSignalInterceptor",
     "current_mcp_invocation_context", "reset_mcp_invocation_context", "set_mcp_invocation_context",
     "McpInteractionType", "McpInvocationActor", "McpInvocationCorrelation",

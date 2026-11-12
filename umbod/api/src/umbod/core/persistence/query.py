@@ -243,6 +243,12 @@ class GreaterThan(Generic[RowT, ValueT]):
 
 
 @dataclass(frozen=True)
+class LessThan(Generic[RowT, ValueT]):
+    field: Field[RowT, ValueT]
+    value: ValueT
+
+
+@dataclass(frozen=True)
 class Not(Generic[RowT]):
     predicate: "Predicate[RowT]"
 
@@ -262,6 +268,7 @@ Predicate: TypeAlias = (
     | Equals[RowT, object]
     | OneOf[RowT, object]
     | GreaterThan[RowT, object]
+    | LessThan[RowT, object]
     | Not[RowT]
     | AllOf[RowT]
     | AnyOf[RowT]
@@ -397,7 +404,7 @@ def _decode_result(
 def _predicate_fields(predicate: Predicate[RowT]) -> tuple[Field[RowT, object], ...]:
     if isinstance(predicate, NoFilter):
         return ()
-    if isinstance(predicate, (Equals, OneOf, GreaterThan)):
+    if isinstance(predicate, (Equals, OneOf, GreaterThan, LessThan)):
         return (cast(Field[RowT, object], predicate.field),)
     if isinstance(predicate, Not):
         return _predicate_fields(predicate.predicate)
@@ -418,7 +425,7 @@ def _validate_comparable_fields(
 
 
 def _validate_predicate_values(predicate: Predicate[RowT]) -> None:
-    if isinstance(predicate, (Equals, GreaterThan)):
+    if isinstance(predicate, (Equals, GreaterThan, LessThan)):
         predicate.field.codec.encode(predicate.value)
     elif isinstance(predicate, OneOf):
         for value in predicate.values:

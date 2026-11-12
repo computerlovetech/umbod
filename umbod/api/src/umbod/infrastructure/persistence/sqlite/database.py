@@ -1,3 +1,5 @@
+import sqlite3
+
 import aiosqlite
 
 from collections.abc import AsyncIterator, Sequence
@@ -6,7 +8,7 @@ from typing import cast
 
 from pydantic import BaseModel
 
-from umbod.core.persistence.ports import DatabaseSession, ReadSession, TransactionMode
+from umbod.core.persistence.ports import DatabaseSession, PersistenceBusyError, ReadSession, TransactionMode
 from umbod.core.persistence.query import (
     AllFields,
     DeleteQuery,
@@ -24,7 +26,7 @@ from umbod.core.persistence.query import (
 )
 from umbod.infrastructure.persistence.sqlite.compiler import SQLiteCompiler
 from umbod.infrastructure.connections import ConnectionProvider
-from umbod.infrastructure.connections.lifecycle import complete_cleanup
+from umbod.infrastructure.persistence.sqlite.cancellation import interruptible_transaction
 from umbod.infrastructure.persistence.sqlite.schema_validation import (
     validate_non_reusing_key_schema,
 )
@@ -124,7 +126,7 @@ class SQLiteDatabase:
     async def ensure_schema(self, tables: Sequence[Table[BaseModel, BaseModel]]) -> None:
         compiler = SQLiteCompiler(SQLiteValueMapper())
         async with self._connections.get_connection() as connection:
-            try:
+            async with interruptible_transaction(connection):
                 cursor = await connection.execute("PRAGMA journal_mode=WAL")
                 await cursor.close()
                 cursor = await connection.execute("BEGIN IMMEDIATE")
@@ -135,42 +137,41 @@ class SQLiteDatabase:
                     await cursor.close()
                     await validate_non_reusing_key_schema(connection, table)
                 await connection.commit()
-            except BaseException:
-                await complete_cleanup(connection.rollback())
-                raise
 
     @asynccontextmanager
     async def schema_connection(self) -> AsyncIterator[aiosqlite.Connection]:
         async with self._connections.get_connection() as connection:
-            try:
+            async with interruptible_transaction(connection):
                 cursor = await connection.execute("BEGIN IMMEDIATE")
                 await cursor.close()
                 yield connection
                 await connection.commit()
-            except BaseException:
-                await complete_cleanup(connection.rollback())
-                raise
 
     @asynccontextmanager
     async def read_session(self) -> AsyncIterator[ReadSession]:
         async with self._connections.get_connection() as connection:
-            try:
+            async with interruptible_transaction(connection):
                 for statement in ("PRAGMA query_only=ON", "BEGIN"):
                     cursor = await connection.execute(statement)
                     await cursor.close()
                 yield _SQLiteReadSession(connection)
-            finally:
-                await complete_cleanup(connection.rollback())
 
     @asynccontextmanager
     async def session(self, *, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:
         async with self._connections.get_connection() as connection:
-            try:
-                statement = "BEGIN IMMEDIATE" if mode is TransactionMode.SERIALIZED_WRITE else "BEGIN"
-                cursor = await connection.execute(statement)
+            async with interruptible_transaction(connection):
+                if mode is TransactionMode.TRY_SERIALIZED_WRITE:
+                    cursor = await connection.execute("PRAGMA busy_timeout=0")
+                    await cursor.close()
+                statement = "BEGIN" if mode is TransactionMode.READ_WRITE else "BEGIN IMMEDIATE"
+                try:
+                    cursor = await connection.execute(statement)
+                except aiosqlite.OperationalError as error:
+                    if mode is TransactionMode.TRY_SERIALIZED_WRITE and error.sqlite_errorcode in (
+                        sqlite3.SQLITE_BUSY, sqlite3.SQLITE_LOCKED,
+                    ):
+                        raise PersistenceBusyError("Persistence write lock is unavailable") from error
+                    raise
                 await cursor.close()
                 yield _SQLiteDatabaseSession(connection)
                 await connection.commit()
-            except BaseException:
-                await complete_cleanup(connection.rollback())
-                raise

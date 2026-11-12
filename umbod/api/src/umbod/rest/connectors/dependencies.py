@@ -9,6 +9,7 @@ from umbod.core.invocation import (
     ConnectorInvocationPolicyStore,
     DatabaseConnectorInvocationPolicyStore,
 )
+from umbod.core.invocation.tools.configuration import NoConnectorToolConfigurationEventStream
 from umbod.core.invocation.tools.configuration_mutation import (
     ConnectorToolConfigurationMutationPort,
 )
@@ -64,9 +65,10 @@ async def get_connector_event_stream(
     dependency_factories: Annotated[
         ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)
     ],
-) -> EventStream | None:
+) -> EventStream:
     await dependency_factories.persistence_runtime.readiness.ensure_ready()
-    return dependency_factories.event_stream.create()
+    event_stream = dependency_factories.event_stream.create()
+    return event_stream if event_stream is not None else NoConnectorToolConfigurationEventStream()
 
 
 async def get_connector_capability_description_override_store(

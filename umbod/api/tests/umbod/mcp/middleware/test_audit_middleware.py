@@ -26,6 +26,7 @@ from umbod.mcp.logging import (
 )
 from tests.support.signals import InMemorySignalFailureHandler
 from umbod.mcp.listeners.invocation_audit import InvocationAuditReceiver
+from umbod.core.invocation.diagnostics import NoInvocationFailureDiagnostic
 from umbod.mcp.signals import (
     McpInvocationPublisher,
     McpSignals,
@@ -334,7 +335,7 @@ async def test_gateway_audit_preserves_nested_failure_classification_without_lea
 
     async def nested_failure(context: MiddlewareContext[object]) -> ToolResult:
         lifecycle = publisher.start(McpToolIdentity("nested_tool", "connector", "operation"))
-        publisher.failed(lifecycle, category, None, None)
+        publisher.failed(lifecycle, category, NoInvocationFailureDiagnostic(), None)
         return result
 
     middleware = _middleware(sink)

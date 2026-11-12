@@ -14,7 +14,7 @@ import { InMemoryPersonalConnectionsApi } from '$lib/personal-connections/infras
 import CatalogueCapabilities from './CatalogueCapabilities.svelte';
 import ConnectorDetail from './ConnectorDetail.svelte';
 import ConnectorWorkspace from './ConnectorWorkspace.svelte';
-import Dashboard from './Dashboard.svelte';
+import ConnectorsPage from './ConnectorsPage.svelte';
 
 vi.mock('$lib/components/feedback', () => ({
   useToast: (): ToastApi => ({
@@ -33,10 +33,10 @@ async function loadedController(): Promise<DashboardController> {
   return state;
 }
 
-describe('dashboard presentation', () => {
+describe('connector catalogue presentation', () => {
   test('hides privileged navigation until the independent current-user read completes', (): void => {
     const currentUser = vi.fn();
-    const body = render(Dashboard, { props: {
+    const body = render(ConnectorsPage, { props: {
       createWorkspaceApi: () => ({ profile: { get: currentUser } }),
       createApi: (): DashboardApi => new InMemoryDashboardApi(catalogue),
       createPersonalApi: (): PersonalConnectionsApi => new InMemoryPersonalConnectionsApi([])
@@ -52,18 +52,21 @@ describe('dashboard presentation', () => {
     }
   });
 
-  test('initial render keeps the whole main view loading without partial dashboard content', (): void => {
+  test('initial render scopes loading to connectors without usage controls', (): void => {
     const api: DashboardApi = new InMemoryDashboardApi(catalogue);
     const personal: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([]);
     const list = vi.spyOn(api.catalogue, 'list');
     const personalList = vi.spyOn(personal.connections, 'list');
-    const body = render(Dashboard, { props: {
+    const body = render(ConnectorsPage, { props: {
       createApi: (): DashboardApi => api,
       createPersonalApi: (): PersonalConnectionsApi => personal
     } }).body;
-    expect(body).not.toContain('Dashboard</h1>');
-    expect(body).toContain('content-loading active');
-    expect(body).toContain('inert');
+    expect(body).toContain('Connectors</h1>');
+    expect(body).not.toContain('Your usage');
+    expect(body).not.toContain('Refresh usage');
+    expect(body).toContain('Connectors');
+    expect(body).not.toContain('content-loading active');
+    expect(body).not.toContain('inert');
     expect(body).toContain('aria-busy="true"');
     expect(body).not.toContain('Loading connectors');
     expect(body).not.toContain('MCP setup');
@@ -71,7 +74,7 @@ describe('dashboard presentation', () => {
     expect(body).not.toContain('/admin');
     expect(body).not.toContain('Connections');
     expect(body).not.toContain('Manage group permissions');
-    expect((body.match(/<h1/g) ?? []).length).toBe(0);
+    expect((body.match(/<h1/g) ?? []).length).toBe(1);
     expect(list).not.toHaveBeenCalled();
     expect(personalList).not.toHaveBeenCalled();
   });

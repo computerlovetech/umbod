@@ -22,6 +22,11 @@ ResultT = TypeVar("ResultT", bound=BaseModel)
 class TransactionMode(str, Enum):
     READ_WRITE = "read_write"
     SERIALIZED_WRITE = "serialized_write"
+    TRY_SERIALIZED_WRITE = "try_serialized_write"
+
+
+class PersistenceBusyError(RuntimeError):
+    pass
 
 
 class ReadSession(Protocol):

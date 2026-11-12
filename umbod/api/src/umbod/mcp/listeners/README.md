@@ -6,6 +6,7 @@ description: "Application-scoped adapters from neutral MCP signals to logging, m
 
 # Files
 
+- [capability_logging.py](./capability_logging.py) — Resource and prompt completion formatting and structured logging receiver.
 - [__init__.py](./__init__.py) — Package exports.
 - [invocation_audit.py](./invocation_audit.py) — Completion audit adapter.
 - [invocation_logging.py](./invocation_logging.py) — Completion logging adapter.

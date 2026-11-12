@@ -6,6 +6,7 @@ import pytest
 from tests.support.application_failures import CapturingApplicationFailures
 from tests.support.signals import InMemorySignalFailureHandler
 from umbod.core.diagnostics import PublishingSignalFailureHandler
+from umbod.core.invocation.diagnostics import NoInvocationFailureDiagnostic
 from umbod.core.invocation.failure_evidence import InvocationFailureOrigin, InvocationReturnedFailure
 from umbod.mcp.signals import McpInvocationPublisher, McpSignals, McpToolIdentity, McpToolInvocationCompleted, McpToolInvocationFailureCategory
 from umbod.mcp.signals.lifecycle import McpToolInvocationLifecycle, UnavailableToolInvocationLifecycle
@@ -26,7 +27,7 @@ def test_unavailable_completion_publishes_no_invocation() -> None:
     lifecycle = UnavailableToolInvocationLifecycle()
 
     publisher.succeeded(lifecycle)
-    publisher.failed(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, None, InvocationReturnedFailure(InvocationFailureOrigin.INTERNAL))
+    publisher.failed(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, NoInvocationFailureDiagnostic(), InvocationReturnedFailure(InvocationFailureOrigin.INTERNAL))
     publisher.succeeded(lifecycle)
 
     assert events == []
@@ -57,9 +58,9 @@ def test_active_lifecycle_suppresses_duplicate_mixed_completions(first_completio
     if first_completion == "success":
         publisher.succeeded(lifecycle)
     else:
-        publisher.failed(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, None, evidence)
+        publisher.failed(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, NoInvocationFailureDiagnostic(), evidence)
     publisher.succeeded(lifecycle)
-    publisher.failed(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, None, evidence)
+    publisher.failed(lifecycle, McpToolInvocationFailureCategory.UNEXPECTED_ERROR, NoInvocationFailureDiagnostic(), evidence)
 
     assert len(events) == 1
     assert events[0].outcome.value == first_completion

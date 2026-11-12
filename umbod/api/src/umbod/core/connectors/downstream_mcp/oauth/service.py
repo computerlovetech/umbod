@@ -16,6 +16,8 @@ from .ports import (
     OAuthConnection,
     OAuthDiscovery,
     OAuthHost,
+    RetainOAuthScopes,
+    ReplaceOAuthScopes,
 )
 from .provider import CLIENT_METADATA_URL, OAuthFailure
 
@@ -45,16 +47,14 @@ class OAuthService:
             raise ValueError("Personal OAuth cannot use shared authorization operations")
         return connection
 
-    async def begin(self, key: str, client_id: str, scopes: str | None) -> dict:
+    async def begin(self, key: str, client_id: str, scopes: RetainOAuthScopes | ReplaceOAuthScopes) -> dict:
         server = self._shared_connection(key)
         if urlsplit(server.endpoint_url).scheme != "https":
             raise ValueError("Browser sign-in requires an HTTPS connector")
         if key in self.tasks and not self.tasks[key].done():
             raise ValueError("Browser sign-in is already in progress")
-        if scopes is not None:
-            if not isinstance(scopes, str):
-                raise ValueError("OAuth scopes must be a space-separated string")
-            self.host.set_scopes(key, " ".join(scopes.split()))
+        if isinstance(scopes, ReplaceOAuthScopes):
+            self.host.set_scopes(key, " ".join(scopes.scopes.split()))
             server = self._shared_connection(key)
         # Registration binds the client to this URI. State remains fresh per attempt;
         # the path must survive retries and application restarts.

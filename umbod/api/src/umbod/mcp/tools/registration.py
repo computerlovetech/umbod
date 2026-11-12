@@ -21,7 +21,7 @@ from referencing.exceptions import Unresolvable
 from umbod.build_identity import UMBOD_RELEASE, UMBOD_REVISION
 from umbod.core.responses import ToolResponseMetadataFactory
 from umbod.mcp.responses.ports import ToolResponseAdapter
-from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoInvocationFailureDiagnostic
 
 from umbod.core.invocation.failure_evidence import (
     InvocationExceptionEvidence,
@@ -159,7 +159,7 @@ class ObservedFunctionTool(Tool):
         evidence: InvocationFailureEvidence,
     ) -> None:
         try:
-            self._publisher.failed(lifecycle, category, None, evidence)
+            self._publisher.failed(lifecycle, category, NoInvocationFailureDiagnostic(), evidence)
         except Exception as error:
             self._publisher.report_failure("invocation.failure", error)
 

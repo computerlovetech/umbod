@@ -17,6 +17,7 @@ description: "Operator settings, validation and conversion into runtime applicat
 - [personal_connection_policy.py](./personal_connection_policy.py) — Personal identity and OAuth policy resolution.
 - [secret_derivation.py](./secret_derivation.py) — Secret derivation.
 - [server_settings.py](./server_settings.py) — Server root-secret preflight.
+- [usage.py](./usage.py) — Bounded personal usage collection settings and queue/batch validation.
 - [validate.py](./validate.py) — Cross-field validation.
 - [telemetry.py](./telemetry.py) — Collector-only settings and security validation independent of REST and MCP configuration.
 

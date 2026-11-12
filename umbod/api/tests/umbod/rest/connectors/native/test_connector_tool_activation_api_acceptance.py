@@ -184,6 +184,7 @@ def test_admin_bulk_update_unknown_tool_writes_nothing(client: TestClient) -> No
     )
 
     assert response.status_code == 404
+    assert response.json() == {"detail": "Connector tool was not found"}
     tools_response = client.get("/api/admin/connectors/catalog/test/tools")
     assert _tool_by_operation_name(tools_response.json(), "echo")["activation_status"] == "disabled"
 

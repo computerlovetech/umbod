@@ -11,6 +11,8 @@ from umbod.core.activation import ActivationStore, ActivationStatus, CapabilityR
 from umbod.core.persistence import Database
 from umbod.core.connectors.downstream_mcp.stores import CONNECTOR_CREDENTIAL_TABLE, CONNECTOR_DEFINITION_TABLE, ConnectorDefinitionStoreService, EncryptedCredentialStoreService, TOOL_CATALOG_TABLE, ToolCatalogStoreService
 from tests.persistence_runtime import create_inmemory_runtime
+from tests.mcp_fixtures import build_test_mcp
+from umbod.mcp.signals.capabilities import McpCapabilityCompleted
 import asyncio
 import json
 from dataclasses import dataclass
@@ -306,19 +308,33 @@ async def test_fastmcp_exposes_only_namespaced_tools_and_preserves_result() -> N
     assert result.meta['io.modelcontextprotocol/serverInfo']['name'] == 'downstream'
 
 @pytest.mark.asyncio
-async def test_fastmcp_forwards_prompt_arguments_and_resource_reads() -> None:
+async def test_fastmcp_forwards_prompt_arguments_and_resource_reads(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level('INFO', logger='umbod.structured')
     (provider, factory, _, _, _) = await _provider({'weather': _downstream()})
-    public = FastMCP('public', providers=[provider])
+    public = await build_test_mcp(connector_registrations=[])
+    public.add_provider(provider)
+    completions: list[McpCapabilityCompleted] = []
+    public.invocation_signals.capability_completed.connect('test.capture', completions.append)
     async with Client(public) as client:
         templates = await client.list_resource_templates()
         prompt = await client.get_prompt('weather_weather_prompt', {'city': 'Copenhagen'})
         fixed = await client.read_resource('data://weather/weather')
         templated = await client.read_resource('data://weather/Copenhagen')
-    assert [template.uri_template for template in templates] == ['data://weather/{city}']
+    assert 'data://weather/{city}' in [template.uri_template for template in templates]
     assert prompt.messages[0].content.text == 'Copenhagen'
     assert fixed[0].text == 'weather'
     assert templated[0].text == 'Copenhagen'
     assert factory.created == ['weather', 'weather', 'weather']
+    assert [event.method for event in completions] == [
+        'resources/templates/list', 'prompts/get', 'resources/read', 'resources/read',
+    ]
+    assert [event.outcome for event in completions] == ['success'] * 4
+    records = [record for record in caplog.records if record.getMessage() == 'mcp capability operation completed']
+    assert len(records) == 4
+    serialized_attributes = json.dumps([record.structured_attributes for record in records])
+    assert 'Copenhagen' not in serialized_attributes
+    assert 'data://weather/' not in serialized_attributes
+    assert 'weather_weather_prompt' not in serialized_attributes
 
 @pytest.mark.asyncio
 async def test_prompt_and_resources_require_publication_and_activation(monkeypatch: pytest.MonkeyPatch) -> None:

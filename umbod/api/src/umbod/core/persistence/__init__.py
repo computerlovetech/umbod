@@ -10,6 +10,7 @@ from umbod.core.persistence.ports import (
     DatabaseSchema,
     DatabaseSession,
     ReadSession,
+    PersistenceBusyError,
     TransactionMode,
 )
 from umbod.core.persistence.runtime import (
@@ -35,6 +36,7 @@ from umbod.core.persistence.query import (
     JsonTupleCodec,
     JsonValueCodec,
     KeyCodec,
+    LessThan,
     NoFilter,
     NonReusingIntegerKeyCodec,
     Not,
@@ -75,6 +77,7 @@ __all__ = [
     "JsonTupleCodec",
     "JsonValueCodec",
     "KeyCodec",
+    "LessThan",
     "ManyRead",
     "NoFilter",
     "NonReusingIntegerKeyCodec",
@@ -95,6 +98,7 @@ __all__ = [
     "ReadPlanOperations",
     "ReadResults",
     "ReadSession",
+    "PersistenceBusyError",
     "RowCodec",
     "Table",
     "TableIdentity",

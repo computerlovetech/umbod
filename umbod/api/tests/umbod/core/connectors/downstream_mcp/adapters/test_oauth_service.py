@@ -13,7 +13,7 @@ from tests.umbod.core.connectors.downstream_mcp.adapters.oauth_fakes import (
     MemoryDiscovery,
     ScriptedSessionFactory,
 )
-from umbod.core.connectors.downstream_mcp.oauth.ports import OAuthConnection
+from umbod.core.connectors.downstream_mcp.oauth.ports import OAuthConnection, RetainOAuthScopes, ReplaceOAuthScopes
 from umbod.core.connectors.downstream_mcp.oauth.provider import (
     InteractiveConnectorOAuth,
     OAuthFailure,
@@ -70,7 +70,7 @@ async def test_sign_in_distinguishes_authorization_from_discovery(failure: str) 
     sessions = ScriptedSessionFactory(failure)
     oauth = OAuthService(host, sessions, MemoryDiscovery())
     try:
-        result = await oauth.begin("fixture", "", scopes=" read  write ")
+        result = await oauth.begin("fixture", "", scopes=ReplaceOAuthScopes(" read  write "))
         assert result["status"] == "pending"
         assert host.scopes == "read write"
         rejected = await oauth.callback("fixture", {"state": "wrong", "code": "secret"})
@@ -103,13 +103,31 @@ async def test_sign_in_distinguishes_authorization_from_discovery(failure: str) 
         await oauth.close()
 
 
+@pytest.mark.parametrize(
+    ("scopes", "expected_scopes"),
+    [(RetainOAuthScopes(), "read"), (ReplaceOAuthScopes(""), ""), (ReplaceOAuthScopes("  write  read "), "write read")],
+)
+async def test_begin_applies_explicit_scope_update(
+    scopes: RetainOAuthScopes | ReplaceOAuthScopes, expected_scopes: str,
+) -> None:
+    host = MemoryHost()
+    sessions = ScriptedSessionFactory("")
+    oauth = OAuthService(host, sessions, MemoryDiscovery())
+    try:
+        await oauth.begin("fixture", "", scopes)
+        assert host.scopes == expected_scopes
+        assert sessions.options[0].requested_scopes == expected_scopes
+    finally:
+        await oauth.close()
+
+
 async def test_cancel_preserves_authorization_and_logout_clears_it() -> None:
     host = MemoryHost()
     await host.saved.set_tokens(OAuthToken(access_token="saved", token_type="Bearer"))
     sessions = ScriptedSessionFactory("")
     oauth = OAuthService(host, sessions, MemoryDiscovery())
     try:
-        await oauth.begin("fixture", "", None)
+        await oauth.begin("fixture", "", RetainOAuthScopes())
         await oauth.cancel("fixture")
         assert host.saved.document.tokens.access_token == "saved"
         assert sessions.sessions[0].disposed
@@ -172,7 +190,7 @@ async def test_discovery_and_hosted_metadata_arguments() -> None:
         preview = await oauth.discover("fixture")
         assert preview["registration"] == "hosted_metadata"
         assert discovery.endpoints == ["https://tools.example/mcp"]
-        await oauth.begin("fixture", "", None)
+        await oauth.begin("fixture", "", RetainOAuthScopes())
         options = sessions.options[0]
         assert str(options.endpoint) == "https://tools.example/mcp"
         assert options.metadata_mode == "hosted_metadata"

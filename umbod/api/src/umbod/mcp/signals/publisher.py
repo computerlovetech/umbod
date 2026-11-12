@@ -1,7 +1,7 @@
 from dataclasses import replace
 from weakref import WeakSet
 
-from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoInvocationFailureDiagnostic
 from umbod.core.invocation.failure_evidence import InvocationFailureEvidence
 from umbod.mcp.signals.channels import McpSignals
 from umbod.mcp.signals.events import McpToolIdentity, McpToolInvocationFailureCategory, ToolInventoryObserved
@@ -37,7 +37,7 @@ class McpInvocationPublisher:
             return
         self._signals.invocation_completed.send(completed)
 
-    def failed(self, lifecycle: McpToolInvocationLifecycle | UnavailableToolInvocationLifecycle, category: McpToolInvocationFailureCategory, diagnostic: InvocationFailureDiagnostic | None, evidence: InvocationFailureEvidence) -> None:
+    def failed(self, lifecycle: McpToolInvocationLifecycle | UnavailableToolInvocationLifecycle, category: McpToolInvocationFailureCategory, diagnostic: InvocationFailureDiagnostic | NoInvocationFailureDiagnostic, evidence: InvocationFailureEvidence) -> None:
         if isinstance(lifecycle, UnavailableToolInvocationLifecycle) or lifecycle in self._completed:
             return
         self._completed.add(lifecycle)

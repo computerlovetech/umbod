@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from umbod.core.connectors.downstream_mcp.oauth.service import OAuthService
+from umbod.core.connectors.downstream_mcp.oauth.ports import RetainOAuthScopes, ReplaceOAuthScopes
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
 from umbod.core.connectors.downstream_mcp.stores import (
     ConnectorDefinitionFound,
@@ -101,7 +102,8 @@ async def discover(connector_id: str, service: ConnectorService) -> object:
 
 @router.post("/{connector_id}/begin")
 async def begin(connector_id: str, body: BeginRequest, service: ConnectorService) -> object:
-    return await execute(service, connector_id, "begin", **body.model_dump())
+    scopes = RetainOAuthScopes() if body.scopes is None else ReplaceOAuthScopes(body.scopes)
+    return await execute(service, connector_id, "begin", client_id=body.client_id, scopes=scopes)
 
 
 @router.post("/{connector_id}/cancel")

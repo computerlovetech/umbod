@@ -50,6 +50,22 @@ tags:
 - [WorkspaceShell](src/lib/components/shared/workspace/WorkspaceShell.svelte) — Contextual sidebar, optional section heading and return link, account and logout frame; parents own destinations and eligibility.
 - [AccountPicture](src/lib/components/header/AccountPicture.svelte) — Account image with accessible placeholder; use for consistent user identity imagery in headers and navigation.
 
+## Dashboard layout
+
+- [DashboardContainer](src/lib/components/shared/dashboard/DashboardContainer.svelte) — Named section with heading, caller-owned toolbar and footer; compose rows here without coupling layout to data loading.
+- [DashboardRow](src/lib/components/shared/dashboard/DashboardRow.svelte) — Twelve-track responsive row; use with DashboardColumn for aligned visual panels without fixed viewport heights.
+- [DashboardColumn](src/lib/components/shared/dashboard/DashboardColumn.svelte) — Explicit one-to-twelve span within DashboardRow; stacks below a 760px dashboard container width.
+- [DashboardPanel](src/lib/components/shared/dashboard/DashboardPanel.svelte) — Neutral panel with a level-three heading, metadata and optional actions; use within a labelled dashboard section.
+
+- [DashboardPeriodSwitch](src/lib/components/shared/dashboard/DashboardPeriodSwitch.svelte) — Controlled 7/30-day button group with pressed states; use for aligned dashboard period selection without a dropdown.
+
+## Dashboard visualizations
+
+- [OutcomeRing](src/lib/components/shared/dashboard/visualizations/OutcomeRing.svelte) — Tool-outcome ring and labelled counts from prepared projections; renders a neutral empty state, not an implied success rate.
+- [OperationMixChart](src/lib/components/shared/dashboard/visualizations/OperationMixChart.svelte) — Proportion bar with category labels, percentages and counts; caller supplies prepared operation totals and shares.
+- [DailyActivityChart](src/lib/components/shared/dashboard/visualizations/DailyActivityChart.svelte) — Stacked daily tool outcomes with accessible per-day values; caller supplies UTC labels and a positive axis maximum.
+- [ToolRankingList](src/lib/components/shared/dashboard/visualizations/ToolRankingList.svelte) — Ranked tool bars and counts with five static silhouettes when empty; caller owns sorting, filtering and limiting.
+
 ## Files presentation
 
 - [CsvPreview](src/lib/components/files/preview/CsvPreview.svelte) — Content-only comma-separated table; shows up to 200 rows and 50 columns without header guessing, with plain text fallback for malformed CSV.
@@ -97,6 +113,8 @@ tags:
 - [Global baseline](src/app.css) — Application typography, page reset, and focus ring; use as the baseline rather than recreating global styles per feature.
 
 ## Scope and composition
+
+- [Dashboard composition](src/lib/components/dashboard/README.md) — Separate feature-owned usage and connector pages; reuse indexed controls, not either page workflow.
 
 - [Getting started composition](src/lib/components/getting-started/README.md) — Feature-owned Codex plugin downloads, harness onboarding and personal-token workflows; reuse its neutral controls, not the complete page.
 

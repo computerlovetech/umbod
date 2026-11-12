@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+from umbod.core.usage.models import UnavailableUsageOwner, UsageOwnership
+
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoInvocationFailureDiagnostic
 from umbod.core.invocation.failure_evidence import InvocationFailureEvidence
 from enum import StrEnum
 from typing import Literal, Protocol
@@ -38,6 +40,7 @@ class McpInvocationActor:
     authenticated_user_id: str | None = None
     agent_client_id: str | None = None
     session_id: str | None = None
+    usage_owner: UsageOwnership = UnavailableUsageOwner(kind='unavailable')
 
 
 @dataclass(frozen=True)
@@ -78,7 +81,7 @@ class McpToolInvocationFailed:
     started: McpToolInvocationStarted
     duration_ms: float
     failure_category: McpToolInvocationFailureCategory
-    diagnostic: InvocationFailureDiagnostic | None = None
+    diagnostic: InvocationFailureDiagnostic | NoInvocationFailureDiagnostic = NoInvocationFailureDiagnostic()
     evidence: InvocationFailureEvidence | None = None
 
     @property

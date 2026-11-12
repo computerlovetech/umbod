@@ -1,5 +1,7 @@
 from umbod.core.diagnostics import ApplicationFailure, PublishingSignalFailureHandler
 from umbod.core.signals import SignalPublisher
+from umbod.logging import emit_structured_record
+from umbod.mcp.listeners.capability_logging import CapabilityLoggingReceiver
 from umbod.mcp.listeners.invocation_audit import InvocationAuditReceiver
 from umbod.mcp.listeners.invocation_logging import InvocationLoggingReceiver
 from umbod.mcp.listeners.invocation_metrics import InventoryMetricsReceiver, InvocationMetricsReceiver
@@ -16,6 +18,7 @@ def register_mcp_listeners(
     audit_recorder: McpAuditRecorder,
 ) -> None:
     names = (
+        (signals.capability_completed, "mcp.capability.logging"),
         (signals.invocation_completed, "mcp.invocation.logging"),
         (signals.invocation_completed, "mcp.invocation.metrics"),
         (signals.invocation_completed, "mcp.invocation.audit"),
@@ -24,6 +27,7 @@ def register_mcp_listeners(
     for signal, name in names:
         if signal.is_connected(name):
             raise ValueError(f"Signal receiver name already registered: {name}")
+    signals.capability_completed.connect("mcp.capability.logging", CapabilityLoggingReceiver(emit_structured_record))
     signals.invocation_completed.connect("mcp.invocation.logging", InvocationLoggingReceiver(log_sink))
     signals.invocation_completed.connect("mcp.invocation.metrics", InvocationMetricsReceiver(metrics_recorder))
     signals.invocation_completed.connect("mcp.invocation.audit", InvocationAuditReceiver(audit_recorder))

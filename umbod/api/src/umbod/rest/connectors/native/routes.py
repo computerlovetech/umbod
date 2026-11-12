@@ -70,7 +70,7 @@ from umbod.rest.connectors.native.schemas import (
     ConnectorToolActivationListResponse,
 )
 from umbod.rest.connectors.native.service import ConnectorPresentationService
-from umbod.rest.connectors.tool_activation import list_tool_activations, put_tool_activations
+from umbod.rest.connectors.tool_activation import ListedActivationNames, default_unknown_tool_error, list_tool_activations, put_tool_activations
 
 
 router = APIRouter(prefix="/connectors/catalog", tags=["connectors"])
@@ -392,7 +392,7 @@ async def list_connector_tools(
         connector_id=connector_id,
         activation_port=activation_port,
         policy_store=policy_store,
-        operation_names=None,
+        operation_names=ListedActivationNames(),
         activation_filter=ActivationListFilter(activation_status=activation_status),
     )
 
@@ -413,7 +413,7 @@ async def put_connector_tool_activations(
         Depends(get_connector_tool_configuration_mutation_port),
     ],
     event_stream: Annotated[
-        EventStream | None,
+        EventStream,
         Depends(get_connector_event_stream),
     ],
 ) -> ConnectorToolActivationListResponse | JSONResponse:
@@ -426,7 +426,7 @@ async def put_connector_tool_activations(
         mutation_port=mutation_port,
         event_stream=event_stream,
         activation_event_policy=AlwaysPublishActivationEvents(),
-        unknown_tool_error=None,
+        unknown_tool_error=default_unknown_tool_error,
     )
 
 

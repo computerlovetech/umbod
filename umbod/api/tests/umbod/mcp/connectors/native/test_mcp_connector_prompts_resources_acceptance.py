@@ -13,6 +13,7 @@ from tests.support.configuration import InMemoryConnectorCurrentConfigurationSto
 from umbod.core.connectors.native.runtime import ConnectorRuntime
 from umbod.proxies import Model
 from tests.mcp_fixtures import build_test_mcp
+from umbod.mcp.signals.capabilities import McpCapabilityCompleted
 
 class KnowledgeBaseConfiguration(Model):
     model_config = ConfigDict(extra='forbid')
@@ -69,15 +70,24 @@ async def test_published_configured_connector_prompt_is_listed_with_connector_pr
     assert 'summarize_article' not in prompt_names
 
 @pytest.mark.asyncio
-async def test_published_configured_connector_prompt_can_be_requested() -> None:
+async def test_published_configured_connector_prompt_can_be_requested(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level('INFO', logger='umbod.structured')
     runtime = _runtime(RuntimeOptions(prompt_mappings=[_prompt_mapping('knowledge_base', 'summarize_article')]))
     await _configure(runtime, 'knowledge_base')
     await _publish(runtime, 'knowledge_base')
     mcp = await build_test_mcp(connector_runtime=runtime)
     await _enable_prompt_and_resource_activations(mcp, runtime)
+    completions: list[McpCapabilityCompleted] = []
+    mcp.invocation_signals.capability_completed.connect('test.capture', completions.append)
     async with Client(mcp) as client:
         prompt = await client.get_prompt('knowledge_base_summarize_article', {'article_id': 'a-123'})
     assert prompt.messages[0].content.text == 'Summarize article a-123'
+    assert [event.method for event in completions] == ['prompts/get']
+    assert [event.outcome for event in completions] == ['success']
+    records = [record for record in caplog.records if record.getMessage() == 'mcp capability operation completed']
+    assert len(records) == 1
+    assert 'a-123' not in str(records[0].structured_attributes)
+    assert 'knowledge_base_summarize_article' not in str(records[0].structured_attributes)
 
 @pytest.mark.parametrize('mapping_factory_name', ['annotated', 'metadata'])
 @pytest.mark.asyncio
@@ -125,15 +135,24 @@ async def test_published_configured_connector_resource_template_exposes_metadata
     assert template.meta['connector'] == {'parameters': RESOURCE_PARAMETERS_SCHEMA}
 
 @pytest.mark.asyncio
-async def test_published_configured_connector_resource_can_be_read() -> None:
+async def test_published_configured_connector_resource_can_be_read(caplog: pytest.LogCaptureFixture) -> None:
+    caplog.set_level('INFO', logger='umbod.structured')
     runtime = _runtime(RuntimeOptions(resource_mappings=[_resource_mapping('knowledge_base', 'kb://articles/{article_id}')]))
     await _configure(runtime, 'knowledge_base')
     await _publish(runtime, 'knowledge_base')
     mcp = await build_test_mcp(connector_runtime=runtime)
     await _enable_prompt_and_resource_activations(mcp, runtime)
+    completions: list[McpCapabilityCompleted] = []
+    mcp.invocation_signals.capability_completed.connect('test.capture', completions.append)
     async with Client(mcp) as client:
         resources = await client.read_resource('kb://articles/a-123')
     assert resources[0].text == 'Article a-123'
+    assert [event.method for event in completions] == ['resources/read']
+    assert [event.outcome for event in completions] == ['success']
+    records = [record for record in caplog.records if record.getMessage() == 'mcp capability operation completed']
+    assert len(records) == 1
+    assert 'a-123' not in str(records[0].structured_attributes)
+    assert 'kb://articles/' not in str(records[0].structured_attributes)
 
 @pytest.mark.asyncio
 async def test_same_declared_prompt_name_from_multiple_connectors_is_exposed_with_unique_prefixes() -> None:

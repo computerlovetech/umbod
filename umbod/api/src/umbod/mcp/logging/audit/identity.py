@@ -7,6 +7,8 @@ from typing import Protocol
 from fastmcp.server.dependencies import get_access_token
 
 from umbod.core.callers import AuthenticationProvenance, CallerContext, SubjectIdentity
+from umbod.core.usage.models import UsageOwnership
+from umbod.mcp.usage.identity import resolve_mcp_usage_owner
 from umbod.mcp.auth.caller import authentication_provenance, caller_context_from_access_token
 from umbod.mcp.logging.audit.event import (
     McpAnonymousAuditActor,
@@ -90,15 +92,21 @@ class McpAuditIdentityAdapter:
 def _request_identity_snapshot(fastmcp_context: object) -> _RequestIdentitySnapshot:
     server = getattr(fastmcp_context, "fastmcp", None)
     authentication = authentication_provenance(getattr(server, "auth", None))
+    snapshot = _access_token_snapshot(get_access_token(), authentication)
+    configured_issuer = getattr(server, 'usage_identity_issuer', '')
     return _normalize_request_identity(
-        _access_token_snapshot(get_access_token(), authentication),
-        _framework_context_snapshot(fastmcp_context),
+        snapshot, _framework_context_snapshot(fastmcp_context),
+        resolve_mcp_usage_owner(
+            snapshot.caller, getattr(server, 'auth', None),
+            configured_issuer if isinstance(configured_issuer, str) else '',
+        ),
     )
 
 
 def _normalize_request_identity(
     token: _AccessTokenSnapshot,
     context: _FrameworkContextSnapshot,
+    usage_owner: UsageOwnership,
 ) -> _RequestIdentitySnapshot:
     identity = _user_identity(token.caller, token.claims)
     user_id = identity.user_id if isinstance(identity, _AuthenticatedUserIdentity) else None
@@ -116,6 +124,7 @@ def _normalize_request_identity(
             authenticated_user_id=user_id,
             agent_client_id=token.client_id,
             session_id=context.session_id,
+            usage_owner=usage_owner,
         ),
     )
 

@@ -12,13 +12,13 @@ describe('workspace navigation history', (): void => {
     expect(history.transition).toBeNull();
   });
 
-  test('remembers successful personal locations including query and fragment', (): void => {
+  test.each(['/files', '/connectors'])('remembers successful personal location %s including query and fragment', (destination: string): void => {
     const history = new WorkspaceNavigationHistory(location('/dashboard'), true);
-    history.completeNavigation(location('/files?sort=name#selected'), true);
-    history.startNavigation(location('/files?sort=name#selected'), location('/admin/connectors'), true);
+    history.completeNavigation(location(`${destination}?sort=name#selected`), true);
+    history.startNavigation(location(`${destination}?sort=name#selected`), location('/admin/connectors'), true);
     history.completeNavigation(location('/admin/connectors'), true);
     history.completeNavigation(location('/admin/groups'), true);
-    expect(history.returnHref).toBe('/files?sort=name#selected');
+    expect(history.returnHref).toBe(`${destination}?sort=name#selected`);
   });
 
   test.each(['/login', '/admin', '/admin/groups', '/administrator', '/files-other', 'https://other.test/files'])('ignores non-workspace or administrative return destination %s', (path: string): void => {

@@ -15,7 +15,8 @@ description: "Static SvelteKit SPA layouts, browser loaders and page composition
 - [Log analytics](./admin/analytics/README.md) — Instance-wide log-count query route.
 - [Groups](./admin/groups/README.md) — Central administrator group catalogue route.
 - [Group permissions](./admin/group-permissions/README.md) — Persistent permissions layout and lazy tab editors.
-- [dashboard/](./dashboard/) — User catalogue page.
+- [dashboard/](./dashboard/) — Personal usage page.
+- [connectors/](./connectors/) — User connector catalogue and personal authorization page.
 - [error.test.ts](./error.test.ts) — Route error presentation tests.
 - [files/](./files/) — User filesystem page.
 - [Getting started](./getting-started/README.md) — Single destination for MCP and telemetry onboarding.

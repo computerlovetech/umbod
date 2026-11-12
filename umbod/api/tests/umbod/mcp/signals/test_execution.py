@@ -7,7 +7,7 @@ from fastmcp.exceptions import AuthorizationError, ToolError, ValidationError
 from pydantic import ValidationError as ModelValidationError
 
 from umbod.core.capabilities import CapabilityIdentity
-from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoInvocationFailureDiagnostic
 from umbod.core.invocation.failure_evidence import (
     InvocationExceptionEvidence,
     InvocationFailureOrigin,
@@ -56,6 +56,7 @@ async def test_returned_openapi_failure_has_origin_without_exception(execution_r
     assert isinstance(event, McpToolInvocationFailed)
     assert event.failure_category == McpToolInvocationFailureCategory.TOOL_ERROR
     assert event.evidence == InvocationReturnedFailure(InvocationFailureOrigin.OPENAPI)
+    assert isinstance(event.diagnostic, NoInvocationFailureDiagnostic)
 
 
 @pytest.mark.asyncio

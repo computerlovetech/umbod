@@ -90,7 +90,7 @@ from umbod.rest.connectors.schemas import (
     ConnectorToolInvocationPolicyConflictResponse,
     OverriddenInitialCapabilityDescriptionOverride,
 )
-from umbod.rest.connectors.tool_activation import list_tool_activations, put_tool_activations
+from umbod.rest.connectors.tool_activation import CatalogOperationNames, list_tool_activations, put_tool_activations
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.connectors.downstream_mcp.dependencies import (
     get_personal_oauth_configuration_store,
@@ -172,7 +172,7 @@ ToolConfigurationMutation = Annotated[
     ConnectorToolConfigurationMutationPort,
     Depends(get_connector_tool_configuration_mutation_port),
 ]
-ConnectorEventStream = Annotated[EventStream | None, Depends(get_connector_event_stream)]
+ConnectorEventStream = Annotated[EventStream, Depends(get_connector_event_stream)]
 
 
 def get_public_mcp_base_url(
@@ -868,8 +868,8 @@ async def get_tool_activations(
         connector_id=connector_id,
         activation_port=activation,
         policy_store=policy_store,
-        operation_names=operation_names,
-        activation_filter=None,
+        operation_names=CatalogOperationNames(operation_names),
+        activation_filter=ActivationListFilter(),
     )
 
 
@@ -891,10 +891,6 @@ async def set_tool_activations(
         if isinstance(catalog, ToolCatalogFound)
         else ()
     )
-    unknown = next(
-        (item.tool_id for item in request.tools if item.tool_id not in operation_names),
-        None,
-    )
     return await put_tool_activations(
         connector_kind="downstream_mcp",
         connector_id=connector_id,
@@ -903,7 +899,5 @@ async def set_tool_activations(
         mutation_port=mutation_port,
         event_stream=event_stream,
         activation_event_policy=DownstreamActivationEventPublicationPolicy(queries),
-        unknown_tool_error=(
-            present_tool_not_found(connector_id, unknown) if unknown is not None else None
-        ),
+        unknown_tool_error=lambda operation_name: present_tool_not_found(connector_id, operation_name),
     )

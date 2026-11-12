@@ -4,6 +4,7 @@ from typing import Any, Protocol
 
 from fastmcp.exceptions import AuthorizationError, ValidationError
 
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoInvocationFailureDiagnostic
 from umbod.core.invocation.policy import ConnectorInvocationDenied, ConnectorInvocationPolicy
 
 from umbod.core.invocation.failure_evidence import (
@@ -57,17 +58,18 @@ class ConnectorInvocationSignalInterceptor:
             return
         if isinstance(outcome, ToolExecutionFailed) and isinstance(outcome.error, (ModernConnectorApprovalRequired, asyncio.CancelledError)):
             return
-        diagnostic = invocation_failure.get()
+        context_diagnostic = invocation_failure.get()
+        diagnostic = context_diagnostic if context_diagnostic is not None else NoInvocationFailureDiagnostic()
         diagnostic_rejection = {
             "invalid_arguments": McpToolInvocationFailureCategory.VALIDATION,
             "admission_denied": McpToolInvocationFailureCategory.AUTHORIZATION,
             "authorization_rejected": McpToolInvocationFailureCategory.AUTHORIZATION,
-        }.get(diagnostic.reason) if diagnostic is not None else None
+        }.get(diagnostic.reason) if isinstance(diagnostic, InvocationFailureDiagnostic) else None
         if isinstance(outcome, ToolExecutionFailed):
             evidence = current_invocation_failure()
             category = McpToolInvocationFailureCategory.CONNECTOR_ERROR
             rejection = isinstance(outcome.error, (ValidationError, ConnectorInvocationDenied, AuthorizationError, ToolAuthorizationDenied))
-            server_diagnostic = diagnostic is not None and diagnostic_rejection is None
+            server_diagnostic = isinstance(diagnostic, InvocationFailureDiagnostic) and diagnostic_rejection is None
             if diagnostic_rejection is not None:
                 category = diagnostic_rejection
                 evidence = InvocationRejectedFailure(InvocationFailureOrigin.CLIENT_INPUT)
@@ -82,7 +84,7 @@ class ConnectorInvocationSignalInterceptor:
             returned_error = isinstance(outcome, ToolExecutionSucceeded) and self._result_is_error(outcome.result)
         except Exception as error:
             self._signals.report_failure("Connector tool result classification failed", error)
-            self._publisher.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, invocation_failure.get(), exception_evidence(error, InvocationFailureOrigin.INTERNAL))
+            self._publisher.failed(state, McpToolInvocationFailureCategory.CONNECTOR_ERROR, diagnostic, exception_evidence(error, InvocationFailureOrigin.INTERNAL))
             return
         if returned_error:
             evidence = current_invocation_failure()
@@ -97,7 +99,7 @@ class ConnectorInvocationSignalInterceptor:
             if diagnostic_rejection is not None:
                 category = diagnostic_rejection
                 evidence = InvocationRejectedFailure(InvocationFailureOrigin.CLIENT_INPUT)
-            elif isinstance(evidence, InvocationExceptionEvidence) or (diagnostic is not None and diagnostic.reason != "downstream_tool_error"):
+            elif isinstance(evidence, InvocationExceptionEvidence) or (isinstance(diagnostic, InvocationFailureDiagnostic) and diagnostic.reason != "downstream_tool_error"):
                 category = McpToolInvocationFailureCategory.CONNECTOR_ERROR
             self._publisher.failed(state, category, diagnostic, evidence)
         else:

@@ -248,6 +248,13 @@ async def test_downstream_activation_route_handles_noop_conflict_and_unknown_ato
     assert stale.status_code == 409
     assert stale.json() == {'code': 'invocation_policy_revision_conflict', 'conflicts': [{'tool_id': 'echo', 'expected_revision': 1, 'current_mode': 'direct', 'current_revision': 0}]}
     assert unknown.status_code == 404
+    assert unknown.json() == {'detail': {
+        'code': 'tool_not_found',
+        'message': 'Downstream MCP tool not found.',
+        'phase': 'connector',
+        'retryable': False,
+        'context': {'connector_id': connector_id, 'downstream_name': 'missing'},
+    }}
     assert client.get(path).json()['tools'][0] == {'tool_id': 'echo', 'activation_status': 'disabled', 'invocation_mode': 'direct', 'policy_revision': 0}
 
 @pytest.mark.parametrize('item', [{'tool_id': 'echo'}, {'tool_id': 'echo', 'invocation_mode': 'ask'}, {'tool_id': 'echo', 'expected_policy_revision': 0}, {'tool_id': 'echo', 'invocation_mode': 'ask', 'expected_policy_revision': -1}])

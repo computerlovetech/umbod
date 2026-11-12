@@ -32,6 +32,7 @@ description: "MCP application composition, capability exposure, authentication a
 - [settings.py](./settings.py) — MCP settings.
 - [signals/](./signals/README.md) — Neutral execution events.
 - [telemetry/](./telemetry/README.md) — Required application telemetry and listener composition.
+- [usage/](./usage/README.md) — Trusted personal usage completion collection and bounded asynchronous persistence.
 - [tools/](./tools/) — Observed tool registration, successful-output contract validation, and safe authorization/response failures.
 
 # Architecture

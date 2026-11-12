@@ -8,6 +8,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from umbod.config import defaults
+from umbod.config.usage import PersonalUsageConfig
 
 
 class ConfigModel(BaseModel):
@@ -423,6 +424,7 @@ class AppConfig(ConfigModel):
     endpoints: EndpointsConfig = Field(default_factory=EndpointsConfig)
     rest: RestConfig = Field(default_factory=RestConfig)
     otlp_receiver: OtlpReceiverConfig = Field(default_factory=OtlpReceiverConfig)
+    personal_usage: PersonalUsageConfig = Field(default_factory=PersonalUsageConfig)
     telemetry_analytics: TelemetryAnalyticsConfig = Field(
         default_factory=TelemetryAnalyticsConfig
     )

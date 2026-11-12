@@ -14,7 +14,7 @@ from fastmcp.exceptions import ToolError, ValidationError
 from fastmcp.tools import FunctionTool, InputRequiredToolResult, ToolResult
 from mcp.types import InputRequiredResult
 
-from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic
+from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoInvocationFailureDiagnostic
 from umbod.core.invocation.failure_evidence import (
     InvocationExceptionEvidence,
     InvocationFailureEvidence,
@@ -100,7 +100,7 @@ class RaisingObserver(McpInvocationPublisher):
             raise RuntimeError("failed")
         super().succeeded(lifecycle)
 
-    def failed(self, lifecycle: Any, category: McpToolInvocationFailureCategory, diagnostic: Optional[InvocationFailureDiagnostic] = None, evidence: Optional[InvocationFailureEvidence] = None) -> None:
+    def failed(self, lifecycle: Any, category: McpToolInvocationFailureCategory, diagnostic: InvocationFailureDiagnostic | NoInvocationFailureDiagnostic, evidence: InvocationFailureEvidence) -> None:
         if self._failing_method == "failed":
             raise RuntimeError("failed")
         super().failed(lifecycle, category, diagnostic, evidence)
@@ -555,7 +555,7 @@ async def test_returned_error_skips_output_contract_guard() -> None:
     assert result is returned
     assert len(logger.events) == 1
     assert isinstance(logger.events[0], McpToolInvocationFailed)
-    assert logger.events[0].diagnostic is None
+    assert isinstance(logger.events[0].diagnostic, NoInvocationFailureDiagnostic)
     assert logger.events[0].evidence == InvocationReturnedFailure(InvocationFailureOrigin.INTERNAL)
 
 

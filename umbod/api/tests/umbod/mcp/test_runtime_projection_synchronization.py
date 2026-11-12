@@ -18,6 +18,7 @@ from umbod.mcp.connectors.downstream_mcp.runtime import DownstreamDiscoveryRunti
 from umbod.mcp.messaging import RuntimeProjectionHealth, RuntimeProjectionSynchronizer
 from umbod.mcp.public_app import DynamicPublicMcpDispatcher
 from umbod.mcp import public_app
+from umbod.mcp.usage import McpUsageRuntime
 from umbod.mcp.runtime_options import StoreBackedConnectorRuntimeStateSourceStrategy
 
 
@@ -267,8 +268,12 @@ async def test_sql_bootstrap_without_api_url_never_copies_authoritative_store_st
         metrics_recorder=Mock(),
         group_permission_runtime_state=None,
         connector_runtime=SimpleNamespace(connector_tool_mappings=[], connector_configuration_store=configuration, connector_publishing_store=publishing),
-        mcp=SimpleNamespace(runtime_projection_health=RuntimeProjectionHealth(), filesystem_discovery_runtime=SimpleNamespace(reconcile=AsyncMock()), downstream_mcp_discovery_runtime=Mock(), downstream_mcp_discovery_coordinator=coordinator, connector_tool_registry=registry, connector_prompt_registry=SimpleNamespace(reconcile_all=AsyncMock()), connector_resource_registry=SimpleNamespace(reconcile_all=AsyncMock())),
+        mcp=SimpleNamespace(usage_runtime=Mock(spec=McpUsageRuntime), runtime_projection_health=RuntimeProjectionHealth(), filesystem_discovery_runtime=SimpleNamespace(reconcile=AsyncMock()), downstream_mcp_discovery_runtime=Mock(), downstream_mcp_discovery_coordinator=coordinator, connector_tool_registry=registry, connector_prompt_registry=SimpleNamespace(reconcile_all=AsyncMock()), connector_resource_registry=SimpleNamespace(reconcile_all=AsyncMock())),
     )
+    async def shutdown() -> None:
+        context.mcp.usage_runtime.stop.assert_awaited_once()
+
+    context.persistence_runtime.shutdown.side_effect = shutdown
     adapters = SimpleNamespace(create_projection_reader=lambda: events, create_checkpoint_store=lambda: checkpoints)
     monkeypatch.setattr(public_app, 'McpMessagingAdapterFactory', lambda *_args: adapters)
     monkeypatch.setattr(public_app, 'reconcile_openapi_discovery', AsyncMock())
@@ -282,3 +287,5 @@ async def test_sql_bootstrap_without_api_url_never_copies_authoritative_store_st
         assert publishing.mock_calls == []
     assert configuration.mock_calls == []
     assert publishing.mock_calls == []
+    context.mcp.usage_runtime.stop.assert_awaited_once()
+    context.persistence_runtime.shutdown.assert_awaited_once()

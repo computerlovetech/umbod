@@ -19,6 +19,10 @@ class DownstreamHttpResponse(BaseModel):
 DownstreamResponseEvidence = Annotated[NoDownstreamResponse | DownstreamHttpResponse, Field(discriminator="kind")]
 
 
+class NoInvocationFailureDiagnostic(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+
 class InvocationFailureDiagnostic(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 

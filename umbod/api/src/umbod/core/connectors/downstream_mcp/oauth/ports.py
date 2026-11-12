@@ -15,6 +15,16 @@ from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage import 
 
 
 @dataclass(frozen=True)
+class RetainOAuthScopes:
+    pass
+
+
+@dataclass(frozen=True)
+class ReplaceOAuthScopes:
+    scopes: str
+
+
+@dataclass(frozen=True)
 class OAuthConnection:
     endpoint_url: str
     requested_scopes: str = ""

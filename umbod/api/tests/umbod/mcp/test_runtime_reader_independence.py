@@ -12,6 +12,7 @@ from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntim
 from umbod.core.permissions import InMemoryGroupConnectorToolPermissions
 from umbod.core.permissions.ports import GroupPermissionReader
 from umbod.mcp import public_app
+from umbod.mcp.usage import McpUsageRuntime
 from umbod.mcp.connectors.downstream_mcp.capability_notifications import CapabilityListChangeNotifier
 from umbod.mcp.connectors.downstream_mcp.coordinator import DownstreamDiscoveryCoordinator
 from umbod.mcp.connectors.native.tools import InMemoryConnectorToolRuntimeStateStore
@@ -33,7 +34,7 @@ def runtime_context(source: str, transport: str, api_url: str) -> SimpleNamespac
     registry.client_notifier = Mock(spec=CapabilityListChangeNotifier)
     activations = Mock(spec=ActivationStore)
     activations.get_status.return_value = ActivationStatus.ENABLED
-    return SimpleNamespace(
+    context = SimpleNamespace(
         api_base_url=api_url or None,
         source_strategy=runtime_source(source),
         settings=SimpleNamespace(endpoints=SimpleNamespace(mcp_base_url="http://test"), mcp=SimpleNamespace(messaging_transport=transport, metrics_enabled=False, metrics_port=0)),
@@ -44,6 +45,7 @@ def runtime_context(source: str, transport: str, api_url: str) -> SimpleNamespac
         connector_tool_runtime_state_store=InMemoryConnectorToolRuntimeStateStore(),
         connector_runtime=SimpleNamespace(connector_tool_mappings=(SimpleNamespace(connector_id="connector", operation_name="read"),)),
         mcp=SimpleNamespace(
+            usage_runtime=Mock(spec=McpUsageRuntime),
             filesystem_discovery_runtime=SimpleNamespace(reconcile=AsyncMock()),
             runtime_projection_health=RuntimeProjectionHealth(),
             downstream_mcp_discovery_coordinator=Mock(spec=DownstreamDiscoveryCoordinator),
@@ -54,6 +56,12 @@ def runtime_context(source: str, transport: str, api_url: str) -> SimpleNamespac
             capability_activation_store=activations,
         ),
     )
+
+    async def shutdown() -> None:
+        context.mcp.usage_runtime.stop.assert_awaited_once()
+
+    context.persistence_runtime.shutdown.side_effect = shutdown
+    return context
 
 
 @pytest.mark.asyncio
@@ -105,6 +113,30 @@ async def test_event_transport_does_not_select_runtime_data_readers(monkeypatch:
             database_permissions.list_all_group_permissions.assert_awaited_once()
             http_reader_factory.assert_not_called()
             context.mcp.capability_activation_store.get_status.assert_awaited_once()
+    context.mcp.usage_runtime.stop.assert_awaited_once()
+    context.persistence_runtime.shutdown.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_usage_shutdown_failure_still_closes_owned_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
+    context = runtime_context('database', 'independent-adapter', '')
+    context.group_permission_runtime_state = None
+    failure = TimeoutError('Usage shutdown budget exceeded')
+    context.mcp.usage_runtime.stop.side_effect = failure
+    adapters = Mock(spec=McpMessagingAdapterFactory)
+    adapters.create_projection_reader.return_value = InMemoryEventStreamFactory('closed').create()
+    adapters.create_checkpoint_store.return_value = InMemoryEventCheckpointStoreFactory(InMemoryEventCheckpointStoreMessages()).create()
+    monkeypatch.setattr(public_app, 'McpMessagingAdapterFactory', Mock(return_value=adapters))
+    monkeypatch.setattr(public_app, 'reconcile_openapi_discovery', AsyncMock())
+    app = await public_app.build_starlette_app(context)
+
+    with pytest.raises(TimeoutError) as raised:
+        async with app.router.lifespan_context(app):
+            pass
+
+    assert raised.value is failure
+    context.mcp.usage_runtime.stop.assert_awaited_once()
+    context.persistence_runtime.shutdown.assert_awaited_once()
 
 
 @pytest.mark.asyncio
@@ -124,3 +156,5 @@ async def test_non_http_event_adapter_does_not_require_an_api_url(monkeypatch: p
     async with app.router.lifespan_context(app):
         adapter_factory.assert_called_once_with("independent-adapter", "", context.persistence_runtime.database)
         assert context.mcp.runtime_projection_health.ready
+    context.mcp.usage_runtime.stop.assert_awaited_once()
+    context.persistence_runtime.shutdown.assert_awaited_once()

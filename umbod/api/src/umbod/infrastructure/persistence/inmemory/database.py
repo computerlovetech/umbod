@@ -6,7 +6,7 @@ from typing import cast
 
 from pydantic import BaseModel
 
-from umbod.core.persistence.ports import DatabaseSession, ReadSession, TransactionMode
+from umbod.core.persistence.ports import DatabaseSession, PersistenceBusyError, ReadSession, TransactionMode
 from umbod.core.persistence.query import (
     AllOf,
     AnyOf,
@@ -16,6 +16,7 @@ from umbod.core.persistence.query import (
     GreaterThan,
     InsertCommand,
     KeyT,
+    LessThan,
     NoFilter,
     NonReusingIntegerKeyCodec,
     Not,
@@ -170,7 +171,8 @@ class InMemoryDatabase:
 
     @asynccontextmanager
     async def session(self, *, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:
-        _ = mode
+        if mode is TransactionMode.TRY_SERIALIZED_WRITE and self._transaction_lock.locked():
+            raise PersistenceBusyError("Persistence write lock is unavailable")
         async with self._transaction_lock:
             transaction_tables = deepcopy(self._tables)
             transaction_generated_integer_keys = deepcopy(self._generated_integer_keys)
@@ -192,6 +194,8 @@ def _matches_predicate(row: Mapping[str, object], predicate: Predicate[RowT]) ->
         return row[predicate.field.name] == predicate.field.codec.encode(predicate.value)
     if isinstance(predicate, GreaterThan):
         return row[predicate.field.name] > predicate.field.codec.encode(predicate.value)
+    if isinstance(predicate, LessThan):
+        return row[predicate.field.name] < predicate.field.codec.encode(predicate.value)
     if isinstance(predicate, OneOf):
         values = tuple(predicate.field.codec.encode(value) for value in predicate.values)
         return row[predicate.field.name] in values

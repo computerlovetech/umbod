@@ -1,10 +1,11 @@
 from typing import Annotated, Literal, Optional
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import Field, FiniteFloat, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from umbod.config import defaults
 from umbod.config.app import validate_collector_base_url, validate_telemetry_analytics_sqlite_path
+from umbod.config.usage import PersonalUsageConfig
 
 Profile = str
 AuthRecipe = str
@@ -33,6 +34,31 @@ class OperatorSettings(BaseSettings):
     personal_connections_enabled: PersonalConnectionsMode = "auto"
     personal_connections_oauth_enabled: PersonalConnectionsMode = "auto"
     personal_connections_identity_namespace: str = ""
+    personal_usage_enabled: bool = True
+    personal_usage_queue_capacity: int = Field(default=4096, ge=1, le=65536)
+    personal_usage_max_record_bytes: int = Field(default=2048, ge=256, le=65536)
+    personal_usage_batch_size: int = Field(default=128, ge=1, le=1024)
+    personal_usage_flush_interval_seconds: FiniteFloat = Field(default=1.0, gt=0, le=60)
+    personal_usage_write_timeout_seconds: FiniteFloat = Field(default=5.0, gt=0, le=60)
+    personal_usage_max_retries: int = Field(default=3, ge=0, le=5)
+    personal_usage_shutdown_timeout_seconds: FiniteFloat = Field(default=10.0, gt=0, le=120)
+    personal_usage_retention_days: int = Field(default=90, ge=1, le=3650)
+
+    @model_validator(mode="after")
+    def validate_personal_usage(self) -> "OperatorSettings":
+        PersonalUsageConfig(
+            enabled=self.personal_usage_enabled,
+            queue_capacity=self.personal_usage_queue_capacity,
+            max_record_bytes=self.personal_usage_max_record_bytes,
+            batch_size=self.personal_usage_batch_size,
+            flush_interval_seconds=self.personal_usage_flush_interval_seconds,
+            write_timeout_seconds=self.personal_usage_write_timeout_seconds,
+            max_retries=self.personal_usage_max_retries,
+            shutdown_timeout_seconds=self.personal_usage_shutdown_timeout_seconds,
+            retention_days=self.personal_usage_retention_days,
+        )
+        return self
+
     telemetry_analytics_enabled: bool = False
     telemetry_analytics_sqlite_path: str = defaults.TELEMETRY_ANALYTICS_SQLITE_PATH
     otlp_public_base_url: str = ""

@@ -1,4 +1,5 @@
-from collections.abc import Collection, Sequence
+from collections.abc import Callable, Collection, Sequence
+from dataclasses import dataclass
 
 from fastapi import HTTPException
 from fastapi.responses import JSONResponse
@@ -12,7 +13,6 @@ from umbod.core.invocation import (
 )
 from umbod.core.invocation.tools.configuration import (
     ActivationEventPublicationPolicy,
-    NoConnectorToolConfigurationEventStream,
     SetConnectorToolConfiguration,
     SetConnectorToolConfigurationCommand,
 )
@@ -30,23 +30,37 @@ from umbod.rest.connectors.schemas import (
 )
 
 
+@dataclass(frozen=True)
+class ListedActivationNames:
+    pass
+
+
+@dataclass(frozen=True)
+class CatalogOperationNames:
+    names: Sequence[str]
+
+
+def default_unknown_tool_error(operation_name: str) -> HTTPException:
+    return HTTPException(status_code=404, detail="Connector tool was not found")
+
+
 async def list_tool_activations(
     *,
     connector_kind: ConnectorKind,
     connector_id: str,
     activation_port: ActivationPort,
     policy_store: ConnectorInvocationPolicyStore,
-    operation_names: Sequence[str] | None,
-    activation_filter: ActivationListFilter | None,
+    operation_names: ListedActivationNames | CatalogOperationNames,
+    activation_filter: ActivationListFilter,
 ) -> ToolActivationBatchResponse:
     tools = await activation_port.list_activations(
         connector_id,
         "tool",
-        activation_filter if activation_filter is not None else ActivationListFilter(),
+        activation_filter,
     )
     names = (
-        tuple(operation_names)
-        if operation_names is not None
+        tuple(operation_names.names)
+        if isinstance(operation_names, CatalogOperationNames)
         else tuple(tool.ref.capability_key for tool in tools)
     )
     policies = await list_invocation_policies(connector_kind, connector_id, names, policy_store)
@@ -72,18 +86,17 @@ async def put_tool_activations(
     items: Sequence[ToolActivationBatchRequestItem],
     known_operation_names: Collection[str],
     mutation_port: ConnectorToolConfigurationMutationPort,
-    event_stream: EventStream | None,
+    event_stream: EventStream,
     activation_event_policy: ActivationEventPublicationPolicy,
-    unknown_tool_error: HTTPException | None,
+    unknown_tool_error: Callable[[str], HTTPException],
 ) -> ToolActivationBatchResponse | JSONResponse:
-    if any(item.tool_id not in known_operation_names for item in items):
-        if unknown_tool_error is not None:
-            raise unknown_tool_error
-        raise HTTPException(status_code=404, detail="Connector tool was not found")
+    for item in items:
+        if item.tool_id not in known_operation_names:
+            raise unknown_tool_error(item.tool_id)
     try:
         mutation_result = await SetConnectorToolConfiguration(
             mutation_port,
-            event_stream or NoConnectorToolConfigurationEventStream(),
+            event_stream,
             activation_event_policy,
         ).execute(
             SetConnectorToolConfigurationCommand.model_validate(

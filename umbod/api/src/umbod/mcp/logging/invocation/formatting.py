@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import Mapping, Protocol, Self
 
 from umbod.core.invocation.failure_evidence import InvocationExceptionEvidence
-from umbod.core.invocation.diagnostics import DownstreamHttpResponse
+from umbod.core.invocation.diagnostics import DownstreamHttpResponse, InvocationFailureDiagnostic
 from umbod.mcp.signals.events import (
     McpToolInvocationFailed,
     McpToolInvocationFailureCategory,
@@ -127,7 +127,7 @@ class _InvocationLogAttributesBuilder:
                 if isinstance(event.evidence, InvocationExceptionEvidence):
                     self._attributes["exception.type"] = event.evidence.exception_type
                     self._attributes["exception.stacktrace"] = event.evidence.stacktrace
-            if event.diagnostic is not None:
+            if isinstance(event.diagnostic, InvocationFailureDiagnostic):
                 self._attributes[McpToolInvocationLogAttribute.FAILURE_STAGE] = event.diagnostic.stage
                 self._attributes[McpToolInvocationLogAttribute.FAILURE_REASON] = event.diagnostic.reason
                 self._attributes[McpToolInvocationLogAttribute.EXECUTION_MODE] = event.diagnostic.execution_mode

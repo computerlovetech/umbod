@@ -13,6 +13,9 @@ _SQLITE_SPECIFIC_TABLE_NAMES = frozenset(
     }
 )
 _CURRENT_SCHEMA_STATEMENTS = (
+    "CREATE INDEX IF NOT EXISTS personal_usage_events_day_idx ON personal_usage_events(day)",
+    "CREATE INDEX IF NOT EXISTS personal_usage_events_owner_day_idx ON personal_usage_events(owner_id, day)",
+    "CREATE INDEX IF NOT EXISTS personal_usage_daily_day_idx ON personal_usage_daily(day)",
     """CREATE TABLE IF NOT EXISTS connector_capability_description_overrides (
         connector_id TEXT PRIMARY KEY NOT NULL,
         connector_kind TEXT NOT NULL CHECK (connector_kind IN ('native', 'downstream_mcp', 'openapi')),

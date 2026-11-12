@@ -29,8 +29,8 @@ describe('contextual sidebar rendering', (): void => {
     await tick();
     const links = Array.from(document.querySelectorAll('nav a'));
     expect(links.map((link): string => link.textContent.trim())).toEqual(allowed
-      ? ['Dashboard', 'Files', 'Getting started', 'Administration']
-      : ['Dashboard', 'Files', 'Getting started']);
+      ? ['Dashboard', 'Connectors', 'Files', 'Getting started', 'Administration']
+      : ['Dashboard', 'Connectors', 'Files', 'Getting started']);
     for (const link of links) {
       expect(link.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
       expect(link.querySelector('svg')?.getAttribute('focusable')).toBe('false');
@@ -108,9 +108,9 @@ describe('contextual sidebar rendering', (): void => {
     expect(document.querySelector('.enter-backward')).toBeNull();
   });
 
-  test('root navigation updates return links and applies motion only across sidebar contexts', async (): Promise<void> => {
+  test.each(['/files', '/connectors'])('root navigation remembers %s and applies motion only across sidebar contexts', async (destination: string): Promise<void> => {
     const dashboard = new URL('https://umbod.test/dashboard');
-    const files = new URL('https://umbod.test/files?sort=name#document');
+    const files = new URL(`https://umbod.test${destination}?sort=name#document`);
     const admin = new URL('https://umbod.test/admin/connectors');
     const groups = new URL('https://umbod.test/admin/groups');
     const history = new WorkspaceNavigationHistory(dashboard, true);
@@ -125,7 +125,7 @@ describe('contextual sidebar rendering', (): void => {
     history.completeNavigation(files, true);
     history.startNavigation(files, admin, true);
     await tick();
-    expect(document.querySelector('.workspace-back')?.getAttribute('href')).toBe('/files?sort=name#document');
+    expect(document.querySelector('.workspace-back')?.getAttribute('href')).toBe(`${destination}?sort=name#document`);
     expect(document.querySelector('.sidebar-navigation.enter-forward')).not.toBeNull();
     expect(document.querySelector('.content-shell.enter-forward')).toBeNull();
     history.startNavigation(admin, groups, true);
@@ -134,6 +134,6 @@ describe('contextual sidebar rendering', (): void => {
     history.startNavigation(groups, files, true);
     await tick();
     expect(document.querySelector('.sidebar-navigation.enter-backward')).toBeNull();
-    expect(document.querySelector('.workspace-back')?.getAttribute('href')).toBe('/files?sort=name#document');
+    expect(document.querySelector('.workspace-back')?.getAttribute('href')).toBe(`${destination}?sort=name#document`);
   });
 });

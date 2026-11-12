@@ -9,6 +9,7 @@ from fastmcp.server.http import StarletteWithLifespan
 from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages
 from messaging.models import StreamEvent
 from umbod.mcp import public_app
+from umbod.mcp.usage import McpUsageRuntime
 from umbod.mcp.settings import MCPAppSettings
 from umbod.mcp.telemetry.composition import create_configured_mcp_telemetry
 from umbod.mcp.connectors.downstream_mcp.capability_notifications import CapabilityListChangeNotifier
@@ -29,6 +30,7 @@ def context(monkeypatch: pytest.MonkeyPatch) -> SimpleNamespace:
         connector_runtime=SimpleNamespace(connector_tool_mappings=()),
         group_permission_runtime_state=None,
         mcp=SimpleNamespace(
+            usage_runtime=Mock(spec=McpUsageRuntime),
             filesystem_discovery_runtime=SimpleNamespace(reconcile=AsyncMock()),
             downstream_mcp_discovery_runtime=Mock(),
             downstream_mcp_discovery_coordinator=SimpleNamespace(reconcile_native_capabilities=AsyncMock(), initialize_native_capabilities=AsyncMock(), stop=Mock()),
@@ -83,6 +85,7 @@ async def test_lifespan_cancels_its_projection_consumer_and_respects_persistence
 
     async def shutdown() -> None:
         assert cancelled.is_set()
+        context.mcp.usage_runtime.stop.assert_awaited_once()
 
     reader = SimpleNamespace(list_after=AsyncMock(side_effect=read))
     adapters.create_projection_reader.return_value = reader

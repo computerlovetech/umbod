@@ -10,6 +10,7 @@ from tests.umbod.core.connectors.downstream_mcp.adapters.test_oauth_service impo
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
 from umbod.core.connectors.downstream_mcp.oauth.ports import OAuthConnection
 from umbod.core.connectors.downstream_mcp.oauth.service import OAuthService
+from umbod.core.connectors.downstream_mcp.oauth.ports import ReplaceOAuthScopes
 from tests.umbod.core.connectors.downstream_mcp.adapters.oauth_fakes import MemoryDiscovery, ScriptedSessionFactory
 from umbod.core.connectors.downstream_mcp.stores import (
     CONNECTOR_DEFINITION_TABLE,
@@ -34,7 +35,7 @@ async def test_shared_oauth_service_rejects_personal_ownership_before_mutation(o
     authorization_before = host.saved.export()
     with pytest.raises(ValueError, match="Personal OAuth"):
         if operation == "begin":
-            await service.begin("fixture", "", "write")
+            await service.begin("fixture", "", ReplaceOAuthScopes("write"))
         else:
             await getattr(service, operation)("fixture")
     assert host.saved.export() == authorization_before

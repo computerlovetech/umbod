@@ -1,6 +1,10 @@
 import json
+from pathlib import Path
+
+import pytest
 
 from fastapi.testclient import TestClient
+from umbod.rest.connectors.downstream_mcp.oauth import BeginRequest, begin
 from umbod.rest.main import create_app
 from umbod.rest.settings import APISettings
 from umbod.core.connectors.downstream_mcp.oauth.service import OAuthService
@@ -10,7 +14,26 @@ from tests.umbod.core.connectors.downstream_mcp.adapters.test_oauth_service impo
 )
 
 
-def test_shared_oauth_api_authentication_contract_and_redaction(monkeypatch, tmp_path):
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("payload", "expected_scopes"),
+    [({}, "read"), ({"scopes": None}, "read"), ({"scopes": ""}, ""), ({"scopes": " write  read "}, "write read")],
+)
+async def test_begin_maps_optional_scope_input_to_explicit_update(
+    payload: dict[str, object], expected_scopes: str,
+) -> None:
+    host = MemoryHost()
+    sessions = ScriptedSessionFactory("")
+    service = OAuthService(host, sessions, MemoryDiscovery())
+    try:
+        await begin("fixture", BeginRequest.model_validate(payload), service)
+        assert host.scopes == expected_scopes
+        assert sessions.options[0].requested_scopes == expected_scopes
+    finally:
+        await service.close()
+
+
+def test_shared_oauth_api_authentication_contract_and_redaction(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     declaration = tmp_path / "connectors.json"
     declaration.write_text('{"connectors": []}')
     monkeypatch.setenv(
