@@ -204,3 +204,23 @@ footer { padding-block: 32px; }
   .footer-about { grid-column: 1 / -1; }
   .footer-bottom { flex-direction: column; gap: 12px; margin-top: 32px; }
 }
+
+.capabilities { background: var(--soft); border-top: 1px solid var(--line); }
+.capability-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.capability-card { min-width: 0; padding: 12px 12px 28px; border: 1px solid var(--line); border-radius: 16px; background: white; }
+.card-visual { overflow: hidden; border-radius: 10px; background: #eef5f1; }
+.card-visual svg { display: block; width: 100%; height: auto; }
+.card-visual .wire { fill: none; stroke: #90b6a5; stroke-width: 1.5; }
+.card-visual .accent-wire { fill: none; stroke: #10b88b; stroke-width: 2; }
+.card-visual .surface { fill: #fff; stroke: #cdded4; }
+.card-visual .label { fill: #526a5e; font: 10px ui-sans-serif, sans-serif; }
+.card-visual .node-label { fill: white; font: 600 13px ui-sans-serif, sans-serif; }
+.card-visual .icon { fill: none; stroke: #07634e; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.card-visual .paper-line { stroke: #c3d5ca; stroke-width: 3; stroke-linecap: round; }
+.card-copy { padding: 24px 14px 0; }
+.capability-card h3 { margin: 0 0 9px; font-size: 21px; }
+.capability-card p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
+.capabilities-note { margin: 28px 0 0; color: var(--muted); font-size: 12px; }
+.capabilities-note a { text-decoration: underline; text-underline-offset: 3px; }
+@media (min-width: 761px) and (max-width: 1100px) { .capability-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .capability-grid { grid-template-columns: minmax(0, 1fr); gap: 16px; } }

@@ -30,13 +30,13 @@ test('home and enterprise lead with Kubernetes onboarding and secondary contact'
     const html = read(path);
     assert.match(html, /platform teams/i);
     assert.match(html, /kind create cluster/);
-    assert.match(html, /Grant access by group/);
     assert.match(html, /Kubernetes edition.*overview/i);
     assert.match(html, /class="button" href="\/#how">Get started/);
     assert.match(html, /class="text-link" href="mailto:hello@computerlove\.tech/);
     assert.doesNotMatch(html, /Umbod Desktop|desktop-download-options|data-desktop-cta|Apple Silicon|Coming soon/);
   }
-  assert.match(read('index.html'), /<title>Umbod — Agent access for platform teams<\/title>/);
+  assert.match(read('index.html'), /<title>Umbod — A shared hub for agents<\/title>/);
+  assert.match(read('enterprise/index.html'), /Grant access by group/);
   for (const path of retiredAssets) assert.ok(!existsSync(join(root, path)), path);
 });
 
@@ -80,6 +80,13 @@ test('production build preserves routes, metadata, shared navigation and release
       assert.ok(html.includes(`${release.chartVersion} chart`));
       for (const [, fragment] of html.matchAll(/href="#([^"]+)"/g)) assert.ok(html.includes(`id="${fragment}"`), `missing anchor ${fragment}`);
     }
+    assert.match(pages[0], /Bring agents together<br><span>through one shared hub\.<\/span>/);
+    assert.match(pages[0], /Connect agents to your internal systems/);
+    assert.match(pages[0], /Share results\. Give the next agent a head start\./);
+    assert.equal((pages[0].match(/<article class="capability-card">/g) || []).length, 6);
+    assert.equal((pages[0].match(/<svg viewBox="0 0 320 200"/g) || []).length, 6);
+    assert.match(pages[0], /id="how-it-works"/);
+    assert.doesNotMatch(pages[0], /noindex|preview\.html/);
     assert.notEqual(pages[0].match(/<title>(.*?)<\/title>/)[1], pages[1].match(/<title>(.*?)<\/title>/)[1]);
     for (const path of ['download/index.html', 'desktop-downloads.json', 'oauth/client-metadata.json']) {
       assert.ok(!existsSync(join(site, 'dist', path)), path);
@@ -131,7 +138,7 @@ async function verifyCloudflareRoutes(site) {
     const missing = await fetch(base + '/not-a-real-page');
     assert.equal(missing.status, 404, 'unknown routes must not silently serve the home page');
     const home = await fetch(base + '/');
-    assert.match(await home.text(), /Manage agent access\./);
+    assert.match(await home.text(), /Bring agents together/);
   } finally {
     const exited = new Promise(resolve => worker.once('exit', resolve));
     if (worker.exitCode === null) { worker.kill('SIGTERM'); await exited; }
