@@ -5,25 +5,27 @@ import PersonalServerDialog from './PersonalServerDialog.svelte';
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
-import { policyFixture, serverFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
+import { policyFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
 import { PolicyForm } from './policy-form.svelte';
 import PolicyFields from './PolicyFields.svelte';
 import PersonalServerPolicyPanel from './PersonalServerPolicyPanel.svelte';
 import PersonalServerRegistration from './PersonalServerRegistration.svelte';
 import { PersonalServerFormState } from './personal-server-form-state.svelte';
-import * as formStateModule from './personal-server-form-state.svelte';
 import { configurationFixture } from '$lib/admin/personal-mcp-servers/availability.test-support';
 
 vi.mock('$app/state', () => ({ navigating: { to: null, from: null } }));
 
 describe('personal server administration presentation', () => {
   test('renders a standalone selected policy panel with whole-server guidance and no second inventory', () => {
-    const body = render(PersonalServerPolicyPanel, { props: { connectorId: 'personal', api: new InMemoryPersonalServers(), configuration: { get: async () => configurationFixture() } } }).body;
+    const body = render(PersonalServerPolicyPanel).body;
     expect(body).toContain('href="/admin/group-permissions/connectors"');
     expect(body).toContain('including future tools after explicit rediscovery');
     expect(body).toContain('No per-tool approval, activation or tool grants are required');
-    expect(body).toContain('Server details and endpoint are read-only');
-    expect(body).toContain('Reload OAuth settings');
+    expect(body).toContain('Each user manages their own enablement, OAuth sign-in and private tool discovery');
+    expect(body).toContain('href="/dashboard"');
+    expect(body).not.toContain('<form');
+    expect(body).not.toContain('<input');
+    expect(body).not.toContain('<button');
     expect(body).not.toContain('<nav');
     expect(body).not.toContain('AdminShell');
     expect(body).not.toContain('ready to execute');
@@ -66,40 +68,29 @@ describe('personal server administration presentation', () => {
     expect(document.getElementById('personal-description')?.getAttribute('maxlength')).toBe('300');
     expect(document.body.textContent).not.toContain('Dedicated endpoint');
   });
-  test('selected policy panel and registration keep labels and helper references scoped when rendered together', async () => {
+  test('read-only policy guidance and registration retain unique IDs and scoped accessible fields', () => {
     const document = new Window().document;
-    const api = new InMemoryPersonalServers([serverFixture()], [policyFixture()]);
-    const configuration = { get: async () => configurationFixture() };
-    const selected = new PersonalServerFormState(api, configuration, 'personal');
-    await selected.reload();
     const registration = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null);
-    for (const form of [selected.form, registration.form]) form.setKind('preconfigured_confidential');
-    const constructor = vi.spyOn(formStateModule, 'PersonalServerFormState').mockImplementation(function (): PersonalServerFormState { return selected; });
-    let panelBody: string;
-    try { panelBody = render(PersonalServerPolicyPanel, { props: { connectorId: 'personal', api, configuration } }).body; }
-    finally { constructor.mockRestore(); }
-    document.body.innerHTML = `<section data-scope="selected">${panelBody}</section><section data-scope="registration">${render(PersonalServerRegistration, { props: { state: registration, close: vi.fn(), reload: vi.fn() } }).body}</section>`;
+    registration.form.setKind('preconfigured_confidential');
+    document.body.innerHTML = `<section data-scope="selected">${render(PersonalServerPolicyPanel).body}</section><section data-scope="registration">${render(PersonalServerRegistration, { props: { state: registration, close: vi.fn(), reload: vi.fn() } }).body}</section>`;
     const ids = [...document.querySelectorAll('[id]')].map((element) => element.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const scope of document.querySelectorAll('[data-scope]')) {
-      for (const label of scope.querySelectorAll('label[for]')) {
-        const target = document.getElementById(label.getAttribute('for')!);
-        expect(target).not.toBeNull();
-        expect(scope.contains(target!)).toBe(true);
-        expect(target?.matches('input, button[role="combobox"]')).toBe(true);
-      }
-      for (const control of scope.querySelectorAll('[aria-describedby]')) {
-        for (const id of control.getAttribute('aria-describedby')!.split(' ')) {
-          const helper = document.getElementById(id);
-          expect(helper).not.toBeNull();
-          expect(scope.contains(helper!)).toBe(true);
-        }
-      }
-      const labels = [...scope.querySelectorAll('label')].map((label) => label.textContent);
-      for (const name of ['OAuth application setup', 'Requested scopes', 'Exact HTTPS issuer URL', 'Client ID', 'Token endpoint authentication', 'Fresh client secret']) expect(labels).toContain(name);
+    const scope = document.querySelector('[data-scope="registration"]')!;
+    for (const label of scope.querySelectorAll('label[for]')) {
+      const target = document.getElementById(label.getAttribute('for')!);
+      expect(target).not.toBeNull();
+      expect(scope.contains(target!)).toBe(true);
+      expect(target?.matches('input, button[role="combobox"]')).toBe(true);
     }
-    const panel = readFileSync('src/lib/components/admin/personal-mcp-servers/PersonalServerPolicyPanel.svelte', 'utf8');
-    expect(panel).toContain('idPrefix={`personal-policy-${connectorId}`}');
+    for (const control of scope.querySelectorAll('[aria-describedby]')) {
+      for (const id of control.getAttribute('aria-describedby')!.split(' ')) {
+        const helper = document.getElementById(id);
+        expect(helper).not.toBeNull();
+        expect(scope.contains(helper!)).toBe(true);
+      }
+    }
+    const labels = [...scope.querySelectorAll('label')].map((label) => label.textContent);
+    for (const name of ['OAuth application setup', 'Requested scopes', 'Exact HTTPS issuer URL', 'Client ID', 'Token endpoint authentication', 'Fresh client secret']) expect(labels).toContain(name);
   });
   test('dynamic clients expose no stored or shared credential controls', () => {
     const body = render(PolicyFields, { props: { form: new PolicyForm(), idPrefix: 'personal' } }).body;
@@ -153,22 +144,10 @@ describe('personal server administration presentation', () => {
     expect(body).not.toContain('Leave blank to keep');
     expect(body).not.toContain('********');
   });
-  test('selected policy and registration retain native validation, explicit invalidation and lifecycle disposal', () => {
-    const panel = readFileSync('src/lib/components/admin/personal-mcp-servers/PersonalServerPolicyPanel.svelte', 'utf8');
+  test('registration retains native validation and the dialog exposes accessible dismissal', () => {
     const registration = readFileSync('src/lib/components/admin/personal-mcp-servers/PersonalServerRegistration.svelte', 'utf8');
-    expect(panel).toContain("ALL users' saved authorizations and pending sign-ins");
-    expect(panel).toContain('User enablement, publication and group grants persist');
-    expect(panel).toContain('Remote tokens are not revoked');
-    expect(panel).toContain('return state.dispose');
-    expect(registration).toContain('onDestroy(untrack(() => state.form.clearSecret))');
-    for (const form of [panel, registration]) {
-      expect(form).toContain('captureInvalidSubmission(state.handleNativeInvalid)');
-      expect(form).not.toContain('novalidate');
-      expect(form).not.toContain('$effect');
-      expect(form).not.toContain('localStorage');
-      expect(form).toContain('<PersonalServerDialog');
-      expect(form).toContain('<PolicyFields');
-    }
+    expect(registration).toContain('captureInvalidSubmission(state.handleNativeInvalid)');
+    expect(registration).not.toContain('novalidate');
     const body = render(PersonalServerDialog, { props: {
       title: 'Confirm change', titleId: 'dialog-title', descriptionId: 'dialog-description', close: vi.fn(),
       children: createRawSnippet(() => ({ render: (): string => '<p id="dialog-description">Review this change.</p>' }))

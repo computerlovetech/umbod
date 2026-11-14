@@ -1,5 +1,5 @@
-import { filesystemNode } from '../fixtures.test-support';
 import { InMemoryNodeSharing } from './in-memory-sharing.test-support';
+import { filesystemNode } from '../fixtures.test-support';
 import type { FilesApi, FilesystemApi } from '../api';
 import { browseResultSchema, type BrowseResult, updateNodeSchema, type UpdateNode, updateDescriptionSchema, type UpdateDescription, breadcrumbsSchema, type Breadcrumbs, type BreadcrumbItem, fileRevisionSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, beginUploadSchema, uploadSessionSchema, rawUploadSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
 import { UploadPhaseError } from '../errors';
@@ -14,6 +14,11 @@ export class InMemoryFilesystem implements FilesystemApi {
     nodeIdSchema.parse(rootId);
     for (const node of nodes) this.nodes.set(node.id, nodeSummarySchema.parse(node));
   }
+
+  listNamespaces = async (signal?: AbortSignal): Promise<import('../domain/schemas').FilesystemNamespace[]> => {
+    const home = await this.getHome(signal);
+    return [{ id: home.id, root_node_id: home.id, name: 'My files', description: home.metadata.attributes.description ?? '', kind: 'personal', permissions: ['discover', 'read', 'write', 'delete'] }];
+  };
 
   getHome = async (signal?: AbortSignal): Promise<NodeSummary> => {
     signal?.throwIfAborted();
@@ -38,7 +43,7 @@ export class InMemoryFilesystem implements FilesystemApi {
           move: writable && !!parent && this.canWrite(parent),
           edit_description: writable,
           delete: entry.kind === 'file' && !!parent && this.canDelete(entry),
-          share: this.canShare(entry.id),
+          share: entry.id !== this.rootId && this.canShare(entry.id),
           upload: entry.kind === 'directory' && writable,
           create_directory: entry.kind === 'directory' && writable
         };
@@ -247,17 +252,18 @@ export class InMemoryFilesystem implements FilesystemApi {
         can_read: this.canRead(node),
         can_write: this.canWrite(node),
         can_delete: this.canDelete(node),
-        can_share: this.canShare(node.id)
+        can_share: node.id !== this.rootId && this.canShare(node.id)
       }
     });
   }
 }
 
 export class InMemoryFilesApi implements FilesApi {
-  readonly sharing = new InMemoryNodeSharing();
+  readonly sharing: InMemoryNodeSharing;
   readonly filesystem: InMemoryFilesystem;
 
   constructor(rootId: string, nodes: NodeSummary[], uploadLimitBytes?: number, canDelete?: (node: NodeSummary) => boolean, canRead?: (node: NodeSummary) => boolean, canWrite?: (node: NodeSummary) => boolean) {
+    this.sharing = new InMemoryNodeSharing((id) => id !== rootId, (id) => nodes.find((node) => node.id === id)?.visible_to ?? { type: 'restricted' });
     this.filesystem = new InMemoryFilesystem(rootId, nodes, uploadLimitBytes, canDelete, canRead, canWrite, this.sharing.available);
   }
 }

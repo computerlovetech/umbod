@@ -204,7 +204,7 @@
     {/snippet}
   </AdminSplitWorkspace>
 {:else if data.status === 'empty'}
-  <ConnectorListEmptyState message={data.message} />
+  <ConnectorListEmptyState message={data.message} workspaceLabel="OpenAPI connectors workspace" sidebarLabel="OpenAPI connectors" sidebarHeading="OpenAPI connectors" detailLabel="Selected OpenAPI connector detail" />
 {:else if data.status === 'failed'}
   <div class="admin-message admin-message-error failure" role="alert">
     <p>{data.message}</p>
@@ -217,7 +217,7 @@
     </Button>
   </div>
 {:else}
-  <ConnectorListEmptyState message="No OpenAPI connectors are available yet." />
+  <ConnectorListEmptyState message="No OpenAPI connectors are available yet." workspaceLabel="OpenAPI connectors workspace" sidebarLabel="OpenAPI connectors" sidebarHeading="OpenAPI connectors" detailLabel="Selected OpenAPI connector detail" />
 {/if}
 
 <style>

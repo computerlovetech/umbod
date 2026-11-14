@@ -6,10 +6,10 @@ from umbod.core.filesystem import AccessGrant, NodeKind, NodeMetadata, Permissio
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
 from umbod.core.filesystem.updates import NodeChanges, NodeUpdateService, NodePatch, Unchanged
 from umbod.core.filesystem.models import MetadataPatch, UnchangedContentType, UnspecifiedContentType
-from umbod.core.filesystem.namespace import ROOT_ID
 from tests.umbod.core.filesystem.test_authorized_content import ContentContext, caller, stream
 from tests.umbod.core.filesystem.test_authorized_content import content_context as content_context
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
+from tests.support.filesystem.namespaces import set_shared_access
 
 
 def description_patch(description: str) -> NodePatch:
@@ -24,9 +24,9 @@ async def test_description_creation_update_clear_preserves_every_other_field(
     context = content_context
     metadata = NodeMetadata(content_type="text/plain", attributes={"description": "Initial", "team": "research"})
     if kind == NodeKind.FILE:
-        node = await context.service.upload(caller(), ROOT_ID, "node", metadata, stream(b"bytes"))
+        node = await context.service.upload(caller(), content_context.root_id, "node", metadata, stream(b"bytes"))
     else:
-        node = await context.creation.create_directory(caller(), ROOT_ID, "node", metadata)
+        node = await context.creation.create_directory(caller(), content_context.root_id, "node", metadata)
     before = await context.namespace.get_node(node.id)
     service = NodeUpdateService(VerifiedIdentityResolver(), context.transactions)
     await service.check_update_eligibility(caller(), node.id)
@@ -56,7 +56,7 @@ async def test_generic_patch_preserves_omitted_attributes_and_node_structure(
 ) -> None:
     context = content_context
     node = await context.service.upload(
-        caller(), ROOT_ID, "file", NodeMetadata(
+        caller(), content_context.root_id, "file", NodeMetadata(
             content_type="text/plain", attributes={"description": description, "team": "research"},
         ), stream(b"bytes"),
     )
@@ -81,7 +81,7 @@ async def test_description_requires_discover_and_write_without_missing_node_leak
     content_context: ContentContext, permissions: set[Permission],
 ) -> None:
     context = content_context
-    node = await context.creation.create_directory(caller(), ROOT_ID, "node", NodeMetadata(content_type="text/plain", attributes={}))
+    node = await context.creation.create_directory(caller(), content_context.root_id, "node", NodeMetadata(content_type="text/plain", attributes={}))
     bob = Principal(type=PrincipalType.USER, issuer="issuer", id="bob")
     await context.policies.add_grant(AccessGrant(node_id=node.id, principal=bob, permissions=permissions, recursive=False))
     service = NodeUpdateService(VerifiedIdentityResolver(), context.transactions)
@@ -94,16 +94,18 @@ async def test_description_requires_discover_and_write_without_missing_node_leak
 
 
 @pytest.mark.asyncio
-async def test_rename_direct_write_grant_needs_no_parent_access_and_rechecks_revocation(content_context: ContentContext) -> None:
+async def test_direct_write_grant_authorizes_guest_and_rechecks_explicit_revocation(content_context: ContentContext) -> None:
     context = content_context
-    node = await context.creation.create_file(caller(), ROOT_ID, "node", NodeMetadata(content_type="text/plain", attributes={}))
+    node = await context.creation.create_file(caller(), content_context.root_id, "node", NodeMetadata(content_type="text/plain", attributes={}))
     bob = Principal(type=PrincipalType.USER, issuer="issuer", id="bob")
     await context.policies.add_grant(AccessGrant(node_id=node.id, principal=bob, permissions={Permission.DISCOVER, Permission.WRITE}, recursive=False))
     service = NodeUpdateService(VerifiedIdentityResolver(), context.transactions)
-    actor = snapshot("bob", "issuer", ())
+    actor = snapshot("bob", "issuer", ("team",))
     await service.check_update_eligibility(actor, node.id)
     updated = await service.update_node(actor, node.id, NodeChanges(name="renamed").to_core_patch(), expected_revision=node.revision)
     assert updated.name == "renamed"
+    await set_shared_access(context.database, context.root_id, writable=False, discoverable=False)
+    await service.check_update_eligibility(actor, node.id)
     await context.policies.remove_grant(node.id, bob)
     with pytest.raises(PermissionDenied):
         await service.update_node(actor, node.id, description_patch(""), expected_revision=updated.revision)

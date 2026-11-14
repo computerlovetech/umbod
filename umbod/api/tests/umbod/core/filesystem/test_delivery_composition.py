@@ -10,18 +10,13 @@ from umbod.core.callers import (
 )
 from umbod.core.filesystem import (
     NodeMetadata,
-    Permission,
-    Principal,
-    PrincipalType,
-    RootBootstrapGrant,
-    RootBootstrapSpec,
 )
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
 from umbod.core.persistence import PersistenceRuntime
 from umbod.infrastructure import (
     create_filesystem_browsing,
     create_filesystem_creation,
-    create_root_provisioning,
+    create_filesystem_homes,
 )
 
 
@@ -40,12 +35,7 @@ async def test_separately_composed_delivery_services_share_namespace_and_private
     filesystem_runtime: PersistenceRuntime,
 ) -> None:
     database = filesystem_runtime.database
-    root = await create_root_provisioning(database=database).provision(RootBootstrapSpec(grants=(
-        RootBootstrapGrant(
-            principal=Principal(type=PrincipalType.GROUP, issuer="issuer", id="members"),
-            permissions=frozenset({Permission.DISCOVER, Permission.WRITE}),
-        ),
-    )))
+    root = await create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver()).get_or_provision(verified_snapshot("alice"))
     creation = create_filesystem_creation(database=database, resolver=VerifiedIdentityResolver())
     browsing = create_filesystem_browsing(database=database, resolver=VerifiedIdentityResolver())
     created = await creation.create_file(
@@ -53,6 +43,7 @@ async def test_separately_composed_delivery_services_share_namespace_and_private
     )
     assert await browsing.get_node(verified_snapshot("alice"), created.id) == created
     assert list(await browsing.list_children(verified_snapshot("alice"), root.id)) == [created]
-    assert list(await browsing.list_children(verified_snapshot("bob"), root.id)) == []
+    with pytest.raises(PermissionDenied):
+        await browsing.list_children(verified_snapshot("bob"), root.id)
     with pytest.raises(PermissionDenied):
         await browsing.get_node(verified_snapshot("bob"), created.id)

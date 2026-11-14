@@ -25,6 +25,24 @@ describe('shared subpage presentation', (): void => {
     expect(body).not.toContain('Add connector');
   });
 
+  test('omits the introduction when the page only needs a heading', (): void => {
+    const body = render(SubpageContainer, { props: { title: 'Agent behaviour', lede: '', navigation, children } }).body;
+    expect(body).toContain('Agent behaviour</h1>');
+    expect(body).not.toMatch(/<p\b/);
+  });
+
+  test('identifies a parent location without claiming its URL is the current page', (): void => {
+    const body = render(SubpageNavigation, { props: {
+      label: 'Insights views', activeId: 'behaviour', current: 'location', links: [
+        { id: 'behaviour', label: 'Agent behaviour', href: '/admin/insights/agent-behaviour' },
+        { id: 'logs', label: 'Log analytics', href: '/admin/insights/logs' }
+      ]
+    } }).body;
+    expect(body.match(/aria-current="location"/g)).toHaveLength(1);
+    expect(body).not.toContain('aria-current="page"');
+    expect(body).not.toContain('role="tab"');
+  });
+
   test('uses real subpage links and identifies exactly one current page', (): void => {
     const body = render(SubpageNavigation, { props: {
       label: 'Setup sections', activeId: 'telemetry', links: [

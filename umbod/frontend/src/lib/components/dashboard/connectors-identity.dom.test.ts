@@ -23,7 +23,7 @@ function identity(id: string): HeaderAccountIdentityState {
 }
 
 function profile(id: string): WorkspaceProfile {
-  return { user: { id: `header-${id}`, name: `Account ${id}`, email: null, picture: null }, capabilities: { administration: true } };
+  return { identity_key: `header-${id}`, user: { id: `header-${id}`, name: `Account ${id}`, email: null, picture: null }, capabilities: { administration: true } };
 }
 
 const catalogueA = {
@@ -60,6 +60,15 @@ describe('Connectors identity source epochs', () => {
       createWorkspaceApi: () => ({ profile: { get: getProfile } })
     } });
     await vi.waitFor(() => expect(document.body.textContent).toContain('Account A connector'));
+    const container = document.querySelector('.page-container');
+    expect(container).not.toBeNull();
+    const header = container!.querySelector('header');
+    expect(header?.querySelector('h1')?.textContent).toBe('Connectors');
+    expect(container!.querySelector('.page-container-actions')).toBeNull();
+    const workspace = document.querySelector('[aria-label="Your connector workspace"]');
+    expect(workspace).not.toBeNull();
+    expect(container!.querySelector('.page-container-content')?.contains(workspace!)).toBe(true);
+    expect(workspace!.contains(header!)).toBe(false);
     expect(document.querySelector('a[href="/admin/connectors"]')).not.toBeNull();
     if (pending) {
       window.dispatchEvent(new Event('focus'));
@@ -70,6 +79,8 @@ describe('Connectors identity source epochs', () => {
     inputs.replace(destination === 'B' ? identity('B') : { kind: 'hidden' });
     await tick();
     expect(catalogueSignalA?.aborted).toBe(true);
+    expect(document.querySelector('.page-container')).toBe(container);
+    expect(container!.querySelector('header')).toBe(header);
     expect(document.body.textContent).not.toContain('Account A connector');
     expect(document.querySelector('a[href="/admin/connectors"]')).toBeNull();
     expect(document.querySelector('[aria-label="Workspace sidebar"]')?.textContent).not.toContain('Account A');

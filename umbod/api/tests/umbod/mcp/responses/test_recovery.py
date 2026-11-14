@@ -10,19 +10,19 @@ from umbod.mcp.responses.rendering import render_response_guidance
 @pytest.mark.parametrize(
     ("tool_name", "arguments", "expected"),
     [
-        ("get_filesystem_root", {}, "no filesystem write"),
         ("get_filesystem_node", {}, "no filesystem write"),
         ("list_filesystem_children", {}, "no filesystem write"),
         ("filesystem_search_sharing_recipients", {}, "no filesystem write"),
+        ("filesystem_share", {}, "manageable direct grants"),
         ("filesystem_browse", {"operation": "stat"}, "no filesystem write"),
         ("filesystem_browse", {"operation": "home"}, "home provisioning"),
+        ("filesystem_browse", {"operation": "namespaces"}, "namespace"),
         ("create_filesystem_file", {}, "original parent"),
         ("create_filesystem_directory", {}, "original parent"),
         ("filesystem_upload", {}, "original destination"),
         ("filesystem_begin_upload", {}, "staging session was created"),
         ("filesystem_complete_upload", {}, "same upload_id"),
         ("update_filesystem_node", {}, "original node UUID"),
-        ("filesystem_share", {}, "manageable direct grants"),
         ("filesystem_delete_file", {}, "fresh explicit human confirmation"),
         ("read_connector_configuration", {}, "No configuration write was requested"),
         ("upsert_connector_configuration", {}, "read_connector_configuration"),
@@ -113,5 +113,21 @@ def test_read_permission_failure_does_not_claim_creation_permissions_are_require
     ))
 
     assert "no filesystem write" in text
-    assert "Ask the owner" in text
+    assert "Ask the item owner or a namespace administrator" in text
     assert "Creating files requires" not in text
+
+
+@pytest.mark.parametrize("state", [OperationState.UNKNOWN, OperationState.COMPLETED])
+@pytest.mark.parametrize("operation", ["ls", "tree", "stat"])
+@pytest.mark.parametrize("target", [{"type": "root"}, {"type": "path", "path": "/private-secret"}])
+def test_personal_root_and_path_recovery_acknowledges_possible_namespace_provisioning(
+    state: OperationState, operation: str, target: dict[str, str],
+) -> None:
+    instructions = " ".join(recovery_instructions(
+        "filesystem_browse", {"operation": operation, "target": target}, "operation_failed", state,
+    ))
+
+    assert "Personal namespace provisioning may already have completed" in instructions
+    assert "only your personal files" in instructions
+    assert "no filesystem write" not in instructions
+    assert "private-secret" not in instructions

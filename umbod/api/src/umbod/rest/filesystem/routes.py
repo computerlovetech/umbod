@@ -13,11 +13,12 @@ from umbod.core.filesystem.browsing.exploration import FilesystemBrowser
 from umbod.core.filesystem.access import CallerNodeSummary
 from umbod.core.filesystem.homes import HomeService
 
+from umbod.core.filesystem.namespaces import NamespaceService, NamespaceSummary
 from .access import Access, CallerBrowseResult
 from .deps import (
     get_filesystem_browsing, get_filesystem_caller, get_filesystem_creation, get_filesystem_homes,
     get_filesystem_content, get_filesystem_explorer, get_filesystem_browse_node_id,
-    get_filesystem_download_delivery,
+    get_filesystem_download_delivery, get_filesystem_namespaces,
 )
 from .deletion import router as deletion_router
 from .metadata import router as metadata_router
@@ -39,7 +40,7 @@ Content = Annotated[FilesystemContent, Depends(get_filesystem_content)]
     "/browse", response_model=CallerBrowseResult,
     openapi_extra={"parameters": [{
         "name": "node_id", "in": "query", "required": False,
-        "description": "Node to browse; omit to browse the filesystem root.",
+        "description": "Node to browse; omit to browse personal files.",
         "schema": {"type": "string", "format": "uuid"},
     }]},
 )
@@ -55,6 +56,17 @@ async def browse(
         return CallerBrowseResult(
             **result.model_dump(exclude={"node", "entries"}), node=nodes[0], entries=nodes[1:],
         )
+
+
+@router.get("/namespaces")
+async def list_namespaces(
+    caller: Caller, response: Response,
+    namespaces: Annotated[NamespaceService, Depends(get_filesystem_namespaces)],
+) -> dict[str, list[NamespaceSummary]]:
+    with filesystem_errors():
+        result = await namespaces.list(caller)
+    response.headers["Cache-Control"] = "no-store"
+    return {"namespaces": result}
 
 
 @router.get("/nodes/{node_id}", response_model=CallerNodeSummary)

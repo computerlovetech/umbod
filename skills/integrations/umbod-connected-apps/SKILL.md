@@ -15,7 +15,7 @@ When `search_tools` is available, make a read-only discovery call using the app 
 
 When app tools are exposed directly, listing them is sufficient for setup. Do not invoke app operations merely to test installation. Report connection and discovery results separately, and do not claim access has been verified when listing or discovery failed.
 
-If the server is missing or requires sign-in, ask the user to inspect `/mcp` in Codex. For the bundled server named `umbod`, the terminal authentication command is `codex mcp login umbod`. Never request account passwords, access tokens, or telemetry tokens in chat.
+If the server is missing or requires sign-in, ask the user to inspect `/mcp` in their coding harness and use that connection's sign-in flow. Plugin-bundled connections may have harness-specific names; do not assume a standalone server name or authentication command. Never request account passwords, access tokens, or telemetry tokens in chat.
 
 ## Discover and execute
 

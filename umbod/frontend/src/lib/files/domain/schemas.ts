@@ -1,6 +1,16 @@
 import { z } from 'zod';
 
 export const nodeIdSchema = z.uuid();
+export const filesystemNamespaceSchema = z.strictObject({
+  id: nodeIdSchema,
+  root_node_id: nodeIdSchema,
+  name: z.string(),
+  description: z.string(),
+  kind: z.enum(['personal', 'shared']),
+  permissions: z.array(z.enum(['discover', 'read', 'write', 'delete']))
+});
+export const filesystemNamespacesSchema = z.strictObject({ namespaces: z.array(filesystemNamespaceSchema) });
+export type FilesystemNamespace = z.infer<typeof filesystemNamespaceSchema>;
 const emptyObjectSchema = z.strictObject({});
 export const metadataSchema = z.object({
   content_type: z.union([z.string(), emptyObjectSchema]),
@@ -13,27 +23,14 @@ export const nodePermissionsSchema = z.strictObject({
   can_delete: z.boolean(),
   can_share: z.boolean()
 });
-export const nodePrincipalSchema = z.strictObject({
-  type: z.enum(['user', 'group', 'system']),
-  issuer: z.string(),
-  id: z.string()
-});
-export const nodeGrantSchema = z.strictObject({
-  node_id: nodeIdSchema,
-  principal: nodePrincipalSchema,
-  permissions: z.array(z.enum(['discover', 'read', 'write', 'delete', 'share'])),
-  recursive: z.boolean()
-});
 export const nodeVisibilitySchema = z.discriminatedUnion('type', [
   z.strictObject({
-    type: z.literal('available'),
-    scope: z.literal('direct_node_policy'),
-    owner: nodePrincipalSchema,
-    grants: z.array(nodeGrantSchema),
-    group_members_expanded: z.literal(false)
+    type: z.literal('namespace'),
+    namespace_id: nodeIdSchema,
+    kind: z.enum(['personal', 'shared']),
+    name: z.string()
   }),
-  z.strictObject({ type: z.literal('restricted') }),
-  z.strictObject({ type: z.literal('unavailable') })
+  z.strictObject({ type: z.literal('restricted') })
 ]);
 export const nodeSummarySchema = z.strictObject({
   id: nodeIdSchema,
@@ -80,7 +77,7 @@ export const browseResultSchema = z.strictObject({
   const invalid = last?.id !== node.id || last.name !== node.name || last.kind !== node.kind
     || new Set(breadcrumbs.items.map((item) => item.id)).size !== breadcrumbs.items.length
     || breadcrumbs.items.slice(0, -1).some((item) => item.kind !== 'directory')
-    || breadcrumbs.complete && (breadcrumbs.items[0].kind !== 'directory' || breadcrumbs.items[0].name !== '')
+    || breadcrumbs.complete && (breadcrumbs.items[0].kind !== 'directory')
     || node.kind === 'file' && entries.length !== 0
     || entries.some((entry) => entry.parent_id !== node.id)
     || new Set(ids).size !== ids.length

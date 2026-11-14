@@ -128,15 +128,16 @@ async def test_each_tool_invocation_captures_exactly_one_current_token(
     )
     assert source.call_count == 0
     async with Client(server) as client:
-        root = (await client.call_tool("get_filesystem_root", {})).data
+        home = await client.call_tool("filesystem_browse", {"operation": "home"})
+        root = home.structured_content["result"]["node"]["id"]
         node = (await client.call_tool("create_filesystem_file", {
-            "parent_id": str(root.id), "name": "empty",
+            "parent_id": root, "name": "empty",
             "metadata": {"content_type": {}, "attributes": {}},
         })).data
         await client.call_tool("get_filesystem_node", {"node_id": str(node.id)})
-        await client.call_tool("list_filesystem_children", {"parent_id": str(root.id)})
+        await client.call_tool("list_filesystem_children", {"parent_id": root})
         await client.call_tool("create_filesystem_directory", {
-            "parent_id": str(root.id), "name": "directory",
+            "parent_id": root, "name": "directory",
             "metadata": {"content_type": {}, "attributes": {}},
         })
     assert source.call_count == 5

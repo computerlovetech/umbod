@@ -1,3 +1,4 @@
+import { InMemoryNamespaceAdministration } from '../../../../../tests/support/filesystem/in-memory-namespace-administration';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
@@ -18,7 +19,7 @@ afterEach(async (): Promise<void> => {
 const settle = async (): Promise<void> => { await tick(); await tick(); await tick(); };
 
 describe('persistent group permissions composition', () => {
-  it('replaces only active detail content and retains chrome, selection and both drafts', async (): Promise<void> => {
+  it('replaces only active detail content and retains chrome, selection and connector drafts', async (): Promise<void> => {
     const fixture = createWorkspace();
     const { state } = fixture;
     const inputs = new SvelteMap<string, GroupPermissionsTab>([['tab', 'connectors']]);
@@ -26,7 +27,7 @@ describe('persistent group permissions composition', () => {
     await vi.waitFor(() => expect(state.connectors?.editorStatus).toBe('ready'));
     component = mount(WorkspaceTestHarness, { target: document.body, props: { state, get tab(): GroupPermissionsTab { return inputs.get('tab')!; } } });
     flushSync();
-    const selectors = ['.workspace-shell', '[aria-label="Administration navigation"]', '.page-header', '.permission-tabs', '.admin-split-workspace', 'aside[aria-label="Groups"]', '.groups', '.group-header'];
+    const selectors = ['.workspace-shell', '[aria-label="Administration navigation"]', '.page-header', 'nav[aria-label="Group permission type"]', '.admin-split-workspace', 'aside[aria-label="Groups"]', '.groups', '.group-header'];
     const nodes = selectors.map((selector) => document.querySelector(selector));
     for (const node of nodes) expect(node).not.toBeNull();
     const firstCheckbox = document.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
@@ -35,22 +36,17 @@ describe('persistent group permissions composition', () => {
     expect(state.connectors?.hasUnsavedChanges).toBe(true);
     state.activate('filesystem');
     inputs.set('tab', 'filesystem');
-    await vi.waitFor(() => expect(document.body.textContent).toContain('Browse root'));
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Shared namespaces'));
     expect(firstCheckbox.isConnected).toBe(false);
-    const read = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find((input) => input.closest('label')?.textContent?.trim() === 'Read')!;
-    read.click();
-    await settle();
     state.activate('connectors');
     inputs.set('tab', 'connectors');
     await settle();
     expect(document.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true);
-    expect(read.isConnected).toBe(false);
-    expect(state.filesystem.dirty).toBe(true);
     selectors.forEach((selector, index) => expect(document.querySelector(selector)).toBe(nodes[index]));
     const readers = [...document.querySelectorAll<HTMLButtonElement>('aside[aria-label="Groups"] button')].find((button) => button.textContent?.includes('Readers'))!;
     readers.click();
     await settle();
-    expect(document.body.textContent).toContain('unsaved connector changes');
+    expect(document.body.textContent).toContain('unsaved permission changes');
     const discard = [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Discard changes')!;
     discard.click();
     await settle();
@@ -59,39 +55,57 @@ describe('persistent group permissions composition', () => {
     state.activate('filesystem');
     inputs.set('tab', 'filesystem');
     await settle();
-    expect(state.filesystemEditor.selected?.group_id).toBe('b');
-    expect(fixture.list).not.toHaveBeenCalled();
-    expect(fixture.root).toHaveBeenCalledTimes(1);
     expect(fixture.targets).toHaveBeenCalledTimes(1);
     state.dispose();
   });
 
-  it('offers explicit confirmed recovery after a filesystem save failure without remounting the workspace', async (): Promise<void> => {
-    const { state, filesystem } = createWorkspace();
-    vi.spyOn(filesystem, 'replaceRootAccess').mockRejectedValueOnce(new Error('Temporary failure'));
+
+  it('retains local namespace access across tab remounts and guards hidden drafts through the real sidebar', async (): Promise<void> => {
+    const api = new InMemoryNamespaceAdministration([], ['a', 'b']);
+    await api.create({ name: 'Research', groups: [] });
+    const { state } = createWorkspace(undefined, api);
+    const inputs = new SvelteMap<string, GroupPermissionsTab>([['tab', 'filesystem']]);
+    await state.namespaces.ensureLoaded();
     state.activate('filesystem');
-    await vi.waitFor(() => expect(state.filesystem.saved).not.toBeNull());
-    component = mount(WorkspaceTestHarness, { target: document.body, props: { state, tab: 'filesystem' } });
-    flushSync();
-    const shell = document.querySelector('.workspace-shell');
-    const read = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].find((input) => input.closest('label')?.textContent?.trim() === 'Read')!;
-    read.click();
+    component = mount(WorkspaceTestHarness, { target: document.body, props: { state, get tab(): GroupPermissionsTab { return inputs.get('tab')!; } } });
     await settle();
-    document.querySelector<HTMLButtonElement>('button[aria-label="Save permissions"]')!.click();
+    const sidebar = document.querySelector('aside[aria-label="Groups"]');
+    expect(sidebar).not.toBeNull();
+    const read = document.querySelector<HTMLInputElement>('fieldset[aria-label="Access to Research"] input[value="read"]');
+    expect(read).not.toBeNull();
+    read!.click();
     await settle();
-    expect(state.filesystem.blocked).toBe(true);
-    const recovery = [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent === 'Reload policy')!;
-    recovery.click();
+    expect((await api.list())[0].groups).toEqual([]);
+    state.activate('connectors');
+    inputs.set('tab', 'connectors');
+    await vi.waitFor(() => expect(state.connectors?.editorStatus).toBe('ready'));
     await settle();
-    expect(state.filesystem.confirmation).toBe('reload');
-    expect(state.filesystem.dirty).toBe(true);
-    const discard = [...document.querySelectorAll<HTMLButtonElement>('dialog button')].find((button) => button.textContent === 'Discard and reload')!;
-    discard.click();
+    const readers = [...document.querySelectorAll<HTMLButtonElement>('aside[aria-label="Groups"] button')].find((button) => button.textContent?.includes('Readers'));
+    expect(readers).toBeDefined();
+    readers!.click();
     await settle();
-    expect(state.filesystem.blocked).toBe(false);
-    expect(state.filesystem.dirty).toBe(false);
-    expect(document.querySelector('.workspace-shell')).toBe(shell);
-    expect(state.selectedGroupId).toBe('a');
+    expect(document.body.textContent).toContain('unsaved permission changes');
+    const cancel = [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.trim() === 'Cancel');
+    expect(cancel).toBeDefined();
+    cancel!.click();
+    await settle();
+    expect(document.querySelector('.group-header h2')?.textContent).toBe('Operators');
+    state.activate('filesystem');
+    inputs.set('tab', 'filesystem');
+    await settle();
+    expect(document.querySelector<HTMLInputElement>('fieldset[aria-label="Access to Research"] input[value="read"]')?.checked).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>('button[aria-label="Save permissions"]')?.disabled).toBe(false);
+    readers!.click();
+    await settle();
+    const discard = [...document.querySelectorAll<HTMLButtonElement>('button')].find((button) => button.textContent?.trim() === 'Discard changes');
+    expect(discard).toBeDefined();
+    discard!.click();
+    await settle();
+    expect(document.querySelector('.group-header h2')?.textContent).toBe('Readers');
+    expect(document.querySelector<HTMLInputElement>('fieldset[aria-label="Access to Research"] input[value="none"]')?.checked).toBe(true);
+    expect(document.querySelector<HTMLButtonElement>('button[aria-label="Save permissions"]')?.disabled).toBe(true);
+    expect(document.querySelector('aside[aria-label="Groups"]')).toBe(sidebar);
+    expect((await api.list())[0].groups).toEqual([]);
     state.dispose();
   });
 

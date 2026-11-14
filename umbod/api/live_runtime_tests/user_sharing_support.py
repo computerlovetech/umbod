@@ -30,15 +30,17 @@ async def assert_mcp_user_target_sharing(
     assert sharing_write_payload(await alice.call_tool("filesystem_share", command)) == {**command, "recursive": False, "changed": True}
     assert sharing_write_payload(await alice.call_tool("filesystem_share", command)) == {**command, "recursive": False, "changed": False}
     inspected = tool_payload(await alice.call_tool("get_filesystem_node", {"node_id": node_id}))
+    assert inspected["permissions"]["can_share"] is True
     assert inspected["sharing"] == {
         "can_share": True,
-        "grants": [{"recipient": {**target, "label": recipient["label"]}, "permissions": ["discover", "read"], "recursive": False}],
+        "grants": [{"recipient": recipient, "permissions": ["discover", "read"], "recursive": False}],
     }
     received = tool_payload(await bob.call_tool("get_filesystem_node", {"node_id": node_id}))
     assert received["id"] == node_id
+    assert received["permissions"]["can_share"] is False
     assert received["sharing"] == {"can_share": False}
     assert received["permissions"]["can_write"] is False
-    assert received["visible_to"] == {"type": "restricted"}
+    assert received["visible_to"]["type"] in {"namespace", "restricted"}
 
 
 def assert_rest_recipient_scopes(

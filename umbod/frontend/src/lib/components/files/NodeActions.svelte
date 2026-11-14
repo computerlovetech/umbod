@@ -12,13 +12,13 @@
   import NodeDetailsDialog from './NodeDetailsDialog.svelte';
   import NodeActionIcon from './NodeActionIcon.svelte';
 
-  let { update, description, name, signIn, node, sharing, deletion, onconfirm, mutationsAllowed = true, displayName }: { update: NodeUpdateState; description: DescriptionState; name: string; signIn: () => void; node?: NodeSummary; sharing?: SharingEligibilityState; deletion?: DeletionState; onconfirm?: () => void; mutationsAllowed?: boolean; displayName?: string } = $props();
-  const menuState = new NodeActionsState(() => ({ update, description, node, sharing, deletion, mutationsAllowed }));
+  let { update, description, name, signIn, node, sharing, deletion, onconfirm, mutationsAllowed = true, displayName, disabled = false, contextKey = 0 }: { update: NodeUpdateState; description: DescriptionState; name: string; signIn: () => void; node?: NodeSummary; sharing?: SharingEligibilityState; deletion?: DeletionState; onconfirm?: () => void; mutationsAllowed?: boolean; displayName?: string; disabled?: boolean; contextKey?: number } = $props();
+  const menuState = new NodeActionsState(() => ({ update, description, node, sharing, deletion, mutationsAllowed, disabled, contextKey }));
 </script>
 
 {#if menuState.available}
   <div class="node-actions" {@attach menuState.attach}>
-    <ActionMenu open={menuState.open} label={`Actions for “${name || 'Files'}”`} onopenchange={menuState.setOpen} --action-menu-trigger-size="var(--node-actions-trigger-size, 2.75rem)" --action-menu-trigger-z-index="1" --action-menu-min-width="12.5rem">
+    <ActionMenu {disabled} open={menuState.open} label={`Actions for “${name || 'Files'}”`} onopenchange={menuState.setOpen} --action-menu-trigger-size="var(--node-actions-trigger-size, 2.75rem)" --action-menu-trigger-z-index="1" --action-menu-min-width="12.5rem">
       {#snippet trigger()}
         <svg aria-hidden="true" focusable="false" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><circle cx="5" cy="12" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="19" cy="12" r="1.5" /></svg>
       {/snippet}

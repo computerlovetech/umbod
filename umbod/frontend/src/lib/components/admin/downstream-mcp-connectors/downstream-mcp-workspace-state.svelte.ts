@@ -25,7 +25,7 @@ export type DownstreamMcpWorkspaceBundle = {
   invocationPolicies?: InvocationPolicyTool[];
 };
 
-export type DownstreamMcpModal = 'choose' | 'personal' | 'create' | 'configure' | 'delete' | null;
+export type DownstreamMcpModal = 'choose' | 'personal' | 'personal-edit' | 'create' | 'configure' | 'delete' | null;
 
 export interface DownstreamMcpCreateValues {
   displayName: string;
@@ -105,6 +105,8 @@ export class DownstreamMcpWorkspaceState {
   open = (modal: Exclude<DownstreamMcpModal, null>, trigger: HTMLElement, connector?: DownstreamMcpConnector): void => {
     if (this.operations.locked) return;
     if (modal === 'configure' && connector && connector.authorization_mode !== 'shared') return;
+    if (modal === 'personal-edit' && (!connector || connector.authorization_mode !== 'personal')) return;
+    this.menuOpen = false;
     this.returnFocus = trigger;
     this.authMode = connector?.auth_mode === 'static_bearer' ? 'static_bearer' : 'none';
     this.headerType = connector?.header_type ?? 'bearer';
@@ -205,7 +207,7 @@ export class DownstreamMcpWorkspaceState {
   finishSubmit = (): void => { this.submitting = false; };
   failSubmit = (message: string): void => { this.submitError = message; this.submitting = false; };
   setMenuOpen = (open: boolean): void => { this.menuOpen = open; };
-  handleKeydown = (event: KeyboardEvent): void => { if (event.key === 'Escape') this.close(); };
+  handleKeydown = (event: KeyboardEvent): void => { if (event.key === 'Escape' && this.modal !== 'personal-edit') this.close(); };
 }
 
 async function loadDownstreamBundle(connectorId: string, signal?: AbortSignal): Promise<DownstreamMcpWorkspaceBundle> {

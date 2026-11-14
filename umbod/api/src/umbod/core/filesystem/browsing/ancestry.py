@@ -10,6 +10,7 @@ from ..authorization import PermissionDenied
 
 async def discoverable_breadcrumbs(
     node_id: NodeId, discover: Callable[[NodeId], Awaitable[Optional[NodeSummary]]],
+    namespace_roots: frozenset[NodeId],
 ) -> Breadcrumbs:
     items: list[BreadcrumbItem] = []
     visited: set[NodeId] = set()
@@ -26,6 +27,8 @@ async def discoverable_breadcrumbs(
         if node.id != current_id or (items and node.kind != NodeKind.DIRECTORY):
             raise StorageFailure("Invalid filesystem ancestry")
         items.append(BreadcrumbItem(id=node.id, name=node.name, kind=node.kind))
+        if node.id in namespace_roots:
+            return Breadcrumbs(items=list(reversed(items)), complete=True)
         if node.id == ROOT_ID:
             if not isinstance(node.parent_id, RootParent) or node.kind != NodeKind.DIRECTORY or node.name != "":
                 raise StorageFailure("Invalid filesystem ancestry")

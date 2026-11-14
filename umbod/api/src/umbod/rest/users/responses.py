@@ -18,5 +18,6 @@ class UserCapabilitiesResponse(Model):
 
 
 class UserProfileResponse(Model):
+    identity_key: str = Field(description="Opaque issuer-qualified authenticated identity key for client state isolation.")
     user: CurrentUserResponse
     capabilities: UserCapabilitiesResponse

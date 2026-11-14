@@ -10,16 +10,16 @@ from umbod.core.filesystem import ByteStream, ContentDriver, ContentRef, Storage
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
 from umbod.core.filesystem.content import UploadTooLarge
 from umbod.core.filesystem.deletion import DeletionService
-from umbod.core.filesystem.namespace import ROOT_ID
 from umbod.core.filesystem.stores.uploads import DatabaseUploadTransactions
 from umbod.core.filesystem.uploads import UploadService
 from umbod.core.filesystem.uploads.errors import UploadChecksumMismatch, UploadConflict, UploadExpired, UploadLengthMismatch, UploadMediaTypeMismatch
 from umbod.core.filesystem.uploads.models import ExternalTransfer, ExternalTransferInstructions, ExternalTransferRequest, ExpectedChecksum, NoExpectedChecksum, UploadedContent, UploadSession, VerifiedReceipt
 from umbod.core.persistence import PersistenceRuntime
-from tests.umbod.core.filesystem.test_authorized_content import alice, caller, metadata, stream
+from tests.umbod.core.filesystem.test_authorized_content import caller, metadata, stream
 from tests.umbod.core.filesystem.test_authorized_content import content_context as content_context
 from tests.umbod.core.filesystem.test_upload_sessions import UploadContext, uploads as uploads
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
+from tests.support.filesystem.namespaces import set_shared_access
 
 
 class MemoryExternalContent:
@@ -71,7 +71,7 @@ def external_service(
     uploads: UploadContext, runtime: PersistenceRuntime,
 ) -> tuple[UploadService, MemoryExternalContent]:
     async def inspect_namespace() -> None:
-        await uploads.content.namespace.list_children(ROOT_ID)
+        await uploads.content.namespace.list_children(uploads.content.root_id)
 
     content = MemoryExternalContent(uploads.content.content, inspect_namespace)
     service = UploadService(
@@ -86,7 +86,7 @@ async def test_external_completion_reads_outside_transaction_and_persists_receip
     uploads: UploadContext, filesystem_runtime: PersistenceRuntime,
 ) -> None:
     service, content = external_service(uploads, filesystem_runtime)
-    upload = await service.begin_transfer(caller(), ROOT_ID, "external", metadata(), 3, NoExpectedChecksum())
+    upload = await service.begin_transfer(caller(), uploads.content.root_id, "external", metadata(), 3, NoExpectedChecksum())
     assert isinstance(upload.delegated_transfer, ExternalTransfer)
     instructions = await service.transfer_instructions(upload)
     assert instructions.url.startswith("https://objects.example.test/")
@@ -94,7 +94,7 @@ async def test_external_completion_reads_outside_transaction_and_persists_receip
     assert "signature" not in upload.model_dump_json()
     content.objects[upload.delegated_transfer.storage_key] = (b"abc", "application/octet-stream")
     assert (await service.get(caller(), upload.id)).progress.status == "pending"
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
     with pytest.raises(UploadConflict):
         await service.put(caller(), upload.id, "application/octet-stream", stream(b"abc"))
     with pytest.raises(PermissionDenied):
@@ -125,7 +125,7 @@ async def test_external_failure_leaves_session_pending_and_namespace_empty(
 ) -> None:
     service, content = external_service(uploads, filesystem_runtime)
     upload = await service.begin_transfer(
-        caller(), ROOT_ID, "invalid", metadata(), 3, ExpectedChecksum(sha256=hashlib.sha256(b"abc").hexdigest()),
+        caller(), uploads.content.root_id, "invalid", metadata(), 3, ExpectedChecksum(sha256=hashlib.sha256(b"abc").hexdigest()),
     )
     assert isinstance(upload.delegated_transfer, ExternalTransfer)
     errors = {"missing": UploadConflict, "short": UploadLengthMismatch, "long": UploadLengthMismatch,
@@ -138,7 +138,7 @@ async def test_external_failure_leaves_session_pending_and_namespace_empty(
     with pytest.raises(errors[failure]):
         await service.complete_verified(caller(), upload.id)
     assert (await service.get(caller(), upload.id)).progress.status == "pending"
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
 
 
 @pytest.mark.asyncio
@@ -147,12 +147,12 @@ async def test_external_completion_checks_authorization_before_readback(
     uploads: UploadContext, filesystem_runtime: PersistenceRuntime, failure: str,
 ) -> None:
     service, content = external_service(uploads, filesystem_runtime)
-    upload = await service.begin_transfer(caller(), ROOT_ID, "private", metadata(), 0, NoExpectedChecksum())
+    upload = await service.begin_transfer(caller(), uploads.content.root_id, "private", metadata(), 0, NoExpectedChecksum())
     identity = caller()
     if failure == "foreign":
         identity = snapshot("bob", "issuer", ())
     elif failure == "revoked":
-        await uploads.content.policies.remove_grant(ROOT_ID, alice())
+        await set_shared_access(uploads.content.database, uploads.content.root_id, writable=False, discoverable=False)
     else:
         uploads.clock.current += timedelta(hours=1)
     with pytest.raises(UploadExpired if failure == "expired" else PermissionDenied):
@@ -165,14 +165,14 @@ async def test_transfer_deadline_is_fixed_and_internal_upload_still_uses_content
     uploads: UploadContext, filesystem_runtime: PersistenceRuntime,
 ) -> None:
     service, content = external_service(uploads, filesystem_runtime)
-    upload = await service.begin_transfer(caller(), ROOT_ID, "deadline", metadata(), 0, NoExpectedChecksum())
+    upload = await service.begin_transfer(caller(), uploads.content.root_id, "deadline", metadata(), 0, NoExpectedChecksum())
     await service.transfer_instructions(upload)
     uploads.clock.current += timedelta(minutes=10)
     await service.transfer_instructions(await service.get(caller(), upload.id))
     assert content.preparations[0].transfer.expires_at == content.preparations[1].transfer.expires_at
     uploads.clock.current += timedelta(minutes=5)
     assert (await service.transfer_instructions(await service.get(caller(), upload.id))).reason == "expired"
-    internal = await service.begin(caller(), ROOT_ID, "inline", metadata(), 1)
+    internal = await service.begin(caller(), uploads.content.root_id, "inline", metadata(), 1)
     await service.put(caller(), internal.id, "application/octet-stream", stream(b"x"))
     assert (await service.complete_verified(caller(), internal.id)).created
 
@@ -185,7 +185,7 @@ async def test_external_admission_rejects_unauthorized_invalid_and_oversize_befo
     with pytest.raises(PermissionDenied):
         await service.begin_transfer(caller(), uuid4(), "file", metadata(), 0, NoExpectedChecksum())
     with pytest.raises(UploadTooLarge):
-        await service.begin_transfer(caller(), ROOT_ID, "large", metadata(), 7, NoExpectedChecksum())
+        await service.begin_transfer(caller(), uploads.content.root_id, "large", metadata(), 7, NoExpectedChecksum())
     assert not content.preparations
 
 
@@ -194,7 +194,7 @@ async def test_external_and_legacy_session_payloads_roundtrip(
     uploads: UploadContext, filesystem_runtime: PersistenceRuntime,
 ) -> None:
     service, _ = external_service(uploads, filesystem_runtime)
-    upload = await service.begin_transfer(caller(), ROOT_ID, "serialization", metadata(), 0, NoExpectedChecksum())
+    upload = await service.begin_transfer(caller(), uploads.content.root_id, "serialization", metadata(), 0, NoExpectedChecksum())
     assert UploadSession.model_validate_json(upload.model_dump_json()) == upload
     legacy = upload.model_dump(mode="json")
     del legacy["delegated_transfer"]

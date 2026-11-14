@@ -11,6 +11,7 @@ from umbod.core.filesystem.content import FilesystemContent
 from umbod.core.filesystem.updates import FilesystemNodeUpdates
 from umbod.core.filesystem.deletion import FilesystemDeletion
 from umbod.core.filesystem.homes import HomeService
+from umbod.core.filesystem.namespaces import NamespaceService
 from umbod.core.filesystem.access import AccessMetadataService
 from umbod.core.filesystem.uploads import UploadService
 from umbod.core.filesystem.sharing import FilesystemSharing
@@ -46,10 +47,11 @@ class FilesystemServiceFactory(Protocol):
 
     def homes(self) -> HomeService: ...
 
+    def namespaces(self) -> NamespaceService: ...
+
     def access(self) -> AccessMetadataService: ...
 
     def sharing(self) -> FilesystemSharing: ...
-
     def browsing(self) -> FilesystemBrowsing: ...
 
     def creation(self) -> FilesystemCreation: ...

@@ -10,6 +10,7 @@ description: "Neutral authenticated profile, workspace navigation and capability
 - [Domain](./domain/README.md) — Profile identity and explicit capability validation.
 - [Infrastructure](./infrastructure/README.md) — Profile HTTP route and composite workspace client.
 - [in-memory-api.test-support.ts](./in-memory-api.test-support.ts) — Test-only validated profile adapter.
+- [profile-identity.ts](./profile-identity.ts) — Trusted opaque profile identity keys mapped to account request fences without changing displayed user fields.
 - [admin-access.ts](./admin-access.ts) — Capability-based navigation eligibility with independent visible identity.
 - [admin-access.test.ts](./admin-access.test.ts) — Access presentation tests.
 - [navigation.ts](./navigation.ts) — Separate workspace and administration destinations, sidebar labels, icons and route matching.

@@ -26,9 +26,12 @@ from .conftest import FilesystemMcp, caller_snapshot
 from .test_browsing import create_node
 from .test_tools import root_id
 from .test_upload import upload
+from .test_visibility import shared_namespace, save_namespace_access, select_caller
+from umbod.infrastructure import create_filesystem_namespace_management
+from umbod.core.filesystem.namespaces import SaveSharedNamespace
 
 TOOL = "filesystem_delete_file"
-DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."
+DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask an administrator for namespace access."
 
 
 async def approve_deletion(*args: object) -> dict[str, bool]:
@@ -72,7 +75,7 @@ async def test_delete_removes_namespace_and_policies_retains_bytes_and_preserves
         assert result.structured_content == {"node_id": node_id, "deleted": True}
         descriptor = next(tool for tool in await client.list_tools() if tool.name == TOOL)
         validate(result.structured_content, descriptor.output_schema)
-        listing = await client.call_tool("filesystem_browse", {"operation": "ls", "target": {"type": "root"}})
+        listing = await client.call_tool("filesystem_browse", {"operation": "ls", "target": {"type": "node", "node_id": parent}})
         assert [node["id"] for node in listing.structured_content["result"]["entries"]] == [sibling]
         repeated = await client.call_tool(TOOL, {
             "node_id": node_id, "expected_revision": published.structured_content["revision"],
@@ -108,7 +111,7 @@ async def test_stale_revision_preserves_node_and_policy(filesystem_invocation_mc
     assert result.is_error
     assert result.content[0].text == "filesystem_revision_conflict: Filesystem revision conflict. Read the current node, review its changes, and retry with its current revision."
     assert {key: value for key, value in before.structured_content.items() if key != "visible_to"} == {key: value for key, value in after.structured_content.items() if key != "visible_to"}
-    assert after.structured_content["visible_to"]["grants"] == [grant.model_dump(mode="json")]
+    assert after.structured_content["visible_to"] == before.structured_content["visible_to"]
     assert await policies.get_owner(UUID(node_id)) == owner
     assert await policies.list_grants(UUID(node_id)) == [grant]
     assert any(sample.labels["tool_name"] == TOOL and sample.labels["outcome"] == "failure"
@@ -197,25 +200,23 @@ async def test_delete_requires_current_verified_identity(
 
 
 @pytest.mark.asyncio
-async def test_direct_node_grant_authorizes_without_parent_access_and_revocation_is_fresh(
-    filesystem_invocation_mcp: FilesystemMcp,
-) -> None:
-    policies = create_access_control_driver(database=filesystem_invocation_mcp.database)
-    principal = Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob")
-    async with Client(filesystem_invocation_mcp.server, elicitation_handler=approve_deletion) as client:
-        node_id = await create_node(client, await root_id(client), "file", "file")
-        grant = AccessGrant(node_id=UUID(node_id), principal=principal,
-                            permissions={Permission.DISCOVER, Permission.DELETE}, recursive=False)
-        await policies.add_grant(grant)
-        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
-            "bob", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED,
-        ))
+async def test_shared_namespace_revocation_is_fresh_before_delete(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    filesystem = filesystem_invocation_mcp
+    policy = await shared_namespace(filesystem)
+    select_caller(filesystem, "alice", (policy.groups[0].group_id,))
+    async with Client(filesystem.server, elicitation_handler=approve_deletion) as client:
+        node_id = await create_node(client, str(policy.root_node_id), "file", "file")
+        select_caller(filesystem, "bob", (policy.groups[0].group_id,))
         await client.call_tool("get_filesystem_node", {"node_id": node_id})
-        await policies.remove_grant(UUID(node_id), principal)
+        revoked_policy = await save_namespace_access(filesystem, policy, None)
         revoked = await client.call_tool(TOOL, {"node_id": node_id, "expected_revision": 1}, raise_on_error=False)
         assert revoked.is_error
         assert revoked.content[0].text == DENIED
-        await policies.add_grant(grant)
+        await create_filesystem_namespace_management(database=filesystem.database, issuer="https://issuer").save(
+            policy.id, SaveSharedNamespace(
+                expected_revision=revoked_policy.revision, name=policy.name, groups=policy.groups,
+            ),
+        )
         deleted = await client.call_tool(TOOL, {"node_id": node_id, "expected_revision": 1})
     assert deleted.structured_content == {"node_id": node_id, "deleted": True}
 

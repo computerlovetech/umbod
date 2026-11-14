@@ -26,14 +26,12 @@ from .conftest import FilesystemMcp, caller_snapshot
 from .test_browsing import create_node
 from .test_tools import root_id
 
-VARIANTS = ["ls", "tree", "stat", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children"]
+VARIANTS = ["ls", "tree", "stat", "get_filesystem_node", "list_filesystem_children"]
 
 
 def request(variant: str, target: str) -> tuple[str, dict[str, Any]]:
     if variant in {"ls", "tree", "stat"}:
         return "filesystem_browse", {"operation": variant, "target": {"type": "node", "node_id": target}}
-    if variant == "get_filesystem_root":
-        return variant, {}
     return variant, {"parent_id" if variant == "list_filesystem_children" else "node_id": target}
 
 
@@ -54,10 +52,11 @@ async def test_restricted_reads_omit_grants_in_every_read_variant(
 ) -> None:
     async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
-        child = await create_node(client, root, "visible", "file")
+        root = await create_node(client, root, "shared-folder", "directory")
+        await create_node(client, root, "visible", "file")
         await create_access_control_driver(database=filesystem_invocation_mcp.database).add_grant(AccessGrant(
-            node_id=UUID(child), principal=Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob"),
-            permissions={Permission.DISCOVER}, recursive=False,
+            node_id=UUID(root), principal=Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob"),
+            permissions={Permission.DISCOVER}, recursive=True,
         ))
         filesystem_invocation_mcp.callers.current.set(caller_snapshot(
             "bob", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED,
@@ -91,7 +90,7 @@ async def test_all_read_variants_advertise_and_return_required_sharing(
         recorder = RecordingSharing(filesystem_invocation_mcp.services.sharing())
         monkeypatch.setattr(filesystem_invocation_mcp.services, "sharing", lambda: recorder)
         captures = filesystem_invocation_mcp.callers.count
-        tool, arguments = request(variant, root if variant == "get_filesystem_root" else owned)
+        tool, arguments = request(variant, owned)
         result = await client.call_tool(tool, arguments)
         descriptor = next(item for item in await client.list_tools() if item.name == tool)
     validate(result.structured_content, descriptor.output_schema)
@@ -119,17 +118,21 @@ async def test_sharing_batch_contains_only_returned_nodes_after_limits_and_visib
     filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch, variant: str,
 ) -> None:
     async with Client(filesystem_invocation_mcp.server) as client:
-        root = await root_id(client)
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
+            "bob", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED,
+        ))
+        root = await create_node(client, await root_id(client), "shared-folder", "directory")
+        await create_node(client, root, "hidden", "file")
+        await create_access_control_driver(database=filesystem_invocation_mcp.database).add_grant(AccessGrant(
+            node_id=UUID(root), principal=Principal(type=PrincipalType.USER, issuer="https://issuer", id="alice"),
+            permissions={Permission.DISCOVER, Permission.WRITE}, recursive=False,
+        ))
+        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
+            "alice", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED,
+        ))
         first = await create_node(client, root, "a", "directory")
         await create_node(client, first, "beyond-depth", "file")
         await create_node(client, root, "limited-away", "file")
-        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
-            "bob", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED,
-        ))
-        await create_node(client, root, "hidden", "file")
-        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
-            "alice", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED,
-        ))
         recorder = RecordingSharing(filesystem_invocation_mcp.services.sharing())
         monkeypatch.setattr(filesystem_invocation_mcp.services, "sharing", lambda: recorder)
         tool, arguments = request(variant, root)
@@ -168,16 +171,11 @@ async def test_read_sharing_projects_current_exact_recipients_and_protects_other
     async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         owned = await create_node(client, root, "owned", "directory")
-        target = root if variant == "get_filesystem_root" else owned
+        target = owned
         if variant == "list_filesystem_children":
             target_node = await create_node(client, owned, "child", "file")
         else:
             target_node = target
-        if target_node == root:
-            await policies.add_grant(AccessGrant(
-                node_id=UUID(root), principal=Principal(type=PrincipalType.USER, issuer="https://issuer", id="alice"),
-                permissions={Permission.DISCOVER, Permission.SHARE}, recursive=False,
-            ))
         for issuer, recursive in [("https://issuer", False), ("foreign", False)]:
             await policies.add_grant(AccessGrant(
                 node_id=UUID(target_node), principal=Principal(type=PrincipalType.GROUP, issuer=issuer, id=identifier),
@@ -204,26 +202,18 @@ async def test_read_sharing_projects_current_exact_recipients_and_protects_other
         "recipient": {"type": "group", "group_id": "recursive", "label": "recursive"},
         "permissions": ["read"], "recursive": True,
     }]
-    if target_node == root:
-        expected_grants.append({
-            "recipient": {"type": "group", "group_id": "writers", "label": "writers"},
-            "permissions": ["discover", "write"], "recursive": False,
-        })
     expected_grants.append({
         "recipient": {"type": "user", "user_id": user_id, "label": 'Bob "Reader"'},
         "permissions": ["read"], "recursive": False,
     })
-    assert node["sharing"] == (
-        {"can_share": False} if node["visible_to"]["type"] == "unavailable"
-        else {"can_share": True, "grants": expected_grants}
-    )
+    assert node["sharing"] == {"can_share": True, "grants": expected_grants}
     if variant in {"ls", "tree", "stat"}:
         text = result.content[0].text
         assert json.dumps(label) in text
         assert json.dumps(identifier) in text
         assert json.dumps('Bob "Reader"') in text
         assert user_id in text
-        assert '"issuer":"foreign"' in text
+        assert '"issuer":"foreign"' not in text
         assert '"recursive":true' in text
 
 

@@ -9,11 +9,37 @@ import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-ap
 import { catalogue } from '$lib/dashboard/test-fixtures';
 import { InMemoryPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/in-memory-api';
 import { workspaceNavigation } from './navigation';
+import { resolveWorkspaceAccess } from './admin-access';
 import { WorkspaceAccessState } from './workspace-access-state.svelte';
 
-const user: WorkspaceProfile = { user: { id: 'admin', name: 'Alex', email: null, picture: null }, capabilities: { administration: true } };
+const user: WorkspaceProfile = { identity_key: 'opaque-admin-key', user: { id: 'admin', name: 'Alex', email: null, picture: null }, capabilities: { administration: true } };
 
 describe('independent workspace access', () => {
+  test('trusted profile keys distinguish equal raw subjects and fence earlier workspace profiles', async (): Promise<void> => {
+    const subject = { id: 'same-raw-subject', name: 'Same display name', email: null, picture: null };
+    const profileA: WorkspaceProfile = { identity_key: 'opaque-key-7ec4', user: subject, capabilities: { administration: true } };
+    const profileB: WorkspaceProfile = { identity_key: 'opaque-key-91bd', user: subject, capabilities: { administration: false } };
+    const identityA = (await resolveWorkspaceAccess(new InMemoryWorkspaceApi(profileA))).accountIdentity;
+    const identityB = (await resolveWorkspaceAccess(new InMemoryWorkspaceApi(profileB))).accountIdentity;
+    expect(profileA.user.id).toBe(profileB.user.id);
+    expect(identityA).toMatchObject({ hiddenValues: { id: profileA.identity_key } });
+    expect(identityB).toMatchObject({ hiddenValues: { id: profileB.identity_key } });
+    let fallback = identityA;
+    const pending = deferred<WorkspaceProfile>();
+    const get = vi.fn<() => Promise<WorkspaceProfile>>().mockReturnValueOnce(pending.promise).mockResolvedValue(profileB);
+    const access = new WorkspaceAccessState({ profile: { get } }, () => fallback);
+    const loading = access.load();
+    fallback = identityB;
+    expect(access.observeIdentitySource(identityB)).toBe(true);
+    await vi.waitFor(() => expect(access.adminAccess).toBe('denied'));
+    pending.resolve(profileA);
+    await loading;
+    expect(access.effectiveAccountIdentity).toEqual(identityB);
+    expect(access.accountIdentity).toEqual(identityB);
+    expect(access.adminAccess).toBe('denied');
+    access.dispose();
+  });
+
   test('a changed raw source immediately excludes an older profile and revokes administration on observation', async (): Promise<void> => {
     let fallback: HeaderAccountIdentityState = { kind: 'visible', name: 'A', email: null, picture: null, hiddenValues: { id: 'A' } };
     const next = deferred<WorkspaceProfile>();

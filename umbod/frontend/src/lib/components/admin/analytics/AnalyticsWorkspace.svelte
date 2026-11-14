@@ -1,32 +1,31 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
   import type { AnalyticsState } from '$lib/admin/analytics/analytics-state.svelte';
   import { dimensions } from '$lib/admin/analytics/domain/schemas';
   import { bucketOptions, dimensionLabels, dimensionOptions, rangeOptions } from '$lib/admin/analytics/query-draft.svelte';
   import { reportOptions } from '$lib/admin/analytics/reports';
   import Button from '../shared/Button.svelte';
-  import LoadingButton from '../shared/LoadingButton.svelte';
+  import QueryPanel from '$lib/components/shared/workspace/QueryPanel.svelte';
   import Select from '../shared/Select.svelte';
   import DateTimeView from '$lib/components/shared/DateTimeView.svelte';
 
   let { state }: { state: AnalyticsState } = $props();
+  onMount(() => { void state.start(); });
   onDestroy(() => state.dispose());
 </script>
 
-<header>
-  <h1 class="admin-title">Log analytics</h1>
-  <p class="admin-lede">Explore log activity across your instance.</p>
+<header class="insight-heading">
+  <h2>Log analytics</h2>
 </header>
 
 {#if state.accessLost}
   <div class="admin-message admin-message--error" role="alert">{state.error}</div>
 {:else}
-  <form id="analytics-query" class="admin-panel query" novalidate onsubmit={(event) => { event.preventDefault(); void state.run(); }}>
-    <div class="toolbar">
+  <QueryPanel id="analytics-query" summary={state.summary} pending={state.pending} onrun={() => state.run()} onreset={() => state.reset()}>
+    <div class="toolbar insight-query-fields">
       <Select label="Report" options={reportOptions} value={state.report} onchange={(value) => state.setReport(value)} />
       <Select label="Time range" options={rangeOptions} value={state.formDraft.preset} onchange={(value) => state.formDraft.setPreset(value)} />
       {#if state.custom}<Select label="Interval" options={bucketOptions} value={state.draft.bucket} onchange={(value) => state.draft.setBucket(value)} />{/if}
-      <LoadingButton type="submit" label={state.custom ? 'Run query' : 'Run report'} loadingLabel={state.custom ? 'Running query' : 'Running report'} loading={state.pending} />
     </div>
     {#if state.formDraft.preset === 'custom'}
       <div class="range-grid">
@@ -80,47 +79,32 @@
     {/if}
     {/if}
     {#if state.validation}<div class="admin-message admin-message--error" role="alert">{state.validation}</div>{/if}
-    {#if state.pending || state.changed}<p class="hint" role="status">{state.pending ? 'Running query…' : state.custom ? 'Filters or settings changed. Run query to update results.' : 'Report settings changed. Run report to update results.'}</p>{/if}
-  </form>
+    {#if state.pending || state.changed}<p class="hint" role="status">{state.pending ? 'Running query…' : 'Settings changed. Run query to update results.'}</p>{/if}
+  </QueryPanel>
+  {#if state.pending}<p class="insight-caption" role="status">Running query…</p>{/if}
   {#if state.error}
     <div class="admin-message admin-message--error failure" role="alert"><span>{state.error}</span><Button variant="secondary" disabled={state.pending} onclick={() => state.retry()}>Retry query</Button></div>
   {/if}
   {#if state.result}
-    <section class="admin-panel results" aria-label="Query results" aria-busy={state.pending}>
-      <div class="section-heading"><h2>{state.resultLabel}</h2>{#if !state.submittedCustom}{#if state.narrowedSession !== undefined}<Button variant="secondary" size="compact" disabled={state.pending} onclick={() => state.allSessions()}>All sessions</Button>{:else}<span>All sessions</span>{/if}{/if}{#if state.changed}<span>Previous query</span>{/if}</div>
-      <p class="range"><DateTimeView value={state.result.query.time_range.start} /> → <DateTimeView value={state.result.query.time_range.end} /></p>
+    <section class="insight-results results" aria-label="Query results" aria-busy={state.pending}>
+      <div class="section-heading"><h3>{state.resultLabel}</h3>{#if !state.submittedCustom}{#if state.narrowedSession !== undefined}<Button variant="secondary" size="compact" disabled={state.pending} onclick={() => state.allSessions()}>All sessions</Button>{/if}{/if}{#if state.changed}<span>Previous query</span>{/if}</div>
       {#if state.submittedFilters.length > 0}<ul class="submitted-filters">{#each state.submittedFilters as filter (filter.dimension)}<li>{dimensionLabels[filter.dimension]}: {filter.values.map((value) => value === '' ? 'Empty value' : value).join(', ')}</li>{/each}</ul>{/if}
-      {#if state.explanation}<p class="hint">{state.explanation}</p>{/if}
-      <dl class="stats"><div><dt>{state.submittedCustom ? 'Logs' : state.countLabel} on this page</dt><dd>{state.total.toLocaleString('en')}</dd></div><div><dt>{state.submittedCustom ? 'Groups' : 'Result rows'} on this page</dt><dd>{state.groupCount.toLocaleString('en')}</dd></div></dl>
-      {#if !state.submittedCustom}
-        <section class="classification-coverage" aria-label="Scope log classifications">
-          <h3>Stored log classifications</h3>
-          <p class="hint">All log types in this range and session, not just this report or page. Separate live reads; other logs may be diagnostics. These counts do not establish usage or collection completeness.</p>
-          {#if state.coverage.pending}
-            <p role="status">Loading log classification counts…</p>
-          {:else if state.coverage.error}
-            <div role="alert">{state.coverage.error} <Button variant="secondary" size="compact" onclick={state.coverage.retry}>Retry counts</Button></div>
-          {:else if state.coverage.counts}
-            <dl class="classification-counts"><div><dt>Recognized activity logs</dt><dd>{state.coverage.counts.recognized.toLocaleString('en')}</dd></div><div><dt>Other / unclassified logs</dt><dd>{state.coverage.counts.other.toLocaleString('en')}</dd></div></dl>
-            {#if state.result.report !== 'logs' && state.result.response.rows.length === 0 && state.coverage.hasLogs}
-              <p role="status">There are stored logs in this scope, but none match this activity report on this page.</p>
-            {/if}
-          {/if}
-          {#if state.result.report !== 'logs'}<Button variant="secondary" size="compact" disabled={state.pending} onclick={() => state.inspectClassifications()}>Inspect log classifications</Button>{/if}
-        </section>
-      {/if}
+      <div class="insight-result-meta">
+        <dl class="result-counts"><div><dt>{state.submittedCustom ? 'Logs' : state.countLabel} on page</dt><dd>{state.total.toLocaleString('en')}</dd></div><div><dt>{state.submittedCustom ? 'Groups' : 'Rows'} on page</dt><dd>{state.groupCount.toLocaleString('en')}</dd></div></dl>
+        <p class="range"><DateTimeView value={state.result.query.time_range.start} /> → <DateTimeView value={state.result.query.time_range.end} /></p>
+      </div>
       {#if state.result.response.rows.length === 0}
-        <p class="empty" role="status">{state.submittedCustom ? 'No logs on this page. Try a wider time range or fewer filters.' : state.result.report === 'logs' ? 'No stored logs on this page. Scope counts use separate live reads.' : 'No reported matching activity on this page. This does not establish zero usage or telemetry coverage.'}</p>
+        <p class="empty" role="status">{state.submittedCustom ? 'No logs on this page.' : state.result.report === 'logs' ? 'No stored logs on this page.' : 'No reported matching activity on this page.'}</p>
       {:else}
         <div class="table-scroll" role="region" aria-label="Log-count results table">
-          <table><caption><a href="#analytics-query">{state.submittedCustom ? 'Edit query' : 'Edit report'}</a> · {#if state.submittedCustom}{state.groupingLabel} · {state.bucketLabel} · Page {state.page}. Only observed groups and time buckets are shown.{:else}Page {state.page}. Select a session to focus this report. A session can have multiple rows or span pages.{/if}</caption><thead><tr>{#if state.result.query.bucketing.kind === 'fixed'}<th scope="col">Bucket start (UTC)</th>{/if}{#each state.result.query.group_by as dimension (dimension)}<th scope="col">{dimensionLabels[dimension]}</th>{/each}<th scope="col" class="count">{state.countLabel}</th></tr></thead><tbody>
+          <table aria-label={state.resultLabel}>{#if state.submittedCustom}<caption>{state.groupingLabel} · {state.bucketLabel}</caption>{/if}<thead><tr>{#if state.result.query.bucketing.kind === 'fixed'}<th scope="col">Bucket start (UTC)</th>{/if}{#each state.result.query.group_by as dimension (dimension)}<th scope="col">{dimensionLabels[dimension]}</th>{/each}<th scope="col" class="count">{state.countLabel}</th></tr></thead><tbody>
             {#each state.tableRows as row (JSON.stringify([row.bucket, row.groups]))}
               <tr>{#if row.bucket.kind === 'bucket'}<td><DateTimeView value={row.bucket.start} /></td>{/if}{#each row.groups as group (group.dimension)}<td>{#if group.value.kind === 'missing'}<span class="missing">{group.dimension === 'activity_kind' ? 'Unclassified' : state.submittedCustom ? 'Missing attribute' : 'Not reported'}</span>{:else if group.value.value === ''}<span class="missing">{group.dimension === 'activity_kind' ? 'Unclassified' : state.submittedCustom ? 'Empty string' : 'Not reported'}</span>{:else if state.isSessionGroup(group)}{@const session = group.value.value}<Button variant="quiet" size="compact" class="session-link" disabled={state.pending} aria-label={`View session ${session}`} onclick={() => state.narrowToSession(session)}>{session}</Button>{:else}<span class="exact-value">{state.formatValue(group.dimension, group.value.value)}</span>{/if}</td>{/each}<td class="count">{row.count.toLocaleString('en')}</td></tr>
             {/each}
           </tbody></table>
         </div>
       {/if}
-      <nav class="pagination" aria-label="Results pagination">
+      <nav class="pagination insight-pagination" aria-label="Results pagination">
         <Button variant="secondary" disabled={!state.canGoPrevious} onclick={() => state.previous()}>Previous</Button>
         <span aria-live="polite">Page {state.page}</span>
         <Button variant="secondary" disabled={!state.canGoNext} onclick={() => state.next()}>Next</Button>
@@ -132,11 +116,9 @@
 {/if}
 
 <style>
-  header { margin-bottom: 1.5rem; }
-  .query, .results { padding: 1.5rem; margin-bottom: 1.25rem; display: grid; gap: 1.25rem; }
-  .toolbar { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem; align-items: end; }
+  .results { margin-bottom: 1.25rem; display: grid; gap: 1rem; }
   .section-heading, .failure, .picker-feedback { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; }
-  h2 { font-size: 1.05rem; margin: 0; }
+  .section-heading h3 { font-size: 1rem; margin: 0; }
   .section-heading > span, .hint, .picker-feedback { font-size: .8125rem; color: var(--admin-muted); }
   .range-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; align-items: start; }
   .field { display: grid; gap: .35rem; min-width: 0; }
@@ -160,27 +142,19 @@
   .failure { margin-bottom: 1.25rem; }
   .range { font-size: .8125rem; color: var(--admin-muted); margin: 0; }
   .submitted-filters { margin: 0; padding-left: 1.25rem; font-size: .8125rem; overflow-wrap: anywhere; white-space: pre-wrap; }
-  .classification-coverage { display: grid; gap: .5rem; border-top: 1px solid var(--admin-border); padding-top: .75rem; }
-  .classification-coverage h3 { font-size: .8125rem; margin: 0; }
-  .classification-coverage > :global(button) { justify-self: start; }
-  .classification-counts { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; margin: 0; }
-  .classification-counts div { display: flex; align-items: baseline; gap: .5rem; }
-  .classification-counts dd { font-size: .875rem; margin: 0; }
-  .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 0; }
-  .stats div { padding: 1rem; background: var(--admin-soft); border-radius: 8px; }
+  .result-counts { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; margin: 0; }
+  .result-counts div { display: flex; align-items: baseline; gap: .5rem; }
   dt { font-size: .8125rem; color: var(--admin-muted); }
-  dd { font-size: 1.65rem; font-weight: 600; margin: .35rem 0 0; font-variant-numeric: tabular-nums; }
+  dd { font-size: .875rem; font-weight: 600; margin: 0; font-variant-numeric: tabular-nums; }
   .empty { text-align: center; color: var(--admin-muted); padding: 2rem; }
   .table-scroll { overflow: auto; max-height: 36rem; border: 1px solid var(--admin-border); border-radius: 8px; }
   table { border-collapse: collapse; width: 100%; text-align: left; font-size: .875rem; }
   caption { caption-side: bottom; text-align: left; padding: .75rem; font-size: .75rem; color: var(--admin-muted); }
-  caption a { color: var(--admin-accent); white-space: nowrap; }
   th, td { padding: .75rem 1rem; border-bottom: 1px solid var(--admin-border); overflow-wrap: anywhere; min-width: 7rem; }
   th { background: var(--admin-soft); position: sticky; top: 0; font-size: .75rem; }
   .count { min-width: 5rem; text-align: right; font-variant-numeric: tabular-nums; position: sticky; right: 0; background: var(--admin-panel); }
   th.count { background: var(--admin-soft); z-index: 2; }
   .missing { color: var(--admin-muted); font-style: italic; }
-  .pagination { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: .75rem; }
   .pagination span { color: var(--admin-muted); font-size: .875rem; }
-  @media (max-width: 700px) { .toolbar, .range-grid, .picker-fields { grid-template-columns: 1fr; } .query, .results { padding: 1rem; } .stats { gap: .5rem; } .stats div { padding: .65rem; } dd { font-size: 1.25rem; } }
+  @media (max-width: 700px) { .range-grid, .picker-fields { grid-template-columns: 1fr; } }
 </style>

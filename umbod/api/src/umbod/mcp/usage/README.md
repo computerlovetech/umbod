@@ -17,4 +17,3 @@ description: Trusted completion projections and bounded application-local asynch
 # Contracts
 
 - [Usage domain](../../core/usage/README.md) — Shared ownership, canonical OTEL records, persistence ports, and storage.
-- [Feature specification](../../../../../project/specifications/personal-usage-analytics.md) — Personal usage scope, safety guarantees, and acceptance criteria.

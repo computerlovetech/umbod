@@ -5,7 +5,7 @@ import os
 import ssl
 import time
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -21,11 +21,13 @@ from upload_transfer_support import assert_transfer_succeeded, s3_runtime, trans
 
 
 FILESYSTEM = "/api/me/filesystem"
+STRUCTURAL_ROOT = "00000000-0000-0000-0000-000000000000"
+RETIRED_TOOLS = frozenset({"get_filesystem_root"})
 FILESYSTEM_TOOLS = frozenset({
-    "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
+    "filesystem_browse", "get_filesystem_node", "list_filesystem_children",
     "create_filesystem_file", "create_filesystem_directory", "filesystem_upload",
     "filesystem_begin_upload", "filesystem_complete_upload",
-    "filesystem_delete_file", "filesystem_search_sharing_recipients", "filesystem_share",
+    "filesystem_delete_file", "filesystem_share", "filesystem_search_sharing_recipients",
     "update_filesystem_node",
 })
 
@@ -75,32 +77,41 @@ def file_resource_link(result: CallToolResult, node_id: str) -> str:
 
 
 def check_access_metadata(node: dict[str, Any]) -> None:
+    assert "sharing" not in node
     assert set(node["permissions"]) == {"can_discover", "can_read", "can_write", "can_delete", "can_share"}
     assert all(isinstance(value, bool) for value in node["permissions"].values())
     assert node["permissions"]["can_discover"] is True
     visibility = node["visible_to"]
-    assert visibility["type"] in {"available", "restricted", "unavailable"}
-    if visibility["type"] == "available":
-        assert visibility["scope"] == "direct_node_policy"
-        assert visibility["group_members_expanded"] is False
-        assert all(grant["node_id"] == node["id"] for grant in visibility["grants"])
-        assert all(type(grant["recursive"]) is bool for grant in visibility["grants"])
-        if node["kind"] == "file":
-            assert all(grant["recursive"] is False for grant in visibility["grants"])
+    assert visibility["type"] in {"namespace", "restricted"}
+    if visibility["type"] == "namespace":
+        assert set(visibility) == {"type", "namespace_id", "kind", "name"}
+        UUID(visibility["namespace_id"])
+        assert visibility["kind"] in {"personal", "shared"}
+        assert isinstance(visibility["name"], str) and visibility["name"]
+    else:
+        assert visibility == {"type": "restricted"}
 
 
 def node_identity(node: dict[str, Any]) -> dict[str, Any]:
     return {key: value for key, value in node.items() if key not in {"permissions", "visible_to", "sharing"}}
 
 
+def mcp_node_summary(node: dict[str, Any]) -> dict[str, Any]:
+    sharing = node["sharing"]
+    assert sharing["can_share"] is node["permissions"]["can_share"]
+    if sharing["can_share"]:
+        assert set(sharing) == {"can_share", "grants"}
+        assert isinstance(sharing["grants"], list)
+    else:
+        assert sharing == {"can_share": False}
+    summary = {key: value for key, value in node.items() if key != "sharing"}
+    check_access_metadata(summary)
+    return summary
+
+
 def sharing_write_payload(result: CallToolResult) -> dict[str, Any]:
     payload = tool_payload(result)
-    visibility = payload["visible_to"]
-    assert visibility["type"] == "available"
-    assert visibility["scope"] == "direct_node_policy"
-    assert visibility["group_members_expanded"] is False
-    assert all(grant["node_id"] == payload["node_id"] for grant in visibility["grants"])
-    assert all(type(grant["recursive"]) is bool for grant in visibility["grants"])
+    assert payload["visible_to"]["type"] in {"namespace", "restricted"}
     assert type(payload["recursive"]) is bool
     return {key: value for key, value in payload.items() if key != "visible_to"}
 
@@ -117,7 +128,7 @@ def checked_summary(response: httpx.Response, status: int) -> dict[str, Any]:
     return payload
 
 
-def checked_root_browse(response: httpx.Response) -> dict[str, Any]:
+def checked_namespace_browse(response: httpx.Response) -> dict[str, Any]:
     assert response.status_code == 200, response.text
     assert response.headers["cache-control"] == "no-store"
     payload = response.json()
@@ -128,7 +139,8 @@ def checked_root_browse(response: httpx.Response) -> dict[str, Any]:
         "permissions", "visible_to",
     }
     check_access_metadata(node)
-    assert node["parent_id"] == {}
+    assert node["id"] != STRUCTURAL_ROOT
+    assert node["visible_to"]["type"] == "namespace"
     assert node["kind"] == "directory"
     assert payload["breadcrumbs"] == {
         "items": [{"id": node["id"], "name": node["name"], "kind": "directory"}],
@@ -226,27 +238,15 @@ async def check_filesystem_node_updates(
         else:
             created = tool_payload(await alice_mcp.call_tool("create_filesystem_directory", arguments))
         path = FILESYSTEM + "/nodes/" + created["id"]
-        access_path = path + "/access?recipient_type=group"
-        access = alice.get(access_path)
-        assert access.status_code == 200, access.text
-        shared = alice.put(access_path, headers={"If-Match": access.headers["etag"]}, json={
-            "grants": [{"recipient": {"type": "group", "group_id": "admin"}, "permissions": ["discover", "read", "write"]}],
-        })
-        assert shared.status_code == 200, shared.text
-        access_before = shared.json()
-        assert access_before["visible_to"]["type"] == "available"
-        direct_rename = checked_summary(bob.patch(path, headers={"If-Match": f'"{created["revision"]}"'}, json={"name": "direct-rename-" + kind}), 200)
-        assert direct_rename["parent_id"] == source["id"]
-        denied_move = bob.patch(path, headers={"If-Match": f'"{direct_rename["revision"]}"'}, json={
+        denied_move = bob.patch(path, headers={"If-Match": f'"{created["revision"]}"'}, json={
             "parent_id": destination["id"], "metadata": {"attributes": {"team": "must not persist"}},
         })
         assert denied_move.status_code == 403, denied_move.text
-        owner_view = checked_summary(alice_second.get(path), 200)
-        assert node_identity(owner_view) == node_identity(direct_rename)
+        direct_rename = checked_summary(alice_second.patch(path, headers={"If-Match": f'"{created["revision"]}"'},
+            json={"name": "renamed-" + kind}), 200)
+        assert direct_rename["parent_id"] == source["id"]
         assert direct_rename["permissions"]["can_write"] is True
-        assert direct_rename["permissions"]["can_share"] is False
-        assert direct_rename["visible_to"] == {"type": "restricted"}
-        assert owner_view["visible_to"]["type"] == "available"
+        assert direct_rename["visible_to"] == created["visible_to"]
         updated_mcp = tool_payload(await alice_mcp.call_tool("update_filesystem_node", {
             "node_id": created["id"], "expected_revision": direct_rename["revision"],
             "name": "moved-" + kind, "parent_id": destination["id"],
@@ -259,16 +259,8 @@ async def check_filesystem_node_updates(
         assert updated["revision"] == direct_rename["revision"] + 1
         assert updated_mcp["revision"] == updated["revision"]
         assert updated["metadata"]["attributes"] == {"team": "retained", "description": "Read after moving"}
-        access_after = alice_second.get(access_path)
-        assert access_after.status_code == 200, access_after.text
-        assert {field: value for field, value in access_after.json().items() if field != "revision"} == {
-            field: value for field, value in access_before.items() if field not in {"revision", "visible_to"}
-        }
-        reader_view = checked_summary(bob.get(path), 200)
-        assert node_identity(reader_view) == node_identity(updated)
-        assert reader_view["permissions"]["can_write"] is True
-        assert reader_view["permissions"]["can_share"] is False
-        assert reader_view["visible_to"] == {"type": "restricted"}
+        assert updated["visible_to"] == created["visible_to"]
+        assert bob.get(path).status_code == 403
         assert created["id"] not in {item["id"] for item in alice.get(FILESYSTEM + "/nodes/" + source["id"] + "/children").json()["nodes"]}
         inspected = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
             "operation": "stat", "target": {"type": "node", "node_id": created["id"]},
@@ -394,90 +386,7 @@ async def check_mcp_file_deletion(
 
 
 @pytest.mark.asyncio
-async def test_cross_worker_discovery_distinguishes_root_creation_from_direct_file_read(
-    runtime_endpoints: RuntimeEndpoints,
-) -> None:
-    second_mcp = os.environ["UMBOD_TEST_MCP_B_URL"]
-    tls = ssl.create_default_context(cafile=os.environ["UMBOD_TEST_PERSONAL_CA"])
-    with httpx.Client(
-        base_url=runtime_endpoints.api_base_url,
-        headers={"Authorization": "Bearer " + runtime_endpoints.bearer_token}, timeout=30,
-    ) as alice, httpx.Client(
-        base_url=os.environ["UMBOD_TEST_PERSONAL_URL"], verify=tls, timeout=30,
-    ) as identity:
-        token = proxy_token(second_mcp, os.environ["UMBOD_TEST_BEARER_TOKEN_B"], identity)
-        policy_path = "/api/admin/filesystem/root-access"
-        previous_response = alice.get(policy_path)
-        assert previous_response.status_code == 200
-        previous = previous_response.json()
-        configured = alice.put(policy_path, json={
-            "expected_revision": previous["revision"],
-            "groups": [{"group_id": "admin", "permissions": ["discover", "write"]}],
-        })
-        assert configured.status_code == 200, configured.text
-        access_path = ""
-        try:
-            root = checked_root_browse(alice.get(FILESYSTEM + "/browse"))
-            async with mcp_client(second_mcp, token) as bob:
-                root_tools = {
-                    "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
-                    "create_filesystem_file", "create_filesystem_directory", "filesystem_upload",
-                    "filesystem_begin_upload", "filesystem_complete_upload",
-                    "update_filesystem_node",
-                }
-                assert await wait_for_filesystem_tools(bob, root_tools, FILESYSTEM_TOOLS - root_tools) == root_tools
-                folder = checked_summary(alice.post(FILESYSTEM + "/nodes/" + root["id"] + "/directories", json={
-                    "name": "discovery-" + uuid4().hex,
-                    "metadata": {"content_type": {}, "attributes": {}},
-                }), 201)
-                begun = alice.post(FILESYSTEM + "/nodes/" + folder["id"] + "/uploads", json={
-                    "name": "direct-read.txt", "size_bytes": 0,
-                    "metadata": {"content_type": "text/plain", "attributes": {}},
-                })
-                assert begun.status_code == 201, "Upload begin failed"
-                upload = begun.json()
-                assert_transfer_succeeded(transfer_upload(alice, upload["transfer"], b""))
-                file = checked_summary(alice.post(upload["complete_url"]), 201)
-                access_path = FILESYSTEM + "/nodes/" + file["id"] + "/access?recipient_type=group"
-                initial = alice.get(access_path)
-                assert initial.status_code == 200
-                shared = alice.put(access_path, headers={"If-Match": initial.headers["etag"]}, json={
-                    "grants": [{"recipient": {"type": "group", "group_id": "admin"}, "permissions": ["discover", "read"]}],
-                })
-                assert shared.status_code == 200, shared.text
-                current = alice.get(policy_path)
-                assert current.status_code == 200
-                revoked = alice.put(policy_path, json={"expected_revision": current.json()["revision"], "groups": []})
-                assert revoked.status_code == 200, revoked.text
-                read_tools = {"filesystem_browse", "get_filesystem_node"}
-                assert await wait_for_filesystem_tools(bob, read_tools, FILESYSTEM_TOOLS - read_tools) == read_tools
-                discovered = await bob.call_tool("get_filesystem_node", {"node_id": file["id"]})
-                contents = await bob.read_resource(file_resource_link(discovered, file["id"]))
-                assert len(contents) == 1
-                assert isinstance(contents[0], TextResourceContents)
-                assert contents[0].text == ""
-                root_error = await bob.call_tool("get_filesystem_root", {}, raise_on_error=False)
-                assert root_error.is_error
-                assert root_error.content[0].text == "Authorization failed for tool 'get_filesystem_root': not found or not authorized"
-                with pytest.raises(MCPError) as denied:
-                    await bob.read_resource(file_resource_uri(folder["id"]))
-                with pytest.raises(MCPError) as missing:
-                    await bob.read_resource(file_resource_uri(str(uuid4())))
-                assert denied.value.error.message == missing.value.error.message
-        finally:
-            if access_path:
-                current_access = alice.get(access_path)
-                assert current_access.status_code == 200
-                cleared = alice.put(access_path, json={"grants": []}, headers={"If-Match": current_access.headers["etag"]})
-                assert cleared.status_code == 200, cleared.text
-            current = alice.get(policy_path)
-            assert current.status_code == 200
-            restored = alice.put(policy_path, json={"expected_revision": current.json()["revision"], "groups": previous["groups"]})
-            assert restored.status_code == 200, restored.text
-
-
-@pytest.mark.asyncio
-async def test_verified_filesystem_is_shared_across_transports_and_workers_but_children_are_private(
+async def test_verified_personal_filesystem_is_consistent_across_transports_and_workers_but_private(
     runtime_endpoints: RuntimeEndpoints,
 ) -> None:
     issuer_bearer = runtime_endpoints.bearer_token
@@ -487,23 +396,8 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
     tls = ssl.create_default_context(cafile=os.environ["UMBOD_TEST_PERSONAL_CA"])
     with httpx.Client(base_url=runtime_endpoints.api_base_url, headers={"Authorization": "Bearer " + issuer_bearer}, timeout=30) as alice, httpx.Client(base_url=second_api, headers={"Authorization": "Bearer " + second_bearer}, timeout=30) as bob, httpx.Client(base_url=second_api, headers={"Authorization": "Bearer " + issuer_bearer}, timeout=30) as alice_second, httpx.Client(base_url=os.environ["UMBOD_TEST_PERSONAL_URL"], verify=tls, timeout=30, follow_redirects=False) as identity:
         assert httpx.get(runtime_endpoints.api_base_url + FILESYSTEM + "/browse", timeout=30).status_code == 401
-        policy_url = "/api/admin/filesystem/root-access"
-        assert alice.get(FILESYSTEM + "/browse").status_code == 403
-        inspected = alice.get(policy_url)
-        assert inspected.status_code == 200
-        assert inspected.headers["cache-control"] == "no-store"
-        policy = inspected.json()
-        assert policy["status"] in ("uninitialized", "ready")
-        assert policy["groups"] == []
-        assert set(policy) == {"status", "revision", "groups", "blocked_group_ids"}
-        assert policy["blocked_group_ids"] == []
-        group = {"group_id": "admin", "permissions": ["discover", "write"]}
-        configured = alice.put(policy_url, json={"expected_revision": policy["revision"], "groups": [group]})
-        assert configured.status_code == 200, configured.text
-        assert configured.headers["cache-control"] == "no-store"
-        assert set(configured.json()) == {"status", "revision", "groups", "blocked_group_ids"}
-        assert configured.json()["status"] == "ready"
-        root = checked_root_browse(alice.get(FILESYSTEM + "/browse"))
+        assert alice.get(FILESYSTEM + "/browse", params={"node_id": STRUCTURAL_ROOT}).status_code == 403
+        root = checked_namespace_browse(alice.get(FILESYSTEM + "/browse"))
         root_listing = alice_second.get(FILESYSTEM + "/browse")
         assert root_listing.status_code == 200, root_listing.text
         assert root_listing.headers["cache-control"] == "no-store"
@@ -514,7 +408,9 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             "edit_description": True, "delete": False, "share": False,
             "upload": True, "create_directory": True,
         }
-        assert checked_root_browse(bob.get(FILESYSTEM + "/browse")) == root
+        bob_root = checked_namespace_browse(bob.get(FILESYSTEM + "/browse"))
+        assert bob_root["id"] != root["id"]
+        assert bob.get(FILESYSTEM + "/nodes/" + root["id"]).status_code == 403
         checked_breadcrumbs(alice_second.get(FILESYSTEM + "/nodes/" + root["id"] + "/breadcrumbs"), [root], True)
         alice_token = proxy_token(second_mcp, issuer_bearer, identity)
         bob_token = proxy_token(runtime_endpoints.mcp_url, second_bearer, identity)
@@ -611,37 +507,35 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             elicitation_handler=approvals,
         ) as alice_mcp, mcp_client(runtime_endpoints.mcp_url, bob_token) as bob_mcp:
             await wait_for_filesystem_tools(alice_mcp, set(FILESYSTEM_TOOLS))
-            await wait_for_filesystem_tools(bob_mcp, {
-                "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file",
-            })
-            assert tool_payload(await alice_mcp.call_tool("get_filesystem_root", {})) == {
-                **root, "sharing": {"can_share": False},
-            }
-            assert tool_payload(await alice_mcp.call_tool("get_filesystem_node", {"node_id": alice_directory["id"]})) == {
-                **alice_directory, "sharing": {"can_share": True, "grants": []},
-            }
+            await wait_for_filesystem_tools(bob_mcp, {"get_filesystem_node", "list_filesystem_children", "create_filesystem_file"})
+            for client in (alice_mcp, bob_mcp):
+                assert {tool.name for tool in await client.list_tools()}.isdisjoint(RETIRED_TOOLS)
+                for retired in RETIRED_TOOLS:
+                    assert (await client.call_tool(retired, {}, raise_on_error=False)).is_error
+                denied_root = await client.call_tool("get_filesystem_node", {"node_id": STRUCTURAL_ROOT}, raise_on_error=False)
+                assert denied_root.is_error
+            assert mcp_node_summary(tool_payload(await alice_mcp.call_tool("get_filesystem_node", {"node_id": alice_directory["id"]}))) == alice_directory
             denied = await bob_mcp.call_tool("get_filesystem_node", {"node_id": alice_directory["id"]}, raise_on_error=False)
             assert denied.is_error
             assert "filesystem_permission_denied" in denied.content[0].text
-            bob_listing = tool_payload(await bob_mcp.call_tool("list_filesystem_children", {"parent_id": root["id"]}))
+            bob_listing = tool_payload(await bob_mcp.call_tool("list_filesystem_children", {"parent_id": bob_root["id"]}))
             assert alice_directory["id"] not in {node["id"] for node in bob_listing["nodes"]}
             assert not any(node["name"].startswith("local-test-private-") for node in bob_listing["nodes"])
             forbidden_name = "injected-" + uuid4().hex
-            injection = await bob_mcp.call_tool("create_filesystem_file", {"parent_id": root["id"], "name": forbidden_name, "metadata": metadata, "owner": "kind-ci"}, raise_on_error=False)
+            injection = await bob_mcp.call_tool("create_filesystem_file", {"parent_id": bob_root["id"], "name": forbidden_name, "metadata": metadata, "owner": "kind-ci"}, raise_on_error=False)
             assert injection.is_error
-            assert forbidden_name not in {node["name"] for node in tool_payload(await bob_mcp.call_tool("list_filesystem_children", {"parent_id": root["id"]}))["nodes"]}
+            assert forbidden_name not in {node["name"] for node in tool_payload(await bob_mcp.call_tool("list_filesystem_children", {"parent_id": bob_root["id"]}))["nodes"]}
             rest_injection = bob.post(
-                FILESYSTEM + "/nodes/" + root["id"] + "/uploads",
+                FILESYSTEM + "/nodes/" + bob_root["id"] + "/uploads",
                 json={"name": forbidden_name, "metadata": metadata, "size_bytes": 0, "owner": "kind-ci"},
             )
             assert rest_injection.status_code == 422
             assert forbidden_name not in {
-                node["name"] for node in bob.get(FILESYSTEM + "/nodes/" + root["id"] + "/children").json()["nodes"]
+                node["name"] for node in bob.get(FILESYSTEM + "/nodes/" + bob_root["id"] + "/children").json()["nodes"]
             }
-            bob_created = await bob_mcp.call_tool("create_filesystem_file", {"parent_id": root["id"], "name": "bob-" + uuid4().hex, "metadata": metadata})
+            bob_created = await bob_mcp.call_tool("create_filesystem_file", {"parent_id": bob_root["id"], "name": "bob-" + uuid4().hex, "metadata": metadata})
             bob_summary = tool_payload(bob_created)
-            assert bob_summary["sharing"] == {"can_share": True, "grants": []}
-            bob_file = {field: value for field, value in bob_summary.items() if field != "sharing"}
+            bob_file = mcp_node_summary(bob_summary)
             bob_uri = file_resource_link(bob_created, bob_file["id"])
             assert checked_summary(bob.get(FILESYSTEM + "/nodes/" + bob_file["id"]), 200) == bob_file
             forbidden = alice.get(FILESYSTEM + "/nodes/" + bob_file["id"])
@@ -649,24 +543,24 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             assert forbidden.json()["detail"]["code"] == "filesystem_permission_denied"
             alice_created = await alice_mcp.call_tool("create_filesystem_file", {"parent_id": alice_directory["id"], "name": "draft", "metadata": metadata})
             alice_summary = tool_payload(alice_created)
-            assert alice_summary["sharing"] == {"can_share": True, "grants": []}
-            alice_file = {field: value for field, value in alice_summary.items() if field != "sharing"}
+            alice_file = mcp_node_summary(alice_summary)
             alice_uri = file_resource_link(alice_created, alice_file["id"])
             assert checked_summary(alice_second.get(FILESYSTEM + "/nodes/" + alice_file["id"]), 200) == alice_file
             child_response = alice.get(FILESYSTEM + "/nodes/" + alice_directory["id"] + "/children")
             assert child_response.status_code == 200
             assert {node["id"] for node in child_response.json()["nodes"]} == {alice_file["id"], uploaded["id"]}
             assert child_response.headers["cache-control"] == "no-store"
-            browse_target = {"type": "path", "path": "/" + name}
+            browse_target = {"type": "node", "node_id": alice_directory["id"]}
             listing = await alice_mcp.call_tool("filesystem_browse", {
                 "operation": "ls", "target": browse_target,
             })
             listed = tool_payload(listing)["result"]
             assert file_resource_link(listing, alice_file["id"]) == alice_uri
             assert file_resource_link(listing, uploaded["id"]) == file_resource_uri(uploaded["id"])
-            assert listed["node"] == {**alice_directory, "sharing": {"can_share": True, "grants": []}}
-            assert {node["id"] for node in listed["entries"]} == {alice_file["id"], uploaded["id"]}
-            assert all(node["sharing"] == {"can_share": True, "grants": []} for node in listed["entries"])
+            assert mcp_node_summary(listed["node"]) == alice_directory
+            assert {node["id"]: mcp_node_summary(node) for node in listed["entries"]} == {
+                node["id"]: node for node in (alice_file, uploaded)
+            }
             legacy_children = tool_payload(await alice_mcp.call_tool("list_filesystem_children", {"parent_id": alice_directory["id"]}))
             assert {node["id"]: node for node in legacy_children["nodes"]} == {
                 node["id"]: node for node in listed["entries"]
@@ -678,15 +572,17 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             assert len(limited["entries"]) == 1
             assert limited["truncated"] is True
             inspected = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
-                "operation": "stat", "target": {"type": "path", "path": "/" + name + "/draft"},
+                "operation": "stat", "target": {"type": "node", "node_id": alice_file["id"]},
             }))["result"]
-            assert inspected["node"] == {**alice_file, "sharing": {"can_share": True, "grants": []}}
+            assert mcp_node_summary(inspected["node"]) == alice_file
             tree = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
                 "operation": "tree", "target": browse_target, "depth": 2,
             }))["result"]
             assert {entry["node"]["id"] for entry in tree["entries"]} == {alice_file["id"], uploaded["id"]}
-            assert tree["node"]["sharing"] == {"can_share": True, "grants": []}
-            assert all(entry["node"]["sharing"] == {"can_share": True, "grants": []} for entry in tree["entries"])
+            assert mcp_node_summary(tree["node"]) == alice_directory
+            assert {entry["node"]["id"]: mcp_node_summary(entry["node"]) for entry in tree["entries"]} == {
+                node["id"]: node for node in (alice_file, uploaded)
+            }
             private_tree = await bob_mcp.call_tool("filesystem_browse", {
                 "operation": "tree", "target": browse_target,
             }, raise_on_error=False)
@@ -743,40 +639,13 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
             assert deleted_mcp.is_error
             assert "filesystem_permission_denied" in deleted_mcp.content[0].text
             await check_mcp_file_deletion(alice, alice_second, alice_mcp, bob_mcp, alice_directory["id"], approvals)
-            current_policy = alice.get(policy_url).json()
-            revoked = alice.put(policy_url, json={"expected_revision": current_policy["revision"], "groups": []})
-            assert revoked.status_code == 200, revoked.text
-            assert revoked.json()["groups"] == []
-            assert alice.get(FILESYSTEM + "/browse").status_code == 403
-            assert bob.get(FILESYSTEM + "/browse").status_code == 403
-            assert alice_second.get(FILESYSTEM + "/nodes/" + root["id"] + "/breadcrumbs").status_code == 403
-            await wait_for_filesystem_tools(bob_mcp, {"get_filesystem_node"}, frozenset({"get_filesystem_root"}))
-            revoked_root = await bob_mcp.call_tool("get_filesystem_root", {}, raise_on_error=False)
-            assert revoked_root.is_error
-            assert revoked_root.content[0].text == "Authorization failed for tool 'get_filesystem_root': not found or not authorized"
-            assert checked_summary(alice_second.get(FILESYSTEM + "/nodes/" + alice_file["id"]), 200) == alice_file
-            checked_breadcrumbs(alice_second.get(breadcrumb_path), [alice_directory], False)
-            checked_breadcrumbs(
-                alice_second.get(FILESYSTEM + "/nodes/" + alice_file["id"] + "/breadcrumbs"),
-                [alice_directory, alice_file], False,
-            )
-            checked_breadcrumbs(bob.get(FILESYSTEM + "/nodes/" + bob_file["id"] + "/breadcrumbs"), [bob_file], False)
-            assert tool_payload(await bob_mcp.call_tool("get_filesystem_node", {"node_id": bob_file["id"]})) == {
-                **bob_file, "sharing": {"can_share": True, "grants": []},
-            }
+            for api in (alice, alice_second, bob):
+                assert api.get(FILESYSTEM + "/browse", params={"node_id": STRUCTURAL_ROOT}).status_code == 403
+            checked_breadcrumbs(alice_second.get(breadcrumb_path), [root, alice_directory], True)
             contents = await bob_mcp.read_resource(bob_uri)
             assert len(contents) == 1
             assert isinstance(contents[0], TextResourceContents)
             assert contents[0].text == ""
-            partial = tool_payload(await alice_mcp.call_tool("filesystem_browse", {
-                "operation": "ls", "target": {"type": "node", "node_id": alice_directory["id"]},
-            }))["result"]
-            assert partial["breadcrumbs"]["complete"] is False
-            assert {node["id"] for node in partial["entries"]} == {alice_file["id"]}
-            stale = alice.put(policy_url, json={"expected_revision": current_policy["revision"], "groups": [group]})
-            assert stale.status_code == 409
-            assert stale.json()["detail"]["code"] == "filesystem_policy_stale"
-            assert alice.get(FILESYSTEM + "/browse").status_code == 403
             await check_filesystem_descriptions(alice, alice_second, bob, alice_mcp, alice_directory["id"])
             await check_filesystem_node_updates(alice, alice_second, bob, alice_mcp, alice_directory["id"])
 
@@ -791,7 +660,7 @@ async def test_verified_filesystem_is_shared_across_transports_and_workers_but_c
     ("PATCH", "/nodes/{id}", {"parent_id": str(uuid4())}, 403),
     ("PATCH", "/nodes/{id}/description", {"description": "obsolete endpoint"}, 404),
 ])
-def test_removed_filesystem_routes_and_missing_node_updates_preserve_root_policy(
+def test_removed_filesystem_routes_and_missing_node_updates_preserve_namespaces(
     runtime_endpoints: RuntimeEndpoints, method: str, suffix: str, body: dict[str, Any], status: int,
 ) -> None:
     path = FILESYSTEM + suffix.format(id=uuid4())
@@ -799,12 +668,12 @@ def test_removed_filesystem_routes_and_missing_node_updates_preserve_root_policy
         "Authorization": "Bearer " + runtime_endpoints.bearer_token,
         "If-Match": '"1"',
     }, timeout=30) as client:
-        before = client.get("/api/admin/filesystem/root-access")
+        before = client.get(FILESYSTEM + "/namespaces")
         assert before.status_code == 200
         response = client.request(method, path, json=body)
         assert response.status_code == status, response.text
         assert response.headers["cache-control"] == "no-store"
-        after = client.get("/api/admin/filesystem/root-access")
+        after = client.get(FILESYSTEM + "/namespaces")
         assert after.status_code == 200
         assert after.json() == before.json()
     unauthenticated = httpx.request(
@@ -812,6 +681,39 @@ def test_removed_filesystem_routes_and_missing_node_updates_preserve_root_policy
     )
     assert unauthenticated.status_code == 401
     assert unauthenticated.headers["cache-control"] == "no-store"
+
+
+@pytest.mark.parametrize("method", ["GET", "PUT"])
+def test_retired_root_administration_is_absent(
+    runtime_endpoints: RuntimeEndpoints, method: str,
+) -> None:
+    with httpx.Client(base_url=runtime_endpoints.api_base_url, headers={
+        "Authorization": "Bearer " + runtime_endpoints.bearer_token,
+    }, timeout=30) as client:
+        assert client.request(method, "/api/admin/filesystem/root-access", json={"groups": []}).status_code == 404
+        schema = client.get("/api/admin/openapi.json").json()
+        assert "/filesystem/root-access" not in schema["paths"]
+        assert "/filesystem/namespaces" in schema["paths"]
+        personal_schema = client.get("/api/me/openapi.json").json()
+        assert "/filesystem/nodes/{node_id}/access" in personal_schema["paths"]
+
+
+@pytest.mark.parametrize("suffix", [
+    "/browse?node_id={id}", "/nodes/{id}", "/nodes/{id}/children",
+    "/nodes/{id}/breadcrumbs", "/nodes/{id}/content?delivery=stream",
+])
+def test_structural_root_is_not_a_user_namespace(
+    runtime_endpoints: RuntimeEndpoints, suffix: str,
+) -> None:
+    with httpx.Client(base_url=runtime_endpoints.api_base_url, headers={
+        "Authorization": "Bearer " + runtime_endpoints.bearer_token,
+    }, timeout=30) as client:
+        assert checked_namespace_browse(client.get(FILESYSTEM + "/browse"))["id"] != STRUCTURAL_ROOT
+        response = client.get(FILESYSTEM + suffix.format(id=STRUCTURAL_ROOT))
+        missing = client.get(FILESYSTEM + suffix.format(id=uuid4()))
+        assert response.status_code == missing.status_code == 403
+        assert response.json() == missing.json()
+        assert response.headers["cache-control"] == "no-store"
 
 
 @pytest.mark.parametrize("path", [

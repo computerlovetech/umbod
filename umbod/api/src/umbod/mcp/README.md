@@ -9,13 +9,14 @@ description: "MCP application composition, capability exposure, authentication a
 - [__init__.py](./__init__.py) — Package exports.
 - [administrator/](./administrator/README.md) — Shared administrator tools and the dedicated administrator-only HTTP application.
 - [agent_instructions.py](./agent_instructions.py) — Agent setup guidance resource.
+- [agent_behaviour/](./agent_behaviour/README.md) — Authenticated current playbooks, user-requested diagnostics and durable self-report receipts.
 - [assets/](./assets/) — MCP assets.
 - [auth/](./auth/) — Authentication and caller capture.
 - [authorization.py](./authorization.py) — FastMCP permission bridge.
 - [connectors/](./connectors/) — Connector-kind delivery adapters.
 - [Personal discovery](./connectors/downstream_mcp/personal_discovery.py) — Operation-scoped owner inventories, current connector grants and indexed authorization.
 - [context.py](./context.py) — Application configuration and runtime dependencies.
-- [filesystem/](./filesystem/README.md) — Filesystem browsing, creation, content, and node-authorized group/user sharing discovery.
+- [filesystem/](./filesystem/README.md) — Personal/shared namespace browsing, content, updates, deletion and individual file/folder sharing.
 - [listeners/](./listeners/README.md) — Invocation observation adapters.
 - [live_permission_updates.py](./live_permission_updates.py) — Permission synchronization.
 - [logging/](./logging/) — Invocation and audit logging.

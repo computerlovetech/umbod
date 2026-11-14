@@ -67,6 +67,38 @@ function dialogButton(label: string): HTMLButtonElement {
 }
 
 describe('Files row actions menu', (): void => {
+  test.each([true, false])('file details keep deletion eligibility %s inside the persistent menu', async (allowed): Promise<void> => {
+    const { api, state } = await setup((api): void => {
+      const browse = api.filesystem.browse;
+      vi.spyOn(api.filesystem, 'browse').mockImplementation(async (target, signal) => {
+        const result = await browse(target, signal);
+        return { ...result, capabilities: result.capabilities.map((capability) => ({ ...capability, delete: allowed })) };
+      });
+    });
+    const remove = vi.spyOn(api.filesystem, 'deleteFile');
+    await state.load(fileId);
+    await tick();
+    const toolbar = document.querySelector('[aria-label="Location actions"]');
+    expect(toolbar).not.toBeNull();
+    const invokingButton = toolbar!.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    expect(invokingButton).not.toBeNull();
+    expect(toolbar!.querySelectorAll('button')).toHaveLength(1);
+    expect(toolbar!.textContent).not.toContain('Delete file');
+    invokingButton!.click();
+    await tick();
+    expect(document.querySelector('[role="menuitem"][aria-label="Delete “Notes.txt”"]') !== null).toBe(allowed);
+    if (allowed) {
+      menuitem('Delete').click();
+      await tick();
+      expect(document.querySelector('[role="menu"]')).toBeNull();
+      expect(document.querySelectorAll('dialog')).toHaveLength(1);
+      dialogButton('Cancel').click();
+      await tick();
+      await vi.waitFor((): void => expect(document.activeElement).toBe(invokingButton));
+    }
+    expect(remove).not.toHaveBeenCalled();
+  });
+
   test('closed rows expose only the ellipsis trigger and open six decorated menu entries', async (): Promise<void> => {
     await setup();
     await vi.waitFor(() => expect(files?.rowDeletion.controllers.get(fileId)?.available).toBe(true));

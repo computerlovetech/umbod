@@ -1,4 +1,5 @@
 <script lang="ts">
+  import '$lib/styles/form-fields.css';
   import type { HTMLInputAttributes } from 'svelte/elements';
 
   type InputType = 'text' | 'password' | 'url';
@@ -49,14 +50,15 @@
   const ariaDescribedBy = $derived([describedBy, helperId].filter(Boolean).join(' ') || undefined);
 </script>
 
-<div class="configuration-field">
-  <label for={id}>{label}</label>
+<div class="configuration-field form-field">
+  <label class="form-field-label" for={id}>{label}</label>
   {#if unsupported}
     <p class="unsupported">{label} cannot be configured in this interface.</p>
   {:else}
     <div class={['input-control', { prefixed: inputPrefix, invalid }]}>
       {#if inputPrefix}<span class="input-prefix" aria-hidden="true">{inputPrefix}</span>{/if}
       <input
+        class="form-control"
         {id}
         {name}
         {type}
@@ -80,33 +82,8 @@
 </div>
 
 <style>
-  .configuration-field {
-    display: grid;
-    gap: 7px;
-  }
-
-  label {
-    color: var(--admin-ink);
-    font-size: 13px;
-    font-weight: 650;
-    line-height: 1.4;
-  }
-
-  input {
-    box-sizing: border-box;
-    background: var(--admin-panel);
-    border: 1px solid var(--admin-border-strong);
-    border-radius: var(--admin-radius);
-    color: var(--admin-ink);
-    font: inherit;
-    font-size: 14px;
-    line-height: 1.4;
-    min-width: 0;
-    padding: 10px 12px;
-    width: 100%;
-  }
-
   .input-control { min-width: 0; }
+  .input-control > input { display: block; }
 
   .prefixed {
     background: var(--admin-panel);
@@ -129,22 +106,8 @@
 
   .prefixed input { border: 0; border-radius: 0; flex: 1; width: 0; }
   .prefixed input:focus { outline: 0; }
-  .prefixed:focus-within { border-color: var(--admin-accent); outline: 3px solid var(--admin-focus); }
+  .prefixed:focus-within { outline: 3px solid var(--admin-focus); outline-offset: 3px; }
   .prefixed.invalid { border-color: var(--admin-danger); }
-
-  input:focus {
-    border-color: var(--admin-accent);
-    outline: 3px solid var(--admin-focus);
-  }
-
-  input[readonly] {
-    background: var(--admin-soft);
-    color: var(--admin-muted);
-  }
-
-  input[aria-invalid='true'] {
-    border-color: var(--admin-danger);
-  }
 
   .helper,
   .unsupported {

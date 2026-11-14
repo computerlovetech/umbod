@@ -7,12 +7,13 @@ from umbod.core.filesystem.deletion import DeletionService, FilesystemDeletion
 from umbod.core.persistence import Database
 from umbod.core.filesystem.ports import ContentDriver
 from umbod.core.filesystem.homes import HomeService
+from umbod.core.filesystem.namespaces import NamespaceService
 from umbod.core.filesystem.access import AccessMetadataService
 from umbod.core.filesystem.uploads import UploadService
 from umbod.core.filesystem.uploads.service import SystemUploadClock
 from umbod.core.filesystem.sharing import FilesystemSharing
 from umbod.infrastructure import (
-    create_filesystem_homes, create_filesystem_access,
+    create_filesystem_homes, create_filesystem_access, create_filesystem_namespaces,
     create_filesystem_browsing, create_filesystem_creation, create_filesystem_sharing,
     create_filesystem_transactions, create_filesystem_uploads,
 )
@@ -37,6 +38,9 @@ class DatabaseFilesystemServiceFactory:
 
     def homes(self) -> HomeService:
         return create_filesystem_homes(database=self._database, resolver=VerifiedIdentityResolver())
+
+    def namespaces(self) -> NamespaceService:
+        return create_filesystem_namespaces(database=self._database, resolver=VerifiedIdentityResolver())
 
     def access(self) -> AccessMetadataService:
         return create_filesystem_access(database=self._database, resolver=VerifiedIdentityResolver())

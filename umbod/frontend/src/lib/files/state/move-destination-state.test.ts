@@ -38,11 +38,30 @@ async function createFolder(api: InMemoryFilesApi, parentId: string, name: strin
 }
 
 describe('move destination picker', (): void => {
+  test('shared namespace destinations exclude personal roots and reject changed cross-namespace ancestry', async (): Promise<void> => {
+    const api = new InMemoryFilesApi(rootId, filesystemFixture);
+    const destination = await createFolder(api, folderId, 'Archive');
+    const breadcrumbs = api.filesystem.getBreadcrumbs;
+    vi.spyOn(api.filesystem, 'getBreadcrumbs').mockImplementation(async (id, signal) => {
+      const path = await breadcrumbs(id, signal);
+      return { items: path.items.filter((item) => item.id !== rootId), complete: true };
+    });
+    const state = picker(api);
+    await state.open(await api.filesystem.getNode(fileId));
+    expect(state.folders.map((item) => item.id)).toEqual([folderId]);
+    expect(state.folders[0].name).toBe('Projects');
+    await state.select(rootId);
+    expect(state.selected).toBeUndefined();
+    vi.mocked(api.filesystem.getBreadcrumbs).mockResolvedValueOnce({ items: [{ id: rootId, name: 'My files', kind: 'directory' }, { id: destination.id, name: 'Archive', kind: 'directory' }], complete: true });
+    await state.select(destination.id);
+    expect(state.canSubmit).toBe(false);
+  });
+
   test('opens the path to the current folder without selecting a destination or listing files', async (): Promise<void> => {
     const api = new InMemoryFilesApi(rootId, filesystemFixture);
     const state = picker(api);
     await state.open(await api.filesystem.getNode(fileId));
-    expect(state.folders).toMatchObject([{ id: rootId, name: 'Home', expanded: true, children: [{ id: folderId, name: 'Projects', current: true, selectable: false, expandable: false }] }]);
+    expect(state.folders).toMatchObject([{ id: rootId, name: 'My files', expanded: true, children: [{ id: folderId, name: 'Projects', current: true, selectable: false, expandable: false }] }]);
     expect(state.selected).toBeUndefined();
     expect(state.canSubmit).toBe(false);
     await state.select(folderId);

@@ -54,7 +54,7 @@ describe('file deletion presentation', (): void => {
     expect(files.rowDeletion.controllers.get(fileId)?.available).toBe(false);
   });
 
-  test('preserves the details delete action while hiding it during stalled checks', async (): Promise<void> => {
+  test('keeps details deletion behind the actions trigger through eligibility checks', async (): Promise<void> => {
     const { api, files, content } = fixture();
     await files.load(folderId);
     expect(content()).not.toContain('Delete file');
@@ -66,7 +66,8 @@ describe('file deletion presentation', (): void => {
     eligibility.resolve();
     await checking;
     await vi.waitFor(() => expect(files.deletion.available).toBe(true));
-    expect(content()).toContain('Delete file');
+    expect(content()).not.toContain('Delete file');
+    expect(content()).toContain('Actions for “Notes.txt”');
   });
 
   test('retains file details and shows reload recovery when eligibility fails', async (): Promise<void> => {
@@ -83,7 +84,8 @@ describe('file deletion presentation', (): void => {
     expect(body).not.toContain('Delete file');
     await files.deletion.reconcile();
     await vi.waitFor(() => expect(files.deletion.available).toBe(true));
-    expect(content()).toContain('Delete file');
+    expect(content()).not.toContain('Delete file');
+    expect(content()).toContain('Actions for “Notes.txt”');
     expect(content()).not.toContain('Reload file');
   });
 

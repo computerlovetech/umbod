@@ -1,9 +1,7 @@
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
-from umbod.core.filesystem import AccessGrant, Ownership, Permission, Principal, PrincipalType
-from umbod.infrastructure import create_access_control_driver
 from .conftest import FilesystemHttp
 from .test_content import upload_file
 from .test_http_contract import BASE
@@ -22,7 +20,7 @@ def test_browse_openapi_describes_optional_uuid_target(filesystem_http: Filesyst
     operation = schema["paths"]["/filesystem/browse"]["get"]
     assert operation["parameters"] == [{
         "name": "node_id", "in": "query", "required": False,
-        "description": "Node to browse; omit to browse the filesystem root.",
+        "description": "Node to browse; omit to browse personal files.",
         "schema": {"type": "string", "format": "uuid"},
     }]
 
@@ -39,7 +37,7 @@ def test_browse_omitted_target_returns_canonical_root_contract(filesystem_http: 
     assert body["node"] == root
     assert body["entries"] == [folder]
     assert body["truncated"] is False
-    assert body["breadcrumbs"] == {"items": [{"id": root["id"], "name": "", "kind": "directory"}], "complete": True}
+    assert body["breadcrumbs"] == {"items": [{"id": root["id"], "name": root["name"], "kind": "directory"}], "complete": True}
     assert body["capabilities"][0] == {
         "node_id": root["id"], "rename": False, "move": False, "edit_description": True,
         "delete": False, "share": False, "upload": True, "create_directory": True,
@@ -82,23 +80,17 @@ def test_browse_missing_and_denied_targets_are_indistinguishable(filesystem_http
 
 
 def test_mutation_rechecks_revoked_write_after_browse_projection(filesystem_http: FilesystemHttp) -> None:
+    from .conftest import create_shared_namespace, replace_shared_access
+
     client = filesystem_http.client
-    root = client.get(f"{BASE}/browse").json()["node"]["id"]
-    target = create_folder(filesystem_http, root, "target")
+    namespace = create_shared_namespace(filesystem_http, "read_write")
+    target = create_folder(filesystem_http, str(namespace.root_node_id), "target")
     initial = client.get(f"{BASE}/browse", params={"node_id": target["id"]}).json()
     assert initial["capabilities"][0]["rename"] is True
-    policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
-    node_id = UUID(target["id"])
-    client.portal.call(policies.set_owner, Ownership(
-        node_id=node_id, owner=Principal(type=PrincipalType.USER, issuer="issuer", id="bob"),
-    ))
-    client.portal.call(policies.add_grant, AccessGrant(
-        node_id=node_id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="alice"),
-        permissions={Permission.DISCOVER}, recursive=False,
-    ))
-    patch = client.patch(f"{BASE}/nodes/{node_id}", json={"name": "forbidden"},
-                         headers={"If-Match": f'"{target["revision"]}"'})
+    replace_shared_access(filesystem_http, namespace, "read")
+    patch = client.patch(f"{BASE}/nodes/{target['id']}", json={"name": "forbidden"},
+                         headers={"Authorization": "Bearer bob", "If-Match": f'"{target["revision"]}"'})
     assert patch.status_code == 403
-    refreshed = client.get(f"{BASE}/browse", params={"node_id": target["id"]}).json()
+    refreshed = client.get(f"{BASE}/browse", params={"node_id": target["id"]}, headers={"Authorization": "Bearer bob"}).json()
     assert refreshed["capabilities"][0]["rename"] is False
     assert refreshed["node"]["name"] == "target"

@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from umbod.rest.authentication.deps import get_caller_context
 from umbod.rest.main import create_app
+from umbod.rest.user_catalogue.identity import catalogue_identity_key
 from umbod.rest.settings import APISettings
 
 
@@ -101,6 +102,7 @@ def test_verified_production_profile_without_email(
     response = client.get("/api/me/profile", headers={header: "Bearer " + token})
     assert response.status_code == 200
     assert response.json() == {
+        "identity_key": catalogue_identity_key(claims),
         "user": {"id": "admin-123", "email": None, "name": "unknown", "picture": None},
         "capabilities": {"administration": True},
     }

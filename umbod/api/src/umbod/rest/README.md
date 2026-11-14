@@ -8,15 +8,17 @@ description: "FastAPI delivery for administration, authenticated users, system e
 
 - [__init__.py](./__init__.py) — Deferred package exports preserving original owner identities.
 - [admin_overview/](./admin_overview/README.md) — Overview metadata summary.
+- [agent_behaviour/](./agent_behaviour/README.md) — Published behaviour configuration and administrator-only self-report inspection.
 - [authentication/](./authentication/) — Authentication and cookie safeguards.
 - [capability_descriptions/](./capability_descriptions/) — Description overrides.
 - [connectors/](./connectors/) — Connector administration and personal delivery.
 - [dependencies.py](./dependencies.py) — Shared dependency providers.
 - [factories.py](./factories.py) — Adapter composition and lazy personal catalogue store wiring.
-- [filesystem/](./filesystem/README.md) — User filesystem browsing, creation, uploads and downloads.
-- [filesystem_administration/](./filesystem_administration/README.md) — Root-access administration.
+- [filesystem/](./filesystem/README.md) — User namespace browsing, item sharing, creation, uploads and downloads.
+- [filesystem_administration/](./filesystem_administration/README.md) — Shared namespace administration.
 - [groups/](./groups/README.md) — Group catalogue administration.
 - [identity_directory/](./identity_directory/README.md) — Verified observation capture and administrative searches.
+- [install/](./install/README.md) — Public instance-configured installer scripts and Codex/Claude Code package downloads.
 - [instance_configuration/](./instance_configuration/) — Client-visible instance settings.
 - [main.py](./main.py) — Application assembly and mounts.
 - [mcp_permissions/](./mcp_permissions/README.md) — Group-to-capability permissions.

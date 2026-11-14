@@ -17,6 +17,7 @@
   import { browserAuthorizationBrowser } from '$lib/personal-connections/infrastructure/browser-authorization-browser';
   import { browserPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/personal-connections-api';
   import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
+  import PageContainer from '$lib/components/shared/workspace/PageContainer.svelte';
   import ConnectorWorkspace from './ConnectorWorkspace.svelte';
 
   let {
@@ -68,10 +69,12 @@
 <svelte:document onvisibilitychange={() => { if (document.visibilityState === 'visible') void state.refreshOnFocus(); }} />
 
 <WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(workspaceAccess.adminAccess === 'allowed')} activeItem="connectors" logout={{ logout: async (): Promise<void> => { state.dispose(); workspaceAccess.dispose(); await logoutNavigation.logout(); } }} accountIdentity={workspaceAccess.effectiveAccountIdentity} contentWidth="wide">
-  <div class="dashboard">
-    <h1 id="connectors-heading" class="admin-title">Connectors</h1>
-    <p class="intro">Explore the connectors and capabilities available to your account.</p>
-    <section class="catalogue" aria-labelledby="connectors-heading" aria-busy={state.phase === 'loading' || state.refreshing}>
+  <PageContainer>
+    {#snippet identity()}
+      <h1 id="connectors-heading" class="admin-title">Connectors</h1>
+    {/snippet}
+    {#snippet children()}
+    <section aria-labelledby="connectors-heading" aria-busy={state.phase === 'loading' || state.refreshing}>
       {#if state.catalogueError}
         <div class="feedback" role="alert">
           <span>{state.catalogueError}</span>
@@ -98,16 +101,14 @@
             <Button variant="secondary" onclick={state.loadPersonal}>Retry personal access</Button>
           </div>
         {/if}
-        <ConnectorWorkspace {state} canManage={workspaceAccess.adminAccess === 'allowed'} />
+        <ConnectorWorkspace {state} />
       {/if}
     </section>
-  </div>
+    {/snippet}
+  </PageContainer>
 </WorkspaceShell>
 
 <style>
-  .dashboard { min-width: 0; }
-  .intro { font-size: 0.9rem; margin: 0.65rem 0 0; }
-  .catalogue { margin-top: 1.75rem; }
   .feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 0.75rem; margin-bottom: 1rem; }
   p { color: var(--admin-muted); line-height: 1.6; }
   [role='alert'] { color: var(--admin-danger); }

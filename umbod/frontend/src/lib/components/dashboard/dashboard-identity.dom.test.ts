@@ -23,7 +23,7 @@ function identity(id: string): HeaderAccountIdentityState {
 }
 
 function profile(id: string): WorkspaceProfile {
-  return { user: { id: `header-${id}`, name: `Account ${id}`, email: null, picture: null }, capabilities: { administration: true } };
+  return { identity_key: `header-${id}`, user: { id: `header-${id}`, name: `Account ${id}`, email: null, picture: null }, capabilities: { administration: true } };
 }
 
 const catalogueA = {

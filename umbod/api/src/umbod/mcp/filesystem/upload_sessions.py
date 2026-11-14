@@ -44,7 +44,8 @@ class FilesystemBeginUploadTool(Tool):
         super().__init__(
             name="filesystem_begin_upload",
             description=(
-                "Begin a private filesystem upload using the configured server size limit. "
+                "Begin an upload into the selected namespace using the configured server size limit. "
+                "A shared destination uses namespace-wide access, not private creator ownership. "
                 "Follow the returned PUT instructions: S3 uses a presigned storage URL; other backends use an API capability. "
                 "Treat the whole returned URL as sensitive. Transfer raw bytes once, then call "
                 "filesystem_complete_upload. Never send MCP bearer credentials or follow redirects. "
@@ -113,7 +114,8 @@ class FilesystemCompleteUploadTool(Tool):
         super().__init__(
             name="filesystem_complete_upload",
             description=(
-                "Publish a staged private file using the current authenticated caller. "
+                "Publish a staged file using the current authenticated caller and current destination namespace access. "
+                "Files in shared namespaces remain governed by namespace-wide access. "
                 "Returns node metadata, verified byte count and SHA256, and a native MCP resource link. "
                 "Replay a known completed upload with the same upload ID to retrieve its persisted verified receipt "
                 "and file identity. Deleted files are not restored; deleted or legacy-unverified receipts cannot "

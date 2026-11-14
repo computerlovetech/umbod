@@ -1,0 +1,9 @@
+.insight-heading { margin-bottom: 20px; }
+.insight-heading h2 { font-size: 1.25rem; line-height: 1.4; margin: 0; font-weight: 600; }
+.insight-caption { color: var(--admin-muted); font-size: .8125rem; line-height: 1.5; margin: 6px 0 0; }
+.insight-query-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr)); gap: 14px; align-items: end; min-width: 0; }
+.insight-results { background: var(--admin-panel); border: 1px solid var(--admin-border); border-radius: 8px; padding: 22px; min-width: 0; }
+.insight-result-meta { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 18px; font-size: .8125rem; }
+.insight-result-meta > :first-child { font-weight: 600; }
+.insight-pagination { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 20px; font-size: .8125rem; color: var(--admin-muted); }
+@media (max-width: 700px) { .insight-query-fields { grid-template-columns: 1fr; } .insight-results { padding: 16px; } }

@@ -3,32 +3,12 @@ from collections.abc import Sequence
 from umbod.core.callers import CallerSnapshot
 
 from ..authorization import FilesystemIdentityResolver, PermissionDenied, ResolvedIdentity, UnresolvedIdentity
-from ..authorization.service import resolved_permissions
+from ..authorization.service import resolved_access
 from ..browsing import NodeSummary
-from ..errors import MissingNode, OwnershipNotFound, PolicyDecodingFailure
-from ..models import AccessGrant, NodeId, NodeKind, Permission, Principal, PrincipalType
+from ..errors import MissingNode
+from ..models import NodeKind, Permission
 from ..transactions import FilesystemSession, FilesystemTransactions
-from .models import (
-    AvailableVisibility, CallerNodeSummary, CallerPermissions, RestrictedVisibility,
-    UnavailableVisibility, Visibility,
-)
-
-
-def representable_principal(principal: Principal) -> bool:
-    return (
-        isinstance(principal, Principal)
-        and principal.type in {PrincipalType.USER, PrincipalType.GROUP}
-        and isinstance(principal.issuer, str) and bool(principal.issuer.strip())
-        and isinstance(principal.id, str) and bool(principal.id.strip())
-    )
-
-
-def representable_grant(grant: AccessGrant, node_id: NodeId) -> bool:
-    return (
-        grant.node_id == node_id and representable_principal(grant.principal)
-        and type(grant.recursive) is bool and isinstance(grant.permissions, set)
-        and bool(grant.permissions) and all(isinstance(permission, Permission) for permission in grant.permissions)
-    )
+from .models import CallerNodeSummary, CallerPermissions, NamespaceVisibility, RestrictedVisibility, Visibility
 
 
 async def project_node_access(
@@ -45,36 +25,20 @@ async def project_mutation_result_access(
 ) -> CallerNodeSummary:
     try:
         current = await session.namespace.get_node(node.id)
-        ownership = await session.access_control.get_owner(node.id)
-    except (MissingNode, OwnershipNotFound):
+    except MissingNode:
         raise PermissionDenied() from None
-    permissions = await resolved_permissions(identity, node.id, session.namespace, session.access_control)
-    policy_decodable = True
-    try:
-        grants = tuple(await session.access_control.list_grants(node.id)) if Permission.DISCOVER in permissions else ()
-    except PolicyDecodingFailure:
-        if ownership.owner not in identity.principals:
-            raise PermissionDenied() from None
-        grants = ()
-        policy_decodable = False
+    policy, permissions = await resolved_access(identity, node.id, session.namespace, session.access_control)
     visibility: Visibility = RestrictedVisibility(type="restricted")
-    if {Permission.DISCOVER, Permission.SHARE}.issubset(permissions):
-        if policy_decodable and representable_principal(ownership.owner) and all(
-            representable_grant(grant, node.id) for grant in grants
-        ):
-            visibility = AvailableVisibility(
-                type="available", scope="direct_node_policy", owner=ownership.owner,
-                grants=grants, group_members_expanded=False,
-            )
-        else:
-            visibility = UnavailableVisibility(type="unavailable")
+    if policy is not None and Permission.DISCOVER in permissions:
+        visibility = NamespaceVisibility(type="namespace", namespace_id=policy.id, kind=policy.kind, name=policy.name)
     return CallerNodeSummary(
-        **node.model_dump(exclude={"permissions", "visible_to", "sharing"}),
+        **node.model_dump(exclude={"permissions", "visible_to"}),
         permissions=CallerPermissions(
-            can_discover=Permission.DISCOVER in permissions, can_read=Permission.READ in permissions,
+            can_discover=Permission.DISCOVER in permissions,
+            can_read=Permission.READ in permissions,
             can_write=Permission.WRITE in permissions,
-            can_delete=current.kind == NodeKind.FILE and Permission.DELETE in permissions,
             can_share=Permission.SHARE in permissions,
+            can_delete=current.kind == NodeKind.FILE and Permission.DELETE in permissions,
         ),
         visible_to=visibility,
     )

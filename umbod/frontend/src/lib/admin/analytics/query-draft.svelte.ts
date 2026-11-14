@@ -48,6 +48,15 @@ export class QueryDraft {
   toggleGroup(dimension: Dimension): void {
     this.grouping = this.grouping.includes(dimension) ? this.grouping.filter((entry) => entry !== dimension) : [...this.grouping, dimension];
   }
+  reset(preset: RangePreset): void {
+    this.presetValue = preset;
+    this.startValue = '';
+    this.endValue = '';
+    this.offsetValue = '+00:00';
+    this.bucketValue = 'none';
+    this.grouping = ['severity'];
+    this.filterValues = { source: [], event_name: [], severity: [], session_id: [], tool_name: [], activity_kind: [], outcome: [] };
+  }
   resolveTimeRange(now: Date): LogCountQuery['time_range'] {
     const durations = { hour: 3600000, day: 86400000, week: 604800000 };
     const time_range = this.presetValue === 'custom'

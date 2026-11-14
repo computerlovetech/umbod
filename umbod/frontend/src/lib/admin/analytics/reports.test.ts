@@ -1,6 +1,6 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { AnalyticsState } from './analytics-state.svelte';
-import { InMemoryLogCounts, isClassificationQuery } from './in-memory.test-support';
+import { InMemoryLogCounts } from './in-memory.test-support';
 import { dimensions, logCountQuerySchema, logCountResponseSchema, type LogCountResponse } from './domain/schemas';
 import { HttpError } from '../infrastructure/transport';
 
@@ -14,6 +14,8 @@ describe('session activity reports', () => {
   ])('submits the canonical %s contract for all sessions without custom settings', async (report, activities, groups, countLabel): Promise<void> => {
     const source = new InMemoryLogCounts();
     const state = new AnalyticsState(source, now);
+    state.setReport('tools');
+    state.reportRange.setPreset('hour');
     expect(state.report).toBe('tools');
     state.draft.selectFilter('tool_name', 'ignored');
     state.draft.setBucket('hour');
@@ -36,6 +38,8 @@ describe('session activity reports', () => {
   it('omits the session filter for all sessions and keeps custom settings independent', async (): Promise<void> => {
     const source = new InMemoryLogCounts();
     const state = new AnalyticsState(source, now);
+    state.setReport('tools');
+    state.reportRange.setPreset('hour');
     await state.run();
     expect(source.reportQueries[0].filters).toEqual([{ dimension: 'activity_kind', values: ['tool_call', 'file_read', 'file_edit'] }]);
     state.setReport('custom');
@@ -58,6 +62,8 @@ describe('session activity reports', () => {
     const source = new InMemoryLogCounts();
     source.response = { rows: [], has_more: true };
     const state = new AnalyticsState(source, now);
+    state.setReport('tools');
+    state.reportRange.setPreset('hour');
     await state.run();
     const submitted = source.reportQueries[0];
     state.setReport('custom');
@@ -82,6 +88,8 @@ describe('session activity reports', () => {
     const source = new InMemoryLogCounts();
     source.response = { rows: [], has_more: true };
     const state = new AnalyticsState(source, now);
+    state.setReport('tools');
+    state.reportRange.setPreset('hour');
     state.setReport(report);
     await state.run();
     const submitted = source.reportQueries[0];
@@ -113,6 +121,8 @@ describe('session activity reports', () => {
   it.each(['narrow', 'clear'])('retries a failed session %s without changing the previous successful scope', async (operation): Promise<void> => {
     const source = new InMemoryLogCounts();
     const state = new AnalyticsState(source, now);
+    state.setReport('tools');
+    state.reportRange.setPreset('hour');
     await state.run();
     if (operation === 'clear') await state.narrowToSession('selected');
     const previous = state.result;
@@ -136,9 +146,11 @@ describe('session activity reports', () => {
     const source = new InMemoryLogCounts();
     source.response = { rows: [], has_more: true };
     const state = new AnalyticsState(source, now);
+    state.setReport('tools');
+    state.reportRange.setPreset('hour');
     await state.run();
     let complete!: (value: LogCountResponse) => void;
-    source.handler = (query) => isClassificationQuery(query) ? Promise.resolve(source.classificationResponse) : new Promise((resolve) => { complete = resolve; });
+    source.handler = () => new Promise((resolve) => { complete = resolve; });
     const pending = state.narrowToSession('selected');
     await state.narrowToSession('other');
     await state.allSessions();
@@ -148,7 +160,7 @@ describe('session activity reports', () => {
     source.handler = undefined;
     state.setReport('files');
     await state.run();
-    expect(source.signals[2]?.aborted).toBe(true);
+    expect(source.signals[1]?.aborted).toBe(true);
     complete({ rows: [], has_more: false });
     await pending;
     expect(state.result?.report).toBe('files');
@@ -162,6 +174,8 @@ describe('session activity reports', () => {
   it('keeps custom session filtering separate and starts fresh standard runs across all sessions', async (): Promise<void> => {
     const source = new InMemoryLogCounts();
     const state = new AnalyticsState(source, now);
+    state.setReport('tools');
+    state.reportRange.setPreset('hour');
     await state.narrowToSession('ignored');
     await state.allSessions();
     expect(source.reportQueries).toHaveLength(0);
@@ -188,6 +202,8 @@ describe('session activity reports', () => {
   it('formats only canonical report values and leaves custom values untouched', async (): Promise<void> => {
     const source = new InMemoryLogCounts();
     const state = new AnalyticsState(source, now);
+    state.setReport('tools');
+    state.reportRange.setPreset('hour');
     await state.run();
     expect(state.formatValue('outcome', 'success')).toBe('Successful');
     expect(state.formatValue('outcome', 'failure')).toBe('Failed');
@@ -205,8 +221,10 @@ describe('session activity reports', () => {
   it('fences late report completions after disposal and access loss', async (): Promise<void> => {
     const source = new InMemoryLogCounts();
     const state = new AnalyticsState(source, now);
+    state.setReport('tools');
+    state.reportRange.setPreset('hour');
     let complete!: (value: LogCountResponse) => void;
-    source.handler = (query) => isClassificationQuery(query) ? Promise.resolve(source.classificationResponse) : new Promise((resolve) => { complete = resolve; });
+    source.handler = () => new Promise((resolve) => { complete = resolve; });
     const pending = state.run();
     source.handler = undefined;
     source.failure = new HttpError(403, 'Forbidden', {});
@@ -221,125 +239,32 @@ describe('session activity reports', () => {
     expect(source.reportQueries).toHaveLength(2);
   });
 
-  it('automatically counts successful standard scopes without blocking results, caches paging and preserves counts on primary failure', async (): Promise<void> => {
+  it.each(['tools', 'files', 'skills', 'logs'])('issues only requested primary calls for %s runs, pagination and session narrowing', async (report): Promise<void> => {
     const source = new InMemoryLogCounts();
+    source.response = { rows: [], has_more: true };
     const state = new AnalyticsState(source, now);
-    let complete!: (value: LogCountResponse) => void;
-    source.handler = (query) => isClassificationQuery(query) ? new Promise((resolve) => { complete = resolve; }) : Promise.resolve({ rows: [], has_more: true });
-    await state.run();
-    expect(state.pending).toBe(false);
-    expect(state.result).toBeDefined();
-    expect(state.coverage.pending).toBe(true);
-    expect(source.queries).toHaveLength(2);
-    complete({ rows: [{ groups: [{ dimension: 'activity_kind', value: { kind: 'missing' } }], count: 28, bucket: { kind: 'none' } }], has_more: false });
-    await vi.waitFor(() => expect(state.coverage.counts).toEqual({ recognized: 0, other: 28 }));
-    await state.next();
-    expect(source.coverageQueries).toHaveLength(1);
-    source.failure = new Error('offline');
-    state.reportRange.setPreset('week');
-    await state.run();
-    expect(state.page).toBe(2);
-    expect(state.coverage.counts).toEqual({ recognized: 0, other: 28 });
-    source.failure = undefined;
-    source.handler = undefined;
-    await state.narrowToSession('selected');
-    await vi.waitFor(() => expect(state.coverage.pending).toBe(false));
-    expect(source.coverageQueries).toHaveLength(2);
-    expect(source.coverageQueries[1].filters).toEqual([{ dimension: 'session_id', values: ['selected'] }]);
-    state.dispose();
-  });
-
-  it('inspects classifications in the submitted frozen scope without touching either form draft', async (): Promise<void> => {
-    const source = new InMemoryLogCounts();
-    const state = new AnalyticsState(source, now);
-    await state.run();
-    await state.narrowToSession('selected');
-    const submitted = state.result;
-    state.draft.setPreset('week');
-    state.draft.selectFilter('source', 'custom draft');
-    const customFingerprint = state.draft.fingerprint;
-    state.reportRange.setPreset('day');
-    const rangeFingerprint = state.reportRange.fingerprint;
-    state.setReport('custom');
-    await state.inspectClassifications();
-    expect(source.reportQueries.at(-1)).toEqual({
-      time_range: submitted?.query.time_range,
-      filters: [{ dimension: 'session_id', values: ['selected'] }],
-      group_by: ['activity_kind', 'source', 'event_name', 'tool_name', 'session_id'],
-      bucketing: { kind: 'none' }, pagination: { limit: 100, offset: 0 }
-    });
-    expect(state.resultLabel).toBe('Log classifications');
-    expect(state.report).toBe('logs');
-    expect(state.countLabel).toBe('Log records');
-    expect(state.changed).toBe(true);
-    expect(state.draft.fingerprint).toBe(customFingerprint);
-    expect(state.reportRange.fingerprint).toBe(rangeFingerprint);
-    expect(source.coverageQueries).toHaveLength(2);
-    await state.run();
-    expect(state.changed).toBe(false);
-    expect(state.narrowedSession).toBeUndefined();
-    expect(source.reportQueries.at(-1)?.filters).toEqual([]);
-    state.dispose();
-  });
-
-  it('treats inspection with unchanged settings as clean and keeps counts for the same scope', async (): Promise<void> => {
-    const source = new InMemoryLogCounts();
-    const state = new AnalyticsState(source, now);
-    await state.run();
-    await state.inspectClassifications();
-    expect(state.changed).toBe(false);
-    expect(state.report).toBe('logs');
-    expect(source.coverageQueries).toHaveLength(1);
-    state.dispose();
-  });
-
-  it('does not count failed first submissions or custom results and keeps auxiliary errors separate', async (): Promise<void> => {
-    const source = new InMemoryLogCounts();
-    const state = new AnalyticsState(source, now);
-    source.failure = new Error('offline');
-    await state.run();
-    expect(source.coverageQueries).toHaveLength(0);
-    expect(state.coverage.counts).toBeUndefined();
-    source.failure = undefined;
-    source.handler = async (query) => {
-      if (isClassificationQuery(query)) throw new Error('count failure');
-      return { rows: [], has_more: false };
-    };
-    await state.run();
-    await vi.waitFor(() => expect(state.coverage.error).not.toBe(''));
-    expect(state.error).toBe('');
-    expect(state.resultLabel).toBe('Tool calls');
-    source.handler = undefined;
-    await state.coverage.retry();
-    expect(state.coverage.counts).toEqual({ recognized: 0, other: 0 });
-    state.setReport('custom');
-    await state.run();
-    expect(state.coverage.counts).toBeUndefined();
-    expect(source.coverageQueries).toHaveLength(2);
-    const requests = source.queries.length;
-    await state.inspectClassifications();
-    expect(source.queries).toHaveLength(requests);
-    state.dispose();
-  });
-
-  it('auxiliary access loss clears primary results and fences a pending primary query', async (): Promise<void> => {
-    const source = new InMemoryLogCounts();
-    const state = new AnalyticsState(source, now);
-    await state.run();
-    await vi.waitFor(() => expect(state.coverage.pending).toBe(false));
-    let complete!: (value: LogCountResponse) => void;
-    source.handler = () => new Promise((resolve) => { complete = resolve; });
-    const pending = state.run();
-    source.failure = new HttpError(403, 'Forbidden', {});
-    await state.coverage.retry();
-    expect(state.accessLost).toBe(true);
-    expect(state.result).toBeUndefined();
-    expect(state.coverage.counts).toBeUndefined();
-    expect(source.signals[2]?.aborted).toBe(true);
-    complete({ rows: [], has_more: false });
-    await pending;
-    expect(state.result).toBeUndefined();
-    state.dispose();
+    state.setReport(report);
+    try {
+      await state.run();
+      expect(source.queries).toHaveLength(1);
+      const submitted = source.queries[0];
+      await state.next();
+      expect(source.queries).toHaveLength(2);
+      await state.previous();
+      expect(source.queries).toHaveLength(3);
+      await state.narrowToSession('selected');
+      expect(source.queries).toHaveLength(4);
+      await state.allSessions();
+      expect(source.queries).toEqual([
+        submitted,
+        { ...submitted, pagination: { limit: 100, offset: 100 } },
+        submitted,
+        { ...submitted, filters: [...submitted.filters, { dimension: 'session_id', values: ['selected'] }] },
+        submitted
+      ]);
+    } finally {
+      state.dispose();
+    }
   });
 
   it('validates all seven dimensions in filters, grouping and responses', (): void => {

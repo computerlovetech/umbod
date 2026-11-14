@@ -33,7 +33,7 @@ def register_filesystem_tools(
     deletion_approval: FilesystemDeletionApproval,
 ) -> None:
     for tool, operation_names in (
-        (FilesystemBrowseTool(callers, services), frozenset({"ls", "tree", "stat", "home"})),
+        (FilesystemBrowseTool(callers, services), frozenset({"ls", "tree", "stat", "home", "namespaces"})),
         (FilesystemUploadTool(callers, services), frozenset()),
         (FilesystemBeginUploadTool(callers, services), frozenset()),
         (FilesystemCompleteUploadTool(callers, services), frozenset()),
@@ -47,14 +47,6 @@ def register_filesystem_tools(
             FilesystemArgumentErrorsTool(tool), result_is_error=tool_result_is_error,
             operation_names=operation_names, builtin_response=True,
         )
-
-    async def get_filesystem_root() -> ToolResult:
-        with filesystem_operation():
-            snapshot = callers.capture()
-            node = await services.browsing().get_root(snapshot)
-            operation_completed()
-            result = (await enrich_nodes(services.sharing(), snapshot, [node], services.access()))[0]
-            return file_link_result(result, [result], result.model_dump_json(), services.read_max_bytes())
 
     async def get_filesystem_node(node_id: UUID) -> ToolResult:
         with filesystem_operation():
@@ -92,17 +84,14 @@ def register_filesystem_tools(
             return (await enrich_nodes(services.sharing(), snapshot, [node], services.access()))[0]
 
     for function, description, readonly, output_model in (
-        (get_filesystem_root, "Get the provisioned filesystem root.", True, FilesystemNodeSummary),
         (get_filesystem_node, "Get a filesystem node by UUID with an MCP resource link for files.", True, FilesystemNodeSummary),
         (list_filesystem_children, "List discoverable children with MCP resource links for files.", True, FilesystemChildren),
-        (create_filesystem_file, "Create an empty private filesystem file and return its MCP resource link.", False, FilesystemNodeSummary),
-        (create_filesystem_directory, "Create an empty private filesystem directory.", False, FilesystemNodeSummary),
+        (create_filesystem_file, "Create an empty file in the selected namespace and return its MCP resource link. Shared namespace access is not private to the creator.", False, FilesystemNodeSummary),
+        (create_filesystem_directory, "Create an empty directory governed by its namespace's access policy.", False, FilesystemNodeSummary),
     ):
         tool = FunctionTool.from_function(
-            function, name=function.__name__, description=(
-                description + " Includes manageable direct group and user sharing only, not a full effective-access audit."
-                if readonly else description
-            ), auth=visibility.authorize, tags=set(), meta={},
+            function, name=function.__name__, description=description,
+            auth=visibility.authorize, tags=set(), meta={},
         )
         tool.output_schema = output_model.model_json_schema()
         tool.annotations = ToolAnnotations(

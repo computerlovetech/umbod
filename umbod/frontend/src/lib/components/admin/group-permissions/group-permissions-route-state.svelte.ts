@@ -14,9 +14,7 @@ export class GroupPermissionsRouteState {
   }
 
   get description(): string {
-    return this.activeTab === 'filesystem'
-      ? 'Choose a group and assign filesystem access.'
-      : 'Choose a group and assign which connectors and operations its agents can access.';
+    return 'Choose a group to manage connector permissions and shared namespace access.';
   }
 
   get initialTarget(): GroupPermissionsInitialTarget | null {

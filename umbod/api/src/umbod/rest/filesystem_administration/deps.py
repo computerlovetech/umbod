@@ -5,9 +5,9 @@ from fastapi import Depends
 from umbod.config import AppConfig
 from umbod.config.identity_policy import filesystem_managed_issuer
 from umbod.rest.instance_configuration.dependencies import get_app_config
-from umbod.core.filesystem.administration import RootGroupPolicyManagement
 from umbod.core.persistence import Database
-from umbod.infrastructure import create_root_group_policy_management
+from umbod.infrastructure import create_filesystem_namespace_management
+from umbod.core.filesystem.namespaces import NamespaceManagement
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 
@@ -19,9 +19,8 @@ async def get_policy_database(
     return factories.persistence_runtime.database
 
 
-def get_root_group_policy_management(
+def get_namespace_management(
     database: Annotated[Database, Depends(get_policy_database)],
     config: Annotated[AppConfig, Depends(get_app_config)],
-) -> RootGroupPolicyManagement:
-    issuer = filesystem_managed_issuer(config)
-    return create_root_group_policy_management(database=database, issuer=issuer)
+) -> NamespaceManagement:
+    return create_filesystem_namespace_management(database=database, issuer=filesystem_managed_issuer(config))

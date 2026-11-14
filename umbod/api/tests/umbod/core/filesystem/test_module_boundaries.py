@@ -67,10 +67,10 @@ def test_filesystem_core_does_not_import_host_filesystem_or_infrastructure() -> 
     "umbod.core.filesystem.creation",
     "umbod.core.filesystem.creation.ports",
     "umbod.core.filesystem.creation.service",
-    "umbod.core.filesystem.provisioning",
-    "umbod.core.filesystem.provisioning.models",
-    "umbod.core.filesystem.provisioning.ports",
-    "umbod.core.filesystem.provisioning.service",
+    "umbod.core.filesystem.namespaces",
+    "umbod.core.filesystem.namespaces.models",
+    "umbod.core.filesystem.namespaces.ports",
+    "umbod.core.filesystem.namespaces.service",
     "umbod.core.filesystem.authorization.resolver",
 ])
 def test_importing_filesystem_core_does_not_load_infrastructure(module: str) -> None:

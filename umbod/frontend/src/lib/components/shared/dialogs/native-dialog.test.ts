@@ -35,6 +35,44 @@ describe('shared native dialog attachment', (): void => {
     if (typeof cleanup === 'function') cleanup();
   });
 
+  it('focuses Close rather than preselecting the first field when Cancel is not marked', (): void => {
+    const { document, dialog, cancel, picker } = dialogFixture();
+    cancel.removeAttribute('data-dialog-cancel');
+    const header = document.createElement('header');
+    const close = document.createElement('button');
+    close.dataset.dialogClose = '';
+    header.append(close);
+    dialog.prepend(header);
+    const cleanup = nativeDialog(vi.fn())(dialog);
+    expect(document.activeElement).toBe(close);
+    picker.focus();
+    expect(document.activeElement).toBe(picker);
+    if (typeof cleanup === 'function') cleanup();
+  });
+
+  it('focuses a chooser action rather than its heading or header close button', (): void => {
+    const { document, dialog, cancel } = dialogFixture();
+    dialog.replaceChildren();
+    const header = document.createElement('header');
+    const heading = document.createElement('h2');
+    heading.tabIndex = -1;
+    const close = document.createElement('button');
+    header.append(heading, close);
+    cancel.removeAttribute('data-dialog-cancel');
+    dialog.append(header, cancel);
+    const cleanup = nativeDialog(vi.fn())(dialog);
+    expect(document.activeElement).toBe(cancel);
+    if (typeof cleanup === 'function') cleanup();
+  });
+
+  it('sets initial focus without scrolling the form', (): void => {
+    const { dialog, cancel } = dialogFixture();
+    const focus = vi.spyOn(cancel, 'focus');
+    const cleanup = nativeDialog(vi.fn())(dialog);
+    expect(focus).toHaveBeenCalledWith({ preventScroll: true });
+    if (typeof cleanup === 'function') cleanup();
+  });
+
   it('focuses the enabled file input selected by the caller', (): void => {
     const { document, dialog, picker } = dialogFixture();
     const cleanup = nativeDialog(vi.fn(), () => true, 'input[type="file"]:not(:disabled)')(dialog);

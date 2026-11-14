@@ -2,6 +2,12 @@ from collections.abc import AsyncIterator, Iterator
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
+
+from umbod.core.groups.models import RegisterGroup
+from umbod.core.groups.stores.composition import create_group_management
+from umbod.core.filesystem.namespaces import CreateSharedNamespace, NamespaceGroupAccess, SaveSharedNamespace, SharedNamespaceView
+from umbod.infrastructure import create_filesystem_namespace_management
 
 import pytest
 from fastapi import FastAPI, Request
@@ -11,8 +17,7 @@ from starlette.routing import Mount
 
 from umbod.config import AppConfig, InMemoryConnectorStoreConfig, PersistenceConfig
 from umbod.core.callers import AuthenticationProvenance, CallerContext
-from umbod.core.filesystem import Permission, Principal, PrincipalType, RootBootstrapGrant, RootBootstrapSpec
-from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider, create_root_provisioning
+from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
 from umbod.rest.authentication.csrf_middleware import RestCookieCsrfMiddleware
 from umbod.rest.authentication.middleware import JwtVerifierFactory, SuppliedJwtVerifierFactory
 from umbod.rest.authentication.rest_middleware import RestAuthenticationMiddleware
@@ -41,6 +46,23 @@ class FilesystemHttp:
     app: FastAPI
     root: FastAPI
     factories: ConnectorApiDependencyFactories
+
+
+def create_shared_namespace(http: FilesystemHttp, access: Literal["read", "read_write"]) -> SharedNamespaceView:
+    database = http.factories.persistence_runtime.database
+    http.client.portal.call(create_group_management(database).register_group, RegisterGroup(group_id="team"))
+    management = create_filesystem_namespace_management(database=database, issuer="issuer")
+    return http.client.portal.call(management.create, CreateSharedNamespace(
+        name="Team files", groups=[NamespaceGroupAccess(group_id="team", access=access)],
+    ))
+
+
+def replace_shared_access(http: FilesystemHttp, namespace: SharedNamespaceView, access: Literal["read", "read_write"] | None) -> SharedNamespaceView:
+    management = create_filesystem_namespace_management(database=http.factories.persistence_runtime.database, issuer="issuer")
+    return http.client.portal.call(management.save, namespace.id, SaveSharedNamespace(
+        expected_revision=namespace.revision, name=namespace.name,
+        groups=[] if access is None else [NamespaceGroupAccess(group_id="team", access=access)],
+    ))
 
 
 @pytest.fixture
@@ -137,15 +159,8 @@ def _filesystem_client(root: FastAPI) -> Iterator[FilesystemHttp]:
     app.dependency_overrides[get_connector_api_dependency_factories] = capture_factories
     app.dependency_overrides[get_caller_context] = trusted_test_caller
     with TestClient(root, headers={"Authorization": "Bearer alice"}) as client:
-        assert client.get("/api/me/filesystem/browse").status_code == 403
+        assert client.get("/api/me/filesystem/namespaces").status_code == 200
         factories = captured[-1]
-        provisioner = create_root_provisioning(database=factories.persistence_runtime.database)
-        client.portal.call(provisioner.provision, RootBootstrapSpec(grants=(
-            RootBootstrapGrant(
-                principal=Principal(type=PrincipalType.GROUP, issuer="issuer", id="team"),
-                permissions=frozenset({Permission.DISCOVER, Permission.WRITE}),
-            ),
-        )))
         yield FilesystemHttp(client, app, root, factories)
 
 

@@ -16,6 +16,9 @@ class FilesystemGroupUsage:
         self._session = session
 
     async def is_in_use(self, group_id: str) -> bool:
+        from .namespaces import namespace_policies
+        if any(grant.principal.type == PrincipalType.GROUP and grant.principal.id == group_id for policy in await namespace_policies(self._session) for grant in policy.grants):
+            return True
         grant = await self._session.find_one(
             GRANT_TABLE,
             Query(

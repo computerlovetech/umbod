@@ -1,9 +1,10 @@
-from typing import Protocol
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, Protocol
 
 from umbod.core.connectors.downstream_mcp.personal_connections.health_models import RejectPersonalAuthorization
 
 from ..personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalToolResult
-from ..stores.ports import ConnectorIdQuery
 from .models import (
     AdmitPersonalTool,
     InvokePersonalTool,
@@ -17,6 +18,10 @@ from .models import (
     SavePersonalToolObservation,
     UnconfiguredPersonalToolPolicy,
 )
+
+
+if TYPE_CHECKING:
+    from ..stores.ports import ConnectorIdQuery
 
 
 class PersonalToolDiscoveryReader(Protocol):

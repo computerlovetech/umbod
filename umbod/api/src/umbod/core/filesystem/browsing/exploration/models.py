@@ -2,7 +2,9 @@ from typing import Annotated, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from ...models import AccessGrant, Node, NodeId, Ownership
+from ...namespaces.models import NamespacePolicy
+from ...models import Node, NodeId, Ownership
+from ...authorization.discovery import AuthorizationGrant
 from ..models import Breadcrumbs, NodeSummary
 
 
@@ -77,7 +79,8 @@ class BrowseResult(DirectoryListing):
 class BrowseScope(ExplorationModel):
     nodes: tuple[Node, ...]
     ownerships: tuple[Ownership, ...]
-    grants: tuple[AccessGrant, ...]
+    grants: tuple[AuthorizationGrant, ...]
+    namespaces: tuple[NamespacePolicy, ...]
 
 
 class TreeEntry(ExplorationModel):

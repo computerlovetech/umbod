@@ -20,27 +20,25 @@ from umbod.core.filesystem import (
     InvalidName,
     NameCollision,
     NamespaceDriver,
+    NodeId,
     NodeMetadata,
     Permission,
     Principal,
     PrincipalType,
-    RootBootstrapGrant,
-    RootBootstrapSpec,
     StorageFailure,
     UnspecifiedContentType,
     WrongNodeKind,
 )
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
 from umbod.core.filesystem.content import ContentService, FilesystemContent, UploadTooLarge
-from umbod.core.filesystem.namespace import ROOT_ID
-from umbod.core.persistence import PersistenceRuntime
+from umbod.core.persistence import Database, PersistenceRuntime
+from tests.support.filesystem.namespaces import shared_directory, set_shared_access
 from umbod.infrastructure import (
     InMemoryContentConfig,
     create_access_control_driver,
     create_content_driver,
     create_filesystem_transactions,
     create_namespace_driver,
-    create_root_provisioning,
 )
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
 
@@ -54,7 +52,7 @@ def alice() -> Principal:
 
 
 def caller() -> CallerSnapshot:
-    return snapshot("alice", "issuer", ())
+    return snapshot("alice", "issuer", ("team",))
 
 
 async def stream(*chunks: bytes) -> ByteStream:
@@ -64,6 +62,8 @@ async def stream(*chunks: bytes) -> ByteStream:
 
 @dataclass(frozen=True)
 class ContentContext:
+    root_id: NodeId
+    database: Database
     service: FilesystemContent
     namespace: NamespaceDriver
     policies: AccessControlDriver
@@ -78,13 +78,10 @@ async def content_context(filesystem_runtime: PersistenceRuntime) -> ContentCont
     transactions = create_filesystem_transactions(database=database)
     content = create_content_driver(InMemoryContentConfig(type="inmemory"))
     resolver = VerifiedIdentityResolver()
-    await create_root_provisioning(database=database).provision(RootBootstrapSpec(grants=(
-        RootBootstrapGrant(
-            principal=alice(),
-            permissions=frozenset({Permission.DISCOVER, Permission.WRITE}),
-        ),
-    )))
+    home = await shared_directory(database)
     return ContentContext(
+        root_id=home.id,
+        database=database,
         service=ContentService(resolver, transactions, content, 6),
         namespace=create_namespace_driver(database=database),
         policies=create_access_control_driver(database=database),
@@ -100,7 +97,7 @@ async def test_upload_download_roundtrip_and_private_ownership(
     content_context: ContentContext, chunks: tuple[bytes, ...],
 ) -> None:
     context = content_context
-    node = await context.service.upload(caller(), ROOT_ID, "uploaded", metadata(), stream(*chunks))
+    node = await context.service.upload(caller(), content_context.root_id, "uploaded", metadata(), stream(*chunks))
     download = await context.service.open_download(caller(), node.id)
     assert b"".join([chunk async for chunk in download.data]) == b"".join(chunks)
     assert download.size == len(b"".join(chunks))
@@ -113,7 +110,7 @@ async def test_upload_download_roundtrip_and_private_ownership(
 
 @pytest.mark.asyncio
 async def test_empty_created_file_download_returns_empty_stream(content_context: ContentContext) -> None:
-    node = await content_context.creation.create_file(caller(), ROOT_ID, "empty", metadata())
+    node = await content_context.creation.create_file(caller(), content_context.root_id, "empty", metadata())
     download = await content_context.service.open_download(caller(), node.id)
     assert b"".join([chunk async for chunk in download.data]) == b""
     assert download.size == 0
@@ -133,9 +130,9 @@ async def test_oversize_chunk_never_reaches_content_driver(content_context: Cont
     content.put.side_effect = put
     service = ContentService(VerifiedIdentityResolver(), context.transactions, content, 6)
     with pytest.raises(UploadTooLarge):
-        await service.upload(caller(), ROOT_ID, "large", metadata(), stream(b"abc", b"defg"))
+        await service.upload(caller(), content_context.root_id, "large", metadata(), stream(b"abc", b"defg"))
     assert received == [b"abc"]
-    assert await context.namespace.list_children(ROOT_ID) == []
+    assert await context.namespace.list_children(content_context.root_id) == []
 
 
 @pytest.mark.asyncio
@@ -144,7 +141,7 @@ async def test_invalid_name_and_collision_reject_before_consuming(
     content_context: ContentContext, name: str,
 ) -> None:
     context = content_context
-    existing = await context.creation.create_file(caller(), ROOT_ID, "existing", metadata())
+    existing = await context.creation.create_file(caller(), content_context.root_id, "existing", metadata())
     consumed: list[bool] = []
 
     async def data() -> ByteStream:
@@ -152,9 +149,9 @@ async def test_invalid_name_and_collision_reject_before_consuming(
         yield b"x"
 
     with pytest.raises(NameCollision if name == "existing" else InvalidName):
-        await context.service.upload(caller(), ROOT_ID, name, metadata(), data())
+        await context.service.upload(caller(), content_context.root_id, name, metadata(), data())
     assert consumed == []
-    assert [node.id for node in await context.namespace.list_children(ROOT_ID)] == [existing.id]
+    assert [node.id for node in await context.namespace.list_children(content_context.root_id)] == [existing.id]
 
 
 @pytest.mark.asyncio
@@ -163,9 +160,7 @@ async def test_permission_rejection_precedes_stream_consumption(
     content_context: ContentContext, permissions: set[Permission],
 ) -> None:
     context = content_context
-    await context.policies.add_grant(AccessGrant(
-        node_id=ROOT_ID, principal=alice(), permissions=permissions, recursive=False,
-    ))
+    await set_shared_access(context.database, context.root_id, writable=False, discoverable=Permission.DISCOVER in permissions)
     consumed: list[bool] = []
 
     async def data() -> ByteStream:
@@ -173,11 +168,11 @@ async def test_permission_rejection_precedes_stream_consumption(
         yield b"x"
 
     with pytest.raises(PermissionDenied):
-        await context.service.authorize_upload(caller(), ROOT_ID)
+        await context.service.authorize_upload(caller(), content_context.root_id)
     with pytest.raises(PermissionDenied):
-        await context.service.upload(caller(), ROOT_ID, "denied", metadata(), data())
+        await context.service.upload(caller(), content_context.root_id, "denied", metadata(), data())
     assert consumed == []
-    assert await context.namespace.list_children(ROOT_ID) == []
+    assert await context.namespace.list_children(content_context.root_id) == []
 
 
 @pytest.mark.asyncio
@@ -187,7 +182,7 @@ async def test_unresolved_identity_rejects_before_content_put(content_context: C
     service = ContentService(VerifiedIdentityResolver(), context.transactions, content, 6)
     unresolved = snapshot("", "issuer", ())
     with pytest.raises(PermissionDenied):
-        await service.upload(unresolved, ROOT_ID, "denied", metadata(), stream(b"x"))
+        await service.upload(unresolved, content_context.root_id, "denied", metadata(), stream(b"x"))
     content.put.assert_not_called()
 
 
@@ -198,16 +193,16 @@ async def test_revocation_during_upload_has_no_database_lock_and_no_visible_node
     context = content_context
 
     async def data() -> ByteStream:
-        assert await context.namespace.list_children(ROOT_ID) == []
-        await context.policies.remove_grant(ROOT_ID, alice())
+        assert await context.namespace.list_children(content_context.root_id) == []
+        await set_shared_access(context.database, context.root_id, writable=False, discoverable=False)
         yield b"x"
 
     with pytest.raises(PermissionDenied):
         await asyncio.wait_for(
-            context.service.upload(caller(), ROOT_ID, "revoked", metadata(), data()),
+            context.service.upload(caller(), content_context.root_id, "revoked", metadata(), data()),
             timeout=5,
         )
-    assert await context.namespace.list_children(ROOT_ID) == []
+    assert await context.namespace.list_children(content_context.root_id) == []
 
 
 @pytest.mark.asyncio
@@ -217,15 +212,15 @@ async def test_concurrent_collision_during_consumption_publishes_no_placeholder(
     context = content_context
 
     async def data() -> ByteStream:
-        await context.creation.create_file(caller(), ROOT_ID, "raced", metadata())
+        await context.creation.create_file(caller(), content_context.root_id, "raced", metadata())
         yield b"x"
 
     with pytest.raises(NameCollision):
         await asyncio.wait_for(
-            context.service.upload(caller(), ROOT_ID, "raced", metadata(), data()),
+            context.service.upload(caller(), content_context.root_id, "raced", metadata(), data()),
             timeout=5,
         )
-    children = await context.namespace.list_children(ROOT_ID)
+    children = await context.namespace.list_children(content_context.root_id)
     assert len(children) == 1
     assert children[0].revision == 1
 
@@ -237,8 +232,8 @@ async def test_content_failure_leaves_no_visible_node(content_context: ContentCo
     content.put.side_effect = StorageFailure("content failed")
     service = ContentService(VerifiedIdentityResolver(), context.transactions, content, 6)
     with pytest.raises(StorageFailure, match="content failed"):
-        await service.upload(caller(), ROOT_ID, "failed", metadata(), stream(b"x"))
-    assert await context.namespace.list_children(ROOT_ID) == []
+        await service.upload(caller(), content_context.root_id, "failed", metadata(), stream(b"x"))
+    assert await context.namespace.list_children(content_context.root_id) == []
 
 
 class FailingPublicationTransactions:
@@ -253,7 +248,7 @@ class FailingPublicationTransactions:
             for method in ("get_node", "list_children", "create_node", "update_node"):
                 getattr(namespace, method).side_effect = getattr(session.namespace, method)
             policies = create_autospec(AccessControlDriver, instance=True)
-            for method in ("get_owner", "list_grants", "set_owner"):
+            for method in ("get_owner", "list_grants", "set_owner", "list_namespace_policies"):
                 getattr(policies, method).side_effect = getattr(session.access_control, method)
             target = policies.set_owner if self._stage == "owner" else namespace.update_node
             target.side_effect = StorageFailure("publication failed")
@@ -273,9 +268,9 @@ async def test_publication_failure_rolls_back_created_node(
         6,
     )
     with pytest.raises(StorageFailure, match="publication failed"):
-        await service.upload(caller(), ROOT_ID, "failed", metadata(), stream(b"x"))
-    assert await context.namespace.list_children(ROOT_ID) == []
-    node = await context.service.upload(caller(), ROOT_ID, "failed", metadata(), stream(b"x"))
+        await service.upload(caller(), content_context.root_id, "failed", metadata(), stream(b"x"))
+    assert await context.namespace.list_children(content_context.root_id) == []
+    node = await context.service.upload(caller(), content_context.root_id, "failed", metadata(), stream(b"x"))
     assert (await context.policies.get_owner(node.id)).owner == alice()
 
 
@@ -284,8 +279,8 @@ async def test_directories_cannot_be_downloaded_and_file_cannot_be_upload_parent
     content_context: ContentContext,
 ) -> None:
     context = content_context
-    directory = await context.creation.create_directory(caller(), ROOT_ID, "directory", metadata())
-    file = await context.creation.create_file(caller(), ROOT_ID, "file", metadata())
+    directory = await context.creation.create_directory(caller(), content_context.root_id, "directory", metadata())
+    file = await context.creation.create_file(caller(), content_context.root_id, "file", metadata())
     with pytest.raises(WrongNodeKind):
         await context.service.open_download(caller(), directory.id)
     with pytest.raises(WrongNodeKind):
@@ -300,7 +295,7 @@ async def test_download_requires_discover_and_read(
     content_context: ContentContext, permissions: set[Permission],
 ) -> None:
     context = content_context
-    node = await context.creation.create_file(caller(), ROOT_ID, "private", metadata())
+    node = await context.creation.create_file(caller(), content_context.root_id, "private", metadata())
     bob = Principal(type=PrincipalType.USER, issuer="issuer", id="bob")
     await context.policies.add_grant(AccessGrant(
         node_id=node.id, principal=bob, permissions=permissions, recursive=False,

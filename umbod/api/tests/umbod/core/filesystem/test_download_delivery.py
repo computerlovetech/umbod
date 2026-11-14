@@ -3,7 +3,6 @@ import pytest
 from umbod.core.filesystem import AccessGrant, NodeMetadata, Permission, Principal, PrincipalType, WrongNodeKind
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
 from umbod.core.filesystem.content import ContentDownload, ContentService, ExternalDownloadInstructions
-from umbod.core.filesystem.namespace import ROOT_ID
 from tests.support.filesystem.downloads import DirectDownloadContent
 
 from tests.umbod.core.filesystem.test_authorized_content import (
@@ -16,7 +15,7 @@ from tests.umbod.core.filesystem.test_verified_identity import snapshot
 async def test_external_delivery_authorizes_and_returns_instructions_without_reading_bytes(content_context: ContentContext) -> None:
     driver = DirectDownloadContent()
     service = ContentService(VerifiedIdentityResolver(), content_context.transactions, driver, 6)
-    node = await service.upload(caller(), ROOT_ID, "notes.md", NodeMetadata(content_type="text/markdown", attributes={}), stream(b"# Hi"))
+    node = await service.upload(caller(), content_context.root_id, "notes.md", NodeMetadata(content_type="text/markdown", attributes={}), stream(b"# Hi"))
     download = await service.prepare_download(caller(), node.id)
     assert isinstance(download, ExternalDownloadInstructions)
     assert download.url == "https://storage.example.test/object?signature=secret"
@@ -35,7 +34,7 @@ async def test_external_delivery_requires_discover_and_read_before_signing(
 ) -> None:
     driver = DirectDownloadContent()
     service = ContentService(VerifiedIdentityResolver(), content_context.transactions, driver, 6)
-    node = await service.upload(caller(), ROOT_ID, "private", metadata(), stream(b"secret"))
+    node = await service.upload(caller(), content_context.root_id, "private", metadata(), stream(b"secret"))
     await content_context.policies.add_grant(AccessGrant(
         node_id=node.id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="bob"),
         permissions=permissions, recursive=False,
@@ -50,10 +49,10 @@ async def test_external_delivery_requires_discover_and_read_before_signing(
 async def test_external_backend_keeps_embedded_reads_and_unstored_empty_files_streamed(content_context: ContentContext) -> None:
     driver = DirectDownloadContent()
     service = ContentService(VerifiedIdentityResolver(), content_context.transactions, driver, 6)
-    node = await service.upload(caller(), ROOT_ID, "embedded", metadata(), stream(b"bytes"))
+    node = await service.upload(caller(), content_context.root_id, "embedded", metadata(), stream(b"bytes"))
     embedded = await service.open_download(caller(), node.id)
     assert b"".join([part async for part in embedded.data]) == b"bytes"
-    empty = await content_context.creation.create_file(caller(), ROOT_ID, "empty", metadata())
+    empty = await content_context.creation.create_file(caller(), content_context.root_id, "empty", metadata())
     prepared = await service.prepare_download(caller(), empty.id)
     assert isinstance(prepared, ContentDownload)
     assert prepared.size == 0
@@ -63,7 +62,7 @@ async def test_external_backend_keeps_embedded_reads_and_unstored_empty_files_st
 
 @pytest.mark.asyncio
 async def test_nonexternal_backend_retains_streamed_delivery(content_context: ContentContext) -> None:
-    node = await content_context.service.upload(caller(), ROOT_ID, "local", metadata(), stream(b"local"))
+    node = await content_context.service.upload(caller(), content_context.root_id, "local", metadata(), stream(b"local"))
     download = await content_context.service.prepare_download(caller(), node.id)
     assert isinstance(download, ContentDownload)
     assert b"".join([part async for part in download.data]) == b"local"
@@ -73,7 +72,7 @@ async def test_nonexternal_backend_retains_streamed_delivery(content_context: Co
 async def test_directory_is_rejected_before_signing(content_context: ContentContext) -> None:
     driver = DirectDownloadContent()
     service = ContentService(VerifiedIdentityResolver(), content_context.transactions, driver, 6)
-    node = await content_context.creation.create_directory(caller(), ROOT_ID, "directory", metadata())
+    node = await content_context.creation.create_directory(caller(), content_context.root_id, "directory", metadata())
     with pytest.raises(WrongNodeKind):
         await service.prepare_download(caller(), node.id)
     assert driver.download_requests == []

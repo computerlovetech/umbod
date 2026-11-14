@@ -1,17 +1,20 @@
 import { HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
 import type { NodeSharingApi } from '../api';
+import type { NodeSummary } from '../domain/schemas';
 import { nodeAccessSchema, nodeAccessWriteSchema, replaceAccessSchema, sharingRecipientSchema, sharingRecipientSearchSchema, sharingRecipientSearchResultSchema, sharingRecipientTypeSchema, type SharingRecipientType, type NodeAccess, type ReplaceAccess, type SharingRecipient, type SharingRecipientSearchResult } from '../domain/sharing';
 
 export class InMemoryNodeSharing implements NodeSharingApi {
   private readonly access = new Map<string, NodeAccess>();
   private recipients: SharingRecipient[] = [];
 
+  constructor(private readonly canShare: (id: string) => boolean = () => true, private readonly visibility: (id: string) => NodeSummary['visible_to'] = () => ({ type: 'restricted' })) {}
+
   configure = (access: NodeAccess, recipients: SharingRecipient[]): void => {
     this.access.set(access.node_id, nodeAccessSchema.parse(access));
     this.recipients = sharingRecipientSchema.array().parse(recipients);
   };
 
-  available = (id: string): boolean => this.access.has(id);
+  available = (id: string): boolean => this.canShare(id) && this.access.has(id);
 
   revoke = (id: string): void => { this.access.delete(id); };
 
@@ -19,7 +22,7 @@ export class InMemoryNodeSharing implements NodeSharingApi {
     signal?.throwIfAborted();
     if (recipientType !== undefined) sharingRecipientTypeSchema.parse(recipientType);
     const access = this.access.get(id);
-    if (!access) throw new HttpError(403, 'Forbidden', {});
+    if (!access || !this.canShare(id)) throw new HttpError(403, 'Forbidden', {});
     return nodeAccessSchema.parse({ ...access, grants: access.grants.filter((grant) => recipientType === undefined || grant.recipient.type === recipientType), blocked_recipients: access.blocked_recipients.filter((recipient) => recipientType === undefined || recipient.type === recipientType) });
   };
 
@@ -53,7 +56,7 @@ export class InMemoryNodeSharing implements NodeSharingApi {
     this.access.set(id, result);
     return nodeAccessWriteSchema.transform(({ node_id, revision, grants, blocked_recipients }) => ({ node_id, revision, grants, blocked_recipients })).parse({
       ...await this.inspectAccess(id, recipientType),
-      visible_to: { type: 'unavailable' }
+      visible_to: this.visibility(id)
     });
   };
 }

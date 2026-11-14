@@ -22,7 +22,7 @@ describe('authoritative file navigation', () => {
     expect(files.navigation.path).toEqual(path);
     expect(files.navigation.parent?.id).toBe(folderId);
     expect(files.navigation.href(path.items[0])).toBe('/files');
-    expect(files.navigation.label(path.items[0])).toBe('Home');
+    expect(files.navigation.label(path.items[0])).toBe('My files');
     await files.reload();
     expect(read).toHaveBeenCalledTimes(2);
     await files.load(folderId);
@@ -62,8 +62,7 @@ describe('authoritative file navigation', () => {
   test.each([
     { ...path, items: path.items.slice(0, 2) },
     { ...path, items: [path.items[2]] },
-    { ...path, items: path.items.slice(1) },
-    { ...path, items: [{ ...path.items[0], name: 'Not the root' }, ...path.items.slice(1)] },
+    { ...path, items: [{ ...path.items[0], kind: 'file' }, ...path.items.slice(1)] },
     { ...path, items: [...path.items.slice(0, 2), { ...path.items[2], kind: 'directory' }] },
     { ...path, items: [path.items[2], path.items[1], path.items[2]] }
   ])('rejects an incoherent browse path without exposing file details', async (response): Promise<void> => {

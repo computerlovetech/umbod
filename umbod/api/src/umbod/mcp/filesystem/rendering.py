@@ -12,7 +12,8 @@ from .models import AuthorizedSharingMetadata, FilesystemNodeSummary
 
 def visible_location(breadcrumbs: Breadcrumbs) -> str:
     prefix = "/" if breadcrumbs.complete else ".../"
-    return prefix + "/".join(item.name for item in breadcrumbs.items if item.name)
+    items = breadcrumbs.items[1:] if breadcrumbs.complete else breadcrumbs.items
+    return prefix + "/".join(item.name for item in items if item.name)
 
 
 def sharing_label(node: FilesystemNodeSummary) -> str:
@@ -21,7 +22,7 @@ def sharing_label(node: FilesystemNodeSummary) -> str:
     if not node.sharing.grants:
         return "no manageable direct grants"
     return "manageable direct sharing=" + json.dumps(
-        [grant.model_dump(mode="json") for grant in node.sharing.grants], ensure_ascii=False,
+        [grant.model_dump(mode="json") for grant in node.sharing.grants], ensure_ascii=False, separators=(",", ":"),
     )
 
 

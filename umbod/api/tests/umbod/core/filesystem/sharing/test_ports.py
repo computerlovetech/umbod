@@ -5,7 +5,7 @@ import pytest
 
 from umbod.core.filesystem import AccessGrant, Ownership, Permission, Principal, PrincipalType
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
-from umbod.core.filesystem.namespace import initial_root
+from tests.support.filesystem.group_sharing import sharing_node
 from umbod.core.filesystem.sharing import GroupPolicy, ReplaceNodePolicy, SharingRecipientSearchQuery, SharingService
 from tests.support.filesystem.group_sharing import (
     InMemorySharingTransactions, SharingGroups, SharingNamespace, SharingPolicies,
@@ -15,7 +15,7 @@ from tests.umbod.core.filesystem.test_verified_identity import snapshot
 
 
 def transactions() -> InMemorySharingTransactions:
-    root = initial_root()
+    root = sharing_node()
     return InMemorySharingTransactions(
         SharingNamespace((root,)),
         SharingPolicies(Ownership(node_id=root.id, owner=alice()), ()),
@@ -27,7 +27,7 @@ def transactions() -> InMemorySharingTransactions:
 async def test_denied_or_missing_nodes_never_read_recipient_catalogue() -> None:
     ports = transactions()
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
-    for node_id in (initial_root().id, uuid4()):
+    for node_id in (sharing_node().id, uuid4()):
         with pytest.raises(PermissionDenied):
             await service.replace(snapshot("admin", "issuer", ("admins",)), node_id, ReplaceNodePolicy(recipient_type="group", expected_revision="unknown", grants=group_commands(())))
         with pytest.raises(PermissionDenied):
@@ -42,7 +42,7 @@ async def test_denied_or_missing_nodes_never_read_recipient_catalogue() -> None:
 async def test_port_fake_replacement_returns_authoritative_policy() -> None:
     ports = transactions()
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
-    root = initial_root()
+    root = sharing_node()
     before = await service.inspect(caller(), root.id, GROUP_SCOPE)
     policy = GroupPolicy(group_id="team", permissions=frozenset({Permission.READ}))
     result = await service.replace(caller(), root.id, ReplaceNodePolicy(recipient_type="group", expected_revision=before.revision, grants=group_commands((policy,))))
@@ -60,7 +60,7 @@ async def test_port_fake_replacement_returns_authoritative_policy() -> None:
 async def test_grant_order_does_not_change_canonical_revision() -> None:
     ports = transactions()
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
-    root = initial_root()
+    root = sharing_node()
     grants = tuple(
         AccessGrant(node_id=root.id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id=identifier), permissions=set(Permission), recursive=False)
         for identifier in ("bob", "charlie")

@@ -71,10 +71,11 @@ class NodeUpdateService:
         async with self._transactions.transaction() as session:
             await self._require_write(session, identity, node_id)
             node = await session.namespace.get_node(node_id)
-            if isinstance(node.parent_id, RootParent) and (
-                not isinstance(patch.name, Unchanged) or not isinstance(patch.parent_id, Unchanged)
-            ):
-                raise RootMutation()
+            placement_requested = not isinstance(patch.name, Unchanged) or not isinstance(patch.parent_id, Unchanged)
+            if placement_requested:
+                namespace_roots = {policy.root_node_id for policy in await session.access_control.list_namespace_policies()}
+                if isinstance(node.parent_id, RootParent) or node.id in namespace_roots:
+                    raise RootMutation()
             if not isinstance(patch.parent_id, Unchanged):
                 await self._authorize_move(session, identity, node, patch.parent_id)
             details = NodeUpdate(

@@ -18,10 +18,9 @@ async def test_inspect_root_does_not_list_children(
     browsing: InMemoryBrowsing, target: RootTarget | PathTarget,
 ) -> None:
     explorer: FilesystemExplorer = BrowsingExplorer(browsing)
-    result = await explorer.inspect_node(browsing.caller, target)
-    assert result.node == browsing.root
-    assert result.breadcrumbs.complete
-    assert browsing.calls == [("root", browsing.root.id), ("breadcrumbs", browsing.root.id)]
+    with pytest.raises(PermissionDenied):
+        await explorer.inspect_node(browsing.caller, target)
+    assert browsing.calls == []
 
 
 async def test_path_resolution_uses_visible_children_and_preserves_partial_breadcrumbs(
@@ -29,16 +28,11 @@ async def test_path_resolution_uses_visible_children_and_preserves_partial_bread
 ) -> None:
     directory = browsing.add(1, "Documents", NodeKind.DIRECTORY, browsing.root)
     file = browsing.add(2, "File", NodeKind.FILE, directory)
-    result = await BrowsingExplorer(browsing).inspect_node(
-        browsing.caller, PathTarget(type="path", path="//Documents///File/"),
-    )
-    assert result.node == file
-    assert not result.breadcrumbs.complete
-    assert [item.id for item in result.breadcrumbs.items] == [file.id]
-    assert browsing.calls == [
-        ("root", browsing.root.id), ("children", browsing.root.id),
-        ("children", directory.id), ("breadcrumbs", file.id),
-    ]
+    with pytest.raises(PermissionDenied):
+        await BrowsingExplorer(browsing).inspect_node(
+            browsing.caller, PathTarget(type="path", path="//Documents///File/"),
+        )
+    assert file.id not in {node_id for _, node_id in browsing.calls}
 
 
 async def test_node_inspection_needs_no_root_or_ancestor_access(browsing: InMemoryBrowsing) -> None:
@@ -79,7 +73,7 @@ async def test_missing_and_hidden_node_ids_are_permission_denied(
         )
 
 
-@pytest.mark.parametrize("operation", ["path", "list", "tree"])
+@pytest.mark.parametrize("operation", ["list", "tree"])
 async def test_file_as_traversed_directory_raises_wrong_node_kind(
     browsing: InMemoryBrowsing, operation: str,
 ) -> None:
@@ -87,9 +81,7 @@ async def test_file_as_traversed_directory_raises_wrong_node_kind(
     explorer = BrowsingExplorer(browsing)
     target = NodeTarget(type="node", node_id=file.id)
     with pytest.raises(WrongNodeKind):
-        if operation == "path":
-            await explorer.inspect_node(browsing.caller, PathTarget(type="path", path="/file/child"))
-        elif operation == "list":
+        if operation == "list":
             await explorer.list_directory(browsing.caller, target, ListingLimits(max_entries=10))
         else:
             await explorer.read_tree(browsing.caller, target, TreeLimits(max_entries=10, depth=2))
@@ -108,7 +100,7 @@ async def test_directory_listing_has_total_order_and_exact_truncation(
     hidden = browsing.add(7, "hidden", NodeKind.FILE, browsing.root)
     browsing.hidden.add(hidden.id)
     result = await BrowsingExplorer(browsing).list_directory(
-        browsing.caller, RootTarget(type="root"), ListingLimits(max_entries=limit),
+        browsing.caller, NodeTarget(type="node", node_id=browsing.root.id), ListingLimits(max_entries=limit),
     )
     assert result.entries == [lower_id, higher_id, lower, file, last][:limit]
     assert result.truncated is truncated
@@ -119,7 +111,7 @@ async def test_tree_depth_limit_does_not_list_unexpanded_directories(browsing: I
     browsing.add(2, "deeper", NodeKind.FILE, directory)
     file = browsing.add(3, "file", NodeKind.FILE, browsing.root)
     result = await BrowsingExplorer(browsing).read_tree(
-        browsing.caller, RootTarget(type="root"), TreeLimits(max_entries=1000, depth=1),
+        browsing.caller, NodeTarget(type="node", node_id=browsing.root.id), TreeLimits(max_entries=1000, depth=1),
     )
     assert result.expansion == "expanded"
     assert [(entry.node.id, entry.depth, entry.expansion) for entry in result.entries] == [
@@ -146,7 +138,7 @@ async def test_tree_budget_is_global_depth_first_and_excludes_selected_node(
     browsing.add(2, "a", NodeKind.FILE, directory)
     browsing.add(4, "z", NodeKind.FILE, browsing.root)
     result = await BrowsingExplorer(browsing).read_tree(
-        browsing.caller, RootTarget(type="root"), TreeLimits(max_entries=budget, depth=16),
+        browsing.caller, NodeTarget(type="node", node_id=browsing.root.id), TreeLimits(max_entries=budget, depth=16),
     )
     assert [(entry.node.id.int, entry.depth, entry.expansion) for entry in result.entries] == expected
     assert result.expansion == root_expansion
@@ -158,7 +150,7 @@ async def test_tree_nested_directory_at_depth_limit_is_not_expanded(browsing: In
     child = browsing.add(2, "child", NodeKind.DIRECTORY, parent)
     browsing.add(3, "leaf", NodeKind.FILE, child)
     result = await BrowsingExplorer(browsing).read_tree(
-        browsing.caller, RootTarget(type="root"), TreeLimits(max_entries=10, depth=2),
+        browsing.caller, NodeTarget(type="node", node_id=browsing.root.id), TreeLimits(max_entries=10, depth=2),
     )
     assert [(entry.depth, entry.expansion) for entry in result.entries] == [
         (1, "expanded"), (2, "depth_limit"),
@@ -168,13 +160,13 @@ async def test_tree_nested_directory_at_depth_limit_is_not_expanded(browsing: In
 
 async def test_empty_tree_has_expanded_root(browsing: InMemoryBrowsing) -> None:
     result = await BrowsingExplorer(browsing).read_tree(
-        browsing.caller, RootTarget(type="root"), TreeLimits(max_entries=1, depth=1),
+        browsing.caller, NodeTarget(type="node", node_id=browsing.root.id), TreeLimits(max_entries=1, depth=1),
     )
     assert result.entries == []
     assert result.expansion == "expanded"
 
 
-@pytest.mark.parametrize("operation", ["path", "tree", "list"])
+@pytest.mark.parametrize("operation", ["tree", "list"])
 @pytest.mark.parametrize("corruption", ["cycle", "duplicate"])
 async def test_repeated_ids_fail_without_looping(
     browsing: InMemoryBrowsing, operation: str, corruption: str,
@@ -186,12 +178,10 @@ async def test_repeated_ids_fail_without_looping(
         browsing.children[browsing.root.id].append(directory)
     explorer = BrowsingExplorer(browsing)
     with pytest.raises(StorageFailure):
-        if operation == "path":
-            await explorer.inspect_node(browsing.caller, PathTarget(type="path", path="/directory"))
-        elif operation == "list":
-            await explorer.list_directory(browsing.caller, RootTarget(type="root"), ListingLimits(max_entries=1))
+        if operation == "list":
+            await explorer.list_directory(browsing.caller, NodeTarget(type="node", node_id=browsing.root.id), ListingLimits(max_entries=1))
         else:
-            await explorer.read_tree(browsing.caller, RootTarget(type="root"), TreeLimits(max_entries=10, depth=16))
+            await explorer.read_tree(browsing.caller, NodeTarget(type="node", node_id=browsing.root.id), TreeLimits(max_entries=10, depth=16))
 
 
 async def test_repeated_ids_across_branches_fail(browsing: InMemoryBrowsing) -> None:
@@ -201,14 +191,14 @@ async def test_repeated_ids_across_branches_fail(browsing: InMemoryBrowsing) -> 
     browsing.children[second.id].append(file)
     with pytest.raises(StorageFailure):
         await BrowsingExplorer(browsing).read_tree(
-            browsing.caller, RootTarget(type="root"), TreeLimits(max_entries=10, depth=16),
+            browsing.caller, NodeTarget(type="node", node_id=browsing.root.id), TreeLimits(max_entries=10, depth=16),
         )
 
 
-async def test_path_cycle_after_first_segment_fails(browsing: InMemoryBrowsing) -> None:
+async def test_tree_cycle_after_first_segment_fails(browsing: InMemoryBrowsing) -> None:
     directory = browsing.add(1, "directory", NodeKind.DIRECTORY, browsing.root)
     browsing.children[directory.id].append(directory)
     with pytest.raises(StorageFailure):
-        await BrowsingExplorer(browsing).inspect_node(
-            browsing.caller, PathTarget(type="path", path="/directory/directory"),
+        await BrowsingExplorer(browsing).read_tree(
+            browsing.caller, NodeTarget(type="node", node_id=browsing.root.id), TreeLimits(max_entries=10, depth=16),
         )

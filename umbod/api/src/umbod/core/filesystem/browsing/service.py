@@ -9,7 +9,7 @@ from ..authorization import (
 )
 from ..errors import MissingNode, StorageFailure
 from ..models import Node, NodeId, Permission
-from ..namespace import ROOT_ID, require_directory
+from ..namespace import require_directory
 from ..ports import NamespaceDriver
 from ..transactions import FilesystemTransactions
 from .models import Breadcrumbs, NodeSummary
@@ -59,21 +59,14 @@ class BrowsingService:
                 except MissingNode:
                     raise StorageFailure("Invalid filesystem ancestry") from None
 
-            return await discoverable_breadcrumbs(node_id, discover)
+            roots = frozenset(policy.root_node_id for policy in await session.access_control.list_namespace_policies())
+            return await discoverable_breadcrumbs(node_id, discover, roots)
 
     async def _require_discover(self, caller: CallerSnapshot, node_id: NodeId) -> None:
         try:
             await self._authorization.require(caller, node_id, Permission.DISCOVER)
         except PermissionDenied:
             raise discover_denied(node_id) from None
-
-    async def get_root(self, caller: CallerSnapshot) -> NodeSummary:
-        try:
-            root = await self._namespace.get_root()
-        except MissingNode:
-            raise discover_denied(ROOT_ID) from None
-        await self._require_discover(caller, root.id)
-        return summary(root)
 
     async def get_node(self, caller: CallerSnapshot, node_id: NodeId) -> NodeSummary:
         await self._require_discover(caller, node_id)

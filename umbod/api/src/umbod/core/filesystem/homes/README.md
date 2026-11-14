@@ -10,4 +10,4 @@ description: Stable caller-owned upload destinations with explicit home bindings
 
 - [models.py](./models.py) — Exact issuer/user bindings to stable node identities.
 - [ports.py](./ports.py) — Atomic home binding, namespace and ownership transaction contracts.
-- [service.py](./service.py) — Idempotent caller-owned home provisioning with injected identity resolution and fail-closed binding and root ownership checks.
+- [service.py](./service.py) — Idempotent personal home provisioning with injected identity resolution and fail-closed binding and namespace adoption checks.

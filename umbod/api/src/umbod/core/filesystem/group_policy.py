@@ -2,7 +2,7 @@ from collections.abc import Sequence
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from .models import AccessGrant, Permission, PrincipalType
+from .models import AccessGrant, Permission
 
 
 class GroupPolicy(BaseModel):
@@ -17,16 +17,6 @@ class GroupPolicy(BaseModel):
         if not value.strip():
             raise ValueError("Policy keys must be nonblank")
         return value
-
-
-def editable_grant(grant: AccessGrant, issuer: str) -> bool:
-    return (
-        grant.principal.type == PrincipalType.GROUP
-        and grant.principal.issuer == issuer
-        and bool(grant.principal.id.strip())
-        and bool(grant.permissions)
-        and not grant.recursive
-    )
 
 
 def canonical_grants(grants: Sequence[AccessGrant]) -> list[dict[str, object]]:

@@ -64,8 +64,8 @@ def _model_tool(model: type[BaseModel], name: str = "filesystem_upload") -> File
         ({"operation": "stat", "target": {"type": "path", "path": SENTINEL}}, "target.path", "absolute path"),
         ({"operation": "tree", "target": {"type": "root"}, "depth": 20}, "depth", "1 through 16"),
         ({"operation": "ls", "target": {"type": "root"}, "max_entries": 0}, "max_entries", "1 through 1000"),
-        ({"operation": SENTINEL}, "operation", "ls, tree, stat, or home"),
-        ({}, "operation", "ls, tree, stat, or home"),
+        ({"operation": SENTINEL}, "operation", "ls, tree, stat, home, or namespaces"),
+        ({}, "operation", "ls, tree, stat, home, or namespaces"),
         ({"operation": "stat", "target": {}}, "target.type", "root, path, or node"),
     ],
 )

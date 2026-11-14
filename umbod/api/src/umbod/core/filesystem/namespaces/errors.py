@@ -1,0 +1,2 @@
+class NamespaceValidationError(ValueError):
+    pass

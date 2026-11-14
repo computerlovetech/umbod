@@ -5,7 +5,7 @@ import pytest
 from umbod.core.callers import AuthenticationProvenance
 from umbod.core.filesystem import AccessGrant, NodeId, Permission, Principal, PrincipalType
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
-from umbod.core.filesystem.namespace import initial_root
+from tests.support.filesystem.group_sharing import sharing_node
 from umbod.core.filesystem.sharing import InvalidSharingPolicy, ReplaceNodePolicy, SharingService
 from tests.support.filesystem.sharing_policy import GROUP_SCOPE
 from tests.umbod.core.filesystem.test_authorized_content import caller
@@ -25,7 +25,7 @@ async def test_directory_unauthorized_callers_cannot_project_or_clear_users_even
 ) -> None:
     ports = transactions()
     ports.users = UnreadableUsers()
-    node_id = initial_root().id
+    node_id = sharing_node().id
     if has_user_grant:
         await ports.policies.add_grant(AccessGrant(
             node_id=node_id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="recipient"),
@@ -52,7 +52,7 @@ async def test_directory_unauthorized_callers_cannot_project_or_clear_users_even
 async def test_inspection_and_replacement_authorize_node_before_any_directory_lookup(permissions: set[Permission]) -> None:
     ports = transactions()
     ports.users = UnreadableUsers()
-    node_id = initial_root().id
+    node_id = sharing_node().id
     await ports.policies.add_grant(AccessGrant(
         node_id=node_id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="delegate"),
         permissions=permissions, recursive=False,
@@ -75,7 +75,7 @@ async def test_all_user_targets_resolve_before_any_mutation(monkeypatch: pytest.
     identifier = await observe(ports.users, "issuer", "recipient")
     invalid_identifier = await observe(ports.users, "foreign", "recipient") if invalid_target == "foreign" else "unknown"
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
-    node_id = initial_root().id
+    node_id = sharing_node().id
     await service.share(caller(), node_id, user_command(identifier, Permission.READ))
     view = await service.inspect(caller(), node_id, USER_SCOPE)
 
@@ -99,7 +99,7 @@ async def test_inspect_without_users_never_reads_directory_but_group_filtered_us
     ports = transactions()
     users = CountingUsers()
     ports.users = users
-    node_id = initial_root().id
+    node_id = sharing_node().id
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
     await service.inspect(caller(), node_id, GROUP_SCOPE)
     assert users.lookups == []
@@ -119,7 +119,7 @@ async def test_user_binding_changes_revision_without_changing_grants() -> None:
     ports = transactions()
     identifier = await observe(ports.users, "issuer", "recipient")
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
-    node_id = initial_root().id
+    node_id = sharing_node().id
     await service.share(caller(), node_id, user_command(identifier, Permission.READ))
     before = await service.inspect(caller(), node_id, GROUP_SCOPE)
     stored = ports.users.users["issuer", "recipient"]

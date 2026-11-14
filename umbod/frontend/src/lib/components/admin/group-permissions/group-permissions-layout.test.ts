@@ -10,7 +10,8 @@ describe('shared group permissions presentation', () => {
     const body = render(GroupPermissionsPage, { props: { activeTab, description: 'Assign group access.', children } }).body;
     expect(body).toContain('aria-labelledby="group-permissions-title"');
     expect(body).toContain('Assign group access.');
-    expect(body).toContain('Manage groups');
+    expect(body).not.toContain('Manage groups');
+    expect(body).not.toContain('href="/admin/groups"');
     expect(body).toContain('Permission editor content');
     expect(body).toMatch(new RegExp('href="/admin/group-permissions/' + activeTab + '"[^>]*aria-current="page"'));
     expect(body).not.toContain('Back to OpenAPI connector');

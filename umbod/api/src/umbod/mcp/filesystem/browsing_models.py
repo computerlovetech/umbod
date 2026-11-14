@@ -10,6 +10,8 @@ from umbod.core.filesystem.browsing.exploration import (
     TreeEntry,
 )
 
+from umbod.core.filesystem.namespaces import NamespaceSummary
+
 from .models import FilesystemNodeSummary
 
 
@@ -37,10 +39,16 @@ class ResolveHome(BaseModel):
     operation: Literal["home"] = Field(description="Resolve the caller home directory; no target is accepted.")
 
 
+class ListNamespaces(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    operation: Literal["namespaces"] = Field(description="List your personal namespace and accessible shared namespaces; no target is accepted.")
+
+
 class BrowseCommand(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    target: BrowseTarget = Field(description="Select the filesystem root, an absolute path, or a node UUID.")
+    target: BrowseTarget = Field(description="Select your personal root, an absolute path within personal files, or a node UUID from a namespace listing.")
 
 
 class BoundedBrowseCommand(BrowseCommand):
@@ -61,7 +69,7 @@ class InspectNode(BrowseCommand):
 
 
 FilesystemBrowseCommand = Annotated[
-    Union[ListDirectory, ReadTree, InspectNode, ResolveHome], Field(discriminator="operation")
+    Union[ListDirectory, ReadTree, InspectNode, ResolveHome, ListNamespaces], Field(discriminator="operation")
 ]
 
 
@@ -93,8 +101,21 @@ class HomeResponse(BaseModel):
     result: FilesystemNodeInspection
 
 
+class NamespaceListing(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    namespaces: list[NamespaceSummary]
+
+
+class NamespaceListingResponse(BaseModel):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    operation: Literal["namespaces"]
+    result: NamespaceListing
+
+
 FilesystemBrowseResponse = Annotated[
-    Union[DirectoryListingResponse, DirectoryTreeResponse, NodeInspectionResponse, HomeResponse],
+    Union[DirectoryListingResponse, DirectoryTreeResponse, NodeInspectionResponse, HomeResponse, NamespaceListingResponse],
     Field(discriminator="operation"),
 ]
 

@@ -1,3 +1,4 @@
+from umbod.core.filesystem.namespace import ROOT_ID
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -55,65 +56,28 @@ async def _local_filesystem_client(settings: AppConfig, runtime: PersistenceRunt
 
 
 @pytest.mark.asyncio
-async def test_local_filesystem_requires_explicit_root_grant_and_retains_private_ownership(
+async def test_local_personal_namespace_is_private_and_idempotent(
     local_filesystem_settings: AppConfig, local_filesystem_runtime: PersistenceRuntime,
 ) -> None:
     async with _local_filesystem_client(local_filesystem_settings, local_filesystem_runtime) as client:
-        initial = (await client.get(POLICY)).json()
-        assert initial["status"] == "uninitialized"
-        assert set(initial) == {"status", "revision", "groups", "blocked_group_ids"}
-        assert (await client.get(BASE + "/browse")).status_code == 403
-        assert (await client.get(BASE + "/nodes?scope=owned")).status_code == 404
-        initial = (await client.get(POLICY)).json()
-        saved = await client.put(POLICY, json={
-            "expected_revision": initial["revision"], "groups": [{
-                "group_id": "admin", "permissions": ["discover", "write"],
-            }],
-        })
-        assert saved.status_code == 200
-        root = (await client.get(BASE + "/browse")).json()["node"]
-        created = await client.post(BASE + f"/nodes/{root['id']}/directories", json={
-            "name": "private-local-directory", "metadata": {"content_type": {}, "attributes": {}},
-        })
-        assert created.status_code == 201
-        child = created.json()
-        assert (await client.get(BASE + f"/nodes/{root['id']}/children")).json() == {"nodes": [child]}
-        revoked = await client.put(POLICY, json={"expected_revision": saved.json()["revision"], "groups": []})
-        assert revoked.status_code == 200
-        assert (await client.get(BASE + "/browse")).status_code == 403
-        assert (await client.get(BASE + f"/nodes/{child['id']}")).json() == child
-    other_settings = AppConfig.model_validate({
-        **local_filesystem_settings.model_dump(),
-        "admin_authentication": {
-            **local_filesystem_settings.admin_authentication.model_dump(), "simulated_user_id": "other-user",
-        },
-    })
-    async with _local_filesystem_client(other_settings, local_filesystem_runtime) as other:
-        assert (await other.get(POLICY)).json() == revoked.json()
-        assert (await other.get(BASE + f"/nodes/{child['id']}")).status_code == 403
-    async with _local_filesystem_client(local_filesystem_settings, local_filesystem_runtime) as owner:
-        assert (await owner.get(BASE + f"/nodes/{child['id']}")).json() == child
-
-
-@pytest.mark.asyncio
-async def test_local_home_is_private_and_idempotent_without_root_grants(
-    local_filesystem_settings: AppConfig, local_filesystem_runtime: PersistenceRuntime,
-) -> None:
-    async with _local_filesystem_client(local_filesystem_settings, local_filesystem_runtime) as client:
-        assert (await client.get(BASE + "/browse")).status_code == 403
+        assert (await client.get(BASE + f"/browse?node_id={ROOT_ID}")).status_code == 403
         first = await client.post(BASE + "/home")
         repeated = await client.post(BASE + "/home")
         assert first.status_code == repeated.status_code == 200
         assert first.json() == repeated.json()
         home = first.json()
-        assert home["visible_to"]["owner"] == {
-            "type": "user", "issuer": "urn:umbod:local", "id": "test-user",
+        namespace = (await client.get(BASE + "/namespaces")).json()["namespaces"][0]
+        assert home["visible_to"] == {
+            "type": "namespace", "namespace_id": namespace["id"], "kind": "personal", "name": namespace["name"],
         }
-        assert home["visible_to"]["grants"] == []
-        assert (await client.get(BASE + "/browse")).status_code == 403
-        browsed = await client.get(BASE + "/browse", params={"node_id": home["id"]})
-        assert browsed.status_code == 200
-        assert browsed.json()["node"] == home
+        assert set(home["permissions"]) == {"can_discover", "can_read", "can_write", "can_delete", "can_share"}
+        created = await client.post(BASE + f"/nodes/{home['id']}/directories", json={
+            "name": "private", "metadata": {"content_type": {}, "attributes": {}},
+        })
+        assert created.status_code == 201
+        child = created.json()
+        assert (await client.get(BASE + "/browse")).json()["entries"] == [child]
+        assert (await client.get(POLICY)).status_code == 404
     other_settings = AppConfig.model_validate({
         **local_filesystem_settings.model_dump(),
         "admin_authentication": {
@@ -121,26 +85,23 @@ async def test_local_home_is_private_and_idempotent_without_root_grants(
         },
     })
     async with _local_filesystem_client(other_settings, local_filesystem_runtime) as other:
-        assert (await other.get(BASE + f"/nodes/{home['id']}")).status_code == 403
+        assert (await other.get(BASE + f"/nodes/{child['id']}")).status_code == 403
         other_home = await other.post(BASE + "/home")
         assert other_home.status_code == 200
         assert other_home.json()["id"] != home["id"]
-        assert other_home.json()["visible_to"]["owner"]["id"] == "other-user"
+    async with _local_filesystem_client(local_filesystem_settings, local_filesystem_runtime) as owner:
+        assert (await owner.get(BASE + f"/nodes/{child['id']}")).json() == child
 
 
 @pytest.mark.asyncio
-async def test_local_filesystem_rejects_client_selected_issuer(
+async def test_local_namespace_ignores_client_selected_identity(
     local_filesystem_settings: AppConfig, local_filesystem_runtime: PersistenceRuntime,
 ) -> None:
     async with _local_filesystem_client(local_filesystem_settings, local_filesystem_runtime) as client:
-        initial = (await client.get(POLICY)).json()
-        saved = await client.put(POLICY, json={
-            "expected_revision": initial["revision"], "groups": [{
-                "issuer": "attacker", "group_id": "admin", "permissions": ["discover", "write"],
-            }],
-        })
-        assert saved.status_code == 422
-        assert (await client.get(BASE + "/browse", headers={
+        home = (await client.post(BASE + "/home")).json()
+        response = await client.get(BASE + f"/nodes/{home['id']}", headers={
             "Authorization": 'Bearer {"iss":"attacker","sub":"test-user","groups":["admin"]}',
             "X-Umbod-Issuer": "attacker",
-        })).status_code == 403
+        })
+        assert response.status_code == 200
+        assert response.json() == home

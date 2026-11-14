@@ -164,7 +164,7 @@ The tool decorator requires `description` and accepts optional `name`, `paramete
 
 An explicit `output_schema` must be a JSON Schema dictionary. Omitting it means no declared output schema, which is distinct from supplying an empty dictionary; `None` is invalid. Registration metadata represents this distinction with `output_schema_status` set to `absent` or `present`, and includes `output_schema` when present.
 
-These SDK contracts are separate from changes to Umbod's built-in filesystem tools. For typed sharing recipients, alternative schema branches, removed discovery-tool names, and REST migration requirements, see the [filesystem sharing reference](https://umbod.ai/docs/reference/filesystem-sharing/).
+These SDK contracts are separate from Umbod's built-in filesystem tools. For personal/shared namespace discovery and administrator-managed group access, see the [filesystem namespace reference](https://umbod.ai/docs/reference/filesystem-namespaces/).
 
 ## Declaring plugin discovery metadata
 

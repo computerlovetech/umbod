@@ -41,7 +41,7 @@ describe('contextual sidebar rendering', (): void => {
     expect(document.querySelector('h1')?.textContent).toBe('Existing files page');
   });
 
-  test.each(['connectors', 'groups', 'groupPermissions', 'analytics', 'instanceConfiguration'] as const)('administration selects %s while preserving the page and identity frame', async (activeItem): Promise<void> => {
+  test.each(['connectors', 'groups', 'groupPermissions', 'insights'] as const)('administration selects %s while preserving the page and identity frame', async (activeItem): Promise<void> => {
     component = mount(AdminShell, {
       target: document.body,
       props: {

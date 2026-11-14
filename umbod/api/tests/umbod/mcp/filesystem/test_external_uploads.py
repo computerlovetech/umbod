@@ -29,10 +29,10 @@ async def test_external_mcp_begin_needs_no_api_origin_and_inline_remains_interna
     server.add_tool(FilesystemCompleteUploadTool(filesystem_state.callers, services))
     server.add_tool(FilesystemUploadTool(filesystem_state.callers, services))
     async with Client(server) as client:
-        from umbod.core.filesystem.namespace import ROOT_ID
+        home = await services.homes().get_or_provision(filesystem_state.callers.current.get())
 
         begin = await client.call_tool("filesystem_begin_upload", {
-            "parent_id": str(ROOT_ID), "name": "external", "metadata": METADATA,
+            "parent_id": str(home.id), "name": "external", "metadata": METADATA,
             "size_bytes": 3, "expected_sha256": hashlib.sha256(b"abc").hexdigest(),
         })
         data = begin.structured_content
@@ -48,7 +48,7 @@ async def test_external_mcp_begin_needs_no_api_origin_and_inline_remains_interna
         assert complete.structured_content["sha256"] == hashlib.sha256(b"abc").hexdigest()
         assert content.verifications == 1
         inline = await client.call_tool("filesystem_upload", {
-            "parent_id": str(ROOT_ID), "name": "inline", "metadata": METADATA,
+            "parent_id": str(home.id), "name": "inline", "metadata": METADATA,
             "content": {"encoding": "utf-8", "text": "inline"},
         })
         assert inline.structured_content["name"] == "inline"

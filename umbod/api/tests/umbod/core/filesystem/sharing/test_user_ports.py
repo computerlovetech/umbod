@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
-from umbod.core.filesystem.namespace import initial_root
+from tests.support.filesystem.group_sharing import sharing_node
 from umbod.core.filesystem.sharing import InvalidSharingPolicy, ShareNodeResult, SharingService, ShareNodePolicy, UserSharingTarget
 from umbod.core.identity_directory.user_models import ObservedUserIdentity, ObservedUserProfile, SubjectUsersLookup, UserLookup
 from tests.support.identity_directory import InMemoryIdentityDirectory
@@ -30,7 +30,7 @@ class UnreadableUsers(InMemoryIdentityDirectory):
 async def test_current_direct_authority_is_checked_before_any_user_lookup(permissions: set[Permission]) -> None:
     ports = transactions()
     ports.users = UnreadableUsers()
-    node_id = initial_root().id
+    node_id = sharing_node().id
     await ports.policies.add_grant(AccessGrant(
         node_id=node_id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="delegate"),
         permissions=permissions, recursive=False,
@@ -51,7 +51,7 @@ async def test_malformed_same_principal_grant_blocks_share_and_summary_without_d
 ) -> None:
     ports = transactions()
     user_id = await observe(ports.users, "issuer", "recipient")
-    node_id = initial_root().id
+    node_id = sharing_node().id
     grant = AccessGrant.model_construct(
         node_id=node_id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="recipient"),
         permissions=permissions, recursive=recursive,
@@ -69,7 +69,7 @@ async def test_malformed_same_principal_grant_blocks_share_and_summary_without_d
 async def test_subset_user_sharing_performs_no_write_but_validates_current_authority() -> None:
     ports = CountingTransactions(transactions())
     user_id = await observe(ports.ports.users, "issuer", "delegate")
-    node_id = initial_root().id
+    node_id = sharing_node().id
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
     command = user_command(user_id, Permission.READ)
     await service.share(caller(), node_id, command)
@@ -99,7 +99,7 @@ def test_user_share_policy_rejects_invalid_permissions(permissions: list[str]) -
 
 def test_user_result_is_frozen_preserves_exact_identifier_and_sorts_permissions() -> None:
     result = ShareNodeResult(
-        node_id=initial_root().id, recipient=UserSharingTarget(type="user", user_id=" exact "), recursive=True, changed=False,
+        node_id=sharing_node().id, recipient=UserSharingTarget(type="user", user_id=" exact "), recursive=True, changed=False,
         permissions=frozenset({Permission.WRITE, Permission.READ, Permission.DISCOVER}),
     )
     assert result.recipient.user_id == " exact "

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { afterNavigate, goto } from '$app/navigation';
-  import { onMount } from 'svelte';
+  import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+  import { onMount, untrack } from 'svelte';
   import { workspaceApi } from '$lib/workspace/infrastructure/workspace-api';
   import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
   import type { WorkspaceApi } from '$lib/workspace/api';
@@ -27,12 +28,14 @@
   import { csvPreviewAdapter } from './preview/csv-adapter';
 
   let {
+    accountIdentity = { kind: 'hidden' },
     createApi = browserFilesApi,
     createWorkspaceApi = workspaceApi,
     configuration = publicConfigurationProvider,
     createContentSource = (configuration: PreviewConfigurationProvider): FileContentPort => new FileContentRoute(browserTransport(), configuration),
     signIn = navigateToSignIn
   }: {
+    accountIdentity?: HeaderAccountIdentityState;
     createApi?: () => FilesApi;
     createWorkspaceApi?: () => WorkspaceApi;
     configuration?: PreviewConfigurationProvider;
@@ -45,7 +48,7 @@
   }
 
   function createAccess(): WorkspaceAccessState {
-    return new WorkspaceAccessState(createWorkspaceApi());
+    return new WorkspaceAccessState(createWorkspaceApi(), () => accountIdentity);
   }
 
   function createPreview(): FilePreviewState {
@@ -59,11 +62,23 @@
   const upload = new UploadState(api, state);
   const access = createAccess();
 
+  $effect.pre(() => {
+    const source = accountIdentity;
+    const changed = untrack(() => access.observeIdentitySource(source));
+    const identity = access.effectiveAccountIdentity;
+    untrack(() => {
+      if (changed) { folder.navigate(); upload.navigate(); }
+      state.observeAccountIdentity(identity, changed);
+    });
+  });
+
   afterNavigate(({ to }) => {
     if (to?.url.pathname !== '/files') { preview.reset(); state.deletion.reset(); state.rowDeletion.reset(); state.sharing.reset(); return; }
+    const target = to.url.searchParams.get('node');
+    if (state.isCurrentTarget(target)) return;
     folder.navigate();
     upload.navigate();
-    void state.load(to.url.searchParams.get('node'));
+    void state.load(target);
   });
 
   onMount(() => {
@@ -78,6 +93,6 @@
 </script>
 
 <svelte:head><title>Files · Umbod</title></svelte:head>
-<WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(access.adminAccess === 'allowed')} activeItem="files" accountIdentity={access.accountIdentity} contentWidth="wide">
+<WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(access.adminAccess === 'allowed')} activeItem="files" accountIdentity={access.effectiveAccountIdentity} contentWidth="wide">
   <FilesContent {state} {folder} {upload} {signIn} />
 </WorkspaceShell>

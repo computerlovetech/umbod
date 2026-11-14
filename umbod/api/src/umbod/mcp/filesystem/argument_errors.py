@@ -61,12 +61,12 @@ def _correction(kind: str, path: tuple[str, ...], fields: DeclaredArgumentFields
         ("group_id",): "Use a nonblank registered group ID returned by filesystem_search_sharing_recipients.",
         ("recipient", "group_id"): "Use a nonblank registered group ID returned by filesystem_search_sharing_recipients.",
         ("recipient", "user_id"): "Use a nonblank user ID of at most 200 characters returned by filesystem_search_sharing_recipients.",
-        ("operation",): "Use ls, tree, stat, or home.",
-        ("content", "encoding"): "Use utf-8 or base64.",
         ("recipient", "type"): "Use group or user.",
         ("recipient_type",): "Use group or user.",
-        ("target", "type"): "Use root, path, or node.",
         ("permissions",): "Use a nonempty list of allowed permissions: discover, read, write, delete, share.",
+        ("operation",): "Use ls, tree, stat, home, or namespaces.",
+        ("content", "encoding"): "Use utf-8 or base64.",
+        ("target", "type"): "Use root, path, or node.",
     }
     if path in guidance:
         return guidance[path]

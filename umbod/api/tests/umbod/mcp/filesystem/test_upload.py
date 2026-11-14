@@ -45,7 +45,7 @@ async def test_upload_publishes_readable_private_content(
     assert success == "File uploaded successfully."
     assert json.loads(rendered) == result.structured_content
     assert json.loads(rendered)["permissions"]["can_write"] is True
-    assert json.loads(rendered)["visible_to"]["type"] == "available"
+    assert json.loads(rendered)["visible_to"]["type"] == "namespace"
     assert set(result.structured_content) == {
         "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision", "permissions", "visible_to",
     }

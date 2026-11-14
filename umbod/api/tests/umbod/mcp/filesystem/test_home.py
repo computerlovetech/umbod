@@ -26,12 +26,12 @@ async def test_targetless_home_resolves_private_upload_destination_and_reconcile
         node = result["node"]
         assert node["permissions"]["can_write"] is True
         assert node["permissions"]["can_delete"] is False
-        assert node["visible_to"]["type"] == "available"
-        assert node["visible_to"]["grants"] == []
+        assert node["visible_to"]["type"] == "namespace"
+        assert node["visible_to"]["kind"] == "personal"
+        assert node["permissions"]["can_share"] is False
         assert '"can_write":true' in first.content[0].text
-        assert 'visible_to={"type":"available","scope":"direct_node_policy"' in first.content[0].text
-        assert '"grants":[]' in first.content[0].text
-        assert result["breadcrumbs"]["complete"] is False
+        assert 'visible_to={"type":"namespace"' in first.content[0].text
+        assert result["breadcrumbs"]["complete"] is True
         listing = await client.call_tool("filesystem_browse", {
             "operation": "ls", "target": {"type": "node", "node_id": node["id"]},
         })
@@ -40,7 +40,11 @@ async def test_targetless_home_resolves_private_upload_destination_and_reconcile
     tools = await listed_tools(filesystem_mcp)
     assert "filesystem_begin_upload" in tools
     assert "get_filesystem_root" not in tools
-    assert len(await filesystem_mcp.server.list_tools()) <= 13
+    assert tools == {
+        "filesystem_browse", "get_filesystem_node", "list_filesystem_children",
+        "create_filesystem_file", "create_filesystem_directory", "filesystem_upload",
+        "filesystem_begin_upload", "filesystem_complete_upload", "update_filesystem_node",
+    }
     assert "upload it to Umbod" in descriptor.description
     assert "original-byte" in descriptor.description
 

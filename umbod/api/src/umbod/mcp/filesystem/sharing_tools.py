@@ -36,7 +36,8 @@ class FilesystemSearchSharingRecipientsTool(Tool):
                 "user names as a case-insensitive literal substring, with normalized whitespace. "
                 "Query must be nonblank and at most 200 characters. Omit recipient_type to search both types. "
                 "Returns at most 50 eligible recipients, groups first, with has_more. "
-                "Does not create recipients or grant access; the observed directory may be incomplete."
+                "Does not create recipients or grant access; the observed directory may be incomplete. "
+                "Namespace roots use separate administration and cannot be shared through this tool."
             ),
             parameters={"type": "object", **SEARCH_RECIPIENTS_COMMAND.json_schema()},
             output_schema=SharingRecipientSearchResult.model_json_schema(),
@@ -84,6 +85,8 @@ class FilesystemShareTool(Tool):
                 "Omitting recursive preserves the scope of an existing grant. "
                 "Set recursive=false for this node only; file grants always return recursive=false. "
                 "Additive sharing preserves existing recursive scope and never transfers ownership. "
+                "Namespace roots cannot be shared through this tool. Namespace baseline rights remain additive; "
+                "recursive folder inheritance stops at the namespace boundary. "
                 "Find recipients with filesystem_search_sharing_recipients. Use the returned type and "
                 "group_id or user_id in recipient, omitting the display label. "
                 "Legacy top-level group_id requests retain their original response shape."

@@ -5,6 +5,8 @@ from fastapi.exceptions import RequestValidationError
 from pydantic import ValidationError
 
 from umbod.config.identity_policy import filesystem_managed_issuer
+from umbod.core.filesystem.sharing import FilesystemSharing
+from umbod.infrastructure import create_filesystem_sharing
 from umbod.core.callers import CallerContext, CallerSnapshot, group_membership_from_values
 from umbod.core.filesystem import ContentDriver, FilesystemCreation, Principal, PrincipalType
 from umbod.core.filesystem.content import ContentService, FilesystemContent
@@ -17,12 +19,12 @@ from umbod.core.filesystem.authorization import (
 from umbod.core.filesystem.browsing import FilesystemBrowsing
 from umbod.core.filesystem.browsing.exploration import FilesystemBrowser
 from umbod.core.filesystem.models import NodeId
-from umbod.core.filesystem.namespace import ROOT_ID
-from umbod.core.filesystem.sharing import FilesystemSharing
+from umbod.core.filesystem.namespaces import NamespaceService
+from umbod.infrastructure import create_filesystem_namespaces
 from umbod.core.persistence import Database
 from umbod.infrastructure import (
     create_filesystem_explorer, create_filesystem_browsing, create_filesystem_creation, create_filesystem_transactions,
-    create_filesystem_uploads, create_filesystem_sharing,
+    create_filesystem_uploads,
 )
 from umbod.rest.authentication.local import LOCAL_DEVELOPMENT_ISSUER, local_rest_identity_enabled
 from umbod.rest.authentication.authorization import JwtClaims
@@ -81,6 +83,13 @@ async def require_filesystem_identity(
             raise PermissionDenied()
 
 
+def get_filesystem_namespaces(
+    database: Annotated[Database, Depends(get_filesystem_database)],
+    resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
+) -> NamespaceService:
+    return create_filesystem_namespaces(database=database, resolver=resolver)
+
+
 def get_filesystem_homes(
     database: Annotated[Database, Depends(get_filesystem_database)],
     resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
@@ -111,9 +120,14 @@ def get_filesystem_download_delivery(request: Request) -> Literal["auto", "strea
         ]) from error
 
 
-def get_filesystem_browse_node_id(request: Request) -> NodeId:
+async def get_filesystem_browse_node_id(
+    request: Request,
+    caller: Annotated[CallerSnapshot, Depends(get_filesystem_caller)],
+    namespaces: Annotated[NamespaceService, Depends(get_filesystem_namespaces)],
+) -> NodeId:
     if "node_id" not in request.query_params:
-        return ROOT_ID
+        with filesystem_errors():
+            return (await namespaces.list(caller))[0].root_node_id
     try:
         return BrowseNodeQuery.model_validate({"node_id": request.query_params["node_id"]}).node_id
     except ValidationError as error:
@@ -125,12 +139,8 @@ def get_filesystem_browse_node_id(request: Request) -> NodeId:
 def get_filesystem_explorer(
     database: Annotated[Database, Depends(get_filesystem_database)],
     resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
-    factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
 ) -> FilesystemBrowser:
-    return create_filesystem_explorer(
-        database=database, resolver=resolver,
-        sharing_available=bool(filesystem_managed_issuer(factories.settings).strip()),
-    )
+    return create_filesystem_explorer(database=database, resolver=resolver)
 
 
 def get_filesystem_sharing(
@@ -138,8 +148,7 @@ def get_filesystem_sharing(
     resolver: Annotated[FilesystemIdentityResolver, Depends(get_filesystem_identity_resolver)],
     factories: Annotated[ConnectorApiDependencyFactories, Depends(get_connector_api_dependency_factories)],
 ) -> FilesystemSharing:
-    config = factories.settings
-    issuer = filesystem_managed_issuer(config)
+    issuer = filesystem_managed_issuer(factories.settings)
     with filesystem_errors():
         return create_filesystem_sharing(database=database, resolver=resolver, issuer=issuer)
 

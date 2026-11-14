@@ -72,7 +72,7 @@ function begin(): DataTransfer {
 async function confirmDrop(): Promise<void> {
   await vi.waitFor(() => expect(document.querySelector('dialog form')).not.toBeNull());
   await tick();
-  expect(document.querySelector('dialog')?.textContent).toContain('Moving this item may change inherited access. Direct sharing remains unchanged.');
+  expect(document.querySelector('dialog')?.textContent).toContain('Moving this item may change namespace access. Direct sharing remains unchanged.');
   const confirm = document.querySelector<HTMLButtonElement>('dialog button[type="submit"]');
   expect(confirm).not.toBeNull();
   await vi.waitFor(() => expect(confirm!.disabled).toBe(false));
@@ -87,7 +87,7 @@ describe('file row drag move UI', (): void => {
     dispatch(row(destinationId), 'drop', begin());
     await vi.waitFor(() => expect(document.querySelector('dialog')).not.toBeNull());
     await tick();
-    expect(document.querySelector('dialog')?.textContent).toContain('Moving this item may change inherited access. Direct sharing remains unchanged.');
+    expect(document.querySelector('dialog')?.textContent).toContain('Moving this item may change namespace access. Direct sharing remains unchanged.');
     expect(patch).not.toHaveBeenCalled();
     if (action === 'Escape') document.querySelector('dialog')!.dispatchEvent(new Event('cancel', { cancelable: true }));
     else {
@@ -334,10 +334,9 @@ describe('file row drag move UI', (): void => {
     expect(upload.pending).toBe(false);
   });
 
-  test('the list omits descriptions while file details group full text, metadata and actions', async (): Promise<void> => {
+  test('the list and opened file omit inline descriptions while retaining metadata and actions', async (): Promise<void> => {
     const description = 'First line\n\nSecond line\t' + 'Detailed guidance '.repeat(20) + '\nFinal line';
-    const { api, files } = await setup(description);
-    api.sharing.configure({ node_id: fileId, revision: 'revision', grants: [], blocked_recipients: [] }, []);
+    const { files } = await setup(description);
     expect(row(fileId).textContent).not.toContain('First line');
     expect(document.querySelector('tbody')?.textContent).not.toContain(description);
     const link = row(fileId).querySelector<HTMLAnchorElement>('a')!;
@@ -346,15 +345,18 @@ describe('file row drag move UI', (): void => {
     await tick();
     expect(document.querySelector('table')).toBeNull();
     const details = document.querySelector('[aria-label="File details"]')!;
-    expect(document.querySelector('[aria-label="Description"]')?.textContent).toContain(description);
-    expect(document.querySelector('[aria-label="Description"] h2')?.textContent).toBe('Description');
+    expect(document.querySelector('[aria-label="Description"]')).toBeNull();
+    expect(document.body.textContent).not.toContain(description);
     expect(details.querySelector('[aria-label="Metadata"] h2')?.textContent).toBe('Metadata');
     expect(details.querySelector('[aria-label="Metadata"] dl')?.textContent).toContain('Content type');
-    await vi.waitFor((): void => expect(files.sharing.available(fileId)).toBe(true));
     await tick();
     const actions = document.querySelector('[role="group"][aria-label="Location actions"]')!;
     expect(actions).not.toBeNull();
-    expect(actions.querySelector('button[aria-label="Share “Notes.txt”"]')).not.toBeNull();
-    expect(actions.textContent).toContain('Delete file');
+    expect(actions.textContent).not.toContain('Delete file');
+    const trigger = actions.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    expect(trigger).not.toBeNull();
+    trigger!.click();
+    await tick();
+    expect(document.querySelector('[role="menuitem"][aria-label="Delete “Notes.txt”"]')).not.toBeNull();
   });
 });

@@ -1,6 +1,6 @@
 <script lang="ts">
+  import NamespaceManagement from '../filesystem/NamespaceManagement.svelte';
   import AdminShell from '../AdminShell.svelte';
-  import FilesystemAccessEditor from '../filesystem/FilesystemAccessEditor.svelte';
   import GroupPermissionsPage from './GroupPermissionsPage.svelte';
   import GroupPermissionsWorkspace from './GroupPermissionsWorkspace.svelte';
   import GroupPermissionsManager from './GroupPermissionsManager.svelte';
@@ -12,11 +12,11 @@
 
 <AdminShell activeItem="groupPermissions" accountIdentity={{ kind: 'hidden' }} navigationScope="/admin/group-permissions">
   <GroupPermissionsPage activeTab={tab} description="Assign group permissions.">
-    <GroupPermissionsWorkspace {state} activeTab={tab}>
+    <GroupPermissionsWorkspace {state}>
       {#if tab === 'connectors'}
         {#if state.connectors}<GroupPermissionsManager state={state.connectors} />{/if}
       {:else}
-        <FilesystemAccessEditor state={state.filesystem} editor={state.filesystemEditor} />
+        <NamespaceManagement state={state.namespaces} />
       {/if}
     </GroupPermissionsWorkspace>
   </GroupPermissionsPage>

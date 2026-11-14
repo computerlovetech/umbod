@@ -12,6 +12,7 @@ from umbod.core.persistence import (
     Unordered,
     UpsertCommand,
 )
+from ..namespaces.models import NamespacePolicy
 from ..errors import OwnershipNotFound, PolicyDecodingFailure
 from ..models import AccessGrant, NodeId, Ownership, Principal, PrincipalType
 from .schema import (
@@ -44,6 +45,11 @@ class DatabaseAccessControl:
     def __init__(self, database: Database) -> None:
         self._database = database
 
+    async def list_namespace_policies(self) -> list[NamespacePolicy]:
+        async with self._database.read_session() as session:
+            from .namespaces import namespace_policies
+            return await namespace_policies(session)
+
     async def get_owner(self, node_id: NodeId) -> Ownership:
         async with storage_session(self._database, TransactionMode.READ_WRITE) as session:
             return await SessionAccessControl(session).get_owner(node_id)
@@ -72,6 +78,10 @@ class DatabaseAccessControl:
 class SessionAccessControl:
     def __init__(self, session: DatabaseSession) -> None:
         self._session = session
+
+    async def list_namespace_policies(self) -> list[NamespacePolicy]:
+        from .namespaces import namespace_policies
+        return await namespace_policies(self._session)
 
     async def clear_node(self, node_id: NodeId) -> None:
         await self._session.delete(GRANT_TABLE, DeleteQuery(filter=Equals(GRANT_NODE, str(node_id))))

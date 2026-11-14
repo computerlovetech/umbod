@@ -2,8 +2,7 @@ import { z } from 'zod';
 import { AuthenticationRequiredError, HttpError } from '../infrastructure/transport';
 import type { LogCountSource } from './port';
 import type { LogCountQuery, LogCountResponse } from './domain/schemas';
-import { QueryDraft, dimensionLabels } from './query-draft.svelte';
-import { ActivityCoverage } from './activity-coverage.svelte';
+import { QueryDraft, dimensionLabels, rangeOptions } from './query-draft.svelte';
 import { FilterChoices } from './filter-choices.svelte';
 import { reportOptions, reports, reportValue, resolveReport, type ReportId } from './reports';
 
@@ -13,6 +12,7 @@ interface Submission {
   report: ReportId;
   query: LogCountQuery;
   fingerprint: string;
+  rangeLabel: string;
 }
 
 interface SubmittedResult extends Submission {
@@ -24,9 +24,8 @@ const detailSchema = z.object({ detail: z.string() });
 export class AnalyticsState {
   readonly draft = new QueryDraft();
   readonly reportRange = new QueryDraft();
-  private reportValue = $state<ReportId>('tools');
+  private reportValue = $state<ReportId>('logs');
   readonly choices: FilterChoices;
-  readonly coverage: ActivityCoverage;
   private resultValue = $state.raw<SubmittedResult | undefined>();
   private pendingValue = $state(false);
   private errorValue = $state('');
@@ -35,10 +34,11 @@ export class AnalyticsState {
   private failedSubmission: Submission | undefined;
   private generation = 0;
   private disposed = false;
+  private started = false;
   private controller: AbortController | undefined;
 
-  constructor(private readonly source: LogCountSource, private readonly now: () => Date = () => new Date()) {
-    this.coverage = new ActivityCoverage(source, this.loseAccess);
+  constructor(private readonly source: LogCountSource, private readonly now: () => Date = () => new Date(), private readonly onAccessLost: () => void = () => {}) {
+    this.reportRange.setPreset('week');
     this.choices = new FilterChoices(this.draft, source, now, this.loseAccess);
   }
 
@@ -63,7 +63,6 @@ export class AnalyticsState {
   }
   get resultLabel(): string { return this.submittedReport?.label ?? 'Results'; }
   get countLabel(): string { return this.submittedReport?.countLabel ?? 'Log count'; }
-  get explanation(): string { return this.submittedReport?.explanation ?? ''; }
   formatValue(dimension: LogCountQuery['group_by'][number], value: string): string { return this.submittedCustom ? value : reportValue(dimension, value); }
   setReport(value: string): void {
     if (reportOptions.some((option) => option.value === value)) {
@@ -97,17 +96,44 @@ export class AnalyticsState {
     return bucket?.kind === 'fixed' ? `${bucket.width} buckets` : 'No time buckets';
   }
 
-  async run(): Promise<void> {
-    if (this.disposed || this.accessLost) return;
+  get summary(): string {
+    const result = this.resultValue;
+    const reportLabel = reportOptions.find((option) => option.value === result?.report)?.label ?? 'Stored logs';
+    const labels = [`${reportLabel} · ${result?.rangeLabel ?? 'Last 7 days'}`];
+    for (const filter of this.submittedFilters) labels.push(`${dimensionLabels[filter.dimension]}: ${filter.values.map((value) => value === '' ? 'Empty value' : value).join(', ')}`);
+    if (this.submittedCustom) labels.push(this.groupingLabel, this.bucketLabel);
+    return labels.join(' · ');
+  }
+
+  start(): Promise<boolean> {
+    if (this.started || this.disposed || this.accessLost) return Promise.resolve(false);
+    this.started = true;
+    return this.run();
+  }
+
+  reset(): void {
+    this.reportValue = 'logs';
+    this.reportRange.reset('week');
+    this.draft.reset('hour');
+    this.choices.close();
+    this.validationValue = '';
+  }
+
+  async run(): Promise<boolean> {
+    if (this.disposed || this.accessLost) return false;
     this.validationValue = '';
     let query: LogCountQuery;
     try {
       query = this.report === 'custom' ? this.draft.resolve(this.now()) : resolveReport(this.report, this.reportRange.resolveTimeRange(this.now()));
     } catch (failure) {
       this.validationValue = failure instanceof Error ? failure.message : 'Check your query settings.';
-      return;
+      return false;
     }
-    await this.submit({ query, fingerprint: this.fingerprint, report: this.report });
+    const rangeLabel = rangeOptions.find((option) => option.value === this.formDraft.preset)?.label ?? '';
+    const submission = this.submit({ query, fingerprint: this.fingerprint, report: this.report, rangeLabel });
+    const generation = this.generation;
+    const success = await submission;
+    return success && !this.disposed && !this.accessLost && generation === this.generation;
   }
 
   async previous(): Promise<void> {
@@ -130,20 +156,6 @@ export class AnalyticsState {
     if (this.narrowedSession !== undefined) await this.changeSessionScope(undefined);
   }
 
-  async inspectClassifications(): Promise<void> {
-    const result = this.resultValue;
-    if (!result || !this.submittedReport || this.pending || this.accessLost || this.disposed) return;
-    this.setReport('logs');
-    await this.submit({
-      report: 'logs',
-      fingerprint: result.fingerprint,
-      query: {
-        ...resolveReport('logs', result.query.time_range),
-        filters: result.query.filters.filter((filter) => filter.dimension !== 'activity_kind')
-      }
-    });
-  }
-
   private async changeSessionScope(session: string | undefined): Promise<void> {
     const result = this.resultValue;
     if (!result || !this.submittedReport || this.pending) return;
@@ -157,6 +169,7 @@ export class AnalyticsState {
         pagination: { limit: 100, offset: 0 }
       },
       report: result.report,
+      rangeLabel: result.rangeLabel,
       fingerprint: result.fingerprint
     });
   }
@@ -166,13 +179,14 @@ export class AnalyticsState {
     if (!result) return;
     await this.submit({
       query: { ...result.query, pagination: { limit: 100, offset: result.query.pagination.offset + change } },
+      rangeLabel: result.rangeLabel,
       report: result.report,
       fingerprint: result.fingerprint
     });
   }
 
-  private async submit({ query, fingerprint, report }: Submission): Promise<void> {
-    if (this.disposed || this.accessLost) return;
+  private async submit({ query, fingerprint, report, rangeLabel }: Submission): Promise<boolean> {
+    if (this.disposed || this.accessLost) return false;
     this.failedSubmission = undefined;
     this.validationValue = '';
     const generation = ++this.generation;
@@ -182,13 +196,12 @@ export class AnalyticsState {
     this.errorValue = '';
     try {
       const response = await this.source.query(query, this.controller.signal);
-      if (this.disposed || generation !== this.generation) return;
-      this.resultValue = { query, response, fingerprint, report };
-      if (report === 'custom') this.coverage.clear();
-      else void this.coverage.load(query);
+      if (this.disposed || generation !== this.generation) return false;
+      this.resultValue = { query, response, fingerprint, report, rangeLabel };
+      return true;
     } catch (failure) {
-      if (this.disposed || generation !== this.generation) return;
-      this.failedSubmission = { query, fingerprint, report };
+      if (this.disposed || generation !== this.generation) return false;
+      this.failedSubmission = { query, fingerprint, report, rangeLabel };
       if (failure instanceof AuthenticationRequiredError || (failure instanceof HttpError && [401, 403].includes(failure.status))) {
         this.loseAccess();
       } else if (failure instanceof HttpError && failure.status === 503) {
@@ -199,12 +212,14 @@ export class AnalyticsState {
       } else {
         this.errorValue = 'The log-count query failed. Check your connection and try again.';
       }
+      return false;
     } finally {
       if (!this.disposed && generation === this.generation) this.pendingValue = false;
     }
   }
 
   private loseAccess = (): void => {
+    if (this.disposed || this.accessLost) return;
     this.generation++;
     this.controller?.abort();
     this.pendingValue = false;
@@ -213,11 +228,10 @@ export class AnalyticsState {
     this.accessLostValue = true;
     this.errorValue = 'Administration access is no longer available. Sign in again or contact your administrator.';
     this.choices.dispose();
-    this.coverage.dispose();
+    this.onAccessLost();
   };
 
   dispose(): void {
-    this.coverage.dispose();
     this.choices.dispose();
     this.disposed = true;
     this.failedSubmission = undefined;

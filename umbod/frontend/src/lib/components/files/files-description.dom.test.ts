@@ -22,13 +22,17 @@ afterEach(async (): Promise<void> => {
 });
 
 function button(label: string): HTMLButtonElement {
-  const found = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.textContent?.trim() === label);
+  const found = Array.from(document.querySelectorAll('button')).find((candidate) => (candidate.getAttribute('aria-label') ?? candidate.textContent?.trim()) === label);
   expect(found, label).toBeDefined();
   return found!;
 }
 
 async function setup(id: string, denied = false): Promise<{ api: InMemoryFilesApi; state: FilesState }> {
   const api = new InMemoryFilesApi(rootId, filesystemFixture, undefined, undefined, undefined, () => !denied);
+  if (id === rootId) {
+    const namespaces = await api.filesystem.listNamespaces();
+    vi.spyOn(api.filesystem, 'listNamespaces').mockResolvedValue(namespaces.map((namespace) => ({ ...namespace, kind: 'shared' as const, name: 'Research' })));
+  }
   const state = new FilesState(api);
   files = state;
   const target = document.createElement('div');
@@ -40,7 +44,7 @@ async function setup(id: string, denied = false): Promise<{ api: InMemoryFilesAp
 }
 
 async function edit(value: string): Promise<void> {
-  document.querySelector<HTMLButtonElement>('.heading-identity button[aria-haspopup="menu"]')!.click();
+  document.querySelector<HTMLButtonElement>('[aria-label="Location actions"] button[aria-haspopup="menu"]')!.click();
   await tick();
   button('Edit description').click();
   await tick();
@@ -57,33 +61,48 @@ function submit(): void {
 }
 
 describe('filesystem description UI', (): void => {
-  test('folder and file navigation retain the same header, action slots and description position', async (): Promise<void> => {
+  test('folder and file navigation retain the same header and action slots without showing descriptions', async (): Promise<void> => {
     const { api, state } = await setup(folderId);
     for (const node of filesystemFixture) api.sharing.configure({ node_id: node.id, revision: 'revision', grants: [], blocked_recipients: [] }, []);
+    for (const id of [folderId, fileId]) {
+      const node = await api.filesystem.getNode(id);
+      await api.filesystem.updateDescription(id, node.revision, { description: 'Project guidance' });
+    }
     await state.reload();
     await vi.waitFor((): void => expect(state.sharing.available(folderId)).toBe(true));
     await tick();
-    const container = document.querySelector('.files-container')!;
+    const container = document.querySelector('.page-container')!;
     const header = container.querySelector('header')!;
     const toolbar = container.querySelector('[aria-label="Location actions"]')!;
-    const sharingSlot = toolbar.firstElementChild!;
-    const actionSlot = toolbar.lastElementChild!;
-    const descriptionPosition = Array.from(container.children).indexOf(container.querySelector('[aria-label="Description"]')!);
-    expect(sharingSlot.querySelector('button')?.textContent).toContain('Share');
-    expect(actionSlot.textContent).toContain('Upload file');
-    expect(actionSlot.textContent).toContain('New folder');
+    const actionSlot = toolbar;
+    const detail = container.querySelector('[aria-label="Files content"]')!;
+    const retainedContent = detail.querySelector('[aria-busy]')!;
+    expect(detail.querySelector('[aria-label="Description"]')).toBeNull();
+    expect(detail.textContent).not.toContain('Project guidance');
+    expect(detail.contains(header)).toBe(false);
+    expect(detail.contains(toolbar)).toBe(false);
+    expect(toolbar.querySelector('button[aria-label^="Share"]')).toBeNull();
+    expect(actionSlot.querySelector('button[aria-label="Upload file"]')).not.toBeNull();
+    expect(actionSlot.querySelector('button[aria-label="New folder"]')).not.toBeNull();
     expect(container.querySelector('table')).not.toBeNull();
     await state.load(fileId);
     await vi.waitFor((): void => expect(state.sharing.available(fileId)).toBe(true));
     await tick();
-    expect(document.querySelector('.files-container')).toBe(container);
+    expect(document.querySelector('.page-container')).toBe(container);
     expect(container.querySelector('header')).toBe(header);
     expect(container.querySelector('[aria-label="Location actions"]')).toBe(toolbar);
-    expect(descriptionPosition).toBeGreaterThan(-1);
-    expect(Array.from(container.children).indexOf(container.querySelector('[aria-label="Description"]')!)).toBe(descriptionPosition);
-    expect(sharingSlot.querySelector('button')?.textContent).toContain('Share');
-    expect(actionSlot.textContent).toContain('Delete file');
-    expect(actionSlot.textContent).not.toContain('Upload file');
+    expect(container.querySelector('[aria-label="Files content"]')).toBe(detail);
+    expect(detail.querySelector('[aria-busy]')).toBe(retainedContent);
+    expect(detail.querySelector('[aria-label="Description"]')).toBeNull();
+    expect(detail.textContent).not.toContain('Project guidance');
+    expect(actionSlot.textContent).not.toContain('Delete file');
+    const trigger = actionSlot.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    expect(trigger).not.toBeNull();
+    trigger!.click();
+    await tick();
+    expect(document.querySelector('[role="menuitem"][aria-label="Share “Notes.txt”"]')).not.toBeNull();
+    expect(document.querySelector('[role="menuitem"][aria-label="Delete “Notes.txt”"]')).not.toBeNull();
+    expect(actionSlot.querySelector('button[aria-label="Upload file"]')).toBeNull();
     expect(container.querySelector('table')).toBeNull();
     expect(container.querySelector('[aria-label="Metadata"]')).not.toBeNull();
   });
@@ -120,7 +139,7 @@ describe('filesystem description UI', (): void => {
     expect((await api.filesystem.getNode(folderId)).metadata.attributes.description).toBeUndefined();
   });
 
-  test.each([fileId, folderId])('edits, cancels and clears current %s without replacing heading', async (id): Promise<void> => {
+  test.each([rootId, fileId, folderId])('edits, cancels and clears current %s without replacing heading', async (id): Promise<void> => {
     const { api, state } = await setup(id);
     await vi.waitFor(() => expect(state.description.available).toBe(true));
     const heading = document.querySelector('h1');
@@ -131,7 +150,8 @@ describe('filesystem description UI', (): void => {
     await edit('Guidance');
     submit();
     await vi.waitFor(() => expect(document.querySelector('textarea')).toBeNull());
-    expect(document.querySelector('[aria-label="Description"]')?.textContent).toContain('Guidance');
+    expect(document.querySelector('[aria-label="Description"]')).toBeNull();
+    expect((await api.filesystem.getNode(id)).metadata.attributes.description).toBe('Guidance');
     expect(document.querySelector('h1')).toBe(heading);
     await edit('');
     submit();
@@ -139,7 +159,28 @@ describe('filesystem description UI', (): void => {
     expect((await api.filesystem.getNode(id)).metadata.attributes).not.toHaveProperty('description');
   });
 
-  test('denied editing stays hidden while descriptions appear only in the opened item', async (): Promise<void> => {
+  test('root browsing uses current canonical metadata even when namespace discovery is stale', async (): Promise<void> => {
+    const { api, state } = await setup(rootId);
+    const namespaces = await api.filesystem.listNamespaces();
+    vi.spyOn(api.filesystem, 'listNamespaces').mockResolvedValue(namespaces.map((namespace) => ({ ...namespace, description: 'Stale inventory description' })));
+    const root = await api.filesystem.getNode(rootId);
+    await api.filesystem.updateDescription(rootId, root.revision, { description: 'Canonical namespace description' });
+    await state.reload();
+    await tick();
+    expect(document.body.textContent).not.toContain('Canonical namespace description');
+    await edit('Canonical namespace description');
+    expect(document.querySelector('textarea')?.value).toBe('Canonical namespace description');
+    button('Cancel').click();
+    await tick();
+    expect(document.body.textContent).not.toContain('Stale inventory description');
+    await edit('Updated from Files');
+    submit();
+    await vi.waitFor(() => expect(document.querySelector('textarea')).toBeNull());
+    expect(document.querySelector('[aria-label="Description"]')).toBeNull();
+    expect((await api.filesystem.getNode(rootId)).metadata.attributes.description).toBe('Updated from Files');
+  });
+
+  test('denied editing and inline descriptions stay hidden in the opened item', async (): Promise<void> => {
     const { api, state } = await setup(folderId);
     await api.filesystem.updateDescription(fileId, 1, { description: 'Row guidance' });
     await state.reload();
@@ -148,7 +189,8 @@ describe('filesystem description UI', (): void => {
     vi.spyOn(api.filesystem, 'checkDescriptionEligibility').mockRejectedValue(new HttpError(403, 'Forbidden', {}));
     await state.load(fileId);
     await tick();
-    expect(document.querySelector('[aria-label="Description"]')?.textContent).toContain('Row guidance');
+    expect(document.querySelector('[aria-label="Description"]')).toBeNull();
+    expect(document.body.textContent).not.toContain('Row guidance');
     const labels = Array.from(document.querySelectorAll('button')).map((candidate) => candidate.textContent?.trim());
     expect(labels).not.toContain('Edit description');
     expect(labels).not.toContain('Retry description check');

@@ -36,6 +36,7 @@ OPAQUE = '"' + "a" * 64 + '"'
 def sharing_http(filesystem_http: FilesystemHttp) -> FilesystemHttp:
     filesystem_http.factories.settings.oidc.issuer_url = "issuer"
     filesystem_http.factories.settings.admin_authentication.mode = "jwt"
+    register_recipient(filesystem_http, "team")
     return filesystem_http
 
 
@@ -87,11 +88,11 @@ def test_owner_can_replace_and_revoke_with_authoritative_etag_without_content_ch
     assert saved.status_code == 200, saved.text
     assert saved.headers["etag"] != initial.headers["etag"]
     assert {key: value for key, value in saved.json().items() if key != "visible_to"} == client.get(path, params={"recipient_type": "group"}).json()
-    assert saved.json()["visible_to"]["type"] == "available"
+    assert saved.json()["visible_to"] == private_node["visible_to"]
     assert set(saved.json()["grants"][0]["permissions"]) == {"discover", "share"}
     current = client.get(f"{BASE}/nodes/{private_node['id']}").json()
     assert {key: value for key, value in current.items() if key != "visible_to"} == {key: value for key, value in private_node.items() if key != "visible_to"}
-    assert len(current["visible_to"]["grants"]) == 1
+    assert current["visible_to"] == private_node["visible_to"]
     bob = {"Authorization": "Bearer bob"}
     assert client.get(path, headers=bob).status_code == 200
     revoked = client.put(path, params={"recipient_type": "group"}, json={"grants": []}, headers={**bob, "If-Match": saved.headers["etag"]})

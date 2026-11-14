@@ -32,15 +32,15 @@ class FilesystemUpdateNodeTool(Tool):
             description=(
                 "Atomically update a file or directory name, parent or metadata with its current revision. "
                 "Provide at least one of name, parent_id or metadata; empty updates are invalid. "
-                "Omitted fields, bytes, ownership and grants are preserved. Requires discover and write on the item; "
+                "Omitted fields and bytes are preserved. Requires discover and write on the item; "
                 "moving also requires discover and write on both current and destination directories. "
-                "Before moving, warn the user that inherited access may change while direct sharing remains unchanged. "
-                "A move replaces source-folder inheritance with destination-folder inheritance for the item and its contents. "
-                "Root metadata may change, but root cannot be renamed or moved. "
+                "Moves must stay within the same namespace and preserve its baseline policy and direct item grants. "
+                "Before moving, warn that recursive folder access follows the destination and may change the audience. "
+                "Namespace root metadata may change, but roots cannot be renamed or moved. "
                 "An empty attributes.description clears the description. Returns file resource links when discover access remains. "
                 "Permissions and visibility reflect the committed update transaction; later policy changes require fresh inspection. "
-                "A successful move may return can_discover=false when the caller loses inherited access; "
-                "the move is complete and must not be retried for that reason."
+                "A successful update may return can_discover=false if discovery is revoked concurrently; "
+                "the update is complete and must not be retried for that reason."
             ),
             parameters=UpdateNodeCommand.model_json_schema(),
             output_schema=FilesystemNodeSummary.model_json_schema(),

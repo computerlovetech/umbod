@@ -1,30 +1,23 @@
 import json
-from typing import Any
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 from uuid import UUID
 
 import pytest
-from fastmcp import Client, FastMCP
+from fastmcp import Client
 from fastmcp.exceptions import AuthorizationError
 from mcp.shared.exceptions import MCPError
 
-from tests.support.signals import InMemorySignalFailureHandler
-from umbod.core.filesystem.sharing import FilesystemSharing, SharingRecipientSearchResult
 from umbod.core.filesystem.uploads.errors import (
     UploadChecksumMismatch, UploadConflict, UploadExpired, UploadLengthMismatch, UploadReceiptUnavailable,
 )
 from umbod.core.responses import ToolFailureMetadata
 from umbod.infrastructure import create_access_control_driver, create_namespace_driver
-from umbod.mcp.filesystem import register_filesystem_tools
 from umbod.mcp.filesystem.deletion import FilesystemDeleteFileTool
 from umbod.mcp.filesystem.errors import filesystem_operation
-from umbod.mcp.filesystem.ports import FilesystemServiceFactory
-from umbod.mcp.responses.adapter import RESPONSE_METADATA_KEY
-from umbod.mcp.signals import McpInvocationPublisher, McpSignals
-from umbod.mcp.tools import McpObservedToolRegistrar
+from umbod.mcp.responses.adapter import BuiltinToolResponseAdapter, RESPONSE_METADATA_KEY
 from umbod.mcp.tools.errors import BuiltinToolError
 
-from .conftest import FilesystemMcp, FilesystemState
+from .conftest import FilesystemMcp
 from .test_approval import ApprovalContext
 from .test_browsing import create_node
 from .test_tools import root_id
@@ -32,59 +25,36 @@ from .test_tools import root_id
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool_name,operation", [
-    ("get_filesystem_root", ""),
     ("get_filesystem_node", ""),
     ("list_filesystem_children", ""),
     ("filesystem_browse", "stat"),
     ("filesystem_browse", "tree"),
     ("filesystem_browse", "ls"),
-    ("filesystem_search_sharing_recipients", ""),
 ])
-async def test_primary_read_completion_survives_enrichment_or_serialization_failure(
-    filesystem_state: FilesystemState, tool_name: str, operation: str,
+async def test_primary_read_completion_survives_response_preparation_failure(
+    filesystem_invocation_mcp: FilesystemMcp, tool_name: str, operation: str, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    filesystem = filesystem_state
-    browsing = filesystem.services.browsing()
-    root = await browsing.get_root(filesystem.callers.capture())
-    sharing = Mock(spec=FilesystemSharing)
-    sharing.summarize_nodes = AsyncMock(side_effect=RuntimeError("SECRET enrichment failure"))
-    recipients = Mock(spec=SharingRecipientSearchResult)
-    recipients.model_dump_json.side_effect = RuntimeError("SECRET serialization failure")
-    sharing.search_recipients = AsyncMock(return_value=recipients)
-    services = Mock(spec=FilesystemServiceFactory)
-    services.browsing.return_value = browsing
-    services.access.return_value = filesystem.services.access()
-    services.sharing.return_value = sharing
-    server = FastMCP()
-    register_filesystem_tools(
-        McpObservedToolRegistrar(server, McpInvocationPublisher(McpSignals(InMemorySignalFailureHandler()))),
-        filesystem.callers, services, filesystem.visibility, filesystem.approval,
-    )
-    arguments: dict[str, Any] = {}
-    if operation:
-        arguments = {"operation": operation, "target": {"type": "root"}}
-    elif tool_name == "get_filesystem_node":
-        arguments = {"node_id": str(root.id)}
-    elif tool_name == "list_filesystem_children":
-        arguments = {"parent_id": str(root.id)}
-    elif tool_name == "filesystem_search_sharing_recipients":
-        arguments = {"node_id": str(root.id), "query": "writers"}
-    async with Client(server) as client:
+    filesystem = filesystem_invocation_mcp
+    async with Client(filesystem.server) as client:
+        root = await root_id(client)
+        if operation:
+            arguments = {"operation": operation, "target": {"type": "node", "node_id": root}}
+        elif tool_name == "get_filesystem_node":
+            arguments = {"node_id": root}
+        else:
+            arguments = {"parent_id": root}
+        preparation = Mock(side_effect=RuntimeError("SECRET response failure"))
+        monkeypatch.setattr(BuiltinToolResponseAdapter, "prepare", preparation)
         result = await client.call_tool(tool_name, arguments, raise_on_error=False)
     assert result.is_error
     metadata = ToolFailureMetadata.model_validate(result.meta[RESPONSE_METADATA_KEY])
     assert metadata.schema_version == 1
     assert metadata.guidance.operation_state == "completed"
     assert metadata.guidance.recovery.retry == "inspect_before_retry"
-    assert metadata.guidance.error.message == "Filesystem operation failed."
     assert "SECRET" not in json.dumps({
         "meta": result.meta, "content": [item.model_dump(mode="json") for item in result.content],
     })
-    if tool_name == "filesystem_search_sharing_recipients":
-        sharing.search_recipients.assert_awaited_once()
-        recipients.model_dump_json.assert_called_once()
-    else:
-        sharing.summarize_nodes.assert_awaited_once()
+    preparation.assert_called_once()
 
 
 @pytest.mark.parametrize("error_type,summary", [

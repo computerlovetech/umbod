@@ -14,4 +14,3 @@ description: Authenticated owner-only usage summaries from application persisten
 # Related modules
 
 - [Usage domain](../../core/usage/README.md) — Immutable records, OTEL projection, replay-safe rollups, and owner-scoped reads.
-- [Feature specification](../../../../../project/specifications/personal-usage-analytics.md) — Collection, isolation, eventual consistency, and Dashboard acceptance criteria.

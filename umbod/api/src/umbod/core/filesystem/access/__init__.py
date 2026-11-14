@@ -1,10 +1,9 @@
 from .models import (
-    AvailableVisibility, CallerNodeSummary, CallerPermissions, RestrictedVisibility,
-    UnavailableVisibility, Visibility,
+    CallerNodeSummary, CallerPermissions, NamespaceVisibility, RestrictedVisibility, Visibility,
 )
 from .service import AccessMetadataService
 
 __all__ = [
-    "AccessMetadataService", "AvailableVisibility", "CallerNodeSummary", "CallerPermissions",
-    "RestrictedVisibility", "UnavailableVisibility", "Visibility",
+    "AccessMetadataService", "NamespaceVisibility", "CallerNodeSummary", "CallerPermissions",
+    "RestrictedVisibility", "Visibility",
 ]

@@ -14,7 +14,6 @@ from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdenti
 from umbod.core.filesystem.content import ContentService, UploadTooLarge
 from umbod.core.filesystem.deletion import DeletionService
 from umbod.core.filesystem.errors import MissingNode
-from umbod.core.filesystem.namespace import ROOT_ID
 from umbod.core.filesystem.stores.uploads import DatabaseUploadTransactions
 from umbod.core.filesystem.uploads import UploadService, UploadSession, UploadStore, UploadTransactions
 from umbod.core.filesystem.uploads.ports import UploadTransaction
@@ -24,11 +23,12 @@ from umbod.infrastructure import create_filesystem_transactions, create_namespac
 from tests.umbod.core.filesystem.test_authorized_content import ContentContext, alice, caller, metadata, stream
 from tests.umbod.core.filesystem.test_authorized_content import content_context as content_context
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
+from tests.support.filesystem.namespaces import set_shared_access
 
 
 @pytest.mark.asyncio
 async def test_completed_upload_cannot_republish_a_deleted_file(uploads: "UploadContext") -> None:
-    upload = await uploads.service.begin(caller(), ROOT_ID, "deleted", metadata(), 1)
+    upload = await uploads.service.begin(caller(), uploads.content.root_id, "deleted", metadata(), 1)
     await uploads.service.put(caller(), upload.id, "application/octet-stream", stream(b"x"))
     completed = await uploads.service.complete(caller(), upload.id)
     historical = await uploads.service.get(caller(), upload.id)
@@ -39,10 +39,10 @@ async def test_completed_upload_cannot_republish_a_deleted_file(uploads: "Upload
         with pytest.raises(PermissionDenied):
             await uploads.service.complete(caller(), upload.id)
     assert await uploads.service.get(caller(), upload.id) == historical
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
     with pytest.raises(MissingNode):
         await uploads.content.namespace.get_node(completed.node.id)
-    replacement = await uploads.content.creation.create_file(caller(), ROOT_ID, "deleted", metadata())
+    replacement = await uploads.content.creation.create_file(caller(), uploads.content.root_id, "deleted", metadata())
     assert replacement.id != completed.node.id
     with pytest.raises(PermissionDenied):
         await uploads.service.complete(caller(), upload.id)
@@ -77,13 +77,13 @@ async def uploads(content_context: ContentContext, filesystem_runtime: Persisten
 @pytest.mark.parametrize("payload", [b"", b"abc", b"abcdef"])
 async def test_begin_and_transfer_are_invisible_until_atomic_completion(uploads: UploadContext, payload: bytes) -> None:
     service = uploads.service
-    upload = await service.begin(caller(), ROOT_ID, "file", metadata(), len(payload))
+    upload = await service.begin(caller(), uploads.content.root_id, "file", metadata(), len(payload))
     assert upload.progress.status == "pending"
     assert upload.expires_at == uploads.clock.now() + timedelta(hours=1)
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
     await service.put(caller(), upload.id, "application/octet-stream", stream(payload))
     assert (await service.get(caller(), upload.id)).progress.status == "uploaded"
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
     result = await service.complete(caller(), upload.id)
     assert result.created
     assert (await uploads.content.policies.get_owner(result.node.id)).owner == alice()
@@ -94,14 +94,14 @@ async def test_begin_and_transfer_are_invisible_until_atomic_completion(uploads:
 
 @pytest.mark.asyncio
 async def test_begin_does_not_reserve_name_and_collision_preserves_completed_bytes(uploads: UploadContext) -> None:
-    first = await uploads.service.begin(caller(), ROOT_ID, "same", metadata(), 1)
-    second = await uploads.service.begin(caller(), ROOT_ID, "same", metadata(), 1)
+    first = await uploads.service.begin(caller(), uploads.content.root_id, "same", metadata(), 1)
+    second = await uploads.service.begin(caller(), uploads.content.root_id, "same", metadata(), 1)
     for upload in (first, second):
         await uploads.service.put(caller(), upload.id, "application/octet-stream", stream(b"x"))
     result = await uploads.service.complete(caller(), first.id)
     with pytest.raises(NameCollision):
         await uploads.service.complete(caller(), second.id)
-    assert [node.id for node in await uploads.content.namespace.list_children(ROOT_ID)] == [result.node.id]
+    assert [node.id for node in await uploads.content.namespace.list_children(uploads.content.root_id)] == [result.node.id]
     assert (await uploads.service.get(caller(), second.id)).progress.status == "uploaded"
 
 
@@ -110,7 +110,7 @@ async def test_begin_does_not_reserve_name_and_collision_preserves_completed_byt
 async def test_unknown_and_foreign_sessions_fail_closed_for_all_operations(
     uploads: UploadContext, user: str, issuer: str,
 ) -> None:
-    upload = await uploads.service.begin(caller(), ROOT_ID, "private", metadata(), 1)
+    upload = await uploads.service.begin(caller(), uploads.content.root_id, "private", metadata(), 1)
     foreign = snapshot(user, issuer, ())
     for identifier in (upload.id, uuid4()):
         with pytest.raises(PermissionDenied):
@@ -124,10 +124,10 @@ async def test_unknown_and_foreign_sessions_fail_closed_for_all_operations(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("stage", ["before_transfer", "during_transfer", "before_completion"])
 async def test_revocation_is_rechecked_without_holding_transaction_during_io(uploads: UploadContext, stage: str) -> None:
-    upload = await uploads.service.begin(caller(), ROOT_ID, "revoked", metadata(), 1)
+    upload = await uploads.service.begin(caller(), uploads.content.root_id, "revoked", metadata(), 1)
 
     async def revoke() -> None:
-        await uploads.content.policies.remove_grant(ROOT_ID, alice())
+        await set_shared_access(uploads.content.database, uploads.content.root_id, writable=False, discoverable=False)
 
     async def data() -> ByteStream:
         if stage == "during_transfer":
@@ -144,7 +144,7 @@ async def test_revocation_is_rechecked_without_holding_transaction_during_io(upl
             await asyncio.wait_for(uploads.service.put(caller(), upload.id, "application/octet-stream", data()), 5)
     with pytest.raises(PermissionDenied):
         await uploads.service.complete(caller(), upload.id)
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
 
 
 @pytest.mark.asyncio
@@ -152,7 +152,7 @@ async def test_revocation_is_rechecked_without_holding_transaction_during_io(upl
 async def test_failed_length_check_can_retry_full_transfer(
     uploads: UploadContext, size: int, payload: bytes, error: type[Exception],
 ) -> None:
-    upload = await uploads.service.begin(caller(), ROOT_ID, "retry", metadata(), size)
+    upload = await uploads.service.begin(caller(), uploads.content.root_id, "retry", metadata(), size)
     with pytest.raises(error):
         await uploads.service.put(caller(), upload.id, "application/octet-stream", stream(payload))
     assert (await uploads.service.get(caller(), upload.id)).progress.status == "pending"
@@ -163,15 +163,15 @@ async def test_failed_length_check_can_retry_full_transfer(
 @pytest.mark.asyncio
 async def test_declared_limit_and_premature_completion(uploads: UploadContext) -> None:
     with pytest.raises(UploadTooLarge):
-        await uploads.service.begin(caller(), ROOT_ID, "large", metadata(), 7)
-    upload = await uploads.service.begin(caller(), ROOT_ID, "early", metadata(), 0)
+        await uploads.service.begin(caller(), uploads.content.root_id, "large", metadata(), 7)
+    upload = await uploads.service.begin(caller(), uploads.content.root_id, "early", metadata(), 0)
     with pytest.raises(UploadConflict):
         await uploads.service.complete(caller(), upload.id)
 
 
 @pytest.mark.asyncio
 async def test_interrupted_transfer_can_retry(uploads: UploadContext) -> None:
-    upload = await uploads.service.begin(caller(), ROOT_ID, "retry", metadata(), 2)
+    upload = await uploads.service.begin(caller(), uploads.content.root_id, "retry", metadata(), 2)
 
     async def interrupted() -> ByteStream:
         yield b"a"
@@ -186,7 +186,7 @@ async def test_interrupted_transfer_can_retry(uploads: UploadContext) -> None:
 @pytest.mark.asyncio
 @pytest.mark.parametrize("uploaded", [False, True])
 async def test_expired_incomplete_sessions_are_gone(uploads: UploadContext, uploaded: bool) -> None:
-    upload = await uploads.service.begin(caller(), ROOT_ID, "expired", metadata(), 1)
+    upload = await uploads.service.begin(caller(), uploads.content.root_id, "expired", metadata(), 1)
     if uploaded:
         await uploads.service.put(caller(), upload.id, "application/octet-stream", stream(b"x"))
     uploads.clock.current += timedelta(hours=1)
@@ -200,7 +200,7 @@ async def test_expired_incomplete_sessions_are_gone(uploads: UploadContext, uplo
 
 @pytest.mark.asyncio
 async def test_concurrent_completion_is_idempotent_and_completed_content_is_immutable(uploads: UploadContext) -> None:
-    upload = await uploads.service.begin(caller(), ROOT_ID, "once", metadata(), 1)
+    upload = await uploads.service.begin(caller(), uploads.content.root_id, "once", metadata(), 1)
     await uploads.service.put(caller(), upload.id, "application/octet-stream", stream(b"x"))
     results = await asyncio.gather(*(uploads.service.complete(caller(), upload.id) for _ in range(5)))
     assert sum(result.created for result in results) == 1
@@ -218,8 +218,8 @@ async def test_concurrent_completion_is_idempotent_and_completed_content_is_immu
 async def test_completion_rechecks_current_size_limit_without_changing_completed_outcomes(
     uploads: UploadContext, filesystem_runtime: PersistenceRuntime,
 ) -> None:
-    completed = await uploads.service.begin(caller(), ROOT_ID, "completed", metadata(), 6)
-    staged = await uploads.service.begin(caller(), ROOT_ID, "staged", metadata(), 6)
+    completed = await uploads.service.begin(caller(), uploads.content.root_id, "completed", metadata(), 6)
+    staged = await uploads.service.begin(caller(), uploads.content.root_id, "staged", metadata(), 6)
     for upload in (completed, staged):
         await uploads.service.put(caller(), upload.id, "application/octet-stream", stream(b"abcdef"))
     result = await uploads.service.complete(caller(), completed.id)
@@ -231,12 +231,12 @@ async def test_completion_rechecks_current_size_limit_without_changing_completed
         await restricted.complete(caller(), staged.id)
     assert (await restricted.get(caller(), staged.id)).progress.status == "uploaded"
     assert (await restricted.complete(caller(), completed.id)).node == result.node
-    assert [node.id for node in await uploads.content.namespace.list_children(ROOT_ID)] == [result.node.id]
+    assert [node.id for node in await uploads.content.namespace.list_children(uploads.content.root_id)] == [result.node.id]
 
 
 @pytest.mark.asyncio
 async def test_inflight_transfer_cannot_replace_content_published_by_completion(uploads: UploadContext) -> None:
-    upload = await uploads.service.begin(caller(), ROOT_ID, "racing", metadata(), 1)
+    upload = await uploads.service.begin(caller(), uploads.content.root_id, "racing", metadata(), 1)
     await uploads.service.put(caller(), upload.id, "application/octet-stream", stream(b"x"))
 
     async def racing() -> ByteStream:
@@ -271,13 +271,13 @@ async def test_storage_size_mismatch_cannot_be_staged(
         VerifiedIdentityResolver(), DatabaseUploadTransactions(filesystem_runtime.database),
         IncorrectSizeContent(uploads.content.content), 6, uploads.clock, timedelta(hours=1),
     )
-    upload = await service.begin(caller(), ROOT_ID, "mismatched", metadata(), 1)
+    upload = await service.begin(caller(), uploads.content.root_id, "mismatched", metadata(), 1)
     with pytest.raises(UploadLengthMismatch):
         await service.put(caller(), upload.id, "application/octet-stream", stream(b"x"))
     assert (await service.get(caller(), upload.id)).progress.status == "pending"
     with pytest.raises(UploadConflict):
         await service.complete(caller(), upload.id)
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
 
 
 class FailOnceContent:
@@ -302,7 +302,7 @@ async def test_storage_failure_allows_full_transfer_retry(uploads: UploadContext
         VerifiedIdentityResolver(), DatabaseUploadTransactions(filesystem_runtime.database),
         FailOnceContent(uploads.content.content), 6, uploads.clock, timedelta(hours=1),
     )
-    upload = await service.begin(caller(), ROOT_ID, "retry-storage", metadata(), 1)
+    upload = await service.begin(caller(), uploads.content.root_id, "retry-storage", metadata(), 1)
     with pytest.raises(StorageFailure):
         await service.put(caller(), upload.id, "application/octet-stream", stream(b"x"))
     assert (await service.get(caller(), upload.id)).progress.status == "pending"
@@ -338,7 +338,7 @@ class FailingCompletionTransactions:
 async def test_failed_session_transition_rolls_back_node_owner_and_reference(
     uploads: UploadContext, filesystem_runtime: PersistenceRuntime,
 ) -> None:
-    upload = await uploads.service.begin(caller(), ROOT_ID, "rollback", metadata(), 1)
+    upload = await uploads.service.begin(caller(), uploads.content.root_id, "rollback", metadata(), 1)
     await uploads.service.put(caller(), upload.id, "application/octet-stream", stream(b"x"))
     failing = UploadService(
         VerifiedIdentityResolver(), FailingCompletionTransactions(DatabaseUploadTransactions(filesystem_runtime.database)),
@@ -346,7 +346,7 @@ async def test_failed_session_transition_rolls_back_node_owner_and_reference(
     )
     with pytest.raises(StorageFailure):
         await failing.complete(caller(), upload.id)
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
     assert (await uploads.service.get(caller(), upload.id)).progress.status == "uploaded"
     result = await uploads.service.complete(caller(), upload.id)
     assert (await uploads.content.policies.get_owner(result.node.id)).owner == alice()
@@ -354,7 +354,7 @@ async def test_failed_session_transition_rolls_back_node_owner_and_reference(
 
 @pytest.mark.asyncio
 async def test_expiry_during_transfer_does_not_publish_staged_reference(uploads: UploadContext) -> None:
-    upload = await uploads.service.begin(caller(), ROOT_ID, "expires", metadata(), 1)
+    upload = await uploads.service.begin(caller(), uploads.content.root_id, "expires", metadata(), 1)
 
     async def delayed() -> ByteStream:
         uploads.clock.current += timedelta(hours=1)
@@ -362,7 +362,7 @@ async def test_expiry_during_transfer_does_not_publish_staged_reference(uploads:
 
     with pytest.raises(UploadExpired):
         await uploads.service.put(caller(), upload.id, "application/octet-stream", delayed())
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
 
 
 @pytest.mark.asyncio
@@ -373,8 +373,8 @@ async def test_recreated_services_recover_pending_uploaded_and_completed_session
     content = uploads.content.content
     clock = uploads.clock
     service = uploads.service
-    pending = await service.begin(caller(), ROOT_ID, "pending", metadata(), 1)
-    uploaded = await service.begin(caller(), ROOT_ID, "uploaded", metadata(), 1)
+    pending = await service.begin(caller(), uploads.content.root_id, "pending", metadata(), 1)
+    uploaded = await service.begin(caller(), uploads.content.root_id, "uploaded", metadata(), 1)
     await service.put(caller(), uploaded.id, "application/octet-stream", stream(b"x"))
     service = UploadService(VerifiedIdentityResolver(), DatabaseUploadTransactions(database), content, 6, clock, timedelta(hours=1))
     assert (await service.get(caller(), pending.id)).progress.status == "pending"
@@ -386,4 +386,4 @@ async def test_recreated_services_recover_pending_uploaded_and_completed_session
     download = await ContentService(VerifiedIdentityResolver(), create_filesystem_transactions(database=database),
                                     content, 6).open_download(caller(), result.node.id)
     assert b"".join([chunk async for chunk in download.data]) == b"x"
-    assert len(await create_namespace_driver(database=database).list_children(ROOT_ID)) == 1
+    assert len(await create_namespace_driver(database=database).list_children(uploads.content.root_id)) == 1

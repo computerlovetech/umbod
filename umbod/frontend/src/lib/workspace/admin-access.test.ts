@@ -9,10 +9,10 @@ const user = { id: 'admin-id', name: 'Alex', email: null, picture: null };
 
 describe('workspace access presentation', () => {
   test.each([true, false])('administration capability %s controls navigation without hiding identity', async (administration): Promise<void> => {
-    const api: WorkspaceApi = new InMemoryWorkspaceApi(workspaceProfileSchema.parse({ user, capabilities: { administration } }));
+    const api: WorkspaceApi = new InMemoryWorkspaceApi(workspaceProfileSchema.parse({ identity_key: 'opaque-account-key', user, capabilities: { administration } }));
     await expect(resolveWorkspaceAccess(api)).resolves.toEqual({
       adminAccess: administration ? 'allowed' : 'denied',
-      accountIdentity: { kind: 'visible', name: 'Alex', email: null, picture: null, hiddenValues: { id: 'admin-id' } }
+      accountIdentity: { kind: 'visible', name: 'Alex', email: null, picture: null, hiddenValues: { id: 'opaque-account-key' } }
     });
   });
 

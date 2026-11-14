@@ -1,18 +1,18 @@
 ---
 type: Software Module
-title: "Filesystem access editor"
-description: "Administration presentation and draft state for root filesystem group permissions."
+title: "Shared namespace management"
+description: "Shared namespace administration with revision-safe saves and exact group access."
 ---
 
 # Files
 
-- [confirmation-dialog.test.ts](./confirmation-dialog.test.ts) — Native dialog lifecycle tests.
-- [confirmation-dialog.ts](./confirmation-dialog.ts) — Shared native dialog compatibility export.
-- [filesystem-access-state.svelte.ts](./filesystem-access-state.svelte.ts) — Root policy drafts and saves.
-- [filesystem-access-state.test.ts](./filesystem-access-state.test.ts) — Policy draft tests.
-- [filesystem-components.test.ts](./filesystem-components.test.ts) — Accessible editor tests.
-- [filesystem-group-editor-state.svelte.ts](./filesystem-group-editor-state.svelte.ts) — Selected-group inline permission drafts and blocked assignment guidance.
-- [filesystem-group-editor-state.test.ts](./filesystem-group-editor-state.test.ts) — Group and grant draft tests.
-- [FilesystemAccessEditor.svelte](./FilesystemAccessEditor.svelte) — Root policy detail consuming layout-owned editor state.
+- [AddNamespaceButton.svelte](./AddNamespaceButton.svelte) — Feature-owned header action opening namespace creation with pending-state protection.
+
+- [NamespaceManagement.svelte](./NamespaceManagement.svelte) — Compact access choices and size-aligned edit actions, with explicit permission saves, guarded reload and separate metadata actions.
+- [NamespaceFormModal.svelte](./NamespaceFormModal.svelte) — Feature-local name and optional description dialog, independent of group access assignment.
+- [namespace-management-state.svelte.ts](./namespace-management-state.svelte.ts) — Metadata and group access drafts, captured policy revisions, sequential partial-save reconciliation and identity fences.
+- [namespace-management-state.test.ts](./namespace-management-state.test.ts) — Draft/save, partial failure, metadata isolation, revision conflicts, reload decisions and obsolete-response tests.
+- [namespace-management.dom.test.ts](./namespace-management.dom.test.ts) — Description modal, escaped list text, independent access, dismissal guards and conflict-recovery interactions.
+- [NamespaceWorkspaceTestHarness.test-support.svelte](./NamespaceWorkspaceTestHarness.test-support.svelte) — Real group sidebar and namespace editor composition for interaction tests.
+
 - [Group permissions workspace](../group-permissions/README.md) — Persistent shell, catalogue, selection and tab state.
-- [FilesystemConfirmationDialog.svelte](./FilesystemConfirmationDialog.svelte) — Policy confirmation presentation.

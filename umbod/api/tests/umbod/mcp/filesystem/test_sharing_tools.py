@@ -32,7 +32,7 @@ from .test_tools import root_id
 
 LIST = "filesystem_search_sharing_recipients"
 SHARE = "filesystem_share"
-DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."
+DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask an administrator for namespace access."
 
 
 def arguments(tool: str, node_id: str) -> dict[str, Any]:
@@ -380,7 +380,8 @@ async def test_canonical_recipients_union_retry_and_direct_node_access(
         if recipient_type == "user" else {"type": "group", "group_id": "writers"}
     )
     async with Client(filesystem_invocation_mcp.server) as client:
-        node_id = await create_node(client, await root_id(client), "shared", kind)
+        parent_id = await root_id(client)
+        node_id = await create_node(client, parent_id, "shared", kind)
         child_id = await create_node(client, node_id, "private-child", "file") if kind == "directory" else ""
         command = {"node_id": node_id, "recipient": recipient}
         descriptor = next(tool for tool in await client.list_tools() if tool.name == SHARE)
@@ -398,6 +399,10 @@ async def test_canonical_recipients_union_retry_and_direct_node_access(
             AuthenticationProvenance.UPSTREAM_VERIFIED,
         ))
         assert not (await client.call_tool("get_filesystem_node", {"node_id": node_id})).is_error
+        parent = await client.call_tool("get_filesystem_node", {"node_id": parent_id}, raise_on_error=False)
+        assert parent.is_error
+        catalog = await client.call_tool("filesystem_browse", {"operation": "namespaces"})
+        assert all(value["root_node_id"] != parent_id for value in catalog.structured_content["result"]["namespaces"])
         if child_id:
             inherited = await client.call_tool("get_filesystem_node", {"node_id": child_id}, raise_on_error=False)
             assert not inherited.is_error
@@ -474,3 +479,25 @@ async def test_canonical_request_rejects_mixed_legacy_fields_and_authority(
         }, raise_on_error=False)
     assert response.content[0].text.startswith("filesystem_invalid_sharing: Invalid filesystem sharing arguments. ")
     assert filesystem_invocation_mcp.callers.count == captures
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool", [LIST, SHARE])
+async def test_personal_namespace_root_never_exposes_sharing_even_with_old_share_grants(
+    filesystem_invocation_mcp: FilesystemMcp, tool: str,
+) -> None:
+    filesystem = filesystem_invocation_mcp
+    async with Client(filesystem.server) as client:
+        root = await root_id(client)
+        await create_access_control_driver(database=filesystem.database).add_grant(AccessGrant(
+            node_id=UUID(root), principal=Principal(type=PrincipalType.USER, issuer="https://issuer", id="alice"),
+            permissions=set(Permission), recursive=True,
+        ))
+        inspected = await client.call_tool("get_filesystem_node", {"node_id": root})
+        denied = await client.call_tool(tool, arguments(tool, root), raise_on_error=False)
+        missing = await client.call_tool(tool, arguments(tool, str(uuid4())), raise_on_error=False)
+    assert inspected.structured_content["permissions"]["can_share"] is False
+    assert inspected.structured_content["sharing"] == {"can_share": False}
+    assert denied.is_error and missing.is_error
+    assert denied.content[:1] == missing.content[:1]
+    assert denied.meta["computerlove.tech/umbod"]["guidance"] == missing.meta["computerlove.tech/umbod"]["guidance"]

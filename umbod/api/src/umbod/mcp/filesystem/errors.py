@@ -38,7 +38,7 @@ class InvalidReadEncoding(Exception):
     pass
 
 
-FILESYSTEM_ACCESS_DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions. Creating files requires discover and write on the parent directory; filesystem_browse with operation home resolves your private upload destination."
+FILESYSTEM_ACCESS_DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask an administrator for namespace access. Creating files requires discover and write on the parent directory; filesystem_browse with operation home resolves your private upload destination."
 
 
 _ERROR_MESSAGES: dict[type[Exception], str] = {
@@ -53,8 +53,8 @@ _ERROR_MESSAGES: dict[type[Exception], str] = {
     UploadExpired: "filesystem_upload_expired: Filesystem upload expired. Begin a new upload, transfer the bytes, and complete it before expiry.",
     UploadLengthMismatch: "filesystem_upload_length_mismatch: Invalid upload length. Compute size_bytes from the original bytes and transfer exactly that many bytes.",
     UploadMediaTypeMismatch: "filesystem_upload_media_type_mismatch: Invalid upload content type. Send the Content-Type specified by the upload transfer instructions.",
-    InvalidMove: "filesystem_invalid_move: Invalid filesystem destination. Choose a directory outside the node's own subtree.",
-    RootMutation: "filesystem_root_protected: The filesystem root cannot be renamed or moved. Select a non-root node.",
+    InvalidMove: "filesystem_invalid_move: Invalid filesystem destination. Choose a directory in the same namespace, outside the node's own subtree.",
+    RootMutation: "filesystem_root_protected: Namespace roots cannot be renamed or moved. Select a non-root node.",
     InvalidName: "filesystem_invalid_name: Invalid filesystem name. Use a nonempty UTF-8 name other than . or .., without slashes, backslashes, or null characters.",
     NameCollision: "filesystem_name_collision: Filesystem name already exists. Inspect the existing node before retrying, or choose a different name.",
     WrongNodeKind: "filesystem_wrong_node_kind: Invalid filesystem node kind. Inspect the node and select the file or directory required by this operation.",
@@ -86,7 +86,7 @@ def _details(message: str) -> ToolErrorDetails:
 
 
 _ERROR_DETAILS = {error_type: _details(message) for error_type, message in _ERROR_MESSAGES.items()}
-_TOOL_ACCESS_DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."
+_TOOL_ACCESS_DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask an administrator for namespace access."
 _ACCESS_DENIED_DETAILS = _details(_TOOL_ACCESS_DENIED)
 _ERROR_DETAILS.update({
     StorageFailure: _details("filesystem_storage_failure: Filesystem storage unavailable."),

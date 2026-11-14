@@ -7,11 +7,10 @@
   import { useWorkspaceNavigationHistory } from '$lib/workspace/navigation-history-context';
 
   type AdminShellActiveItem =
-    | 'analytics'
+    | 'insights'
     | 'connectors'
     | 'groups'
-    | 'groupPermissions'
-    | 'instanceConfiguration';
+    | 'groupPermissions';
 
   type AdminShellProps = {
     activeItem: AdminShellActiveItem;

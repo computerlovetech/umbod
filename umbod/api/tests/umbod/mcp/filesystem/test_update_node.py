@@ -1,4 +1,7 @@
 import json
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from typing import Literal
 from uuid import UUID
 
 import pytest
@@ -7,11 +10,14 @@ from jsonschema import validate
 from mcp.types import ResourceLink
 
 from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
-from umbod.infrastructure import create_access_control_driver
+from umbod.infrastructure import create_access_control_driver, create_filesystem_transactions
+from umbod.core.filesystem.authorization import VerifiedIdentityResolver
+from umbod.core.filesystem.transactions import FilesystemSession
+from umbod.core.filesystem.updates import NodeUpdateService
 from .conftest import FilesystemMcp
 from .test_browsing import create_node
 from .test_tools import root_id
-from .test_visibility import grant, listed_tools, private_node, select_caller
+from .test_visibility import listed_tools, shared_namespace, save_namespace_access, select_caller
 
 TOOL = "update_filesystem_node"
 
@@ -54,6 +60,8 @@ async def test_move_completes_without_resource_links_when_mover_loses_inherited_
         assert inspected.structured_content["revision"] == 2
 
 
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["file", "directory"])
 async def test_node_update_schema_description_browsing_clearing_and_stale_revision(
@@ -73,7 +81,9 @@ async def test_node_update_schema_description_browsing_clearing_and_stale_revisi
         assert descriptor.annotations.destructive_hint is False
         assert descriptor.annotations.idempotent_hint is False
         assert descriptor.annotations.open_world_hint is False
-        assert "inherited access may change" in descriptor.description
+        assert "Moves must stay within the same namespace" in descriptor.description
+        assert "preserve its baseline policy and direct item grants" in descriptor.description
+        assert "recursive folder access" in descriptor.description
         assert "can_discover=false" in descriptor.description
         arguments = {
             "node_id": node_id, "metadata": {"attributes": {"description": description, "team": "research"}},
@@ -89,7 +99,7 @@ async def test_node_update_schema_description_browsing_clearing_and_stale_revisi
         stale = await client.call_tool(TOOL, {**arguments, "metadata": {"attributes": {"description": "stale"}}}, raise_on_error=False)
         assert stale.is_error
         for operation in ("ls", "tree"):
-            result = await client.call_tool("filesystem_browse", {"operation": operation, "target": {"type": "root"}})
+            result = await client.call_tool("filesystem_browse", {"operation": operation, "target": {"type": "node", "node_id": await root_id(client)}})
             assert "description=" + json.dumps(description) in result.content[0].text
             assert "\nforged row" not in result.content[0].text
         cleared = await client.call_tool(TOOL, {
@@ -167,27 +177,25 @@ async def test_node_update_rejects_invalid_metadata_and_structural_values(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("kind", ["file", "directory"])
-@pytest.mark.parametrize("permissions,visible", [
-    ({Permission.DISCOVER, Permission.WRITE}, True),
-    ({Permission.WRITE}, False),
-    ({Permission.DISCOVER}, False),
-    ({Permission.DISCOVER, Permission.READ}, False),
-])
-async def test_node_update_visibility_uses_same_node_discover_and_write(
-    filesystem_mcp: FilesystemMcp, kind: str, permissions: set[Permission], visible: bool,
+@pytest.mark.parametrize("access,visible", [("read_write", True), ("read", False)])
+async def test_node_update_visibility_uses_namespace_write_access(
+    filesystem_mcp: FilesystemMcp, kind: str, access: Literal["read", "read_write"], visible: bool,
 ) -> None:
-    node_id = await private_node(filesystem_mcp, kind)
-    await grant(filesystem_mcp, node_id, "bob", permissions)
-    await filesystem_mcp.runtime.reconcile()
-    select_caller(filesystem_mcp, "bob")
-    assert (TOOL in await listed_tools(filesystem_mcp)) == visible
+    filesystem = filesystem_mcp
+    policy = await shared_namespace(filesystem)
+    select_caller(filesystem, "alice", (policy.groups[0].group_id,))
+    async with Client(filesystem.server) as client:
+        node_id = await create_node(client, str(policy.root_node_id), "node", kind)
+    await save_namespace_access(filesystem, policy, access)
+    await filesystem.runtime.reconcile()
+    select_caller(filesystem, "bob", (policy.groups[0].group_id,))
+    assert (TOOL in await listed_tools(filesystem)) == visible
     if visible:
-        async with Client(filesystem_mcp.server) as client:
+        async with Client(filesystem.server) as client:
             result = await client.call_tool(TOOL, {
-                "node_id": str(node_id), "metadata": {"attributes": {"description": "direct"}}, "expected_revision": 1,
+                "node_id": node_id, "metadata": {"attributes": {"description": "shared"}}, "expected_revision": 1,
             })
-        assert result.structured_content["metadata"]["attributes"]["description"] == "direct"
-
+        assert result.structured_content["metadata"]["attributes"]["description"] == "shared"
 
 
 @pytest.mark.asyncio
@@ -229,34 +237,35 @@ async def test_root_cannot_be_renamed_or_moved(filesystem_invocation_mcp: Filesy
 
 
 @pytest.mark.asyncio
-async def test_update_returns_committed_access_snapshot_after_writer_grant_revocation(
+async def test_update_returns_committed_namespace_snapshot_after_revocation(
     filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    from umbod.core.filesystem import Principal, PrincipalType
-    from umbod.core.filesystem.authorization import VerifiedIdentityResolver
-    from umbod.core.filesystem.updates import NodeUpdateService
-    from umbod.infrastructure import create_access_control_driver, create_filesystem_transactions
-    from tests.support.filesystem.access_snapshots import RevokeAfterCommitTransactions
-
     filesystem = filesystem_invocation_mcp
-    node_id = await private_node(filesystem, "directory")
-    await grant(filesystem, node_id, "bob", {Permission.DISCOVER, Permission.WRITE})
-    policies = create_access_control_driver(database=filesystem.database)
-    transactions = RevokeAfterCommitTransactions(
-        create_filesystem_transactions(database=filesystem.database), policies, node_id,
-        Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob"),
-    )
-    updates = NodeUpdateService(VerifiedIdentityResolver(), transactions)
+    policy = await shared_namespace(filesystem)
+    select_caller(filesystem, "alice", (policy.groups[0].group_id,))
+    async with Client(filesystem.server) as client:
+        node_id = await create_node(client, str(policy.root_node_id), "node", "directory")
+    transactions = create_filesystem_transactions(database=filesystem.database)
+
+    class RevokingTransactions:
+        @asynccontextmanager
+        async def transaction(self) -> AsyncIterator[FilesystemSession]:
+            async with transactions.transaction() as session:
+                yield session
+            await save_namespace_access(filesystem, policy, None)
+
+    updates = NodeUpdateService(VerifiedIdentityResolver(), RevokingTransactions())
     monkeypatch.setattr(filesystem.services, "updates", lambda: updates)
-    select_caller(filesystem, "bob")
+    select_caller(filesystem, "bob", (policy.groups[0].group_id,))
     async with Client(filesystem.server) as client:
         result = await client.call_tool(TOOL, {
-            "node_id": str(node_id), "expected_revision": 1, "name": "committed",
+            "node_id": node_id, "expected_revision": 1, "name": "committed",
         })
         assert result.structured_content["name"] == "committed"
         assert result.structured_content["revision"] == 2
         assert result.structured_content["permissions"]["can_write"] is True
-        assert result.structured_content["visible_to"] == {"type": "restricted"}
-        assert result.structured_content["sharing"] == {"can_share": False}
-        denied = await client.call_tool("get_filesystem_node", {"node_id": str(node_id)}, raise_on_error=False)
+        assert result.structured_content["visible_to"]["type"] == "namespace"
+        assert result.structured_content["visible_to"]["namespace_id"] == str(policy.id)
+        assert "sharing" in result.structured_content
+        denied = await client.call_tool("get_filesystem_node", {"node_id": node_id}, raise_on_error=False)
         assert denied.is_error

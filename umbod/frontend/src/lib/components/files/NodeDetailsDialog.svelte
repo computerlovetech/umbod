@@ -16,6 +16,7 @@
     <dt>Created</dt><dd><DateTimeView value={node.created_at} /></dd>
     <dt>Updated</dt><dd><DateTimeView value={node.updated_at} /></dd>
     <dt>Revision</dt><dd>{node.revision}</dd>
+    <dt>Namespace</dt><dd>{node.visible_to.type === 'restricted' ? 'Restricted' : node.visible_to.name}</dd>
   </dl>
   <h3>Your permissions</h3>
   <dl aria-label="Your permissions">

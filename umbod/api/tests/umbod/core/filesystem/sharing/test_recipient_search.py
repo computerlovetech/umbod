@@ -6,7 +6,7 @@ from pydantic import ValidationError
 from umbod.core.callers import AuthenticationProvenance
 from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
-from umbod.core.filesystem.namespace import initial_root
+from tests.support.filesystem.group_sharing import sharing_node
 from umbod.core.filesystem.sharing import (
     GroupSharingRecipient, SharingRecipientSearchQuery, SharingRecipientType,
     SharingScope, SharingService, UserSharingRecipient,
@@ -101,7 +101,7 @@ async def test_authority_precedes_all_catalogue_and_directory_reads_even_for_mis
 ) -> None:
     ports = transactions()
     ports.users = UnreadableUsers()
-    node_id = initial_root().id
+    node_id = sharing_node().id
     await ports.policies.add_grant(AccessGrant(
         node_id=node_id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="delegate"),
         permissions=permissions, recursive=False,
@@ -118,7 +118,7 @@ async def test_group_only_search_never_reads_directory() -> None:
     ports = transactions()
     ports.users = UnreadableUsers()
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
-    result = await service.search_recipients(caller(), initial_root().id, search("TEAM", GROUP))
+    result = await service.search_recipients(caller(), sharing_node().id, search("TEAM", GROUP))
     assert result.recipients == (GroupSharingRecipient(type="group", group_id="team", label="team"),)
     assert len(result.recipients) == 1
     assert not result.has_more
@@ -132,12 +132,12 @@ async def test_foreign_issuer_authority_fails_whole_search_without_group_partial
     ports = transactions()
     ports.users = UnreadableUsers()
     await ports.policies.add_grant(AccessGrant(
-        node_id=initial_root().id, principal=Principal(type=PrincipalType.USER, issuer="foreign", id="delegate"),
+        node_id=sharing_node().id, principal=Principal(type=PrincipalType.USER, issuer="foreign", id="delegate"),
         permissions={Permission.DISCOVER, Permission.SHARE}, recursive=False,
     ))
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
     with pytest.raises(PermissionDenied):
-        await service.search_recipients(snapshot("delegate", "foreign", ()), initial_root().id, search("team", types))
+        await service.search_recipients(snapshot("delegate", "foreign", ()), sharing_node().id, search("team", types))
 
 
 @pytest.mark.asyncio
@@ -148,7 +148,7 @@ async def test_unverified_provenance_denies_before_discovery(authentication: Aut
     actor = caller()
     actor = actor.model_copy(update={"caller": actor.caller.model_copy(update={"authentication": authentication})})
     with pytest.raises(PermissionDenied):
-        await SharingService(VerifiedIdentityResolver(), ports, "issuer").search_recipients(actor, initial_root().id, search("team", BOTH))
+        await SharingService(VerifiedIdentityResolver(), ports, "issuer").search_recipients(actor, sharing_node().id, search("team", BOTH))
     assert ports.groups.reads == 0
 
 
@@ -206,7 +206,7 @@ async def test_search_reads_directory_once_without_resolving_results_or_writing_
     for subject in ("one", "two", "blocked"):
         await users.observe(observation("issuer", subject, "Team Person"))
     await ports.policies.add_grant(AccessGrant(
-        node_id=initial_root().id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="blocked"),
+        node_id=sharing_node().id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="blocked"),
         permissions=set(), recursive=False,
     ))
     before_users = users.users.copy()
@@ -214,7 +214,7 @@ async def test_search_reads_directory_once_without_resolving_results_or_writing_
     before_owners = ports.policies.owners.copy()
     before_nodes = ports.namespace.nodes.copy()
     result = await SharingService(VerifiedIdentityResolver(), ports, "issuer").search_recipients(
-        caller(), initial_root().id, search("team", BOTH),
+        caller(), sharing_node().id, search("team", BOTH),
     )
     assert tuple(recipient.type for recipient in result.recipients) == ("group", "user", "user")
     assert users.searches == [ScopedUserSearch(
@@ -236,15 +236,15 @@ async def test_protected_user_collision_is_excluded_but_foreign_principal_does_n
         await ports.users.observe(observation("issuer", subject, "Team Person"))
     await ports.users.observe(observation("foreign", "foreign", "Team Person"))
     await ports.policies.add_grant(AccessGrant.model_construct(
-        node_id=initial_root().id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="blocked"),
+        node_id=sharing_node().id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="blocked"),
         permissions=permissions, recursive=recursive,
     ))
     await ports.policies.add_grant(AccessGrant(
-        node_id=initial_root().id, principal=Principal(type=PrincipalType.USER, issuer="foreign", id="eligible"),
+        node_id=sharing_node().id, principal=Principal(type=PrincipalType.USER, issuer="foreign", id="eligible"),
         permissions={Permission.READ}, recursive=True,
     ))
     result = await SharingService(VerifiedIdentityResolver(), ports, "issuer").search_recipients(
-        caller(), initial_root().id, search("team", USER),
+        caller(), sharing_node().id, search("team", USER),
     )
     assert len(result.recipients) == 1 and not result.has_more
     assert result.recipients[0].user_id == ports.users.users["issuer", "eligible"].user_id

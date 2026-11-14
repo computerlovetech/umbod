@@ -12,12 +12,12 @@
   import TelemetrySetup from './TelemetrySetup.svelte';
 
   let {
-    mcpEndpoint,
+    installerBaseUrl,
     activePage = 'connect',
     accountIdentity = { kind: 'hidden' },
     createWorkspaceApi = workspaceApi
   }: {
-    mcpEndpoint: string;
+    installerBaseUrl: string;
     activePage?: 'connect' | 'telemetry';
     accountIdentity?: HeaderAccountIdentityState;
     createWorkspaceApi?: () => WorkspaceApi;
@@ -42,12 +42,12 @@
 <svelte:head><title>Getting started · Umbod</title></svelte:head>
 
 <WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(access.adminAccess === 'allowed')} activeItem="gettingStarted" accountIdentity={access.accountIdentity.kind === 'visible' ? access.accountIdentity : accountIdentity} contentWidth="wide">
-  <SubpageContainer title="Getting started" lede="Connect your harness to Umbod, then optionally send telemetry with a personal access token.">
+  <SubpageContainer title="Getting started" lede="">
     {#snippet navigation()}
       <SubpageNavigation links={subpages} activeId={activePage} label="Setup sections" />
     {/snippet}
     {#if activePage === 'connect'}
-      <McpSetupGuide {mcpEndpoint} />
+      <McpSetupGuide {installerBaseUrl} />
     {:else}
       <TelemetrySetup />
     {/if}

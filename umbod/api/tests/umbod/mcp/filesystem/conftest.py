@@ -23,13 +23,13 @@ from umbod.core.callers import (
     SubjectIdentity,
 )
 from umbod.core.invocation import DatabaseApprovalNonceStore
-from umbod.core.filesystem.models import Permission, Principal, PrincipalType
-from umbod.core.filesystem.provisioning.models import RootBootstrapGrant, RootBootstrapSpec
 from umbod.infrastructure import (
-    InMemoryContentConfig, create_content_driver, create_filesystem_transactions, create_root_provisioning,
+    InMemoryContentConfig, create_content_driver, create_filesystem_transactions,
 )
 from umbod.core.filesystem.authorization import VerifiedIdentityResolver
 from umbod.core.persistence import Database
+from umbod.core.groups import RegisterGroup
+from umbod.core.groups.stores.composition import create_group_management
 from umbod.core.filesystem.content import ContentService, FilesystemContent
 from umbod.core.filesystem.ports import ContentDriver, ByteStream
 from umbod.core.filesystem.models import ContentRef, StorageKey
@@ -105,12 +105,7 @@ class InvocationFilesystemToolVisibility(FilesystemToolVisibility):
 @pytest_asyncio.fixture
 async def filesystem_state() -> AsyncIterator[FilesystemState]:
     runtime = await prepared_inmemory_runtime()
-    await create_root_provisioning(database=runtime.database).provision(
-        RootBootstrapSpec(grants=(RootBootstrapGrant(
-            principal=Principal(type=PrincipalType.GROUP, issuer="https://issuer", id="writers"),
-            permissions=frozenset({Permission.DISCOVER, Permission.WRITE}),
-        ),))
-    )
+    await create_group_management(runtime.database).register_group(RegisterGroup(group_id="writers"))
     callers = ScopedCallerCapture()
     callers.current.set(caller_snapshot(
         "alice", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED
@@ -122,6 +117,7 @@ async def filesystem_state() -> AsyncIterator[FilesystemState]:
         VerifiedIdentityResolver(), create_filesystem_transactions(database=runtime.database),
         content, 20_971_520,
     )
+    await services.homes().get_or_provision(callers.current.get())
     discovery = FilesystemDiscoveryRuntime(DatabaseFilesystemAuthorizationReader(runtime.database))
     await discovery.reconcile()
     visibility = InvocationFilesystemToolVisibility(callers, discovery)

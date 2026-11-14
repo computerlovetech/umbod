@@ -3,8 +3,8 @@ from .errors import PermissionDenied
 from .models import AuthorizationDecision, ResolvedIdentity, UnresolvedIdentity
 from .discovery import (
     FILESYSTEM_DISCOVERY_CHANGED,
-    AuthorizationGrant,
     AuthorizationNode,
+    AuthorizationGrant,
     FilesystemAuthorizationSnapshot,
     FilesystemOperation,
     permitted_operations,
@@ -16,8 +16,8 @@ from .recipients import ObservedUserPrincipalResolver
 
 __all__ = [
     "FILESYSTEM_DISCOVERY_CHANGED",
-    "AuthorizationGrant",
     "AuthorizationNode",
+    "AuthorizationGrant",
     "FilesystemAuthorizationSnapshot",
     "FilesystemAuthorizationReader",
     "FilesystemOperation",

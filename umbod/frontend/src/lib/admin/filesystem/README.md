@@ -1,15 +1,13 @@
 ---
 type: Software Module
 title: "Filesystem administration"
-description: "Ports and adapters for root filesystem group access policy."
+description: "Shared namespace administration ports, schemas and validated HTTP adapters."
 ---
 
 # Files
 
-- [administration.test.ts](./administration.test.ts) — Policy port and HTTP tests.
-- [domain/](./domain/) — Strict group-only root access request and response contracts.
-- [errors.ts](./errors.ts) — Safe policy failure presentation.
-- [fixtures.test-support.ts](./fixtures.test-support.ts) — Policy test fixtures.
-- [http-route.ts](./http-route.ts) — Root access HTTP adapter.
-- [in-memory.ts](./in-memory.ts) — Revision-aware policy adapter with blocked group assignment checks.
-- [port.ts](./port.ts) — Policy administration port.
+- [domain/namespaces.ts](./domain/namespaces.ts) — Strict shared namespace summaries, exact group grants and revision-safe mutation schemas.
+- [namespaces-port.ts](./namespaces-port.ts) — Shared namespace administration port, separate from content access.
+- [namespaces-route.ts](./namespaces-route.ts) — Validated shared namespace listing, creation and revision-safe replacement adapter.
+- [namespaces-route.test.ts](./namespaces-route.test.ts) — Transport-port request contracts and invalid authority-bearing input tests.
+- [Namespace test support](../../../../tests/support/filesystem/README.md) — Test-only revision-aware shared namespace adapter outside the application source.

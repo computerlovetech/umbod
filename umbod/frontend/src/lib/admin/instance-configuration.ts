@@ -68,8 +68,3 @@ export type InstanceConfiguration = z.infer<typeof instanceConfigurationSchema>;
 export type InstanceConfigurationEntry = z.infer<
   typeof instanceConfigurationEntrySchema
 >;
-
-export type InstanceConfigurationPageData =
-  | { status: "ready"; configuration: InstanceConfiguration }
-  | { status: "empty" }
-  | { status: "failed"; message: string; retryLabel: string };

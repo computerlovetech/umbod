@@ -1,8 +1,8 @@
-from uuid import UUID, uuid4
+from umbod.core.filesystem.namespace import ROOT_ID
+from uuid import uuid4
 
 import pytest
 
-from umbod.infrastructure import create_access_control_driver
 from umbod.rest.authentication.deps import get_caller_context
 
 from .conftest import FilesystemHttp
@@ -11,7 +11,9 @@ from .test_http_contract import BASE, BODY, creation_payload
 
 def test_breadcrumbs_return_minimal_ordered_items_and_no_store(filesystem_http: FilesystemHttp) -> None:
     client = filesystem_http.client
-    root = client.get(f"{BASE}/browse").json()["node"]
+    browsed = client.get(f"{BASE}/browse")
+    assert browsed.status_code == 200, browsed.text
+    root = browsed.json()["node"]
     directory = client.post(f"{BASE}/nodes/{root['id']}/directories", **creation_payload("directories", BODY)).json()
     response = client.get(f"{BASE}/nodes/{directory['id']}/breadcrumbs")
     assert response.status_code == 200
@@ -21,21 +23,19 @@ def test_breadcrumbs_return_minimal_ordered_items_and_no_store(filesystem_http: 
         "complete": True,
     }
     assert client.get(f"{BASE}/nodes/{root['id']}/breadcrumbs").json() == {
-        "items": [{"id": root["id"], "name": "", "kind": "directory"}], "complete": True,
+        "items": [{"id": root["id"], "name": root["name"], "kind": "directory"}], "complete": True,
     }
 
 
-def test_known_child_does_not_require_discoverable_root(filesystem_http: FilesystemHttp) -> None:
+def test_namespace_breadcrumbs_do_not_expose_structural_root(filesystem_http: FilesystemHttp) -> None:
     client = filesystem_http.client
     root = client.get(f"{BASE}/browse").json()["node"]
-    directory = client.post(f"{BASE}/nodes/{root['id']}/directories", **creation_payload("directories", BODY)).json()
-    policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
-    client.portal.call(policies.clear_node, UUID(root["id"]))
-    response = client.get(f"{BASE}/nodes/{directory['id']}/breadcrumbs")
+    response = client.get(f"{BASE}/nodes/{root['id']}/breadcrumbs")
     assert response.status_code == 200
     assert response.json() == {
-        "items": [{key: directory[key] for key in ("id", "name", "kind")}], "complete": False,
+        "items": [{key: root[key] for key in ("id", "name", "kind")}], "complete": True,
     }
+    assert root["id"] != str(ROOT_ID)
     assert response.headers["cache-control"] == "no-store"
 
 

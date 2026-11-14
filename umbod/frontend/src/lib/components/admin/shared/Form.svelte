@@ -48,12 +48,15 @@
   }
 
   .fields {
+    align-content: start;
     display: grid;
+    grid-auto-rows: max-content;
     gap: var(--form-gap, 1rem);
     margin-top: var(--form-margin-top, 1.25rem);
     min-height: 0;
     overflow-y: auto;
-    padding: 0 0.25rem 0.25rem 0;
+    padding: 6px;
+    scroll-padding: 6px;
   }
 
   footer {

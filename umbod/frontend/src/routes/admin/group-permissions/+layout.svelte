@@ -1,10 +1,11 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import { onDestroy } from 'svelte';
+  import { onDestroy, untrack } from 'svelte';
+  import { adminApi } from '$lib/admin/infrastructure/admin-api';
   import { afterNavigate } from '$app/navigation';
   import { page } from '$app/state';
-  import { adminApi } from '$lib/admin/infrastructure/admin-api';
   import AdminShell from '$lib/components/admin/AdminShell.svelte';
+  import AddNamespaceButton from '$lib/components/admin/filesystem/AddNamespaceButton.svelte';
   import GroupPermissionsPage from '$lib/components/admin/group-permissions/GroupPermissionsPage.svelte';
   import GroupPermissionsWorkspace from '$lib/components/admin/group-permissions/GroupPermissionsWorkspace.svelte';
   import { BrowserGroupPermissionsLoader } from '$lib/components/admin/group-permissions/group-permissions-loader';
@@ -16,9 +17,12 @@
 
   let { data, children }: { data: LayoutData; children: Snippet } = $props();
   const route = new GroupPermissionsRouteState(() => page.url);
-  const api = adminApi();
-  const state = new GroupPermissionsWorkspaceState(() => data.permissionGroups, api.groups, api.filesystem, new BrowserGroupPermissionsLoader(), new BrowserGroupPermissionsSaver(), () => route.initialTarget);
+  const state = new GroupPermissionsWorkspaceState(() => data.permissionGroups, new BrowserGroupPermissionsLoader(), new BrowserGroupPermissionsSaver(), () => route.initialTarget, adminApi().namespaces);
   setGroupPermissionsWorkspace(state);
+  $effect.pre(() => {
+    const identity = data.accountIdentity ?? { kind: 'hidden' as const };
+    untrack(() => state.namespaces.observeAccountIdentity(identity));
+  });
   afterNavigate(() => state.activate(route.activeTab));
   onDestroy(state.dispose);
 </script>
@@ -26,7 +30,10 @@
 <AdminShell activeItem="groupPermissions" accountIdentity={data.accountIdentity ?? { kind: 'hidden' }} contentWidth="wide" navigationScope="/admin/group-permissions">
   <div class="admin-page">
     <GroupPermissionsPage activeTab={route.activeTab} description={route.description} backHref={route.backHref}>
-      <GroupPermissionsWorkspace {state} activeTab={route.activeTab}>
+      {#snippet actions()}
+        {#if route.activeTab === 'filesystem'}<AddNamespaceButton state={state.namespaces} />{/if}
+      {/snippet}
+      <GroupPermissionsWorkspace {state}>
         {@render children()}
       </GroupPermissionsWorkspace>
     </GroupPermissionsPage>

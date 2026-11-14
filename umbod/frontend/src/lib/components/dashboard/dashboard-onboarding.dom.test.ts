@@ -20,7 +20,7 @@ describe('Dashboard onboarding entry', () => {
       props: {
         createApi: () => new InMemoryDashboardApi({ ...catalogue, personal_enabled: false }),
         createWorkspaceApi: () => new InMemoryWorkspaceApi({
-          user: { id: 'member', name: 'Member', email: null, picture: null },
+          identity_key: 'opaque-member-key', user: { id: 'member', name: 'Member', email: null, picture: null },
           capabilities: { administration: false }
         })
       }

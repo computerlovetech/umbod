@@ -20,6 +20,7 @@ export class DownstreamMcpMutationState {
   get locked(): boolean { return this.registrationLocked || this.formLocked || this.busy || this.blocked || this.authenticationLost || this.disposed; }
   setRegistrationLocked = (locked: boolean): void => { this.registrationLocked = locked; };
   setFormLocked = (locked: boolean): void => { this.formLocked = locked; };
+  requireReload = (message: string): void => { this.blocked = true; this.message = message; };
   request = (action: CommonMcpAction, id: string, name: string): void => {
     if (!this.locked) this.pending = { action, id, name };
   };

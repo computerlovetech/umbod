@@ -27,7 +27,7 @@ function identity(id: string): HeaderAccountIdentityState {
 }
 
 function profile(id: string): WorkspaceProfile {
-  return { user: { id, name: id, email: null, picture: null }, capabilities: { administration: true } };
+  return { identity_key: id, user: { id, name: id, email: null, picture: null }, capabilities: { administration: true } };
 }
 
 function refreshBrowserEvents(): void {

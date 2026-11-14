@@ -22,10 +22,6 @@ class RevisionConflict(Exception):
     pass
 
 
-class ProvisioningConflict(Exception):
-    pass
-
-
 class InvalidMove(Exception):
     pass
 
@@ -39,4 +35,16 @@ class StorageFailure(Exception):
 
 
 class PolicyDecodingFailure(StorageFailure):
+    pass
+
+
+class PolicyRevisionConflict(Exception):
+    pass
+
+
+class PolicyConflict(Exception):
+    pass
+
+
+class PolicyUnavailable(Exception):
     pass

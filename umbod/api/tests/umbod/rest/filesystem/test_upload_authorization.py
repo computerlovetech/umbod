@@ -1,10 +1,8 @@
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
-from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
 from umbod.core.persistence import Database
-from umbod.infrastructure import create_access_control_driver
 from umbod.rest.authentication.deps import get_caller_context
 from umbod.rest.filesystem.deps import get_filesystem_database
 
@@ -57,15 +55,13 @@ def test_upload_cors_preflight_is_not_an_authorized_options_handler(filesystem_h
 
 
 def test_readable_directory_does_not_imply_upload_authority(
-    filesystem_http: FilesystemHttp, upload_parent: str,
+    filesystem_http: FilesystemHttp,
 ) -> None:
+    from .conftest import create_shared_namespace
+
     client = filesystem_http.client
-    policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
-    client.portal.call(policies.add_grant, AccessGrant(
-        node_id=UUID(upload_parent),
-        principal=Principal(type=PrincipalType.USER, issuer="issuer", id="bob"),
-        permissions={Permission.DISCOVER, Permission.READ}, recursive=False,
-    ))
+    namespace = create_shared_namespace(filesystem_http, "read")
+    upload_parent = str(namespace.root_node_id)
     bob = {"Authorization": "Bearer bob"}
     assert client.get(f"{BASE}/nodes/{upload_parent}", headers=bob).status_code == 200
     response = client.post(upload_path(upload_parent), json={**BODY, "size_bytes": 0}, headers=bob)

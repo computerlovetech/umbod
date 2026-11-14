@@ -1,7 +1,7 @@
 from collections.abc import Sequence
 
 from umbod.core.callers import CallerSnapshot
-from umbod.core.filesystem.access import AccessMetadataService, CallerNodeSummary, UnavailableVisibility
+from umbod.core.filesystem.access import AccessMetadataService, CallerNodeSummary
 from umbod.core.filesystem.authorization import PermissionDenied
 from umbod.core.filesystem.errors import PolicyDecodingFailure
 from umbod.core.filesystem.browsing import NodeSummary
@@ -21,9 +21,7 @@ async def enrich_nodes(
 async def enrich_projected_nodes(
     sharing: FilesystemSharing, caller: CallerSnapshot, nodes: Sequence[CallerNodeSummary],
 ) -> list[FilesystemNodeSummary]:
-    node_ids = tuple(dict.fromkeys(
-        node.id for node in nodes if not isinstance(node.visible_to, UnavailableVisibility)
-    ))
+    node_ids = tuple(dict.fromkeys(node.id for node in nodes))
     indexed = {}
     if node_ids or not nodes:
         try:

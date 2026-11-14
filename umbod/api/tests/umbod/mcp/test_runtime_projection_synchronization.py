@@ -10,6 +10,7 @@ from starlette.responses import JSONResponse
 from starlette.types import Receive, Scope, Send
 
 from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages
+from tests.support.application_failures import CapturingApplicationFailures
 from tests.support.messaging import InMemoryEventStreamFactory
 from messaging.models import MessagingEvent, StreamEvent
 from messaging.ports import EventCheckpointStore, EventStream
@@ -266,6 +267,7 @@ async def test_sql_bootstrap_without_api_url_never_copies_authoritative_store_st
         persistence_runtime=SimpleNamespace(database=object(), readiness=SimpleNamespace(ensure_ready=AsyncMock()), shutdown=AsyncMock()),
         http_app=StarletteWithLifespan(),
         metrics_recorder=Mock(),
+        telemetry=SimpleNamespace(application_failures=CapturingApplicationFailures()),
         group_permission_runtime_state=None,
         connector_runtime=SimpleNamespace(connector_tool_mappings=[], connector_configuration_store=configuration, connector_publishing_store=publishing),
         mcp=SimpleNamespace(usage_runtime=Mock(spec=McpUsageRuntime), runtime_projection_health=RuntimeProjectionHealth(), filesystem_discovery_runtime=SimpleNamespace(reconcile=AsyncMock()), downstream_mcp_discovery_runtime=Mock(), downstream_mcp_discovery_coordinator=coordinator, connector_tool_registry=registry, connector_prompt_registry=SimpleNamespace(reconcile_all=AsyncMock()), connector_resource_registry=SimpleNamespace(reconcile_all=AsyncMock())),

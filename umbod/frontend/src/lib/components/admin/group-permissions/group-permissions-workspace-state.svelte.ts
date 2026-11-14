@@ -1,38 +1,33 @@
 import { exactMatchGuidance, mapGroupPermissionSummary, type GroupPermissionsInitialTarget } from '$lib/admin/group-permissions';
 import type { CatalogueGroup } from '$lib/admin/groups/domain/schemas';
-import type { GroupCatalogue } from '$lib/admin/groups/port';
-import type { FilesystemAdministration } from '$lib/admin/filesystem/port';
-import { FilesystemAccessState, type FilesystemGroup } from '../filesystem/filesystem-access-state.svelte';
-import { FilesystemGroupEditorState } from '../filesystem/filesystem-group-editor-state.svelte';
+import type { NamespaceAdministration } from '$lib/admin/filesystem/namespaces-port';
+import { NamespaceManagementState } from '../filesystem/namespace-management-state.svelte';
 import { GroupPermissionsState } from './group-permissions-state.svelte';
 import type { GroupPermissionsLoader } from './group-permissions-loader';
 import type { GroupPermissionsSaver } from './group-permissions-saver';
 import type { GroupPermissionsTab } from './group-permissions-route-state.svelte';
 
-type WorkspaceGroup = Readonly<Omit<FilesystemGroup, 'permissions'> & { permissions: Readonly<FilesystemGroup['permissions']> }>;
+type WorkspaceGroup = Readonly<CatalogueGroup & { id: string }>;
 
 export class GroupPermissionsWorkspaceState {
-  readonly filesystem: FilesystemAccessState;
-  readonly filesystemEditor: FilesystemGroupEditorState;
+  readonly namespaces: NamespaceManagementState;
   private connectorState = $state.raw<GroupPermissionsState | null>(null);
   private selection = $state<string | null>(null);
   private pending = $state<string | null>(null);
   private activeTab: GroupPermissionsTab = 'connectors';
   private disposed = false;
   private summaries = $derived.by(() => this.catalogue().map(mapGroupPermissionSummary));
-  private entries = $derived.by(() => this.filesystem.groupEntries);
+  private entries = $derived.by(() => this.catalogue().map((group) => ({ ...group, id: group.group_id })));
 
   constructor(
     private readonly catalogue: () => CatalogueGroup[],
-    groups: GroupCatalogue,
-    filesystem: FilesystemAdministration,
     private readonly loader: GroupPermissionsLoader,
     private readonly saver: GroupPermissionsSaver,
-    private readonly target: () => GroupPermissionsInitialTarget | null
+    private readonly target: () => GroupPermissionsInitialTarget | null,
+    namespaceAdministration: NamespaceAdministration
   ) {
     this.selection = catalogue()[0]?.group_id ?? null;
-    this.filesystem = new FilesystemAccessState(filesystem, groups, catalogue);
-    this.filesystemEditor = new FilesystemGroupEditorState(() => this.filesystem, () => this.selectedGroupId);
+    this.namespaces = new NamespaceManagementState(namespaceAdministration, () => this.selectedGroupId);
   }
 
   get connectors(): GroupPermissionsState | null { return this.connectorState; }
@@ -44,14 +39,14 @@ export class GroupPermissionsWorkspaceState {
     return this.groupEntries.find((group) => group.id === this.selectedGroupId) ?? null;
   }
   get pendingSelection(): string | null { return this.pending; }
-  get busy(): boolean { return this.connectorState?.saving === true || this.filesystem.saving; }
-  get dirty(): boolean { return this.connectorState?.hasUnsavedChanges === true || this.filesystem.dirty; }
+  get busy(): boolean { return this.connectorState?.saving === true || this.namespaces.writing || this.namespaces.editorOpen; }
+  get dirty(): boolean { return this.connectorState?.hasUnsavedChanges === true || this.namespaces.hasUnsavedChanges; }
 
   activate = (tab: GroupPermissionsTab): void => {
     if (this.disposed) return;
     this.activeTab = tab;
     if (tab === 'filesystem') {
-      void this.filesystem.ensureLoaded();
+      void this.namespaces.ensureLoaded();
       return;
     }
     if (!this.connectorState) {
@@ -62,16 +57,16 @@ export class GroupPermissionsWorkspaceState {
         exactMatchGuidance,
         initialTarget: null,
         originHref: null
-      }, null, this.selectedGroup?.registered ? this.selectedGroupId : null, this.loader, this.saver, this.target);
+      }, null, this.selectedGroupId, this.loader, this.saver, this.target);
     }
     this.connectorState.synchronizeCatalogue(this.summaries);
-    if (this.selectedGroup?.registered && this.selectedGroupId) this.connectorState.ensureSelection(this.selectedGroupId);
+    if (this.selectedGroupId) this.connectorState.ensureSelection(this.selectedGroupId);
     this.connectorState.refreshRouteTarget();
   };
 
   requestSelection = (id: string): void => {
     if (this.disposed || this.busy || id === this.selectedGroupId || !this.groupEntries.some((group) => group.id === id)) return;
-    if (this.connectorState?.hasUnsavedChanges && id !== this.connectorState.selectedGroupId) {
+    if (this.dirty) {
       this.pending = id;
       return;
     }
@@ -84,6 +79,7 @@ export class GroupPermissionsWorkspaceState {
     this.pending = null;
     if (decision === 'discard' && id !== null && this.groupEntries.some((group) => group.id === id)) {
       this.connectorState?.discardSelectedDraft();
+      this.namespaces.discardSelectedDraft();
       this.commitSelection(id);
     }
   };
@@ -96,6 +92,6 @@ export class GroupPermissionsWorkspaceState {
   dispose = (): void => {
     this.disposed = true;
     this.connectorState?.dispose();
-    this.filesystem.dispose();
+    this.namespaces.dispose();
   };
 }

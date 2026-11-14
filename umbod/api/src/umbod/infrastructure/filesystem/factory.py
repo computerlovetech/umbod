@@ -1,3 +1,6 @@
+from umbod.core.filesystem.namespaces import NamespaceService, NamespaceManagement, NamespaceManagementService
+from umbod.core.filesystem.stores.namespaces import DatabaseNamespaceRegistry
+
 from datetime import timedelta
 from typing import assert_never
 
@@ -6,8 +9,6 @@ from umbod.core.filesystem import (
     CreationService,
     FilesystemCreation,
     FilesystemTransactions,
-    RootProvisioning,
-    RootProvisioningService,
     ContentDriver,
     Filesystem,
     NamespaceDriver,
@@ -21,11 +22,8 @@ from umbod.core.persistence import Database
 from umbod.core.filesystem.uploads import UploadClock, UploadService
 from umbod.core.filesystem.stores.uploads import DatabaseUploadTransactions
 
-from umbod.core.filesystem.administration import RootGroupPolicyManagement, RootGroupPolicyService
-from umbod.core.filesystem.stores.administration import DatabaseRootPolicyTransactions
 from umbod.core.filesystem.sharing import FilesystemSharing, SharingService
 from umbod.core.filesystem.stores.sharing import DatabaseSharingTransactions
-
 from umbod.core.filesystem.homes import HomeService
 from umbod.core.filesystem.access import AccessMetadataService
 from umbod.core.filesystem.stores.homes import DatabaseHomeTransactions
@@ -37,6 +35,14 @@ from .config import (
     LocalContentConfig,
     S3ContentConfig,
 )
+
+
+def create_filesystem_namespaces(*, database: Database, resolver: FilesystemIdentityResolver) -> NamespaceService:
+    return NamespaceService(DatabaseNamespaceRegistry(database), resolver)
+
+
+def create_filesystem_namespace_management(*, database: Database, issuer: str) -> NamespaceManagement:
+    return NamespaceManagementService(DatabaseNamespaceRegistry(database), issuer)
 
 
 def create_filesystem_homes(*, database: Database, resolver: FilesystemIdentityResolver) -> HomeService:
@@ -66,9 +72,9 @@ def create_filesystem_browsing(
 
 
 def create_filesystem_explorer(
-    *, database: Database, resolver: FilesystemIdentityResolver, sharing_available: bool,
+    *, database: Database, resolver: FilesystemIdentityResolver,
 ) -> FilesystemBrowser:
-    return ScopedBrowsingExplorer(DatabaseBrowseScopeReader(database), resolver, sharing_available)
+    return ScopedBrowsingExplorer(DatabaseBrowseScopeReader(database), resolver)
 
 
 def create_filesystem_transactions(*, database: Database) -> FilesystemTransactions:
@@ -91,18 +97,10 @@ def create_filesystem_uploads(
     )
 
 
-def create_root_group_policy_management(*, database: Database, issuer: str) -> RootGroupPolicyManagement:
-    return RootGroupPolicyService(DatabaseRootPolicyTransactions(database), issuer)
-
-
 def create_filesystem_sharing(
     *, database: Database, resolver: FilesystemIdentityResolver, issuer: str,
 ) -> FilesystemSharing:
     return SharingService(resolver, DatabaseSharingTransactions(database), issuer)
-
-
-def create_root_provisioning(*, database: Database) -> RootProvisioning:
-    return RootProvisioningService(create_filesystem_transactions(database=database))
 
 
 def create_namespace_driver(*, database: Database) -> NamespaceDriver:

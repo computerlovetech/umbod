@@ -1,7 +1,7 @@
 ---
 type: Software Module
 title: "Filesystem authorization"
-description: "Effective direct and recursive-ancestor permission evaluation and caller-to-principal resolution."
+description: "Namespace-bounded additive permission evaluation and caller-to-principal resolution."
 ---
 
 # Files
@@ -13,7 +13,7 @@ description: "Effective direct and recursive-ancestor permission evaluation and 
 - [models.py](./models.py) — Resolved identities and decisions.
 - [ports.py](./ports.py) — Resolver and authorization contracts.
 - [resolver.py](./resolver.py) — Verified identity mapping.
-- [recipients.py](./recipients.py) — Observed-user identifiers resolved to existing user principals without granting access.
+- [recipients.py](./recipients.py) — Observed-user identifiers mapped to existing exact-issuer principals.
 - [service.py](./service.py) — Live ancestry loading and fresh policy evaluation.
 
 # Related links

@@ -8,7 +8,7 @@ import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
 import { UploadState } from '$lib/files/state/upload-state.svelte';
 import type { NodeAccess, SharingRecipient, SharingRecipientSearchResult } from '$lib/files/domain/sharing';
 import FilesContent from './FilesContent.svelte';
-import NodeShareButton from './NodeShareButton.svelte';
+import NodeActions from './NodeActions.svelte';
 import NodeSharingDialog from './NodeSharingDialog.svelte';
 import { SharingEligibilityState } from '$lib/files/state/sharing-eligibility-state.svelte';
 
@@ -110,7 +110,7 @@ describe('Files group sharing UI', (): void => {
     expect(scopes).toEqual([false, true]);
   });
 
-  test('uses the home label for the share button, dialog heading and saved announcement after a canonical rename', async (): Promise<void> => {
+  test('uses the home label for the share menu item, dialog heading and saved announcement after a canonical rename', async (): Promise<void> => {
     const api = new InMemoryFilesApi(rootId, filesystemFixture);
     const home = { ...filesystemFixture[1], name: 'Renamed home' };
     api.sharing.configure({ ...view, node_id: home.id }, recipients);
@@ -119,11 +119,15 @@ describe('Files group sharing UI', (): void => {
       sharing.seed([{ node_id: home.id, share: true }]);
       const target = document.createElement('div');
       document.body.append(target);
-      component = mount(NodeShareButton, { target, props: { node: home, sharing } });
+      const state = new FilesState(api);
+      files = state;
+      component = mount(NodeActions, { target, props: { node: home, sharing, update: state.update, description: state.description, name: 'Files', signIn: vi.fn() } });
       await tick();
-      const trigger = button('Share “Files”');
-      expect(trigger.title).toBe('Share “Files”');
-      trigger.click();
+      button('Actions for “Files”').click();
+      await tick();
+      const share = button('Share “Files”');
+      expect(share.getAttribute('role')).toBe('menuitem');
+      share.click();
       await vi.waitFor(() => expect(sharing.dialog.phase).toBe('ready'));
       await unmount(component);
       component = mount(NodeSharingDialog, { target, props: { state: sharing.dialog, signIn: vi.fn() } });
@@ -141,28 +145,80 @@ describe('Files group sharing UI', (): void => {
 
   test('renders authorized current directory, directory/file rows and file details; denied defaults remain hidden', async (): Promise<void> => {
     const { state } = await setup(rootId);
-    await vi.waitFor(() => expect(button('Share “Files”')).toBeDefined());
+    expect(document.querySelector('[aria-label="Share “My files”"]')).toBeNull();
+    expect(state.sharing.available(rootId)).toBe(false);
     expect(button('Actions for “Projects”').closest('tr')).not.toBeNull();
     expect(document.querySelector('tbody button[aria-label^="Share"]')).toBeNull();
     await state.load(folderId);
     await tick();
-    expect(button('Share “Projects”')).toBeDefined();
+    expect(document.querySelector('[aria-label="Location actions"] button[aria-label^="Share"]')).toBeNull();
+    expect(button('Actions for “Projects”').closest('[aria-label="Location actions"]')).not.toBeNull();
     expect(button('Actions for “Notes.txt”').closest('tr')).not.toBeNull();
     expect(document.querySelector('tbody button[aria-label^="Share"]')).toBeNull();
     await state.load(fileId);
     await tick();
-    expect(button('Share “Notes.txt”').closest('[aria-label="Location actions"]')).not.toBeNull();
+    const trigger = button('Actions for “Notes.txt”');
+    expect(trigger.closest('[aria-label="Location actions"]')).not.toBeNull();
+    trigger.click();
+    await tick();
+    expect(button('Share “Notes.txt”').getAttribute('role')).toBe('menuitem');
     state.sharing.reset();
     await tick();
     expect(document.querySelector('button[aria-label^="Share"]')).toBeNull();
   });
 
-  test('direct sharing action restores focus to its native invoking button', async (): Promise<void> => {
+  test('keeps the primary toolbar unchanged when sharing availability changes', async (): Promise<void> => {
+    const { state } = await setup();
+    const toolbar = document.querySelector('[aria-label="Location actions"]');
+    expect(toolbar).not.toBeNull();
+    const controls = [...toolbar!.querySelectorAll('button:not([role="menuitem"])')];
+    expect(controls.map((control): string | null => control.getAttribute('aria-label'))).toEqual(['Upload file', 'New folder', 'Actions for “Projects”']);
+    expect(toolbar!.querySelector('[aria-label^="Share"]')).toBeNull();
+    state.sharing.revoke(folderId);
+    await tick();
+    expect([...toolbar!.querySelectorAll('button:not([role="menuitem"])')]).toEqual(controls);
+    button('Actions for “Projects”').click();
+    await tick();
+    expect(document.querySelector('[role="menuitem"][aria-label="Share “Projects”"]')).toBeNull();
+    state.sharing.seed([{ node_id: folderId, share: true }]);
+    await tick();
+    expect(button('Share “Projects”').getAttribute('role')).toBe('menuitem');
+    expect([...toolbar!.querySelectorAll('button:not([role="menuitem"])')]).toEqual(controls);
+  });
+
+  test.each([fileId, folderId])('direct UUID %s renders shared content and sharing without namespace-root access', async (targetId): Promise<void> => {
+    const nodes = filesystemFixture.map((node) => ({ ...node, visible_to: { type: 'namespace' as const, namespace_id: rootId, kind: 'personal' as const, name: 'Alex’s files' } }));
+    const api = new InMemoryFilesApi(rootId, nodes, undefined, undefined, (node) => node.id !== rootId);
+    vi.spyOn(api.filesystem, 'listNamespaces').mockResolvedValue([]);
+    api.sharing.configure({ ...view, node_id: targetId }, recipients);
+    const state = new FilesState(api);
+    files = state;
+    component = mount(FilesContent, { target: document.body, props: { state, folder: new NewFolderState(api, state), upload: new UploadState(api, state), signIn: vi.fn() } });
+    await state.load(targetId);
+    await tick();
+    expect(state.phase).toBe('ready');
+    expect(state.namespaces).toEqual([]);
+    expect(document.querySelector('h1')?.textContent).toBe('Files');
+    expect(document.querySelector('[aria-label="File namespaces"]')).toBeNull();
+    const name = targetId === fileId ? 'Notes.txt' : 'Projects';
+    button(`Actions for “${name}”`).click();
+    await tick();
+    button(`Share “${name}”`).click();
+    await vi.waitFor(() => expect(state.sharing.dialog.phase).toBe('ready'));
+    await tick();
+    expect(document.querySelector('dialog form[aria-label="Manage sharing"]')).not.toBeNull();
+    button('Close').click();
+    await tick();
+    expect(state.sharing.dialog.open).toBe(false);
+    expect(state.node?.visible_to).toEqual({ type: 'namespace', namespace_id: rootId, kind: 'personal', name: 'Alex’s files' });
+  });
+
+  test('header sharing restores focus to its persistent ellipsis trigger', async (): Promise<void> => {
     const { api } = await setup();
     const replace = vi.spyOn(api.sharing, 'replaceAccess');
-    const trigger = button('Share “Projects”');
+    const trigger = button('Actions for “Projects”');
     trigger.focus();
-    trigger.click();
+    await open('Share “Projects”');
     await vi.waitFor(() => expect(document.querySelector('input[role="combobox"]')).not.toBeNull());
     await tick();
     expect(document.activeElement).toBe(button('Close'));
@@ -180,10 +236,14 @@ describe('Files group sharing UI', (): void => {
     await state.load(fileId);
     state.sharing.recheck(fileId);
     await tick();
+    const trigger = button('Actions for “Notes.txt”');
+    trigger.click();
+    await tick();
     expect(document.querySelector('button[aria-label^="Share"]')).toBeNull();
     pending.reject(new HttpError(403, 'Forbidden', {}));
     await tick();
     expect(document.querySelector('button[aria-label^="Share"]')).toBeNull();
+    expect(button('Actions for “Notes.txt”')).toBe(trigger);
   });
 
   test('adds, edits and removes permissions through DOM and saves exact IDs without replacing the workspace', async (): Promise<void> => {

@@ -1,113 +1,27 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
-import ipaddress
-import json
 import shlex
 import shutil
+import sys
 from collections.abc import Mapping, Sequence
 from pathlib import Path
-from urllib.parse import urlsplit, urlunsplit
 
-PLUGIN_VERSION = "0.1.0"
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "api/src"))
+
+from umbod.core.harness_plugins.rendering import (
+    PLUGIN_VERSION as PLUGIN_VERSION,
+    is_loopback as is_loopback,
+    marketplace_name as marketplace_name,
+    normalize_endpoint as normalize_endpoint,
+    render_package as render_harness_package,
+)
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 SKILL_PATH = REPOSITORY_ROOT / "skills/integrations/umbod-connected-apps/SKILL.md"
 
 
-def normalize_endpoint(value: str) -> str:
-    if not value or any(character.isspace() or ord(character) < 32 for character in value):
-        raise ValueError("The MCP endpoint must be an absolute URL without whitespace")
-    try:
-        parsed = urlsplit(value)
-        host = parsed.hostname
-        parsed.port
-    except ValueError as error:
-        raise ValueError("The MCP endpoint has an invalid host or port") from error
-    if parsed.scheme not in {"http", "https"} or not host:
-        raise ValueError("The MCP endpoint must use HTTP or HTTPS with a host")
-    if parsed.username is not None or parsed.password is not None or "?" in value or "#" in value:
-        raise ValueError("The MCP endpoint must not contain credentials, a query, or a fragment")
-    if any(character in value for character in ('\\', '$', '{', '}')):
-        raise ValueError("The MCP endpoint must be a literal URL without placeholders or backslashes")
-    if parsed.scheme == "http" and not is_loopback(host):
-        raise ValueError("Non-loopback MCP endpoints must use HTTPS")
-    path = parsed.path.rstrip("/")
-    if not path.endswith("/mcp"):
-        path += "/mcp"
-    return urlunsplit((parsed.scheme, parsed.netloc, path, "", ""))
-
-
-def is_loopback(host: str) -> bool:
-    if host.lower() == "localhost":
-        return True
-    try:
-        return ipaddress.ip_address(host).is_loopback
-    except ValueError:
-        return False
-
-
-def marketplace_name(endpoint: str) -> str:
-    identity = hashlib.sha256(normalize_endpoint(endpoint).encode("utf-8")).hexdigest()[:12]
-    return f"umbod-{identity}"
-
-
 def render_package(endpoint: str, skill: str, license_text: str) -> Mapping[str, str]:
-    selected_endpoint = normalize_endpoint(endpoint)
-    if not skill.strip() or not license_text.strip():
-        raise ValueError("The canonical skill and license must not be empty")
-    marketplace = {
-        "name": marketplace_name(selected_endpoint),
-        "interface": {"displayName": "Umbod"},
-        "plugins": [
-            {
-                "name": "umbod",
-                "source": {"source": "local", "path": "./plugins/umbod"},
-                "policy": {"installation": "AVAILABLE", "authentication": "ON_USE"},
-                "category": "Productivity",
-            }
-        ],
-    }
-    manifest = {
-        "name": "umbod",
-        "version": PLUGIN_VERSION,
-        "description": "Discover and use the connected apps available to your Umbod account.",
-        "author": {"name": "Computerlove", "url": "https://computerlove.tech"},
-        "homepage": "https://umbod.ai",
-        "repository": "https://github.com/computerlovetech/umbod",
-        "license": "MIT",
-        "skills": "./skills/",
-        "mcpServers": "./.mcp.json",
-    }
-    mcp = {"mcpServers": {"umbod": {"type": "http", "url": selected_endpoint}}}
-    return {
-        ".agents/plugins/marketplace.json": json.dumps(marketplace, indent=2) + "\n",
-        "plugins/umbod/.codex-plugin/plugin.json": json.dumps(manifest, indent=2) + "\n",
-        "plugins/umbod/.mcp.json": json.dumps(mcp, indent=2) + "\n",
-        "plugins/umbod/skills/umbod-connected-apps/SKILL.md": skill,
-        "plugins/umbod/LICENSE": license_text,
-    }
-
-
-def render_browser_template(skill: str, license_text: str) -> str:
-    endpoint = "https://umbod-template.invalid/mcp"
-    endpoint_placeholder = "__UMBOD_MCP_ENDPOINT__"
-    marketplace_placeholder = "__UMBOD_MARKETPLACE_NAME__"
-    files = dict(render_package(endpoint, skill, license_text))
-    files["plugins/umbod/.mcp.json"] = files["plugins/umbod/.mcp.json"].replace(
-        json.dumps(endpoint), json.dumps(endpoint_placeholder)
-    )
-    files[".agents/plugins/marketplace.json"] = files[".agents/plugins/marketplace.json"].replace(
-        json.dumps(marketplace_name(endpoint)), json.dumps(marketplace_placeholder)
-    )
-    return json.dumps(
-        {
-            "endpointPlaceholder": endpoint_placeholder,
-            "marketplacePlaceholder": marketplace_placeholder,
-            "files": files,
-        },
-        indent=2,
-    ) + "\n"
+    return render_harness_package(endpoint, skill, license_text, "codex")
 
 
 def write_package(destination: Path, files: Mapping[str, str]) -> None:
@@ -138,27 +52,9 @@ def build_package(endpoint: str, destination: Path) -> str:
 
 def main(arguments: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Build an endpoint-specific Umbod marketplace for Codex CLI")
-    parser.add_argument("--endpoint", help="Umbod MCP URL or deployment origin")
-    parser.add_argument("--output", type=Path, help="New marketplace directory; existing paths are never replaced")
-    parser.add_argument("--browser-template", type=Path, help="Generated browser package template JSON file")
+    parser.add_argument("--endpoint", required=True, help="Umbod MCP URL or deployment origin")
+    parser.add_argument("--output", required=True, type=Path, help="New marketplace directory; existing paths are never replaced")
     options = parser.parse_args(arguments)
-    if options.browser_template is not None:
-        if options.endpoint is not None or options.output is not None:
-            parser.error("--browser-template cannot be combined with --endpoint or --output")
-        try:
-            template = render_browser_template(
-                SKILL_PATH.read_text(encoding="utf-8"),
-                (REPOSITORY_ROOT / "LICENSE").read_text(encoding="utf-8"),
-            )
-            template_path = options.browser_template.expanduser().resolve()
-            template_path.parent.mkdir(parents=True, exist_ok=True)
-            template_path.write_text(template, encoding="utf-8")
-        except (ValueError, OSError) as error:
-            parser.exit(1, f"Could not build the Codex plugin: {error}\n")
-        return 0
-    missing = [flag for flag, value in (("--endpoint", options.endpoint), ("--output", options.output)) if value is None]
-    if missing:
-        parser.error(f"the following arguments are required: {', '.join(missing)}")
     destination = options.output.expanduser().resolve()
     try:
         name = build_package(options.endpoint, destination)

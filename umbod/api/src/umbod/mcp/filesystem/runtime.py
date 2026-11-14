@@ -2,7 +2,7 @@ from umbod.core.filesystem.authorization.discovery import FilesystemAuthorizatio
 from umbod.core.filesystem.authorization.ports import FilesystemAuthorizationReader
 
 
-EMPTY_AUTHORIZATION = FilesystemAuthorizationSnapshot(nodes=(), ownerships=(), grants=())
+EMPTY_AUTHORIZATION = FilesystemAuthorizationSnapshot(nodes=(), ownerships=(), grants=(), namespaces=())
 
 
 class FilesystemDiscoveryRuntime:

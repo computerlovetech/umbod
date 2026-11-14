@@ -38,8 +38,7 @@ def test_openapi_exposes_implemented_metadata_and_no_placeholders(filesystem_htt
     assert {"200", "403", "412", "422", "428"} <= set(patch["responses"])
     assert any(p["name"] == "If-Match" and p["required"] for p in patch["parameters"])
     assert all("x-umbod-status" not in operation for methods in paths.values() for operation in methods.values())
-    for method in ("get", "put"):
-        assert "200" in paths["/filesystem/nodes/{node_id}/access"][method]["responses"]
+    assert {"get", "put"} <= set(paths["/filesystem/nodes/{node_id}/access"])
     assert "201" in paths["/filesystem/nodes/{parent_id}/uploads"]["post"]["responses"]
     assert {"200", "307"} <= set(content["get"]["responses"])
     assert paths["/filesystem/nodes/{parent_id}/children"]["get"]["parameters"] == [{

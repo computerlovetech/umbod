@@ -241,57 +241,26 @@ def test_registration_validates_json_body(
 
 
 def test_filesystem_reference_blocks_both_delete_routes(client: TestClient) -> None:
-    state = client.get("/api/admin/filesystem/root-access").json()
-    response = client.put(
-        "/api/admin/filesystem/root-access",
-        json={
-            "expected_revision": state["revision"],
-            "groups": [
-                {
-                    "group_id": "filesystem-only",
-                    "permissions": ["discover"],
-                }
-            ],
-        },
+    assert client.post("/api/admin/groups", json={"group_id": "filesystem-only"}).status_code == 204
+    response = client.post(
+        "/api/admin/filesystem/namespaces",
+        json={"name": "Shared", "groups": [{"group_id": "filesystem-only", "access": "read"}]},
     )
-    assert response.status_code == 200
-    assert client.get("/api/admin/groups").json() == {
-        "groups": [group_record("filesystem-only")]
-    }
-    assert (
-        client.request(
-            "DELETE", "/api/admin/groups", json={"group_id": "filesystem-only"}
-        ).status_code
-        == 409
-    )
+    assert response.status_code == 201
+    assert client.get("/api/admin/groups").json() == {"groups": [group_record("filesystem-only")]}
+    assert client.request("DELETE", "/api/admin/groups", json={"group_id": "filesystem-only"}).status_code == 409
     assert client.delete("/api/admin/groups/filesystem-only").status_code == 409
-    assert (
-        client.delete("/api/admin/mcp-permissions/groups/filesystem-only").status_code
-        == 409
-    )
+    assert client.delete("/api/admin/mcp-permissions/groups/filesystem-only").status_code == 409
 
 
-def test_stale_root_save_does_not_register_rejected_group(client: TestClient) -> None:
-    state = client.get("/api/admin/filesystem/root-access").json()
-    assert (
-        client.put(
-            "/api/admin/filesystem/root-access",
-            json={"expected_revision": state["revision"], "groups": []},
-        ).status_code
-        == 200
-    )
-    response = client.put(
-        "/api/admin/filesystem/root-access",
-        json={
-            "expected_revision": state["revision"],
-            "groups": [
-                {
-                    "group_id": "stale-only",
-                    "permissions": ["discover"],
-                }
-            ],
-        },
-    )
+def test_stale_namespace_save_does_not_register_rejected_group(client: TestClient) -> None:
+    state = client.post("/api/admin/filesystem/namespaces", json={"name": "Shared", "groups": []}).json()
+    path = "/api/admin/filesystem/namespaces/" + state["id"]
+    command = {"expected_revision": state["revision"], "name": "Shared", "groups": []}
+    assert client.put(path, json=command).status_code == 200
+    response = client.put(path, json={
+        **command, "groups": [{"group_id": "stale-only", "access": "read"}],
+    })
     assert response.status_code == 409
     assert client.get("/api/admin/groups").json() == {"groups": []}
 

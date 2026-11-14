@@ -34,7 +34,7 @@ export class NodeUpdateState {
   get draft(): string { return this.name; }
   get title(): string { return this.moving ? `Move “${this.current?.name ?? ''}”` : 'Rename item'; }
   get reviewingDrop(): boolean { return !!this.stagedDestination; }
-  get moveWarning(): string { return this.moving ? 'Moving this item may change inherited access. Direct sharing remains unchanged.' : ''; }
+  get moveWarning(): string { return this.moving ? 'Moving this item may change namespace access. Direct sharing remains unchanged.' : ''; }
   get submitLabel(): string { return this.moving ? this.stagedDestination ? `Move to “${this.stagedDestination.name}”` : this.destinations.selected ? `Move to “${this.destinations.selectedName}”` : 'Move' : 'Rename'; }
   get pending(): boolean { return this.saving || !!this.current && this.pendingIds.has(this.current.id); }
   get error(): string { return this.message || this.destinations.error; }

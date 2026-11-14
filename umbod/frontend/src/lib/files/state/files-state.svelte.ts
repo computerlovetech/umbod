@@ -9,14 +9,45 @@ import { RowEditingState } from './row-editing-state.svelte';
 import { DragMoveState } from './drag-move-state.svelte';
 import { DeletionState } from './deletion-state.svelte';
 import type { FilesApi } from '../api';
-import { browseResultSchema, nodeIdSchema, nodeSummarySchema, type NodeSummary } from '../domain/schemas';
+import { browseResultSchema, filesystemNamespacesSchema, nodeIdSchema, type FilesystemNamespace, type NodeSummary } from '../domain/schemas';
 import { readFailure, type FilesPhase } from '../errors';
 
 export function filesHref(id?: string): string {
   return id ? '/files?node=' + encodeURIComponent(id) : '/files';
 }
 
+export interface FilesLocation {
+  readonly id: string;
+  readonly label: string;
+  readonly href: string;
+  readonly selected: boolean;
+}
+
+export interface FilesLocationGroup {
+  readonly kind: 'personal' | 'shared';
+  readonly label: string;
+  readonly locations: readonly FilesLocation[];
+}
+
 export class FilesState {
+  private namespaceEntries = $state.raw<FilesystemNamespace[]>([]);
+  get namespaces(): readonly FilesystemNamespace[] { return this.namespaceEntries; }
+  private selectedNamespaceId = $state<string | undefined>(undefined);
+  discoveryPhase = $state<FilesPhase>('loading');
+  get selectedNamespace(): FilesystemNamespace | undefined { return this.namespaceEntries.find((entry) => entry.id === this.selectedNamespaceId); }
+  readonly locationGroups: readonly FilesLocationGroup[] = $derived.by(() => {
+    return (['personal', 'shared'] as const).flatMap((kind) => {
+      const locations = this.namespaceEntries.filter((entry) => entry.kind === kind).map((entry) => ({
+        id: entry.id,
+        label: entry.kind === 'personal' ? 'My files' : entry.name,
+        href: filesHref(entry.root_node_id),
+        selected: entry.id === this.selectedNamespaceId
+      }));
+      return locations.length ? [{ kind, label: kind === 'personal' ? 'Personal' : 'Shared namespaces', locations }] : [];
+    });
+  });
+  namespaceLabel = (id: string): string | undefined => { const entry = this.namespaceEntries.find((item) => item.root_node_id === id); return entry?.kind === 'personal' ? 'My files' : entry?.name; };
+
   mutationNotice = $state('');
   phase = $state<FilesPhase>('loading');
   node = $state.raw<NodeSummary | undefined>(undefined);
@@ -28,7 +59,24 @@ export class FilesState {
   private readonly confirmedDeletedIds = new Set<string>();
   private target: string | null = null;
   private rootId = $state<string | undefined>(undefined);
-  private generation = 0;
+  private identityFingerprint: string | undefined;
+  private generation = $state(0);
+  get navigationVersion(): number { return this.generation; }
+
+  isCurrentTarget = (target: string | null): boolean => {
+    if (this.generation === 0) return false;
+    return target === this.target || !!this.rootId && (target ?? this.rootId) === (this.target ?? this.rootId);
+  };
+
+  private clearContent = (): void => {
+    this.node = undefined;
+    this.children = [];
+    this.uploadAvailability = 'hidden';
+    this.createDirectoryAllowed = false;
+    this.selectedNamespaceId = undefined;
+    this.navigation.reset();
+    this.preview?.reset();
+  };
   private controller: AbortController | undefined;
   private disposed = false;
 
@@ -45,8 +93,8 @@ export class FilesState {
     this.update = new NodeUpdateState(api.filesystem, this.acceptUpdate, this.reload, () => this.rootId);
     this.description = new DescriptionState(api.filesystem, this.acceptDescription, this.reload);
     this.rowEditing = new RowEditingState(api.filesystem, this.acceptUpdate, this.reload, () => this.rootId);
-    this.sharing = new SharingEligibilityState(api.sharing, (node) => node.id === this.rootId ? 'Files' : node.name || 'Files');
-    this.navigation = new FilesNavigationState(api.filesystem, () => this.rootId);
+    this.sharing = new SharingEligibilityState(api.sharing);
+    this.navigation = new FilesNavigationState(api.filesystem, () => this.rootId, this.namespaceLabel);
     const deletionOperations = new SvelteMap<string, symbol>();
     this.deletion = new DeletionState(api, openParent ?? ((id) => this.load(id)), this.reload, this.acceptDeleted, true, deletionOperations);
     this.rowDeletion = new RowDeletionState(api, this.reload, this.acceptRowDeleted, deletionOperations);
@@ -56,6 +104,22 @@ export class FilesState {
       (id) => this.rowEditing.controllers.get(id)?.description.pending === true || this.rowEditing.controllers.get(id)?.description.open === true || this.rowDeletion.controllers.get(id)?.pending === true || !!this.rowDeletion.controllers.get(id)?.confirmation || this.sharing.dialog.open
     );
   }
+
+  observeAccountIdentity = (identity: import('$lib/header/accountIdentity').HeaderAccountIdentityState, force = false): void => {
+    const fingerprint = JSON.stringify(identity.kind === 'visible' ? ['visible', identity.hiddenValues.id] : ['hidden']);
+    if (this.disposed || !force && fingerprint === this.identityFingerprint) return;
+    const previous = this.identityFingerprint;
+    this.identityFingerprint = fingerprint;
+    if (previous === undefined && !force) return;
+    this.updatedNodes.clear();
+    this.confirmedDeletedIds.clear();
+    this.namespaceEntries = [];
+    this.selectedNamespaceId = undefined;
+    this.rootId = undefined;
+    this.mutationNotice = '';
+    this.clearContent();
+    void this.load(this.target);
+  };
 
   load = async (target: string | null): Promise<void> => {
     if (this.disposed) return;
@@ -71,25 +135,28 @@ export class FilesState {
     this.controller?.abort();
     this.controller = new AbortController();
     const signal = this.controller.signal;
-    this.navigation.reset();
+    this.navigation.suspend();
+    this.discoveryPhase = 'loading';
     this.target = target;
-    this.node = undefined;
-    this.children = [];
     this.phase = 'loading';
-    this.uploadAvailability = 'hidden';
-    this.createDirectoryAllowed = false;
     const listingStartSequence = this.updateSequence;
     try {
       const selectedId = target === null ? null : nodeIdSchema.parse(target);
-      if (!this.rootId) {
-        try {
-          const home = nodeSummarySchema.parse(await this.api.filesystem.getHome(signal));
-          if (this.disposed || generation !== this.generation || signal.aborted) return;
-          if (home.kind !== 'directory') throw new Error('Invalid home');
-          this.rootId = home.id;
-        } catch (error) {
-          if (selectedId === null || signal.aborted) throw error;
-        }
+      try {
+        const listing = filesystemNamespacesSchema.parse({ namespaces: await this.api.filesystem.listNamespaces(signal) });
+        if (this.disposed || generation !== this.generation || signal.aborted) return;
+        this.namespaceEntries = listing.namespaces;
+        this.rootId = listing.namespaces.find((entry) => entry.kind === 'personal')?.root_node_id;
+        if (!listing.namespaces.some((entry) => entry.id === this.selectedNamespaceId)) this.selectedNamespaceId = undefined;
+        this.discoveryPhase = 'ready';
+      } catch (error) {
+        if (this.disposed || generation !== this.generation || signal.aborted) return;
+        this.namespaceEntries = [];
+        this.rootId = undefined;
+        this.selectedNamespaceId = undefined;
+        this.discoveryPhase = readFailure(error);
+        this.clearContent();
+        if (selectedId === null) throw error;
       }
       const browseId = selectedId ?? this.rootId;
       if (!browseId) throw new Error('Home unavailable');
@@ -100,22 +167,28 @@ export class FilesState {
       const known = this.updatedNodes.get(loadedNode.id)?.node;
       const node = known && known.revision > loadedNode.revision ? known : loadedNode;
       if (!node.permissions.can_discover) {
+        this.clearContent();
         this.phase = 'missing';
         return;
       }
       const capabilities = new Map(result.capabilities.map((capability) => [capability.node_id, capability]));
       const current = capabilities.get(node.id)!;
+      const namespaceRoot = [...result.breadcrumbs.items].reverse().map((item) => this.namespaceEntries.find((entry) => entry.root_node_id === item.id)).find((entry) => entry !== undefined);
+      const visibility = node.visible_to;
+      this.selectedNamespaceId = namespaceRoot?.id ?? (!result.breadcrumbs.complete && visibility.type === 'namespace' ? this.namespaceEntries.find((entry) => entry.id === visibility.namespace_id)?.id : undefined);
+      this.uploadAvailability = 'hidden';
+      this.createDirectoryAllowed = false;
       this.node = node;
       this.navigation.seed(node, result.breadcrumbs);
       if (typeof node.parent_id === 'string' && node.parent_id !== loadedNode.parent_id) void this.navigation.select(node);
       else this.navigation.acceptUpdatedNode(node);
       this.children = node.kind === 'directory' ? this.reconcileChildren(node.id, result.entries, listingStartSequence, true) : [];
-      this.sharing.seed(result.capabilities);
+      this.sharing.seed(result.capabilities.map((capability) => this.namespaceEntries.some((namespace) => namespace.root_node_id === capability.node_id) ? { ...capability, share: false } : capability));
+      this.sharing.select(this.children);
       this.phase = 'ready';
       void this.preview?.select(node);
       void this.update.select(node, node.id === this.rootId ? { rename: false, move: false } : current);
       void this.description.select(node, current.edit_description);
-      this.sharing.select(this.children);
       this.rowEditing.select(this.children, capabilities);
       if (node.kind === 'directory') {
         this.uploadAvailability = current.upload ? 'allowed' : 'denied';
@@ -123,7 +196,9 @@ export class FilesState {
         this.rowDeletion.select(this.children, capabilities);
       } else void this.deletion.select(node, current.delete);
     } catch (error) {
-      if (this.disposed || generation !== this.generation) return;
+      if (this.disposed || generation !== this.generation || signal.aborted) return;
+      this.clearContent();
+      if (this.discoveryPhase === 'loading') this.discoveryPhase = readFailure(error);
       this.phase = readFailure(error);
     }
   };
@@ -150,18 +225,29 @@ export class FilesState {
     if (known && known.revision > node.revision) return;
     const previousSequence = this.updateSequence;
     this.updatedNodes.set(node.id, { node, sequence: ++this.updateSequence });
+    if (this.phase === 'loading' && !node.permissions.can_discover && this.children.some((child) => child.id === node.id)) {
+      this.children = this.children.filter((child) => child.id !== node.id);
+      this.sharing.remove(node.id);
+    }
     if (this.phase === 'ready' && this.node?.kind === 'directory') {
       const previous = this.children;
       this.children = this.reconcileChildren(this.node.id, previous, previousSequence, false);
+      for (const child of this.children) this.rowDeletion.controllers.get(child.id)?.acceptUpdatedNode(child);
       for (const child of previous) {
         if (!this.children.some((current) => current.id === child.id)) this.sharing.remove(child.id);
       }
-      for (const child of this.children) this.rowDeletion.controllers.get(child.id)?.acceptUpdatedNode(child);
       this.sharing.select(this.children);
       this.rowDeletion.select(this.children);
       this.rowEditing.select(this.children);
     }
     if (this.node?.id !== node.id || this.node.revision > node.revision) return;
+    if (this.phase !== 'ready') {
+      if (node.permissions.can_discover) return;
+      if ((this.target ?? this.rootId) !== node.id) {
+        this.clearContent();
+        return;
+      }
+    }
     const previousParent = typeof this.node.parent_id === 'string' ? this.node.parent_id : undefined;
     const nextParent = typeof node.parent_id === 'string' ? node.parent_id : undefined;
     const parentChanged = previousParent !== nextParent;
@@ -181,6 +267,7 @@ export class FilesState {
       this.children = [];
       this.uploadAvailability = 'hidden';
       this.createDirectoryAllowed = false;
+      this.selectedNamespaceId = undefined;
       this.phase = 'missing';
       return;
     }
@@ -216,15 +303,19 @@ export class FilesState {
 
   nodePresentation = (node: NodeSummary): Readonly<{ name: string; isHome: boolean; iconKind: 'home' | 'file' | 'directory' }> => {
     const isHome = node.kind === 'directory' && node.id === this.rootId;
-    return { name: isHome ? 'Home' : node.name, isHome, iconKind: isHome ? 'home' : node.kind };
+    return { name: this.namespaceLabel(node.id) ?? node.name, isHome, iconKind: isHome ? 'home' : node.kind };
   };
+
+  get atNamespaceRoot(): boolean {
+    return !!this.node && this.namespaceEntries.some((namespace) => namespace.root_node_id === this.node?.id);
+  }
 
   get atPersonalRoot(): boolean {
     return !!this.node && this.node.id === this.rootId;
   }
 
   get locationName(): string {
-    return this.atPersonalRoot ? 'Files' : this.node ? this.navigation.label(this.node) || 'Files' : 'Files';
+    return this.node ? this.navigation.label(this.node) || 'Files' : 'Files';
   }
 
   reload = async (): Promise<void> => this.load(this.target);
@@ -255,6 +346,14 @@ export class FilesState {
 
   dispose = (): void => {
     this.disposed = true;
+    this.clearContent();
+    this.updatedNodes.clear();
+    this.confirmedDeletedIds.clear();
+    this.target = null;
+    this.mutationNotice = '';
+    this.namespaceEntries = [];
+    this.selectedNamespaceId = undefined;
+    this.rootId = undefined;
     this.preview?.dispose();
     this.dragMove.dispose();
     this.update.dispose();

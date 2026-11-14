@@ -81,12 +81,12 @@ def test_models_are_frozen(model: BaseModel) -> None:
 @pytest.mark.asyncio
 async def test_results_expose_only_summary_and_explicit_exploration_fields(browsing: InMemoryBrowsing) -> None:
     explorer = BrowsingExplorer(browsing)
-    inspection = await explorer.inspect_node(browsing.caller, RootTarget(type="root"))
+    inspection = await explorer.inspect_node(browsing.caller, NodeTarget(type="node", node_id=browsing.root.id))
     listing = await explorer.list_directory(
-        browsing.caller, RootTarget(type="root"), ListingLimits(max_entries=1),
+        browsing.caller, NodeTarget(type="node", node_id=browsing.root.id), ListingLimits(max_entries=1),
     )
     tree = await explorer.read_tree(
-        browsing.caller, RootTarget(type="root"), TreeLimits(max_entries=1, depth=1),
+        browsing.caller, NodeTarget(type="node", node_id=browsing.root.id), TreeLimits(max_entries=1, depth=1),
     )
     assert set(inspection.model_dump()) == {"node", "breadcrumbs"}
     assert set(listing.model_dump()) == {"node", "breadcrumbs", "entries", "truncated"}

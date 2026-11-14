@@ -26,7 +26,7 @@ afterEach(async (): Promise<void> => {
 });
 
 function button(label: string): HTMLButtonElement {
-  const found = Array.from(document.querySelectorAll('button')).find((candidate) => candidate.textContent?.trim() === label);
+  const found = Array.from(document.querySelectorAll('button')).find((candidate) => (candidate.getAttribute('aria-label') ?? candidate.textContent?.trim()) === label);
   expect(found, label).toBeDefined();
   return found!;
 }

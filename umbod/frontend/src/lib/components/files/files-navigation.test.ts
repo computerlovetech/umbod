@@ -21,13 +21,32 @@ function fixture(canRead: (node: NodeSummary) => boolean = () => true): { api: I
 }
 
 describe('compact file navigation', () => {
+  test.each([
+    { personal: true, shared: false, icon: 'home', label: 'My files' },
+    { personal: false, shared: true, icon: 'namespace', label: 'Team files' },
+    { personal: false, shared: false, icon: 'folder', label: 'Files' }
+  ])('the framed path uses the $icon icon without edit or copy controls', async ({ personal, shared, icon, label }): Promise<void> => {
+    const { api } = fixture();
+    const state = new FilesNavigationState(api.filesystem, () => personal ? rootId : undefined, (id) => shared && id === rootId ? 'Team files' : undefined);
+    try {
+      await state.select(filesystemFixture[0]);
+      const document = documentFor(state);
+      expect(document.querySelector('.navigation > svg')?.getAttribute('data-kind')).toBe(icon);
+      expect(document.querySelector('.navigation > svg')?.getAttribute('aria-hidden')).toBe('true');
+      expect(document.querySelector('.desktop-path [aria-current="page"]')?.textContent).toBe(label);
+      expect(document.querySelector('input, textarea, button, [contenteditable="true"]')).toBeNull();
+    } finally {
+      state.dispose();
+    }
+  });
+
   test('home at the canonical root retains a plain Home label and no parent link', async (): Promise<void> => {
     const { state } = fixture();
     await state.select(filesystemFixture[0]);
     const document = documentFor(state);
     expect(document.querySelector('.desktop-path[aria-label="File path"]')).not.toBeNull();
-    expect(document.querySelector('.desktop-path [aria-current="page"]')?.textContent).toBe('Home');
-    expect(document.querySelector('.mobile-path [aria-current="page"]')?.textContent).toBe('Home');
+    expect(document.querySelector('.desktop-path [aria-current="page"]')?.textContent).toBe('My files');
+    expect(document.querySelector('.mobile-path [aria-current="page"]')?.textContent).toBe('My files');
     expect(document.querySelector('.partial')).toBeNull();
     expect(document.querySelector('a, button')).toBeNull();
   });
@@ -37,21 +56,11 @@ describe('compact file navigation', () => {
     const state = new FilesNavigationState(api.filesystem, () => folderId);
     await state.select(filesystemFixture[1]);
     const document = documentFor(state);
-    expect(document.querySelector('.desktop-path [aria-current="page"]')?.textContent).toBe('Home');
+    expect(document.querySelector('.desktop-path [aria-current="page"]')?.textContent).toBe('My files');
     expect(document.body.textContent).not.toContain('Projects');
-    const rootHref = '/files?node=' + rootId;
-    if (rootVisible) {
-      expect(document.querySelector('.desktop-path a')?.getAttribute('href')).toBe(rootHref);
-      expect(document.querySelector('.desktop-path a')?.textContent).toBe('Root');
-      expect(document.querySelector('.mobile-path a')?.getAttribute('href')).toBe(rootHref);
-      expect(document.querySelector('.mobile-path a')?.textContent).toBe('‹Root');
-      expect(document.querySelector('.partial')).toBeNull();
-    } else {
-      expect(document.querySelector('a, button')).toBeNull();
-      expect(document.body.innerHTML).not.toContain(rootId);
-      expect(document.body.textContent).not.toContain('Root');
-      expect(document.querySelector('.partial')?.textContent).toContain('Earlier folders unavailable');
-    }
+    expect(document.querySelector('a, button')).toBeNull();
+    expect(document.body.innerHTML).not.toContain(rootId);
+    expect(document.querySelector('.partial')).toBeNull();
     state.dispose();
   });
 
@@ -76,7 +85,7 @@ describe('compact file navigation', () => {
     await state.select(filesystemFixture[1]);
     const link = documentFor(state).querySelector('.mobile-path a');
     expect(link?.getAttribute('href')).toBe('/files');
-    expect(link?.textContent).toBe('‹Home');
+    expect(link?.textContent).toBe('‹My files');
   });
 
   test('partial paths disclose unavailable ancestors without names, ids or fabricated links', async (): Promise<void> => {

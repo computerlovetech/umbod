@@ -88,6 +88,7 @@ def namespace() -> Mock:
 @pytest.fixture
 def policies() -> Mock:
     policies = create_autospec(AccessControlDriver, instance=True, spec_set=True)
+    policies.list_namespace_policies.return_value = []
     policies.get_owner.return_value = Ownership(node_id=uuid4(), owner=principal("other", PrincipalType.USER, "provider"))
     policies.list_grants.return_value = []
     return policies
@@ -100,7 +101,7 @@ def authorization(resolver: Mock, namespace: Mock, policies: Mock) -> Filesystem
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["decide", "require"])
-@pytest.mark.parametrize("source", ["resolver", "node", "owner", "grants"])
+@pytest.mark.parametrize("source", ["resolver", "node", "namespaces"])
 @pytest.mark.parametrize("failure", [StorageFailure("unavailable"), RuntimeError("unexpected")])
 async def test_resolver_and_storage_failures_propagate_without_becoming_denials(
     authorization: FilesystemAuthorization, resolver: Mock, namespace: Mock,
@@ -108,7 +109,7 @@ async def test_resolver_and_storage_failures_propagate_without_becoming_denials(
 ) -> None:
     methods = {
         "resolver": resolver.resolve, "node": namespace.get_node,
-        "owner": policies.get_owner, "grants": policies.list_grants,
+        "namespaces": policies.list_namespace_policies,
     }
     methods[source].side_effect = failure
     with pytest.raises(type(failure)) as caught:
@@ -137,7 +138,7 @@ async def test_unresolved_identity_denies_without_using_storage(
 
 
 @pytest.mark.asyncio
-async def test_root_evaluation_reads_target_node_owner_and_direct_grants(
+async def test_root_evaluation_denies_without_owner_or_grant_reads(
     authorization: FilesystemAuthorization, namespace: Mock, policies: Mock,
 ) -> None:
     node_id = ROOT_ID
@@ -148,10 +149,10 @@ async def test_root_evaluation_reads_target_node_owner_and_direct_grants(
     policies.list_grants.return_value = [AccessGrant(
         node_id=node_id, principal=principal("alice", PrincipalType.USER, "provider"), permissions={Permission.READ}, recursive=True,
     )]
-    assert (await authorization.decide(caller("alice"), node_id, Permission.READ)).allowed
+    assert not (await authorization.decide(caller("alice"), node_id, Permission.READ)).allowed
     assert namespace.mock_calls == [("get_node", (node_id,), {})]
     assert policies.mock_calls == [
-        ("get_owner", (node_id,), {}), ("list_grants", (node_id,), {}),
+        ("list_namespace_policies", (), {}),
     ]
 
 

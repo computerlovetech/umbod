@@ -20,7 +20,6 @@ from .runtime import FilesystemDiscoveryRuntime
 
 FILESYSTEM_TOOL_OPERATIONS: dict[str, FilesystemOperation] = {
     "filesystem_browse": FilesystemOperation.INSPECT,
-    "get_filesystem_root": FilesystemOperation.INSPECT_ROOT,
     "get_filesystem_node": FilesystemOperation.INSPECT,
     "list_filesystem_children": FilesystemOperation.LIST,
     "create_filesystem_file": FilesystemOperation.CREATE,

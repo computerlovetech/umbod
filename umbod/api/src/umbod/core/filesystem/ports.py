@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator, Sequence
 from typing import Protocol
 
+from .namespaces.models import NamespacePolicy
 from .models import (
     AccessGrant,
     Ownership,
@@ -45,6 +46,7 @@ class NamespaceDriver(Protocol):
 
 
 class AccessControlDriver(Protocol):
+    async def list_namespace_policies(self) -> list[NamespacePolicy]: ...
     async def get_owner(self, node_id: NodeId) -> Ownership: ...
     async def set_owner(self, ownership: Ownership) -> None: ...
     async def list_grants(self, node_id: NodeId) -> Sequence[AccessGrant]: ...

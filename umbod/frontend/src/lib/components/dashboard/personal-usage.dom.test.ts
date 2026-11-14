@@ -154,7 +154,7 @@ describe('personal usage presentation', () => {
       await vi.waitFor(() => expect(document.querySelector('[aria-label="Tool activity"]')?.textContent).toContain('63 calls'));
     }
     profileB.resolve({
-      user: { id: 'header-account-b', name: 'Account B', email: null, picture: null },
+      identity_key: 'account-two', user: { id: 'header-account-b', name: 'Account B', email: null, picture: null },
       capabilities: { administration: false }
     });
     await vi.waitFor(() => expect(document.querySelector('[aria-label="Workspace sidebar"]')?.textContent).toContain('Account B'));
@@ -196,7 +196,7 @@ describe('personal usage presentation', () => {
     const personalList = vi.spyOn(personal.connections, 'list');
     const createPersonalApi = vi.spyOn(personalConnectionsAdapter, 'browserPersonalConnectionsApi').mockReturnValue(personal);
     const get = vi.spyOn(api.usage, 'get').mockResolvedValueOnce(usageSnapshot(7, 'account-one', 1)).mockReturnValueOnce(pending.promise);
-    const workspace = new InMemoryWorkspaceApi({ user: { id: 'member', name: 'Member', email: null, picture: null }, capabilities: { administration: false } });
+    const workspace = new InMemoryWorkspaceApi({ identity_key: 'account-one', user: { id: 'member', name: 'Member', email: null, picture: null }, capabilities: { administration: false } });
     vi.spyOn(workspace.profile, 'get').mockReturnValue(new Promise((): void => {}));
     component = mount(Dashboard, { target: document.body, props: {
       createApi: () => api,

@@ -32,8 +32,8 @@ def test_ordinary_user_observation_and_admin_only_scoped_search(
     client: TestClient, signing_key: rsa.RSAPrivateKey
 ) -> None:
     admin_headers = headers(signing_key)
-    root_access = client.get(
-        "/api/admin/filesystem/root-access", headers=admin_headers
+    namespaces = client.get(
+        "/api/admin/filesystem/namespaces", headers=admin_headers
     ).json()
     permission_groups = client.get(
         "/api/admin/mcp-permissions/groups", headers=admin_headers
@@ -62,8 +62,8 @@ def test_ordinary_user_observation_and_admin_only_scoped_search(
         "groups": []
     }
     assert (
-        client.get("/api/admin/filesystem/root-access", headers=admin_headers).json()
-        == root_access
+        client.get("/api/admin/filesystem/namespaces", headers=admin_headers).json()
+        == namespaces
     )
     assert (
         client.get("/api/admin/mcp-permissions/groups", headers=admin_headers).json()

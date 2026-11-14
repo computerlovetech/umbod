@@ -1,6 +1,5 @@
 <script lang="ts">
   import type { DashboardController } from '$lib/dashboard/state/port';
-  import type { CatalogueConnector } from '$lib/dashboard/domain/schemas';
   import { catalogueSidebarItem, connectorKindLabels } from '$lib/dashboard/presentation';
   import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
   import ConnectorSidebarList from '$lib/components/admin/connectors/ConnectorSidebarList.svelte';
@@ -10,13 +9,7 @@
   import { personalAccessStatus } from '$lib/personal-connections/presentation';
   import ConnectorDetail from './ConnectorDetail.svelte';
 
-  let { state, canManage = false }: { state: DashboardController; canManage?: boolean } = $props();
-
-  function managementHref(connector: CatalogueConnector): string | undefined {
-    if (!canManage) return undefined;
-    const paths = { native: '/admin/connectors', openapi: '/admin/openapi-connectors', downstream_mcp: '/admin/downstream-mcp-connectors' };
-    return `${paths[connector.kind]}?connector=${encodeURIComponent(connector.connector_id)}`;
-  }
+  let { state }: { state: DashboardController } = $props();
 </script>
 
 <AdminSplitWorkspace ariaLabel="Your connector workspace" sidebarLabel="Available connectors" sidebarHeading="Connectors" count={state.connectors.length} detailLabel="Selected connector">
@@ -52,7 +45,7 @@
             <p role="status">{state.personalPhase === 'loading' ? 'Loading personal access…' : 'Personal access unavailable'}</p>
           {/if}
         {/snippet}
-        <ConnectorDetail {connector} manageHref={managementHref(connector)} children={connector.ownership === 'personal' ? personalActions : undefined} />
+        <ConnectorDetail {connector} children={connector.ownership === 'personal' ? personalActions : undefined} />
       {/key}
     {/if}
   {/snippet}

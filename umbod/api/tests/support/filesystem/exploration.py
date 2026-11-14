@@ -1,5 +1,6 @@
 from umbod.core.callers import CallerSnapshot
-from umbod.core.filesystem import AccessGrant, Node, NodeId, NodeKind, NodeMetadata, Ownership, PrincipalType
+from umbod.core.filesystem import Node, NodeId, NodeKind, NodeMetadata, PrincipalType
+from umbod.core.filesystem.namespaces import NamespacePolicy
 from umbod.core.filesystem.authorization import ResolvedIdentity, UnresolvedIdentity
 from umbod.core.filesystem.browsing.exploration import BrowseScope
 from umbod.core.filesystem.namespace import new_node
@@ -32,11 +33,7 @@ def child(parent_id: NodeId, name: str, kind: NodeKind) -> Node:
     return new_node(parent_id, name, kind, NodeMetadata(content_type="text/plain", attributes={}))
 
 
-def scope_for(nodes: list[Node], owned: list[Node], grants: list[AccessGrant]) -> BrowseScope:
-    return BrowseScope(
-        nodes=tuple(nodes),
-        ownerships=tuple(Ownership(node_id=node.id, owner=principal("alice", PrincipalType.USER, "issuer")) for node in owned),
-        grants=tuple(grants),
-    )
+def scope_for(nodes: list[Node], namespaces: tuple[NamespacePolicy, ...]) -> BrowseScope:
+    return BrowseScope(nodes=tuple(nodes), ownerships=(), grants=(), namespaces=namespaces)
 
 

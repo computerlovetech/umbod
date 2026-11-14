@@ -88,6 +88,138 @@ describe('files reads and authoritative navigation', () => {
     expect(files.phase).toBe('ready');
   });
 
+  test('semantic target guards detect initial requests and personal-root aliases without suppressing explicit reload', async (): Promise<void> => {
+    const { api, files } = fixture();
+    const browse = vi.spyOn(api.filesystem, 'browse');
+    expect(files.isCurrentTarget(null)).toBe(false);
+    await files.load(null);
+    expect(files.isCurrentTarget(null)).toBe(true);
+    expect(files.isCurrentTarget(rootId)).toBe(true);
+    expect(files.isCurrentTarget(folderId)).toBe(false);
+    const version = files.navigationVersion;
+    await files.reload();
+    expect(files.navigationVersion).toBe(version + 1);
+    expect(browse).toHaveBeenCalledTimes(2);
+    files.dispose();
+  });
+
+  test.each([
+    [new HttpError(403, 'Forbidden', {}), 'denied'],
+    [new HttpError(404, 'Missing', {}), 'missing'],
+    [new AuthenticationRequiredError(), 'sign-in'],
+    [new NetworkError('offline'), 'error']
+  ])('retains committed content inertly until a %s browse failure clears its context', async (error, phase): Promise<void> => {
+    const { api, files } = fixture();
+    await files.load(folderId);
+    const node = files.node;
+    const children = files.children;
+    const path = files.navigation.path;
+    const pending = deferred<never>();
+    const browse = vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(pending.promise);
+    const loading = files.reload();
+    await vi.waitFor(() => expect(browse).toHaveBeenCalled());
+    expect(files.node).toBe(node);
+    expect(files.children).toBe(children);
+    expect(files.navigation.path).toBe(path);
+    expect(files.uploadAvailability).toBe('allowed');
+    expect(files.createDirectoryAllowed).toBe(true);
+    expect(files.creationTarget()).toBeUndefined();
+    pending.reject(error);
+    await loading;
+    expect(files.phase).toBe(phase);
+    expect(files.node).toBeUndefined();
+    expect(files.children).toEqual([]);
+    expect(files.navigation.path).toBeUndefined();
+    expect(files.uploadAvailability).toBe('hidden');
+    expect(files.createDirectoryAllowed).toBe(false);
+    expect(files.selectedNamespace).toBeUndefined();
+    files.dispose();
+  });
+
+  test('failed discovery clears retained content before independent explicit UUID recovery commits', async (): Promise<void> => {
+    const { api, files } = fixture();
+    await files.load(folderId);
+    const result = await api.filesystem.browse(fileId);
+    const discovery = deferred<never>();
+    const browsing = deferred<typeof result>();
+    vi.spyOn(api.filesystem, 'listNamespaces').mockReturnValueOnce(discovery.promise);
+    const browse = vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(browsing.promise);
+    const loading = files.load(fileId);
+    expect(files.node?.id).toBe(folderId);
+    discovery.reject(new Error('offline'));
+    await vi.waitFor(() => expect(browse).toHaveBeenCalled());
+    expect(files.phase).toBe('loading');
+    expect(files.node).toBeUndefined();
+    expect(files.children).toEqual([]);
+    expect(files.navigation.path).toBeUndefined();
+    expect(files.selectedNamespace).toBeUndefined();
+    browsing.resolve(result);
+    await loading;
+    expect(files.phase).toBe('ready');
+    expect(files.node?.id).toBe(fileId);
+    files.dispose();
+  });
+
+  test('late failed browse cannot clear a newer committed target', async (): Promise<void> => {
+    const { api, files } = fixture();
+    await files.load(null);
+    const pending = deferred<never>();
+    const browse = vi.spyOn(api.filesystem, 'browse').mockReturnValueOnce(pending.promise);
+    const loading = files.load(folderId);
+    await vi.waitFor(() => expect(browse).toHaveBeenCalledTimes(1));
+    await files.load(fileId);
+    const node = files.node;
+    const path = files.navigation.path;
+    pending.reject(new HttpError(403, 'Forbidden', {}));
+    await loading;
+    expect(files.phase).toBe('ready');
+    expect(files.node).toBe(node);
+    expect(files.navigation.path).toBe(path);
+    files.dispose();
+  });
+
+  test('identity changes synchronously clear retained content and forced same-identity loads still fetch', async (): Promise<void> => {
+    const { api, files } = fixture();
+    files.observeAccountIdentity({ kind: 'hidden' });
+    await files.load(null);
+    const browse = vi.spyOn(api.filesystem, 'browse');
+    const inventory = await api.filesystem.listNamespaces();
+    const pending = deferred<typeof inventory>();
+    vi.spyOn(api.filesystem, 'listNamespaces').mockReturnValueOnce(pending.promise);
+    const identity = { kind: 'visible', name: 'Other account', email: null, picture: null, hiddenValues: { id: 'other-account' } } as const;
+    files.observeAccountIdentity(identity);
+    expect(files.node).toBeUndefined();
+    expect(files.children).toEqual([]);
+    expect(files.navigation.path).toBeUndefined();
+    expect(files.uploadAvailability).toBe('hidden');
+    expect(files.createDirectoryAllowed).toBe(false);
+    expect(files.namespaces).toEqual([]);
+    pending.resolve(inventory);
+    await vi.waitFor(() => expect(files.phase).toBe('ready'));
+    expect(browse).toHaveBeenCalledTimes(1);
+    files.observeAccountIdentity(identity, true);
+    expect(files.node).toBeUndefined();
+    await vi.waitFor(() => expect(files.phase).toBe('ready'));
+    expect(browse).toHaveBeenCalledTimes(2);
+    files.dispose();
+    expect(files.node).toBeUndefined();
+    expect(files.children).toEqual([]);
+    expect(files.navigation.path).toBeUndefined();
+  });
+
+  test('undiscoverable browse results clear the retained view', async (): Promise<void> => {
+    const { api, files } = fixture();
+    await files.load(null);
+    const result = await api.filesystem.browse(folderId);
+    vi.spyOn(api.filesystem, 'browse').mockResolvedValueOnce({ ...result, node: { ...result.node, permissions: { ...result.node.permissions, can_discover: false } } });
+    await files.load(folderId);
+    expect(files.phase).toBe('missing');
+    expect(files.node).toBeUndefined();
+    expect(files.children).toEqual([]);
+    expect(files.navigation.path).toBeUndefined();
+    files.dispose();
+  });
+
   test('malformed URL IDs make no request', async (): Promise<void> => {
     const { api, files } = fixture();
     const read = vi.spyOn(api.filesystem, 'getNode');
@@ -111,6 +243,7 @@ describe('files reads and authoritative navigation', () => {
     const lateNode = deferred<typeof snapshot>();
     vi.spyOn(api.filesystem, 'browse').mockImplementationOnce(() => lateNode.promise);
     const second = files.load(null);
+    await vi.waitFor(() => expect(api.filesystem.browse).toHaveBeenCalledTimes(1));
     await files.load(folderId);
     lateNode.resolve(snapshot);
     await second;

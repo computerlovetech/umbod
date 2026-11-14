@@ -7,7 +7,7 @@ from .test_http_contract import BASE
 def test_home_post_is_idempotent_private_and_needs_no_root_grant(filesystem_http: FilesystemHttp) -> None:
     client = filesystem_http.client
     headers = {"Authorization": "Bearer outsider"}
-    assert client.get(BASE + "/browse", headers=headers).status_code == 403
+    assert client.get(BASE + "/browse", headers=headers).status_code == 200
     first = client.post(BASE + "/home", headers=headers)
     repeated = client.post(BASE + "/home", headers=headers)
     assert first.status_code == repeated.status_code == 200
@@ -15,12 +15,11 @@ def test_home_post_is_idempotent_private_and_needs_no_root_grant(filesystem_http
     assert first.headers["cache-control"] == "no-store"
     node = first.json()
     assert node["permissions"] == {
-        "can_discover": True, "can_read": True, "can_write": True, "can_delete": False, "can_share": True,
+        "can_discover": True, "can_read": True, "can_write": True, "can_delete": False, "can_share": False,
     }
+    namespace = client.get(BASE + "/namespaces", headers=headers).json()["namespaces"][0]
     assert node["visible_to"] == {
-        "type": "available", "scope": "direct_node_policy", "owner": {
-            "type": "user", "issuer": "issuer", "id": "outsider",
-        }, "grants": [], "group_members_expanded": False,
+        "type": "namespace", "namespace_id": namespace["id"], "kind": "personal", "name": namespace["name"],
     }
     assert client.get(BASE + "/home", headers=headers).status_code == 405
     assert client.get(f"{BASE}/nodes/{node['id']}", headers=headers).json() == node

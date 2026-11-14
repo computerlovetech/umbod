@@ -18,7 +18,8 @@ class ScopedBrowsing:
     def __init__(self, scope: BrowseScope, identity: ResolvedIdentity) -> None:
         self.nodes = {node.id: summary(node) for node in scope.nodes}
         ancestry = tuple(AuthorizationNode(node_id=node.id, kind=node.kind, parent_id=node.parent_id) for node in scope.nodes)
-        evaluator = EffectivePermissionEvaluator(identity.principals, ancestry, scope.ownerships, scope.grants)
+        self.namespace_roots = frozenset(policy.root_node_id for policy in scope.namespaces)
+        evaluator = EffectivePermissionEvaluator(identity.principals, ancestry, scope.ownerships, scope.grants, scope.namespaces)
         self.permissions = {node_id: evaluator.permissions(node_id) for node_id in self.nodes}
 
     async def _discover(self, node_id: NodeId) -> Optional[NodeSummary]:
@@ -32,11 +33,8 @@ class ScopedBrowsing:
             raise discover_denied(node_id)
         return node
 
-    async def get_root(self, caller: CallerSnapshot) -> NodeSummary:
-        return await self.get_node(caller, ROOT_ID)
-
     async def get_breadcrumbs(self, caller: CallerSnapshot, node_id: NodeId) -> Breadcrumbs:
-        return await discoverable_breadcrumbs(node_id, self._discover)
+        return await discoverable_breadcrumbs(node_id, self._discover, self.namespace_roots)
 
     async def list_children(self, caller: CallerSnapshot, parent_id: NodeId) -> list[NodeSummary]:
         await self.get_node(caller, parent_id)
@@ -48,11 +46,10 @@ class ScopedBrowsing:
 
 class ScopedBrowsingExplorer:
     def __init__(
-        self, reader: BrowseScopeReader, resolver: FilesystemIdentityResolver, sharing_available: bool,
+        self, reader: BrowseScopeReader, resolver: FilesystemIdentityResolver,
     ) -> None:
         self._reader = reader
         self._resolver = resolver
-        self._sharing_available = sharing_available
 
     async def browse_node(self, caller: CallerSnapshot, node_id: NodeId) -> BrowseResult:
         identity = await self._resolver.resolve(caller)
@@ -70,13 +67,13 @@ class ScopedBrowsingExplorer:
         editable = Permission.DISCOVER in permissions and Permission.WRITE in permissions
         parent_permissions = browsing.permissions.get(node.parent_id, frozenset())
         parent = browsing.nodes.get(node.parent_id)
-        movable = editable and node.id != ROOT_ID and parent is not None and parent.kind == NodeKind.DIRECTORY and {
+        movable = editable and node.id not in browsing.namespace_roots and node.id != ROOT_ID and parent is not None and parent.kind == NodeKind.DIRECTORY and {
             Permission.DISCOVER, Permission.WRITE,
         }.issubset(parent_permissions)
         directory = node.kind == NodeKind.DIRECTORY
         return NodeCapabilities(
-            node_id=node.id, rename=editable and node.id != ROOT_ID, move=movable,
+            node_id=node.id, rename=editable and node.id not in browsing.namespace_roots and node.id != ROOT_ID, move=movable,
             edit_description=editable, delete=not directory and Permission.DELETE in permissions,
-            share=self._sharing_available and Permission.SHARE in permissions,
+            share=Permission.DISCOVER in permissions and Permission.SHARE in permissions,
             upload=directory and editable, create_directory=directory and editable,
         )

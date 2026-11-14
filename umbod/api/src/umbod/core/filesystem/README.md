@@ -7,9 +7,8 @@ description: "Storage-independent filesystem operations with separate authorizat
 # Files
 
 - [__init__.py](./__init__.py) — Public module exports.
-- [access/](./access/README.md) — Fresh caller rights and direct policy visibility independent of manageable sharing.
-- [homes/](./homes/README.md) — Stable private caller homes without root discovery or write grants.
-- [administration/](./administration/README.md) — Trusted root group policy editing.
+- [access/](./access/README.md) — Fresh caller rights and discover-gated namespace location metadata.
+- [homes/](./homes/README.md) — Stable private-by-default personal homes with optional descendant sharing.
 - [authorization/](./authorization/README.md) — Identity resolution and permission decisions.
 - [browsing/](./browsing/README.md) — Caller-aware summaries, bounded exploration and transaction-consistent visible breadcrumbs.
 - [content/](./content/README.md) — Authorized streaming uploads and downloads.
@@ -17,13 +16,13 @@ description: "Storage-independent filesystem operations with separate authorizat
 - [deletion/](./deletion/README.md) — Authorized permanent single-file removal without byte deletion.
 - [updates/](./updates/README.md) — Atomic authorized rename, move and metadata updates for files and directories.
 - [errors.py](./errors.py) — Namespace and storage failures.
-- [group_policy.py](./group_policy.py) — Shared validated group policies and canonical grant rules.
+- [group_policy.py](./group_policy.py) — Shared per-node group validation and canonical grant rules.
 - [models.py](./models.py) — Nodes, metadata and access policy.
 - [namespace.py](./namespace.py) — Pure namespace rules.
+- [namespaces/](./namespaces/README.md) — Authoritative personal and administrator-managed shared namespaces.
 - [ports.py](./ports.py) — Namespace, content and policy contracts.
-- [provisioning/](./provisioning/README.md) — Trusted one-time root bootstrap.
 - [service.py](./service.py) — Raw filesystem coordination.
-- [sharing/](./sharing/README.md) — Authorized batch sharing summaries and direct-node registered-group policy management.
+- [sharing/](./sharing/README.md) — Individual item sharing with registered groups and observed users.
 - [stores/](./stores/README.md) — Database-neutral namespace and policy stores.
 - [transactions.py](./transactions.py) — Combined namespace and policy transactions.
 - [uploads/](./uploads/README.md) — Persisted upload lifecycle and atomic publication.

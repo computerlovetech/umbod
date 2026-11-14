@@ -447,6 +447,27 @@ describe('sharing dialog state', (): void => {
     state.dispose();
   });
 
+  test('removing direct shares retains independently supplied namespace and owner permissions', async (): Promise<void> => {
+    const node = filesystemNode({ ...filesystemFixture[2], visible_to: { type: 'namespace', namespace_id: rootId, kind: 'shared', name: 'Design' } });
+    const api = new InMemoryFilesApi(rootId, [filesystemFixture[0], filesystemFixture[1], node]);
+    api.sharing.configure(access, recipients);
+    const files = new FilesState(api);
+    try {
+      await files.load(fileId);
+      await files.sharing.dialog.show(files.node!);
+      files.sharing.dialog.remove(' Team A ');
+      await files.sharing.dialog.save();
+      await files.reload();
+      expect((await api.sharing.inspectAccess(fileId, 'group')).grants).toEqual([]);
+      expect((await api.sharing.inspectAccess(fileId, 'user')).grants).toEqual([access.grants[1]]);
+      expect(files.node?.permissions).toMatchObject({ can_read: true, can_write: true, can_share: true });
+      expect(files.node?.visible_to).toEqual(node.visible_to);
+      expect(files.sharing.available(fileId)).toBe(true);
+    } finally {
+      files.dispose();
+    }
+  });
+
   test('self-revocation hides action until a new inspection confirms authority', async (): Promise<void> => {
     const { api } = fixture();
     const eligibility = new SharingEligibilityState(api.sharing);

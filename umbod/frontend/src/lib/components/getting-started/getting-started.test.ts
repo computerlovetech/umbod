@@ -21,15 +21,15 @@ describe('unified Getting started page', () => {
   });
 
   test.each(['connect', 'telemetry'] as const)('renders only the %s subpage within one workspace and heading', (activePage): void => {
-    const body = render(GettingStarted, { props: { mcpEndpoint: 'https://umbod.test/mcp', activePage } }).body;
+    const body = render(GettingStarted, { props: { activePage, installerBaseUrl: 'https://site.test/api/install/v1' } }).body;
     expect(body.match(/<h1[\s>]/g)).toHaveLength(1);
     expect(body).toContain('Getting started</h1>');
     expect(body.match(/aria-label="Workspace sidebar"/g)).toHaveLength(1);
     expect(body).toContain('href="/getting-started"');
     expect(body).toContain('href="/getting-started/telemetry"');
-    expect(body.includes('aria-labelledby="mcp-setup-heading"')).toBe(activePage === 'connect');
+    expect(body.includes('aria-label="Harness setup guides"')).toBe(activePage === 'connect');
     expect(body.includes('aria-label="Telemetry setup"')).toBe(activePage === 'telemetry');
-    expect(body.includes('https://umbod.test/mcp')).toBe(activePage === 'connect');
+    expect(body.includes('https://site.test/api/install/v1/codex/install.sh')).toBe(activePage === 'connect');
     expect(body).toContain('aria-current="page"');
     expect(body).not.toContain('href="/admin"');
   });

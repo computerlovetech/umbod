@@ -14,6 +14,9 @@ description: Shared and personal MCP workspaces, confirmation-owned mutations, a
 - [downstream-mcp-publication.dom.test.ts](./downstream-mcp-publication.dom.test.ts) — Mounted UI publication, retained filters, cancellation, competing-action locks, errors, and fixture-owned disposal.
 - [MCP controls acceptance tests](../../../acceptance/admin-downstream-mcp-connector-controls.test.ts) — Runtime actor/form presentation and validated-adapter behavior; retained catalogue and page lifecycle wiring checks.
 - [DownstreamMcpSetupModal.svelte](./DownstreamMcpSetupModal.svelte) — Shared connector creation and configuration.
+- [PersonalServerRegistration.svelte](../personal-mcp-servers/PersonalServerRegistration.svelte) — Shared personal registration and edit form, with immutable server details during editing.
+- [PersonalServerEditDialog.svelte](../personal-mcp-servers/PersonalServerEditDialog.svelte) — Menu-opened OAuth editing with fresh policy loading and disposal.
+- [PersonalServerPolicyPanel.svelte](../personal-mcp-servers/PersonalServerPolicyPanel.svelte) — Read-only personal authorization guidance in connector details.
 - [DownstreamMcpToolCatalog.svelte](./DownstreamMcpToolCatalog.svelte) — Discovered tool catalogue and batch controls.
 - [DownstreamMcpToolActivationToggle.svelte](./DownstreamMcpToolActivationToggle.svelte) — Tool activation control.
 - [downstream-mcp-tool-catalog-state.svelte.ts](./downstream-mcp-tool-catalog-state.svelte.ts) — Tool activation and invocation-policy changes.

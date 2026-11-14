@@ -25,6 +25,19 @@ const mcpPage = readFileSync('src/lib/components/admin/downstream-mcp-connectors
     expect(sharedShell).toContain('<Button variant="quiet" iconOnly');
   });
 
+  test('scrollable connector forms retain content-height rows under constrained sizing', (): void => {
+    const form = readFileSync('src/lib/components/admin/shared/Form.svelte', 'utf8');
+    const fields = form.match(/\.fields\s*\{([^}]+)\}/)?.[1];
+    expect(fields).toBeDefined();
+    expect(fields).toMatch(/grid-auto-rows:\s*max-content/);
+    expect(fields).toMatch(/align-content:\s*start/);
+  });
+
+  test('configuration input wrappers use block controls without inline baseline sizing', (): void => {
+    const field = readFileSync('src/lib/components/admin/shared/AdminConfigurationField.svelte', 'utf8');
+    expect(field).toMatch(/\.input-control\s*>\s*input\s*\{[^}]*display:\s*block/);
+  });
+
   test('confirmation dialogs compose the same shared shell', () => {
     expect(publicationModal).toContain('import ModalShell');
     expect(publicationModal).toContain('<ModalShell');

@@ -1,8 +1,6 @@
 from .creation import CreationService, FilesystemCreation
-from .provisioning import RootBootstrapGrant, RootBootstrapSpec, RootProvisioning, RootProvisioningService
 from .transactions import FilesystemSession, FilesystemTransactions
 from .errors import (
-    ProvisioningConflict,
     OwnershipNotFound,
     InvalidMove,
     RootMutation,
@@ -41,11 +39,6 @@ __all__ = [
     "FilesystemCreation",
     "FilesystemSession",
     "FilesystemTransactions",
-    "RootBootstrapGrant",
-    "RootBootstrapSpec",
-    "RootProvisioning",
-    "RootProvisioningService",
-    "ProvisioningConflict",
     "SYSTEM_ROOT_OWNER",
     "AccessControlDriver",
     "PrincipalType",

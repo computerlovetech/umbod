@@ -13,10 +13,10 @@ from umbod.core.filesystem import (
 )
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
 from umbod.core.filesystem.deletion import DeletionService, FilesystemDeletion
-from umbod.core.filesystem.namespace import ROOT_ID
 from tests.umbod.core.filesystem.test_authorized_content import ContentContext, alice, caller, metadata, stream
 from tests.umbod.core.filesystem.test_authorized_content import content_context as content_context
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
+from tests.support.filesystem.namespaces import set_shared_access
 
 
 def deletion(context: ContentContext) -> FilesystemDeletion:
@@ -30,7 +30,7 @@ def bob() -> Principal:
 @pytest.mark.asyncio
 async def test_removal_clears_all_policies_but_retains_bytes_and_releases_name(content_context: ContentContext) -> None:
     context = content_context
-    node = await context.service.upload(caller(), ROOT_ID, "file", metadata(), stream(b"bytes"))
+    node = await context.service.upload(caller(), content_context.root_id, "file", metadata(), stream(b"bytes"))
     stored = await context.namespace.get_node(node.id)
     assert isinstance(stored.content, ContentRef)
     await context.policies.add_grant(AccessGrant(node_id=node.id, principal=bob(), permissions=set(Permission), recursive=True))
@@ -40,9 +40,9 @@ async def test_removal_clears_all_policies_but_retains_bytes_and_releases_name(c
     with pytest.raises(OwnershipNotFound):
         await context.policies.get_owner(node.id)
     assert await context.policies.list_grants(node.id) == []
-    assert await context.namespace.list_children(ROOT_ID) == []
+    assert await context.namespace.list_children(content_context.root_id) == []
     assert b"".join([chunk async for chunk in context.content.get(stored.content.key)]) == b"bytes"
-    recreated = await context.creation.create_file(caller(), ROOT_ID, "file", metadata())
+    recreated = await context.creation.create_file(caller(), content_context.root_id, "file", metadata())
     assert recreated.id != node.id
     with pytest.raises(PermissionDenied):
         await deletion(context).delete_file(caller(), node.id, expected_revision=node.revision)
@@ -52,7 +52,7 @@ async def test_removal_clears_all_policies_but_retains_bytes_and_releases_name(c
 @pytest.mark.parametrize("permissions", [set(), {Permission.DISCOVER}, {Permission.DELETE}, {Permission.DISCOVER, Permission.WRITE}, {Permission.DISCOVER, Permission.READ}])
 async def test_both_direct_discover_and_delete_are_required(content_context: ContentContext, permissions: set[Permission]) -> None:
     context = content_context
-    node = await context.creation.create_file(caller(), ROOT_ID, "file", metadata())
+    node = await context.creation.create_file(caller(), content_context.root_id, "file", metadata())
     await context.policies.add_grant(AccessGrant(node_id=node.id, principal=bob(), permissions=permissions, recursive=False))
     for identifier in (node.id, uuid4()):
         with pytest.raises(PermissionDenied):
@@ -64,19 +64,21 @@ async def test_both_direct_discover_and_delete_are_required(content_context: Con
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("group", [False, True])
-async def test_direct_grants_allow_delete_without_parent_write_and_revocation_is_rechecked(content_context: ContentContext, group: bool) -> None:
+async def test_direct_sharing_authority_survives_namespace_revocation_until_explicit_revoke(content_context: ContentContext, group: bool) -> None:
     context = content_context
-    node = await context.creation.create_file(caller(), ROOT_ID, "file", metadata())
+    node = await context.creation.create_file(caller(), content_context.root_id, "file", metadata())
     principal = Principal(type=PrincipalType.GROUP, issuer="issuer", id="team") if group else bob()
-    actor = snapshot("bob", "issuer", ("team",) if group else ())
+    actor = snapshot("bob", "issuer", ("team",))
     grant = AccessGrant(node_id=node.id, principal=principal, permissions={Permission.DISCOVER, Permission.DELETE}, recursive=False)
     await context.policies.add_grant(grant)
     await deletion(context).check_delete_eligibility(actor, node.id)
     assert await context.namespace.get_node(node.id)
+    await set_shared_access(context.database, context.root_id, writable=False, discoverable=False)
+    await deletion(context).check_delete_eligibility(actor, node.id)
     await context.policies.remove_grant(node.id, principal)
     with pytest.raises(PermissionDenied):
         await deletion(context).delete_file(actor, node.id, expected_revision=node.revision)
-    await context.policies.add_grant(grant)
+    await set_shared_access(context.database, context.root_id, writable=True, discoverable=True)
     await deletion(context).delete_file(actor, node.id, expected_revision=node.revision)
     with pytest.raises(MissingNode):
         await context.namespace.get_node(node.id)
@@ -84,27 +86,21 @@ async def test_direct_grants_allow_delete_without_parent_write_and_revocation_is
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("recursive", [False, True])
-async def test_only_recursive_parent_grant_not_foreign_issuer_authorizes(content_context: ContentContext, recursive: bool) -> None:
+async def test_recursive_and_foreign_grants_never_authorize_nonmembers(content_context: ContentContext, recursive: bool) -> None:
     context = content_context
-    node = await context.creation.create_file(caller(), ROOT_ID, "file", metadata())
-    await context.policies.add_grant(AccessGrant(node_id=ROOT_ID, principal=bob(), permissions=set(Permission), recursive=recursive))
+    node = await context.creation.create_file(caller(), content_context.root_id, "file", metadata())
+    await context.policies.add_grant(AccessGrant(node_id=content_context.root_id, principal=bob(), permissions=set(Permission), recursive=recursive))
     await context.policies.add_grant(AccessGrant(node_id=node.id, principal=Principal(type=PrincipalType.USER, issuer="other", id="bob"), permissions=set(Permission), recursive=True))
-    if recursive:
+    with pytest.raises(PermissionDenied):
         await deletion(context).delete_file(snapshot("bob", "issuer", ()), node.id, expected_revision=node.revision)
-        with pytest.raises(MissingNode):
-            await context.namespace.get_node(node.id)
-    else:
-        with pytest.raises(PermissionDenied):
-            await deletion(context).delete_file(snapshot("bob", "issuer", ()), node.id, expected_revision=node.revision)
 
 
 @pytest.mark.asyncio
-async def test_unowned_node_and_unresolved_identity_fail_closed(content_context: ContentContext) -> None:
+async def test_managed_ownerless_node_is_authorized_but_unresolved_identity_denies(content_context: ContentContext) -> None:
     context = content_context
-    node = await context.namespace.create_node(ROOT_ID, "unowned", NodeKind.FILE, metadata())
+    node = await context.namespace.create_node(content_context.root_id, "unowned", NodeKind.FILE, metadata())
     await context.policies.add_grant(AccessGrant(node_id=node.id, principal=alice(), permissions=set(Permission), recursive=False))
-    with pytest.raises(PermissionDenied):
-        await deletion(context).check_delete_eligibility(caller(), node.id)
+    await deletion(context).check_delete_eligibility(caller(), node.id)
     with pytest.raises(PermissionDenied):
         await deletion(context).delete_file(snapshot("alice", "issuer", ("",)), node.id, expected_revision=node.revision)
 
@@ -112,7 +108,7 @@ async def test_unowned_node_and_unresolved_identity_fail_closed(content_context:
 @pytest.mark.asyncio
 async def test_stale_authorized_revision_preserves_node_and_policies(content_context: ContentContext) -> None:
     context = content_context
-    node = await context.creation.create_file(caller(), ROOT_ID, "file", metadata())
+    node = await context.creation.create_file(caller(), content_context.root_id, "file", metadata())
     owner = await context.policies.get_owner(node.id)
     with pytest.raises(RevisionConflict):
         await deletion(context).delete_file(caller(), node.id, expected_revision=node.revision + 1)
@@ -125,10 +121,10 @@ async def test_stale_authorized_revision_preserves_node_and_policies(content_con
 async def test_authorized_directories_and_root_cannot_be_removed(content_context: ContentContext, root: bool) -> None:
     context = content_context
     if root:
-        await context.policies.set_owner(Ownership(node_id=ROOT_ID, owner=alice()))
-        node = await context.namespace.get_root()
+        await context.policies.set_owner(Ownership(node_id=content_context.root_id, owner=alice()))
+        node = await context.namespace.get_node(context.root_id)
     else:
-        node = await context.creation.create_directory(caller(), ROOT_ID, "folder", metadata())
+        node = await context.creation.create_directory(caller(), content_context.root_id, "folder", metadata())
     with pytest.raises(WrongNodeKind):
         await deletion(context).check_delete_eligibility(caller(), node.id)
     with pytest.raises(WrongNodeKind):
@@ -162,16 +158,16 @@ class GatedDeletionTransactions:
 @pytest.mark.asyncio
 async def test_deletion_holds_serialized_transaction_from_authorization_through_cleanup(content_context: ContentContext) -> None:
     context = content_context
-    node = await context.creation.create_file(caller(), ROOT_ID, "file", metadata())
+    node = await context.creation.create_file(caller(), content_context.root_id, "file", metadata())
     await context.policies.add_grant(AccessGrant(node_id=node.id, principal=bob(), permissions={Permission.DISCOVER, Permission.DELETE}, recursive=False))
     checked, release, revoking = asyncio.Event(), asyncio.Event(), asyncio.Event()
     service = DeletionService(VerifiedIdentityResolver(), GatedDeletionTransactions(context.transactions, checked, release))
 
     async def revoke() -> None:
         revoking.set()
-        await context.policies.remove_grant(node.id, bob())
+        await set_shared_access(context.database, context.root_id, writable=False, discoverable=False)
 
-    pending = asyncio.create_task(service.delete_file(snapshot("bob", "issuer", ()), node.id, expected_revision=node.revision))
+    pending = asyncio.create_task(service.delete_file(snapshot("bob", "issuer", ("team",)), node.id, expected_revision=node.revision))
     await checked.wait()
     revocation = asyncio.create_task(revoke())
     await revoking.wait()
@@ -193,6 +189,7 @@ class FailingCleanupTransactions:
         async with self._transactions.transaction() as session:
             policies = create_autospec(AccessControlDriver, instance=True)
             policies.get_owner.side_effect = session.access_control.get_owner
+            policies.list_namespace_policies.side_effect = session.access_control.list_namespace_policies
             policies.list_grants.side_effect = session.access_control.list_grants
 
             async def clear_node(node_id: NodeId) -> None:
@@ -206,7 +203,7 @@ class FailingCleanupTransactions:
 @pytest.mark.asyncio
 async def test_policy_cleanup_failure_rolls_back_namespace_owner_and_grants(content_context: ContentContext) -> None:
     context = content_context
-    node = await context.creation.create_file(caller(), ROOT_ID, "file", metadata())
+    node = await context.creation.create_file(caller(), content_context.root_id, "file", metadata())
     grant = AccessGrant(node_id=node.id, principal=bob(), permissions={Permission.READ}, recursive=False)
     await context.policies.add_grant(grant)
     owner = await context.policies.get_owner(node.id)
@@ -221,8 +218,8 @@ async def test_policy_cleanup_failure_rolls_back_namespace_owner_and_grants(cont
 @pytest.mark.asyncio
 async def test_namespace_and_policy_removal_ports_are_independent_and_revision_checked(content_context: ContentContext) -> None:
     context = content_context
-    node = await context.creation.create_file(caller(), ROOT_ID, "file", metadata())
-    sibling = await context.creation.create_file(caller(), ROOT_ID, "sibling", metadata())
+    node = await context.creation.create_file(caller(), content_context.root_id, "file", metadata())
+    sibling = await context.creation.create_file(caller(), content_context.root_id, "sibling", metadata())
     for principal in (bob(), Principal(type=PrincipalType.GROUP, issuer="issuer", id="team")):
         await context.policies.add_grant(AccessGrant(node_id=node.id, principal=principal, permissions={Permission.READ}, recursive=True))
     sibling_grant = AccessGrant(node_id=sibling.id, principal=bob(), permissions={Permission.READ}, recursive=False)
@@ -240,6 +237,6 @@ async def test_namespace_and_policy_removal_ports_are_independent_and_revision_c
     with pytest.raises(OwnershipNotFound):
         await context.policies.get_owner(node.id)
     with pytest.raises(WrongNodeKind):
-        await context.namespace.delete_node(ROOT_ID, expected_revision=1)
+        await context.namespace.delete_node(content_context.root_id, expected_revision=1)
     with pytest.raises(MissingNode):
         await context.namespace.delete_node(node.id, expected_revision=node.revision)

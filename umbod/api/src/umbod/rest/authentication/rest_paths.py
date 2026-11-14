@@ -24,5 +24,12 @@ def protected_rest_request(scope: Scope) -> bool:
             "/api/oauth/downstream-mcp/docs",
             "/api/oauth/downstream-mcp/openapi.json",
         )
+        and not (
+            scope["method"] in {"GET", "HEAD"}
+            and re.fullmatch(
+                r"/api/install/v1/(?:codex|claude-code)/(?:package\.zip|package\.sha256|marketplace\.txt|endpoint\.txt|install\.sh|install\.ps1)",
+                path,
+            ) is not None
+        )
         and not within_namespace(path, "/api/oauth/downstream-mcp/callback")
     )

@@ -37,24 +37,25 @@ def authorization_context(filesystem_runtime: PersistenceRuntime) -> Authorizati
 @pytest.mark.asyncio
 @pytest.mark.parametrize("permission", list(Permission))
 @pytest.mark.parametrize("owner", [principal("alice", PrincipalType.USER, "provider"), principal("team", PrincipalType.GROUP, "provider")])
-async def test_exact_user_or_trusted_group_owner_receives_every_permission(
+async def test_structural_root_denies_even_exact_user_or_group_owner(
     authorization_context: AuthorizationContext, permission: Permission, owner: Principal
 ) -> None:
     context = authorization_context
     root = await context.namespace.get_root()
     await context.policies.set_owner(Ownership(node_id=root.id, owner=owner))
     decision = await context.authorization.decide(caller("alice"), root.id, permission)
-    assert decision.allowed
+    assert not decision.allowed
     assert decision.node_id == root.id
     assert decision.permission == permission
-    assert await context.authorization.require(caller("alice"), root.id, permission) is None
+    with pytest.raises(PermissionDenied):
+        await context.authorization.require(caller("alice"), root.id, permission)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("granted", list(Permission))
 @pytest.mark.parametrize("recipient", [principal("alice", PrincipalType.USER, "provider"), principal("team", PrincipalType.GROUP, "provider")])
 @pytest.mark.parametrize("recursive", [False, True])
-async def test_direct_grants_confer_only_the_independent_stored_permission(
+async def test_structural_root_denies_every_direct_grant(
     authorization_context: AuthorizationContext, granted: Permission,
     recipient: Principal, recursive: bool,
 ) -> None:
@@ -66,7 +67,7 @@ async def test_direct_grants_confer_only_the_independent_stored_permission(
     ))
     for requested in Permission:
         decision = await context.authorization.decide(caller("alice"), root.id, requested)
-        assert decision.allowed == (requested == granted)
+        assert not decision.allowed
 
 
 @pytest.mark.asyncio
@@ -94,7 +95,7 @@ async def test_identity_mismatch_never_confers_owner_or_grant_authority(
 
 
 @pytest.mark.asyncio
-async def test_matching_grants_combine_without_unmatched_or_empty_grants_adding_permissions(
+async def test_combined_root_grants_never_confer_authority(
     authorization_context: AuthorizationContext,
 ) -> None:
     context = authorization_context
@@ -110,7 +111,7 @@ async def test_matching_grants_combine_without_unmatched_or_empty_grants_adding_
         ))
     for permission in Permission:
         decision = await context.authorization.decide(caller("alice"), root.id, permission)
-        assert decision.allowed == (permission in {Permission.READ, Permission.WRITE})
+        assert not decision.allowed
     await context.policies.add_grant(AccessGrant(
         node_id=root.id, principal=principal("alice", PrincipalType.USER, "provider"), permissions=set(), recursive=True,
     ))
@@ -150,7 +151,7 @@ async def test_unresolved_identity_and_absent_grants_deny_without_administrator_
 @pytest.mark.asyncio
 @pytest.mark.parametrize("ancestor_owner", [False, True])
 @pytest.mark.parametrize("recursive", [False, True])
-async def test_only_recursive_grants_not_ancestor_ownership_authorize_descendants(
+async def test_unmanaged_descendants_deny_ancestor_ownership_and_recursive_grants(
     authorization_context: AuthorizationContext, ancestor_owner: bool, recursive: bool,
 ) -> None:
     context = authorization_context
@@ -167,13 +168,13 @@ async def test_only_recursive_grants_not_ancestor_ownership_authorize_descendant
         node_id=root.id, principal=principal("alice", PrincipalType.USER, "provider"), permissions=set(Permission), recursive=recursive,
     ))
     for permission in Permission:
-        assert (await context.authorization.decide(caller("alice"), child.id, permission)).allowed is recursive
+        assert not (await context.authorization.decide(caller("alice"), child.id, permission)).allowed
     await context.policies.remove_grant(root.id, principal("alice", PrincipalType.USER, "provider"))
     assert not (await context.authorization.decide(caller("alice"), child.id, Permission.READ)).allowed
 
 
 @pytest.mark.asyncio
-async def test_repeated_decisions_observe_revocation_and_keep_callers_isolated(
+async def test_repeated_root_policy_changes_never_make_root_accessible(
     authorization_context: AuthorizationContext,
 ) -> None:
     context = authorization_context
@@ -183,11 +184,11 @@ async def test_repeated_decisions_observe_revocation_and_keep_callers_isolated(
     await context.policies.add_grant(AccessGrant(
         node_id=root.id, principal=principal("alice", PrincipalType.USER, "provider"), permissions={Permission.READ}, recursive=False,
     ))
-    assert (await context.authorization.decide(caller("alice"), root.id, Permission.READ)).allowed
+    assert not (await context.authorization.decide(caller("alice"), root.id, Permission.READ)).allowed
     assert not (await context.authorization.decide(caller("bob"), root.id, Permission.READ)).allowed
     await context.policies.remove_grant(root.id, principal("alice", PrincipalType.USER, "provider"))
     assert not (await context.authorization.decide(caller("alice"), root.id, Permission.READ)).allowed
     await context.policies.set_owner(Ownership(node_id=root.id, owner=principal("alice", PrincipalType.USER, "provider")))
-    assert (await context.authorization.decide(caller("alice"), root.id, Permission.READ)).allowed
+    assert not (await context.authorization.decide(caller("alice"), root.id, Permission.READ)).allowed
     context.resolver.identities.clear()
     assert not (await context.authorization.decide(caller("alice"), root.id, Permission.READ)).allowed

@@ -2,7 +2,6 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from umbod.core.filesystem import AccessGrant, Ownership, Permission, Principal, PrincipalType
 from umbod.infrastructure import create_access_control_driver
 from umbod.rest.authentication.deps import get_caller_context
 from umbod.rest.filesystem.deps import get_filesystem_content_driver
@@ -83,43 +82,30 @@ def test_missing_duplicate_and_stale_preconditions(
     assert client.get(path).json() == published_file
 
 
-@pytest.mark.parametrize("permissions", [set(), {Permission.DISCOVER}, {Permission.DELETE}, {Permission.DISCOVER, Permission.READ}])
 def test_delete_denials_and_missing_nodes_are_indistinguishable(
-    filesystem_http: FilesystemHttp, published_file: dict[str, object], permissions: set[Permission],
-) -> None:
-    client = filesystem_http.client
-    policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
-    client.portal.call(policies.add_grant, AccessGrant(
-        node_id=UUID(str(published_file["id"])),
-        principal=Principal(type=PrincipalType.USER, issuer="issuer", id="bob"),
-        permissions=permissions, recursive=False,
-    ))
-    for method in ("DELETE",):
-        headers = {"Authorization": "Bearer bob", "If-Match": '"999"'}
-        denied = client.request(method, f"{BASE}/nodes/{published_file['id']}", headers=headers)
-        missing = client.request(method, f"{BASE}/nodes/{uuid4()}", headers=headers)
-        assert denied.status_code == missing.status_code == 403
-        assert denied.json() == missing.json()
-        assert denied.json()["detail"]["code"] == "filesystem_permission_denied"
-        assert denied.headers["cache-control"] == "no-store"
-
-
-def test_authorization_revoked_after_eligibility_is_checked_again(
     filesystem_http: FilesystemHttp, published_file: dict[str, object],
 ) -> None:
     client = filesystem_http.client
-    node_id = UUID(str(published_file["id"]))
-    path = f"{BASE}/nodes/{node_id}"
-    policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
-    bob = Principal(type=PrincipalType.USER, issuer="issuer", id="bob")
-    client.portal.call(policies.add_grant, AccessGrant(
-        node_id=node_id, principal=bob, permissions={Permission.DISCOVER, Permission.DELETE}, recursive=False,
-    ))
-    headers = {"Authorization": "Bearer bob", "If-Match": f'"{published_file["revision"]}"'}
+    headers = {"Authorization": "Bearer bob", "If-Match": '"999"'}
+    denied = client.delete(f"{BASE}/nodes/{published_file['id']}", headers=headers)
+    missing = client.delete(f"{BASE}/nodes/{uuid4()}", headers=headers)
+    assert denied.status_code == missing.status_code == 403
+    assert denied.json() == missing.json()
+    assert denied.headers["cache-control"] == "no-store"
+
+
+def test_authorization_revoked_after_eligibility_is_checked_again(filesystem_http: FilesystemHttp) -> None:
+    from .conftest import create_shared_namespace, replace_shared_access
+
+    client = filesystem_http.client
+    namespace = create_shared_namespace(filesystem_http, "read_write")
+    node = upload_file(client, f"{BASE}/nodes/{namespace.root_node_id}/uploads", "shared", b"bytes").json()
+    path = f"{BASE}/nodes/{node['id']}"
+    headers = {"Authorization": "Bearer bob", "If-Match": f'"{node["revision"]}"'}
     assert client.options(path, headers=headers).status_code == 204
-    client.portal.call(policies.remove_grant, node_id, bob)
+    replace_shared_access(filesystem_http, namespace, "read")
     assert client.delete(path, headers=headers).status_code == 403
-    assert client.get(path).json() == published_file
+    assert client.get(path).json()["name"] == node["name"]
 
 
 @pytest.mark.parametrize("root", [False, True])
@@ -128,10 +114,6 @@ def test_authorized_directory_and_root_are_not_deletable(filesystem_http: Filesy
     root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
     if root:
         node_id = root_id
-        policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
-        client.portal.call(policies.set_owner, Ownership(
-            node_id=UUID(root_id), owner=Principal(type=PrincipalType.USER, issuer="issuer", id="alice"),
-        ))
     else:
         node_id = client.post(f"{BASE}/nodes/{root_id}/directories", json=BODY).json()["id"]
     path = f"{BASE}/nodes/{node_id}"

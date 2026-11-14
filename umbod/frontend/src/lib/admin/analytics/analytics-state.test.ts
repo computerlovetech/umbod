@@ -19,6 +19,98 @@ function setup(): { source: InMemoryLogCounts; state: AnalyticsState } {
 }
 
 describe('log-count query state', () => {
+  it('starts the default stored-log week once and never starts after disposal', async (): Promise<void> => {
+    const source = new InMemoryLogCounts();
+    const state = new AnalyticsState(source, now);
+    expect(state.report).toBe('logs');
+    expect(state.formDraft.preset).toBe('week');
+    expect(await state.start()).toBe(true);
+    expect(await state.start()).toBe(false);
+    expect(source.reportQueries).toHaveLength(1);
+    expect(source.reportQueries[0]).toMatchObject({ filters: [], time_range: { start: '2026-10-24T12:00:00.000Z', end: '2026-10-31T12:00:00.000Z' } });
+    expect(state.summary).toBe('Stored logs · Last 7 days');
+    state.dispose();
+    expect(await state.start()).toBe(false);
+    const disposed = new AnalyticsState(source, now);
+    disposed.dispose();
+    expect(await disposed.start()).toBe(false);
+    expect(source.reportQueries).toHaveLength(1);
+  });
+
+  it('resets only drafts while preserving the applied summary, page and failed retry', async (): Promise<void> => {
+    const { source, state } = setup();
+    source.response = { ...response, has_more: true };
+    state.draft.setPreset('day');
+    state.draft.setBucket('hour');
+    state.draft.selectFilter('source', ' exact ');
+    expect(await state.run()).toBe(true);
+    await state.next();
+    const submitted = state.result;
+    const summary = state.summary;
+    source.failure = new Error('offline');
+    await state.next();
+    const failedQuery = source.reportQueries.at(-1);
+    state.draft.setPreset('custom');
+    state.draft.setOffset('-04:00');
+    state.reportRange.setPreset('day');
+    state.reset();
+    expect(state.report).toBe('logs');
+    expect(state.formDraft.preset).toBe('week');
+    expect(state.draft.preset).toBe('hour');
+    expect(state.draft.offset).toBe('+00:00');
+    expect(state.draft.filters.source).toEqual([]);
+    expect(state.draft.groupBy).toEqual(['severity']);
+    expect(state.draft.bucket).toBe('none');
+    expect(state.result).toBe(submitted);
+    expect(state.summary).toBe(summary);
+    expect(state.page).toBe(2);
+    expect(source.reportQueries).toHaveLength(3);
+    source.failure = undefined;
+    await state.retry();
+    expect(source.reportQueries.at(-1)).toEqual(failedQuery);
+    expect(state.summary).toBe(summary);
+    expect(state.page).toBe(3);
+    state.dispose();
+  });
+
+  it('reports success only for successful current submissions, not validation, failures or obsolete completions', async (): Promise<void> => {
+    const { source, state } = setup();
+    state.draft.setPreset('custom');
+    expect(await state.run()).toBe(false);
+    expect(source.queries).toHaveLength(0);
+    state.draft.setPreset('hour');
+    source.failure = new Error('offline');
+    expect(await state.run()).toBe(false);
+    source.failure = undefined;
+    let complete!: (value: LogCountResponse) => void;
+    source.handler = () => new Promise((resolve) => { complete = resolve; });
+    const obsolete = state.run();
+    source.handler = undefined;
+    expect(await state.run()).toBe(true);
+    complete(response);
+    expect(await obsolete).toBe(false);
+    source.handler = () => new Promise((resolve) => { complete = resolve; });
+    const disposed = state.run();
+    state.dispose();
+    complete(response);
+    expect(await disposed).toBe(false);
+    expect(await state.run()).toBe(false);
+  });
+
+  it('notifies the owner once on access loss and fences subsequent submissions', async (): Promise<void> => {
+    const source = new InMemoryLogCounts();
+    let losses = 0;
+    const state = new AnalyticsState(source, now, () => { losses++; });
+    source.failure = new HttpError(403, 'Forbidden', {});
+    expect(await state.start()).toBe(false);
+    expect(losses).toBe(1);
+    expect(await state.run()).toBe(false);
+    await state.retry();
+    expect(losses).toBe(1);
+    expect(source.queries).toHaveLength(1);
+    state.dispose();
+  });
+
   it('pages submitted snapshots, retries failed pages and resets only on a new run', async (): Promise<void> => {
     const { source, state } = setup();
     source.response = { ...response, has_more: true };

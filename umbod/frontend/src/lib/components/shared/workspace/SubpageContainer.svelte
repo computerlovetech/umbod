@@ -15,7 +15,7 @@
   <header>
     <div>
       <h1 class="admin-title" id={headingId} tabindex="-1">{title}</h1>
-      <p class="admin-lede">{lede}</p>
+      {#if lede}<p class="admin-lede">{lede}</p>{/if}
     </div>
     {#if actions}<div class="page-actions">{@render actions()}</div>{/if}
   </header>

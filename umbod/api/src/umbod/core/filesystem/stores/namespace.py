@@ -14,7 +14,7 @@ from umbod.core.persistence import (
     Unordered,
     UpsertCommand,
 )
-from ..errors import InvalidMove, MissingNode, NameCollision, RevisionConflict, StorageFailure, WrongNodeKind
+from ..errors import RootMutation, InvalidMove, MissingNode, NameCollision, RevisionConflict, StorageFailure, WrongNodeKind
 from ..models import ContentRef, Node, NodeId, NodeKind, NodeMetadata, NodeUpdate, RootParent
 from ..namespace import (
     ROOT_ID,
@@ -141,6 +141,11 @@ class SessionNamespace:
         node = updated_details(previous, details, expected_revision)
         placement_changed = node.name != previous.name or node.parent_id != previous.parent_id
         if placement_changed:
+            source_namespace = await self._managed_root(node_id)
+            if source_namespace == node_id:
+                raise RootMutation()
+            if node.parent_id != previous.parent_id and source_namespace != await self._managed_root(node.parent_id):
+                raise InvalidMove()
             if isinstance(node.parent_id, RootParent):
                 raise InvalidMove()
             await self._validate_destination(node_id, node.parent_id)
@@ -159,6 +164,17 @@ class SessionNamespace:
         if placement_changed:
             await append_discovery_changed(self._session)
         return node.model_copy(deep=True)
+
+    async def _managed_root(self, node_id: NodeId | RootParent) -> NodeId | None:
+        from .namespaces import namespace_policies
+        roots = {policy.root_node_id for policy in await namespace_policies(self._session)}
+        visited: set[NodeId] = set()
+        while not isinstance(node_id, RootParent) and node_id not in visited:
+            if node_id in roots:
+                return node_id
+            visited.add(node_id)
+            node_id = (await self.get_node(node_id)).parent_id
+        return None
 
     async def _validate_destination(self, node_id: NodeId, parent_id: NodeId) -> None:
         parent = require_directory(await self.get_node(parent_id))

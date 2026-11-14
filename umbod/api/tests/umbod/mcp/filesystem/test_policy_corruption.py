@@ -1,56 +1,55 @@
-import pytest
-from fastmcp import Client, FastMCP
+from uuid import UUID, uuid4
 
-from umbod.core.callers import AuthenticationProvenance
-from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
-from umbod.core.filesystem.authorization import VerifiedIdentityResolver
-from umbod.infrastructure import InMemoryContentConfig, create_access_control_driver, create_content_driver, create_filesystem_homes
-from umbod.mcp.filesystem.browsing import FilesystemBrowseTool
-from umbod.mcp.filesystem.factory import DatabaseFilesystemServiceFactory
-from umbod.mcp.filesystem.update import FilesystemUpdateNodeTool
-from tests.persistence_runtime import prepared_inmemory_runtime
-from tests.support.filesystem.access_snapshots import fail_stored_grant_decoding
-from .conftest import ScopedCallerCapture, caller_snapshot
+import pytest
+from fastmcp import Client
+from mcp.shared.exceptions import MCPError
+
+from umbod.core.filesystem import AccessGrant, NodeKind, NodeMetadata, Ownership, Permission, Principal, PrincipalType
+from umbod.core.filesystem.models import UnspecifiedContentType
+from umbod.core.filesystem.namespace import ROOT_ID
+from umbod.infrastructure import create_filesystem_transactions
+from umbod.mcp.filesystem.links import file_resource_uri
+
+from .conftest import FilesystemState, create_filesystem_server
+from .test_visibility import select_caller
 
 
 @pytest.mark.asyncio
-async def test_undecodable_policy_browse_and_update_return_unavailable_not_private(monkeypatch: pytest.MonkeyPatch) -> None:
-    runtime = await prepared_inmemory_runtime()
-    try:
-        database = runtime.database
-        callers = ScopedCallerCapture()
-        callers.current.set(caller_snapshot("alice", "issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED))
-        home = await create_filesystem_homes(database=database, resolver=VerifiedIdentityResolver()).get_or_provision(callers.current.get())
-        grant = AccessGrant(
-            node_id=home.id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="bob"),
-            permissions={Permission.DISCOVER, Permission.WRITE}, recursive=False,
+@pytest.mark.parametrize("node_kind", [NodeKind.FILE, NodeKind.DIRECTORY])
+async def test_unmanaged_ownership_and_grants_never_authorize_tools_resources_or_discovery(
+    filesystem_state: FilesystemState, node_kind: NodeKind,
+) -> None:
+    filesystem = create_filesystem_server(filesystem_state, filtered=False)
+    principal = Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob")
+    async with create_filesystem_transactions(database=filesystem.database).transaction() as session:
+        unmanaged = await session.namespace.create_node(
+            ROOT_ID, "unmanaged", node_kind, NodeMetadata(content_type=UnspecifiedContentType(), attributes={}),
         )
-        await create_access_control_driver(database=database).add_grant(grant)
-        fail_stored_grant_decoding(database, home.id, monkeypatch)
-        services = DatabaseFilesystemServiceFactory(
-            database, create_content_driver(InMemoryContentConfig(type="inmemory")), 1024, "issuer", "http://localhost", max_read_bytes=1_048_576)
-        server = FastMCP()
-        server.add_tool(FilesystemBrowseTool(callers, services))
-        server.add_tool(FilesystemUpdateNodeTool(callers, services))
-        async with Client(server) as client:
+        for node_id in (ROOT_ID, unmanaged.id):
+            await session.access_control.set_owner(Ownership(node_id=node_id, owner=principal))
+            await session.access_control.add_grant(AccessGrant(
+                node_id=node_id, principal=principal, permissions=set(Permission), recursive=True,
+            ))
+    select_caller(filesystem, "bob")
+    await filesystem.runtime.reconcile()
+    async with Client(filesystem.server) as client:
+        missing = await client.call_tool("get_filesystem_node", {"node_id": str(uuid4())}, raise_on_error=False)
+        for node_id in (ROOT_ID, unmanaged.id):
+            denied = await client.call_tool("get_filesystem_node", {"node_id": str(node_id)}, raise_on_error=False)
+            assert denied.is_error
+            assert denied.content[:1] == missing.content[:1]
+            assert denied.meta["computerlove.tech/umbod"]["guidance"] == missing.meta["computerlove.tech/umbod"]["guidance"]
             inspected = await client.call_tool("filesystem_browse", {
-                "operation": "stat", "target": {"type": "node", "node_id": str(home.id)},
-            })
-            node = inspected.structured_content["result"]["node"]
-            assert node["permissions"]["can_write"] is True and node["permissions"]["can_share"] is True
-            assert node["visible_to"] == {"type": "unavailable"}
-            assert node["sharing"] == {"can_share": False}
-            assert 'visible_to={"type":"unavailable"}' in inspected.content[0].text
-            assert "sharing unavailable" in inspected.content[0].text
-            assert "not permitted" not in inspected.content[0].text
-            assert "no manageable direct grants" not in inspected.content[0].text
-            updated = await client.call_tool("update_filesystem_node", {
-                "node_id": str(home.id), "name": "renamed", "expected_revision": home.revision,
-            })
-            assert updated.structured_content["name"] == "renamed"
-            assert updated.structured_content["revision"] == home.revision + 1
-            assert updated.structured_content["visible_to"] == {"type": "unavailable"}
-            assert updated.structured_content["sharing"] == {"can_share": False}
-            assert updated.structured_content["permissions"]["can_write"] is True
-    finally:
-        await runtime.shutdown()
+                "operation": "stat", "target": {"type": "node", "node_id": str(node_id)},
+            }, raise_on_error=False)
+            assert inspected.is_error
+            changed = await client.call_tool("update_filesystem_node", {
+                "node_id": str(node_id), "expected_revision": 1, "name": "inaccessible",
+            }, raise_on_error=False)
+            assert changed.is_error
+            with pytest.raises(MCPError, match="filesystem_permission_denied"):
+                await client.read_resource(file_resource_uri(UUID(str(node_id))))
+    filtered = create_filesystem_server(filesystem_state, filtered=True)
+    async with Client(filtered.server) as client:
+        assert {tool.name for tool in await client.list_tools()} == {"filesystem_browse"}
+        assert await client.list_resource_templates() == []

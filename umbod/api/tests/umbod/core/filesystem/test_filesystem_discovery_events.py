@@ -6,7 +6,7 @@ import pytest_asyncio
 
 from umbod.core.filesystem.authorization import FILESYSTEM_DISCOVERY_CHANGED
 from umbod.core.filesystem.models import (
-    AccessGrant, ContentRef, NodeKind, NodeMetadata, Ownership, Permission,
+    AccessGrant, ContentRef, NodeId, NodeKind, NodeMetadata, Ownership, Permission,
     Principal, PrincipalType, UnspecifiedContentType,
 )
 from umbod.core.filesystem.namespace import ROOT_ID
@@ -15,7 +15,8 @@ from umbod.core.filesystem.stores import (
 )
 from umbod.core.filesystem.stores.access_control import SessionAccessControl
 from umbod.core.filesystem.stores.namespace import SessionNamespace
-from umbod.core.filesystem.stores.sharing import DatabaseSharingTransactions
+from umbod.core.filesystem.stores.namespaces import persist_policy
+from tests.umbod.core.filesystem.test_effective_permissions import policy
 from umbod.core.messaging.stores.event_stream import DatabaseEventStream
 from umbod.core.persistence import Database, PersistenceRuntime, ReadSession, TransactionMode
 from tests.persistence_runtime import prepared_inmemory_runtime
@@ -58,7 +59,7 @@ async def test_namespace_creation_and_deletion_emit_sanitized_events_but_content
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("mutation", ["owner", "grant", "remove", "clear", "sharing"])
+@pytest.mark.parametrize("mutation", ["owner", "grant", "remove", "clear"])
 async def test_policy_mutations_emit_sanitized_events(
     event_runtime: PersistenceRuntime, mutation: str,
 ) -> None:
@@ -75,9 +76,6 @@ async def test_policy_mutations_emit_sanitized_events(
         await policies.remove_grant(ROOT_ID, subject())
     elif mutation == "clear":
         await policies.clear_node(ROOT_ID)
-    else:
-        async with DatabaseSharingTransactions(event_runtime.database).transaction() as session:
-            await session.grants.upsert(grant)
     observed = await events.list_after(0, 100)
     assert len(observed) == 1
     assert observed[0].event.event_type == FILESYSTEM_DISCOVERY_CHANGED
@@ -98,34 +96,41 @@ async def test_namespace_policy_and_events_rollback_together(
             raise ValueError("abort")
     snapshot = await DatabaseFilesystemAuthorizationReader(event_runtime.database).read()
     assert snapshot.nodes == ()
-    assert snapshot.ownerships == ()
+    assert snapshot.namespaces == ()
     assert await DatabaseEventStream(event_runtime.database).list_after(0, 100) == []
 
 
 class ConcurrentPolicyChangeDatabase:
-    def __init__(self, database: Database) -> None:
+    def __init__(self, database: Database, node_id: NodeId) -> None:
         self.database = database
+        self.node_id = node_id
 
     @asynccontextmanager
     async def read_session(self) -> AsyncIterator[ReadSession]:
         async with self.database.read_session() as read_session:
             async with self.database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
-                await SessionAccessControl(session).clear_node(ROOT_ID)
+                await SessionAccessControl(session).clear_node(self.node_id)
             yield read_session
 
 
 @pytest.mark.asyncio
-async def test_reader_observes_committed_nodes_owners_and_grants_without_writer_reservation(
+async def test_reader_captures_coherent_owner_and_grant_facts_without_writer_reservation(
     event_runtime: PersistenceRuntime,
 ) -> None:
     async with event_runtime.database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
-        await SessionNamespace(session).initialize_root()
-        await SessionAccessControl(session).set_owner(Ownership(node_id=ROOT_ID, owner=subject()))
+        namespace = SessionNamespace(session)
+        await namespace.initialize_root()
+        namespace_root = await namespace.create_node(ROOT_ID, "Namespace", NodeKind.DIRECTORY, metadata())
+        node = await namespace.create_node(namespace_root.id, "File", NodeKind.FILE, metadata())
+        await persist_policy(session, policy(namespace_root.id))
+        await SessionAccessControl(session).set_owner(Ownership(node_id=node.id, owner=subject()))
         await SessionAccessControl(session).add_grant(AccessGrant(
-            node_id=ROOT_ID, principal=subject(), permissions={Permission.DISCOVER}, recursive=True,
+            node_id=node.id, principal=subject(), permissions={Permission.DISCOVER}, recursive=True,
         ))
-    reader = DatabaseFilesystemAuthorizationReader(ConcurrentPolicyChangeDatabase(event_runtime.database))
+    reader = DatabaseFilesystemAuthorizationReader(ConcurrentPolicyChangeDatabase(event_runtime.database, node.id))
     snapshot = await reader.read()
-    assert len(snapshot.nodes) == len(snapshot.ownerships) == len(snapshot.grants) == 1
+    assert len(snapshot.nodes) == 3
+    assert len(snapshot.ownerships) == len(snapshot.grants) == 1
     assert snapshot.ownerships[0].owner == subject()
     assert snapshot.grants[0].permissions == frozenset({Permission.DISCOVER})
+    assert snapshot.namespaces[0].root_node_id == namespace_root.id

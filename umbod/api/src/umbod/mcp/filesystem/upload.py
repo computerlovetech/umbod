@@ -29,7 +29,8 @@ class FilesystemUploadTool(Tool):
         super().__init__(
             name="filesystem_upload",
             description=(
-                "Create a private file with UTF-8 text or canonical padded base64 content. "
+                "Create a file in the selected namespace with UTF-8 text or canonical padded base64 content. "
+                "Shared namespace access applies to the file; it is not private to its creator. "
                 "Maximum 10485760 decoded bytes (10 MiB); lower server limits apply. "
                 "One-shot upload, without chunking or resumability. Retrying is not idempotent. "
                 "Returns file metadata and an MCP resource link, never uploaded content. "

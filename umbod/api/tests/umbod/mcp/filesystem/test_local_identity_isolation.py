@@ -9,13 +9,13 @@ from .conftest import FilesystemMcp, caller_snapshot
 @pytest.mark.parametrize("provenance", [
     AuthenticationProvenance.LOCAL_SIMULATION, AuthenticationProvenance.LOCAL_TEST,
 ])
-async def test_mcp_keeps_strict_identity_denial_even_with_matching_explicit_grants(
+async def test_mcp_keeps_strict_identity_denial_even_with_matching_personal_namespace(
     filesystem_invocation_mcp: FilesystemMcp, provenance: AuthenticationProvenance,
 ) -> None:
     filesystem_invocation_mcp.callers.current.set(caller_snapshot(
         "alice", "https://issuer", ("writers",), provenance,
     ))
     async with Client(filesystem_invocation_mcp.server) as client:
-        result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
+        result = await client.call_tool("filesystem_browse", {"operation": "home"}, raise_on_error=False)
     assert result.is_error
     assert "filesystem_permission_denied" in result.content[0].text

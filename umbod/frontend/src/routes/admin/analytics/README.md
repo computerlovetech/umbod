@@ -1,11 +1,12 @@
 ---
 type: Software Module
-title: Log analytics route
-description: Thin route composition for administrator log-count queries.
+title: Legacy log analytics route
+description: Compatibility redirect to Insights log analytics.
 ---
 
 # Files
 
-- [Page](+page.svelte) — View-scoped analytics state within the existing capability-checked administrator layout.
+- [Redirect](./+page.ts) — Preserves query and fragment while navigating to Insights log analytics.
+- [Insights routes](../insights/README.md) — Current administration Insights destinations.
 - [Presentation](../../../lib/components/admin/analytics/README.md) — Feature-owned controls and results.
 - [State and contracts](../../../lib/admin/analytics/README.md) — Validated log-count boundary and query lifecycle.

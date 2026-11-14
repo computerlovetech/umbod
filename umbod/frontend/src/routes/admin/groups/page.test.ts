@@ -33,7 +33,13 @@ describe('groups route', () => {
     const body = render(GroupsPage, { props: { data: { groups: [], accountIdentity: { kind: 'hidden' } } } }).body;
     const document = new Window().document;
     document.body.innerHTML = body;
+    expect(document.querySelectorAll('h1')).toHaveLength(1);
     expect(document.querySelector('h1')?.textContent).toBe('Groups');
+    expect(document.querySelector('.subpage-container > header .page-actions button')?.textContent).toBe('Add Group');
+    expect(document.querySelector('section[aria-labelledby="groups-title"]')).not.toBeNull();
+    expect(document.querySelector('#groups-title')?.textContent).toBe('Groups');
+    expect(document.querySelectorAll('.admin-page')).toHaveLength(1);
+    expect(body).not.toContain('Assign group permissions');
     expect(body).not.toContain('admin-eyebrow');
     expect(document.querySelector('nav[aria-label="Administration navigation"] a[aria-current="page"]')?.getAttribute('href')).toBe('/admin/groups');
     expect(workspaceNavigation(false).some((item) => item.href === '/admin/groups')).toBe(false);

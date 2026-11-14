@@ -41,14 +41,16 @@ describe('admin shell logout', () => {
     expect(shell.body).toContain('href="/dashboard"');
     expect(shell.body).not.toContain('Administration</a>');
     expect(shell.body).not.toContain('href="/admin"');
-    expect(shell.body).toContain('href="/admin/analytics"');
+    expect(shell.body).toContain('href="/admin/insights/agent-behaviour"');
+    expect(shell.body).not.toContain('href="/admin/analytics"');
+    expect(shell.body).not.toContain('href="/admin/agent-behaviour"');
     expect(shell.body).toContain('href="/admin/connectors"');
     expect(shell.body).toContain('href="/admin/group-permissions/connectors"');
     expect(shell.body).not.toContain('href="/admin/group-permissions"');
     expect(shell.body).not.toContain('href="/admin/filesystem"');
     expect(shell.body).not.toContain('Filesystem</a>');
     expect(Array.from(document.querySelectorAll('nav a'), (link): string => link.textContent.trim())).toEqual([
-      'Connectors', 'Groups', 'Group permissions', 'Log analytics', 'Instance settings'
+      'Connectors', 'Groups', 'Group permissions', 'Insights'
     ]);
     expect(document.querySelector('nav a[aria-current="page"]')?.textContent.trim()).toBe('Connectors');
     expect(document.querySelector('h1')).toBeNull();

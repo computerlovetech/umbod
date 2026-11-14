@@ -11,8 +11,8 @@ from .conftest import FilesystemMcp
 
 _FILESYSTEM_TOOLS: tuple[str, ...] = (
     "filesystem_browse", "filesystem_upload", "filesystem_begin_upload", "filesystem_complete_upload",
-    "update_filesystem_node", "filesystem_delete_file", "filesystem_search_sharing_recipients",
-    "filesystem_share", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
+    "update_filesystem_node", "filesystem_delete_file", "filesystem_share", "filesystem_search_sharing_recipients",
+    "get_filesystem_node", "list_filesystem_children",
     "create_filesystem_file", "create_filesystem_directory",
 )
 

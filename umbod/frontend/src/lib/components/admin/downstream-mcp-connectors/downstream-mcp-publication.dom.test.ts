@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
+import * as adminApiModule from '$lib/admin/infrastructure/admin-api';
+import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
+import { policyFixture, serverFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
 import { HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
 import type { DownstreamMcpConnectorsRoute } from '$lib/admin/downstream-mcp-connectors-api';
 import DownstreamMcpWorkspace from './DownstreamMcpWorkspace.svelte';
@@ -57,6 +60,7 @@ afterEach(async (): Promise<void> => {
   component = undefined;
   document.body.replaceChildren();
   vi.clearAllMocks();
+  vi.restoreAllMocks();
 });
 
 function renderWorkspace(published: boolean): { api: ReturnType<typeof mutationApi>; navigate: ReturnType<typeof vi.fn> } {
@@ -86,6 +90,169 @@ async function openConfirmation(label: string): Promise<HTMLElement> {
   if (!dialog) throw new Error('Publication confirmation is missing');
   return dialog;
 }
+
+function renderPersonalWorkspace(): {
+  composite: adminApiModule.AdminApi;
+  state: DownstreamMcpWorkspaceState;
+  operations: DownstreamMcpMutationState;
+  api: ReturnType<typeof mutationApi>;
+  navigate: ReturnType<typeof vi.fn>;
+} {
+  const connector = serverFixture();
+  const personalApi = new InMemoryPersonalServers([connector], [policyFixture()]);
+  const composite = new adminApiModule.AdminApi({ request: vi.fn().mockRejectedValue(new Error('Unexpected transport request')) });
+  vi.spyOn(composite.personalServers, 'get').mockImplementation((id) => personalApi.get(id));
+  vi.spyOn(composite.personalServers, 'policy').mockImplementation((id) => personalApi.policy(id));
+  vi.spyOn(composite.personalServers, 'replacePolicy').mockImplementation((id, input) => personalApi.replacePolicy(id, input));
+  vi.spyOn(adminApiModule, 'adminApi').mockReturnValue(composite);
+  const bundle: DownstreamMcpWorkspaceBundle = { mode: 'personal', connector };
+  const api = mutationApi(bundle);
+  const navigate = vi.fn();
+  const operations = new DownstreamMcpMutationState(api, navigate);
+  ownedOperations = operations;
+  const state = new DownstreamMcpWorkspaceState(undefined, undefined, bundle, undefined, undefined, undefined, undefined, undefined, operations);
+  const target = document.createElement('div');
+  document.body.append(target);
+  component = mount(DownstreamMcpWorkspace, {
+    target, props: { connectors: [connector], selected: connector, state }
+  });
+  flushSync();
+  return { composite, state, operations, api, navigate };
+}
+
+async function beginPolicyReplacement(): Promise<HTMLDialogElement> {
+  button('Open actions for Personal server').click();
+  await tick();
+  button('Edit', document.querySelector('[role="menu"]')!).click();
+  await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>('#personal-name')?.value).toBe('Personal server'));
+  const scopes = document.querySelector<HTMLInputElement>('#personal-edit-scopes');
+  if (!scopes) throw new Error('Requested scopes input is missing');
+  scopes.value = 'records:read';
+  scopes.dispatchEvent(new Event('input', { bubbles: true }));
+  await tick();
+  button('Review changes').click();
+  await tick();
+  button('Save settings').click();
+  await tick();
+  const dialog = document.querySelector('dialog');
+  if (!dialog) throw new Error('Personal server editor is missing');
+  return dialog;
+}
+
+describe('personal MCP editing from the action menu', (): void => {
+  test('keeps a pending policy replacement mounted and locked through window Escape and native cancel', async (): Promise<void> => {
+    const { composite, operations, state, api } = renderPersonalWorkspace();
+    type Policy = Awaited<ReturnType<typeof composite.personalServers.replacePolicy>>;
+    let complete!: (policy: Policy) => void;
+    vi.mocked(composite.personalServers.replacePolicy).mockImplementation(() => new Promise<Policy>((resolve) => { complete = resolve; }));
+    const dialog = await beginPolicyReplacement();
+
+    expect(composite.personalServers.replacePolicy).toHaveBeenCalledOnce();
+    expect(operations.locked).toBe(true);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    await tick();
+    expect(document.querySelector('dialog')).toBe(dialog);
+    expect(state.modal).toBe('personal-edit');
+    expect(operations.formLocked).toBe(true);
+
+    const cancel = new Event('cancel', { cancelable: true });
+    dialog.dispatchEvent(cancel);
+    await tick();
+    expect(cancel.defaultPrevented).toBe(true);
+    expect(document.querySelectorAll('dialog')).toHaveLength(1);
+    expect(document.querySelector('dialog')).toBe(dialog);
+    expect(dialog.open).toBe(true);
+    expect(operations.locked).toBe(true);
+    button('Open actions for Personal server').click();
+    await tick();
+    const menu = document.querySelector('[role="menu"]');
+    expect(menu).not.toBeNull();
+    for (const label of ['Edit', 'Publish', 'Delete']) expect(button(label, menu!).disabled).toBe(true);
+    expect(composite.personalServers.replacePolicy).toHaveBeenCalledOnce();
+    expect(api.publish).not.toHaveBeenCalled();
+    expect(api.delete).not.toHaveBeenCalled();
+
+    complete({ ...policyFixture(), revision: 'r2', requested_scopes: ['records:read'] });
+    await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
+    expect(state.modal).toBeNull();
+    expect(operations.locked).toBe(false);
+    expect(composite.personalServers.replacePolicy).toHaveBeenCalledOnce();
+  });
+
+  test('retains unknown-outcome blocking after closing the editor and offers reload without retrying', async (): Promise<void> => {
+    const { composite, operations, api, navigate } = renderPersonalWorkspace();
+    let reject!: (error: Error) => void;
+    vi.mocked(composite.personalServers.replacePolicy).mockImplementation(() => new Promise((_resolve, rejectReplacement) => { reject = rejectReplacement; }));
+    const dialog = await beginPolicyReplacement();
+
+    reject(new NetworkError(new Error('private replacement diagnostic')));
+    await vi.waitFor(() => expect(dialog.querySelector('[role="alert"]')?.textContent).toContain('The outcome is unknown'));
+    const message = dialog.querySelector('[role="alert"]')!.textContent!;
+    expect(operations.locked).toBe(true);
+    button('Open actions for Personal server').click();
+    await tick();
+    const menu = document.querySelector('[role="menu"]');
+    expect(menu).not.toBeNull();
+    for (const label of ['Publish', 'Delete']) expect(button(label, menu!).disabled).toBe(true);
+
+    button('Close', dialog).click();
+    await tick();
+
+    expect(document.querySelector('dialog')).toBeNull();
+    expect(operations.formLocked).toBe(false);
+    expect(operations.blocked).toBe(true);
+    expect(operations.locked).toBe(true);
+    expect(operations.message).toBe(message);
+    expect(document.querySelector('[role="alert"]')?.textContent).toContain(message);
+    expect(document.body.textContent).not.toContain('private replacement diagnostic');
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(button('Reload servers').disabled).toBe(false);
+    for (const action of ['publish', 'delete'] as const) {
+      operations.request(action, 'personal', 'Personal server');
+      expect(operations.pending).toBeNull();
+    }
+    expect(composite.personalServers.replacePolicy).toHaveBeenCalledOnce();
+    expect(api.publish).not.toHaveBeenCalled();
+    expect(api.delete).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+
+    button('Reload servers').click();
+    await tick();
+    expect(navigate).toHaveBeenCalledExactlyOnceWith();
+    expect(composite.personalServers.replacePolicy).toHaveBeenCalledOnce();
+    expect(operations.blocked).toBe(true);
+  });
+
+  test('opens the selected personal server editor and dismisses it without changing the server', async (): Promise<void> => {
+    const { composite, state } = renderPersonalWorkspace();
+    const { get, policy, replacePolicy: replace } = composite.personalServers;
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(get).not.toHaveBeenCalled();
+    expect(policy).not.toHaveBeenCalled();
+    button('Open actions for Personal server').click();
+    await tick();
+    const menu = document.querySelector('[role="menu"]');
+    expect(menu).not.toBeNull();
+    expect(menu?.textContent).not.toContain('Configure');
+    expect(button('Edit', menu!).disabled).toBe(false);
+    button('Edit', menu!).click();
+    await tick();
+
+    await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>('#personal-name')?.value).toBe('Personal server'));
+    expect(document.querySelector('[role="dialog"]')?.textContent).toContain('Edit MCP server with personal authorization');
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(get).toHaveBeenCalledExactlyOnceWith('personal');
+    expect(policy).toHaveBeenCalledExactlyOnceWith('personal');
+
+    button('Cancel', document.querySelector('[role="dialog"]')!).click();
+    await tick();
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    expect(state.modal).toBeNull();
+    expect(replace).not.toHaveBeenCalled();
+    expect(document.querySelector('article')?.textContent).toContain('Personal server');
+  });
+});
 
 describe('shared MCP publication from the action menu', (): void => {
   test.each([

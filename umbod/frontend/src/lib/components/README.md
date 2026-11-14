@@ -8,8 +8,10 @@ description: "Reusable and actor-owned Svelte presentation and interaction modul
 
 - [Component index](../../../COMPONENT_INDEX.md) — Reusable UI building blocks, their locations, and when to use them.
 - [admin/](./admin/) — Administration views and controls.
+- [Insights](./admin/insights/README.md) — Identity-scoped administration insights navigation and feature lifetimes.
 - [Log analytics](./admin/analytics/README.md) — Feature-owned administrator query form and results table.
 - [Connector list empty state](./admin/connectors/ConnectorListEmptyState.svelte) — Consistent empty-list presentation for catalog, OpenAPI, and MCP tabs.
+- [Agent behaviour](./admin/agent-behaviour/README.md) — Definition forms and self-reported diagnostic report inspection.
 - [Group management](./admin/groups/README.md) — Central administrator group catalogue forms.
 - [dashboard](./dashboard/README.md) — User catalogue workspace.
 - [feedback/](./feedback/) — Toast presentation and state.

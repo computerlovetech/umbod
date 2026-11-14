@@ -8,19 +8,21 @@
 
 <script lang="ts">
   import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
+  import '$lib/styles/subpage-navigation.css';
 
-  let { links, activeId, label, pending = false, loadingLabel = 'Loading page' }: {
+  let { links, activeId, label, current = 'page', pending = false, loadingLabel = 'Loading page' }: {
     links: readonly SubpageLink[];
     activeId: string;
     label: string;
+    current?: 'page' | 'location';
     pending?: boolean;
     loadingLabel?: string;
   } = $props();
 </script>
 
-<nav aria-label={label}>
+<nav class="subpage-navigation" aria-label={label}>
   {#each links as link (link.id)}
-    <a class={['subpage-link', { active: activeId === link.id }]} href={link.href} aria-current={activeId === link.id ? 'page' : undefined}>{link.label}</a>
+    <a class="subpage-navigation-item" href={link.href} aria-current={activeId === link.id ? current : undefined}>{link.label}</a>
   {/each}
 </nav>
 {#if pending}
@@ -28,9 +30,5 @@
 {/if}
 
 <style>
-  nav { border-bottom: 1px solid var(--admin-border); display: flex; flex-wrap: wrap; gap: 12px 24px; margin-bottom: 32px; }
-  a { border-bottom: 2px solid transparent; color: var(--admin-muted); font-size: 14px; font-weight: 600; margin-bottom: -1px; padding: 0 2px 10px; text-decoration: none; }
-  a:hover { color: var(--admin-ink); }
-  a.active { border-bottom-color: var(--admin-accent); color: var(--admin-accent); }
   .navigation-loading { display: flex; justify-content: center; margin: -16px 0 16px; min-height: 18px; }
 </style>

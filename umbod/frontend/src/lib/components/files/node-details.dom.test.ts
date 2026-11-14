@@ -43,7 +43,7 @@ async function setup(permissions?: NodeSummary['permissions']): Promise<{ state:
     const browse = api.filesystem.browse;
     vi.spyOn(api.filesystem, 'browse').mockImplementation(async (target, signal) => {
       const result = await browse(target, signal);
-      return { ...result, node: { ...result.node, permissions }, entries: result.entries.map((entry) => ({ ...entry, permissions })), capabilities: result.capabilities.map((entry) => ({ ...entry, rename: false, move: false, edit_description: false, delete: false, share: false })) };
+      return { ...result, node: { ...result.node, permissions }, entries: result.entries.map((entry) => ({ ...entry, permissions })), capabilities: result.capabilities.map((entry) => ({ ...entry, rename: false, move: false, edit_description: false, delete: false })) };
     });
   }
   const state = new FilesState(api);
@@ -110,6 +110,19 @@ describe('node details', (): void => {
     expect(browse).not.toHaveBeenCalled();
     expect(probe).not.toHaveBeenCalled();
     expect(remove).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    [{ type: 'namespace', namespace_id: rootId, kind: 'personal', name: 'Personal namespace' }, 'Personal namespace'],
+    [{ type: 'namespace', namespace_id: folderId, kind: 'shared', name: 'Design' }, 'Design'],
+    [{ type: 'restricted' }, 'Restricted']
+  ] satisfies [NodeSummary['visible_to'], string][])('renders compact visibility %j', async (visible_to, label): Promise<void> => {
+    const inputs = await setupActions();
+    inputs.select(filesystemNode({ ...inputs.node!, visible_to }));
+    await tick();
+    await details();
+    expect(value('Namespace')).toBe(label);
+    expect(document.querySelector('dialog')?.textContent).not.toMatch(/Owner|Grants/);
   });
 
   test('opening details focuses the close control instead of the non-editable title', async (): Promise<void> => {
@@ -179,7 +192,7 @@ describe('node details', (): void => {
     const { state } = await setup();
     await state.load(rootId);
     await tick();
-    const trigger = document.querySelector<HTMLButtonElement>('.node-identity')!.parentElement!.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]');
+    const trigger = document.querySelector<HTMLButtonElement>('[aria-label="Location actions"] button[aria-haspopup="menu"]');
     expect(trigger).not.toBeNull();
     trigger!.click();
     await tick();
@@ -187,7 +200,8 @@ describe('node details', (): void => {
     button('View details').click();
     await tick();
     expect(value('Type')).toBe('Folder');
-    expect(value('Name')).toBe('Files');
-    expect(document.querySelector('.node-identity')!.textContent).toContain('Can edit');
+    expect(value('Name')).toBe('My files');
+    expect(document.querySelector('.node-identity h1')?.textContent).toBe('Files');
+    expect(document.querySelector('.node-identity [aria-current="page"]')?.textContent).toBe('My files');
   });
 });

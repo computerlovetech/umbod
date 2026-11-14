@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, model_validator
 
 from ..models import AccessGrant, NodeId, NodeKind, Ownership, Permission, Principal, RootParent
 from ..namespace import ROOT_ID
+from ..namespaces.models import NamespacePolicy
 from .models import ResolvedIdentity
 
 
@@ -15,7 +16,6 @@ FILESYSTEM_DISCOVERY_CHANGED = "filesystem.discovery_changed"
 class FilesystemOperation(StrEnum):
     HOME = "home"
     INSPECT = "inspect"
-    INSPECT_ROOT = "inspect_root"
     LIST = "list"
     CREATE = "create"
     UPDATE_METADATA = "update_metadata"
@@ -47,9 +47,10 @@ class FilesystemAuthorizationSnapshot(BaseModel):
     nodes: tuple[AuthorizationNode, ...]
     ownerships: tuple[Ownership, ...]
     grants: tuple[AuthorizationGrant, ...]
+    namespaces: tuple[NamespacePolicy, ...]
 
     @model_validator(mode="after")
-    def validate_unique_nodes_and_owners(self) -> Self:
+    def validate_unique_nodes(self) -> Self:
         if len({node.node_id for node in self.nodes}) != len(self.nodes):
             raise ValueError("Duplicate authorization node")
         if len({owner.node_id for owner in self.ownerships}) != len(self.ownerships):
@@ -60,33 +61,41 @@ class FilesystemAuthorizationSnapshot(BaseModel):
 class EffectivePermissionEvaluator:
     def __init__(
         self, principals: frozenset[Principal], nodes: Iterable[AuthorizationNode],
-        ownerships: Iterable[Ownership], grants: Iterable[Union[AccessGrant, AuthorizationGrant]],
+        ownerships: Iterable[Ownership], grants: Iterable[AccessGrant | AuthorizationGrant],
+        namespaces: Iterable[NamespacePolicy],
     ) -> None:
         self._principals = principals
-        self._nodes = {node.node_id: node for node in nodes}
+        policies = tuple(namespaces)
+        self._namespaces = {policy.root_node_id: policy for policy in policies}
+        if len(self._namespaces) != len(policies):
+            raise ValueError("Duplicate namespace roots")
+        ancestry = tuple(nodes)
+        self._nodes = {node.node_id: node for node in ancestry}
+        if len(self._nodes) != len(ancestry):
+            raise ValueError("Duplicate authorization node")
         self._owners = {owner.node_id: owner.owner for owner in ownerships}
         self._direct: dict[NodeId, frozenset[Permission]] = {}
         self._recursive: dict[NodeId, frozenset[Permission]] = {}
         for grant in grants:
             if grant.principal not in principals:
                 continue
-            self._direct[grant.node_id] = self._direct.get(grant.node_id, frozenset()) | frozenset(grant.permissions)
+            permissions = frozenset(grant.permissions)
+            self._direct[grant.node_id] = self._direct.get(grant.node_id, frozenset()) | permissions
             if grant.recursive is True:
-                self._recursive[grant.node_id] = self._recursive.get(grant.node_id, frozenset()) | frozenset(grant.permissions)
-        self._lineage_permissions: dict[NodeId, frozenset[Permission]] = {}
+                self._recursive[grant.node_id] = self._recursive.get(grant.node_id, frozenset()) | permissions
+        self._inherited: dict[NodeId, frozenset[Permission]] = {}
+        self._valid: set[NodeId] = set()
         self._invalid: set[NodeId] = set()
 
     def _resolve_lineage(self, node_id: NodeId) -> bool:
-        path: list[NodeId] = []
         visited: set[NodeId] = set()
         current_id = node_id
-        while current_id not in self._lineage_permissions:
+        while current_id not in self._valid:
             if current_id in visited or current_id in self._invalid or current_id not in self._nodes:
                 self._invalid.update(visited)
                 return False
             visited.add(current_id)
             current = self._nodes[current_id]
-            path.append(current_id)
             if isinstance(current.parent_id, RootParent):
                 if current_id != ROOT_ID or current.kind != NodeKind.DIRECTORY:
                     self._invalid.update(visited)
@@ -97,51 +106,77 @@ class EffectivePermissionEvaluator:
                 self._invalid.update(visited)
                 return False
             current_id = parent.node_id
-        for current_id in reversed(path):
-            current = self._nodes[current_id]
-            inherited = (
-                frozenset() if isinstance(current.parent_id, RootParent)
-                else self._lineage_permissions[current.parent_id]
-            )
-            self._lineage_permissions[current_id] = inherited | (
-                self._recursive.get(current_id, frozenset()) if current.kind == NodeKind.DIRECTORY else frozenset()
-            )
-        return node_id in self._lineage_permissions
+        self._valid.update(visited)
+        return True
+
+    def namespace(self, node_id: NodeId) -> NamespacePolicy | None:
+        if node_id == ROOT_ID or not self._resolve_lineage(node_id):
+            return None
+        while node_id != ROOT_ID:
+            if node_id in self._namespaces:
+                policy = self._namespaces[node_id]
+                return policy if self._nodes[node_id].kind == NodeKind.DIRECTORY else None
+            parent = self._nodes[node_id].parent_id
+            if isinstance(parent, RootParent):
+                return None
+            node_id = parent
+        return None
 
     def permissions(self, node_id: NodeId) -> frozenset[Permission]:
-        if not self._resolve_lineage(node_id) or node_id not in self._owners:
+        policy = self.namespace(node_id)
+        if policy is None:
             return frozenset()
-        if self._owners[node_id] in self._principals:
+        baseline = policy.permissions(self._principals)
+        if node_id == policy.root_node_id:
+            return baseline
+        if self._owners.get(node_id) in self._principals:
             return frozenset(Permission)
-        return self._direct.get(node_id, frozenset()) | self._lineage_permissions[node_id]
+        if policy.kind == "personal" and policy.owners.intersection(self._principals):
+            baseline |= {Permission.SHARE}
+        return baseline | self._direct.get(node_id, frozenset()) | self._ancestor_permissions(node_id, policy.root_node_id)
+
+    def _ancestor_permissions(self, node_id: NodeId, namespace_root: NodeId) -> frozenset[Permission]:
+        path: list[NodeId] = []
+        current_id = node_id
+        while current_id != namespace_root and current_id not in self._inherited:
+            path.append(current_id)
+            parent = self._nodes[current_id].parent_id
+            if isinstance(parent, RootParent):
+                return frozenset()
+            current_id = parent
+        inherited = self._inherited.get(current_id, frozenset())
+        if current_id != namespace_root and self._nodes[current_id].kind == NodeKind.DIRECTORY:
+            inherited |= self._recursive.get(current_id, frozenset())
+        for current_id in reversed(path):
+            current = self._nodes[current_id]
+            self._inherited[current_id] = inherited
+            if current.kind == NodeKind.DIRECTORY:
+                inherited |= self._recursive.get(current_id, frozenset())
+        return self._inherited[node_id]
 
 
 def effective_permissions(
-    principals: frozenset[Principal],
-    node_id: NodeId,
-    ownerships: tuple[Ownership, ...],
-    grants: Iterable[Union[AccessGrant, AuthorizationGrant]],
-    nodes: Iterable[AuthorizationNode],
+    principals: frozenset[Principal], node_id: NodeId,
+    ownerships: Iterable[Ownership], grants: Iterable[AccessGrant | AuthorizationGrant],
+    nodes: Iterable[AuthorizationNode], namespaces: Iterable[NamespacePolicy],
 ) -> frozenset[Permission]:
-    return EffectivePermissionEvaluator(principals, nodes, ownerships, grants).permissions(node_id)
+    return EffectivePermissionEvaluator(principals, nodes, ownerships, grants, namespaces).permissions(node_id)
 
 
 def permitted_operations(
     snapshot: FilesystemAuthorizationSnapshot, identity: ResolvedIdentity
 ) -> frozenset[FilesystemOperation]:
-    evaluator = EffectivePermissionEvaluator(identity.principals, snapshot.nodes, snapshot.ownerships, snapshot.grants)
+    evaluator = EffectivePermissionEvaluator(identity.principals, snapshot.nodes, snapshot.ownerships, snapshot.grants, snapshot.namespaces)
     operations: set[FilesystemOperation] = {FilesystemOperation.HOME}
     for node in snapshot.nodes:
         permissions = evaluator.permissions(node.node_id)
         if Permission.DISCOVER not in permissions:
             continue
         operations.add(FilesystemOperation.INSPECT)
-        if Permission.WRITE in permissions:
-            operations.add(FilesystemOperation.UPDATE_METADATA)
-        if node.node_id == ROOT_ID:
-            operations.add(FilesystemOperation.INSPECT_ROOT)
         if Permission.SHARE in permissions:
             operations.add(FilesystemOperation.SHARE)
+        if Permission.WRITE in permissions:
+            operations.add(FilesystemOperation.UPDATE_METADATA)
         if node.kind == NodeKind.DIRECTORY:
             operations.add(FilesystemOperation.LIST)
             if Permission.WRITE in permissions:

@@ -6,8 +6,7 @@ export type WorkspaceNavigationIcon =
   | 'connectors'
   | 'groups'
   | 'permissions'
-  | 'analytics'
-  | 'settings';
+  | 'analytics';
 
 export interface WorkspaceNavigationItem {
   id: string;
@@ -41,8 +40,7 @@ export const administrationNavigation: readonly WorkspaceNavigationItem[] = [
   { id: 'connectors', label: 'Connectors', href: '/admin/connectors', icon: 'connectors' },
   { id: 'groups', label: 'Groups', href: '/admin/groups', icon: 'groups' },
   { id: 'groupPermissions', label: 'Group permissions', href: '/admin/group-permissions/connectors', icon: 'permissions' },
-  { id: 'analytics', label: 'Log analytics', href: '/admin/analytics', icon: 'analytics' },
-  { id: 'instanceConfiguration', label: 'Instance settings', href: '/admin/instance-configuration', icon: 'settings' }
+  { id: 'insights', label: 'Insights', href: '/admin/insights/agent-behaviour', icon: 'analytics' }
 ];
 
 export const administrationPresentation = {

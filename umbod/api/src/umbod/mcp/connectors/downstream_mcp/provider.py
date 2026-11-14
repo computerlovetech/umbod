@@ -1,3 +1,4 @@
+from umbod.mcp.agent_behaviour.reservations import connector_tool_name_available
 from umbod.mcp.connectors.downstream_mcp.personal_discovery import PersonalDiscoveryOperation, PersonalDiscoveryOperations
 from umbod.mcp.connectors.downstream_mcp.ports import DownstreamClientFactory
 from umbod.mcp.connectors.downstream_mcp.namespaces import PersonalToolNamespaceSnapshot
@@ -279,7 +280,7 @@ class DownstreamMcpToolRuntimeProvider(Provider):
 
     def _configured_tool_records(self, snapshot: DownstreamDiscoverySnapshot) -> tuple[DownstreamCapabilityRecord, ...]:
         scope = self._active_scope()
-        records = tuple(record for record in snapshot.published_records if record.source_tool is not None and record.capability.identity.capability_kind == "tool" and (not scope or record.definition.connector_id == scope))
+        records = tuple(record for record in snapshot.published_records if record.source_tool is not None and record.capability.identity.capability_kind == "tool" and (not scope or record.definition.connector_id == scope) and connector_tool_name_available(record.definition.tool_name_prefix, record.capability.identity.capability_key))
         namespace = snapshot.namespaces.get(scope, PersonalToolNamespaceSnapshot((), scope))
         for record in records:
             name = self._public_tool_name(record.definition.connector_id, record.definition.tool_name_prefix, record.capability.identity.capability_key)
@@ -340,10 +341,10 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
             identities: list[PublicToolIdentity] = []
             active_scope = self._active_scope()
             namespace = snapshot.namespaces.get(active_scope, snapshot.namespaces[""])
-            personal_records = await operation.records()
+            personal_records = tuple(record for record in await operation.records() if connector_tool_name_available(record.definition.tool_name_prefix, record.tool.identity.downstream_name))
             for record in snapshot.available_records:
                 identity = record.capability.identity
-                if identity.capability_kind != "tool" or record.source_tool is None:
+                if identity.capability_kind != "tool" or record.source_tool is None or not connector_tool_name_available(record.definition.tool_name_prefix, identity.capability_key):
                     continue
                 if active_scope and identity.connector_id != active_scope:
                     continue
@@ -371,8 +372,8 @@ class ConnectorAwareDownstreamMcpToolProvider(DownstreamMcpToolRuntimeProvider):
             self._configured_tool_records(snapshot)
             active_scope = self._active_scope()
             namespace = snapshot.namespaces.get(active_scope, snapshot.namespaces[""])
-            personal_records = await operation.records()
-            records = tuple(record for record in snapshot.available_records if record.capability.identity.capability_kind == "tool" and (not active_scope or record.definition.connector_id == active_scope) and policy.allows_capability(record.definition.connector_id, "tool", record.capability.identity.capability_key))
+            personal_records = tuple(record for record in await operation.records() if connector_tool_name_available(record.definition.tool_name_prefix, record.tool.identity.downstream_name))
+            records = tuple(record for record in snapshot.available_records if record.capability.identity.capability_kind == "tool" and (not active_scope or record.definition.connector_id == active_scope) and policy.allows_capability(record.definition.connector_id, "tool", record.capability.identity.capability_key) and connector_tool_name_available(record.definition.tool_name_prefix, record.capability.identity.capability_key))
             identities = [_public_identity(record) for record in records]
             _validate_public_identities(identities)
             candidates = [_search_candidate(record, snapshot.descriptions[record.definition.connector_id]).model_copy(update={"tool_name": self._public_tool_name(record.definition.connector_id, record.definition.tool_name_prefix, record.capability.identity.capability_key)}) for record in records]

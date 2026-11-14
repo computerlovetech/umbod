@@ -1,40 +1,22 @@
 import { describe, expect, test } from 'vitest';
-import { nodeSummarySchema, type NodeSummary } from './schemas';
-import { fileId, filesystemNode } from '../fixtures.test-support';
+import { filesystemNamespaceSchema, nodeSummarySchema } from './schemas';
+import { filesystemNode, rootId } from '../fixtures.test-support';
 
-const owner = { type: 'user', issuer: 'https://identity.test', id: 'owner' } as const;
-const available = {
-  type: 'available',
-  scope: 'direct_node_policy',
-  owner,
-  grants: [],
-  group_members_expanded: false
-} satisfies NodeSummary['visible_to'];
-const grant = {
-  node_id: fileId,
-  principal: { type: 'group', issuer: 'https://foreign.test', id: 'editors' },
-  permissions: ['discover', 'read', 'write', 'delete', 'share'],
-  recursive: true
-};
+const namespace = { type: 'namespace', namespace_id: rootId, kind: 'shared', name: 'Design' } as const;
 
 function accepts(override: Record<string, unknown>): boolean {
   return nodeSummarySchema.safeParse({ ...filesystemNode(), ...override }).success;
 }
 
-describe('filesystem access wire metadata', () => {
-  test.each(['restricted', 'unavailable'] as const)('accepts %s without inventing policy details', (type): void => {
-    const node = filesystemNode({ visible_to: { type } });
-    expect(nodeSummarySchema.parse(node).visible_to).toEqual({ type });
+describe('filesystem access wire metadata', (): void => {
+  test('accepts restricted visibility without inventing namespace details', (): void => {
+    const node = filesystemNode({ visible_to: { type: 'restricted' } });
+    expect(nodeSummarySchema.parse(node).visible_to).toEqual({ type: 'restricted' });
   });
 
-  test('accepts an available owner policy with no actual grants', (): void => {
-    const node = filesystemNode({ visible_to: available });
-    expect(nodeSummarySchema.parse(node).visible_to).toEqual(available);
-  });
-
-  test.each(['user', 'group', 'system'] as const)('accepts %s owners and foreign group grants without expanding members', (type): void => {
-    const visible_to = { ...available, owner: { ...owner, type }, grants: [grant] };
-    expect(nodeSummarySchema.parse({ ...filesystemNode(), visible_to }).visible_to).toEqual(visible_to);
+  test.each(['personal', 'shared'] as const)('accepts %s namespace visibility', (kind): void => {
+    const visible_to = { ...namespace, kind };
+    expect(nodeSummarySchema.parse(filesystemNode({ visible_to })).visible_to).toEqual(visible_to);
   });
 
   test('preserves explicit denied permissions', (): void => {
@@ -56,48 +38,24 @@ describe('filesystem access wire metadata', () => {
   });
 
   test.each([
-    {},
-    { type: 'unknown' },
-    { type: 'restricted', owner },
-    { type: 'unavailable', grants: [] },
-    { ...available, scope: 'inherited' },
-    { ...available, group_members_expanded: true },
-    { ...available, group_members_expanded: undefined },
-    { ...available, owner: undefined },
-    { ...available, grants: undefined },
-    { ...available, members: [] }
-  ])('rejects malformed visibility %j', (visible_to): void => {
+    {}, { type: 'unknown' }, { type: 'unavailable' },
+    { type: 'available', scope: 'direct_node_policy', owner: {}, grants: [] },
+    { type: 'restricted', name: 'Private' },
+    { ...namespace, namespace_id: 'invalid' },
+    { ...namespace, namespace_id: undefined },
+    { ...namespace, kind: 'group' },
+    { ...namespace, name: undefined },
+    { ...namespace, owner: {} },
+    { ...namespace, grants: [] }
+  ])('rejects malformed or retired visibility %j', (visible_to): void => {
     expect(accepts({ visible_to })).toBe(false);
   });
 
-  test.each([
-    null,
-    { ...owner, type: 'service' },
-    { ...owner, issuer: 1 },
-    { ...owner, issuer: undefined },
-    { ...owner, id: null },
-    { ...owner, id: undefined },
-    { ...owner, display_name: 'Private' }
-  ])('rejects malformed owners and grant principals %j', (principal): void => {
-    expect(accepts({ visible_to: { ...available, owner: principal } })).toBe(false);
-    expect(accepts({ visible_to: { ...available, grants: [{ ...grant, principal }] } })).toBe(false);
-  });
-
-  test.each([
-    null,
-    { ...grant, node_id: 'invalid' },
-    { ...grant, permissions: ['admin'] },
-    { ...grant, permissions: 'read' },
-    { ...grant, permissions: undefined },
-    { ...grant, recursive: 'true' },
-    { ...grant, recursive: undefined },
-    { ...grant, members: [] }
-  ])('rejects malformed grants %j', (invalidGrant): void => {
-    expect(accepts({ visible_to: { ...available, grants: [invalidGrant] } })).toBe(false);
-  });
-
-  test('keeps summary and permissions objects strict', (): void => {
+  test('rejects namespace sharing permissions and unexpected summary fields', (): void => {
     expect(accepts({ extra: true })).toBe(false);
-    expect(accepts({ permissions: { ...filesystemNode().permissions, extra: true } })).toBe(false);
+    expect(accepts({ permissions: { ...filesystemNode().permissions, can_share: 'false' } })).toBe(false);
+    expect(filesystemNamespaceSchema.safeParse({
+      id: rootId, root_node_id: rootId, kind: 'personal', name: 'My files', description: '', permissions: ['share']
+    }).success).toBe(false);
   });
 });

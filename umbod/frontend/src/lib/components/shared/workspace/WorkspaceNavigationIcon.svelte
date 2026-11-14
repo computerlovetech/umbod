@@ -29,9 +29,6 @@
     <path d="M12 12v4" />
   {:else if name === 'analytics'}
     <path d="M3 3v18h18M8 16v-5m5 5V6m5 10V9" />
-  {:else if name === 'settings'}
-    <path d="m9 3-.5 2-2 1-2-.5-2 3.5L4 10.5v3L2.5 15l2 3.5 2-.5 2 1 .5 2h4l.5-2 2-1 2 .5 2-3.5-1.5-1.5v-3L20 9l-2-3.5-2 .5-2-1-.5-2Z" />
-    <circle cx="11.5" cy="12" r="3" />
   {/if}
 </svg>
 

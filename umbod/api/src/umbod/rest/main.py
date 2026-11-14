@@ -12,6 +12,7 @@ from starlette.middleware import Middleware
 from starlette.routing import BaseRoute
 from umbod.core.connectors.native.registry import ConnectorRegistration
 from umbod.core.persistence import PersistenceRuntime
+from umbod.core.agent_behaviour.retention import create_diagnostic_retention
 from umbod.core.telemetry.analytics import TelemetryAnalyticsRuntime
 from umbod.infrastructure import create_configured_analytics_runtime
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
@@ -27,6 +28,7 @@ from umbod.rest.authentication import (
 from umbod.rest.authentication.authorization import JwtVerifier
 from umbod.rest.authentication.middleware import SuppliedJwtVerifierFactory
 from umbod.rest.authentication.rest_middleware import RestAuthenticationMiddleware
+from umbod.rest.agent_behaviour import router as agent_behaviour_router
 from umbod.rest.admin_overview import router as admin_overview_router
 from umbod.rest.user_catalogue import router as user_catalogue_router
 from umbod.rest.personal_usage import router as personal_usage_router
@@ -65,6 +67,7 @@ from umbod.rest.metrics import (
 from umbod.config import AppConfig, load_server_app_config
 from umbod.logging import create_application_failure_signal, flush_logging
 from umbod.rest.settings import APISettings
+from umbod.rest.install import router as install_router
 from umbod.rest.system import router as system_router
 from umbod.rest.system.routes import health
 from umbod.rest.system.schemas import HealthResponse
@@ -179,6 +182,7 @@ def _mount_admin_app(
     admin_router.include_router(groups_router)
     admin_router.include_router(identity_directory_admin_router)
     admin_router.include_router(admin_overview_router)
+    admin_router.include_router(agent_behaviour_router)
     admin_router.include_router(telemetry_analytics_router)
     admin_router.include_router(openapi_connector_router)
     admin_router.include_router(oauth_router)
@@ -202,8 +206,8 @@ def _mount_admin_app(
     ) -> Response:
         response = await call_next(request)
         if (
-            request.url.path.rstrip("/").endswith("/filesystem/root-access")
-            or request.url.path.startswith("/api/admin/telemetry/")
+            request.url.path.startswith("/api/admin/telemetry/")
+            or "/agent-behaviour" in request.url.path
         ):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -330,7 +334,8 @@ def _create_configured_lifespan(
                     await metrics_server.stop()
                 raise
             try:
-                yield {"profile_signing_key_resolver": resolver}
+                async with create_diagnostic_retention(persistence_runtime.database, create_application_failure_signal()).lifespan():
+                    yield {"profile_signing_key_resolver": resolver}
             finally:
                 if metrics_enabled:
                     await metrics_server.stop()
@@ -462,6 +467,9 @@ def _assemble_application(
     app.mount("/api/filesystem", transfer_app)
     _mount_personal_oauth_callback_app(app, app_settings, dependency_factories)
     _mount_system_app(app, dependency_factories)
+    install_app = SubApiAppFactory(title="umbod-install-api", router=install_router).create()
+    _attach_dependency_factories(install_app, dependency_factories)
+    app.mount("/api/install", install_app)
     app.user_middleware.extend([
         Middleware(
             AdminRestMetricsMiddleware, recorder=metrics_recorder, routes=admin_routes,

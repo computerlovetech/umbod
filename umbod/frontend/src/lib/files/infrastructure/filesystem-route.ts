@@ -1,10 +1,16 @@
 import { HttpError, SchemaValidationError, type Transport } from '$lib/admin/infrastructure/transport';
+import { filesystemNamespacesSchema, type FilesystemNamespace } from '../domain/schemas';
 import { UploadPhaseError } from '../errors';
 import type { FilesystemApi, UploadTransferPort } from '../api';
 import { browseResultSchema, type BrowseResult, updateDescriptionSchema, updateNodeSchema, type UpdateNode, nodeCapabilitiesSchema, type UpdateDescription, breadcrumbsSchema, type Breadcrumbs, fileRevisionSchema, childrenSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, beginUploadSchema, uploadSessionSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
 
 export class FilesystemRoute implements FilesystemApi {
   constructor(private readonly transport: Transport, private readonly transfer: UploadTransferPort) {}
+
+  listNamespaces = async (signal?: AbortSignal): Promise<FilesystemNamespace[]> => {
+    const result = await this.transport.request({ method: 'GET', path: '/me/filesystem/namespaces', outputSchema: filesystemNamespacesSchema, signal });
+    return result.namespaces;
+  };
 
   getHome = (signal?: AbortSignal): Promise<NodeSummary> =>
     this.transport.request({ method: 'POST', path: '/me/filesystem/home', outputSchema: nodeSummarySchema, signal });

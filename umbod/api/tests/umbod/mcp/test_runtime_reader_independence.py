@@ -5,6 +5,7 @@ import pytest
 from fastmcp.server.http import StarletteWithLifespan
 
 from messaging.in_memory import InMemoryEventCheckpointStoreFactory, InMemoryEventCheckpointStoreMessages
+from tests.support.application_failures import CapturingApplicationFailures
 from tests.support.messaging import InMemoryEventStreamFactory
 from umbod.core.activation import ActivationStatus, ActivationStore
 from umbod.core.capabilities.tools.refs import ConnectorToolRef
@@ -41,6 +42,7 @@ def runtime_context(source: str, transport: str, api_url: str) -> SimpleNamespac
         persistence_runtime=SimpleNamespace(database=object(), readiness=SimpleNamespace(ensure_ready=AsyncMock()), shutdown=AsyncMock()),
         http_app=StarletteWithLifespan(),
         metrics_recorder=Mock(),
+        telemetry=SimpleNamespace(application_failures=CapturingApplicationFailures()),
         group_permission_runtime_state=InMemoryGroupConnectorToolPermissions(group_claim_fields=("groups",)),
         connector_tool_runtime_state_store=InMemoryConnectorToolRuntimeStateStore(),
         connector_runtime=SimpleNamespace(connector_tool_mappings=(SimpleNamespace(connector_id="connector", operation_name="read"),)),

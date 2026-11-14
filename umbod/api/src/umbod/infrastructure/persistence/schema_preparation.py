@@ -16,6 +16,7 @@ from umbod.core.connectors.downstream_mcp.stores.personal_oauth_schema import PE
 
 from pydantic import BaseModel
 
+from umbod.core.agent_behaviour.schema import AGENT_BEHAVIOUR_TABLES
 from umbod.core.activation.stores.schema import CAPABILITY_ACTIVATION_STATE_TABLE
 from umbod.core.capabilities.descriptions.stores.schema import (
     CAPABILITY_DESCRIPTION_OVERRIDE_TABLE,
@@ -51,6 +52,7 @@ from .group_reconciliation import reconcile_group_catalogue
 from umbod.core.filesystem.stores.schema import NODE_TABLE, OWNER_TABLE, GRANT_TABLE
 from umbod.core.filesystem.stores.uploads import UPLOAD_TABLE
 from umbod.core.filesystem.stores.homes import HOME_TABLE
+from umbod.core.filesystem.stores.namespaces import NAMESPACE_TABLE, adopt_existing_homes
 from umbod.core.persistence import Database, Table
 from umbod.core.messaging import CHECKPOINT_TABLE, EVENT_TABLE
 
@@ -60,6 +62,7 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
     GRANT_TABLE,
     UPLOAD_TABLE,
     HOME_TABLE,
+    NAMESPACE_TABLE,
     CONNECTOR_CONFIGURATION_TABLE,
     PUBLICATION_STATE_TABLE,
     CAPABILITY_ACTIVATION_STATE_TABLE,
@@ -69,6 +72,7 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
     *DIRECTORY_TABLES,
     *PERSONAL_ACCESS_TOKEN_TABLES,
     *USAGE_TABLES,
+    *AGENT_BEHAVIOUR_TABLES,
     CONNECTOR_PERMISSION_TABLE,
     CAPABILITY_PERMISSION_TABLE,
     CAPABILITY_DESCRIPTION_OVERRIDE_TABLE,
@@ -96,3 +100,4 @@ APPLICATION_PERSISTENCE_TABLES: Sequence[Table[BaseModel, BaseModel]] = (
 async def prepare_application_schema(database: Database) -> None:
     await database.ensure_schema(APPLICATION_PERSISTENCE_TABLES)
     await reconcile_group_catalogue(database)
+    await adopt_existing_homes(database)

@@ -218,7 +218,7 @@ opener.addheaders = [("Authorization", "Bearer " + os.environ["UMBOD_TEST_BEARER
 install_opener(opener)
 runpy.run_path(os.environ["UMBOD_TEST_BOOTSTRAP_PATH"], run_name="__main__")
 ')
-(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_personal_usage.py live_runtime_tests/test_running_mcp_administrator_hosting.py live_runtime_tests/test_running_user_profile.py live_runtime_tests/test_running_personal_access_tokens.py live_runtime_tests/test_running_personal_mcp_execution.py live_runtime_tests/test_running_filesystem.py live_runtime_tests/test_running_filesystem_uploads.py live_runtime_tests/test_running_filesystem_homes.py live_runtime_tests/test_running_filesystem_s3.py live_runtime_tests/test_running_filesystem_sharing.py live_runtime_tests/test_running_identity_directory.py)
+(cd "${app_directory}/api" && uv run --locked pytest -n 0 --tb=short live_runtime_tests/test_running_personal_usage.py live_runtime_tests/test_running_mcp_administrator_hosting.py live_runtime_tests/test_running_user_profile.py live_runtime_tests/test_running_personal_access_tokens.py live_runtime_tests/test_running_personal_mcp_execution.py live_runtime_tests/test_running_filesystem.py live_runtime_tests/test_running_filesystem_uploads.py live_runtime_tests/test_running_filesystem_homes.py live_runtime_tests/test_running_filesystem_sharing.py live_runtime_tests/test_running_filesystem_s3.py live_runtime_tests/test_running_identity_directory.py)
 for container_name in api api-b mcp mcp-b; do
     kubectl --context "${kube_context}" logs deployment/umbod-core --container "${container_name}" \
         | python3 "${script_directory}/check_secret_logs.py"

@@ -18,17 +18,9 @@ from umbod.mcp.filesystem.authorization import FilesystemToolVisibility
 @pytest.mark.asyncio
 @pytest.mark.parametrize("stage", ["capture", "factory", "service"])
 @pytest.mark.parametrize("tool,operation,method,arguments", [
-    ("filesystem_search_sharing_recipients", "sharing", "search_recipients", {
-        "node_id": "00000000-0000-0000-0000-000000000001", "query": "Observed",
-    }),
-    ("filesystem_share", "sharing", "share", {
-        "node_id": "00000000-0000-0000-0000-000000000001", "group_id": "writers", "permissions": ["read"],
-    }),
-    ("filesystem_share", "sharing", "share", {
-        "node_id": "00000000-0000-0000-0000-000000000001",
-        "recipient": {"type": "user", "user_id": "observed-user"}, "permissions": ["read"],
-    }),
-    ("get_filesystem_root", "browsing", "get_root", {}),
+    ("filesystem_share", "sharing", "share", {"node_id": "00000000-0000-0000-0000-000000000001", "group_id": "writers", "permissions": ["read"]}),
+    ("filesystem_search_sharing_recipients", "sharing", "search_recipients", {"node_id": "00000000-0000-0000-0000-000000000001", "query": "writers"}),
+    ("get_filesystem_node", "browsing", "get_node", {"node_id": "00000000-0000-0000-0000-000000000001"}),
     ("filesystem_delete_file", "deletion", "check_delete_eligibility", {
         "node_id": "00000000-0000-0000-0000-000000000001", "expected_revision": 1,
     }),

@@ -22,7 +22,7 @@ description: Backend behavior, adapter and architecture tests with shared runtim
 - [infrastructure](./umbod/infrastructure/) — Infrastructure checks.
 - [mcp](./umbod/mcp/) — MCP behavior and contract tests selected by this directory.
 - [MCP connectors](./umbod/mcp/connectors/) — Connector transport tests grouped by source provider module.
-- [Sharing discovery tests](./umbod/mcp/filesystem/test_recipient_search.py) — Strict unified search, node authority, directory privacy, and fixed result limits.
+- [Namespace boundary tests](./umbod/mcp/filesystem/test_namespaces.py) — Managed namespace access, private defaults and rejection of unmanaged legacy nodes.
 - [messaging](./messaging/) — Shared messaging tests.
 - [rest](./umbod/rest/) — REST behavior and contract tests selected by this directory.
 - [REST connectors](./umbod/rest/connectors/) — Connector route tests grouped by source provider module.

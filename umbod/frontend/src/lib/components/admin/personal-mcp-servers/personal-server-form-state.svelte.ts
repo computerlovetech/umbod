@@ -27,6 +27,7 @@ export class PersonalServerFormState {
   private epoch = 0;
   private disposed = false;
   constructor(private readonly api: PersonalServerAdministration, private readonly configuration: InstanceConfigurationRoute, private readonly targetId: string | null, private readonly completed: (id: string) => Promise<void> = async () => {}, private readonly accessLost: () => void = () => {}, private readonly lockChanged: (locked: boolean) => void = () => {}) {}
+  get editing(): boolean { return this.targetId !== null; }
   get canRegister(): boolean { return !this.targetId && !this.disposed && !this.locked && this.availability.registration === 'enabled'; }
   private async readAvailability(token: number): Promise<PersonalServerAvailability> {
     try { return personalServerAvailability(await this.configuration.get()); }
@@ -94,6 +95,7 @@ export class PersonalServerFormState {
         if (selected.connector_id !== this.targetId || policy.connector_id !== this.targetId) throw new SchemaValidationError('inbound', []);
         this.selected = selected;
         this.policy = policy;
+        this.metadata = { name: selected.display_name, prefix: selected.tool_name_prefix, description: selected.capability_description, path: selected.public_path.replace(/^\/mcp\/proxies\//, ''), endpoint: selected.endpoint_url };
         this.form.reset(policy);
       } else {
         const availability = await this.readAvailability(token);
@@ -129,7 +131,7 @@ export class PersonalServerFormState {
     this.pathEdited = false;
   }
   setMetadata = (field: keyof PersonalServerFormState['metadata'], value: string): void => {
-    if (this.locked || this.disposed) return;
+    if (this.editing || this.locked || this.disposed) return;
     this.metadata[field] = value;
     if (field === 'prefix') this.prefixEdited = true;
     if (field === 'path') this.pathEdited = true;
@@ -196,7 +198,10 @@ export class PersonalServerFormState {
       if (selectedId && !this.targetId) {
         try { await this.completed(selectedId); }
         catch { if (this.current(token)) { this.blocked = true; this.message = 'Registration completed, but inventory could not be reconciled. Reload before making further changes.'; } }
-      } else await this.reload();
+      } else {
+        await this.reload();
+        if (selectedId && !this.blocked && !this.disposed && !this.authenticationLost) await this.completed(selectedId);
+      }
       if (!this.selected && this.blocked) this.message = 'The change completed, but state could not be reconciled. Reload before making further changes.';
     }
     if (this.current(token)) {

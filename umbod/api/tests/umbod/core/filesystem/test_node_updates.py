@@ -19,11 +19,11 @@ async def test_combined_update_is_atomic_and_preserves_content_and_policies(
 ) -> None:
     context = content_context
     metadata = NodeMetadata(content_type="text/plain", attributes={"team": "research"})
-    destination = await context.creation.create_directory(caller(), ROOT_ID, "destination", metadata)
+    destination = await context.creation.create_directory(caller(), content_context.root_id, "destination", metadata)
     if kind == NodeKind.FILE:
-        node = await context.service.upload(caller(), ROOT_ID, "node", metadata, stream(b"bytes"))
+        node = await context.service.upload(caller(), content_context.root_id, "node", metadata, stream(b"bytes"))
     else:
-        node = await context.creation.create_directory(caller(), ROOT_ID, "node", metadata)
+        node = await context.creation.create_directory(caller(), content_context.root_id, "node", metadata)
     before = await context.namespace.get_node(node.id)
     owner = await context.policies.get_owner(node.id)
     grants = await context.policies.list_grants(node.id)
@@ -38,7 +38,7 @@ async def test_combined_update_is_atomic_and_preserves_content_and_policies(
     assert await context.policies.get_owner(node.id) == owner
     assert await context.policies.list_grants(node.id) == grants
     with pytest.raises(RevisionConflict):
-        await service.update_node(caller(), node.id, NodeChanges(name="stale", parent_id=ROOT_ID).to_core_patch(), expected_revision=node.revision)
+        await service.update_node(caller(), node.id, NodeChanges(name="stale", parent_id=content_context.root_id).to_core_patch(), expected_revision=node.revision)
     assert await context.namespace.get_node(node.id) == stored
 
 
@@ -50,8 +50,8 @@ async def test_move_requires_current_item_source_and_destination_grants_before_r
 ) -> None:
     context = content_context
     metadata = NodeMetadata(content_type="text/plain", attributes={})
-    source = await context.creation.create_directory(caller(), ROOT_ID, "source", metadata)
-    destination = await context.creation.create_directory(caller(), ROOT_ID, "destination", metadata)
+    source = await context.creation.create_directory(caller(), content_context.root_id, "source", metadata)
+    destination = await context.creation.create_directory(caller(), content_context.root_id, "destination", metadata)
     node = await context.creation.create_file(caller(), source.id, "node", metadata)
     bob = Principal(type=PrincipalType.USER, issuer="issuer", id="bob")
     for label, target in (("source", source), ("destination", destination), ("item", node)):
@@ -76,11 +76,11 @@ async def test_explicit_same_parent_move_requires_parent_access_and_unknown_dest
     content_context: ContentContext,
 ) -> None:
     context = content_context
-    node = await context.creation.create_file(caller(), ROOT_ID, "node", NodeMetadata(content_type="text/plain", attributes={}))
+    node = await context.creation.create_file(caller(), content_context.root_id, "node", NodeMetadata(content_type="text/plain", attributes={}))
     bob = Principal(type=PrincipalType.USER, issuer="issuer", id="bob")
     await context.policies.add_grant(AccessGrant(node_id=node.id, principal=bob, recursive=False, permissions={Permission.DISCOVER, Permission.WRITE}))
     service = NodeUpdateService(VerifiedIdentityResolver(), context.transactions)
-    for destination in (ROOT_ID, uuid4()):
+    for destination in (content_context.root_id, uuid4()):
         with pytest.raises(PermissionDenied):
             await service.update_node(snapshot("bob", "issuer", ()), node.id, NodeChanges(parent_id=destination).to_core_patch(), expected_revision=1)
 
@@ -91,10 +91,10 @@ async def test_root_rejects_explicit_structural_change_but_allows_metadata(
     content_context: ContentContext, structural: dict[str, object],
 ) -> None:
     service = NodeUpdateService(VerifiedIdentityResolver(), content_context.transactions)
-    root = await content_context.namespace.get_node(ROOT_ID)
+    root = await content_context.namespace.get_node(content_context.root_id)
     with pytest.raises(RootMutation):
-        await service.update_node(caller(), ROOT_ID, NodeChanges.model_validate(structural).to_core_patch(), expected_revision=root.revision)
-    updated = await service.update_node(caller(), ROOT_ID, NodeChanges(metadata={"attributes": {"description": "Root"}}).to_core_patch(), expected_revision=root.revision)
+        await service.update_node(caller(), content_context.root_id, NodeChanges.model_validate(structural).to_core_patch(), expected_revision=root.revision)
+    updated = await service.update_node(caller(), content_context.root_id, NodeChanges(metadata={"attributes": {"description": "Root"}}).to_core_patch(), expected_revision=root.revision)
     assert updated.metadata.attributes["description"] == "Root"
 
 
@@ -102,9 +102,9 @@ async def test_root_rejects_explicit_structural_change_but_allows_metadata(
 async def test_authorized_file_destination_rejects_move_without_mutation(content_context: ContentContext) -> None:
     context = content_context
     metadata = NodeMetadata(content_type="text/plain", attributes={})
-    node = await context.creation.create_file(caller(), ROOT_ID, "node", metadata)
-    target = await context.creation.create_file(caller(), ROOT_ID, "target", metadata)
+    node = await context.creation.create_file(caller(), content_context.root_id, "node", metadata)
+    target = await context.creation.create_file(caller(), content_context.root_id, "target", metadata)
     service = NodeUpdateService(VerifiedIdentityResolver(), context.transactions)
     with pytest.raises(WrongNodeKind):
         await service.update_node(caller(), node.id, NodeChanges(parent_id=target.id).to_core_patch(), expected_revision=1)
-    assert (await context.namespace.get_node(node.id)).parent_id == ROOT_ID
+    assert (await context.namespace.get_node(node.id)).parent_id == content_context.root_id

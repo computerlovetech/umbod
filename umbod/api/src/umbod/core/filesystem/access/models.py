@@ -1,9 +1,9 @@
 from typing import Annotated, Literal, Union
+from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_serializer
+from pydantic import BaseModel, ConfigDict, Field
 
 from ..browsing import NodeSummary
-from ..models import AccessGrant, Principal
 
 
 class CallerPermissions(BaseModel):
@@ -12,27 +12,17 @@ class CallerPermissions(BaseModel):
     can_discover: bool
     can_read: bool
     can_write: bool
-    can_delete: bool = Field(description="Effective delete permission and file deletion support; directories cannot be deleted.")
+    can_delete: bool
     can_share: bool
 
 
-class AvailableVisibility(BaseModel):
+class NamespaceVisibility(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    type: Literal["available"]
-    scope: Literal["direct_node_policy"] = Field(description="Owner and complete direct-node grants only; inherited grants are excluded from this policy projection.")
-    owner: Principal
-    grants: tuple[AccessGrant, ...]
-    group_members_expanded: Literal[False] = Field(description="Group grants are represented as principals, never as an expanded audience.")
-
-    @field_serializer("grants", when_used="json")
-    def serialize_grants(self, grants: tuple[AccessGrant, ...]) -> list[dict[str, object]]:
-        return [
-            {**grant.model_dump(mode="json"), "permissions": sorted(permission.value for permission in grant.permissions)}
-            for grant in sorted(grants, key=lambda grant: (
-                grant.principal.type.value, grant.principal.issuer, grant.principal.id, str(grant.node_id),
-            ))
-        ]
+    type: Literal["namespace"]
+    namespace_id: UUID
+    kind: Literal["personal", "shared"]
+    name: str
 
 
 class RestrictedVisibility(BaseModel):
@@ -41,17 +31,11 @@ class RestrictedVisibility(BaseModel):
     type: Literal["restricted"]
 
 
-class UnavailableVisibility(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    type: Literal["unavailable"]
-
-
 Visibility = Annotated[
-    Union[AvailableVisibility, RestrictedVisibility, UnavailableVisibility], Field(discriminator="type"),
+    Union[NamespaceVisibility, RestrictedVisibility], Field(discriminator="type"),
 ]
 
 
 class CallerNodeSummary(NodeSummary):
-    permissions: CallerPermissions = Field(description="Effective node rights including recursive ancestor grants; mutation results may report lost discovery. Flags do not promise operation support.")
-    visible_to: Visibility
+    permissions: CallerPermissions
+    visible_to: Visibility = Field(description="Namespace location metadata, not the complete audience; individual item sharing can grant additional access.")

@@ -12,7 +12,7 @@ description: Byte-preserving uploads coordinated by MCP and transferred over HTT
 
 ## Coordination and transfer
 
-When the user has not chosen a destination, resolve their personal home through the `home` operation of `filesystem_browse` and use its returned node UUID. Inspect caller permissions and distinguish direct policy visibility from manageable sharing. The [homes and permissions reference](filesystem-homes-and-permissions.md) describes safe agent destination selection.
+When the user has not chosen a destination, resolve their personal home through the `home` operation of `filesystem_browse` and use its returned node UUID. Inspect caller permissions and namespace visibility. Namespace baseline permissions and recursive folder shares apply to uploads; the namespace descriptor is not a complete audience. The [homes and permissions reference](filesystem-homes-and-permissions.md) describes safe agent destination selection.
 
 The client computes the local file's exact byte size and, preferably, its SHA-256 programmatically. Begin accepts the existing parent UUID, filename, metadata, declared size, and an optional lowercase hexadecimal `expected_sha256`. It returns an upload identifier, transfer deadline, and raw HTTP PUT instructions. With S3 storage, begin defaults to a presigned storage URL. With local storage, it returns the API capability endpoint. Clients follow the returned URL and headers rather than assuming a particular destination. The selected transfer endpoint must be reachable by the client.
 

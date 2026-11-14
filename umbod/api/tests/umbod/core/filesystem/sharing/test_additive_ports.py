@@ -10,7 +10,7 @@ from umbod.core.filesystem import AccessGrant, Permission
 from umbod.core.filesystem.authorization import (
     PermissionDenied, ResolvedIdentity, UnresolvedIdentity, VerifiedIdentityResolver,
 )
-from umbod.core.filesystem.namespace import initial_root
+from tests.support.filesystem.group_sharing import sharing_node
 from umbod.core.filesystem.sharing import (
     FilesystemSharing, GroupPolicy, GroupSharingTarget, InvalidSharingPolicy, ShareNodeResult, SharingService,
 )
@@ -64,7 +64,7 @@ async def test_public_share_unions_permissions_and_skips_repeat_and_subset_write
     ports = CountingTransactions(transactions())
     resolver = CountingResolver()
     service: FilesystemSharing = SharingService(resolver, ports, "issuer")
-    node_id = initial_root().id
+    node_id = sharing_node().id
     read = command("team", Permission.READ)
     discover = command("team", Permission.DISCOVER)
     first = await service.share(caller(), node_id, read)
@@ -87,12 +87,12 @@ async def test_repeat_still_checks_current_authority_and_registration() -> None:
     ports = CountingTransactions(transactions())
     service: FilesystemSharing = SharingService(VerifiedIdentityResolver(), ports, "issuer")
     policy = command("team", Permission.READ)
-    await service.share(caller(), initial_root().id, policy)
+    await service.share(caller(), sharing_node().id, policy)
     with pytest.raises(PermissionDenied):
-        await service.share(snapshot("admin", "issuer", ("admins",)), initial_root().id, policy)
+        await service.share(snapshot("admin", "issuer", ("admins",)), sharing_node().id, policy)
     ports.ports.groups.identifiers = frozenset()
     with pytest.raises(InvalidSharingPolicy):
-        await service.share(caller(), initial_root().id, policy)
+        await service.share(caller(), sharing_node().id, policy)
     assert ports.grants.writes == 1
 
 
@@ -105,7 +105,7 @@ async def test_repeat_still_checks_current_authority_and_registration() -> None:
 ])
 def test_result_rejects_invalid_fields(overrides: dict[str, object]) -> None:
     payload: dict[str, object] = {
-        "node_id": initial_root().id, "recipient": {"type": "group", "group_id": " Team "},
+        "node_id": sharing_node().id, "recipient": {"type": "group", "group_id": " Team "},
         "permissions": [Permission.READ], "recursive": True, "changed": True,
     }
     with pytest.raises(ValidationError):
@@ -115,7 +115,7 @@ def test_result_rejects_invalid_fields(overrides: dict[str, object]) -> None:
 @pytest.mark.parametrize("missing", ["node_id", "recipient", "permissions", "recursive", "changed"])
 def test_result_requires_all_fields(missing: str) -> None:
     payload: dict[str, object] = {
-        "node_id": initial_root().id, "recipient": {"type": "group", "group_id": "team"},
+        "node_id": sharing_node().id, "recipient": {"type": "group", "group_id": "team"},
         "permissions": [Permission.READ], "recursive": True, "changed": True,
     }
     del payload[missing]
@@ -125,7 +125,7 @@ def test_result_requires_all_fields(missing: str) -> None:
 
 def test_result_is_frozen_preserves_exact_id_and_sorts_json_permissions() -> None:
     result = ShareNodeResult(
-        node_id=initial_root().id, recipient=GroupSharingTarget(type="group", group_id=" Team "),
+        node_id=sharing_node().id, recipient=GroupSharingTarget(type="group", group_id=" Team "),
         permissions=frozenset({Permission.WRITE, Permission.DISCOVER, Permission.READ}),
         changed=False, recursive=True,
     )

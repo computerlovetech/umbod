@@ -1,12 +1,11 @@
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from typing import TypeVar
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
 from pydantic import BaseModel
 
-from umbod.core.filesystem.errors import StorageFailure
 from umbod.core.filesystem.models import NodeId, Principal
 from umbod.core.filesystem.ports import AccessControlDriver
 from umbod.core.filesystem.transactions import FilesystemSession, FilesystemTransactions
@@ -56,15 +55,3 @@ class RevokeAfterCommitTransactions:
         async with self._transactions.transaction() as session:
             yield session
         await self._policies.remove_grant(self._node_id, self._principal)
-
-
-class FailingGrantReadTransactions:
-    def __init__(self, transactions: FilesystemTransactions) -> None:
-        self._transactions = transactions
-
-    @asynccontextmanager
-    async def transaction(self) -> AsyncIterator[FilesystemSession]:
-        async with self._transactions.transaction() as session:
-            policies = Mock(spec=AccessControlDriver, wraps=session.access_control)
-            policies.list_grants = AsyncMock(side_effect=StorageFailure("Database I/O failed"))
-            yield FilesystemSession(session.namespace, policies)

@@ -11,8 +11,9 @@ from mcp.types import BlobResourceContents, ResourceLink, TextResourceContents
 
 from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSnapshot, GroupMembership, UnavailableSubject
 from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
+from umbod.infrastructure import create_access_control_driver
 from umbod.core.filesystem.content import FilesystemContent
-from umbod.infrastructure import create_access_control_driver, create_namespace_driver
+from umbod.infrastructure import create_namespace_driver
 from umbod.core.filesystem.models import StorageKey
 from umbod.core.filesystem.ports import ByteStream
 from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory, register_filesystem_resources
@@ -25,12 +26,13 @@ from .conftest import FilesystemMcp, caller_snapshot
 from .test_browsing import create_node
 from .test_tools import root_id
 from .test_upload_limits import server_for
+from .test_visibility import shared_namespace, save_namespace_access, select_caller
 
 
 READ_LIMIT = 1_048_576
 
 
-DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions. Creating files requires discover and write on the parent directory; filesystem_browse with operation home resolves your private upload destination."
+DENIED = "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask an administrator for namespace access. Creating files requires discover and write on the parent directory; filesystem_browse with operation home resolves your private upload destination."
 
 
 async def publish(client: Client, payload: bytes, mime_type: object) -> dict[str, object]:
@@ -130,6 +132,24 @@ async def test_missing_and_denied_are_indistinguishable(filesystem_invocation_mc
                 await client.read_resource(file_resource_uri(node_id))
             messages.append(str(error.value))
     assert messages[0] == messages[1]
+
+
+@pytest.mark.asyncio
+async def test_namespace_policy_and_retained_resource_revocation_are_fresh(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    filesystem = filesystem_invocation_mcp
+    policy = await shared_namespace(filesystem)
+    select_caller(filesystem, "alice", (policy.groups[0].group_id,))
+    async with Client(filesystem.server) as client:
+        node_id = UUID(await create_node(client, str(policy.root_node_id), "empty", "file"))
+        select_caller(filesystem, "bob", (policy.groups[0].group_id,))
+        resource = FilesystemFileResource(node_id, filesystem.callers, filesystem.services)
+        result = await client.read_resource(file_resource_uri(node_id))
+        assert isinstance(result[0], BlobResourceContents)
+        await save_namespace_access(filesystem, policy, None)
+        with pytest.raises(ResourceError, match=DENIED):
+            await resource.read()
+        with pytest.raises(MCPError, match=DENIED):
+            await client.read_resource(file_resource_uri(node_id))
 
 
 @pytest.mark.asyncio

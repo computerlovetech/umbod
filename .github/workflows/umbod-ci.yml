@@ -16,6 +16,8 @@ on:
       - 'packages/umbod-sdk/**'
       - '**/README.md'
       - 'skills/development/write-module-readme/**'
+      - 'skills/integrations/umbod-connected-apps/**'
+      - 'LICENSE'
       - '.github/workflows/umbod-ci.yml'
       - '.github/workflows/harness-linting.yml'
       - '.github/workflows/umbod-release.yml'
@@ -57,6 +59,8 @@ jobs:
               - 'umbod/api/uv.lock'
               - 'umbod/api/README.md'
               - 'umbod/api/src/**'
+              - 'skills/integrations/umbod-connected-apps/**'
+              - 'LICENSE'
               - 'umbod/frontend/**'
               - 'umbod/deploy/helm/umbod/**'
               - 'packages/umbod-sdk/**'
@@ -117,6 +121,31 @@ jobs:
           uv venv --python 3.14 "${RUNNER_TEMP}/sdk-smoke"
           uv pip install --python "${RUNNER_TEMP}/sdk-smoke/bin/python" "${RUNNER_TEMP}"/sdk-dist/*.whl
           env -u PYTHONPATH "${RUNNER_TEMP}/sdk-smoke/bin/python" smoke_tests/installed_wheel.py
+
+  plugin-installers:
+    needs: harness-linting
+    name: Plugin installers (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            tests: test_plugin_installers.py
+          - os: ubuntu-latest
+            tests: test_plugin_installers.py
+          - os: windows-latest
+            tests: test_plugin_installers_windows.py
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v7
+      - name: Test platform installer behavior
+        run: uv run --no-project --python 3.12 --with pytest==9.0.2 python -m pytest umbod/scripts/tests/${{ matrix.tests }} -q
+      - name: Verify literal PowerShell configuration binding
+        if: matrix.os == 'windows-latest'
+        run: uv run --no-project --python 3.12 --with pytest==9.0.2 --with 'pydantic>=2.13.4,<3' python -m pytest --noconftest --import-mode=importlib -o pythonpath=src umbod/api/tests/umbod/core/harness_plugins/test_installers.py -k powershell_binding_executes -q
 
   backend-tests:
     needs: harness-linting
@@ -340,7 +369,7 @@ jobs:
 
   ci-complete:
     name: umbod CI
-    needs: [harness-linting, changes, docs, sdk-tests, backend-tests, core, connector-builder, frontend, helm, helm-kubernetes-schema, helm-kind-install]
+    needs: [harness-linting, changes, docs, sdk-tests, backend-tests, plugin-installers, core, connector-builder, frontend, helm, helm-kubernetes-schema, helm-kind-install]
     if: always()
     runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: umbod-ci
@@ -352,6 +381,7 @@ jobs:
              [ "${{ needs.docs.result }}" != "success" ] || \
              [ "${{ needs.sdk-tests.result }}" != "success" ] || \
              [ "${{ needs.backend-tests.result }}" != "success" ] || \
+             [ "${{ needs.plugin-installers.result }}" != "success" ] || \
              [ "${{ needs.core.result }}" != "success" ] || \
              [ "${{ needs.connector-builder.result }}" != "success" ] || \
              [ "${{ needs.frontend.result }}" != "success" ] || \

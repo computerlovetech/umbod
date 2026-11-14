@@ -24,6 +24,18 @@ Set origins without a trailing path:
 
 These values drive API and MCP URLs, allowed browser origins, OIDC metadata, and authentication redirects. They must match the URLs visible to users and MCP clients.
 
+## Harness plugin installation
+
+Getting started supplies Bash installers for macOS/Linux and PowerShell for Windows, with separate Codex and Claude Code packages. Bash requires Python 3.8 or later, curl and the selected harness; Windows requires PowerShell 5.1 or later, curl.exe and the selected harness. Installation is user-scoped and does not authenticate or verify connected-app access.
+
+The shared API serves `install.sh`, `install.ps1`, `package.zip`, `package.sha256`, `marketplace.txt` and `endpoint.txt` beneath `/api/install/v1/codex/` and `/api/install/v1/claude-code/`. Allow unauthenticated GET/HEAD to these exact paths through any external authentication gateway; terminal downloads cannot use browser sessions. Do not exempt other API routes. Docker Compose supplies finite public routing rules; custom ingress authentication policies must preserve this access explicitly.
+
+Getting started displays one installer URL selected by harness and shell. The response contains the maintained installer with the selected harness, package base and expected MCP endpoint already bound; no additional URL arguments are required. Bash detects macOS or Linux, including WSL. The inspect link opens the same configured script.
+
+Scripts derive their package base from `UMBOD_PUBLIC_API_ORIGIN` plus `/api/install/v1` and their MCP URL from `UMBOD_PUBLIC_MCP_ORIGIN`, never request headers or query parameters. Configure a publicly reachable API origin that exposes anonymous artifact downloads. The browser's `PUBLIC_API_BASE_URL` chooses the initial script URL and may use a different gateway, but the embedded API origin must remain reachable from the installing machine. Installers still refuse mismatched package endpoints. Remote downloads require HTTPS; loopback HTTP is supported for development. Checksums detect package corruption, not compromise of the host serving both package and checksum. Existing standalone Umbod MCP connections and conflicting marketplace registrations require manual review; installers do not replace them.
+
+Codex inventory checks are scoped to configured local marketplaces instead of querying its signed-in remote catalog. The installer checks every discovered local marketplace for conflicting Umbod plugins and verifies the selected marketplace after installation. Progress identifies the active check. Bash harness commands run noninteractively with a 45-second timeout; `UMBOD_INSTALL_COMMAND_TIMEOUT` accepts an integer from 1 to 300 seconds when a slower environment requires a different bound. Package downloads retain their separate 120-second HTTP limit.
+
 ## Administrator MCP hosting
 
 `core.mcp.administrator.hosting` defaults to `separate`, hosting privileged tools on the private MCP-owned listener; select `shared` to place them on the public MCP endpoint. Its `port` defaults to `8013` and `baseUrl` to `http://localhost:8013`. `config.features.mcp.administratorEnabled` independently controls availability and must be enabled to start the separate listener. Helm manages the administrator environment variables consistently in API and MCP for inspection and validation; only MCP starts the listener, binds inside the container to `0.0.0.0`, and creates no public ingress. See [administrator MCP](admin-mcp.md#hosting-and-deployment) for environment defaults, port collision checks, Compose shared-hosting opt-in and private access.
@@ -68,7 +80,7 @@ The application environment contract selects local or S3 file-content storage in
 | `UMBOD_FILESYSTEM_UPLOAD_MAX_BYTES` | `10485760` | Positive maximum filesystem upload size in bytes; independent of the MCP connector file-input limit |
 | `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES` | `1048576` | Maximum raw bytes for browser previews and complete MCP resource reads; positive integer up to `9007199254740991` |
 
-Upload and preview/read limits are grouped as **Filesystem limits** in Instance settings. They remain independent: the upload limit controls accepted file size, while the preview/read limit bounds browser previews and complete MCP resource reads. Full REST downloads are not capped by the preview limit.
+Upload and preview/read limits remain independent: the upload limit controls accepted file size, while the preview/read limit bounds browser previews and complete MCP resource reads. Full REST downloads are not capped by the preview limit.
 
 Helm groups both values under `config.filesystem.uploadMaxBytes` and `config.filesystem.previewMaxBytes`, with defaults matching the environment contract. Both chart values require positive integers up to `9007199254740991` so byte counts remain exact during rendering. These managed settings apply consistently to API and MCP workers; the frontend receives the preview limit only. Per-service overrides through `core.api.env` or `core.mcp.env` are rejected. The former flat `config.filesystemPreviewMaxBytes` key is no longer accepted. Environment variable names are unchanged.
 

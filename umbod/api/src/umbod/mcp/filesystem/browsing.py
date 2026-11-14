@@ -1,3 +1,4 @@
+import json
 from typing import Any
 
 from fastmcp.tools.base import Tool, ToolResult
@@ -18,12 +19,16 @@ from .browsing_models import (
     FilesystemNodeInspection,
     FilesystemTreeEntry,
     InspectNode,
+    ListNamespaces,
+    NamespaceListing,
+    NamespaceListingResponse,
     ResolveHome,
     HomeResponse,
     NodeInspectionResponse,
     ReadTree,
     browse_input_schema,
 )
+from .browsing_scope import PersonalNamespaceTargets
 from .errors import filesystem_operation
 from .links import file_link_result
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
@@ -44,13 +49,17 @@ class FilesystemBrowseTool(Tool):
                 "Home idempotently provisions your private home; use returned node.id as upload parent. "
                 "Inspect permissions.can_write and visible_to, begin an original-byte upload, transfer and complete it, "
                 "then report the receipt and visibility. Never invent paths, UUIDs or hashes. "
+                "Use targetless operation namespaces to list your personal namespace and accessible shared namespaces. "
+                "Shared namespace access applies to every descendant; uploads there are not private to the creator. "
                 "Declare ls for immediate entries, tree for a bounded recursive overview, "
-                "or stat for node details. Target root, an absolute path, or a node UUID. "
+                "or stat for node details. Target root or an absolute path within your personal namespace, "
+                "or use a returned namespace root_node_id as a node UUID to browse shared files. "
                 "No working directory or shell execution. Only discoverable nodes are returned; "
                 "breadcrumbs may be partial. Limits bound returned entries, not storage work. "
                 "Separate reads may observe concurrent changes. No file bytes are read. "
                 f"File entries include MCP resource links; use resources/read to read their current content (maximum {services.read_max_bytes()} bytes). "
-                "Sharing metadata describes manageable direct group and user sharing, not a full effective-access audit."
+                "Visibility identifies the containing namespace, not the complete audience. "
+                "Sharing metadata describes manageable direct group and user grants; inherited folder shares also apply."
             ),
             parameters=browse_input_schema(),
             output_schema={"type": "object", **BROWSE_RESPONSE.json_schema()},
@@ -65,7 +74,22 @@ class FilesystemBrowseTool(Tool):
         command = BROWSE_COMMAND.validate_json(argument_json(arguments, allow_nan=True))
         with filesystem_operation():
             caller = self._callers.capture()
-            explorer = BrowsingExplorer(self._services.browsing())
+            if isinstance(command, ListNamespaces):
+                namespaces = await self._services.namespaces().list(caller)
+                operation_completed()
+                listing = NamespaceListing(namespaces=namespaces)
+                response = NamespaceListingResponse(operation="namespaces", result=listing)
+                rendered = "\n".join(
+                    f"{json.dumps(namespace.name, ensure_ascii=True)} ({namespace.kind}): "
+                    f"root_node_id={namespace.root_node_id}; "
+                    f"description={json.dumps(namespace.description, ensure_ascii=False)}; "
+                    f"permissions={','.join(sorted(permission.value for permission in namespace.permissions))}"
+                    for namespace in namespaces
+                )
+                return file_link_result(response, [], rendered, self._services.read_max_bytes())
+            browsing = self._services.browsing()
+            explorer = BrowsingExplorer(browsing)
+            targets = PersonalNamespaceTargets(browsing, self._services.homes())
             if isinstance(command, ResolveHome):
                 node = await self._services.homes().get_or_provision(caller)
                 operation_completed()
@@ -75,7 +99,7 @@ class FilesystemBrowseTool(Tool):
                 response = HomeResponse(operation="home", result=inspection)
                 rendered = render_inspection(inspection)
             elif isinstance(command, InspectNode):
-                inspection = await explorer.inspect_node(caller, command.target)
+                inspection = await explorer.inspect_node(caller, await targets.resolve(caller, command.target))
                 operation_completed()
                 nodes = await enrich_nodes(self._services.sharing(), caller, [inspection.node], self._services.access())
                 inspection = FilesystemNodeInspection(node=nodes[0], breadcrumbs=inspection.breadcrumbs)
@@ -83,7 +107,8 @@ class FilesystemBrowseTool(Tool):
                 rendered = render_inspection(inspection)
             elif isinstance(command, ReadTree):
                 tree = await explorer.read_tree(
-                    caller, command.target, TreeLimits(depth=command.depth, max_entries=command.max_entries),
+                    caller, await targets.resolve(caller, command.target),
+                    TreeLimits(depth=command.depth, max_entries=command.max_entries),
                 )
                 operation_completed()
                 nodes = await enrich_nodes(
@@ -99,7 +124,7 @@ class FilesystemBrowseTool(Tool):
                 rendered = render_tree(tree)
             else:
                 listing = await explorer.list_directory(
-                    caller, command.target, ListingLimits(max_entries=command.max_entries),
+                    caller, await targets.resolve(caller, command.target), ListingLimits(max_entries=command.max_entries),
                 )
                 operation_completed()
                 nodes = await enrich_nodes(

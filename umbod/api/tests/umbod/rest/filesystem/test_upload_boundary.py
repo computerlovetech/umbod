@@ -15,13 +15,13 @@ from .test_http_contract import BASE
 def test_raw_transfer_rejects_before_consuming_request_stream(
     filesystem_http: FilesystemHttp, upload_path: str, monkeypatch: pytest.MonkeyPatch, reason: str,
 ) -> None:
-    from uuid import UUID
 
-    from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
-    from umbod.infrastructure import create_access_control_driver
 
     client = filesystem_http.client
-    session = begin_upload(client, upload_path, "file", b"x").json()
+    from .conftest import create_shared_namespace, replace_shared_access
+
+    namespace = create_shared_namespace(filesystem_http, "read_write")
+    session = begin_upload(client, f"{BASE}/nodes/{namespace.root_node_id}/uploads", "file", b"x").json()
     headers = session["transfer"]["headers"]
     path = session["transfer"]["url"]
     expected = 403
@@ -30,12 +30,7 @@ def test_raw_transfer_rejects_before_consuming_request_stream(
     elif reason == "unknown":
         path = f"{BASE}/uploads/{uuid4()}/content"
     elif reason == "revoked":
-        policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
-        root_id = client.get(f"{BASE}/browse").json()["node"]["id"]
-        client.portal.call(policies.add_grant, AccessGrant(
-            node_id=UUID(root_id), principal=Principal(type=PrincipalType.GROUP, issuer="issuer", id="team"),
-            permissions={Permission.DISCOVER}, recursive=False,
-        ))
+        replace_shared_access(filesystem_http, namespace, "read")
     elif reason == "media_type":
         headers = {"Content-Type": "text/plain"}
         expected = 415

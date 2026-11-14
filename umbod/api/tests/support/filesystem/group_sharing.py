@@ -1,9 +1,12 @@
 from asyncio import Lock
+from uuid import UUID
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 
 from umbod.core.groups.models import Group
+from umbod.core.filesystem.namespace import ROOT_ID, initial_root
+from umbod.core.filesystem.namespaces import NamespacePolicy
 from umbod.core.identity_directory.ports import ObservedUserDirectory
 from tests.support.identity_directory import InMemoryIdentityDirectory
 from umbod.core.filesystem import (
@@ -15,9 +18,23 @@ from umbod.core.filesystem.sharing.ports import (
 )
 
 
+SHARING_NAMESPACE_ID = UUID("00000000-0000-0000-0000-000000000101")
+SHARING_NODE_ID = UUID("00000000-0000-0000-0000-000000000102")
+
+
+def sharing_node() -> Node:
+    return initial_root().model_copy(update={"id": SHARING_NODE_ID, "parent_id": SHARING_NAMESPACE_ID, "name": "shared"})
+
+
+def sharing_namespace_policy() -> NamespacePolicy:
+    return NamespacePolicy(id=SHARING_NAMESPACE_ID, root_node_id=SHARING_NAMESPACE_ID, name="Namespace", kind="shared", issuer="issuer", revision=1, owners=frozenset(), grants=())
+
+
 class SharingNamespace:
     def __init__(self, nodes: tuple[Node, ...]) -> None:
-        self.nodes = {node.id: node for node in nodes}
+        root = initial_root()
+        namespace = root.model_copy(update={"id": SHARING_NAMESPACE_ID, "parent_id": ROOT_ID, "name": "Namespace"})
+        self.nodes = {node.id: node for node in (root, namespace, *nodes)}
 
     async def get_node(self, node_id: NodeId) -> Node:
         try:
@@ -49,6 +66,9 @@ class SharingPolicies:
     def __init__(self, ownership: Ownership, grants: tuple[AccessGrant, ...]) -> None:
         self.owners = {ownership.node_id: ownership}
         self.grants = {(grant.node_id, grant.principal): grant for grant in grants}
+
+    async def list_namespace_policies(self) -> list[NamespacePolicy]:
+        return [sharing_namespace_policy()]
 
     async def get_owner(self, node_id: NodeId) -> Ownership:
         try:

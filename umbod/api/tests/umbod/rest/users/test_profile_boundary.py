@@ -12,6 +12,7 @@ from fastapi.testclient import TestClient
 
 from umbod.config import AppConfig
 from umbod.rest.main import create_app
+from umbod.rest.user_catalogue.identity import catalogue_identity_key
 
 ISSUER = "https://identity.example.test/"
 KEY_ID = "profile-boundary-signing-key"
@@ -108,6 +109,7 @@ def test_profile_contract_uses_access_membership_not_profile_groups(
 
     assert response.status_code == 200
     assert response.json() == {
+        "identity_key": catalogue_identity_key({"iss": ISSUER, "sub": "admin"}),
         "user": {
             "id": "admin",
             "name": "Display Name",
@@ -350,7 +352,7 @@ def test_profile_dependency_does_not_change_user_openapi(
     }
     assert set(
         schema["components"]["schemas"]["UserProfileResponse"]["properties"]
-    ) == {"user", "capabilities"}
+    ) == {"identity_key", "user", "capabilities"}
     assert set(
         schema["components"]["schemas"]["CurrentUserResponse"]["properties"]
     ) == {"id", "email", "name", "picture"}

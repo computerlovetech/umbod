@@ -133,7 +133,7 @@ export class MoveDestinationState {
       const path = breadcrumbsSchema.parse(await this.api.getBreadcrumbs(id));
       if (generation !== this.generation || selection !== this.selectionGeneration) return;
       if (path.items.at(-1)?.id !== id || path.items.some((item) => item.kind !== 'directory') || new Set(path.items.map((item) => item.id)).size !== path.items.length) throw new Error('Invalid destination path');
-      if (path.items.some((item) => item.id === source.id)) {
+      if (!path.items.some((item) => item.id === this.rootId) || path.items.some((item) => item.id === source.id)) {
         this.clearSelection();
         return;
       }

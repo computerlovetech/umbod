@@ -16,5 +16,4 @@ description: Owner-scoped MCP completion records, canonical OTEL projection and 
 
 # Related documentation
 
-- [Personal usage specification](../../../../../project/specifications/personal-usage-analytics.md) — Collection, storage and personal reporting requirements.
 - [Persistence boundaries](../../../../../project/architecture-records/ADR-001-backend-neutral-persistence.md) — Application runtime ownership and backend-neutral storage boundaries.

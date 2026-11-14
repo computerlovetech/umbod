@@ -21,7 +21,7 @@ def creation_payload(kind: str, body: dict[str, object]) -> dict[str, Any]:
     return {"json": body}
 
 
-def test_group_root_creation_and_private_children(filesystem_http: FilesystemHttp) -> None:
+def test_personal_namespace_creation_and_private_children(filesystem_http: FilesystemHttp) -> None:
     client = filesystem_http.client
     root = client.get(f"{BASE}/browse").json()["node"]
     response = client.post(f"{BASE}/nodes/{root['id']}/directories", **creation_payload("directories", BODY))
@@ -34,7 +34,7 @@ def test_group_root_creation_and_private_children(filesystem_http: FilesystemHtt
     assert client.get(f"{BASE}/nodes/{root['id']}/children").json() == {"nodes": [child]}
     bob = {"Authorization": "Bearer bob"}
     assert client.get(f"{BASE}/browse", headers=bob).status_code == 200
-    assert client.get(f"{BASE}/nodes/{root['id']}/children", headers=bob).json() == {"nodes": []}
+    assert client.get(f"{BASE}/nodes/{root['id']}/children", headers=bob).status_code == 403
     denied = client.get(f"{BASE}/nodes/{child['id']}", headers=bob)
     missing = client.get(f"{BASE}/nodes/{uuid4()}", headers=bob)
     assert denied.status_code == missing.status_code == 403
@@ -44,7 +44,7 @@ def test_group_root_creation_and_private_children(filesystem_http: FilesystemHtt
 
 
 @pytest.mark.parametrize("suffix,method", [
-    ("/browse", "GET"), ("/nodes/{id}", "GET"),
+    ("/browse?node_id={id}", "GET"), ("/nodes/{id}", "GET"),
     ("/nodes/{id}/children", "GET"),
     ("/nodes/{id}/uploads", "POST"), ("/nodes/{id}/directories", "POST"),
 ])

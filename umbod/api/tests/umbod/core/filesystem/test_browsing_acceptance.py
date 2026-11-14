@@ -1,230 +1,90 @@
-from dataclasses import dataclass
 from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
 
-from umbod.core.filesystem import (
-    AccessGrant,
-    ContentRef,
-    Node,
-    NodeId,
-    NodeKind,
-    NodeMetadata,
-    Ownership,
-    Permission,
-    PrincipalType,
-    RootParent,
-    WrongNodeKind,
-)
-from umbod.core.filesystem.authorization import PermissionDenied, ResolvedIdentity
-from umbod.core.filesystem.browsing import BrowsingService, FilesystemBrowsing, NodeSummary
-from umbod.core.persistence import PersistenceRuntime
-from umbod.infrastructure import create_access_control_driver, create_namespace_driver, create_filesystem_transactions
-from tests.support.filesystem.authorization import (
-    AuthorizationContext,
-    caller,
-    create_authorization_context,
-    principal,
-)
-
-
-@dataclass(frozen=True)
-class BrowsingContext:
-    browsing: FilesystemBrowsing
-    authorization: AuthorizationContext
-
-
-@pytest.fixture
-def browsing_context(filesystem_runtime: PersistenceRuntime) -> BrowsingContext:
-    context = create_authorization_context(
-        create_namespace_driver(database=filesystem_runtime.database),
-        create_access_control_driver(database=filesystem_runtime.database),
-    )
-    for name in ("alice", "bob"):
-        context.resolver.identities[caller(name)] = ResolvedIdentity(
-            user=principal(name, PrincipalType.USER, "provider"), groups=[]
-        )
-    browsing: FilesystemBrowsing = BrowsingService(
-        context.namespace, context.authorization, context.resolver,
-        create_filesystem_transactions(database=filesystem_runtime.database),
-    )
-    return BrowsingContext(browsing, context)
-
-
-async def set_owner(context: BrowsingContext, node_id: NodeId, name: str) -> None:
-    await context.authorization.policies.set_owner(
-        Ownership(node_id=node_id, owner=principal(name, PrincipalType.USER, "provider"))
-    )
-
-
-async def grant(
-    context: BrowsingContext, node_id: NodeId, permission: Permission
-) -> None:
-    await context.authorization.policies.add_grant(
-        AccessGrant(
-            node_id=node_id,
-            principal=principal("alice", PrincipalType.USER, "provider"),
-            permissions={permission},
-            recursive=True,
-        )
-    )
-
-
-async def child(
-    context: BrowsingContext, parent_id: NodeId, name: str, kind: NodeKind
-) -> Node:
-    return await context.authorization.namespace.create_node(
-        parent_id, name, kind,
-        NodeMetadata(content_type="text/plain", attributes={"custom": "visible"}),
-    )
+from umbod.core.filesystem import ContentRef, WrongNodeKind
+from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
+from umbod.core.filesystem.namespace import ROOT_ID
+from umbod.core.filesystem.stores.namespaces import persist_policy
+from umbod.core.persistence import TransactionMode
+from umbod.infrastructure import create_filesystem_browsing
+from tests.support.filesystem.namespaces import set_shared_access
+from tests.umbod.core.filesystem.test_authorized_content import ContentContext, caller, metadata
+from tests.umbod.core.filesystem.test_authorized_content import content_context as content_context
+from tests.umbod.core.filesystem.test_effective_permissions import policy, principal
+from tests.umbod.core.filesystem.test_verified_identity import snapshot
 
 
 @pytest.mark.asyncio
-async def test_root_and_direct_lookup_return_complete_safe_summaries(
-    browsing_context: BrowsingContext,
-) -> None:
-    context = browsing_context
-    root = await context.authorization.namespace.get_root()
-    await set_owner(context, root.id, "alice")
-    root_summary = await context.browsing.get_root(caller("alice"))
-    assert isinstance(root_summary.parent_id, RootParent)
-    assert root_summary == await context.browsing.get_node(caller("alice"), root.id)
-    node = await child(context, root.id, "file", NodeKind.FILE)
-    node = await context.authorization.namespace.update_node(
-        node.id, content=ContentRef(key="secret-key", size=123), expected_revision=1
-    )
-    await set_owner(context, node.id, "bob")
-    await grant(context, node.id, Permission.DISCOVER)
-    observed = await context.browsing.get_node(caller("alice"), node.id)
-    expected = node.model_dump(exclude={"content"})
-    assert observed.model_dump() == expected
-    assert set(observed.model_dump()) == {
-        "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision"
-    }
+async def test_managed_lookup_returns_detached_safe_summaries(content_context: ContentContext) -> None:
+    context = content_context
+    node = await context.creation.create_file(caller(), context.root_id, "file", metadata())
+    stored = await context.namespace.update_node(node.id, content=ContentRef(key="secret-key", size=123), expected_revision=1)
+    browsing = create_filesystem_browsing(database=context.database, resolver=VerifiedIdentityResolver())
+    observed = await browsing.get_node(caller(), node.id)
+    assert observed.model_dump() == stored.model_dump(exclude={"content"})
     assert "secret-key" not in observed.model_dump_json()
     with pytest.raises(ValidationError):
         observed.name = "changed"
     observed.metadata.attributes["custom"] = "changed"
-    assert node.metadata.attributes == {"custom": "visible"}
-    assert (await context.browsing.get_node(caller("alice"), node.id)).metadata.attributes == {"custom": "visible"}
-    assert (await context.authorization.namespace.get_node(node.id)).metadata.attributes == {"custom": "visible"}
+    assert (await browsing.get_node(caller(), node.id)).metadata.attributes == {}
+    assert (await context.namespace.get_node(node.id)).metadata.attributes == {}
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("operation", "reason"),
-    [
-        (operation, reason)
-        for operation in ("root", "node", "list")
-        for reason in ("read-only", "unowned", "unresolved", "other-owner", "missing")
-        if (operation, reason) != ("root", "missing")
-    ],
-)
-async def test_targets_without_discover_are_uniformly_denied(
-    browsing_context: BrowsingContext, operation: str, reason: str,
-) -> None:
-    context = browsing_context
-    root = await context.authorization.namespace.get_root()
-    node_id = uuid4() if reason == "missing" else root.id
-    if reason != "unowned":
-        await set_owner(context, node_id, "bob")
-    if reason == "read-only":
-        await grant(context, node_id, Permission.READ)
-    if reason == "unresolved":
-        context.authorization.resolver.identities.clear()
+@pytest.mark.parametrize("missing", [False, True])
+@pytest.mark.parametrize("operation", ["get_node", "list_children"])
+async def test_root_and_missing_targets_are_uniformly_denied(content_context: ContentContext, missing: bool, operation: str) -> None:
+    browsing = create_filesystem_browsing(database=content_context.database, resolver=VerifiedIdentityResolver())
+    node_id = uuid4() if missing else ROOT_ID
     with pytest.raises(PermissionDenied, match=f"^discover denied for node {node_id}$"):
-        if operation == "root":
-            await context.browsing.get_root(caller("alice"))
-        elif operation == "node":
-            await context.browsing.get_node(caller("alice"), node_id)
-        else:
-            await context.browsing.list_children(caller("alice"), node_id)
+        await getattr(browsing, operation)(caller(), node_id)
+    assert not hasattr(browsing, "get_root")
 
 
 @pytest.mark.asyncio
-async def test_listing_filters_each_child_preserving_exact_unicode_name_order(
-    browsing_context: BrowsingContext,
-) -> None:
-    context = browsing_context
-    root = await context.authorization.namespace.get_root()
-    await set_owner(context, root.id, "alice")
-    visible: list[Node] = []
-    for name in ("é", "z", "a", "é", "A", "hidden", "read-only", "unowned"):
-        node = await child(context, root.id, name, NodeKind.FILE)
-        if name == "unowned":
-            continue
-        await set_owner(context, node.id, "bob")
-        if name == "hidden":
-            continue
-        await grant(context, node.id, Permission.READ if name == "read-only" else Permission.DISCOVER)
-        if name != "read-only":
-            visible.append(node)
-    result = await context.browsing.list_children(caller("alice"), root.id)
-    assert [item.id for item in result] == [node.id for node in sorted(visible, key=lambda node: node.name)]
-    assert [item.name for item in result] == ["A", "a", "é", "z", "é"]
-    assert all(isinstance(item, NodeSummary) for item in result)
-
-
-@pytest.mark.asyncio
-async def test_direct_child_discovery_needs_no_parent_authority_but_listing_does(
-    browsing_context: BrowsingContext,
-) -> None:
-    context = browsing_context
-    root = await context.authorization.namespace.get_root()
-    node = await child(context, root.id, "visible", NodeKind.FILE)
-    await set_owner(context, node.id, "alice")
-    assert (await context.browsing.get_node(caller("alice"), node.id)).id == node.id
+async def test_listing_filters_nearest_namespace_boundary_preserving_unicode_order(content_context: ContentContext) -> None:
+    context = content_context
+    names = ("é", "z", "a", "é", "A")
+    for name in names:
+        await context.creation.create_file(caller(), context.root_id, name, metadata())
+    hidden = await context.creation.create_directory(caller(), context.root_id, "hidden", metadata())
+    boundary = policy(hidden.id).model_copy(update={"owners": frozenset({principal("bob")})})
+    async with context.database.session(mode=TransactionMode.SERIALIZED_WRITE) as session:
+        await persist_policy(session, boundary)
+    browsing = create_filesystem_browsing(database=context.database, resolver=VerifiedIdentityResolver())
+    entries = await browsing.list_children(caller(), context.root_id)
+    assert [node.name for node in entries] == sorted(names)
     with pytest.raises(PermissionDenied):
-        await context.browsing.list_children(caller("alice"), root.id)
+        await browsing.get_node(caller(), hidden.id)
+    assert (await browsing.get_node(snapshot("bob", "issuer", ()), hidden.id)).id == hidden.id
+    with pytest.raises(PermissionDenied):
+        await browsing.list_children(snapshot("bob", "issuer", ()), context.root_id)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("authorized", [False, True])
-async def test_file_parent_kind_is_checked_only_after_discover(
-    browsing_context: BrowsingContext, authorized: bool,
-) -> None:
-    context = browsing_context
-    root = await context.authorization.namespace.get_root()
-    node = await child(context, root.id, "file", NodeKind.FILE)
-    await set_owner(context, node.id, "alice" if authorized else "bob")
-    with pytest.raises(WrongNodeKind if authorized else PermissionDenied):
-        await context.browsing.list_children(caller("alice"), node.id)
+async def test_file_parent_kind_is_checked_only_after_discover(content_context: ContentContext) -> None:
+    context = content_context
+    node = await context.creation.create_file(caller(), context.root_id, "file", metadata())
+    browsing = create_filesystem_browsing(database=context.database, resolver=VerifiedIdentityResolver())
+    with pytest.raises(WrongNodeKind):
+        await browsing.list_children(caller(), node.id)
+    with pytest.raises(PermissionDenied):
+        await browsing.list_children(snapshot("bob", "issuer", ()), node.id)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("hidden_child", [False, True])
-async def test_empty_and_fully_filtered_directories_have_identical_results(
-    browsing_context: BrowsingContext, hidden_child: bool,
-) -> None:
-    context = browsing_context
-    root = await context.authorization.namespace.get_root()
-    await set_owner(context, root.id, "alice")
-    if hidden_child:
-        await child(context, root.id, "hidden", NodeKind.DIRECTORY)
-    assert list(await context.browsing.list_children(caller("alice"), root.id)) == []
-
-
-@pytest.mark.asyncio
-async def test_repeated_browsing_observes_revocation_and_caller_isolation(
-    browsing_context: BrowsingContext,
-) -> None:
-    context = browsing_context
-    root = await context.authorization.namespace.get_root()
-    await set_owner(context, root.id, "bob")
-    await grant(context, root.id, Permission.DISCOVER)
-    node = await child(context, root.id, "file", NodeKind.FILE)
-    await set_owner(context, node.id, "alice")
-    assert len(await context.browsing.list_children(caller("alice"), root.id)) == 1
-    assert list(await context.browsing.list_children(caller("bob"), root.id)) == []
-    await set_owner(context, node.id, "bob")
-    assert [item.id for item in await context.browsing.list_children(caller("alice"), root.id)] == [node.id]
-    await context.authorization.policies.remove_grant(root.id, principal("alice", PrincipalType.USER, "provider"))
+async def test_browsing_observes_namespace_revocation_and_caller_isolation(content_context: ContentContext) -> None:
+    context = content_context
+    node = await context.creation.create_file(caller(), context.root_id, "file", metadata())
+    browsing = create_filesystem_browsing(database=context.database, resolver=VerifiedIdentityResolver())
+    assert [entry.id for entry in await browsing.list_children(caller(), context.root_id)] == [node.id]
     with pytest.raises(PermissionDenied):
-        await context.browsing.get_root(caller("alice"))
+        await browsing.list_children(snapshot("bob", "issuer", ()), context.root_id)
+    await set_shared_access(context.database, context.root_id, writable=False, discoverable=False)
     with pytest.raises(PermissionDenied):
-        await context.browsing.list_children(caller("alice"), root.id)
-    assert (await context.browsing.get_node(caller("bob"), node.id)).id == node.id
-    context.authorization.resolver.identities.clear()
+        await browsing.get_node(caller(), context.root_id)
+    assert (await browsing.get_node(caller(), node.id)).id == node.id
     with pytest.raises(PermissionDenied):
-        await context.browsing.get_node(caller("bob"), node.id)
+        await browsing.get_node(snapshot("bob", "issuer", ("team",)), node.id)

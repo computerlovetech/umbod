@@ -1,4 +1,5 @@
 import type { Attachment } from 'svelte/attachments';
+import { focusDialogControl } from '$lib/components/shared/dialogs/native-dialog';
 
 export function modalDialog(close: () => void, fallbackId: string): Attachment<HTMLDialogElement> {
   return (dialog: HTMLDialogElement): (() => void) => {
@@ -10,11 +11,12 @@ export function modalDialog(close: () => void, fallbackId: string): Attachment<H
     };
     dialog.addEventListener('cancel', cancel);
     dialog.showModal();
-    dialog.querySelector<HTMLElement>('[data-dialog-title]')?.focus();
+    focusDialogControl(dialog);
     return (): void => {
       dialog.removeEventListener('cancel', cancel);
       if (dialog.open) dialog.close();
       queueMicrotask((): void => {
+        if (document.activeElement?.closest('dialog[open]')) return;
         const target = opener?.isConnected && !opener.matches(':disabled') && !opener.closest('[inert]') ? opener : document.getElementById(fallbackId);
         target?.focus();
       });

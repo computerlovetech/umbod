@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class ApplicationFailureKind(Enum):
+    AGENT_BEHAVIOUR_RETENTION = ('Agent behaviour retention failed', 'agent_behaviour', 'purge', 'purge_failed')
     USAGE_PROJECTION = ('MCP usage projection dropped', 'mcp_usage', 'project', 'projection_failed')
     USAGE_OVERSIZED = ('MCP usage record dropped', 'mcp_usage', 'enqueue', 'oversized')
     USAGE_OVERFLOW = ('MCP usage queue full', 'mcp_usage', 'enqueue', 'overflow')

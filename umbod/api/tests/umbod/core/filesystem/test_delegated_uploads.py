@@ -8,9 +8,8 @@ from uuid import uuid4
 
 import pytest
 
-from umbod.core.filesystem import AccessGrant, ByteStream, Permission, Principal, PrincipalType
+from umbod.core.filesystem import ByteStream
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
-from umbod.core.filesystem.namespace import ROOT_ID
 from umbod.core.filesystem.stores.uploads import DatabaseUploadTransactions
 from umbod.core.filesystem.uploads import UploadService, UploadTransactions
 from umbod.core.filesystem.uploads.ports import UploadTransaction
@@ -24,11 +23,12 @@ from umbod.core.filesystem.uploads.models import (
 from umbod.core.persistence import PersistenceRuntime
 from umbod.infrastructure import InMemoryContentConfig, LocalContentConfig, create_content_driver
 
-from tests.umbod.core.filesystem.test_authorized_content import alice, caller, metadata, stream
+from tests.umbod.core.filesystem.test_authorized_content import caller, metadata, stream
 from tests.umbod.core.filesystem.test_authorized_content import content_context as content_context
 from tests.umbod.core.filesystem.test_upload_sessions import UploadContext
 from tests.umbod.core.filesystem.test_upload_sessions import uploads as uploads
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
+from tests.support.filesystem.namespaces import set_shared_access
 
 
 @pytest.mark.asyncio
@@ -48,7 +48,7 @@ async def test_streamed_receipts_survive_completion_and_expiry(
     payload = b"".join(chunks)
     receipt = VerifiedReceipt(size_bytes=len(payload), sha256=hashlib.sha256(payload).hexdigest())
     delegated = await service.begin_delegated(
-        caller(), ROOT_ID, "receipt", metadata(), len(payload), ExpectedChecksum(sha256=receipt.sha256),
+        caller(), uploads.content.root_id, "receipt", metadata(), len(payload), ExpectedChecksum(sha256=receipt.sha256),
     )
     assert delegated.expires_at == uploads.clock.now() + timedelta(minutes=15)
     assert delegated.session.expires_at == uploads.clock.now() + timedelta(hours=1)
@@ -68,14 +68,14 @@ async def test_streamed_receipts_survive_completion_and_expiry(
 @pytest.mark.asyncio
 async def test_checksum_mismatch_prevents_publication_and_releases_claim(uploads: UploadContext) -> None:
     delegated = await uploads.service.begin_delegated(
-        caller(), ROOT_ID, "checksum", metadata(), 2,
+        caller(), uploads.content.root_id, "checksum", metadata(), 2,
         ExpectedChecksum(sha256=hashlib.sha256(b"ok").hexdigest()),
     )
     with pytest.raises(UploadChecksumMismatch):
         await uploads.service.put_delegated(delegated.session.id, delegated.token, "application/octet-stream", stream(b"no"))
     with pytest.raises(UploadConflict):
         await uploads.service.complete(caller(), delegated.session.id)
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
     await uploads.service.put_delegated(delegated.session.id, delegated.token, "application/octet-stream", stream(b"o", b"k"))
     assert (await uploads.service.complete(caller(), delegated.session.id)).receipt == VerifiedReceipt(
         size_bytes=2, sha256=hashlib.sha256(b"ok").hexdigest(),
@@ -85,7 +85,7 @@ async def test_checksum_mismatch_prevents_publication_and_releases_claim(uploads
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", ["short", "interrupted", "cancelled"])
 async def test_failed_delegated_transfer_can_retry(uploads: UploadContext, failure: str) -> None:
-    delegated = await uploads.service.begin_delegated(caller(), ROOT_ID, "retry", metadata(), 2, NoExpectedChecksum())
+    delegated = await uploads.service.begin_delegated(caller(), uploads.content.root_id, "retry", metadata(), 2, NoExpectedChecksum())
 
     async def broken() -> ByteStream:
         yield b"a"
@@ -103,7 +103,7 @@ async def test_failed_delegated_transfer_can_retry(uploads: UploadContext, failu
 
 @pytest.mark.asyncio
 async def test_claim_admission_rejects_concurrent_and_replayed_bytes(uploads: UploadContext) -> None:
-    delegated = await uploads.service.begin_delegated(caller(), ROOT_ID, "once", metadata(), 1, NoExpectedChecksum())
+    delegated = await uploads.service.begin_delegated(caller(), uploads.content.root_id, "once", metadata(), 1, NoExpectedChecksum())
     entered = asyncio.Event()
     resume = asyncio.Event()
     reads: list[bool] = []
@@ -142,8 +142,8 @@ async def test_claim_admission_rejects_concurrent_and_replayed_bytes(uploads: Up
 @pytest.mark.asyncio
 @pytest.mark.parametrize("token_kind", ["empty", "wrong", "unicode", "tampered", "other_upload", "expired"])
 async def test_capabilities_deny_before_reading_any_body(uploads: UploadContext, token_kind: str) -> None:
-    delegated = await uploads.service.begin_delegated(caller(), ROOT_ID, "private", metadata(), 1, NoExpectedChecksum())
-    other = await uploads.service.begin_delegated(caller(), ROOT_ID, "other", metadata(), 1, NoExpectedChecksum())
+    delegated = await uploads.service.begin_delegated(caller(), uploads.content.root_id, "private", metadata(), 1, NoExpectedChecksum())
+    other = await uploads.service.begin_delegated(caller(), uploads.content.root_id, "other", metadata(), 1, NoExpectedChecksum())
     token = {
         "empty": "", "wrong": "x" * 43, "unicode": "é" * 43,
         "tampered": ("A" if delegated.token[0] != "A" else "B") + delegated.token[1:],
@@ -168,15 +168,15 @@ async def test_capabilities_deny_before_reading_any_body(uploads: UploadContext,
 async def test_transfer_rechecks_grants_and_expiry_without_holding_io_transaction(
     uploads: UploadContext, stage: str,
 ) -> None:
-    delegated = await uploads.service.begin_delegated(caller(), ROOT_ID, "revoked", metadata(), 1, NoExpectedChecksum())
+    delegated = await uploads.service.begin_delegated(caller(), uploads.content.root_id, "revoked", metadata(), 1, NoExpectedChecksum())
     if stage == "admission":
-        await uploads.content.policies.remove_grant(ROOT_ID, alice())
+        await set_shared_access(uploads.content.database, uploads.content.root_id, writable=False, discoverable=False)
     reads: list[bool] = []
 
     async def data() -> ByteStream:
         reads.append(True)
         if stage == "during_io":
-            await uploads.content.policies.remove_grant(ROOT_ID, alice())
+            await set_shared_access(uploads.content.database, uploads.content.root_id, writable=False, discoverable=False)
         if stage == "expiry_during_io":
             uploads.clock.current += timedelta(minutes=15)
         yield b"x"
@@ -186,23 +186,18 @@ async def test_transfer_rechecks_grants_and_expiry_without_holding_io_transactio
             delegated.session.id, delegated.token, "application/octet-stream", data(),
         ), 5)
     assert bool(reads) == (stage != "admission")
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
 
 
 @pytest.mark.asyncio
 async def test_completion_rechecks_fresh_caller_membership_and_owner(uploads: UploadContext) -> None:
-    group = Principal(type=PrincipalType.GROUP, issuer="issuer", id="writers")
-    await uploads.content.policies.add_grant(AccessGrant(
-        node_id=ROOT_ID, principal=group, permissions=frozenset({Permission.DISCOVER, Permission.WRITE}), recursive=False,
-    ))
-    await uploads.content.policies.remove_grant(ROOT_ID, alice())
-    issuance = snapshot("alice", "issuer", ("writers",))
-    delegated = await uploads.service.begin_delegated(issuance, ROOT_ID, "groups", metadata(), 1, NoExpectedChecksum())
+    issuance = caller()
+    delegated = await uploads.service.begin_delegated(issuance, uploads.content.root_id, "groups", metadata(), 1, NoExpectedChecksum())
     await uploads.service.put_delegated(delegated.session.id, delegated.token, "application/octet-stream", stream(b"x"))
-    for fresh in (caller(), snapshot("bob", "issuer", ("writers",))):
+    for fresh in (snapshot("alice", "issuer", ()), snapshot("bob", "issuer", ("team",))):
         with pytest.raises(PermissionDenied):
             await uploads.service.complete(fresh, delegated.session.id)
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
     assert (await uploads.service.complete(issuance, delegated.session.id)).created
 
 
@@ -210,7 +205,7 @@ async def test_completion_rechecks_fresh_caller_membership_and_owner(uploads: Up
 async def test_legacy_json_keeps_unavailable_receipt_and_old_completion_compatible(
     uploads: UploadContext, filesystem_runtime: PersistenceRuntime,
 ) -> None:
-    upload = await uploads.service.begin(caller(), ROOT_ID, "legacy", metadata(), 1)
+    upload = await uploads.service.begin(caller(), uploads.content.root_id, "legacy", metadata(), 1)
     await uploads.service.put(caller(), upload.id, "application/octet-stream", stream(b"x"))
     staged = await uploads.service.get(caller(), upload.id)
     payload = staged.model_dump(mode="json")
@@ -225,7 +220,7 @@ async def test_legacy_json_keeps_unavailable_receipt_and_old_completion_compatib
         await transaction.uploads.save(legacy)
     with pytest.raises(UploadReceiptUnavailable):
         await uploads.service.complete_verified(caller(), upload.id)
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []
     completed = await uploads.service.complete(caller(), upload.id)
     assert isinstance(completed.receipt, UnavailableReceipt)
     stored = await uploads.service.get(caller(), upload.id)
@@ -253,7 +248,7 @@ class CancelAfterCommitTransactions:
 async def test_cancellation_after_claim_commit_releases_claim(
     uploads: UploadContext, filesystem_runtime: PersistenceRuntime,
 ) -> None:
-    delegated = await uploads.service.begin_delegated(caller(), ROOT_ID, "cancelled-commit", metadata(), 1, NoExpectedChecksum())
+    delegated = await uploads.service.begin_delegated(caller(), uploads.content.root_id, "cancelled-commit", metadata(), 1, NoExpectedChecksum())
     service = UploadService(
         VerifiedIdentityResolver(), CancelAfterCommitTransactions(DatabaseUploadTransactions(filesystem_runtime.database)),
         uploads.content.content, 6, uploads.clock, timedelta(hours=1),
@@ -266,7 +261,7 @@ async def test_cancellation_after_claim_commit_releases_claim(
 
 @pytest.mark.asyncio
 async def test_crashed_claim_is_not_stolen(uploads: UploadContext, filesystem_runtime: PersistenceRuntime) -> None:
-    delegated = await uploads.service.begin_delegated(caller(), ROOT_ID, "crashed", metadata(), 1, NoExpectedChecksum())
+    delegated = await uploads.service.begin_delegated(caller(), uploads.content.root_id, "crashed", metadata(), 1, NoExpectedChecksum())
     grant = delegated.session.delegated_transfer
     assert isinstance(grant, DelegatedTransfer)
     crashed = delegated.session.model_copy(update={
@@ -276,4 +271,4 @@ async def test_crashed_claim_is_not_stolen(uploads: UploadContext, filesystem_ru
         await transaction.uploads.save(crashed)
     with pytest.raises(UploadConflict):
         await uploads.service.put_delegated(crashed.id, delegated.token, "application/octet-stream", stream(b"x"))
-    assert await uploads.content.namespace.list_children(ROOT_ID) == []
+    assert await uploads.content.namespace.list_children(uploads.content.root_id) == []

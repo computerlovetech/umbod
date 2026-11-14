@@ -1,8 +1,10 @@
 import { publicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
-import { resolveMcpEndpoint } from '$lib/components/getting-started/mcp-endpoint';
+import { resolveInstallerBaseUrl } from '$lib/components/getting-started/installation-url';
 import type { LayoutLoad } from './$types';
 
 export const load: LayoutLoad = async ({ url }) => {
   const configuration = await publicConfigurationProvider.get();
-  return { mcpEndpoint: resolveMcpEndpoint(configuration.mcpBaseUrl, url) };
+  return {
+    installerBaseUrl: resolveInstallerBaseUrl(configuration.apiBaseUrl, url)
+  };
 };

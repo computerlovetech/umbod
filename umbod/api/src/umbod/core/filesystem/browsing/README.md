@@ -1,7 +1,7 @@
 ---
 type: Software Module
 title: "Authorized filesystem browsing"
-description: "Caller-aware root discovery, node summaries, filtered child listing and visible ancestry."
+description: "Namespace-authorized node summaries, filtered child listing and visible ancestry."
 ---
 
 # Files

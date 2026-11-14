@@ -16,7 +16,6 @@ _READ_INSPECTION = (
     "This operation requested no filesystem write. Inspect the failure and current permissions before repeating the read.",
 )
 _OPERATION_INSTRUCTIONS: dict[str, tuple[str, ...]] = {
-    "get_filesystem_root": _READ_INSPECTION,
     "get_filesystem_node": _READ_INSPECTION,
     "list_filesystem_children": _READ_INSPECTION,
     "filesystem_search_sharing_recipients": _READ_INSPECTION,
@@ -33,7 +32,7 @@ _OPERATION_INSTRUCTIONS: dict[str, tuple[str, ...]] = {
     ),
     "filesystem_share": (
         "Inspect the original node with filesystem_browse operation stat and review manageable direct grants for the intended recipient and permissions before sharing again.",
-        "Restricted or unavailable sharing metadata does not prove that no grants exist. This is not a full effective-access audit; current sharing authority is still required.",
+        "Restricted sharing metadata does not establish that no grants exist. Namespace and recursive folder permissions may also apply; current sharing authority is still required.",
     ),
     "filesystem_delete_file": (
         "Inspect the original UUID with get_filesystem_node or filesystem_browse operation stat before another deletion request. Missing and inaccessible nodes remain indistinguishable and do not prove deletion.",
@@ -56,6 +55,13 @@ def _operation_recovery(
     error_code: str,
     state: OperationState,
 ) -> tuple[str, ...]:
+    if tool_name == "report_diagnostic":
+        if state != OperationState.NOT_STARTED:
+            return (
+                "Persistence may already have committed. Retry only the identical payload with the same idempotency_key; never generate a replacement key. Deduplication makes this exact retry safe, not the generic retry flag.",
+                "Do not claim success without a receipt. If the receipt cannot be recovered, contact an administrator with the request reference.",
+            )
+        return ("Correct the submission before retrying; reload and reassess stale instructions rather than relabeling old evidence.",)
     if error_code == "filesystem_delete_approval_denied":
         return (
             "No deletion was authorized by this failed approval. Do not fabricate acceptance, modify continuation state, or replay a consumed continuation.",
@@ -70,9 +76,18 @@ def _operation_recovery(
             "If no upload ID and transfer capability were received, recovery through the existing MCP tools is unavailable. Stop and contact an administrator with the request reference.",
         )
     if tool_name == "filesystem_browse":
+        if arguments.get("operation") == "namespaces":
+            return (
+                "Personal namespace provisioning may already have completed. Inspect the result before repeating the idempotent filesystem_browse operation namespaces; use only returned namespace and node IDs.",
+            )
         if arguments.get("operation") == "home":
             return (
                 "Private home provisioning may already have completed. Inspect the result before deciding whether to repeat the idempotent filesystem_browse operation home; do not substitute an invented path or UUID.",
+            )
+        target = arguments.get("target")
+        if isinstance(target, dict) and target.get("type") in {"root", "path"}:
+            return (
+                "Personal namespace provisioning may already have completed. Inspect the current namespace and permissions before repeating this read; root and absolute-path targets select only your personal files.",
             )
         return _READ_INSPECTION
     if error_code == "filesystem_upload_receipt_unavailable":
@@ -102,8 +117,8 @@ def recovery_instructions(
         return instructions
     if tool_name in {"create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_begin_upload"}:
         return (*instructions,
-            "Creating files requires discover and write on the parent directory. Ask its owner for the required permissions, or use filesystem_browse operation home for your private upload destination.",
+            "Creating files requires discover and write on the parent directory. Ask the item owner or a namespace administrator for access, or use filesystem_browse operation home for your private upload destination.",
         )
     return (*instructions,
-        "Ask the owner for the permissions required by this operation. Missing and inaccessible nodes remain indistinguishable; do not probe hidden destinations.",
+        "Ask the item owner or a namespace administrator for the permissions required by this operation. Missing and inaccessible nodes remain indistinguishable; do not probe hidden destinations.",
     )

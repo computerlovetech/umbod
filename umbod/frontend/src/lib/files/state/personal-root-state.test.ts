@@ -21,12 +21,12 @@ describe('personal Files root', () => {
     await files.load(null);
     expect(files.phase).toBe('ready');
     expect(files.node).toMatchObject({ id: home.id, name: home.name });
-    expect(files.locationName).toBe('Files');
+    expect(files.locationName).toBe('My files');
     expect(files.children.map((node) => node.name)).toEqual(['Projects']);
-    expect(files.navigation.displayItems.map((item) => item.id)).toEqual(rootVisible ? [rootId, folderId] : [folderId]);
-    expect(files.navigation.displayComplete).toBe(rootVisible);
-    expect(files.navigation.atRoot).toBe(false);
-    expect(files.navigation.parent?.id).toBe(rootVisible ? rootId : undefined);
+    expect(files.navigation.displayItems.map((item) => item.id)).toEqual([folderId]);
+    expect(files.navigation.displayComplete).toBe(true);
+    expect(files.navigation.atRoot).toBe(true);
+    expect(files.navigation.parent?.id).toBeUndefined();
     expect(files.update.canRename).toBe(false);
     expect(files.update.canMove).toBe(false);
     expect(browse).toHaveBeenCalledExactlyOnceWith(folderId, expect.any(AbortSignal));
@@ -37,12 +37,12 @@ describe('personal Files root', () => {
     const { api, files } = fixture();
     await files.load(fileId);
     expect(files.navigation.path?.items.map((item) => item.id)).toEqual([rootId, folderId, fileId]);
-    expect(files.navigation.displayItems.map((item) => item.id)).toEqual([rootId, folderId, fileId]);
-    expect(files.navigation.label(files.navigation.parent!)).toBe('Home');
+    expect(files.navigation.displayItems.map((item) => item.id)).toEqual([folderId, fileId]);
+    expect(files.navigation.label(files.navigation.parent!)).toBe('My files');
     expect(files.navigation.href(files.navigation.parent!)).toBe('/files');
     await files.reload();
-    expect(api.filesystem.getHome).toHaveBeenCalledTimes(1);
-    expect(files.navigation.displayItems.map((item) => item.id)).toEqual([rootId, folderId, fileId]);
+    expect(api.filesystem.getHome).toHaveBeenCalledTimes(2);
+    expect(files.navigation.displayItems.map((item) => item.id)).toEqual([folderId, fileId]);
     files.dispose();
   });
 
@@ -53,10 +53,8 @@ describe('personal Files root', () => {
     vi.spyOn(api.filesystem, 'getHome').mockImplementation((signal) => api.filesystem.getNode(folderId, signal));
     const files = new FilesState(api);
     await files.load(null);
-    const root = files.navigation.parent;
-    expect(root?.id).toBe(rootId);
-    expect(files.navigation.href(root!)).toBe('/files?node=' + rootId);
-    await files.load(root!.id);
+    expect(files.navigation.parent).toBeUndefined();
+    await files.load(rootId);
     expect(files.children.map((node) => node.id)).toContain(legacyFile.id);
     expect(files.navigation.atRoot).toBe(true);
     await files.load(null);
@@ -83,17 +81,17 @@ describe('personal Files root', () => {
     await api.filesystem.updateNode(folderId, 1, { name: 'Renamed home' });
     await files.load(folderId);
     expect(files.node?.name).toBe('Renamed home');
-    expect(files.nodePresentation(files.node!)).toEqual({ name: 'Home', isHome: true, iconKind: 'home' });
-    expect(files.locationName).toBe('Files');
-    expect(files.navigation.atRoot).toBe(false);
-    expect(files.navigation.parent?.id).toBe(rootId);
+    expect(files.nodePresentation(files.node!)).toEqual({ name: 'My files', isHome: true, iconKind: 'home' });
+    expect(files.locationName).toBe('My files');
+    expect(files.navigation.atRoot).toBe(true);
+    expect(files.navigation.parent?.id).toBeUndefined();
     files.dispose();
   });
 
   test('shared-root links retain their UUID destination instead of returning to home', async (): Promise<void> => {
     const { files } = fixture();
     await files.load(rootId);
-    expect(files.locationName).toBe('Root');
+    expect(files.locationName).toBe('Files');
     expect(files.navigation.href(files.navigation.displayItems[0])).toBe('/files?node=' + rootId);
     expect(files.atPersonalRoot).toBe(false);
     files.dispose();

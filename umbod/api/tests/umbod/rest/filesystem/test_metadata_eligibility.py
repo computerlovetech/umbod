@@ -1,11 +1,10 @@
+from typing import Literal
 from uuid import UUID, uuid4
 
 import pytest
 
 from umbod.core.callers import CallerSnapshot
-from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
 from umbod.core.filesystem.errors import StorageFailure
-from umbod.infrastructure import create_access_control_driver
 from umbod.rest.filesystem.deps import get_filesystem_deletion, get_filesystem_updates
 
 from .conftest import FilesystemHttp
@@ -27,31 +26,27 @@ def editable_node(filesystem_http: FilesystemHttp, request: pytest.FixtureReques
     return response.json()
 
 
-@pytest.mark.parametrize("permissions,methods", [
-    ({Permission.DISCOVER}, {"GET", "OPTIONS"}),
-    ({Permission.DISCOVER, Permission.WRITE}, {"GET", "OPTIONS", "PATCH"}),
-    ({Permission.DISCOVER, Permission.DELETE}, {"GET", "OPTIONS", "DELETE"}),
-    ({Permission.DISCOVER, Permission.WRITE, Permission.DELETE}, {"GET", "OPTIONS", "PATCH", "DELETE"}),
+@pytest.mark.parametrize("access,methods", [
+    ("read", {"GET", "OPTIONS"}),
+    ("read_write", {"GET", "OPTIONS", "PATCH", "DELETE"}),
 ])
-def test_options_reports_each_operation_independently(
-    filesystem_http: FilesystemHttp, editable_node: dict[str, object],
-    permissions: set[Permission], methods: set[str],
+def test_options_reports_shared_namespace_access(
+    filesystem_http: FilesystemHttp, access: Literal["read", "read_write"], methods: set[str],
 ) -> None:
+    from .conftest import create_shared_namespace, replace_shared_access
+
+    namespace = create_shared_namespace(filesystem_http, "read_write")
     client = filesystem_http.client
-    policies = create_access_control_driver(database=filesystem_http.factories.persistence_runtime.database)
-    node_id = UUID(str(editable_node["id"]))
-    client.portal.call(policies.add_grant, AccessGrant(
-        node_id=node_id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="bob"),
-        permissions=permissions, recursive=False,
-    ))
-    response = client.options(f"{BASE}/nodes/{node_id}", headers={"Authorization": "Bearer bob"})
+    node = upload_file(client, f"{BASE}/nodes/{namespace.root_node_id}/uploads", "shared", b"bytes").json()
+    replace_shared_access(filesystem_http, namespace, access)
+    response = client.options(f"{BASE}/nodes/{node['id']}", headers={"Authorization": "Bearer bob"})
     assert response.status_code == 204
-    expected = methods - {"DELETE"} if editable_node["kind"] == "directory" else methods
-    assert set(response.headers["allow"].split(", ")) == expected
+    assert set(response.headers["allow"].split(", ")) == methods
     assert response.headers["cache-control"] == "no-store"
-    current = client.get(f"{BASE}/nodes/{node_id}").json()
-    assert {key: value for key, value in current.items() if key != "visible_to"} == {key: value for key, value in editable_node.items() if key != "visible_to"}
-    assert set(current["visible_to"]["grants"][0]["permissions"]) == {permission.value for permission in permissions}
+    current = client.get(f"{BASE}/nodes/{node['id']}").json()
+    assert current["visible_to"] == {
+        "type": "namespace", "namespace_id": str(namespace.id), "kind": "shared", "name": namespace.name,
+    }
 
 
 def test_owner_options_includes_all_applicable_operations(

@@ -261,7 +261,7 @@ describe('table row deletion', (): void => {
     expect(row.available).toBe(false);
     expect(row.confirmation).toBeUndefined();
     expect(files.mutationNotice).toBe(action === 'reload' ? '“Notes.txt” was deleted from the workspace.' : '');
-    expect(files.node?.id).toBe(action === 'navigate' ? rootId : folderId);
+    expect(files.node?.id).toBe(action === 'dispose' ? undefined : action === 'navigate' ? rootId : folderId);
   });
 
   test('protects the same node when moving from a pending row to details', async (): Promise<void> => {

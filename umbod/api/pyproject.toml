@@ -43,6 +43,10 @@ packages = ["src/umbod", "src/messaging"]
 
 [tool.hatch.build.targets.wheel.force-include]
 "src/umbod/mcp/assets/logo.png" = "umbod/mcp/assets/logo.png"
+"src/umbod/rest/install/assets/install.sh" = "umbod/rest/install/assets/install.sh"
+"src/umbod/rest/install/assets/install.ps1" = "umbod/rest/install/assets/install.ps1"
+"../../skills/integrations/umbod-connected-apps/SKILL.md" = "umbod/harness_plugin_resources/SKILL.md"
+"../../LICENSE" = "umbod/harness_plugin_resources/LICENSE"
 
 [tool.hatch.build]
 dev-mode-dirs = ["src"]

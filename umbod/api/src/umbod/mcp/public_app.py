@@ -4,7 +4,6 @@ import random
 import secrets
 import time
 
-from umbod.config.identity_policy import filesystem_managed_issuer
 from umbod.core.diagnostics import PublishingSignalFailureHandler
 from umbod.mcp.middleware.capability_completion import McpCapabilityCompletionMiddleware
 
@@ -55,6 +54,8 @@ from umbod.core.capabilities.tools.names import PublicToolIdentity
 from umbod.core.connectors.native.tools.runtime_state import ConnectorToolRuntimeState
 from umbod_sdk.connectors.discovery import load_connector_plugins
 from umbod.mcp.agent_instructions import register_agent_instructions
+from umbod.mcp.agent_behaviour.composition import register_configured_agent_behaviour
+from umbod.mcp.agent_behaviour.reservations import ensure_connector_tool_name_available
 from umbod.mcp.http_transport import MAX_MCP_REQUEST_BODY_BYTES, create_mcp_http_app
 from umbod.mcp.administrator.composition import register_configured_administrator_tools
 from umbod.mcp.auth import MCPAuthProviderFactory
@@ -95,6 +96,7 @@ from umbod.mcp.connectors.downstream_mcp.inventory import shared_tool_inventory
 from umbod.mcp.middleware import McpAuditMiddleware, McpResponseMetadataMiddleware
 from umbod.mcp.middleware.protocol_metrics import McpProtocolMetricsMiddleware
 from umbod.mcp.filesystem.approval import McpFilesystemDeletionApproval
+from umbod.config.identity_policy import filesystem_managed_issuer
 from umbod.mcp.filesystem import CurrentFilesystemCallerCapture, DatabaseFilesystemServiceFactory, RuntimeFilesystemGroupClaimFields, StaticFilesystemGroupClaimFields, register_filesystem_resources, register_filesystem_tools
 from umbod.core.filesystem.stores.discovery import DatabaseFilesystemAuthorizationReader
 from umbod.mcp.filesystem.authorization import FilesystemToolVisibility, FilesystemVisibilityMiddleware
@@ -115,6 +117,7 @@ from umbod.mcp.connectors.openapi.discovery_runtime import initialize_openapi_di
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, ConnectorStorePair, HttpConnectorRuntimeStateSourceStrategy, LocalConnectorRuntimeStateSourceStrategy, StoreBackedConnectorRuntimeStateSourceStrategy, resolve_connector_runtime_state_source_strategy
 from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
 from umbod.config import AppConfig, InMemoryConnectorStoreConfig, SQLiteConnectorStoreConfig, load_server_app_config
+from umbod.core.agent_behaviour.retention import create_diagnostic_retention
 from umbod.logging import flush_logging
 from umbod.mcp.settings import MCPAppSettings
 from umbod.mcp.usage import McpUsageRuntime, create_mcp_usage_runtime
@@ -214,6 +217,10 @@ async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provide
         ),
     )
     register_filesystem_resources(mcp, filesystem_callers, filesystem_services)
+    mcp.agent_behaviour_service = register_configured_agent_behaviour(
+        mcp, McpObservedToolRegistrar(mcp, publisher), persistence_runtime.database,
+        allow_local=settings.admin_authentication.environment != 'production',
+    )
     await initialize_openapi_discovery(mcp)
     await _register_connector_capabilities(mcp, runtime, connector_tool_runtime_state_store, signals, mcp.execution_pipelines, settings.mcp.connector_tool_exposure_mode, settings.mcp.connector_code_execution_timeout_seconds, settings.mcp.maximum_uploaded_file_bytes)
     mcp.openapi_codemode_executor = build_openapi_codemode_executor(mcp, mcp.execution_pipelines, telemetry.application_failures)
@@ -279,6 +286,8 @@ def _default_connector_tool_runtime_state_store(runtime: ConnectorRuntime) -> In
     return store
 
 async def _register_connector_capabilities(mcp: FastMCP, runtime: ConnectorRuntime, connector_tool_runtime_state_store: InMemoryConnectorToolRuntimeStateStore, signals: McpSignals, execution_pipelines: McpToolExecutionPipelineFactory, connector_tool_exposure_mode: Literal['flat', 'gateway', 'codemode'], connector_code_execution_timeout_seconds: float, maximum_uploaded_file_bytes: int) -> None:
+    for mapping in runtime.connector_tool_mappings:
+        ensure_connector_tool_name_available(getattr(mapping, 'tool_name_prefix', '') or mapping.connector_id, mapping.operation_name)
     await register_connector_tools(mcp, connector_registrations=runtime.connector_registrations, connector_configuration_store=runtime.connector_configuration_store, connector_publishing_store=runtime.connector_publishing_store, connector_tool_mappings=runtime.connector_tool_mappings, capability_description_overrides=mcp.capability_description_overrides, connector_tool_runtime_state_store=connector_tool_runtime_state_store, signals=signals, execution_pipelines=execution_pipelines, connector_tool_exposure_mode=connector_tool_exposure_mode, connector_code_execution_timeout_seconds=connector_code_execution_timeout_seconds, maximum_uploaded_file_bytes=maximum_uploaded_file_bytes)
     connector_options = {'connector_registrations': runtime.connector_registrations, 'connector_configuration_store': runtime.connector_configuration_store, 'connector_publishing_store': runtime.connector_publishing_store, 'activation_store': mcp.capability_activation_store}
     await register_connector_prompts(mcp, ConnectorPromptRegistrationOptions(**connector_options, connector_prompt_mappings=runtime.connector_prompt_mappings))
@@ -464,6 +473,7 @@ def _create_public_http_lifespan(context: PublicAppRuntimeContext, *, owns_persi
             synchronizer = await _initialize_runtime_projection(context)
             async with AsyncExitStack() as stack:
                 await stack.enter_async_context(context.http_app.lifespan(context.http_app))
+                await stack.enter_async_context(create_diagnostic_retention(context.persistence_runtime.database, context.telemetry.application_failures).lifespan())
                 if context.settings.mcp.metrics_enabled:
                     metrics_server = context.telemetry.metrics_server_factory.create()
                     await metrics_server.start()

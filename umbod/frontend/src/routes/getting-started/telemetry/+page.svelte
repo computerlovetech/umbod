@@ -5,4 +5,4 @@
   let { data }: { data: PageData } = $props();
 </script>
 
-<GettingStarted activePage="telemetry" mcpEndpoint={data.mcpEndpoint} accountIdentity={data.accountIdentity} />
+<GettingStarted activePage="telemetry" installerBaseUrl={data.installerBaseUrl} accountIdentity={data.accountIdentity} />

@@ -11,7 +11,7 @@ from umbod.core.filesystem import AccessGrant, NodeId, Permission, Principal, Pr
 from umbod.core.filesystem.authorization import (
     PermissionDenied, ResolvedIdentity, UnresolvedIdentity, VerifiedIdentityResolver,
 )
-from umbod.core.filesystem.namespace import initial_root
+from tests.support.filesystem.group_sharing import sharing_node
 from umbod.core.filesystem.sharing import FilesystemSharing, SharingService
 from umbod.core.filesystem.sharing.ports import SharingSession
 from umbod.core.groups.models import Group
@@ -59,7 +59,7 @@ async def test_batch_resolves_once_and_reads_catalogue_only_once_if_authorized(a
     ports = CountingTransactions()
     resolver = CountingResolver()
     service: FilesystemSharing = SharingService(resolver, ports, "issuer")
-    root = initial_root()
+    root = sharing_node()
     second = root.model_copy(update={"id": uuid4(), "parent_id": root.id})
     ports.namespace.nodes[second.id] = second
     ports.policies.owners[second.id] = ports.policies.owners[root.id].model_copy(update={"node_id": second.id})
@@ -89,7 +89,7 @@ async def test_unresolved_caller_is_denied_before_transaction(empty: bool) -> No
     ports = CountingTransactions()
     service: FilesystemSharing = SharingService(CountingResolver(), ports, "issuer")
     with pytest.raises(PermissionDenied):
-        await service.summarize_nodes(snapshot("alice", "issuer", ("",)), () if empty else (initial_root().id,))
+        await service.summarize_nodes(snapshot("alice", "issuer", ("",)), () if empty else (sharing_node().id,))
     assert ports.entries == ports.groups.reads == 0
 
 
@@ -111,14 +111,14 @@ async def test_storage_errors_and_cancellation_propagate(failure: BaseException,
     else:
         monkeypatch.setattr(ports.groups, "registered_groups", fail_groups)
     with pytest.raises(type(failure)) as caught:
-        await service.summarize_nodes(caller(), (initial_root().id,))
+        await service.summarize_nodes(caller(), (sharing_node().id,))
     assert caught.value is failure
 
 
 @pytest.mark.asyncio
 async def test_protected_same_principal_collision_does_not_leak_manageable_grant() -> None:
     ports = CountingTransactions()
-    root = initial_root()
+    root = sharing_node()
     principal = Principal(type=PrincipalType.GROUP, issuer="issuer", id="team")
     editable = AccessGrant(node_id=root.id, principal=principal, permissions={Permission.READ}, recursive=False)
     protected = editable.model_copy(update={"permissions": set()})

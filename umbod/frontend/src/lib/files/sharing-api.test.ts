@@ -142,7 +142,7 @@ describe('node sharing adapters', (): void => {
 
   test('HTTP writes user targets without labels and rejects invalid or missing scope before transport', async (): Promise<void> => {
     const result: NodeAccess = { ...view, grants: [{ recipient: { type: 'user', user_id: 'user-a', label: 'Person A' }, recursive: false, permissions: ['read'] }], blocked_recipients: [] };
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ ...result, visible_to: { type: 'unavailable' } }));
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json({ ...result, visible_to: { type: 'restricted' } }));
     const api = new FilesApi(browserTransport({ fetch, configuration }));
     for (const invalid of [undefined, '', 'other', 'group&recipient_type=user']) {
       expect(() => api.sharing.replaceAccess(fileId, view.revision, { grants: [] }, invalid as SharingRecipientType)).toThrow(SchemaValidationError);
@@ -180,7 +180,7 @@ describe('node sharing adapters', (): void => {
   });
 
   test('HTTP sends only groups with strong opaque conditional JSON and searches the node-scoped catalogue', async (): Promise<void> => {
-    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(Response.json(view)).mockResolvedValueOnce(Response.json({ recipients: [{ type: 'group', group_id: ' Team A ', label: 'Friendly' }], has_more: false })).mockResolvedValueOnce(Response.json({ ...view, revision: 'new-hash', visible_to: { type: 'unavailable' } }));
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValueOnce(Response.json(view)).mockResolvedValueOnce(Response.json({ recipients: [{ type: 'group', group_id: ' Team A ', label: 'Friendly' }], has_more: false })).mockResolvedValueOnce(Response.json({ ...view, revision: 'new-hash', visible_to: { type: 'restricted' } }));
     const api = new FilesApi(browserTransport({ fetch, configuration }));
     const signal = new AbortController().signal;
     expect(await api.sharing.inspectAccess(fileId, 'group', signal)).toEqual(view);
@@ -194,8 +194,8 @@ describe('node sharing adapters', (): void => {
 
   test.each([
     { type: 'restricted' },
-    { type: 'unavailable' },
-    { type: 'available', scope: 'direct_node_policy', owner: { type: 'user', issuer: 'https://identity.test', id: 'owner' }, grants: [], group_members_expanded: false }
+    { type: 'namespace', namespace_id: fileId, kind: 'personal', name: 'Personal namespace' },
+    { type: 'namespace', namespace_id: fileId, kind: 'shared', name: 'Design' }
   ] satisfies NodeAccessWrite['visible_to'][])('validates write visibility without changing the read port contract %j', async (visible_to): Promise<void> => {
     const response = { ...view, visible_to };
     expect(nodeAccessWriteSchema.parse(response)).toEqual(response);
@@ -212,7 +212,7 @@ describe('node sharing adapters', (): void => {
     { ...view, visible_to: { type: 'unknown' } },
     { ...view, visible_to: { type: 'restricted', grants: [] } },
     { ...view, visible_to: { type: 'available', scope: 'direct_node_policy', owner: { type: 'user', issuer: 'issuer', id: 'owner' }, grants: [], group_members_expanded: true } },
-    { ...view, visible_to: { type: 'unavailable' }, unexpected: true }
+    { ...view, visible_to: { type: 'restricted' }, unexpected: true }
   ])('rejects missing or malformed write visibility and unknown fields %j', async (response): Promise<void> => {
     expect(nodeAccessWriteSchema.safeParse(response).success).toBe(false);
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(Response.json(response));

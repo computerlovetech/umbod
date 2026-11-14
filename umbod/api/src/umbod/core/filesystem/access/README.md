@@ -1,12 +1,12 @@
 ---
 type: Software Module
 title: Caller filesystem access metadata
-description: Fresh effective permissions and honest direct-node policy visibility, separate from manageable sharing.
+description: Fresh namespace-bounded permissions and discover-gated namespace location metadata.
 ---
 
 # Files
 
 - [__init__.py](./__init__.py) — Public contracts and service exports.
 
-- [models.py](./models.py) — Caller permission flags and available, restricted or unavailable direct policy projections.
-- [service.py](./service.py) — Discover-gated reads and authorized mutation-result flags with restricted visibility after access loss.
+- [models.py](./models.py) — Caller permission flags and namespace or restricted visibility.
+- [service.py](./service.py) — Namespace-bounded additive rights and mutation-result flags with restricted visibility after discovery loss.

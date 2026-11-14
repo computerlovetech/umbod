@@ -1,6 +1,7 @@
 import asyncio
 
 from umbod.infrastructure.persistence.schema_preparation import APPLICATION_PERSISTENCE_TABLES
+from umbod.core.filesystem.stores.namespaces import adopt_existing_homes
 from umbod.infrastructure.persistence.group_reconciliation import reconcile_group_catalogue
 from umbod.infrastructure.persistence.sqlite.database import SQLiteDatabase
 
@@ -13,6 +14,7 @@ _SQLITE_SPECIFIC_TABLE_NAMES = frozenset(
     }
 )
 _CURRENT_SCHEMA_STATEMENTS = (
+    "CREATE UNIQUE INDEX IF NOT EXISTS filesystem_namespaces_root_uq ON filesystem_namespaces(root_node_id)",
     "CREATE INDEX IF NOT EXISTS personal_usage_events_day_idx ON personal_usage_events(day)",
     "CREATE INDEX IF NOT EXISTS personal_usage_events_owner_day_idx ON personal_usage_events(owner_id, day)",
     "CREATE INDEX IF NOT EXISTS personal_usage_daily_day_idx ON personal_usage_daily(day)",
@@ -62,3 +64,4 @@ class SQLiteCurrentSchemaPreparation:
                         "ALTER TABLE mcp_permission_groups ADD COLUMN revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0)"
                     )
             await reconcile_group_catalogue(self._database)
+            await adopt_existing_homes(self._database)

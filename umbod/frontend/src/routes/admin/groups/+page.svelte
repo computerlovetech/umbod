@@ -7,5 +7,5 @@
 
 <svelte:head><title>Groups · Administration</title></svelte:head>
 <AdminShell activeItem="groups" accountIdentity={data.accountIdentity ?? { kind: 'hidden' }} contentWidth="wide">
-  <div class="admin-page">{#key data.groups}<GroupsWorkspace groups={data.groups} />{/key}</div>
+  {#key data.groups}<GroupsWorkspace groups={data.groups} />{/key}
 </AdminShell>

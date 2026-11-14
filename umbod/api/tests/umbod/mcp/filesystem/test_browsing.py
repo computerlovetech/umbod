@@ -1,14 +1,13 @@
 from typing import Any
 from unittest.mock import Mock
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from fastmcp import Client, FastMCP
 from jsonschema import FormatChecker, ValidationError as SchemaValidationError, validate
 
 from umbod.core.callers import AuthenticationProvenance
-from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
-from umbod.infrastructure import create_access_control_driver
+from umbod.core.filesystem.namespace import ROOT_ID
 from umbod.mcp.filesystem import register_filesystem_tools
 from umbod.mcp.signals import McpInvocationPublisher
 from umbod.mcp.tools import McpObservedToolRegistrar
@@ -56,19 +55,18 @@ async def test_browse_discovery_declares_operations_without_constructing_service
 ) -> None:
     factory = Mock(side_effect=AssertionError("Discovery must not access services"))
     monkeypatch.setattr(filesystem_invocation_mcp.services, "browsing", factory)
-    monkeypatch.setattr(filesystem_invocation_mcp.services, "sharing", factory)
     async with Client(filesystem_invocation_mcp.server) as client:
         descriptor = next(tool for tool in await client.list_tools() if tool.name == TOOL)
     assert descriptor.input_schema["type"] == "object"
     branches = descriptor.input_schema["oneOf"]
-    assert {branch["properties"]["operation"]["const"] for branch in branches} == {"ls", "tree", "stat", "home"}
+    assert {branch["properties"]["operation"]["const"] for branch in branches} == {"ls", "tree", "stat", "home", "namespaces"}
     assert all(branch["additionalProperties"] is False for branch in branches)
     assert all(len(branch["properties"]["target"]["oneOf"]) == 3 for branch in branches if "target" in branch["properties"])
     assert "target" not in next(branch for branch in branches if branch["properties"]["operation"]["const"] == "home")["properties"]
     assert len(descriptor.input_schema["properties"]["target"]["oneOf"]) == 3
     for branch in branches:
         operation = branch["properties"]["operation"]["const"]
-        if operation == "home":
+        if operation in {"home", "namespaces"}:
             validate({"operation": operation}, branch)
             with pytest.raises(SchemaValidationError):
                 validate({"operation": operation, "target": ROOT}, branch)
@@ -116,7 +114,8 @@ async def test_tree_resolves_path_and_returns_descendants_with_depth_cutoffs(
     filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
     async with Client(filesystem_invocation_mcp.server) as client:
-        root = await root_id(client)
+        home = await client.call_tool(TOOL, {"operation": "home"})
+        root = str(home.structured_content["result"]["node"]["id"])
         projects = await create_node(client, root, "projects", "directory")
         reports = await create_node(client, projects, "reports", "directory")
         await create_node(client, reports, "annual.txt", "file")
@@ -164,26 +163,26 @@ async def test_stat_accepts_file_id_without_reading_bytes(filesystem_invocation_
 
 
 @pytest.mark.asyncio
-async def test_independently_accessible_directory_by_id_preserves_partial_location(
+async def test_shared_namespace_by_id_stops_breadcrumbs_at_namespace_boundary(
     filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
-    async with Client(filesystem_invocation_mcp.server) as client:
-        root = await root_id(client)
-        directory = await create_node(client, root, "private", "directory")
-        await filesystem_invocation_mcp.runtime.reconcile()
-        filesystem_invocation_mcp.callers.current.set(caller_snapshot(
-            "alice", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED,
-        ))
+    from .test_visibility import shared_namespace, select_caller
+
+    filesystem = filesystem_invocation_mcp
+    namespace = await shared_namespace(filesystem)
+    select_caller(filesystem, "alice", (namespace.groups[0].group_id,))
+    async with Client(filesystem.server) as client:
+        directory = await create_node(client, str(namespace.root_node_id), "reference", "directory")
+        select_caller(filesystem, "bob", (namespace.groups[0].group_id,))
         result = await client.call_tool(TOOL, {
             "operation": "ls", "target": {"type": "node", "node_id": directory},
         })
         denied = await client.call_tool(TOOL, {
-            "operation": "ls", "target": {"type": "path", "path": "/private"},
+            "operation": "ls", "target": {"type": "path", "path": "/reference"},
         }, raise_on_error=False)
-    assert result.structured_content["result"]["breadcrumbs"]["complete"] is False
-    assert '".../private"' in result.content[0].text
+    assert result.structured_content["result"]["node"]["id"] == directory
+    assert all(item["id"] != str(ROOT_ID) for item in result.structured_content["result"]["breadcrumbs"]["items"])
     assert denied.is_error
-    assert denied.content[0].text == "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."
 
 
 @pytest.mark.asyncio
@@ -246,37 +245,30 @@ async def test_listing_file_returns_existing_safe_kind_error(filesystem_invocati
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("operation", ["stat", "ls", "tree"])
-@pytest.mark.parametrize("restricted", [False, True], ids=["owner", "restricted"])
-async def test_browse_text_projects_authorized_permissions_and_visibility(
-    filesystem_invocation_mcp: FilesystemMcp, operation: str, restricted: bool,
+@pytest.mark.parametrize("shared", [False, True], ids=["personal", "shared"])
+async def test_browse_text_projects_namespace_permissions_and_visibility(
+    filesystem_invocation_mcp: FilesystemMcp, operation: str, shared: bool,
 ) -> None:
+    from .test_visibility import shared_namespace, select_caller
+
     filesystem = filesystem_invocation_mcp
+    namespace = await shared_namespace(filesystem) if shared else None
     async with Client(filesystem.server) as client:
-        directory = await create_node(client, await root_id(client), "audience", "directory")
-        child = await create_node(client, directory, "child", "file")
-        if restricted:
-            policies = create_access_control_driver(database=filesystem.database)
-            for node_id in (directory, child):
-                await policies.add_grant(AccessGrant(
-                    node_id=UUID(node_id),
-                    principal=Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob"),
-                    permissions={Permission.DISCOVER, Permission.READ, Permission.WRITE}, recursive=False,
-                ))
-            filesystem.callers.current.set(caller_snapshot(
-                "bob", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED,
-            ))
+        if namespace is not None:
+            select_caller(filesystem, "alice", (namespace.groups[0].group_id,))
+        root = str(namespace.root_node_id) if namespace is not None else await root_id(client)
+        directory = await create_node(client, root, "audience", "directory")
+        await create_node(client, directory, "child", "file")
+        if namespace is not None:
+            select_caller(filesystem, "bob", (namespace.groups[0].group_id,))
         result = await client.call_tool(TOOL, {
             "operation": operation, "target": {"type": "node", "node_id": directory},
         })
     rendered = result.content[0].text
     visible_nodes = 1 if operation == "stat" else 2
     assert rendered.count('"can_write":true') == visible_nodes
-    if restricted:
-        assert rendered.count('visible_to={"type":"restricted"}') == visible_nodes
-        assert '"owner":' not in rendered
-        assert '"grants":' not in rendered
-        assert '"alice"' not in rendered
-    else:
-        assert rendered.count('visible_to={"type":"available","scope":"direct_node_policy"') == visible_nodes
-        assert rendered.count('"group_members_expanded":false') == visible_nodes
-        assert rendered.count('"grants":[]') == visible_nodes
+    assert rendered.count('visible_to={"type":"namespace"') == visible_nodes
+    assert '"kind":"' + ("shared" if shared else "personal") + '"' in rendered
+    assert '"owner":' not in rendered
+    assert '"grants":' not in rendered
+    assert ("sharing unavailable" in rendered) is shared

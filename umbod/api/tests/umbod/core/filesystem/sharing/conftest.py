@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from uuid import uuid4
 
 import pytest_asyncio
 
@@ -11,9 +12,10 @@ from umbod.core.groups import GroupManagementService
 from umbod.core.groups.stores.composition import create_group_management
 from umbod.core.persistence import Database, PersistenceRuntime
 from umbod.infrastructure import (
-    create_access_control_driver, create_filesystem_sharing, create_namespace_driver,
+    create_access_control_driver, create_filesystem_sharing, create_namespace_driver, create_filesystem_namespace_management,
 )
 from tests.umbod.core.filesystem.test_authorized_content import alice, metadata
+from umbod.core.filesystem.namespaces import CreateSharedNamespace
 
 
 @dataclass(frozen=True)
@@ -28,7 +30,8 @@ class SharingContext:
 
 async def sharing_context(database: Database) -> SharingContext:
     namespace = create_namespace_driver(database=database)
-    node = await namespace.create_node((await namespace.get_root()).id, "shared", NodeKind.DIRECTORY, metadata())
+    registered = await create_filesystem_namespace_management(database=database, issuer="issuer").create(CreateSharedNamespace(name=f"Namespace-{uuid4()}", groups=[]))
+    node = await namespace.create_node(registered.root_node_id, "shared", NodeKind.DIRECTORY, metadata())
     policies = create_access_control_driver(database=database)
     await policies.set_owner(Ownership(node_id=node.id, owner=alice()))
     return SharingContext(

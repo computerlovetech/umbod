@@ -267,7 +267,7 @@ describe('file deletion state', (): void => {
     else await second.files.load(rootId);
     response.resolve();
     await operation;
-    expect(second.files.node?.id).toBe(action === 'dispose' ? fileId : rootId);
+    expect(second.files.node?.id).toBe(action === 'dispose' ? undefined : rootId);
     expect(second.files.deletion.confirmation).toBeUndefined();
     expect(second.files.deletion.message).toBe('');
   });

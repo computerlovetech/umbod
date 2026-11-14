@@ -1,57 +1,52 @@
 ---
 type: Reference
 title: Filesystem homes and permissions
-description: Personal upload destinations and caller-specific permission and visibility metadata.
+description: Private upload destinations, namespace-owned caller permissions and safe visibility metadata.
 ---
 
 # Filesystem homes and permissions
 
-## Choosing a destination for an agent upload
+## Choosing an upload destination
 
-When the user says “upload it to Umbod” without choosing a destination, use the `home` operation of `filesystem_browse`. This operation takes no target, path, user, or issuer. It resolves the authenticated caller's home and provisions it with caller ownership and no direct grants on first use. It returns the home node and permission-safe breadcrumbs; use `ls` with the returned node UUID to list its contents.
+When no destination is specified, use the targetless `home` operation of `filesystem_browse`. It resolves or provisions the caller's private personal namespace and returns its home node and namespace-bounded breadcrumbs. Use the returned UUID as the upload's `parent_id`.
 
-First-use provisioning changes tool eligibility through the existing event-synchronized runtime. Refresh tool discovery when upload tools have not yet appeared; do not interpret that reconciliation delay as a denial of the returned home permissions.
+The targetless `namespaces` operation lists this personal namespace and accessible shared namespaces. Root and absolute-path browse targets resolve only within personal files. Select a shared namespace using its returned `root_node_id`; do not infer a path from its display name.
 
-Use the returned node's `id` as the upload's `parent_id`. Check `permissions.can_write` rather than inferring write access from a folder name, administrator role, or `sharing.can_share`. Inspect `visible_to` separately from manageable sharing information. Permission metadata is a point-in-time snapshot, not a reservation: subsequent operations still check current authorization. Metadata-update responses capture access information within the mutation transaction, so later revocation does not turn a committed update into a reported authorization failure.
+First-use provisioning publishes a durable discovery change. Refresh discovery when upload tools have not yet appeared; synchronization delay does not invalidate returned permissions. REST exposes home resolution through `POST /api/me/filesystem/home` and discovery through `GET /api/me/filesystem/namespaces`.
 
-For an existing local file, compute its exact byte count and preferably its SHA-256 programmatically. Use `filesystem_begin_upload`, transfer the original bytes using its HTTP instructions, and call `filesystem_complete_upload`. Do not reconstruct local contents as generated text, invent a checksum, or treat a display name as a writable path. The [upload transfer reference](filesystem-upload-transfers.md) describes credentials, limits and retries.
+Check `permissions.can_write`, not a folder name, administrator role or creator identity. Permission metadata is a point-in-time snapshot, not a reservation. Subsequent operations check current authorization. Update responses capture access within the mutation transaction, so a committed update must not be retried merely because discovery was lost afterward.
 
-After completion, report the returned file identity, verified size and SHA-256, and the file's own `visible_to` information. Do not report success before completion. Do not infer the file's audience from its parent folder or from an earlier upload receipt. Restricted or unavailable visibility must be reported as unknown, not private.
+For an existing local file, compute its exact byte count and preferably its SHA-256 from the original bytes. Use `filesystem_begin_upload`, transfer those bytes using its HTTP instructions, then call `filesystem_complete_upload`. Do not reconstruct local contents as generated text or invent a checksum. See [Upload transfers](filesystem-upload-transfers.md).
 
-## Personal homes and the shared root
+Report success only after completion, using the returned identity, verified size and SHA-256, and current `visible_to` descriptor. Repeated completion retains the verified receipt but resolves current access again. Restricted visibility must be reported as unknown, not private.
 
-The shared root remains the canonical filesystem root. A home is an ordinary directory beneath it, owned by its authenticated user and initially created with no sharing grants. Creating a home does not require permission to discover or write to the shared root and does not grant either permission.
+## Personal namespace identity
 
-Home identity is bound to the exact authenticated issuer and user identifier. The durable binding, not a name or path, identifies the home. Default names use `Home-` followed by an opaque UUID to preserve sibling-name uniqueness without putting user identities in directory names. Renaming a home does not change its identity or cause another home to be created.
+Home identity is bound to the exact trusted issuer and user identifier. A durable binding, not a name or path, identifies it. Repeated and concurrent requests resolve the same directory. Lookup never adopts an arbitrary folder because its name resembles a home; inconsistent bindings or ownership fail closed.
 
-Repeated and concurrent home requests resolve the same directory. Lookup never adopts an existing folder merely because its name resembles a home. Missing or inconsistent ownership and binding state fails closed instead of selecting another user's folder or silently replacing policy.
+Files presents the personal namespace as **My files**. Its root cannot be renamed, moved or deleted through ordinary file operations. Breadcrumbs and move destinations stop at the namespace boundary. The hidden structural anchor is not a browsable shared workspace.
 
-Shared-root browsing filters each child independently. Administrator status or a folder-only root grant does not reveal another user's unshared home. An explicitly recursive root grant does apply to homes and their contents. A user can explicitly share their home under the existing sharing rules; home lookup does not reset those choices. These are application authorization guarantees, not encryption against operators of the underlying storage.
-
-The web Files page opens directly into the caller's home, provisioning it on first use, and presents it as **Files** rather than a separate `Home-<UUID>` folder. Breadcrumbs and move destinations stop at this personal root and keep its internal name out of headings, upload destinations and sharing dialogs. This presentation follows the durable home binding even after a rename. Explicit node links outside the home remain available under existing permissions; the canonical root is labelled **Shared files** and retains its explicit node UUID link. No existing nodes are moved or renamed.
-
-REST exposes the same caller-only operation through POST `/api/me/filesystem/home`. The `/api/me` prefix identifies the caller; it does not turn the entire filesystem into a personal namespace. Existing root browsing and explicit node UUIDs retain their meaning. A home is not a new `/me` path alias or a working directory.
+Personal namespaces are private by default. Explicit item sharing permits access to child files and folders, without exposing the personal root. Administrator status and old global-root grants provide no implicit access. These are application authorization guarantees, not encryption against storage operators. Existing bound personal homes are retained; unrelated unmanaged entries are not adopted or deleted automatically.
 
 ## Caller permissions
 
-Full node summaries include a `permissions` object with `can_discover`, `can_read`, `can_write`, `can_delete`, and `can_share`. Values describe the current caller, combining matching direct user/group grants, recursive ancestor grants, and ownership of that node. Directory deletion remains unsupported, so directories report `can_delete` as false.
+Full node summaries include five permission flags:
 
-These fields are separate from MCP `sharing` metadata, which describes the direct user and group grants that the caller can manage. Being unable to manage sharing does not imply being unable to write. Conversely, sharing authority does not grant write permission.
+- `can_discover`: discover the node and its metadata.
+- `can_read`: read content where supported.
+- `can_write`: create children and perform eligible updates.
+- `can_delete`: delete a file; directories report false because their deletion is unsupported.
+- `can_share`: manage direct file/folder sharing; namespace roots report false.
 
-Permission metadata accompanies full node summaries returned by browsing, creation, metadata changes and completed uploads. Sparse breadcrumb items, deletion acknowledgements and unpublished upload-session instructions are not full node summaries. Content downloads continue to enforce their existing authorization rules.
+Permissions add the containing namespace's baseline, item ownership, matching direct grants and recursive folder grants within that namespace. Grants at the structural global root do not inherit into namespaces. Unmanaged nodes remain inaccessible even when ownership or grants exist. Removing one source of access does not revoke rights supplied by another.
 
-## Visibility is a policy description
+Permission metadata accompanies full summaries from browsing, creation, updates and completed uploads. Sparse breadcrumbs, deletion acknowledgements and unpublished session instructions are not full summaries. Downloads independently enforce authorization.
 
-`visible_to` has three explicit states:
+## Visibility
 
-- `available` describes the owner and the node's actual direct grants, scoped as `direct_node_policy`. It is available to callers authorized to inspect the policy, not merely to write the node.
-- `restricted` means the caller cannot inspect the policy. This is not evidence of owner-only access.
-- `unavailable` means the policy cannot be represented reliably. It must not be replaced by an empty audience.
+`visible_to` has two states:
 
-An available policy includes direct principals even when those principals are not present in the manageable sharing projection. An empty manageable-grant list alone never establishes privacy. An available owner-only direct policy with no grants does not rule out inherited access. Homes and newly created files receive no copied grants, but applicable recursive ancestor shares still apply.
+- `namespace` identifies the governing `namespace_id`, its `kind` (`personal` or `shared`) and display `name`. The descriptor identifies the containing namespace, not every source of item access.
+- `restricted` supplies no namespace details when discovery has been lost. It must not be interpreted as private or as an empty audience.
 
-`group_members_expanded` is false: group grants identify groups, not a complete enumeration of their members. Discover permission governs node metadata; reading file content additionally requires read permission. Effective rights can combine grants for multiple principals belonging to the same caller, so the policy is not a complete list of individual readers.
-
-Recursive directory grants apply to existing and future descendants, including new uploads. Folder-only grants do not inherit, and existing false scopes are not automatically widened. Ownership remains node-local. Administrator membership supplies no implicit filesystem override. The direct-only `visible_to` projection is not a complete effective audience; do not infer privacy from an empty direct policy.
-
-Visibility returned after a write describes that node's policy. A repeated upload completion retains its verified byte receipt while resolving current caller permissions and visibility, rather than claiming the original audience remains unchanged.
+Visibility does not enumerate group members, disclose another owner's identity or expose direct node grants. Namespace baseline access applies to every descendant and can be supplemented, but not reduced, by individual shares. A personal namespace descriptor alone does not prove an item is private. Moves remain within a namespace and preserve its governing policy. See [Namespace access](filesystem-namespaces.md) and [File and folder sharing](filesystem-sharing.md).

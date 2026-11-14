@@ -15,4 +15,3 @@ description: "Browser transport, public runtime configuration and administration
 - [schema.ts](./schema.ts) — Shared validation helpers.
 - [transport.ts](./transport.ts) — Authenticated JSON, multipart and raw-File transport, validated strong opaque conditional headers and header responses.
 - [transport.spec.ts](./transport.spec.ts) — Transport tests.
-- [Sharing transport regressions](../../files/sharing-api.test.ts) — Conditional JSON replacement and malformed If-Match rejection before network I/O.

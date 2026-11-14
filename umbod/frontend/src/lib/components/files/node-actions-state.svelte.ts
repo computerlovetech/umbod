@@ -5,14 +5,18 @@ import type { SharingEligibilityState } from '$lib/files/state/sharing-eligibili
 import type { DeletionState } from '$lib/files/state/deletion-state.svelte';
 
 export class NodeActionsState {
-  private expanded = $state(false);
+  private expanded = $state<{ nodeId: string | undefined; contextKey: number } | undefined>(undefined);
   private detailsId = $state<string | undefined>(undefined);
+  private detailsContext = $state(0);
   private element: HTMLElement | undefined;
   private fallbackFocus: HTMLElement | null = null;
 
-  constructor(private readonly inputs: () => { update: NodeUpdateState; description: DescriptionState; node?: NodeSummary; sharing?: SharingEligibilityState; deletion?: DeletionState; mutationsAllowed?: boolean }) {}
+  constructor(private readonly inputs: () => { update: NodeUpdateState; description: DescriptionState; node?: NodeSummary; sharing?: SharingEligibilityState; deletion?: DeletionState; mutationsAllowed?: boolean; disabled?: boolean; contextKey?: number }) {}
 
-  get open(): boolean { return this.expanded; }
+  get open(): boolean {
+    const { node, contextKey = 0, disabled = false } = this.inputs();
+    return !disabled && !!this.expanded && this.expanded.nodeId === node?.id && this.expanded.contextKey === contextKey;
+  }
   get available(): boolean {
     const { update, description } = this.inputs();
     return this.canViewDetails || this.mutationsAllowed && (this.canShare || this.inputs().deletion?.available === true || this.inputs().deletion?.pending === true || update.canRename || update.canMove || update.probeFailed || update.needsReload || description.available || description.eligibility === 'error' || description.eligibility === 'sign-in' || description.needsReload);
@@ -21,18 +25,21 @@ export class NodeActionsState {
   get canViewDetails(): boolean { return this.inputs().node?.permissions.can_discover === true; }
   get detailsNode(): NodeSummary | undefined {
     const { node } = this.inputs();
-    return this.canViewDetails && node?.id === this.detailsId ? node : undefined;
+    return !this.inputs().disabled && (this.inputs().contextKey ?? 0) === this.detailsContext && this.canViewDetails && node?.id === this.detailsId ? node : undefined;
   }
 
   showDetails = (): void => {
-    if (this.canViewDetails) this.run((): void => { this.detailsId = this.inputs().node?.id; });
+    if (this.canViewDetails) this.run((): void => {
+      this.detailsId = this.inputs().node?.id;
+      this.detailsContext = this.inputs().contextKey ?? 0;
+    });
   };
 
   closeDetails = (): void => { this.detailsId = undefined; };
 
   attachDetails = (_element: HTMLElement): (() => void) => this.closeDetails;
 
-  get busy(): boolean { return this.inputs().update.pending || this.inputs().description.pending || this.inputs().deletion?.pending === true; }
+  get busy(): boolean { return this.inputs().disabled === true || this.inputs().update.pending || this.inputs().description.pending || this.inputs().deletion?.pending === true; }
   get canShare(): boolean {
     const { node, sharing } = this.inputs();
     return !!node && sharing?.available(node.id) === true;
@@ -58,10 +65,14 @@ export class NodeActionsState {
     });
   };
 
-  setOpen = (open: boolean): void => { this.expanded = open; };
+  setOpen = (open: boolean): void => {
+    const { node, contextKey = 0, disabled = false } = this.inputs();
+    this.expanded = open && !disabled ? { nodeId: node?.id, contextKey } : undefined;
+  };
 
   run = (action: () => unknown): void => {
-    this.expanded = false;
+    if (this.inputs().disabled) return;
+    this.expanded = undefined;
     this.element?.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]')?.focus();
     action();
   };

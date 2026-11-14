@@ -6,7 +6,7 @@ export const reportOptions: { value: ReportId; label: string }[] = [
   { value: 'tools', label: 'Tool calls' },
   { value: 'files', label: 'File activity' },
   { value: 'skills', label: 'Skill activity' },
-  { value: 'logs', label: 'Log classifications' },
+  { value: 'logs', label: 'Stored logs' },
   { value: 'custom', label: 'Custom log query' }
 ];
 export type ActivityReportId = Exclude<ReportId, 'custom'>;
@@ -14,37 +14,32 @@ export type ActivityReportId = Exclude<ReportId, 'custom'>;
 interface ReportDefinition {
   readonly label: string;
   readonly countLabel: string;
-  readonly explanation: string;
   readonly activities: readonly string[];
   readonly groups: readonly Dimension[];
 }
 
 export const reports: Record<ActivityReportId, ReportDefinition> = {
   logs: {
-    label: 'Log classifications',
+    label: 'Stored logs',
     countLabel: 'Log records',
-    explanation: 'Includes diagnostics and other stored logs. Unclassified logs have no nonempty activity classification; they are not necessarily missed activity.',
     activities: [],
     groups: ['activity_kind', 'source', 'event_name', 'tool_name', 'session_id']
   },
   tools: {
     label: 'Tool calls',
     countLabel: 'Reported tool calls',
-    explanation: 'Counts reported tool calls, including read-tool and edit-tool calls. Only reported matching activity is shown.',
     activities: ['tool_call', 'file_read', 'file_edit'],
     groups: ['source', 'session_id', 'outcome']
   },
   files: {
     label: 'File activity',
     countLabel: 'Read/edit-tool calls',
-    explanation: 'Counts read-tool and edit-tool calls, not unique files. Excludes shell and implicit reads.',
     activities: ['file_read', 'file_edit'],
     groups: ['source', 'session_id', 'activity_kind']
   },
   skills: {
     label: 'Skill activity',
     countLabel: 'Skill activations',
-    explanation: 'Counts reported skill activations, not unique skills.',
     activities: ['skill_activation'],
     groups: ['source', 'session_id']
   }

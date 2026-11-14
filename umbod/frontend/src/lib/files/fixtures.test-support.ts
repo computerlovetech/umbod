@@ -9,7 +9,7 @@ export function filesystemNode(overrides: Partial<NodeSummary> = {}): NodeSummar
     id: rootId, parent_id: {}, name: '', kind: 'directory',
     metadata: { content_type: {}, attributes: {} },
     permissions: { can_discover: true, can_read: true, can_write: true, can_delete: true, can_share: false },
-    visible_to: { type: 'unavailable' },
+    visible_to: { type: 'namespace', namespace_id: rootId, kind: 'personal', name: 'My files' },
     created_at: '2026-01-01T10:00:00Z', updated_at: '2026-01-02T10:00:00Z', revision: 1,
     ...overrides
   });

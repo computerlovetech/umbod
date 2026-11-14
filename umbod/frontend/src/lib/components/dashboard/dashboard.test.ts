@@ -110,9 +110,10 @@ describe('connector catalogue presentation', () => {
     if (connector.kind !== 'downstream_mcp') expect(body).not.toContain('MCP server');
   });
 
-  test('detail only offers management navigation when a management URL is supplied', (): void => {
-    const body = render(ConnectorDetail, { props: { connector: sharedConnector, manageHref: '/admin/connectors/downstream_mcp/shared' } }).body;
-    expect(body).toContain('href="/admin/connectors/downstream_mcp/shared"');
+  test('detail does not offer management navigation', (): void => {
+    const body = render(ConnectorDetail, { props: { connector: sharedConnector } }).body;
+    expect(body).not.toContain('Manage in Connectors');
+    expect(body).not.toContain('href="/admin');
     expect(body).not.toMatch(/Publish|Unpublish|Published|Unpublished/);
     expect(body).not.toContain('Edit connector');
   });
@@ -149,10 +150,11 @@ describe('connector catalogue presentation', () => {
     expect(body).not.toContain('href="/admin');
   });
 
-  test('workspace management permission exposes a link without exposing editing or publication controls', async (): Promise<void> => {
+  test('workspace does not expose management navigation or editing controls', async (): Promise<void> => {
     const state = await loadedController();
-    const body = render(ConnectorWorkspace, { props: { state, canManage: true } }).body;
-    expect(body).toContain('href="/admin');
+    const body = render(ConnectorWorkspace, { props: { state } }).body;
+    expect(body).not.toContain('Manage in Connectors');
+    expect(body).not.toContain('href="/admin');
     expect(body).not.toMatch(/Publish|Unpublish|Published|Unpublished/);
     expect(body).not.toContain('Edit connector');
     expect(body).not.toContain('Delete connector');

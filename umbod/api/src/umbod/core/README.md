@@ -10,6 +10,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [activation](./activation/README.md) — Capability enablement.
 - [admin_overview](./admin_overview/README.md) — Administration summary contracts.
 - [administrator](./administrator/) — Shared administrator configuration.
+- [agent_behaviour](./agent_behaviour/README.md) — Behaviour patterns, diagnostic playbooks and durable agent self-reports.
 - [caching](./caching/README.md) — Request-local result reuse.
 - [callers](./callers/README.md) — Transport-neutral caller facts.
 - [capabilities](./capabilities/README.md) — Capability identity and catalogues.
@@ -18,6 +19,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [diagnostics](./diagnostics/README.md) — Safe failure-event snapshots and signal publication contracts.
 - [filesystem](./filesystem/README.md) — Namespaces, content and access policy.
 - [groups](./groups/README.md) — Group catalogue.
+- [harness_plugins](./harness_plugins/README.md) — Instance-bound installer rendering, harness packages, and deterministic ZIP delivery contracts.
 - [icons](./icons/README.md) — Favicon discovery.
 - [identity](./identity/) — Connector identity.
 - [identity_directory](./identity_directory/README.md) — Observed identities and membership values.

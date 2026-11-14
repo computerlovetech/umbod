@@ -22,10 +22,10 @@ describe('contextual workspace navigation', (): void => {
   test('administration sidebar preserves page destinations in preview order without workspace links', (): void => {
     expect(administrationNavigation.map((link): string => link.href)).toEqual([
       '/admin/connectors', '/admin/groups', '/admin/group-permissions/connectors',
-      '/admin/analytics', '/admin/instance-configuration'
+      '/admin/insights/agent-behaviour'
     ]);
     expect(administrationNavigation.map((link): string | undefined => link.icon)).toEqual([
-      'connectors', 'groups', 'permissions', 'analytics', 'settings'
+      'connectors', 'groups', 'permissions', 'analytics'
     ]);
   });
 });

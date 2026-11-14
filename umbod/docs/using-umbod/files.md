@@ -1,112 +1,100 @@
+---
+type: User Guide
+title: Files
+description: Personal and shared file workspaces, ordinary file operations and namespace access administration.
+---
+
 # Files
 
-Umbod's filesystem is a virtual workspace for files and folders, available to users and agents. It is not access to the host computer's filesystem. Umbod stores names, ownership, and permissions in its application database; file bytes can live in local storage or S3.
+Umbod's filesystem is a virtual workspace for files and folders, not access to the host computer's filesystem. Names, namespace policies and metadata live in the application database; file bytes can live in local storage or S3.
 
-!!! note "Feature in development"
-    This guide describes the current implementation. Use a deployment image containing the filesystem changes; not every operation is available yet.
+## Personal and shared files
 
-## For normal users
+Open **Files** in the workspace navigation. **My files** is your personal namespace, private by default and provisioned on first use. Administrators have no automatic access; explicitly shared files and folders remain accessible to their recipients.
 
-Open **Files** in the workspace navigation. Browse directories using the file list and breadcrumbs. Only authorized nodes and ancestors are exposed, so a shared location may have a partial breadcrumb path.
+The **Locations** panel separates **Personal → My files** from **Shared namespaces**. Select a location to open its root; the highlighted location stays selected while you browse its folders and file previews. Locations appear beside the file browser on larger screens and above it on smaller screens. The page title stays **Files**, with file actions above the panel.
 
-### Create and upload
+Use the file list and breadcrumbs to navigate folders within a location. Breadcrumbs stop at that namespace's root and remain separate from location switching. Only accessible namespaces appear. Shared files follow the namespace's group policy, including files uploaded by you.
 
-- Use **New folder** in a directory to create a folder. The server checks your permission to create there.
-- Use the upload control or drop a file into an eligible directory. Dropping starts the upload immediately; the UI handles one file at a time.
-- Wait for completion before expecting a new file in the directory. Umbod first creates an upload session, transfers the bytes, and then publishes the file.
+There is no browsable global filesystem root. Entries outside registered namespaces are inaccessible, even when old ownership or sharing records remain. Removing legacy access does not move or delete stored entries or file bytes.
 
-A new file is owned by its creator and inherits applicable folder shares. With **Include contents** enabled, a folder share applies to existing and future files and subfolders. Duplicate names are rejected rather than overwritten; an upload can fail at completion if another file has taken the same name. Zero-byte files are allowed.
+## Create folders and upload files
 
-The default maximum upload is **10 MiB**, configurable by the operator. An upload session expires after one hour; it is not a resumable upload. A configured byte limit is a per-upload limit, not a user storage quota.
+Use **New folder** or **Upload file** in an eligible directory. You can also drop a file into a writable directory; the UI handles one file at a time. Read-only shared namespaces do not offer write actions.
 
-### Descriptions and metadata
+An upload creates a staging session, transfers the original bytes, then publishes the file. Wait for completion before expecting it in the directory. Duplicate names are rejected rather than overwritten, including when a concurrent upload takes the name before completion. Zero-byte files are supported.
 
-Add an optional description when creating a folder or uploading a file, or use **Edit description** on an existing item. Explain what is inside and when it should be read. An empty description clears it.
+Namespace policy supplies baseline permissions for every descendant. Item ownership and explicit file/folder shares can add permissions. Changing namespace assignments removes that source of access, but does not revoke independent ownership or item grants.
 
-Descriptions are stored in `metadata.attributes.description` and are visible to callers who can discover the node. Editing requires `discover` and `write` on that node. Descriptions do not grant access and should be treated as untrusted text.
+The default upload limit is **10 MiB**, configurable by the operator. Sessions expire after one hour and are not resumable. This limit is per upload, not a user storage quota.
 
-REST clients update metadata through `PATCH /api/me/filesystem/nodes/{id}` with a `metadata` object and the current quoted revision in `If-Match`. Attribute changes merge with existing attributes; unspecified attributes and content type remain unchanged. An explicit `content_type` replaces that metadata value without changing file bytes. MCP clients use `update_filesystem_node` with `node_id`, `expected_revision` and the requested changes, following the same partial update contract. The former description-specific tool has been removed; refresh cached MCP capabilities.
+## Descriptions and metadata
 
-### Rename and move
+Add an optional description when creating a folder or uploading a file, or choose **Edit description** on an existing item. An empty description clears it.
 
-Open a file or folder and choose **Rename** or **Move**. Renaming requires `discover` and `write` on the item. Moving additionally requires both permissions on the source folder and destination folder. Destination folders need not be visible from the root, but must be accessible directly.
+Descriptions are stored in `metadata.attributes.description`, are visible to callers who can discover the node, and require write access to change. Descriptions do not grant access and must be treated as untrusted text.
 
-REST node PATCH and MCP `update_filesystem_node` accept `name` for renaming, `parent_id` for moving and `metadata` for descriptive changes. These are separate top-level fields and may be combined in one atomic update with one expected node revision. Omitted fields stay unchanged; empty requests, explicit nulls and unknown fields are rejected. Use the node UUID returned by browsing, not a path, for updates.
+REST clients update nodes through `PATCH /api/me/filesystem/nodes/{id}` with the current quoted revision in `If-Match`. Attribute changes merge with existing attributes; unspecified fields remain unchanged. Changing content-type metadata does not change bytes. MCP clients use `update_filesystem_node` with `node_id`, `expected_revision` and the requested changes.
 
-A move preserves the item's ID, content, ownership and direct sharing grants. Moving a folder carries its subtree without rewriting descendant IDs or revisions. Inherited access follows the destination hierarchy: a move can give people access or remove access inherited from the source. Both the move picker and native file dragging warn before confirmation. Direct sharing remains unchanged. Existing UUID-based file resource links identify the same file, but reading still requires current access. A move can succeed even if the mover loses access afterward.
+## Rename and move
 
-The root cannot be renamed or moved, but is a valid destination when authorized. Duplicate sibling names, non-directory destinations and moves into the item itself or its descendants are rejected. A failed combined update leaves every field unchanged. Revision conflicts require reloading the item before retrying.
+Choose **Rename** or **Move** from an item's actions. Renaming requires discover and write access on the item. Moving additionally requires discover and write access on both the current and destination directories.
 
-### Share with groups or users
+Moves stay within one namespace. They preserve identities and bytes, and moving a folder carries its subtree without rewriting descendant IDs or revisions. Namespace baseline access remains unchanged, but inherited folder shares follow the destination and can change access. Direct item grants are preserved. Moving between personal and shared namespaces, or between two shared namespaces, is unsupported.
 
-For nodes you may share, open the sharing dialog and choose **Groups** or **Users**. Search registered groups by name or ID, or observed users by name, choose permissions, and save the selected type. Remove a recipient's grant through the same dialog when access is no longer needed. Switching types prompts before discarding unsaved changes.
+REST node PATCH and MCP `update_filesystem_node` accept top-level `name`, `parent_id` and `metadata` changes in one atomic update. Use returned UUIDs, not invented paths. Empty requests, explicit nulls and unknown fields are rejected. Failed combined updates leave every field unchanged; revision conflicts require rereading before retrying.
 
-| Permission | Purpose |
-| --- | --- |
-| `discover` | Visibility of the node when browsing |
-| `read` | Read access to the node and file content |
-| `write` | Update metadata, rename, create children, or move with authority on both folders |
-| `delete` | Delete a file; directories and root cannot currently be deleted |
-| `share` | Manage access grants |
+Namespace roots cannot be renamed, moved or deleted through ordinary file operations. Duplicate sibling names, non-directory destinations and moves into the item's own subtree are rejected.
 
-New folder shares enable **Include contents** by default. Clear it for folder-only access. Existing folder-only shares stay unchanged until you explicitly include contents and save. Direct grants and recursive ancestor grants add permissions together: a direct read grant cannot reduce inherited write access, and removing a direct grant may leave inherited access intact. Ownership applies only to the owned node. Sharing requires current `discover` and `share` authority on that node. For normal file reading, grant both `discover` and `read`; `read` alone does not make a file visible.
+## Share files and folders
 
-### Share with an observed user
+Open an item's sharing dialog to share it with registered **Groups** or observed **Users**. Search recipients, choose permissions, and save. Remove grants through the same dialog. Sharing requires current discover and share permission on the item; namespace roots use namespace administration instead.
 
-User discovery requires verified authentication and only finds previously observed users with names. MCP tools and REST clients use the same typed recipient search; see the [filesystem sharing reference](../reference/filesystem-sharing.md) for request fields and replacement rules.
+Folder shares can **Include contents**, applying recursively to existing and future descendants within the namespace. Folder-only shares do not inherit. Permissions add together: removing a direct read grant cannot remove write access supplied by a namespace or another recursive share.
 
-Umbod's user directory records users observed during verified authentication. It is not a complete or live identity-provider directory, and an observed record does not prove an account is still active. Search matches user names, not email addresses or authentication subjects. Users without names are not searchable; identical names can identify different users. Always use the returned opaque ID rather than inventing one from a name or email.
+Recipients can follow an item's UUID link without access to its parent or namespace root. Such items do not automatically add the containing namespace to their namespace list. Observed-user discovery uses verified identities and is not a complete or live identity-provider directory. Use returned opaque recipient IDs, not names or email addresses, as mutation targets.
 
-A recipient can access a directly shared file by its node ID without access to the parent directory. Sharing does not send notifications or provide a dedicated shared-files listing. Communicate the node ID or MCP resource URI separately when the recipient cannot find it by browsing.
+See [File and folder sharing](../reference/filesystem-sharing.md) for recipient, revision and API contracts.
 
-Sharing summaries describe manageable direct grants, not every source of effective access. An empty summary is not proof that nobody else has access. Representable recursive grants can be edited. Unresolved, malformed, and foreign-issuer grants remain protected from the sharing editor.
+## Read, download and delete
 
-### Read and delete
+The Files view provides permission-dependent actions and previews for Markdown, PDF and supported raster images. `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES` bounds browser previews and complete-file MCP resource reads, not full authenticated REST downloads.
 
-The Files view provides file metadata, permission-dependent actions, and previews for Markdown, PDF and supported raster images. Preview size is controlled by `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES`, shared with complete-file MCP resource reads. Authenticated clients can download larger files through the REST node-content endpoint; this preview setting does not cap full downloads.
-
-Deletion requires permission and confirmation. It removes the file's namespace entry and access policy; it does not currently guarantee physical removal of the stored bytes. Do not treat deletion as secure erasure or immediate recovery of storage space.
+File deletion requires permission and confirmation. It removes the file entry and associated policy records, not necessarily its stored bytes. It is not secure erasure or a promise of immediate storage-space recovery. Directory deletion is unsupported.
 
 ## Agent access
 
-Filesystem tools and resources are available through Umbod's root MCP endpoint, not connector-scoped endpoints. Tools support browsing, inspecting nodes, atomic metadata/rename/move updates, uploading, deleting files, and direct group/user sharing. Native MCP resources provide complete-file reads, subject to the caller's filesystem permissions.
+Filesystem tools and native resources are available through the public MCP endpoint, not connector-scoped endpoints. Agents can browse, create folders and files, upload, inspect, rename, move, update metadata and request confirmed file deletion, subject to current namespace permissions.
 
-Connecting an agent does not grant it unrestricted file access. Tools and resource reads use Umbod's virtual filesystem and check authorization; they do not browse arbitrary host paths or bootstrap root permissions.
+Use `filesystem_browse` operation `namespaces` to discover personal and accessible shared namespaces. Operation `home` resolves the private default upload destination. Root and absolute-path targets refer only to personal files; shared namespaces are selected using returned root node UUIDs. No operation browses arbitrary host paths.
 
-### Native file resources
+Files have resource URIs of the form `umbod://filesystem/files/{node_id}`. Browsing, inspection, file creation and upload results include native resource links without reading bytes. Read through MCP `resources/read`; links identify current content, not a historical revision or an access grant. Every read checks current discover and read permissions, including after access is revoked.
 
-Files have canonical resource URIs of the form `umbod://filesystem/files/{node_id}`. Browsing, node inspection, file creation, and upload tools return native `resource_link` content alongside file metadata. The links identify files without loading their bytes. Directories do not receive file-content links.
+Known textual MIME types return UTF-8 text; binary or unspecified types return base64 blobs. Invalid UTF-8 in declared text fails rather than being silently replaced. Reads have no partial results or silent truncation. Use authenticated REST downloads for larger files.
 
-Read a file through MCP `resources/read` using its URI. The URI identifies current content, not a historical revision; the response includes the captured `revision` and `size_bytes` in content metadata. Umbod advertises a parameterized file template through `resources/templates/list`, rather than enumerating every file in `resources/list`. Template visibility requires an eligible read operation; each read independently checks current access.
+Full summaries report the caller's discover, read, write and supported file-delete permissions, plus the governing namespace. See [Homes and permissions](../reference/filesystem-homes-and-permissions.md) and [Upload transfers](../reference/filesystem-upload-transfers.md).
 
-Known textual MIME types return UTF-8 text; binary or unspecified MIME types return MCP base64 blobs. Text types include `text/*`, JSON, XML, and their structured suffixes. Invalid UTF-8 in a declared text file fails rather than being replaced or silently decoded. Reads are bounded by `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES`, with no partial results or silent truncation; resource descriptions advertise the configured byte limit. Use an authenticated REST download for larger files.
+## Shared namespace administration
 
-Resource links are locators, not access grants. Reads require current `discover` and `read` permissions, including when following a retained link after sharing changes. A direct file grant does not require access to its ancestors. Client applications decide how to display links and load resources; a link is not an automatic download.
+Open **Group permissions → Filesystem** at `/admin/group-permissions/filesystem`. Use **+** to create a shared namespace with a name and an optional **Description**. Creation assigns no group access and does not depend on which group is selected. Use the namespace's edit action to change its name or description; clearing the description removes it.
 
-The beta `filesystem_read_file` tool has been removed, without a compatibility alias. Refresh cached MCP capabilities and use native resource reads instead.
+Descriptions appear when browsing the namespace and in REST and MCP namespace discovery. They use the same metadata as the namespace's root folder, so editing that folder's description updates the namespace description too.
 
-Recipient discovery uses `filesystem_search_sharing_recipients`; the former `filesystem_list_sharing_groups` and `search_users` tools are no longer available. `filesystem_share` accepts a typed `recipient`, with legacy top-level `group_id` requests still supported. Refresh cached tool schemas: search and share expose alternative schema branches, and REST access-policy updates have a breaking request change. See [Filesystem sharing](../reference/filesystem-sharing.md).
+Select a group in the sidebar, then choose **No access**, **Read** or **Read and write** for existing namespaces. Changes remain local until you choose **Save permissions**. Switching between the Filesystem and Connectors tabs retains unsaved permission changes; switching groups asks you to discard those changes or cancel.
 
-MCP uploads have a maximum of 10 MiB, or the configured filesystem limit if lower. Complete-file MCP resource reads and browser previews share `UMBOD_FILESYSTEM_PREVIEW_MAX_BYTES`; see [filesystem runtime configuration](../operations/configuration.md#filesystem-runtime). Upload and proxy limits remain separate.
+Multiple groups can use the same namespace; switching groups changes whose access you edit, not the namespace itself. An assignment supplies baseline access to every descendant. Individual item shares remain additive and cannot narrow that baseline. Editing a namespace's name or description does not save staged permission changes.
 
-## For administrators and operators
+Permission saves apply per namespace. If a save partially fails, successful changes remain saved and the remaining changes stay unsaved. A revision conflict requires reloading and reviewing permissions before trying again; discarding unsaved changes requires confirmation.
 
-Root ownership belongs to a system principal, not automatically to an administrator. To let users start browsing and uploading:
+Read permits discovery and content reading. Read/write also permits creation, uploads, metadata updates, renaming, moves within the namespace and file deletion. Management authority does not itself grant content access: administrators must also have an assigned group to browse its root, or independent item access to follow an individual shared link.
 
-1. Open **Group permissions → Filesystem** at `/admin/group-permissions/filesystem`.
-2. Select the intended groups and grant **Browse root** (`discover`) and **Create items** (`write`).
-3. Choose **Save permissions** to initialize root access and save the grants.
+Administrator REST clients use `/api/admin/filesystem/namespaces`. Updates replace group assignments and require the current `expected_revision`. Stale saves must be reloaded and reconciled. See [Namespace access](../reference/filesystem-namespaces.md).
 
-Administrator API clients can read `GET /api/admin/filesystem/root-access` and update `PUT /api/admin/filesystem/root-access` using the returned revision as `expected_revision` and a `groups` list of group IDs and permission lists. The update replaces the editable root group policy, so retain existing groups you want to preserve. Ordinary MCP tools do not initialize root access, and administrator membership is not a blanket filesystem permission bypass.
-
-Preserve the application database and the matching content storage together. Losing namespace and ownership records makes an S3 bucket alone insufficient to restore the workspace. Local-content workers must share the same content directory; S3 workers must use the same bucket and configuration. See [Filesystem runtime configuration](../operations/configuration.md#filesystem-runtime) and [S3 file-content storage](../operations/s3-file-storage.md).
-
-Downloads use authenticated node-content access, attachment disposition, and no-store caching. Clients should tolerate a future temporary storage redirect without forwarding Umbod credentials to a different origin. Current transfers still pass through Umbod.
+Preserve the application database and matching content storage together. A bucket alone cannot restore namespace structure and policy. Local-content workers must share a content directory; S3 workers must share the bucket and configuration. See [Filesystem runtime configuration](../operations/configuration.md#filesystem-runtime) and [S3 file storage](../operations/s3-file-storage.md).
 
 ## Current boundaries
 
-- Directory and root deletion are unsupported; deletion currently applies only to files.
-- Content replacement and dedicated owned/shared listings are unsupported; their placeholder routes have been removed.
-- There is no automatic storage migration, storage quota/accounting, or physical content garbage collection.
-- Failed publication can leave unreferenced content. Expired sessions do not imply automatic cleanup of their stored bytes.
-- The UI, REST clients, and MCP tools share filesystem authorization, but do not yet expose identical controls.
+- Namespace and directory deletion are unsupported; ordinary deletion applies only to files.
+- Cross-namespace moves and content replacement are unsupported.
+- There is no automatic migration of unmanaged entries, storage quota or physical content garbage collection.
+- Failed publication and expired sessions can leave unreferenced stored bytes.

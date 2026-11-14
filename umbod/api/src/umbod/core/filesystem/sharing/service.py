@@ -8,9 +8,10 @@ from umbod.core.identity_directory.users import (
 
 from ..authorization import (
     FilesystemIdentityResolver, ObservedUserPrincipalResolver, PermissionDenied, ResolvedIdentity,
-    UnresolvedIdentity, allows_resolved,
+    UnresolvedIdentity,
 )
-from ..errors import RevisionConflict
+from ..errors import OwnershipNotFound, RevisionConflict
+from ..authorization.service import resolved_permissions
 from ..models import AccessGrant, NodeId, NodeKind, Permission, Principal, PrincipalType
 from .errors import InvalidSharingPolicy, SharingPolicyUnavailable
 from .models import (
@@ -43,11 +44,13 @@ class SharingService:
     async def _can_share(
         self, session: SharingSession, identity: ResolvedIdentity, node_id: NodeId,
     ) -> bool:
-        for permission in (Permission.DISCOVER, Permission.SHARE):
-            if not await allows_resolved(
-                identity, node_id, permission, session.namespace, session.access_control,
-            ):
-                return False
+        permissions = await resolved_permissions(identity, node_id, session.namespace, session.access_control)
+        if not {Permission.DISCOVER, Permission.SHARE}.issubset(permissions):
+            return False
+        try:
+            await session.access_control.get_owner(node_id)
+        except OwnershipNotFound:
+            return False
         return True
 
     async def _observe(

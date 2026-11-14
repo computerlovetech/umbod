@@ -36,7 +36,7 @@ describe('admin connector shared presentation', () => {
       expect(component).toContain('<ConnectorListEmptyState message=');
     }
     expect(connectorPage).toContain('<ConnectorListEmptyState message={data.message} />');
-    expect(openApiConnectorList).toContain('<ConnectorListEmptyState message={data.message} />');
+    expect(openApiConnectorList).toContain('<ConnectorListEmptyState message={data.message} workspaceLabel="OpenAPI connectors workspace"');
     expect(openApiConnectorList).not.toContain('.empty-note');
     expect(downstreamMcpWorkspace).not.toContain('class="empty"');
   });

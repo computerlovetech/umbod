@@ -17,7 +17,7 @@ from mcp.types import BlobResourceContents, TextResourceContents
 
 from conftest import RuntimeEndpoints
 from test_running_filesystem import (
-    FILESYSTEM, checked_root_browse, checked_summary, file_resource_link, file_resource_uri, tool_payload, wait_for_filesystem_tools,
+    FILESYSTEM, checked_namespace_browse, checked_summary, file_resource_link, file_resource_uri, tool_payload, wait_for_filesystem_tools,
 )
 from test_running_personal_mcp_execution import mcp_client, proxy_token
 from upload_transfer_support import assert_s3_transfer, assert_transfer_succeeded, s3_runtime, transfer_upload
@@ -44,34 +44,17 @@ async def native_upload_runtime(runtime_endpoints: RuntimeEndpoints) -> AsyncIte
     }, timeout=30) as other_api, httpx.Client(
         base_url=os.environ["UMBOD_TEST_PERSONAL_URL"], verify=tls, timeout=30,
     ) as identity:
-        policy_url = "/api/admin/filesystem/root-access"
-        previous_response = api.get(policy_url)
-        assert previous_response.status_code == 200
-        previous = previous_response.json()
-        configured = api.put(policy_url, json={
-            "expected_revision": previous["revision"],
-            "groups": [{"group_id": "admin", "permissions": ["discover", "write"]}],
-        })
-        assert configured.status_code == 200, configured.text
-        try:
-            root = checked_root_browse(api.get(FILESYSTEM + "/browse"))
-            token = proxy_token(runtime_endpoints.mcp_url, runtime_endpoints.bearer_token, identity)
-            other_token = proxy_token(second_mcp, os.environ["UMBOD_TEST_BEARER_TOKEN_B"], identity)
-            async with mcp_client(runtime_endpoints.mcp_url, token) as client, mcp_client(second_mcp, other_token) as other_client:
-                await wait_for_filesystem_tools(client, {"create_filesystem_directory", "filesystem_upload"})
-                await wait_for_filesystem_tools(other_client, {"filesystem_upload"})
-                directory = tool_payload(await client.call_tool("create_filesystem_directory", {
-                    "parent_id": root["id"], "name": "native-upload-" + uuid4().hex,
-                    "metadata": {"content_type": "application/octet-stream", "attributes": {}},
-                }))
-                yield NativeUploadRuntime(api, other_api, client, other_client, directory["id"])
-        finally:
-            current = api.get(policy_url)
-            assert current.status_code == 200
-            restored = api.put(policy_url, json={
-                "expected_revision": current.json()["revision"], "groups": previous["groups"],
-            })
-            assert restored.status_code == 200, restored.text
+        root = checked_namespace_browse(api.get(FILESYSTEM + "/browse"))
+        token = proxy_token(runtime_endpoints.mcp_url, runtime_endpoints.bearer_token, identity)
+        other_token = proxy_token(second_mcp, os.environ["UMBOD_TEST_BEARER_TOKEN_B"], identity)
+        async with mcp_client(runtime_endpoints.mcp_url, token) as client, mcp_client(second_mcp, other_token) as other_client:
+            await wait_for_filesystem_tools(client, {"create_filesystem_directory", "filesystem_upload"})
+            await wait_for_filesystem_tools(other_client, {"filesystem_upload"})
+            directory = tool_payload(await client.call_tool("create_filesystem_directory", {
+                "parent_id": root["id"], "name": "native-upload-" + uuid4().hex,
+                "metadata": {"content_type": "application/octet-stream", "attributes": {}},
+            }))
+            yield NativeUploadRuntime(api, other_api, client, other_client, directory["id"])
 
 
 @pytest.mark.asyncio

@@ -7,6 +7,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from umbod.rest.main import create_app
+from umbod.rest.user_catalogue.identity import catalogue_identity_key
 from umbod.rest.settings import APISettings
 
 
@@ -322,6 +323,20 @@ def test_authenticated_caller_with_non_string_picture_claim_gets_no_picture(
     }
 
 
+def test_profile_identity_key_distinguishes_equal_subjects_from_different_issuers(
+    current_user_api: CurrentUserApiBoundary, tokens: JwtTokenFactory,
+) -> None:
+    responses = [
+        current_user_api.get_current_user(CurrentUserRequest(tokens.trusted_token({
+            "iss": issuer, "sub": "same-subject", "groups": ["umbod-users"],
+        })))
+        for issuer in ("https://issuer-a.example", "https://issuer-b.example")
+    ]
+    assert [response.status_code for response in responses] == [200, 200]
+    assert [response.body["user"]["id"] for response in responses] == ["same-subject", "same-subject"]
+    assert responses[0].body["identity_key"] != responses[1].body["identity_key"]
+
+
 @pytest.mark.parametrize("authenticated", [True, False])
 def test_disabled_admin_authentication_keeps_profile_authenticated(
     tmp_path: Path,
@@ -343,6 +358,7 @@ def test_disabled_admin_authentication_keeps_profile_authenticated(
     if authenticated:
         assert response.status_code == 200
         assert response.body == {
+            "identity_key": catalogue_identity_key({"sub": "ordinary-user"}),
             "user": {
                 "id": "ordinary-user", "name": "unknown", "email": None, "picture": None,
             },
@@ -375,6 +391,7 @@ def test_non_admin_authenticated_caller_retrieves_profile_without_administration
 
     assert response.status_code == 200
     assert response.body == {
+        "identity_key": catalogue_identity_key({"sub": "jwt-user-123"}),
         "user": {"id": "jwt-user-123", "name": "JWT Alex", "email": None, "picture": None},
         "capabilities": {"administration": False},
     }

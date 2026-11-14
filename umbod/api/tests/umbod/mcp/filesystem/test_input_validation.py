@@ -32,7 +32,7 @@ async def test_otherwise_valid_creation_rejects_authority_extras_without_creatin
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool", [
-    "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
+    "filesystem_browse", "get_filesystem_node", "list_filesystem_children",
 ])
 @pytest.mark.parametrize("extra", [
     {"owner": "injected"}, {"caller": {}}, {"grants": []}, {"content": "SECRET"},
@@ -43,7 +43,7 @@ async def test_browsing_rejects_extras_before_invocation(
     async with Client(filesystem_invocation_mcp.server) as client:
         root = await root_id(client)
         arguments = {
-            "get_filesystem_root": {},
+            "filesystem_browse": {"operation": "home"},
             "get_filesystem_node": {"node_id": root},
             "list_filesystem_children": {"parent_id": root},
         }[tool]
@@ -88,7 +88,7 @@ async def test_authority_named_metadata_attributes_are_only_data(filesystem_invo
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("tool,arguments,field", [
-    ("get_filesystem_root", {"SECRET_FIELD": "SECRET_VALUE"}, "arguments"),
+    ("filesystem_browse", {"operation": "home", "SECRET_FIELD": "SECRET_VALUE"}, "arguments"),
     ("get_filesystem_node", {"node_id": "SECRET_VALUE"}, "node_id"),
     ("list_filesystem_children", {"parent_id": "SECRET_VALUE"}, "parent_id"),
     ("create_filesystem_file", {"parent_id": "SECRET_VALUE", "name": "private", "metadata": METADATA}, "parent_id"),
@@ -138,7 +138,6 @@ async def test_argument_errors_identify_safe_fields_without_echoing_input_or_per
     assert response_metadata["guidance"]["recovery"]["retry"] == "after_correction"
     assert field in {issue["field"] for issue in response_metadata["guidance"]["error"]["issues"]}
     assert "input_value" not in result.content[0].text
-    assert "ShareNodeCommand" not in result.content[0].text
     assert "function-after" not in result.content[0].text
     assert "SECRET" not in repr(result)
     assert "SECRET" not in caplog.text

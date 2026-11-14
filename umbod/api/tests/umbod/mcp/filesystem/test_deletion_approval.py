@@ -14,7 +14,7 @@ from mcp.types import InputRequiredResult
 
 from umbod.core.callers import AuthenticationProvenance
 from umbod.core.filesystem import (
-    AccessGrant, ContentRef, MissingNode, OwnershipNotFound, Permission, Principal, PrincipalType,
+    ContentRef, MissingNode, OwnershipNotFound,
 )
 from umbod.infrastructure import create_access_control_driver, create_namespace_driver
 from tests.umbod.mcp.test_http_transport import HEADERS, rpc_result
@@ -23,7 +23,8 @@ from umbod.mcp.signals import McpInvocationPublisher
 
 from .conftest import FilesystemMcp, caller_snapshot
 from .test_browsing import create_node
-from .test_tools import root_id
+from .test_visibility import shared_namespace, save_namespace_access, select_caller
+from umbod.core.filesystem.namespaces.models import SharedNamespaceView
 
 TOOL = "filesystem_delete_file"
 
@@ -71,16 +72,12 @@ def deletion_successes(filesystem: FilesystemMcp) -> list[float]:
     ]
 
 
-async def prepare_file(filesystem: FilesystemMcp) -> tuple[str, AccessGrant]:
+async def prepare_file(filesystem: FilesystemMcp) -> tuple[str, SharedNamespaceView]:
+    policy = await shared_namespace(filesystem)
+    select_caller(filesystem, "alice", (policy.groups[0].group_id,))
     async with Client(filesystem.server) as client:
-        node_id = await create_node(client, await root_id(client), "approval-target", "file")
-    grant = AccessGrant(
-        node_id=UUID(node_id),
-        principal=Principal(type=PrincipalType.USER, issuer="https://issuer", id="bob"),
-        permissions={Permission.DISCOVER, Permission.DELETE}, recursive=False,
-    )
-    await create_access_control_driver(database=filesystem.database).add_grant(grant)
-    return node_id, grant
+        node_id = await create_node(client, str(policy.root_node_id), "approval-target", "file")
+    return node_id, policy
 
 
 @pytest.mark.asyncio
@@ -88,7 +85,7 @@ async def test_signed_continuation_echoes_unchanged_and_deletes_only_after_accep
     filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     filesystem = filesystem_invocation_mcp
-    node_id, grant = await prepare_file(filesystem)
+    node_id, policy = await prepare_file(filesystem)
     namespace = create_namespace_driver(database=filesystem.database)
     policies = create_access_control_driver(database=filesystem.database)
     before = await namespace.get_node(UUID(node_id))
@@ -110,7 +107,7 @@ async def test_signed_continuation_echoes_unchanged_and_deletes_only_after_accep
         assert transport.observed_states[0][1].startswith("v1.")
         assert await namespace.get_node(UUID(node_id)) == before
         assert await policies.get_owner(UUID(node_id)) == owner
-        assert await policies.list_grants(UUID(node_id)) == [grant]
+        assert await policies.list_grants(UUID(node_id)) == []
         assert deletion_successes(filesystem) == []
         assert terminal_successes == []
         return {"value": True}
@@ -139,11 +136,11 @@ async def test_signed_continuation_echoes_unchanged_and_deletes_only_after_accep
 @pytest.mark.asyncio
 @pytest.mark.parametrize("response", ["false", "decline", "cancel", "no-handler"])
 @pytest.mark.parametrize("mode", ["auto", "legacy"])
-async def test_denied_approval_preserves_namespace_owner_and_direct_grants(
+async def test_denied_approval_preserves_node_and_namespace_authority(
     filesystem_invocation_mcp: FilesystemMcp, response: str, mode: str,
 ) -> None:
     filesystem = filesystem_invocation_mcp
-    node_id, grant = await prepare_file(filesystem)
+    node_id, policy = await prepare_file(filesystem)
     namespace = create_namespace_driver(database=filesystem.database)
     policies = create_access_control_driver(database=filesystem.database)
     before = await namespace.get_node(UUID(node_id))
@@ -179,7 +176,7 @@ async def test_denied_approval_preserves_namespace_owner_and_direct_grants(
                     assert instruction in result.content[1].text
     assert await namespace.get_node(UUID(node_id)) == before
     assert await policies.get_owner(UUID(node_id)) == owner
-    assert await policies.list_grants(UUID(node_id)) == [grant]
+    assert await policies.list_grants(UUID(node_id)) == []
     assert deletion_successes(filesystem) == []
 
 
@@ -188,7 +185,7 @@ async def test_stateless_legacy_http_cannot_delete_without_backchannel(
     filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
     filesystem = filesystem_invocation_mcp
-    node_id, grant = await prepare_file(filesystem)
+    node_id, policy = await prepare_file(filesystem)
     namespace = create_namespace_driver(database=filesystem.database)
     policies = create_access_control_driver(database=filesystem.database)
     before = await namespace.get_node(UUID(node_id))
@@ -210,7 +207,7 @@ async def test_stateless_legacy_http_cannot_delete_without_backchannel(
     assert "schema_version" not in result.get("_meta", {}).get("computerlove.tech/umbod", {})
     assert await namespace.get_node(UUID(node_id)) == before
     assert await policies.get_owner(UUID(node_id)) == owner
-    assert await policies.list_grants(UUID(node_id)) == [grant]
+    assert await policies.list_grants(UUID(node_id)) == []
     assert deletion_successes(filesystem) == []
 
 
@@ -221,7 +218,7 @@ async def test_nonboolean_wire_approval_cannot_delete(
     filesystem_invocation_mcp: FilesystemMcp, value: object, mode: str,
 ) -> None:
     filesystem = filesystem_invocation_mcp
-    node_id, grant = await prepare_file(filesystem)
+    node_id, policy = await prepare_file(filesystem)
     namespace = create_namespace_driver(database=filesystem.database)
     policies = create_access_control_driver(database=filesystem.database)
     before = await namespace.get_node(UUID(node_id))
@@ -237,14 +234,14 @@ async def test_nonboolean_wire_approval_cannot_delete(
     assert result.is_error
     assert await namespace.get_node(UUID(node_id)) == before
     assert await policies.get_owner(UUID(node_id)) == owner
-    assert await policies.list_grants(UUID(node_id)) == [grant]
+    assert await policies.list_grants(UUID(node_id)) == []
     assert deletion_successes(filesystem) == []
 
 
 @pytest.mark.asyncio
 async def test_tampered_signed_continuation_cannot_delete(filesystem_invocation_mcp: FilesystemMcp) -> None:
     filesystem = filesystem_invocation_mcp
-    node_id, grant = await prepare_file(filesystem)
+    node_id, policy = await prepare_file(filesystem)
     namespace = create_namespace_driver(database=filesystem.database)
     policies = create_access_control_driver(database=filesystem.database)
     before = await namespace.get_node(UUID(node_id))
@@ -260,7 +257,7 @@ async def test_tampered_signed_continuation_cannot_delete(filesystem_invocation_
     assert transport.observed_states[0][1].startswith("v1.")
     assert await namespace.get_node(UUID(node_id)) == before
     assert await policies.get_owner(UUID(node_id)) == owner
-    assert await policies.list_grants(UUID(node_id)) == [grant]
+    assert await policies.list_grants(UUID(node_id)) == []
     assert deletion_successes(filesystem) == []
 
 
@@ -270,19 +267,19 @@ async def test_permission_revoked_during_approval_prevents_final_delete(
     filesystem_invocation_mcp: FilesystemMcp, mode: str,
 ) -> None:
     filesystem = filesystem_invocation_mcp
-    node_id, grant = await prepare_file(filesystem)
+    node_id, policy = await prepare_file(filesystem)
     namespace = create_namespace_driver(database=filesystem.database)
     policies = create_access_control_driver(database=filesystem.database)
     before = await namespace.get_node(UUID(node_id))
     owner = await policies.get_owner(UUID(node_id))
     filesystem.callers.current.set(caller_snapshot(
-        "bob", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED,
+        "bob", "https://issuer", (policy.groups[0].group_id,), AuthenticationProvenance.UPSTREAM_VERIFIED,
     ))
     callbacks: list[bool] = []
 
     async def revoke(*args: object) -> dict[str, bool]:
         callbacks.append(True)
-        await policies.remove_grant(UUID(node_id), grant.principal)
+        await save_namespace_access(filesystem, policy, None)
         return {"value": True}
 
     async with Client(filesystem.server, mode=mode, elicitation_handler=revoke) as client:
@@ -291,7 +288,7 @@ async def test_permission_revoked_during_approval_prevents_final_delete(
         )
     assert callbacks == [True]
     assert result.is_error
-    assert result.content[0].text == "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."
+    assert result.content[0].text == "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask an administrator for namespace access."
     assert await namespace.get_node(UUID(node_id)) == before
     assert await policies.get_owner(UUID(node_id)) == owner
     assert await policies.list_grants(UUID(node_id)) == []
@@ -304,7 +301,7 @@ async def test_revision_changed_during_approval_prevents_final_delete(
     filesystem_invocation_mcp: FilesystemMcp, mode: str,
 ) -> None:
     filesystem = filesystem_invocation_mcp
-    node_id, grant = await prepare_file(filesystem)
+    node_id, policy = await prepare_file(filesystem)
     namespace = create_namespace_driver(database=filesystem.database)
     policies = create_access_control_driver(database=filesystem.database)
     owner = await policies.get_owner(UUID(node_id))
@@ -323,7 +320,7 @@ async def test_revision_changed_during_approval_prevents_final_delete(
     assert result.content[0].text == "filesystem_revision_conflict: Filesystem revision conflict. Read the current node, review its changes, and retry with its current revision."
     assert (await namespace.get_node(UUID(node_id))).revision == 2
     assert await policies.get_owner(UUID(node_id)) == owner
-    assert await policies.list_grants(UUID(node_id)) == [grant]
+    assert await policies.list_grants(UUID(node_id)) == []
     assert deletion_successes(filesystem) == []
 
 
@@ -334,21 +331,14 @@ async def test_changed_caller_during_approval_cannot_delete(
     filesystem_invocation_mcp: FilesystemMcp, monkeypatch: pytest.MonkeyPatch, change: str, mode: str,
 ) -> None:
     filesystem = filesystem_invocation_mcp
-    node_id, grant = await prepare_file(filesystem)
+    node_id, policy = await prepare_file(filesystem)
     namespace = create_namespace_driver(database=filesystem.database)
     policies = create_access_control_driver(database=filesystem.database)
     before = await namespace.get_node(UUID(node_id))
     owner = await policies.get_owner(UUID(node_id))
     initial = filesystem.callers.capture()
     if change == "groups":
-        await policies.remove_grant(UUID(node_id), grant.principal)
-        grant = AccessGrant(
-            node_id=UUID(node_id),
-            principal=Principal(type=PrincipalType.GROUP, issuer="https://issuer", id="deleters"),
-            permissions={Permission.DISCOVER, Permission.DELETE}, recursive=False,
-        )
-        await policies.add_grant(grant)
-        initial = caller_snapshot("bob", "https://issuer", ("deleters",), AuthenticationProvenance.UPSTREAM_VERIFIED)
+        initial = caller_snapshot("bob", "https://issuer", (policy.groups[0].group_id,), AuthenticationProvenance.UPSTREAM_VERIFIED)
     capture = Mock(return_value=initial)
     monkeypatch.setattr(filesystem.callers, "capture", capture)
     callbacks: list[bool] = []
@@ -357,7 +347,7 @@ async def test_changed_caller_during_approval_cannot_delete(
         callbacks.append(True)
         capture.return_value = caller_snapshot(
             "bob", "https://issuer",
-            () if change == "groups" else ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED,
+            () if change == "groups" else (policy.groups[0].group_id,), AuthenticationProvenance.UPSTREAM_VERIFIED,
         )
         return {"value": True}
 
@@ -369,5 +359,5 @@ async def test_changed_caller_during_approval_cannot_delete(
     assert result.is_error
     assert await namespace.get_node(UUID(node_id)) == before
     assert await policies.get_owner(UUID(node_id)) == owner
-    assert await policies.list_grants(UUID(node_id)) == [grant]
+    assert await policies.list_grants(UUID(node_id)) == []
     assert deletion_successes(filesystem) == []

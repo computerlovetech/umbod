@@ -78,7 +78,7 @@ class BuiltinToolResponseAdapter:
                 return self._failure_result(metadata)
 
     def prepare(self, result: ToolResult, arguments: dict[str, Any]) -> ToolResult:
-        if isinstance(result, InputRequiredToolResult):
+        if isinstance(result, (InputRequiredToolResult, BuiltinToolResult)):
             return result
         try:
             return self._adapt_result(

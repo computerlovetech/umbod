@@ -11,10 +11,10 @@ from fastmcp.exceptions import ToolError
 
 from umbod.logging import create_application_failure_signal
 from umbod.core.filesystem.authorization.errors import PermissionDenied
+from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
 from umbod.core.filesystem.browsing import FilesystemBrowsing
 from umbod.core.filesystem.creation import FilesystemCreation
 from umbod.core.filesystem.deletion import FilesystemDeletion
-from umbod.core.filesystem.sharing import InvalidSharingPolicy, SharingPolicyUnavailable
 from umbod.core.filesystem.content.errors import UploadTooLarge
 from umbod.core.filesystem.uploads.errors import (
     UploadConflict, UploadExpired, UploadLengthMismatch, UploadMediaTypeMismatch,
@@ -74,8 +74,8 @@ class SpecializedStorageFailure(StorageFailure):
     (UploadExpired, "filesystem_upload_expired: Filesystem upload expired."),
     (UploadLengthMismatch, "filesystem_upload_length_mismatch: Invalid upload length."),
     (UploadMediaTypeMismatch, "filesystem_upload_media_type_mismatch: Invalid upload content type. Send the Content-Type specified by the upload transfer instructions."),
-    (PermissionDenied, "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."),
-    (MissingNode, "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."),
+    (PermissionDenied, "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask an administrator for namespace access."),
+    (MissingNode, "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask an administrator for namespace access."),
     (InvalidName, "filesystem_invalid_name: Invalid filesystem name. Use a nonempty UTF-8 name other than . or .., without slashes, backslashes, or null characters."),
     (NameCollision, "filesystem_name_collision: Filesystem name already exists. Inspect the existing node before retrying, or choose a different name."),
     (RevisionConflict, "filesystem_revision_conflict: Filesystem revision conflict. Read the current node, review its changes, and retry with its current revision."),
@@ -89,7 +89,7 @@ async def test_expected_domain_failures_do_not_leak_details(
     application_failures = create_application_failure_signal()
     server = FastMCP()
     browsing = Mock(spec=FilesystemBrowsing)
-    browsing.get_root = AsyncMock(side_effect=error_type("SECRET backend /private/path"))
+    browsing.get_node = AsyncMock(side_effect=error_type("SECRET backend /private/path"))
     factory = Mock(spec=FilesystemServiceFactory)
     factory.browsing.return_value = browsing
     register_filesystem_tools(
@@ -97,7 +97,7 @@ async def test_expected_domain_failures_do_not_leak_details(
         filesystem_error_context.callers, factory, filesystem_error_context.visibility, filesystem_error_context.approval,
     )
     async with Client(server) as client:
-        result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
+        result = await client.call_tool("get_filesystem_node", {"node_id": "00000000-0000-0000-0000-000000000001"}, raise_on_error=False)
     assert result.is_error
     assert result.content[0].text == expected
     assert "SECRET" not in repr(result)
@@ -125,7 +125,7 @@ async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
     output = StringIO()
     server = FastMCP()
     browsing = Mock(spec=FilesystemBrowsing)
-    browsing.get_root = AsyncMock(side_effect=error_type("SECRET backend /private/path"))
+    browsing.get_node = AsyncMock(side_effect=error_type("SECRET backend /private/path"))
     factory = Mock(spec=FilesystemServiceFactory)
     factory.browsing.return_value = browsing
     signals = create_mcp_signals(
@@ -144,7 +144,7 @@ async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
     ))
 
     async with Client(server) as client:
-        result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
+        result = await client.call_tool("get_filesystem_node", {"node_id": "00000000-0000-0000-0000-000000000001"}, raise_on_error=False)
 
     records = [json.loads(line) for line in output.getvalue().splitlines()]
     assert result.is_error
@@ -152,13 +152,13 @@ async def test_filesystem_failures_emit_classified_invocation_and_audit_records(
     assert {record["body"] for record in records} == {"mcp tool invocation completed", "mcp audit event"}
     for record in records:
         assert record["attributes"]["mcp.failure.category"] == category
-        assert record["attributes"]["mcp.tool.name"] == "get_filesystem_root"
+        assert record["attributes"]["mcp.tool.name"] == "get_filesystem_node"
         assert record["attributes"]["enduser.id"] == "test-caller"
         assert record["trace_id"] == "test-trace"
         assert record["severity_number"] == severity
     invocation = next(record for record in records if record["body"] == "mcp tool invocation completed")
     if category == "authorization":
-        assert result.content[0].text == "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask its owner for the required permissions."
+        assert result.content[0].text == "filesystem_permission_denied: Filesystem access denied. Choose an accessible node or ask an administrator for namespace access."
         assert invocation["attributes"]["mcp.failure.origin"] == "client_input"
         assert "exception.type" not in invocation["attributes"]
         assert "exception.stacktrace" not in invocation["attributes"]
@@ -174,7 +174,6 @@ TOOL_OPERATIONS = [
     ("filesystem_delete_file", "check_delete_eligibility", {
         "node_id": "00000000-0000-0000-0000-000000000001", "expected_revision": 1,
     }),
-    ("get_filesystem_root", "get_root", {}),
     ("get_filesystem_node", "get_node", {"node_id": "00000000-0000-0000-0000-000000000001"}),
     ("list_filesystem_children", "list_children", {"parent_id": "00000000-0000-0000-0000-000000000001"}),
     ("create_filesystem_file", "create_file", {

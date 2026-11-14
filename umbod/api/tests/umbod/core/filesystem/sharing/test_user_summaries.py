@@ -5,7 +5,7 @@ import pytest
 from umbod.core.callers import AuthenticationProvenance, CallerSnapshot
 from umbod.core.filesystem import AccessGrant, Permission, Principal, PrincipalType
 from umbod.core.filesystem.authorization import PermissionDenied, ResolvedIdentity, VerifiedIdentityResolver
-from umbod.core.filesystem.namespace import initial_root
+from tests.support.filesystem.group_sharing import sharing_node
 from umbod.core.filesystem.sharing import SharingService
 from umbod.core.identity_directory.user_models import ObservedUserProfile, SubjectUsersLookup
 from tests.support.identity_directory import InMemoryIdentityDirectory
@@ -72,7 +72,7 @@ async def test_batch_reverse_lookup_reads_once_for_all_authorized_nodes_only() -
     ports = transactions()
     users = CountingUsers()
     ports.users = users
-    root = initial_root()
+    root = sharing_node()
     second = root.model_copy(update={"id": uuid4(), "parent_id": root.id})
     restricted = root.model_copy(update={"id": uuid4(), "parent_id": root.id})
     for node in (second, restricted):
@@ -98,7 +98,7 @@ async def test_batch_reverse_lookup_reads_once_for_all_authorized_nodes_only() -
 async def test_group_summaries_survive_inapplicable_user_lookup_without_directory_reads(provenance: AuthenticationProvenance) -> None:
     ports = transactions()
     ports.users = UnreadableUsers()
-    root = initial_root()
+    root = sharing_node()
     await ports.policies.add_grant(AccessGrant(
         node_id=root.id, principal=Principal(type=PrincipalType.USER, issuer="issuer", id="recipient"),
         permissions={Permission.READ}, recursive=False,
@@ -123,6 +123,6 @@ async def test_unverified_caller_with_default_resolver_is_denied_before_director
     })})
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
     with pytest.raises(PermissionDenied):
-        await service.summarize_nodes(actor, (initial_root().id,))
+        await service.summarize_nodes(actor, (sharing_node().id,))
     with pytest.raises(PermissionDenied):
-        await service.share(actor, initial_root().id, user_command("opaque", Permission.READ))
+        await service.share(actor, sharing_node().id, user_command("opaque", Permission.READ))

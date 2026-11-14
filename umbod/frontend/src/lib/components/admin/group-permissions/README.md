@@ -15,7 +15,7 @@ description: "Persistent group permissions workspace, tab editors and permission
 - [GroupPermissionsWorkspace.svelte](./GroupPermissionsWorkspace.svelte) — Persistent group sidebar, selected-group header and editor slot.
 - [group-permissions-context.ts](./group-permissions-context.ts) — Layout-scoped workspace context.
 - [group-permissions-route-state.svelte.ts](./group-permissions-route-state.svelte.ts) — URL-derived tabs, descriptions and validated deep links.
-- [group-permissions-workspace-state.svelte.ts](./group-permissions-workspace-state.svelte.ts) — Section-scoped selection and retained editor lifetimes.
+- [group-permissions-workspace-state.svelte.ts](./group-permissions-workspace-state.svelte.ts) — Layout-owned namespace and connector states, lazy loading, shared selection and cross-tab discard guards.
 - [group-permissions-workspace-state.test.ts](./group-permissions-workspace-state.test.ts) — Lazy loading, draft retention, shared selection and disposal tests.
 - [group-permissions-workspace.dom.test.ts](./group-permissions-workspace.dom.test.ts) — Stable chrome, editor replacement and save-after-unmount tests.
 - [group-permissions-saver.ts](./group-permissions-saver.ts) — Connector save port and validated browser adapter.
@@ -25,8 +25,8 @@ description: "Persistent group permissions workspace, tab editors and permission
 - [GroupPermissionsPage.svelte](./GroupPermissionsPage.svelte) — Shared page heading, tabs and editor spacing.
 - [GroupPermissionsGroupHeader.svelte](./GroupPermissionsGroupHeader.svelte) — Shared selected-group identity and optional badge.
 - [group-permissions-layout.test.ts](./group-permissions-layout.test.ts) — Shared page composition and group identity presentation tests.
-- [GroupPermissionsGroupList.svelte](./GroupPermissionsGroupList.svelte) — Shared connector and filesystem group selection, styling and accessibility.
+- [GroupPermissionsGroupList.svelte](./GroupPermissionsGroupList.svelte) — Connector catalogue group selection, styling and accessibility.
 - [group-permissions-group-list.dom.test.ts](./group-permissions-group-list.dom.test.ts) — Group selection callbacks and reactive presentation tests.
-- [GroupPermissionsTabs.svelte](./GroupPermissionsTabs.svelte) — Connector and filesystem navigation.
+- [GroupPermissionsTabs.svelte](./GroupPermissionsTabs.svelte) — Connector and filesystem routes composed through shared subpage navigation.
 - [shared/](./shared/) — Native dialog compatibility export.
 - [Group management](../groups/README.md) — Central catalogue labels, descriptions and registration.

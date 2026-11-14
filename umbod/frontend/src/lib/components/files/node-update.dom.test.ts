@@ -42,7 +42,7 @@ async function waitForFolders(): Promise<void> {
 }
 
 async function openAction(label: string): Promise<void> {
-  document.querySelector<HTMLButtonElement>('.heading-identity button[aria-haspopup="menu"]')!.click();
+  document.querySelector<HTMLButtonElement>('[aria-label="Location actions"] button[aria-haspopup="menu"]')!.click();
   await tick();
   button(label).click();
   await tick();
@@ -73,10 +73,10 @@ describe('selected node update controls', (): void => {
       document.body.append(target);
       component = mount(NodeUpdateDialog, { target, props: { state } });
       await tick();
-      expect(document.querySelector('dialog')?.textContent).toContain('Moving this item may change inherited access. Direct sharing remains unchanged.');
+      expect(document.querySelector('dialog')?.textContent).toContain('Moving this item may change namespace access. Direct sharing remains unchanged.');
       const picker = document.querySelector('[aria-label="Destination folders"]')!;
       expect(picker.querySelectorAll('button')).toHaveLength(1);
-      expect(namedButton('Select Home').disabled).toBe(true);
+      expect(namedButton('Select My files').disabled).toBe(true);
       expect(picker.textContent).toContain('Current');
       expect(picker.textContent).not.toContain('Root');
       expect(document.querySelector('dialog')?.textContent).not.toContain('Renamed home');
@@ -118,10 +118,10 @@ describe('selected node update controls', (): void => {
     await tick();
     button('Move').click();
     await waitForFolders();
-    namedButton('Select Home').click();
+    namedButton('Select My files').click();
     await vi.waitFor(() => expect(files?.rowEditing.controllers.get(fileId)?.update.canSubmit).toBe(true));
     await tick();
-    button('Move to “Home”').click();
+    button('Move to “My files”').click();
     await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
     expect((await api.filesystem.getNode(fileId)).parent_id).toBe(rootId);
     expect(document.querySelector('tbody')).toBeNull();
@@ -139,8 +139,8 @@ describe('selected node update controls', (): void => {
     button('Retry folders').click();
     await waitForFolders();
     expect(document.querySelector('[role="alert"]')).toBeNull();
-    namedButton('Select Home').click();
-    await vi.waitFor(() => expect(button('Move to “Home”').disabled).toBe(false));
+    namedButton('Select My files').click();
+    await vi.waitFor(() => expect(button('Move to “My files”').disabled).toBe(false));
   });
 
   test('retries a failed folder list in its branch without losing the current path', async (): Promise<void> => {
@@ -154,18 +154,18 @@ describe('selected node update controls', (): void => {
     await openAction('Move');
     await waitForFolders();
     expect(document.querySelector('[role="alert"]')?.textContent).toBe('Could not load folders.');
-    expect(namedButton('Collapse Home').getAttribute('aria-expanded')).toBe('true');
+    expect(namedButton('Collapse My files').getAttribute('aria-expanded')).toBe('true');
     expect(button('Move', document.querySelector('dialog')!).disabled).toBe(true);
     expect(document.querySelector('dialog')?.textContent).not.toContain('Retry folders');
     vi.mocked(api.filesystem.listChildren).mockImplementation(listChildren);
-    namedButton('Retry Home').click();
+    namedButton('Retry My files').click();
     await vi.waitFor(() => expect(document.querySelector('[role="alert"]')).toBeNull());
     expect(namedButton('Select Projects').disabled).toBe(true);
     expect(namedButton('Select Projects').textContent).toContain('Current');
     expect(document.querySelector('button[aria-label="Expand Projects"]')).toBeNull();
     expect(document.querySelector('button[aria-label="Collapse Projects"]')).toBeNull();
-    namedButton('Select Home').click();
-    await vi.waitFor(() => expect(button('Move to “Home”').disabled).toBe(false));
+    namedButton('Select My files').click();
+    await vi.waitFor(() => expect(button('Move to “My files”').disabled).toBe(false));
   });
 
   test.each([true, false])('expands a writable=%s folder independently of selection and selects its writable descendant', async (writable): Promise<void> => {
@@ -248,11 +248,11 @@ describe('selected node update controls', (): void => {
       document.body.append(target);
       component = mount(NodeUpdateDialog, { target, props: { state } });
       await waitForFolders();
-      expect(namedButton('Collapse Root').getAttribute('aria-expanded')).toBe('true');
-      expect(namedButton('Select Root').disabled).toBe(false);
+      expect(namedButton('Collapse Files').getAttribute('aria-expanded')).toBe('true');
+      expect(namedButton('Select Files').disabled).toBe(false);
       expect(namedButton('Select Projects').disabled).toBe(true);
-      namedButton('Select Root').click();
-      await vi.waitFor(() => expect(button('Move to “Root”').disabled).toBe(false));
+      namedButton('Select Files').click();
+      await vi.waitFor(() => expect(button('Move to “Files”').disabled).toBe(false));
     } finally {
       state.dispose();
     }
@@ -282,7 +282,7 @@ describe('selected node update controls', (): void => {
     expect(input.value).toBe('Renamed.txt');
     button('Rename', document.querySelector('dialog')!).click();
     await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
-    expect(document.querySelector('h1')?.textContent).toBe('Renamed.txt');
+    expect(document.querySelector('h1')?.textContent).toBe('Files');
     expect(files?.node?.id).toBe(fileId);
   });
 
@@ -324,7 +324,7 @@ describe('selected node update controls', (): void => {
     await waitForFolders();
     expect(document.querySelector('#node-update-title')?.textContent).toBe('Move “Notes.txt”');
     expect(button('Move', document.querySelector('dialog')!).disabled).toBe(true);
-    expect(namedButton('Collapse Home').getAttribute('aria-expanded')).toBe('true');
+    expect(namedButton('Collapse My files').getAttribute('aria-expanded')).toBe('true');
     expect(namedButton('Select Projects').disabled).toBe(true);
     expect(namedButton('Select Projects').textContent).toContain('Current');
     expect(document.querySelector('button[aria-label="Expand Projects"]')).toBeNull();
@@ -335,9 +335,9 @@ describe('selected node update controls', (): void => {
     expect(document.querySelector('[aria-label="Destination folders"]')?.textContent).not.toContain('Notes.txt');
     expect(document.querySelector('dialog input')).toBeNull();
     expect(document.querySelector('dialog')?.textContent).not.toContain('Retry folders');
-    namedButton('Select Home').click();
-    await vi.waitFor(() => expect(button('Move to “Home”').disabled).toBe(false));
-    expect(namedButton('Select Home').getAttribute('aria-pressed')).toBe('true');
+    namedButton('Select My files').click();
+    await vi.waitFor(() => expect(button('Move to “My files”').disabled).toBe(false));
+    expect(namedButton('Select My files').getAttribute('aria-pressed')).toBe('true');
     button('Cancel').click();
     await tick();
     expect(document.querySelector('dialog')).toBeNull();

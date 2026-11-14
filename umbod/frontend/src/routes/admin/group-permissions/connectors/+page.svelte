@@ -8,9 +8,7 @@
 
 <svelte:head><title>Connectors · Group permissions</title></svelte:head>
 
-{#if workspace.selectedGroup && !workspace.selectedGroup.registered}
-  <p>This group is not registered for connector permissions. Manage its filesystem access or register it on the Groups page.</p>
-{:else if workspace.connectors}
+{#if workspace.connectors}
   <GroupPermissionsManager state={workspace.connectors} />
 {:else}
   <DelayedSpinner active label="Loading group permissions" />

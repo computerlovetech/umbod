@@ -30,13 +30,12 @@ async function mixedResponse(): Promise<BrowseResult> {
     ...filesystemFixture,
     filesystemNode({ id: '00000000-0000-4000-8000-000000000004', parent_id: folderId, name: 'Design' })
   ]);
-  const result = await memory.filesystem.browse(folderId);
-  return { ...result, capabilities: result.capabilities.map((capability) => ({ ...capability, share: true })) };
+  return memory.filesystem.browse(folderId);
 }
 
 function fixture(respond: (request: TransportRequest<unknown>) => Promise<unknown>): { files: FilesState; api: FilesApi; transport: RecordingTransport } {
-  const transport = new RecordingTransport(async (request) => request.path === '/me/filesystem/home' ? filesystemFixture[0] : respond(request));
-  const unexpected = async (): Promise<never> => { throw new Error('Unexpected sharing probe'); };
+  const transport = new RecordingTransport(async (request) => request.path === '/me/filesystem/namespaces' ? { namespaces: [{ id: rootId, root_node_id: rootId, name: 'My files', description: '', kind: 'personal', permissions: ['discover', 'read', 'write', 'delete'] }] } : respond(request));
+  const unexpected = async (): Promise<never> => { throw new Error('Unexpected upload transfer'); };
   const api: FilesApi = {
     filesystem: new FilesystemRoute(transport, { transfer: unexpected }),
     sharing: { inspectAccess: vi.fn(unexpected), replaceAccess: vi.fn(unexpected), searchRecipients: vi.fn(unexpected) }
@@ -45,6 +44,25 @@ function fixture(respond: (request: TransportRequest<unknown>) => Promise<unknow
 }
 
 describe('coherent filesystem browse', (): void => {
+  test('namespace listing validates personal and shared summaries through the transport boundary', async (): Promise<void> => {
+    const entries = [
+      { id: rootId, root_node_id: rootId, name: 'My files', description: '', kind: 'personal', permissions: ['discover', 'read', 'write', 'delete'] },
+      { id: folderId, root_node_id: folderId, name: 'Research', description: 'Shared research', kind: 'shared', permissions: ['discover', 'read'] }
+    ];
+    const transport = new RecordingTransport(async () => ({ namespaces: entries }));
+    const route = new FilesystemRoute(transport, { transfer: async (): Promise<void> => {} });
+    expect(await route.listNamespaces()).toEqual(entries);
+    expect(transport.requests[0]).toMatchObject({ method: 'GET', path: '/me/filesystem/namespaces' });
+    const invalid = new FilesystemRoute(new RecordingTransport(async () => ({ namespaces: [{ ...entries[0], kind: 'team' }] })), { transfer: async (): Promise<void> => {} });
+    await expect(invalid.listNamespaces()).rejects.toBeInstanceOf(SchemaValidationError);
+  });
+
+  test.each([undefined, null, 1])('rejects missing or invalid namespace discovery descriptions: %s', async (description): Promise<void> => {
+    const transport = new RecordingTransport(async () => ({ namespaces: [{ id: rootId, root_node_id: rootId, name: 'My files', description, kind: 'personal', permissions: ['discover'] }] }));
+    const route = new FilesystemRoute(transport, { transfer: async (): Promise<void> => {} });
+    await expect(route.listNamespaces()).rejects.toBeInstanceOf(SchemaValidationError);
+  });
+
   test('home resolution uses the caller-only POST and validates the returned node', async (): Promise<void> => {
     const home = filesystemNode({ id: folderId, parent_id: rootId, name: 'Home-opaque' });
     const transport = new RecordingTransport(async () => home);
@@ -69,21 +87,18 @@ describe('coherent filesystem browse', (): void => {
     expect(files.update.canRename).toBe(true);
     expect(files.update.canMove).toBe(true);
     expect(files.description.available).toBe(true);
-    expect(files.sharing.available(folderId)).toBe(true);
     expect(files.uploadAvailability).toBe('allowed');
     expect(files.createDirectoryAllowed).toBe(true);
     for (const node of files.children) {
       expect(files.rowEditing.controllers.get(node.id)?.update.canRename).toBe(true);
       expect(files.rowEditing.controllers.get(node.id)?.update.canMove).toBe(true);
       expect(files.rowEditing.controllers.get(node.id)?.description.available).toBe(true);
-      expect(files.sharing.available(node.id)).toBe(true);
     }
     expect(files.rowDeletion.controllers.get(fileId)?.available).toBe(true);
     expect(transport.requests.map(({ method, path }) => ({ method, path }))).toEqual([
-      { method: 'POST', path: '/me/filesystem/home' },
+      { method: 'GET', path: '/me/filesystem/namespaces' },
       { method: 'GET', path: '/me/filesystem/browse?node_id=' + folderId }
     ]);
-    expect(api.sharing.inspectAccess).not.toHaveBeenCalled();
     files.dispose();
   });
 
@@ -107,8 +122,7 @@ describe('coherent filesystem browse', (): void => {
     await files.update.submit();
     expect(files.node?.name).toBe('Canonical');
     expect(files.navigation.path?.items.at(-1)?.name).toBe('Canonical');
-    expect(transport.requests.map(({ method }) => method)).toEqual(['POST', 'GET', 'PATCH', 'PATCH']);
-    expect(api.sharing.inspectAccess).not.toHaveBeenCalled();
+    expect(transport.requests.map(({ method }) => method)).toEqual(['GET', 'GET', 'PATCH', 'PATCH']);
     files.dispose();
   });
 
@@ -117,15 +131,15 @@ describe('coherent filesystem browse', (): void => {
     const { api, transport, files } = fixture(async (request) => memory.filesystem.browse(request.path.endsWith(fileId) ? fileId : rootId));
     await files.load(null);
     expect(files.node?.id).toBe(rootId);
-    expect(transport.requests[0].path).toBe('/me/filesystem/home');
+    expect(transport.requests[0].path).toBe('/me/filesystem/namespaces');
     expect(transport.requests[1].path).toBe('/me/filesystem/browse?node_id=' + rootId);
     await files.load(fileId);
     expect(files.children).toEqual([]);
     expect(files.deletion.available).toBe(true);
     expect(files.uploadAvailability).toBe('hidden');
-    expect(transport.requests).toHaveLength(3);
+    expect(transport.requests).toHaveLength(4);
     await expect(api.filesystem.browse('invalid')).rejects.toThrow();
-    expect(transport.requests).toHaveLength(3);
+    expect(transport.requests).toHaveLength(4);
     files.dispose();
   });
 
@@ -156,7 +170,6 @@ describe('coherent filesystem browse', (): void => {
     expect(files.description.open).toBe(false);
     expect(row.update.open).toBe(false);
     expect(row.description.open).toBe(false);
-    expect(files.sharing.available(fileId)).toBe(false);
     expect(transport.requests).toHaveLength(2);
     folder.dispose();
     upload.dispose();
@@ -204,7 +217,6 @@ describe('coherent filesystem browse', (): void => {
     expect(files.phase).toBe(phase);
     expect(files.node).toBeUndefined();
     expect(files.children).toEqual([]);
-    expect(files.sharing.available(folderId)).toBe(false);
     expect(files.update.canRename).toBe(false);
     expect(files.createDirectoryAllowed).toBe(false);
     fail = false;

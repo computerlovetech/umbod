@@ -51,6 +51,10 @@ class SessionHomes:
         )
         return record.payload if record is not None else None
 
+    async def adopt_namespace(self, binding: HomeBinding) -> None:
+        from .namespaces import adopt_personal
+        await adopt_personal(self._session, binding)
+
     async def save(self, binding: HomeBinding) -> None:
         await self._session.insert(HOME_TABLE, InsertCommand(row=HomeRecord(
             issuer=binding.user.issuer, user_id=binding.user.id, payload=binding,

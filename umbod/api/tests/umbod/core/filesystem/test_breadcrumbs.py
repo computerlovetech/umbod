@@ -14,7 +14,8 @@ from umbod.core.filesystem.authorization import ResolvedIdentity
 from umbod.core.filesystem.browsing import BrowsingService, FilesystemBrowsing
 from umbod.core.filesystem.transactions import FilesystemSession, FilesystemTransactions
 from umbod.core.filesystem.authorization import PermissionDenied
-from umbod.core.persistence import PersistenceRuntime
+from umbod.core.persistence import Database, PersistenceRuntime
+from tests.support.filesystem.namespaces import shared_directory, set_shared_access
 from umbod.infrastructure import (
     create_access_control_driver, create_filesystem_browsing, create_filesystem_transactions, create_namespace_driver,
 )
@@ -25,6 +26,7 @@ from tests.support.filesystem.authorization import (
 
 @dataclass(frozen=True)
 class BreadcrumbContext:
+    database: Database
     browsing: FilesystemBrowsing
     authorization: AuthorizationContext
 
@@ -40,7 +42,7 @@ def breadcrumbs(filesystem_runtime: PersistenceRuntime) -> BreadcrumbContext:
         groups=[principal("team", PrincipalType.GROUP, "issuer")],
     )
     return BreadcrumbContext(
-        create_filesystem_browsing(database=filesystem_runtime.database, resolver=context.resolver), context,
+        filesystem_runtime.database, create_filesystem_browsing(database=filesystem_runtime.database, resolver=context.resolver), context,
     )
 
 
@@ -51,7 +53,8 @@ async def own(context: BreadcrumbContext, node_id: NodeId, owner: str) -> None:
 
 
 async def path(context: BreadcrumbContext, kind: NodeKind) -> list[Node]:
-    root = await context.authorization.namespace.get_root()
+    namespace = await shared_directory(context.database)
+    root = await context.authorization.namespace.get_node(namespace.id)
     nodes = [root]
     for name, node_kind in (("first", NodeKind.DIRECTORY), ("second", NodeKind.DIRECTORY), ("target", kind)):
         node = await context.authorization.namespace.create_node(
@@ -75,13 +78,13 @@ async def test_full_paths_are_ordered_minimal_and_include_target(breadcrumbs: Br
             "items": [{"id": entry.id, "name": entry.name, "kind": entry.kind} for entry in nodes[:index + 1]],
             "complete": True,
         }
-    assert (await breadcrumbs.browsing.get_breadcrumbs(caller("alice"), nodes[0].id)).items[0].name == ""
+    assert (await breadcrumbs.browsing.get_breadcrumbs(caller("alice"), nodes[0].id)).items[0].name == "Shared"
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("hidden_index", [0, 1, 2])
 @pytest.mark.parametrize("reason", ["other-owner", "unowned"])
-async def test_first_hidden_ancestor_ends_path_without_skipping_to_visible_grandparents(
+async def test_raw_ownership_changes_never_hide_managed_ancestors(
     breadcrumbs: BreadcrumbContext, hidden_index: int, reason: str,
 ) -> None:
     nodes = await path(breadcrumbs, NodeKind.FILE)
@@ -90,26 +93,14 @@ async def test_first_hidden_ancestor_ends_path_without_skipping_to_visible_grand
     else:
         await own(breadcrumbs, nodes[hidden_index].id, "bob")
     result = await breadcrumbs.browsing.get_breadcrumbs(caller("alice"), nodes[-1].id)
-    assert result.complete is False
-    assert [item.id for item in result.items] == [node.id for node in nodes[hidden_index + 1:]]
-    assert str(nodes[hidden_index].id) not in result.model_dump_json()
-    if hidden_index:
-        assert nodes[hidden_index].name not in result.model_dump_json()
+    assert result.complete is True
+    assert [item.id for item in result.items] == [node.id for node in nodes]
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("reason", ["missing", "hidden", "unowned", "read-only", "unresolved"])
+@pytest.mark.parametrize("reason", ["missing", "unresolved"])
 async def test_target_denial_is_indistinguishable(breadcrumbs: BreadcrumbContext, reason: str) -> None:
     node = (await path(breadcrumbs, NodeKind.FILE))[-1]
-    if reason in ("hidden", "read-only"):
-        await own(breadcrumbs, node.id, "bob")
-    if reason == "read-only":
-        await breadcrumbs.authorization.policies.add_grant(AccessGrant(
-            node_id=node.id, principal=principal("alice", PrincipalType.USER, "issuer"),
-            permissions={Permission.READ}, recursive=False,
-        ))
-    if reason == "unowned":
-        await breadcrumbs.authorization.policies.clear_node(node.id)
     if reason == "unresolved":
         breadcrumbs.authorization.resolver.identities.clear()
     node_id = uuid4() if reason == "missing" else node.id
@@ -125,7 +116,7 @@ async def test_target_denial_is_indistinguishable(breadcrumbs: BreadcrumbContext
     (PrincipalType.GROUP, "other", "team", False),
     (PrincipalType.USER, "issuer", "bob", False),
 ])
-async def test_exact_issuer_user_and_group_grants_and_revocation(
+async def test_direct_user_and_group_grants_authorize_guests_with_exact_issuer(
     breadcrumbs: BreadcrumbContext, principal_type: PrincipalType, issuer: str, identifier: str, allowed: bool,
 ) -> None:
     nodes = await path(breadcrumbs, NodeKind.FILE)
@@ -134,8 +125,9 @@ async def test_exact_issuer_user_and_group_grants_and_revocation(
     recipient = principal(identifier, principal_type, issuer)
     grant = AccessGrant(node_id=target.id, principal=recipient, permissions={Permission.DISCOVER}, recursive=True)
     await breadcrumbs.authorization.policies.add_grant(grant)
+    await set_shared_access(breadcrumbs.database, nodes[0].id, writable=False, discoverable=False)
     if allowed:
-        assert (await breadcrumbs.browsing.get_breadcrumbs(caller("alice"), target.id)).complete
+        assert (await breadcrumbs.browsing.get_breadcrumbs(caller("alice"), target.id)).items[-1].id == target.id
         await breadcrumbs.authorization.policies.remove_grant(target.id, recipient)
     with pytest.raises(PermissionDenied):
         await breadcrumbs.browsing.get_breadcrumbs(caller("alice"), target.id)
@@ -190,7 +182,7 @@ async def test_ancestry_read_serializes_policy_revocation(
 
     async def revoke() -> None:
         revoking.set()
-        await own(breadcrumbs, nodes[1].id, "bob")
+        await set_shared_access(breadcrumbs.database, nodes[0].id, writable=False, discoverable=False)
 
     pending = asyncio.create_task(browsing.get_breadcrumbs(caller("alice"), nodes[-1].id))
     try:
@@ -203,5 +195,5 @@ async def test_ancestry_read_serializes_policy_revocation(
     assert (await pending).complete is True
     await revocation
     result = await breadcrumbs.browsing.get_breadcrumbs(caller("alice"), nodes[-1].id)
-    assert result.complete is False
-    assert [item.id for item in result.items] == [node.id for node in nodes[2:]]
+    assert not result.complete
+    assert [item.id for item in result.items] == [node.id for node in nodes[1:]]

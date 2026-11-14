@@ -32,10 +32,10 @@ async def test_ten_mib_upload_roundtrips_over_http(filesystem_invocation_mcp: Fi
                               max_request_body_bytes=MAX_MCP_REQUEST_BODY_BYTES)
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://localhost") as client:
-            root = await call_tool(client, "get_filesystem_root", {})
+            root = await call_tool(client, "filesystem_browse", {"operation": "home"})
             before = filesystem_invocation_mcp.callers.count
             result = await call_tool(client, "filesystem_upload", {
-                "parent_id": root["structuredContent"]["id"], "name": "uploaded", "metadata": METADATA,
+                "parent_id": root["structuredContent"]["result"]["node"]["id"], "name": "uploaded", "metadata": METADATA,
                 "content": content,
             })
     assert not result.get("isError", False)
@@ -43,7 +43,7 @@ async def test_ten_mib_upload_roundtrips_over_http(filesystem_invocation_mcp: Fi
     assert message == "File uploaded successfully."
     assert json.loads(metadata) == result["structuredContent"]
     assert result["structuredContent"]["permissions"]["can_write"] is True
-    assert result["structuredContent"]["visible_to"]["grants"] == []
+    assert result["structuredContent"]["visible_to"]["kind"] == "personal"
     assert filesystem_invocation_mcp.callers.count == before + 1
     assert filesystem_invocation_mcp.content.put_count == 1
     download = await filesystem_invocation_mcp.files.open_download(
@@ -58,10 +58,10 @@ async def test_oversize_decoded_upload_reaches_safe_tool_error_over_http(filesys
                               max_request_body_bytes=MAX_MCP_REQUEST_BODY_BYTES)
     async with app.router.lifespan_context(app):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app), base_url="http://localhost") as client:
-            root = await call_tool(client, "get_filesystem_root", {})
+            root = await call_tool(client, "filesystem_browse", {"operation": "home"})
             before = filesystem_invocation_mcp.callers.count
             result = await call_tool(client, "filesystem_upload", {
-                "parent_id": root["structuredContent"]["id"], "name": "uploaded", "metadata": METADATA,
+                "parent_id": root["structuredContent"]["result"]["node"]["id"], "name": "uploaded", "metadata": METADATA,
                 "content": {"encoding": "base64", "data": base64.b64encode(b"x" * (CAP + 1)).decode()},
             })
     assert result["isError"]

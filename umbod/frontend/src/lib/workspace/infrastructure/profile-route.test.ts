@@ -7,7 +7,7 @@ import { workspaceNavigation } from '../navigation';
 import { ProfileRoute } from './profile-route';
 import { HttpWorkspaceApi } from './workspace-api';
 
-const profile = { user: { id: 'user-1', name: 'Alex', email: null, picture: null }, capabilities: { administration: false } };
+const profile = { identity_key: 'opaque-account-key', user: { id: 'user-1', name: 'Alex', email: null, picture: null }, capabilities: { administration: false } };
 
 describe('workspace profile transport', () => {
   test('declares the neutral profile GET and response schema through the transport port', async (): Promise<void> => {
@@ -40,7 +40,7 @@ describe('workspace profile transport', () => {
   });
 
   test('malformed capability fails at the shared transport boundary', async (): Promise<void> => {
-    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ user: profile.user, capabilities: {} }));
+    const request = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ identity_key: profile.identity_key, user: profile.user, capabilities: {} }));
     const api = new HttpWorkspaceApi(browserTransport({
       fetch: request,
       configuration: new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' })

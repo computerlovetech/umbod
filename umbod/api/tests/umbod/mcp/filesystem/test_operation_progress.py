@@ -57,7 +57,6 @@ async def test_mutation_return_marks_completed_before_result_processing(
     setattr(service, mutation, AsyncMock(return_value=committed_result))
     getattr(services, service_name).return_value = service
     services.access.side_effect = RuntimeError("SECRET enrichment failed")
-    services.sharing.side_effect = RuntimeError("SECRET enrichment failed")
     tool = tool_type(callers, services)
     with operation_progress_context() as progress:
         with pytest.raises(BuiltinToolError):

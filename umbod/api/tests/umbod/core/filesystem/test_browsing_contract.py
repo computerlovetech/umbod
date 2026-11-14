@@ -29,7 +29,6 @@ def browsing_mocks() -> BrowsingMocks:
     namespace = create_autospec(NamespaceDriver, instance=True, spec_set=True)
     authorization = create_autospec(FilesystemAuthorization, instance=True, spec_set=True)
     root = initial_root()
-    namespace.get_root.return_value = root
     namespace.get_node.return_value = root
     namespace.list_children.return_value = []
     browsing: FilesystemBrowsing = BrowsingService(
@@ -41,15 +40,13 @@ def browsing_mocks() -> BrowsingMocks:
 
 
 async def observe(context: BrowsingMocks, operation: str) -> Sequence[NodeSummary]:
-    if operation == "root":
-        return [await context.browsing.get_root(caller("alice"))]
     if operation == "node":
         return [await context.browsing.get_node(caller("alice"), context.root.id)]
     return await context.browsing.list_children(caller("alice"), context.root.id)
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("operation", ["root", "node", "list"])
+@pytest.mark.parametrize("operation", ["node", "list"])
 async def test_browsing_uses_only_discover_and_necessary_namespace_reads(
     browsing_mocks: BrowsingMocks, operation: str,
 ) -> None:
@@ -58,7 +55,6 @@ async def test_browsing_uses_only_discover_and_necessary_namespace_reads(
     assert len(result) == (0 if operation == "list" else 1)
     assert context.authorization.mock_calls == [call.require(caller("alice"), context.root.id, Permission.DISCOVER)]
     expected = {
-        "root": [call.get_root()],
         "node": [call.get_node(context.root.id)],
         "list": [call.get_node(context.root.id), call.list_children(context.root.id)],
     }
@@ -80,7 +76,7 @@ async def test_denied_targets_do_not_trigger_namespace_or_ancestor_reads(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failing_read", ["get_root", "get_node", "list_children"])
+@pytest.mark.parametrize("failing_read", ["get_node", "list_children"])
 @pytest.mark.parametrize("failure_type", [MissingNode, StorageFailure, RuntimeError])
 async def test_namespace_absence_is_uniform_denial_and_other_failures_propagate(
     browsing_mocks: BrowsingMocks, failing_read: str, failure_type: type[Exception],
@@ -88,7 +84,7 @@ async def test_namespace_absence_is_uniform_denial_and_other_failures_propagate(
     context = browsing_mocks
     failure = failure_type("backend detail")
     getattr(context.namespace, failing_read).side_effect = failure
-    operation = {"get_root": "root", "get_node": "node", "list_children": "list"}[failing_read]
+    operation = {"get_node": "node", "list_children": "list"}[failing_read]
     with pytest.raises(PermissionDenied if failure_type is MissingNode else failure_type) as caught:
         await observe(context, operation)
     if failure_type is MissingNode:
@@ -99,16 +95,16 @@ async def test_namespace_absence_is_uniform_denial_and_other_failures_propagate(
 
 
 @pytest.mark.asyncio
-async def test_root_authorization_denial_suppresses_injected_sensitive_details(
+async def test_node_authorization_denial_suppresses_injected_sensitive_details(
     browsing_mocks: BrowsingMocks,
 ) -> None:
     context = browsing_mocks
     context.authorization.require.side_effect = PermissionDenied("sensitive root policy detail")
     with pytest.raises(PermissionDenied, match=f"^discover denied for node {context.root.id}$") as caught:
-        await context.browsing.get_root(caller("alice"))
+        await context.browsing.get_node(caller("alice"), context.root.id)
     assert caught.value.__suppress_context__
     assert "sensitive" not in str(caught.value)
-    assert context.namespace.mock_calls == [call.get_root()]
+    assert context.namespace.mock_calls == []
 
 
 @pytest.mark.asyncio
@@ -123,7 +119,7 @@ async def test_parent_disappearing_after_authorization_is_uniform_denial(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("operation", ["root", "node", "list"])
+@pytest.mark.parametrize("operation", ["node", "list"])
 @pytest.mark.parametrize("failure_type", [StorageFailure, RuntimeError, MissingNode])
 async def test_authorization_faults_are_not_mistaken_for_namespace_absence(
     browsing_mocks: BrowsingMocks, operation: str, failure_type: type[Exception],
@@ -195,7 +191,7 @@ async def test_summaries_detach_metadata_even_when_namespace_returns_shared_obje
     context = browsing_mocks
     context.root.metadata.attributes["private-attribute"] = "discover-visible"
     context.namespace.list_children.return_value = [context.root, context.root]
-    first = await context.browsing.get_root(caller("alice"))
+    first = await context.browsing.get_node(caller("alice"), context.root.id)
     second = await context.browsing.get_node(caller("alice"), context.root.id)
     listed = await context.browsing.list_children(caller("alice"), context.root.id)
     first.metadata.attributes["private-attribute"] = "changed"

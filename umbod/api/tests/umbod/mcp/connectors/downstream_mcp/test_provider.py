@@ -612,3 +612,22 @@ async def test_shared_inventory_skips_persisted_personal_oauth_catalog() -> None
     assert metrics.metric_samples() == ()
     assert factory.created == []
     personal.execute.assert_not_called()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("scope", ["", "weather"])
+async def test_diagnostic_name_collision_does_not_hide_unrelated_downstream_tools(scope: str) -> None:
+    provider, factory, _, activations, catalogs = await _provider({"weather": _downstream()})
+    catalog = await catalogs.get(ConnectorIdQuery(connector_id="weather"))
+    assert isinstance(catalog, ToolCatalogFound)
+    reserved = catalog.snapshot.tools[0].model_copy(update={"identity": ToolIdentity(connector_id="weather", downstream_name="report_diagnostic")})
+    await catalogs.replace(ReplaceToolCatalog(snapshot=catalog.snapshot.model_copy(update={"tools": (*catalog.snapshot.tools, reserved)})))
+    await activations.set_status(CapabilityRef(connector_kind="downstream_mcp", connector_id="weather", capability_kind="tool", capability_key="report_diagnostic"), ActivationStatus.ENABLED)
+    await provider.native_capability_projection()
+    token = set_request_connector_scope(scope)
+    try:
+        assert [tool.name for tool in await provider.list_tools()] == ["forecast" if scope else "weather_forecast"]
+        assert [candidate.operation_name for candidate in await provider.eligible_search_candidates()] == ["forecast"]
+    finally:
+        reset_request_connector_scope(token)
+    assert factory.created == []

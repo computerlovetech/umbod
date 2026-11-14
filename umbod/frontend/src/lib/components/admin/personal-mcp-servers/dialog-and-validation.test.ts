@@ -73,16 +73,34 @@ describe('personal form native invalid capture', () => {
 });
 
 describe('personal modal native dialog lifecycle', () => {
-  test('opens modally, focuses its non-destructive title and restores its opener after teardown', async () => {
-    const { dialog, opener, heading } = dialogFixture();
+  test('opens modally without preselecting a field and restores its opener after teardown', async (): Promise<void> => {
+    const { dialog, opener } = dialogFixture();
+    const input = document.createElement('input');
+    const close = document.createElement('button');
+    close.dataset.dialogClose = '';
+    dialog.append(close, input);
     const cleanup = modalDialog(vi.fn(), 'mcp-workspace-heading')(dialog);
     expect(dialog.showModal).toHaveBeenCalledTimes(1);
-    expect(document.activeElement).toBe(heading);
+    expect(document.activeElement).toBe(close);
     if (typeof cleanup === 'function') cleanup();
     await Promise.resolve();
     expect(dialog.close).toHaveBeenCalledTimes(1);
     expect(document.activeElement).toBe(opener);
   });
+  test('does not steal focus from a replacement modal during chooser teardown', async (): Promise<void> => {
+    const { dialog } = dialogFixture();
+    const cleanup = modalDialog(vi.fn(), 'mcp-workspace-heading')(dialog);
+    if (typeof cleanup === 'function') cleanup();
+    const replacement = document.createElement('dialog');
+    replacement.setAttribute('open', '');
+    const input = document.createElement('input');
+    replacement.append(input);
+    document.body.append(replacement);
+    input.focus();
+    await Promise.resolve();
+    expect(document.activeElement).toBe(input);
+  });
+
   test('cancel delegates to guarded state close and prevents the browser bypassing that guard', () => {
     const { dialog } = dialogFixture();
     const close = vi.fn();

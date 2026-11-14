@@ -37,7 +37,7 @@
 <dialog {role} aria-modal="true" aria-labelledby={titleId} aria-describedby={descriptionId} onclick={handleBackdropClick} {@attach dialogAttachment ?? nativeDialog(close, () => !closeDisabled, initialFocus)}>
   <header>
     <h2 id={titleId} tabindex="-1" data-dialog-title>{title}</h2>
-    <Button variant="quiet" iconOnly type="button" aria-label="Close" disabled={closeDisabled} onclick={close}>
+    <Button variant="quiet" iconOnly type="button" aria-label="Close" data-dialog-close disabled={closeDisabled} onclick={close}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18" /></svg>
     </Button>
   </header>

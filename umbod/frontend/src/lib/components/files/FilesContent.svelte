@@ -1,18 +1,18 @@
 <script lang="ts">
   import Button from '$lib/components/admin/shared/Button.svelte';
+  import DelayedLoadingOverlay from '$lib/components/admin/shared/DelayedLoadingOverlay.svelte';
   import { filesHref, type FilesState } from '$lib/files/state/files-state.svelte';
   import type { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
   import type { UploadState } from '$lib/files/state/upload-state.svelte';
   import { FileDropState } from '$lib/files/state/file-drop-state.svelte';
   import PermissionBadge from './PermissionBadge.svelte';
   import NodeActions from './NodeActions.svelte';
-  import NodeShareButton from './NodeShareButton.svelte';
   import NodeSharingDialog from './NodeSharingDialog.svelte';
   import FilesNavigation from './FilesNavigation.svelte';
-  import FileDeletionDialog from './FileDeletionDialog.svelte';
   import FileUploadForm from './FileUploadForm.svelte';
-  import FilesDescription from './FilesDescription.svelte';
-  import FilesContainer from './FilesContainer.svelte';
+  import PageContainer from '$lib/components/shared/workspace/PageContainer.svelte';
+  import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
+  import FilesLocations from './FilesLocations.svelte';
   import FileTypeIcon from './FileTypeIcon.svelte';
   import NewFolderForm from './NewFolderForm.svelte';
   import FilePreview from './preview/FilePreview.svelte';
@@ -76,32 +76,44 @@
   </div>
 {/if}
 
-<FilesContainer>
+<PageContainer>
   {#snippet identity()}
     <div class="node-identity">
-      <h1 id="files-heading" class="admin-title" tabindex="-1" {@attach state.rowDeletion.attachFocus}>{state.locationName}</h1>
-      {#if state.phase === 'ready' && state.node}<PermissionBadge permissions={state.node.permissions} />{/if}
+      <h1 id="files-heading" class="admin-title" tabindex="-1" {@attach state.rowDeletion.attachFocus}>Files</h1>
+      <div class="location-navigation">
+        {#if state.node}
+          <FilesNavigation state={state.navigation} {signIn} />
+        {/if}
+      </div>
     </div>
-    {#if state.phase === 'ready' && state.node}<NodeActions update={state.update} description={state.description} name={state.locationName} displayName={state.atPersonalRoot ? state.locationName : undefined} node={state.node} mutationsAllowed={!state.atPersonalRoot} {signIn} />{/if}
-  {/snippet}
-  {#snippet navigation()}
-    {#if state.node}<FilesNavigation state={state.navigation} {signIn} />{/if}
-  {/snippet}
-  {#snippet sharing()}
-    {#if state.phase === 'ready' && state.node}<NodeShareButton node={state.node} sharing={state.sharing} />{/if}
   {/snippet}
   {#snippet actions()}
-    {#if state.phase === 'ready' && state.node?.kind === 'directory'}
-      {#if upload.available}<Button variant="primary" id="upload-file-button" onclick={upload.show} disabled={upload.open}>Upload file</Button>{/if}
-      {#if state.createDirectoryAllowed}<Button variant="primary" id="new-folder-button" onclick={folder.show} disabled={folder.open}>New folder</Button>{/if}
-    {:else if state.phase === 'ready' && state.node?.kind === 'file' && state.deletion.available}
-      <Button variant="danger" onclick={state.deletion.show} disabled={state.deletion.pending || !!state.deletion.confirmation}>Delete file</Button>
+    <div class="location-actions" role="group" aria-label="Location actions">
+    {#if state.node?.kind === 'directory'}
+      {#if state.uploadAvailability === 'allowed'}
+        <Button variant="quiet" iconOnly id="upload-file-button" aria-label="Upload file" title="Upload file" onclick={upload.show} disabled={!upload.available || upload.open}>
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V3m-5 5 5-5 5 5M4 16v5h16v-5" /></svg>
+        </Button>
+      {/if}
+      {#if state.createDirectoryAllowed}
+        <Button variant="quiet" iconOnly id="new-folder-button" aria-label="New folder" title="New folder" onclick={folder.show} disabled={state.phase !== 'ready' || folder.open}>
+          <svg aria-hidden="true" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V4h6l2 3h10v13H3V7Zm9 4v6m-3-3h6" /></svg>
+        </Button>
+      {/if}
     {/if}
-  {/snippet}
-  {#snippet description()}
-    {#if state.phase === 'ready' && state.node}<FilesDescription state={state.description} />{/if}
+    {#if state.node}<NodeActions disabled={state.phase !== 'ready'} contextKey={state.navigationVersion} update={state.update} description={state.description} name={state.locationName} displayName={state.atPersonalRoot ? state.locationName : undefined} node={state.node} sharing={state.atNamespaceRoot ? undefined : state.sharing} deletion={state.node.kind === 'file' ? state.deletion : undefined} mutationsAllowed={!state.atPersonalRoot} {signIn} />{/if}
+    </div>
   {/snippet}
   {#snippet children()}
+<AdminSplitWorkspace ariaLabel="Files workspace" sidebarLabel="Locations" sidebarHeading="Locations" detailLabel="Files content">
+  {#snippet sidebar()}
+    <FilesLocations {state} {signIn} />
+  {/snippet}
+  {#snippet detail()}
+    {#if state.phase === 'loading'}<p class="visually-hidden" role="status">Loading files…</p>{/if}
+    <div class="files-view">
+    <DelayedLoadingOverlay active={state.phase === 'loading'} label="Loading files…">
+    <div aria-busy={state.phase === 'loading'} inert={state.phase === 'loading'}>
 <p class="upload-status" role="status" aria-atomic="true">{upload.pending ? 'Uploading file…' : upload.status}</p>
 
 {#if state.mutationNotice}<p role="status">{state.mutationNotice}</p>{/if}
@@ -109,16 +121,15 @@
 {#if state.dragMove.error}<p role="alert">{state.dragMove.error}</p>{/if}
 {#if state.dragMove.needsReload}<Button variant="secondary" onclick={state.dragMove.reload} disabled={state.dragMove.pending}>Reload folder</Button>{/if}
 
-{#if state.phase === 'loading'}
-  <p role="status">Loading files…</p>
-{:else if state.phase !== 'ready'}
+{#if state.phase !== 'ready' && state.phase !== 'loading'}
   <p role="alert">{state.phase === 'denied' ? "You don't have access to this location." : state.phase === 'sign-in' ? 'Sign in to view files.' : state.phase === 'missing' ? 'This location is unavailable.' : "Couldn't load files."}</p>
   {#if state.phase === 'sign-in'}
     <Button variant="secondary" onclick={signIn}>Sign in</Button>
   {:else}
     <Button variant="secondary" onclick={folder.reload}>Retry</Button>
   {/if}
-{:else if state.node}
+{/if}
+{#if state.node}
   {#if state.node.kind === 'directory'}
     {#if !upload.available && upload.error}<p role="alert">{upload.error}</p>{/if}
     {#if state.uploadAvailability === 'sign-in'}
@@ -149,7 +160,7 @@
                 <td>{item.kind === 'directory' ? 'Folder' : 'File'}</td>
                 <td><time datetime={item.updated_at}>{updatedAt(item.updated_at)}</time></td>
                 <td class="row-actions">
-                  {#if editing}<NodeActions update={editing.update} description={editing.description} name={presentation.name} displayName={presentation.isHome ? presentation.name : undefined} node={item} sharing={state.sharing} {deletion} onconfirm={() => { void state.rowDeletion.confirm(item.id); }} {signIn} />{/if}
+                  {#if editing}<NodeActions disabled={state.phase !== 'ready'} contextKey={state.navigationVersion} update={editing.update} description={editing.description} name={presentation.name} displayName={presentation.isHome ? presentation.name : undefined} node={item} sharing={state.sharing} {deletion} onconfirm={() => { void state.rowDeletion.confirm(item.id); }} {signIn} />{/if}
                   {#if item.kind === 'file' && deletion}
                     {#if deletion.pending}<span class="visually-hidden" role="status">Deleting “{item.name}”…</span>{/if}
                     {#if deletion.message}<p role="alert">{deletion.message}</p>{/if}
@@ -165,7 +176,6 @@
     {/if}
   {:else}
     <section aria-label="File details">
-      {#if state.deletion.confirmation}<FileDeletionDialog state={state.deletion} />{/if}
       {#if state.deletion.pending}<p role="status">Deleting file…</p>{/if}
       {#if state.deletion.message}<p role="alert">{state.deletion.message}</p>{/if}
       {#if state.deletion.needsReload}<Button variant="secondary" onclick={state.deletion.reconcile}>{state.deletion.mutationSucceeded ? 'Reload parent folder' : 'Reload file'}</Button>{/if}
@@ -188,10 +198,18 @@
 
 {#if state.sharing.dialog.open}<NodeSharingDialog state={state.sharing.dialog} {signIn} />{/if}
 <p role="status" aria-atomic="true">{state.sharing.dialog.status}</p>
+    </div>
+    </DelayedLoadingOverlay>
+    </div>
   {/snippet}
-</FilesContainer>
+</AdminSplitWorkspace>
+  {/snippet}
+</PageContainer>
 
 <style>
+  .location-actions { display: flex; flex-wrap: wrap; align-items: center; gap: inherit; }
+  .files-view { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; height: 100%; }
+  .location-navigation { flex: 1; min-width: 0; }
   .file-drag-image { position: fixed; top: 0; left: 0; width: 1px; height: 1px; pointer-events: none; }
   .file-drag-preview { position: fixed; top: 0; left: 0; transform: translate(var(--preview-x), var(--preview-y)); z-index: 40; display: flex; align-items: center; gap: 0.75rem; box-sizing: border-box; width: min(18rem, calc(100vw - 1rem)); padding: 0.75rem; border: 1px solid var(--admin-accent); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-accent); box-shadow: var(--admin-shadow); pointer-events: none; }
   .file-drag-label { min-width: 0; display: grid; gap: 0.2rem; }
@@ -205,8 +223,8 @@
   .drag-status:not(:empty) { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%); z-index: 30; max-width: calc(100vw - 3rem); box-sizing: border-box; margin: 0; padding: 0.75rem 1rem; border: 1px solid var(--admin-border); border-radius: var(--admin-radius); background: var(--admin-panel); color: var(--admin-ink); box-shadow: var(--admin-shadow); pointer-events: none; }
   .upload-status:not(:empty) { color: var(--admin-ink); }
   .availability-error { font-size: 0.9rem; }
-  .node-identity { min-width: 0; }
-  .node-identity h1 { margin-bottom: 0.35rem; }
+  .node-identity { display: flex; align-items: center; gap: 1.5rem; min-width: 0; min-height: 2.75rem; }
+  .node-identity h1 { flex-shrink: 0; }
   h1 { min-width: 0; overflow-wrap: anywhere; }
   a { color: var(--admin-accent); overflow-wrap: anywhere; }
   :focus-visible { outline: 2px solid var(--admin-accent); outline-offset: 3px; }

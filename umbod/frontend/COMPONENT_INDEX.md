@@ -12,14 +12,20 @@ tags:
 
 ## Buttons, fields, and forms
 
+- [TextAreaField](src/lib/components/shared/TextAreaField.svelte) — Controlled labelled multiline input with native attributes and events; uses the same field and focus styling as plain and configuration text inputs.
+
+- [TextField](src/lib/components/shared/TextField.svelte) — Controlled labelled plain text input with native attribute and event forwarding; use for non-credential text without configuration-secret behavior.
+
 - [Button](src/lib/components/admin/shared/Button.svelte) — Native action button with primary, secondary, danger, quiet, compact, and icon-only presentation; forwards native attributes, events, and attachments.
 - [ButtonLink](src/lib/components/admin/shared/ButtonLink.svelte) — Native navigation anchor with canonical action styling; use for action-like links without replacing href semantics.
 - [LoadingButton](src/lib/components/admin/shared/LoadingButton.svelte) — Button with delayed loading feedback, native attribute forwarding, and immediate pending protection; supports the same variants and sizes.
 - [AdminSaveAction](src/lib/components/admin/shared/AdminSaveAction.svelte) — Save button with status feedback; use when a save action needs loading, success, or error presentation.
 - [AdminConfigurationField](src/lib/components/admin/shared/AdminConfigurationField.svelte) — Labelled text, password, or URL field; use for configuration inputs with helper text, validation, or existing-secret handling.
+- [SegmentedRadio](src/lib/components/shared/SegmentedRadio.svelte) — Controlled native radios with normal or compact sizing; use for a short set of visible, mutually exclusive choices and parent-owned updates.
 - [Select](src/lib/components/admin/shared/Select.svelte) — Controlled select or searchable combobox; use for keyboard-accessible choices, with parent-owned options and filtering.
 - [AdminToggle](src/lib/components/admin/shared/AdminToggle.svelte) — Controlled checkbox or submit-button switch; use for activation and permission flags while the parent owns updates.
 - [AdminFileUpload](src/lib/components/admin/shared/AdminFileUpload.svelte) — Single-file picker/drop field with size and type checks; use for file selection, noting its fixed JSON marker.
+- [QueryPanel](src/lib/components/shared/workspace/QueryPanel.svelte) — Collapsed native query editor; callers own parameters, reset, submission and loading.
 - [Form](src/lib/components/admin/shared/Form.svelte) — Scrollable fields and optional action footer; use for forms compatible with its attached administration submission integration.
 - [CopyableValue](src/lib/components/admin/connectors/CopyableValue.svelte) — Value display with clipboard action and feedback; use for copyable identifiers or URIs within a toast-provider scope.
 
@@ -28,12 +34,12 @@ tags:
 - [ActionMenu](src/lib/components/shared/ActionMenu.svelte) — Keyboard-accessible popup menu; use for contextual actions with custom trigger and menu content.
 - [AdminSidebarActionMenu](src/lib/components/admin/shared/AdminSidebarActionMenu.svelte) — Ellipsis-trigger wrapper around ActionMenu; use for compact contextual actions in lists and sidebars.
 - [ModalShell](src/lib/components/shared/ModalShell.svelte) — Native modal with heading and upper-right close button; use for dialogs with guarded dismissal and caller-selected initial focus.
-- [Native dialog attachment](src/lib/components/shared/dialogs/native-dialog.ts) — Shared native-dialog lifecycle and initial-focus mechanics; use when composing a native dialog rather than duplicating its setup.
+- [Native dialog attachment](src/lib/components/shared/dialogs/native-dialog.ts) — Native-dialog lifecycle and Cancel/Close focus fallbacks; avoids automatic field preselection unless the caller requests it.
 
 ## Loading, notifications, and values
 
 - [DelayedSpinner](src/lib/components/admin/shared/DelayedSpinner.svelte) — Delayed, labelled loading indicator; use for inline or standalone pending states without short-operation flicker.
-- [DelayedLoadingOverlay](src/lib/components/admin/shared/DelayedLoadingOverlay.svelte) — Delayed loading scrim around content; use for visual pending feedback, not input blocking; currently has no production consumer.
+- [DelayedLoadingOverlay](src/lib/components/admin/shared/DelayedLoadingOverlay.svelte) — Delayed loading scrim around content; used for retained Files navigation feedback, not input blocking.
 - [ToastProvider](src/lib/components/feedback/ToastProvider.svelte) — Notification context and rendering scope; use around application content, where it is already mounted by the root layout.
 - [Toast API](src/lib/components/feedback/index.ts) — Public provider, useToast, and notification types; use to send success, warning, or error messages from descendants.
 - [ToastRegion](src/lib/components/feedback/ToastRegion.svelte) — Labelled notification region with dismissible status/alert messages; normally use through ToastProvider rather than separately.
@@ -41,8 +47,9 @@ tags:
 
 ## Layout and identity
 
-- [SubpageContainer](src/lib/components/shared/workspace/SubpageContainer.svelte) — Shared page heading, action slot and content frame; use with feature-owned navigation and selected subpage content.
-- [SubpageNavigation](src/lib/components/shared/workspace/SubpageNavigation.svelte) — Horizontal subpage links and loading feedback; parents supply routes, active selection and eligibility.
+- [PageContainer](src/lib/components/shared/workspace/PageContainer.svelte) — Shared heading, optional actions and content slots for Files and Connectors; pair with the split workspace for sidebar/detail pages.
+- [SubpageContainer](src/lib/components/shared/workspace/SubpageContainer.svelte) — Shared page heading, optional introduction, action slot and content frame; use with feature-owned navigation and selected subpage content.
+- [SubpageNavigation](src/lib/components/shared/workspace/SubpageNavigation.svelte) — Horizontal links with current-page or parent-location semantics; parents supply routes, selection and eligibility.
 
 - [AdminSplitWorkspace](src/lib/components/admin/shared/AdminSplitWorkspace.svelte) — Responsive master/detail surface; use for a labelled selector sidebar and detail pane across workspace features.
 - [CapabilityCatalogGrid](src/lib/components/admin/shared/CapabilityCatalogGrid.svelte) — Responsive list grid; use to arrange capability cards consistently, supplying list items as content.
@@ -78,9 +85,8 @@ tags:
 
 - [MarkdownPreview](src/lib/components/files/preview/MarkdownPreview.svelte) — Content-only Markdown article; escapes raw HTML, omits images and allows only HTTP(S) and mailto links.
 
-- [PermissionBadge](src/lib/components/files/PermissionBadge.svelte) — Neutral caller-permission summary for files titles and rows; accepts permissions only, without ownership or operation eligibility.
+- [PermissionBadge](src/lib/components/files/PermissionBadge.svelte) — Compact caller-permission summary for file and folder rows; accepts permissions only, without ownership or operation eligibility.
 - [FileTypeIcon](src/lib/components/files/FileTypeIcon.svelte) — Accessible file-format, folder and explicit home SVGs; groups MIME types and extensions without loading file contents.
-- [FilesContainer](src/lib/components/files/FilesContainer.svelte) — Common file/folder frame with fixed identity, navigation, sharing, action and description slots; callers own eligibility and content.
 
 ## Connector and catalogue presentation
 
@@ -88,7 +94,7 @@ tags:
 - [ConnectorSidebarList](src/lib/components/admin/connectors/ConnectorSidebarList.svelte) — Controlled connector selector with metadata and action slots; use for connector lists without coupling presentation to inventory fetching.
 - [ConnectorDetailSummary](src/lib/components/admin/connectors/ConnectorDetailSummary.svelte) — Connector header and slotted detail layout; use for consistent connector identity, descriptions, and technical details.
 - [ConnectorDetailItem](src/lib/components/admin/connectors/ConnectorDetailItem.svelte) — Definition-list label/value row with indicator tones; use for connector summary or technical-detail properties.
-- [ConnectorListEmptyState](src/lib/components/admin/connectors/ConnectorListEmptyState.svelte) — Message-only empty-list surface; use for consistent empty connector catalogue states.
+- [ConnectorListEmptyState](src/lib/components/admin/connectors/ConnectorListEmptyState.svelte) — Empty connector split workspace with a centred sidebar icon, accessible message and blank detail pane; use for empty connector inventories.
 - [AdminPublicationStatus](src/lib/components/admin/shared/AdminPublicationStatus.svelte) — Publication-status pill; use for published, draft, or unconfigured states, not as a general-purpose badge.
 - [CatalogControls](src/lib/components/admin/shared/CatalogControls.svelte) — Controlled search/filter/page-size toolbar; use for tool or operation catalogues with parent-owned filtering and counts.
 - [CatalogPagination](src/lib/components/admin/shared/CatalogPagination.svelte) — Controlled previous/next navigation with page count; use for paged catalogues while the parent owns navigation.
@@ -105,7 +111,11 @@ tags:
 
 ## Shared styling foundations
 
+- [Form field styling](src/lib/styles/form-fields.css) — Non-shrinking field stacks, canonical text controls, validation and focus rings for TextField, TextAreaField and AdminConfigurationField.
+
 - [Theme tokens](src/lib/styles/admin.css) — Shared colours, radii, shadows, and focus styling; use the semantic --admin-* variables across features, not just administration.
+- [Insights styling](src/lib/styles/insights.css) — Common headings, query-field layout, result frames and pagination for separate Insights views.
+- [Subpage navigation styling](src/lib/styles/subpage-navigation.css) — Underline presentation for route links and in-place tabs; preserves each control's navigation and keyboard semantics.
 - [Canonical button styling](src/lib/styles/buttons.css) — Shared visual rules for Button and ButtonLink; use the components for actions and action-like navigation, respectively.
 - [Page typography and back links](src/lib/styles/admin.css) — Shared .admin-title, .admin-lede, and .admin-back-link styles; use for consistent page introductions and back navigation.
 - [Panels and messages](src/lib/styles/admin.css) — Shared .admin-panel and .admin-message variants; use for surfaces and inline feedback, supplying accessibility semantics separately.
@@ -114,13 +124,17 @@ tags:
 
 ## Scope and composition
 
+- [Namespace administration composition](src/lib/components/admin/filesystem/README.md) — Feature-owned namespace list and create/edit dialogs; reuse shared modal and form controls, not this administration workflow.
+
+- [Agent behaviour composition](src/lib/components/admin/agent-behaviour/README.md) — Feature-owned pattern editing and report inspection; reuse its canonical controls, not these administrator workflows.
+
 - [Dashboard composition](src/lib/components/dashboard/README.md) — Separate feature-owned usage and connector pages; reuse indexed controls, not either page workflow.
 
-- [Getting started composition](src/lib/components/getting-started/README.md) — Feature-owned Codex plugin downloads, harness onboarding and personal-token workflows; reuse its neutral controls, not the complete page.
+- [Getting started composition](src/lib/components/getting-started/README.md) — Feature-owned platform installers, harness onboarding and personal-token workflows; reuse its neutral controls, not the complete page.
 
-- [Log analytics composition](src/lib/components/admin/analytics/README.md) — Feature-owned reports, scope classifications and frozen inspection; excluded because it owns administrator analytics workflows.
+- [Log analytics composition](src/lib/components/admin/analytics/README.md) — Feature-owned queries, results and session inspection; excluded because it owns administrator analytics workflows.
 
-- [Files compositions](src/lib/components/files/README.md) — Feature-owned sharing, rename, move and upload dialogs; excluded from reusable controls because they own files workflows.
+- [Files compositions](src/lib/components/files/README.md) — Feature-owned Locations navigation, details, sharing and mutation workflows; reuse neutral layouts and controls, not these compositions.
 
 - [Component modules](src/lib/components/README.md) — Browse all presentation modules; this index selects reusable building blocks rather than feature screens or actor-owned workflows.
 - [Shared UI boundaries](../project/architecture-records/ADR-007-actor-specific-ui-composition.md) — Use shared presentation for common mechanics; keep actor-specific policy and data loading in feature compositions.

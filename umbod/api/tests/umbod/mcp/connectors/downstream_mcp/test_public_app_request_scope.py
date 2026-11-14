@@ -14,18 +14,12 @@ import json
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any, AsyncIterator
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
-from umbod.core.filesystem.browsing import FilesystemBrowsing, NodeSummary
-from umbod.core.filesystem.access import AccessMetadataService, CallerNodeSummary, CallerPermissions, RestrictedVisibility
-from umbod.core.filesystem.models import NodeKind, NodeMetadata, RootParent, Permission, Principal, PrincipalType
-from umbod.core.filesystem.provisioning.models import RootBootstrapGrant, RootBootstrapSpec
+from umbod.core.filesystem.models import Principal, PrincipalType
 from umbod.core.callers import AuthenticationProvenance, CallerContext, CallerSnapshot, DeclaredIssuer, GroupMembership, SubjectIdentity
-from umbod.infrastructure import create_root_provisioning
+from umbod.infrastructure import InMemoryContentConfig, create_content_driver
 from umbod.mcp.filesystem.caller import CurrentFilesystemCallerCapture
-from umbod.core.filesystem.sharing import (
-    FilesystemSharing, NodeSharingSummaries, RestrictedNodeSharingSummary,
-)
 from umbod.mcp.filesystem import DatabaseFilesystemServiceFactory
 import httpx
 import pytest
@@ -98,12 +92,6 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(monke
     config = PublicAppConfig(settings=settings, telemetry=create_configured_mcp_telemetry(settings), connector_runtime=runtime, source_stores=ConnectorRuntimeSourceStores(), configured_source_strategy=StoreBackedConnectorRuntimeStateSourceStrategy(), stateless_http=True, api_base_url=None, persistence_runtime=persistence_runtime)
     context = await create_runtime_context(config, downstream_client_factory=await create_configured_downstream_client_factory(config.settings, config.persistence_runtime.database), openapi_adapters=create_configured_openapi_runtime_adapters(config.settings))
     principal = Principal(type=PrincipalType.USER, issuer='https://issuer', id='scope-user')
-    await create_root_provisioning(database=persistence_runtime.database).provision(
-        RootBootstrapSpec(grants=(RootBootstrapGrant(
-            principal=principal,
-            permissions=frozenset({Permission.DISCOVER, Permission.WRITE, Permission.SHARE}),
-        ),)),
-    )
     snapshot = CallerSnapshot(
         caller=CallerContext(
             authentication=AuthenticationProvenance.UPSTREAM_VERIFIED,
@@ -112,28 +100,12 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(monke
         groups=GroupMembership(group_ids=()),
     )
     monkeypatch.setattr(CurrentFilesystemCallerCapture, 'capture', Mock(return_value=snapshot))
-    browsing = Mock(spec=FilesystemBrowsing)
-    browsing.get_root = AsyncMock(return_value=NodeSummary(
-        id='00000000-0000-0000-0000-000000000001', parent_id=RootParent(),
-        name='/', kind=NodeKind.DIRECTORY,
-        metadata=NodeMetadata(content_type='application/octet-stream', attributes={}),
-        created_at=datetime(2026, 1, 1, tzinfo=UTC),
-        updated_at=datetime(2026, 1, 1, tzinfo=UTC), revision=1,
-    ))
-    access = Mock(spec=AccessMetadataService)
-    access.enrich_nodes = AsyncMock(return_value=[CallerNodeSummary(
-        **browsing.get_root.return_value.model_dump(),
-        permissions=CallerPermissions(
-            can_discover=True, can_read=False, can_write=True, can_delete=False, can_share=False,
-        ),
-        visible_to=RestrictedVisibility(type='restricted'),
-    )])
-    monkeypatch.setattr(DatabaseFilesystemServiceFactory, 'access', Mock(return_value=access))
-    sharing = Mock(spec=FilesystemSharing)
-    sharing.summarize_nodes = AsyncMock(return_value=NodeSharingSummaries(nodes=(
-        RestrictedNodeSharingSummary(node_id=browsing.get_root.return_value.id, can_share=False),
-    )))
-    monkeypatch.setattr(DatabaseFilesystemServiceFactory, 'sharing', Mock(return_value=sharing))
+    services = DatabaseFilesystemServiceFactory(
+        persistence_runtime.database, create_content_driver(InMemoryContentConfig(type="inmemory")),
+        1024, "https://issuer", "https://api.example", 1024,
+    )
+    home = await services.homes().get_or_provision(snapshot)
+    browsing = services.browsing()
     service_factory = Mock(return_value=browsing)
     monkeypatch.setattr(DatabaseFilesystemServiceFactory, 'browsing', service_factory)
     app = await build_starlette_app(context)
@@ -148,24 +120,17 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(monke
             proxy_response = await _post(client, PUBLIC_PATH, _request(2, 'tools/list', {}))
             (root_response, concurrent_proxy_response) = await asyncio.gather(_post(client, '/mcp', _request(3, 'tools/list', {})), _post(client, PUBLIC_PATH, _request(4, 'tools/list', {})))
             refreshed_root_response = await _post(client, '/mcp', _request(5, 'tools/list', {}))
-            allowed_response = await _post(client, '/mcp', _request(6, 'tools/call', {'name': 'get_filesystem_root', 'arguments': {}}))
-            assert allowed_response['result']['structuredContent']['id'] == '00000000-0000-0000-0000-000000000001'
+            allowed_response = await _post(client, '/mcp', _request(6, 'tools/call', {'name': 'get_filesystem_node', 'arguments': {'node_id': str(home.id)}}))
+            assert allowed_response['result']['structuredContent']['id'] == str(home.id)
             service_factory.assert_called_once_with()
-            forbidden_response = await _post(client, PUBLIC_PATH, _request(7, 'tools/call', {'name': 'get_filesystem_root', 'arguments': {}}))
-            forbidden_search = await _post(client, PUBLIC_PATH, _request(8, 'tools/call', {'name': 'filesystem_search_sharing_recipients', 'arguments': {'node_id': '00000000-0000-0000-0000-000000000001', 'query': 'Observed'}}))
+            forbidden_response = await _post(client, PUBLIC_PATH, _request(7, 'tools/call', {'name': 'get_filesystem_node', 'arguments': {'node_id': str(home.id)}}))
+            forbidden_search = await _post(client, PUBLIC_PATH, _request(8, 'tools/call', {'name': 'filesystem_browse', 'arguments': {'operation': 'namespaces'}}))
     service_factory.assert_called_once_with()
-    access.enrich_nodes.assert_awaited_once_with(
-        browsing.get_root.call_args.args[0], [browsing.get_root.return_value],
-    )
-    sharing.summarize_nodes.assert_awaited_once_with(
-        browsing.get_root.call_args.args[0], (browsing.get_root.return_value.id,),
-    )
     assert 'error' in forbidden_response or forbidden_response['result'].get('isError') is True
     assert 'error' in forbidden_search or forbidden_search['result'].get('isError') is True
-    sharing.search_recipients.assert_not_called()
     proxy_names = {tool['name'] for tool in proxy_response['result']['tools']}
     concurrent_proxy_names = {tool['name'] for tool in concurrent_proxy_response['result']['tools']}
-    expected_root_names = {f'scope_test_{name}' for name in DOWNSTREAM_TOOL_NAMES} | {"filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_begin_upload", "filesystem_complete_upload", "filesystem_search_sharing_recipients", "filesystem_share", "update_filesystem_node"}
+    expected_root_names = {f'scope_test_{name}' for name in DOWNSTREAM_TOOL_NAMES} | {"report_diagnostic", "filesystem_browse", "get_filesystem_node", "list_filesystem_children", "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_begin_upload", "filesystem_complete_upload", "update_filesystem_node"}
     root_names = {tool['name'] for tool in root_response['result']['tools']}
     refreshed_root_names = {tool['name'] for tool in refreshed_root_response['result']['tools']}
     assert proxy_names == set(DOWNSTREAM_TOOL_NAMES)

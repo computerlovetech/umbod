@@ -13,9 +13,8 @@ from mcp.types import ResourceLink
 
 from umbod.config import AppConfig
 from umbod.core.callers import AuthenticationProvenance
-from umbod.core.filesystem import AccessGrant, ByteStream, Permission, Principal, PrincipalType, RootBootstrapGrant, RootBootstrapSpec
-from umbod.core.filesystem.namespace import ROOT_ID
-from umbod.infrastructure import LocalContentConfig, create_content_driver, create_root_provisioning, create_access_control_driver
+from umbod.core.filesystem import AccessGrant, ByteStream, Permission, Principal, PrincipalType
+from umbod.infrastructure import LocalContentConfig, create_content_driver, create_access_control_driver
 from umbod.mcp.filesystem.factory import DatabaseFilesystemServiceFactory
 from umbod.mcp.filesystem.upload_sessions import FilesystemBeginUploadTool, FilesystemCompleteUploadTool
 from umbod.rest.main import create_app
@@ -54,9 +53,9 @@ async def test_begin_complete_resource_link_and_owner_isolation(filesystem_invoc
         rendered = json.loads(complete.content[0].text)
         assert rendered == complete.structured_content
         assert rendered["node"]["permissions"]["can_write"] is True
-        assert rendered["node"]["visible_to"]["type"] == "available"
+        assert rendered["node"]["visible_to"]["type"] == "namespace"
         assert "sharing" in complete.structured_content["node"]
-        assert complete.structured_content["node"]["visible_to"]["grants"] == []
+        assert complete.structured_content["node"]["visible_to"]["kind"] == "personal"
         policies = create_access_control_driver(database=filesystem.database)
         grant = AccessGrant(
             node_id=UUID(complete.structured_content["node"]["id"]),
@@ -65,8 +64,7 @@ async def test_begin_complete_resource_link_and_owner_isolation(filesystem_invoc
         )
         await policies.add_grant(grant)
         current = await client.call_tool("filesystem_complete_upload", {"upload_id": data["upload_id"]})
-        assert current.structured_content["node"]["visible_to"]["grants"] == [grant.model_dump(mode="json")]
-        assert current.structured_content["node"]["sharing"]["grants"] == []
+        assert current.structured_content["node"]["visible_to"] == complete.structured_content["node"]["visible_to"]
         assert current.structured_content["node"]["id"] == complete.structured_content["node"]["id"]
         assert current.structured_content["sha256"] == complete.structured_content["sha256"]
         assert any(isinstance(block, ResourceLink) for block in complete.content)
@@ -111,22 +109,17 @@ async def test_shared_inmemory_local_storage_mcp_begin_capability_only_rest_put_
     ) as rest:
         await rest.put(f"/api/filesystem/uploads/{UUID(int=0)}/transfer", content=b"")
         runtime = captured[0].persistence_runtime
-        await create_root_provisioning(database=runtime.database).provision(RootBootstrapSpec(grants=(
-            RootBootstrapGrant(
-                principal=Principal(type=PrincipalType.USER, issuer="https://issuer", id="alice"),
-                permissions=frozenset({Permission.DISCOVER, Permission.WRITE}),
-            ),
-        )))
         services = DatabaseFilesystemServiceFactory(
             runtime.database, create_content_driver(content_config), 20_971_520, "https://issuer", "http://localhost", max_read_bytes=1_048_576)
         callers = ScopedCallerCapture()
         callers.current.set(caller_snapshot("alice", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED))
+        home = await services.homes().get_or_provision(callers.current.get())
         server = FastMCP()
         server.add_tool(FilesystemBeginUploadTool(callers, services))
         server.add_tool(FilesystemCompleteUploadTool(callers, services))
         async with Client(server) as mcp:
             begin = await mcp.call_tool("filesystem_begin_upload", {
-                "parent_id": str(ROOT_ID), "name": "shared", "metadata": METADATA,
+                "parent_id": str(home.id), "name": "shared", "metadata": METADATA,
                 "size_bytes": len(payload), "expected_sha256": hashlib.sha256(payload).hexdigest(),
             })
             transfer = begin.structured_content["transfer"]

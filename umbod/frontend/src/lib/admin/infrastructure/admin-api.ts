@@ -1,6 +1,6 @@
+import { NamespacesRoute } from '../filesystem/namespaces-route';
 import { AnalyticsRoute } from '../analytics/http-route';
 import { GroupsRoute } from '../groups/http-route';
-import { FilesystemRoute } from '../filesystem/http-route';
 import { PersonalServersRoute } from '../personal-mcp-servers/http-route';
 import { CapabilityDescriptionsRoute } from '../capability-descriptions-api';
 import { ConnectorsApi } from '../connectors-api';
@@ -12,9 +12,9 @@ import { browserTransport, type Transport } from './transport';
 
 
 export class AdminApi {
+  readonly namespaces: NamespacesRoute;
   readonly analytics: AnalyticsRoute;
   readonly groups: GroupsRoute;
-  readonly filesystem: FilesystemRoute;
   readonly personalServers: PersonalServersRoute;
   readonly capabilityDescriptions: CapabilityDescriptionsRoute;
   readonly connectors: ConnectorsApi;
@@ -24,9 +24,9 @@ export class AdminApi {
   readonly openApiConnectors: OpenApiConnectorsApi;
 
   constructor(transport: Transport) {
+    this.namespaces = new NamespacesRoute(transport);
     this.analytics = new AnalyticsRoute(transport);
     this.groups = new GroupsRoute(transport);
-    this.filesystem = new FilesystemRoute(transport);
     this.personalServers = new PersonalServersRoute(transport);
     this.capabilityDescriptions = new CapabilityDescriptionsRoute(transport);
     this.connectors = new ConnectorsApi(transport);

@@ -1,7 +1,5 @@
-import {
-  createHeaderAccountUserInfoBoundary,
-  type HeaderAccountIdentityState
-} from '$lib/header/accountIdentity';
+import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+import { workspaceAccountIdentity } from './profile-identity';
 import type { WorkspaceApi } from './api';
 import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
 
@@ -17,7 +15,7 @@ export async function resolveWorkspaceAccess(api: WorkspaceApi): Promise<Workspa
     const profile = await api.profile.get();
     return {
       adminAccess: profile.capabilities.administration ? 'allowed' : 'denied',
-      accountIdentity: createHeaderAccountUserInfoBoundary().viewHeaderAccountIdentity(profile.user)
+      accountIdentity: workspaceAccountIdentity(profile)
     };
   } catch (cause) {
     if (cause instanceof AuthenticationRequiredError || (cause instanceof HttpError && cause.status === 401)) {

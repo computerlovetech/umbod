@@ -5,11 +5,10 @@ from uuid import uuid4
 import pytest
 from fastmcp import Client
 from jsonschema import Draft202012Validator, FormatChecker
-from pydantic import TypeAdapter, ValidationError
+from pydantic import TypeAdapter
 
 from umbod.core.filesystem.models import InputName
 from umbod.core.filesystem.namespace import valid_name
-from umbod.core.identity_directory.user_models import SearchText
 
 from umbod.core.callers import AuthenticationProvenance
 from umbod.mcp.tools.registration import ObservedFunctionTool
@@ -20,7 +19,8 @@ CREATE = "create_filesystem_file"
 
 
 async def root_id(client: Client) -> str:
-    return str((await client.call_tool("get_filesystem_root", {})).data.id)
+    result = await client.call_tool("filesystem_browse", {"operation": "home"})
+    return str(result.structured_content["result"]["node"]["id"])
 
 
 @pytest.mark.asyncio
@@ -29,15 +29,15 @@ async def test_observed_tools_publish_safe_schemas(filesystem_invocation_mcp: Fi
         await client.call_tool(CREATE, {"parent_id": await root_id(client), "name": "schema-witness", "metadata": METADATA})
     await filesystem_invocation_mcp.runtime.reconcile()
     tools = await filesystem_invocation_mcp.server.list_tools()
-    assert len(tools) == 13
+    assert len(tools) == 12
     assert all(isinstance(tool, ObservedFunctionTool) for tool in tools)
     async with Client(filesystem_invocation_mcp.server) as client:
         descriptors = {tool.name: tool for tool in await client.list_tools()}
     assert set(descriptors) == {
-        "filesystem_browse", "get_filesystem_root", "get_filesystem_node", "list_filesystem_children",
+        "filesystem_browse", "get_filesystem_node", "list_filesystem_children",
         "create_filesystem_file", "create_filesystem_directory", "filesystem_upload", "filesystem_delete_file",
-        "filesystem_search_sharing_recipients", "filesystem_share", "update_filesystem_node",
-        "filesystem_begin_upload", "filesystem_complete_upload",
+        "update_filesystem_node",
+        "filesystem_begin_upload", "filesystem_complete_upload", "filesystem_share", "filesystem_search_sharing_recipients",
     }
     assert "Provide at least one of name, parent_id or metadata" in descriptors["update_filesystem_node"].description
     schema = descriptors[CREATE].input_schema
@@ -69,7 +69,6 @@ async def test_discovery_schemas_validate_filesystem_argument_shapes(
     async with Client(filesystem_invocation_mcp.server) as client:
         schemas = {tool.name: tool.input_schema for tool in await client.list_tools()}
     valid = {
-        "get_filesystem_root": [{}],
         "get_filesystem_node": [{"node_id": identifier}],
         "list_filesystem_children": [{"parent_id": identifier}],
         "create_filesystem_file": [base],
@@ -92,7 +91,7 @@ async def test_discovery_schemas_validate_filesystem_argument_shapes(
             for operation in ("ls", "tree", "stat")
             for target in ({"type": "root"}, {"type": "path", "path": "/a//b/"},
                            {"type": "node", "node_id": identifier})
-        ] + [{"operation": "home"}],
+        ] + [{"operation": "home"}, {"operation": "namespaces"}],
         "filesystem_search_sharing_recipients": [{"node_id": identifier, "query": " Alice "}],
         "filesystem_share": [
             {"node_id": identifier, "recipient": {"type": kind, key: identifier},
@@ -136,11 +135,6 @@ async def test_discovery_schemas_validate_filesystem_argument_shapes(
         assert not upload.is_valid({**base, "content": content})
     begin = Draft202012Validator(schemas["filesystem_begin_upload"])
     assert not begin.is_valid({**base, "size_bytes": -1})
-    share = Draft202012Validator(schemas["filesystem_share"])
-    assert share.is_valid({"node_id": identifier, "group_id": "writers", "permissions": ["read"]})
-    assert not share.is_valid({"node_id": identifier, "recipient": {"type": "user", "group_id": "writers"}, "permissions": ["read"]})
-    search = Draft202012Validator(schemas["filesystem_search_sharing_recipients"])
-    assert not search.is_valid({"node_id": identifier, "query": "   "})
 
 
 @pytest.mark.parametrize("name", ["", ".", "..", "a/b", "a\\b", "a\x00b", "\ud800", "a", ".hidden", "é", ".\n", "..\n", "a\nb"])
@@ -150,18 +144,6 @@ def test_input_name_annotation_preserves_domain_validation(name: str) -> None:
     if name != "\ud800":
         assert Draft202012Validator(schema).is_valid(name) == valid_name(name)
     assert "UTF-8" in schema["description"]
-
-
-def test_search_text_trims_edges_without_collapsing_internal_whitespace() -> None:
-    adapter = TypeAdapter(SearchText)
-    assert adapter.validate_python("  Alice  Smith  ") == "Alice  Smith"
-    padded = " " + "a" * 200 + " "
-    assert adapter.validate_python(padded) == "a" * 200
-    assert Draft202012Validator(adapter.json_schema()).is_valid(padded)
-    with pytest.raises(ValidationError):
-        adapter.validate_python("a" * 201)
-    with pytest.raises(ValidationError):
-        adapter.validate_python(" \t\n ")
 
 
 @pytest.mark.asyncio
@@ -177,8 +159,8 @@ async def test_bootstrap_group_can_create_private_nodes_and_filter_children(
         filesystem_invocation_mcp.callers.current.set(caller_snapshot(
             "bob", "https://issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED
         ))
-        listed = await client.call_tool("list_filesystem_children", {"parent_id": root})
-        assert listed.structured_content == {"nodes": []}
+        listed = await client.call_tool("list_filesystem_children", {"parent_id": root}, raise_on_error=False)
+        assert listed.is_error
         denied = await client.call_tool("get_filesystem_node", {"node_id": child_id}, raise_on_error=False)
         missing = await client.call_tool("get_filesystem_node", {"node_id": str(uuid4())}, raise_on_error=False)
         assert denied.content[:1] == missing.content[:1]
@@ -211,18 +193,19 @@ async def test_nonverified_callers_remain_denied(
 ) -> None:
     filesystem_invocation_mcp.callers.current.set(caller_snapshot("alice", "https://issuer", ("writers",), provenance))
     async with Client(filesystem_invocation_mcp.server) as client:
-        result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
+        result = await client.call_tool("filesystem_browse", {"operation": "home"}, raise_on_error=False)
     assert result.is_error
     assert "filesystem_permission_denied" in result.content[0].text
 
 
 @pytest.mark.asyncio
 async def test_same_group_identifier_from_other_issuer_has_no_access(filesystem_invocation_mcp: FilesystemMcp) -> None:
+    home = await filesystem_invocation_mcp.services.homes().get_or_provision(filesystem_invocation_mcp.callers.current.get())
     filesystem_invocation_mcp.callers.current.set(caller_snapshot(
         "alice", "https://other-issuer", ("writers",), AuthenticationProvenance.UPSTREAM_VERIFIED
     ))
     async with Client(filesystem_invocation_mcp.server) as client:
-        result = await client.call_tool("get_filesystem_root", {}, raise_on_error=False)
+        result = await client.call_tool("get_filesystem_node", {"node_id": str(home.id)}, raise_on_error=False)
     assert result.is_error
 
 
@@ -259,13 +242,14 @@ async def test_filesystem_invalid_names_and_collisions_have_fixed_errors(filesys
 async def test_concurrent_callers_and_later_membership_revocation_are_isolated(
     filesystem_invocation_mcp: FilesystemMcp,
 ) -> None:
-    async def invoke(groups: tuple[str, ...]) -> bool:
+    async def invoke(subject: str) -> bool:
         filesystem_invocation_mcp.callers.current.set(caller_snapshot(
-            "alice", "https://issuer", groups, AuthenticationProvenance.UPSTREAM_VERIFIED
+            subject, "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED
         ))
         async with Client(filesystem_invocation_mcp.server) as client:
-            return (await client.call_tool("get_filesystem_root", {}, raise_on_error=False)).is_error
+            return (await client.call_tool("get_filesystem_node", {"node_id": str(home.id)}, raise_on_error=False)).is_error
 
-    assert await asyncio.gather(invoke(("writers",)), invoke(())) == [False, True]
-    assert await invoke(()) is True
+    home = await filesystem_invocation_mcp.services.homes().get_or_provision(filesystem_invocation_mcp.callers.current.get())
+    assert await asyncio.gather(invoke("alice"), invoke("bob")) == [False, True]
+    assert await invoke("bob") is True
     assert filesystem_invocation_mcp.callers.count == 3

@@ -11,7 +11,7 @@ from ..ports import FilesystemBrowsing
 from .models import (
     BrowseResult, NodeCapabilities,
     DirectoryListing, DirectoryTree, ListingLimits, NodeInspection, NodeTarget,
-    PathTarget, Target, TreeEntry, TreeLimits,
+    Target, TreeEntry, TreeLimits,
 )
 
 
@@ -31,19 +31,7 @@ class BrowsingExplorer:
     async def _resolve(self, caller: CallerSnapshot, target: Target) -> NodeSummary:
         if isinstance(target, NodeTarget):
             return await self._browsing.get_node(caller, target.node_id)
-        node = await self._browsing.get_root(caller)
-        if isinstance(target, PathTarget):
-            visited = {node.id}
-            for segment in filter(None, target.path.split("/")):
-                require_directory(node)
-                children = await self._children(caller, node, visited)
-                matches = [child for child in children if child.name == segment]
-                if not matches:
-                    raise PermissionDenied("Filesystem path is unavailable")
-                if len(matches) != 1:
-                    raise StorageFailure("Invalid filesystem hierarchy")
-                node = matches[0]
-        return node
+        raise PermissionDenied("Filesystem target requires a namespace node")
 
     async def _children(
         self, caller: CallerSnapshot, node: NodeSummary, visited: set[NodeId]

@@ -1,14 +1,14 @@
 ---
 type: Software Module
-title: "Filesystem root-access administration"
-description: "Authenticated administrator delivery for root-access inspection and revision-checked group policy updates."
+title: "Filesystem namespace administration"
+description: "Authenticated shared namespace management."
 ---
 
 # Files
 
 - [__init__.py](./__init__.py) — Package exports.
 - [deps.py](./deps.py) — Request-local management composition with the configured backend issuer.
-- [routes.py](./routes.py) — Root-access administration routes.
+- [routes.py](./routes.py) — No-store shared namespace create, list and revision-checked replacement.
 
 # Architecture
 

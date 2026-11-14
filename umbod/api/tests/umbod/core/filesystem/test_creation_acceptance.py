@@ -28,8 +28,6 @@ from umbod.core.filesystem import (
     Permission,
     Principal,
     PrincipalType,
-    RootBootstrapGrant,
-    RootBootstrapSpec,
     StorageFailure,
     UnspecifiedContentType,
     WrongNodeKind,
@@ -45,13 +43,13 @@ from umbod.core.filesystem.authorization import (
 )
 from umbod.core.filesystem.browsing import NodeSummary
 from umbod.core.filesystem.namespace import ROOT_ID
-from umbod.core.persistence import PersistenceRuntime
+from umbod.core.persistence import Database, PersistenceRuntime
+from tests.support.filesystem.namespaces import shared_directory, set_shared_access
 from umbod.infrastructure import (
     create_access_control_driver,
     create_filesystem_creation,
     create_filesystem_transactions,
     create_namespace_driver,
-    create_root_provisioning,
 )
 from tests.support.filesystem.transaction_observations import RecordingTransactions
 from tests.umbod.core.filesystem.test_database_persistence import FailingCommitDatabase
@@ -68,6 +66,8 @@ def user(identifier: str) -> Principal:
 
 @dataclass(frozen=True)
 class CreationContext:
+    root_id: NodeId
+    database: Database
     creation: FilesystemCreation
     authorization: FilesystemAuthorization
     namespace: NamespaceDriver
@@ -83,10 +83,10 @@ async def creation_context(filesystem_runtime: PersistenceRuntime) -> CreationCo
     policies = create_access_control_driver(database=database)
     resolver = create_autospec(FilesystemIdentityResolver, instance=True)
     resolver.resolve.side_effect = VerifiedIdentityResolver().resolve
-    await create_root_provisioning(database=database).provision(RootBootstrapSpec(grants=(
-        RootBootstrapGrant(principal=user("alice"), permissions=frozenset({Permission.DISCOVER, Permission.WRITE})),
-    )))
+    home = await shared_directory(database)
     return CreationContext(
+        root_id=home.id,
+        database=database,
         creation=create_filesystem_creation(database=database, resolver=resolver),
         authorization=AuthorizationService(resolver, namespace, policies),
         namespace=namespace, policies=policies,
@@ -101,7 +101,7 @@ async def test_creation_assigns_only_creator_and_no_child_grants(creation_contex
     caller = snapshot("alice", "issuer", ("team",))
     operation = context.creation.create_file if kind == NodeKind.FILE else context.creation.create_directory
     supplied = metadata()
-    child = await operation(caller, ROOT_ID, "child", supplied)
+    child = await operation(caller, creation_context.root_id, "child", supplied)
     context.resolver.resolve.assert_awaited_once_with(caller)
     assert child.kind == kind
     assert not hasattr(child, "content")
@@ -112,67 +112,67 @@ async def test_creation_assigns_only_creator_and_no_child_grants(creation_contex
     assert (await context.namespace.get_node(child.id)).metadata.attributes == {"tag": "safe"}
     for permission in Permission:
         assert (await context.authorization.decide(caller, child.id, permission)).allowed
-        assert not (await context.authorization.decide(snapshot("bob", "issuer", ("team",)), child.id, permission)).allowed
+        assert (await context.authorization.decide(snapshot("bob", "issuer", ("team",)), child.id, permission)).allowed == (permission != Permission.SHARE)
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("permissions", [frozenset(), frozenset({Permission.READ}), frozenset({Permission.DISCOVER}), frozenset({Permission.WRITE})])
 async def test_parent_requires_both_discover_and_write(creation_context: CreationContext, permissions: frozenset[Permission]) -> None:
     context = creation_context
-    await context.policies.add_grant(AccessGrant(node_id=ROOT_ID, principal=user("alice"), permissions=set(permissions), recursive=False))
+    await set_shared_access(context.database, context.root_id, writable=False, discoverable=Permission.DISCOVER in permissions)
     with pytest.raises(PermissionDenied):
-        await context.creation.create_file(snapshot("alice", "issuer", ()), ROOT_ID, "denied", metadata())
-    assert await context.namespace.list_children(ROOT_ID) == []
+        await context.creation.create_file(snapshot("alice", "issuer", ("team",)), creation_context.root_id, "denied", metadata())
+    assert await context.namespace.list_children(creation_context.root_id) == []
 
 
 @pytest.mark.asyncio
 async def test_recursive_group_parent_grant_allows_creation_without_copying_policy(creation_context: CreationContext) -> None:
     context = creation_context
     team = Principal(type=PrincipalType.GROUP, issuer="issuer", id="team")
-    await context.policies.remove_grant(ROOT_ID, user("alice"))
-    await context.policies.add_grant(AccessGrant(node_id=ROOT_ID, principal=team, permissions={Permission.DISCOVER, Permission.WRITE}, recursive=True))
-    child = await context.creation.create_directory(snapshot("alice", "issuer", ("team",)), ROOT_ID, "group-created", metadata())
+    await context.policies.remove_grant(creation_context.root_id, user("alice"))
+    await context.policies.add_grant(AccessGrant(node_id=creation_context.root_id, principal=team, permissions={Permission.DISCOVER, Permission.WRITE}, recursive=True))
+    child = await context.creation.create_directory(snapshot("alice", "issuer", ("team",)), creation_context.root_id, "group-created", metadata())
     assert (await context.policies.get_owner(child.id)).owner == user("alice")
     assert await context.policies.list_grants(child.id) == []
     assert (await context.authorization.decide(snapshot("bob", "issuer", ("team",)), child.id, Permission.DISCOVER)).allowed
     with pytest.raises(PermissionDenied):
-        await context.creation.create_file(snapshot("alice", "issuer", ()), ROOT_ID, "revoked-group", metadata())
+        await context.creation.create_file(snapshot("alice", "issuer", ()), creation_context.root_id, "revoked-group", metadata())
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("missing", [True, False])
 async def test_missing_and_unowned_parent_are_denied(creation_context: CreationContext, missing: bool) -> None:
     context = creation_context
-    parent_id = uuid4() if missing else (await context.namespace.create_node(ROOT_ID, "unowned", NodeKind.DIRECTORY, metadata())).id
+    parent_id = uuid4() if missing else (await context.namespace.create_node(ROOT_ID, "unmanaged", NodeKind.DIRECTORY, metadata())).id
     with pytest.raises(PermissionDenied):
-        await context.creation.create_file(snapshot("alice", "issuer", ()), parent_id, "denied", metadata())
+        await context.creation.create_file(snapshot("alice", "issuer", ("team",)), parent_id, "denied", metadata())
 
 
 @pytest.mark.asyncio
 async def test_authorized_file_parent_reports_kind_and_name_errors_are_preserved(creation_context: CreationContext) -> None:
     context = creation_context
-    caller = snapshot("alice", "issuer", ())
-    file = await context.creation.create_file(caller, ROOT_ID, "file", metadata())
+    caller = snapshot("alice", "issuer", ("team",))
+    file = await context.creation.create_file(caller, creation_context.root_id, "file", metadata())
     with pytest.raises(WrongNodeKind):
         await context.creation.create_directory(caller, file.id, "child", metadata())
     with pytest.raises(InvalidName):
-        await context.creation.create_file(caller, ROOT_ID, "a/b", metadata())
+        await context.creation.create_file(caller, creation_context.root_id, "a/b", metadata())
     with pytest.raises(NameCollision):
-        await context.creation.create_directory(caller, ROOT_ID, "file", metadata())
-    assert len(await context.namespace.list_children(ROOT_ID)) == 1
+        await context.creation.create_directory(caller, creation_context.root_id, "file", metadata())
+    assert len(await context.namespace.list_children(creation_context.root_id)) == 1
 
 
 @pytest.mark.asyncio
 async def test_concurrent_duplicate_create_has_one_owned_winner(creation_context: CreationContext) -> None:
     context = creation_context
     results = await asyncio.gather(*(
-        context.creation.create_file(snapshot("alice", "issuer", ()), ROOT_ID, "same", metadata()) for _ in range(2)
+        context.creation.create_file(snapshot("alice", "issuer", ("team",)), creation_context.root_id, "same", metadata()) for _ in range(2)
     ), return_exceptions=True)
     winners = [result for result in results if isinstance(result, NodeSummary)]
     assert len(winners) == 1
     assert sum(isinstance(result, NameCollision) for result in results) == 1
     assert (await context.policies.get_owner(winners[0].id)).owner == user("alice")
-    assert [node.id for node in await context.namespace.list_children(ROOT_ID)] == [winners[0].id]
+    assert [node.id for node in await context.namespace.list_children(creation_context.root_id)] == [winners[0].id]
 
 
 @pytest.mark.asyncio
@@ -193,6 +193,7 @@ class FailingOwnershipTransactions:
     async def transaction(self) -> AsyncIterator[FilesystemSession]:
         async with self._transactions.transaction() as session:
             policies = create_autospec(AccessControlDriver, instance=True)
+            policies.list_namespace_policies.side_effect = session.access_control.list_namespace_policies
             policies.get_owner.side_effect = session.access_control.get_owner
             policies.list_grants.side_effect = session.access_control.list_grants
             policies.set_owner.side_effect = self._failure
@@ -211,12 +212,12 @@ async def test_failure_and_cancellation_leave_no_orphan_node_or_owner(
     recorded = RecordingTransactions(transactions)
     creation: FilesystemCreation = CreationService(VerifiedIdentityResolver(), recorded)
     with pytest.raises(asyncio.CancelledError if cancelled else StorageFailure):
-        await creation.create_file(snapshot("alice", "issuer", ()), ROOT_ID, "rolled-back", metadata())
-    assert await context.namespace.list_children(ROOT_ID) == []
+        await creation.create_file(snapshot("alice", "issuer", ("team",)), creation_context.root_id, "rolled-back", metadata())
+    assert await context.namespace.list_children(creation_context.root_id) == []
     assert len(recorded.created) == 1
     with pytest.raises(OwnershipNotFound):
         await context.policies.get_owner(recorded.created[0])
-    child = await context.creation.create_file(snapshot("alice", "issuer", ()), ROOT_ID, "rolled-back", metadata())
+    child = await context.creation.create_file(snapshot("alice", "issuer", ("team",)), creation_context.root_id, "rolled-back", metadata())
     assert (await context.policies.get_owner(child.id)).owner == user("alice")
 
 
@@ -235,13 +236,12 @@ async def test_parent_authorization_reads_revocation_committed_before_transactio
     context = creation_context
     resolved = asyncio.Event()
     creation: FilesystemCreation = CreationService(ObservedResolver(resolved), context.transactions)
-    async with context.transactions.transaction() as session:
-        await session.access_control.remove_grant(ROOT_ID, user("alice"))
-        pending = asyncio.create_task(creation.create_file(snapshot("alice", "issuer", ()), ROOT_ID, "revoked", metadata()))
-        await resolved.wait()
+    await set_shared_access(context.database, context.root_id, writable=False, discoverable=False)
+    pending = asyncio.create_task(creation.create_file(snapshot("alice", "issuer", ("team",)), context.root_id, "revoked", metadata()))
+    await resolved.wait()
     with pytest.raises(PermissionDenied):
         await pending
-    assert await context.namespace.list_children(ROOT_ID) == []
+    assert await context.namespace.list_children(creation_context.root_id) == []
 
 
 class GatedCreationTransactions:
@@ -275,9 +275,9 @@ async def test_creation_holds_serialized_transaction_between_authorization_and_o
 
     async def revoke() -> None:
         revoking.set()
-        await context.policies.remove_grant(ROOT_ID, user("alice"))
+        await set_shared_access(context.database, context.root_id, writable=False, discoverable=False)
 
-    pending = asyncio.create_task(creation.create_file(snapshot("alice", "issuer", ()), ROOT_ID, "before-revoke", metadata()))
+    pending = asyncio.create_task(creation.create_file(snapshot("alice", "issuer", ("team",)), creation_context.root_id, "before-revoke", metadata()))
     await checked.wait()
     revocation = asyncio.create_task(revoke())
     await revoking.wait()
@@ -287,7 +287,7 @@ async def test_creation_holds_serialized_transaction_between_authorization_and_o
     await revocation
     assert (await context.policies.get_owner(child.id)).owner == user("alice")
     with pytest.raises(PermissionDenied):
-        await context.creation.create_file(snapshot("alice", "issuer", ()), ROOT_ID, "after-revoke", metadata())
+        await context.creation.create_file(snapshot("alice", "issuer", ("team",)), creation_context.root_id, "after-revoke", metadata())
 
 
 class ReusedIdentityTransactions:
@@ -325,8 +325,8 @@ async def test_returned_uuid_with_orphan_policies_rolls_back_without_modifying_p
     transactions = ReusedIdentityTransactions(context.transactions, reused_id)
     creation: FilesystemCreation = CreationService(VerifiedIdentityResolver(), transactions)
     with pytest.raises(StorageFailure, match="New node has pre-existing policies"):
-        await creation.create_file(snapshot("alice", "issuer", ()), ROOT_ID, "reused", metadata())
-    assert await context.namespace.list_children(ROOT_ID) == []
+        await creation.create_file(snapshot("alice", "issuer", ("team",)), creation_context.root_id, "reused", metadata())
+    assert await context.namespace.list_children(creation_context.root_id) == []
     assert len(transactions.inserted) == 1
     with pytest.raises(OwnershipNotFound):
         await context.policies.get_owner(transactions.inserted[0])

@@ -11,7 +11,6 @@ from umbod.core.filesystem import (
 )
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
 from umbod.core.filesystem.group_policy import GroupPolicy as NeutralGroupPolicy
-from umbod.core.filesystem.administration import GroupPolicy as RootGroupPolicy
 from umbod.core.filesystem.namespace import ROOT_ID
 from umbod.core.filesystem.sharing import (
     GroupPolicy, InvalidSharingPolicy, ReplaceNodePolicy, SharingPolicyUnavailable,
@@ -190,7 +189,7 @@ def test_blank_configured_issuer_fails_closed(context: SharingContext, issuer: s
 
 
 def test_strict_policy_models_reuse_frozen_group_validation() -> None:
-    assert GroupPolicy is RootGroupPolicy is NeutralGroupPolicy
+    assert GroupPolicy is NeutralGroupPolicy
     policy = group(" Team ")
     assert policy.group_id == " Team "
     for payload in (

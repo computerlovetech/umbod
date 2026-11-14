@@ -1,22 +1,18 @@
 <script lang="ts">
   import type { GroupsState } from './groups-state.svelte';
   import Button from '$lib/components/admin/shared/Button.svelte';
-  import ButtonLink from '$lib/components/admin/shared/ButtonLink.svelte';
+  import SubpageContainer from '$lib/components/shared/workspace/SubpageContainer.svelte';
   import GroupFormModal from './GroupFormModal.svelte';
   let { state }: { state: GroupsState } = $props();
 </script>
 
-<section aria-labelledby="groups-title" class="groups-page">
-  <header>
-    <div>
-      <h1 id="groups-title" class="admin-title">Groups</h1>
-      <p class="admin-lede">Manage shared group labels and descriptions. Registration grants no access and does not change identity provider membership.</p>
-    </div>
-    <div class="header-actions">
-      <ButtonLink variant="secondary" href="/admin/group-permissions/connectors">Assign group permissions</ButtonLink>
-      {#if !state.denied}<Button disabled={state.pending} onclick={state.create}>Add Group</Button>{/if}
-    </div>
-  </header>
+<SubpageContainer title="Groups" headingId="groups-title" lede="Manage shared group labels and descriptions. Registration grants no access and does not change identity provider membership.">
+  {#snippet navigation()}{/snippet}
+  {#snippet actions()}
+    {#if !state.denied}<Button disabled={state.pending} onclick={state.create}>Add Group</Button>{/if}
+  {/snippet}
+  {#snippet children()}
+  <section aria-labelledby="groups-title" class="groups-page">
   {#if state.error && !state.formOpen}<p role="alert">{state.error}</p>{/if}
   {#if state.message && !state.formOpen}<p role="status">{state.message}</p>{/if}
   {#if !state.denied}
@@ -55,14 +51,13 @@
       </section>
     {/if}
   {/if}
-</section>
+  </section>
+  {/snippet}
+</SubpageContainer>
 
 <style>
   .groups-page { display: grid; gap: 16px; }
-  header, .header-actions, .actions { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-  header { justify-content: space-between; }
-  header > div:first-child { flex: 1 1 360px; }
-  .header-actions { gap: 8px; }
+  .actions { display: flex; align-items: center; }
   .search-field { display: grid; gap: 8px; max-width: 360px; }
   .search-field label { font-size: 13px; font-weight: 600; }
   ul { list-style: none; margin: 0; padding: 0; }

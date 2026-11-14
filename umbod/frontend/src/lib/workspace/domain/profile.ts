@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export const workspaceProfileSchema = z.object({
+  identity_key: z.string().min(1),
   user: z.object({
     id: z.string(),
     name: z.string(),

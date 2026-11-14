@@ -32,6 +32,69 @@ function content(state: FilesState, folder: NewFolderState, upload: UploadState)
 }
 
 describe('Files user composition', () => {
+  test('a single namespace root retains its location link and no empty description', async (): Promise<void> => {
+    const { state, folder, upload } = fixture();
+    try {
+      await state.load(null);
+      const document = new Window().document;
+      document.body.innerHTML = content(state, folder, upload);
+      expect(document.querySelector('h1')?.textContent).toBe('Files');
+      const actions = document.querySelector('[aria-label="Location actions"]');
+      expect(actions?.querySelector('button[aria-label="Actions for “My files”"]')).not.toBeNull();
+      for (const label of ['Upload file', 'New folder']) {
+        const button = actions?.querySelector(`button[aria-label="${label}"]`);
+        expect(button).not.toBeNull();
+        expect(button?.getAttribute('title')).toBe(label);
+        expect(button?.textContent?.trim()).toBe('');
+        expect(button?.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+      }
+      expect(actions?.closest('header')).not.toBeNull();
+      expect(document.querySelector('header h1')?.textContent).toBe('Files');
+      expect(document.querySelector('header .permission-badge')).toBeNull();
+      const workspace = document.querySelector('[aria-label="Files workspace"]');
+      expect(workspace).not.toBeNull();
+      expect(workspace!.contains(document.querySelector('h1')!)).toBe(false);
+      expect(workspace!.contains(actions!)).toBe(false);
+      expect(workspace?.querySelector('nav[aria-label="File locations"]')).not.toBeNull();
+      expect(document.querySelector('nav[aria-label="File locations"] a[aria-current="page"]')?.getAttribute('href')).toBe(filesHref(rootId));
+      expect(document.querySelector('header nav[aria-label="File path"] [aria-current="page"]')?.textContent).toBe('My files');
+      expect(document.querySelector('[aria-label="Description"]')).toBeNull();
+      expect(document.querySelector('nav[aria-label="File locations"]')?.textContent).toContain('My files');
+      expect(document.body.textContent).not.toContain('No description.');
+    } finally {
+      upload.dispose();
+      folder.dispose();
+      state.dispose();
+    }
+  });
+
+  test('multiple namespaces retain switching links and show the selected namespace in breadcrumbs', async (): Promise<void> => {
+    const { api, state, folder, upload } = fixture();
+    const namespaces = await api.filesystem.listNamespaces();
+    vi.spyOn(api.filesystem, 'listNamespaces').mockResolvedValue([
+      ...namespaces,
+      { ...namespaces[0], id: folderId, root_node_id: folderId, kind: 'shared', name: 'Team files' }
+    ]);
+    try {
+      for (const [id, name] of [[rootId, 'My files'], [folderId, 'Team files']]) {
+        await state.load(id);
+        const document = new Window().document;
+        document.body.innerHTML = content(state, folder, upload);
+        const navigation = document.querySelector('nav[aria-label="File locations"]');
+        expect(navigation).not.toBeNull();
+        expect(navigation?.querySelectorAll('a')).toHaveLength(2);
+        expect(navigation?.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe(name);
+        expect(navigation?.querySelector(`a[href="${filesHref(id)}"]`)).not.toBeNull();
+        expect(document.querySelector('h1')?.textContent).toBe('Files');
+        expect(document.querySelector('header nav[aria-label="File path"] [aria-current="page"]')?.textContent).toBe(name);
+      }
+    } finally {
+      upload.dispose();
+      folder.dispose();
+      state.dispose();
+    }
+  });
+
   test('personal home is the Files page itself, including the upload destination', async (): Promise<void> => {
     const home = filesystemNode({ id: folderId, parent_id: rootId, name: 'Home-internal-identity' });
     const api = new InMemoryFilesApi(rootId, [filesystemFixture[0], home, filesystemFixture[2]]);
@@ -46,7 +109,7 @@ describe('Files user composition', () => {
     expect(body).toContain('Notes.txt');
     expect(body).not.toContain(home.name);
     expect(body).toContain('aria-label="File path"');
-    expect(body).toContain('Actions for “Files”');
+    expect(body).toContain('Actions for “My files”');
     expect(body).toContain('Upload file');
     expect(body).toContain('New folder');
     upload.dispose();
@@ -68,11 +131,11 @@ describe('Files user composition', () => {
       document.body.innerHTML = content(state, folder, upload);
       const link = document.querySelector(`tbody a[href="${filesHref(folderId)}"]`);
       expect(link).not.toBeNull();
-      expect(link?.textContent?.trim()).toBe('Home');
-      expect(link?.getAttribute('title')).toBe('Home');
+      expect(link?.textContent?.trim()).toBe('My files');
+      expect(link?.getAttribute('title')).toBe('My files');
       expect(link?.querySelector('svg')?.getAttribute('aria-label')).toBe('Home folder');
       expect(link?.closest('tr')?.classList.contains('home-row')).toBe(true);
-      expect(link?.closest('tr')?.querySelector('button')?.getAttribute('aria-label')).toBe('Actions for “Home”');
+      expect(link?.closest('tr')?.querySelector('button')?.getAttribute('aria-label')).toBe('Actions for “My files”');
       expect(document.body.innerHTML).not.toContain(name);
       const ordinary = document.querySelector(`tbody a[href="${filesHref(fileId)}"]`);
       expect(ordinary?.textContent?.trim()).toBe(other.name);
@@ -172,7 +235,7 @@ describe('Files user composition', () => {
     expect(body).toContain('aria-label="Parent folder"');
     expect(body).not.toContain(' Up ');
     expect(body).toContain('Projects');
-    expect(body).toContain('Notes.txt</h1>');
+    expect(body).toContain('Files</h1>');
     expect(body).not.toContain('<h2>Notes.txt');
     expect(body).not.toContain('Open parent folder');
     expect(body).not.toContain('New folder');
