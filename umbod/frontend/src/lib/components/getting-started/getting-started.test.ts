@@ -1,4 +1,4 @@
-import { render } from 'svelte/server';
+import { renderWorkspace } from '$lib/components/workspace/render-workspace.test-support';
 import { describe, expect, test, vi } from 'vitest';
 import type { ToastApi } from '$lib/components/feedback/toast-state.svelte';
 import { workspaceNavigation } from '$lib/workspace/navigation';
@@ -21,7 +21,7 @@ describe('unified Getting started page', () => {
   });
 
   test.each(['connect', 'telemetry'] as const)('renders only the %s subpage within one workspace and heading', (activePage): void => {
-    const body = render(GettingStarted, { props: { activePage, installerBaseUrl: 'https://site.test/api/install/v1' } }).body;
+    const body = renderWorkspace(GettingStarted, { props: { activePage, installerBaseUrl: 'https://site.test/api/install/v1' } }, '/getting-started').body;
     expect(body.match(/<h1[\s>]/g)).toHaveLength(1);
     expect(body).toContain('Getting started</h1>');
     expect(body.match(/aria-label="Workspace sidebar"/g)).toHaveLength(1);

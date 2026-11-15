@@ -15,11 +15,9 @@ description: "Static SvelteKit SPA layouts, browser loaders and page composition
 - [Insights](./admin/insights/README.md) — Separate behaviour findings, configuration and log analytics with identity-scoped ownership.
 - [Groups](./admin/groups/README.md) — Central administrator group catalogue route.
 - [Group permissions](./admin/group-permissions/README.md) — Persistent permissions layout and lazy tab editors.
-- [dashboard/](./dashboard/) — Personal usage page.
-- [connectors/](./connectors/) — User connector catalogue and personal authorization page.
+- [Workspace routes](./(workspace)/README.md) — Persistent user sidebar, access lifetime and child pages without URL prefixes.
+- [Dashboard preview](./dashboard/preview/+page.svelte) — Standalone sample-data frame outside the authenticated workspace group.
 - [error.test.ts](./error.test.ts) — Route error presentation tests.
-- [files/](./files/) — User filesystem page.
-- [Getting started](./getting-started/README.md) — Single destination for MCP and telemetry onboarding.
 - [navigation.test.ts](./navigation.test.ts) — Route navigation tests.
 
 # Context not available from the code

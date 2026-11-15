@@ -18,7 +18,10 @@ description: "Neutral authenticated profile, workspace navigation and capability
 - [navigation-history.svelte.ts](./navigation-history.svelte.ts) — Root-owned successful workspace location history and directional sidebar transitions.
 - [navigation-history-context.ts](./navigation-history-context.ts) — Application-scoped navigation history composition for workspace shells.
 - [navigation-history.test.ts](./navigation-history.test.ts) — Safe return locations, isolated lifetimes and context-only transition rules.
-- [workspace-access-state.svelte.ts](./workspace-access-state.svelte.ts) — Independent access lookup lifetime.
+- [workspace-access-state.svelte.ts](./workspace-access-state.svelte.ts) — Frame-owned access lookup and source epochs fencing obsolete profile results.
+- [workspace-context.ts](./workspace-context.ts) — Typed context requiring an explicitly mounted workspace frame.
+- [workspace-scope.svelte.ts](./workspace-scope.svelte.ts) — Scoped page disposal and reactive identity inputs with per-consumer source-change detection.
+- [workspace-navigation-state.svelte.ts](./workspace-navigation-state.svelte.ts) — Active workspace destination derived directly from the current pathname.
 - [workspace-access-state.test.ts](./workspace-access-state.test.ts) — Access lookup isolation tests.
 
 # Architecture

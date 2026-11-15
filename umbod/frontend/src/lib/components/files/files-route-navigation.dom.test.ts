@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { mount, tick, unmount } from 'svelte';
+import { mountWorkspace } from '$lib/components/workspace/mount-workspace.test-support';
+import { tick, unmount } from 'svelte';
 import { deferred, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
 import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
 import FilesPage from './FilesPage.svelte';
@@ -11,7 +12,7 @@ vi.mock('$app/navigation', () => ({
   afterNavigate: (callback: (event: { to: { url: URL } | null }) => void): void => { navigation.callback = callback; }
 }));
 
-let component: ReturnType<typeof mount> | undefined;
+let component: ReturnType<typeof mountWorkspace> | undefined;
 
 afterEach(async (): Promise<void> => {
   if (component) await unmount(component);
@@ -39,7 +40,7 @@ describe('Files route incidental navigation', (): void => {
     const discovery = vi.spyOn(api.filesystem, 'listNamespaces');
     const target = document.createElement('div');
     document.body.append(target);
-    component = mount(FilesPage, { target, props: { createApi: () => api, createWorkspaceApi: () => ({ profile: { get: () => deferred<never>().promise } }) } });
+    component = mountWorkspace(FilesPage, { target, props: { createApi: () => api, createWorkspaceApi: () => ({ profile: { get: () => deferred<never>().promise } }) } }, '/files');
     await tick();
     navigate('/files');
     await vi.waitFor(() => expect(document.querySelector('#new-folder-button')).not.toBeNull());

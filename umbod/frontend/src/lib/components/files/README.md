@@ -45,7 +45,7 @@ description: "Namespace browsing, per-item sharing, node details, folder creatio
 - [file-upload-form.test.ts](./file-upload-form.test.ts) — Modal semantics, accessible selection, validation and pending states.
 - [FileDeletionDialog.svelte](./FileDeletionDialog.svelte) — Files-owned permanent removal confirmation using shared native-dialog mechanics.
 - [file-deletion.test.ts](./file-deletion.test.ts) — Row and details eligibility, accessible filename-specific confirmation and danger action presentation tests.
-- [FilesPage.svelte](./FilesPage.svelte) — Files composition with semantic route guards, independent profile loading and identity-scoped request lifetimes.
+- [FilesPage.svelte](./FilesPage.svelte) — Files content with semantic route guards, frame-scoped identity and identity-fenced request lifetimes.
 - [FilesNavigation.svelte](./FilesNavigation.svelte) — Consistent home and child path rows, known-ancestor overflow and confirmed mobile parent links.
 - [files-navigation.test.ts](./files-navigation.test.ts) — Root, partial path, ancestor overflow, mobile parent markup and independent failure presentation tests.
 - [NewFolderForm.svelte](./NewFolderForm.svelte) — Inline folder creation with optional description guidance.

@@ -1,18 +1,14 @@
 <script lang="ts">
+  import { useWorkspace } from '$lib/workspace/workspace-context';
+  import { WorkspaceIdentityBinding } from '$lib/workspace/workspace-scope.svelte';
   import { afterNavigate, goto } from '$app/navigation';
-  import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
-  import { onMount, untrack } from 'svelte';
-  import { workspaceApi } from '$lib/workspace/infrastructure/workspace-api';
+  import { onMount, onDestroy } from 'svelte';
   import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
-  import type { WorkspaceApi } from '$lib/workspace/api';
-  import { WorkspaceAccessState } from '$lib/workspace/workspace-access-state.svelte';
-  import { workspaceNavigation, workspacePresentation } from '$lib/workspace/navigation';
   import type { FilesApi } from '$lib/files/api';
   import { browserFilesApi } from '$lib/files/infrastructure/files-api';
   import { FilesState, filesHref } from '$lib/files/state/files-state.svelte';
   import { UploadState } from '$lib/files/state/upload-state.svelte';
   import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
-  import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
   import FilesContent from './FilesContent.svelte';
   import { publicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
   import type { PreviewConfigurationProvider } from '$lib/files/preview/configuration';
@@ -28,16 +24,12 @@
   import { csvPreviewAdapter } from './preview/csv-adapter';
 
   let {
-    accountIdentity = { kind: 'hidden' },
     createApi = browserFilesApi,
-    createWorkspaceApi = workspaceApi,
     configuration = publicConfigurationProvider,
     createContentSource = (configuration: PreviewConfigurationProvider): FileContentPort => new FileContentRoute(browserTransport(), configuration),
     signIn = navigateToSignIn
   }: {
-    accountIdentity?: HeaderAccountIdentityState;
     createApi?: () => FilesApi;
-    createWorkspaceApi?: () => WorkspaceApi;
     configuration?: PreviewConfigurationProvider;
     createContentSource?: (configuration: PreviewConfigurationProvider) => FileContentPort;
     signIn?: () => void;
@@ -45,10 +37,6 @@
 
   function createFilesApi(): FilesApi {
     return createApi();
-  }
-
-  function createAccess(): WorkspaceAccessState {
-    return new WorkspaceAccessState(createWorkspaceApi(), () => accountIdentity);
   }
 
   function createPreview(): FilePreviewState {
@@ -60,17 +48,20 @@
   const state = new FilesState(api, async (id: string): Promise<void> => { await goto(filesHref(id)); }, preview);
   const folder = new NewFolderState(api, state);
   const upload = new UploadState(api, state);
-  const access = createAccess();
-
-  $effect.pre(() => {
-    const source = accountIdentity;
-    const changed = untrack(() => access.observeIdentitySource(source));
-    const identity = access.effectiveAccountIdentity;
-    untrack(() => {
-      if (changed) { folder.navigate(); upload.navigate(); }
-      state.observeAccountIdentity(identity, changed);
-    });
+  const workspace = useWorkspace();
+  const identity = new WorkspaceIdentityBinding(workspace.access, (identity, changed): void => {
+    if (changed) { folder.navigate(); upload.navigate(); }
+    state.observeAccountIdentity(identity, changed);
   });
+
+  function dispose(): void {
+    state.dispose();
+    folder.dispose();
+    upload.dispose();
+  }
+
+  onDestroy(workspace.registerDisposal(dispose));
+  $effect.pre(identity.observe);
 
   afterNavigate(({ to }) => {
     if (to?.url.pathname !== '/files') { preview.reset(); state.deletion.reset(); state.rowDeletion.reset(); state.sharing.reset(); return; }
@@ -81,18 +72,8 @@
     void state.load(target);
   });
 
-  onMount(() => {
-    void access.load();
-    return () => {
-      state.dispose();
-      folder.dispose();
-      upload.dispose();
-      access.dispose();
-    };
-  });
+  onMount(() => dispose);
 </script>
 
 <svelte:head><title>Files · Umbod</title></svelte:head>
-<WorkspaceShell {...workspacePresentation} navigationItems={workspaceNavigation(access.adminAccess === 'allowed')} activeItem="files" accountIdentity={access.effectiveAccountIdentity} contentWidth="wide">
-  <FilesContent {state} {folder} {upload} {signIn} />
-</WorkspaceShell>
+<FilesContent {state} {folder} {upload} {signIn} />

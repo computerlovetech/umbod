@@ -23,6 +23,10 @@ export class WorkspaceAccessState {
     this.sourceFingerprint = identityFingerprint(fallbackIdentity());
   }
 
+  get identitySourceVersion(): number {
+    return this.sourceEpoch;
+  }
+
   get effectiveAccountIdentity(): HeaderAccountIdentityState {
     const fallback = this.fallbackIdentity();
     const currentFingerprint = identityFingerprint(fallback);

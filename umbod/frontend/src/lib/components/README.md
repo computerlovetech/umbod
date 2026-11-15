@@ -13,6 +13,7 @@ description: "Reusable and actor-owned Svelte presentation and interaction modul
 - [Connector list empty state](./admin/connectors/ConnectorListEmptyState.svelte) — Consistent empty-list presentation for catalog, OpenAPI, and MCP tabs.
 - [Agent behaviour](./admin/agent-behaviour/README.md) — Definition forms and self-reported diagnostic report inspection.
 - [Group management](./admin/groups/README.md) — Central administrator group catalogue forms.
+- [Workspace frame](./workspace/README.md) — Route-group-owned sidebar, profile access and scoped page lifetimes.
 - [dashboard](./dashboard/README.md) — User catalogue workspace.
 - [feedback/](./feedback/) — Toast presentation and state.
 - [files](./files/README.md) — User filesystem workspace.

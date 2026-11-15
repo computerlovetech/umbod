@@ -12,8 +12,8 @@ description: "Separate personal usage and user connector workspace compositions 
 - [CatalogueToolCard.svelte](./CatalogueToolCard.svelte) — Dashboard-owned tool card composition.
 - [ConnectorDetail.svelte](./ConnectorDetail.svelte) — User connector detail presentation.
 - [ConnectorWorkspace.svelte](./ConnectorWorkspace.svelte) — Combined connector list and selection.
-- [Dashboard.svelte](./Dashboard.svelte) — Usage-only page with independent profile access and account fencing.
-- [ConnectorsPage.svelte](./ConnectorsPage.svelte) — Connector catalogue and personal authorization composition with shared page framing and independent profile access.
+- [Dashboard.svelte](./Dashboard.svelte) — Usage-only content consuming frame-scoped identity with account fencing.
+- [ConnectorsPage.svelte](./ConnectorsPage.svelte) — Connector catalogue and personal authorization content consuming frame-scoped identity.
 - [Shared page container](../shared/workspace/PageContainer.svelte) — Common header and content slots shared with Files; catalogue feedback and selection remain feature-owned.
 - [PersonalUsage.svelte](./PersonalUsage.svelte) — Feature-owned usage charts, shared period buttons and status controls; empty panels stay visible without explanatory text.
 - [Shared dashboard visuals](../shared/dashboard/visualizations/README.md) — Neutral charts shared by live usage and preview; callers own data and eligibility.

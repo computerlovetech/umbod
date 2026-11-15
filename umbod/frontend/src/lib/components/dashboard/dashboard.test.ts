@@ -1,4 +1,5 @@
 import { render } from 'svelte/server';
+import { renderWorkspace } from '$lib/components/workspace/render-workspace.test-support';
 import { InMemoryAttemptScheduler } from '$lib/personal-connections/infrastructure/in-memory-attempt-scheduler';
 import { describe, expect, test, vi } from 'vitest';
 import type { ToastApi } from '$lib/components/feedback/toast-state.svelte';
@@ -36,11 +37,11 @@ async function loadedController(): Promise<DashboardController> {
 describe('connector catalogue presentation', () => {
   test('hides privileged navigation until the independent current-user read completes', (): void => {
     const currentUser = vi.fn();
-    const body = render(ConnectorsPage, { props: {
+    const body = renderWorkspace(ConnectorsPage, { props: {
       createWorkspaceApi: () => ({ profile: { get: currentUser } }),
       createApi: (): DashboardApi => new InMemoryDashboardApi(catalogue),
       createPersonalApi: (): PersonalConnectionsApi => new InMemoryPersonalConnectionsApi([])
-    } }).body;
+    } }, '/connectors').body;
     expect(body).toContain('aria-label="Workspace sidebar"');
     expect(body).toContain('aria-label="Workspace navigation"');
     expect(body).toContain('Your account');
@@ -57,10 +58,10 @@ describe('connector catalogue presentation', () => {
     const personal: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([]);
     const list = vi.spyOn(api.catalogue, 'list');
     const personalList = vi.spyOn(personal.connections, 'list');
-    const body = render(ConnectorsPage, { props: {
+    const body = renderWorkspace(ConnectorsPage, { props: {
       createApi: (): DashboardApi => api,
       createPersonalApi: (): PersonalConnectionsApi => personal
-    } }).body;
+    } }, '/connectors').body;
     expect(body).toContain('Connectors</h1>');
     expect(body).not.toContain('Your usage');
     expect(body).not.toContain('Refresh usage');

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { mount, tick, unmount } from 'svelte';
+import { mountWorkspace } from '$lib/components/workspace/mount-workspace.test-support';
+import { tick, unmount } from 'svelte';
 import { logoutNavigation } from '$lib/admin/infrastructure/logout';
 import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
 import { catalogue, sharedConnector } from '$lib/dashboard/test-fixtures';
@@ -13,7 +14,7 @@ import { DashboardIdentityProps } from './identity-props.test-support.svelte';
 import ConnectorsPage from './ConnectorsPage.svelte';
 import Dashboard from './Dashboard.svelte';
 
-let component: ReturnType<typeof mount> | undefined;
+let component: ReturnType<typeof mountWorkspace> | undefined;
 
 afterEach(async (): Promise<void> => {
   if (component) await unmount(component);
@@ -62,8 +63,8 @@ describe('page logout lifetimes', () => {
       createWorkspaceApi: () => ({ profile: { get: getProfile } })
     };
     component = page === 'Dashboard'
-      ? mount(Dashboard, { target: document.body, props })
-      : mount(ConnectorsPage, { target: document.body, props });
+      ? mountWorkspace(Dashboard, { target: document.body, props }, '/dashboard')
+      : mountWorkspace(ConnectorsPage, { target: document.body, props }, '/connectors');
     if (page === 'Dashboard') {
       await vi.waitFor(() => expect(document.querySelector('[aria-label="Tool activity"]')?.textContent).toContain('63 calls'));
     } else {

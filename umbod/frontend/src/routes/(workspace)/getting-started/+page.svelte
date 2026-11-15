@@ -5,4 +5,4 @@
   let { data }: { data: PageData } = $props();
 </script>
 
-<GettingStarted installerBaseUrl={data.installerBaseUrl} accountIdentity={data.accountIdentity} />
+<GettingStarted installerBaseUrl={data.installerBaseUrl} />

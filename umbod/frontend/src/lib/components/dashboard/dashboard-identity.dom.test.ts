@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { mount, tick, unmount } from 'svelte';
+import { mountWorkspace } from '$lib/components/workspace/mount-workspace.test-support';
+import { tick, unmount } from 'svelte';
 import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
 import type { WorkspaceProfile } from '$lib/workspace/domain/profile';
 import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
@@ -9,7 +10,7 @@ import type { PersonalUsage } from '$lib/dashboard/domain/usage-schemas';
 import { DashboardIdentityProps } from './identity-props.test-support.svelte';
 import Dashboard from './Dashboard.svelte';
 
-let component: ReturnType<typeof mount> | undefined;
+let component: ReturnType<typeof mountWorkspace> | undefined;
 
 afterEach(async (): Promise<void> => {
   if (component) await unmount(component);
@@ -48,11 +49,11 @@ describe('Dashboard identity source epochs', () => {
     }
     usage.mockReturnValue(nextUsageB.promise);
     const getProfile = vi.fn<() => Promise<WorkspaceProfile>>().mockResolvedValueOnce(profile('A')).mockReturnValue(profileB.promise);
-    component = mount(Dashboard, { target: document.body, props: {
+    component = mountWorkspace(Dashboard, { target: document.body, props: {
       get accountIdentity(): HeaderAccountIdentityState { return inputs.identity; },
       createApi: () => api,
       createWorkspaceApi: () => ({ profile: { get: getProfile } })
-    } });
+    } }, '/dashboard');
     await vi.waitFor(() => expect(document.querySelector('[aria-label="Tool activity"]')?.textContent).toContain('63 calls'));
     expect(document.querySelector('a[href="/admin/connectors"]')).not.toBeNull();
     if (pending) {
@@ -97,11 +98,11 @@ describe('Dashboard identity source epochs', () => {
     const api = new InMemoryDashboardApi(catalogueA);
     const usage = vi.spyOn(api.usage, 'get').mockReturnValueOnce(pendingUsageA.promise).mockResolvedValue(usageSnapshot(7, 'account-two', 1));
     const getProfile = vi.fn<() => Promise<WorkspaceProfile>>().mockReturnValueOnce(profileA.promise).mockReturnValue(profileB.promise);
-    component = mount(Dashboard, { target: document.body, props: {
+    component = mountWorkspace(Dashboard, { target: document.body, props: {
       get accountIdentity(): HeaderAccountIdentityState { return inputs.identity; },
       createApi: () => api,
       createWorkspaceApi: () => ({ profile: { get: getProfile } })
-    } });
+    } }, '/dashboard');
     await vi.waitFor(() => expect(getProfile).toHaveBeenCalledTimes(1));
     inputs.replace(destination === 'B' ? identity('B') : { kind: 'hidden' });
     await tick();

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import { mountWorkspace } from '$lib/components/workspace/mount-workspace.test-support';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import type { UsagePort } from '$lib/dashboard/api';
@@ -142,11 +143,11 @@ describe('personal usage presentation', () => {
     const api = new InMemoryDashboardApi({ ...catalogue, personal_enabled: false });
     const list = vi.spyOn(api.catalogue, 'list');
     const get = vi.spyOn(api.usage, 'get').mockReturnValueOnce(usageA.promise).mockReturnValue(usageB.promise);
-    component = mount(Dashboard, { target: document.body, props: {
+    component = mountWorkspace(Dashboard, { target: document.body, props: {
       accountIdentity: { kind: 'visible', name: 'Account A', email: null, picture: null, hiddenValues: { id: 'header-account-a' } },
       createApi: () => api,
       createWorkspaceApi: () => ({ profile: { get: (): Promise<WorkspaceProfile> => profileB.promise } })
-    } });
+    } }, '/dashboard');
     await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(1));
     const usageSignalA = get.mock.calls[0][1];
     if (initialPhase === 'loaded') {
@@ -173,11 +174,11 @@ describe('personal usage presentation', () => {
   test('Connectors loads its catalogue without requesting usage while the profile is pending', async (): Promise<void> => {
     const api = new InMemoryDashboardApi({ ...catalogue, personal_enabled: false });
     const get = vi.spyOn(api.usage, 'get');
-    component = mount(ConnectorsPage, { target: document.body, props: {
+    component = mountWorkspace(ConnectorsPage, { target: document.body, props: {
       createApi: () => api,
       createPersonalApi: () => new InMemoryPersonalConnectionsApi([]),
       createWorkspaceApi: () => ({ profile: { get: () => new Promise<WorkspaceProfile>((): void => {}) } })
-    } });
+    } }, '/connectors');
     await vi.waitFor(() => expect(document.querySelector('[aria-labelledby="connectors-heading"]')?.getAttribute('aria-busy')).toBe('false'));
     expect(document.querySelector('[aria-labelledby="connectors-heading"]')?.textContent).toContain('Shared calendar');
     expect(document.querySelector('[aria-current="page"]')?.getAttribute('href')).toBe('/connectors');
@@ -198,10 +199,10 @@ describe('personal usage presentation', () => {
     const get = vi.spyOn(api.usage, 'get').mockResolvedValueOnce(usageSnapshot(7, 'account-one', 1)).mockReturnValueOnce(pending.promise);
     const workspace = new InMemoryWorkspaceApi({ identity_key: 'account-one', user: { id: 'member', name: 'Member', email: null, picture: null }, capabilities: { administration: false } });
     vi.spyOn(workspace.profile, 'get').mockReturnValue(new Promise((): void => {}));
-    component = mount(Dashboard, { target: document.body, props: {
+    component = mountWorkspace(Dashboard, { target: document.body, props: {
       createApi: () => api,
       createWorkspaceApi: () => workspace
-    } });
+    } }, '/dashboard');
     await vi.waitFor(() => expect(document.querySelector('[aria-label="Tool activity"]')).not.toBeNull());
     expect(document.querySelector('[aria-labelledby="connectors-heading"]')).toBeNull();
     expect(list).not.toHaveBeenCalled();

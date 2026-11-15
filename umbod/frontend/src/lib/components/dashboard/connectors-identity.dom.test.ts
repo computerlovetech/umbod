@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { mount, tick, unmount } from 'svelte';
+import { mountWorkspace } from '$lib/components/workspace/mount-workspace.test-support';
+import { tick, unmount } from 'svelte';
 import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
 import type { WorkspaceProfile } from '$lib/workspace/domain/profile';
 import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
@@ -9,7 +10,7 @@ import { InMemoryPersonalConnectionsApi } from '$lib/personal-connections/infras
 import { DashboardIdentityProps } from './identity-props.test-support.svelte';
 import ConnectorsPage from './ConnectorsPage.svelte';
 
-let component: ReturnType<typeof mount> | undefined;
+let component: ReturnType<typeof mountWorkspace> | undefined;
 
 afterEach(async (): Promise<void> => {
   if (component) await unmount(component);
@@ -53,12 +54,12 @@ describe('Connectors identity source epochs', () => {
     }
     list.mockReturnValue(nextCatalogueB.promise);
     const getProfile = vi.fn<() => Promise<WorkspaceProfile>>().mockResolvedValueOnce(profile('A')).mockReturnValue(profileB.promise);
-    component = mount(ConnectorsPage, { target: document.body, props: {
+    component = mountWorkspace(ConnectorsPage, { target: document.body, props: {
       get accountIdentity(): HeaderAccountIdentityState { return inputs.identity; },
       createApi: () => api,
       createPersonalApi: () => new InMemoryPersonalConnectionsApi([]),
       createWorkspaceApi: () => ({ profile: { get: getProfile } })
-    } });
+    } }, '/connectors');
     await vi.waitFor(() => expect(document.body.textContent).toContain('Account A connector'));
     const container = document.querySelector('.page-container');
     expect(container).not.toBeNull();
@@ -110,12 +111,12 @@ describe('Connectors identity source epochs', () => {
     const api = new InMemoryDashboardApi(catalogueA);
     const list = vi.spyOn(api.catalogue, 'list').mockReturnValueOnce(pendingCatalogueA.promise).mockResolvedValue(catalogueB);
     const getProfile = vi.fn<() => Promise<WorkspaceProfile>>().mockReturnValueOnce(profileA.promise).mockReturnValue(profileB.promise);
-    component = mount(ConnectorsPage, { target: document.body, props: {
+    component = mountWorkspace(ConnectorsPage, { target: document.body, props: {
       get accountIdentity(): HeaderAccountIdentityState { return inputs.identity; },
       createApi: () => api,
       createPersonalApi: () => new InMemoryPersonalConnectionsApi([]),
       createWorkspaceApi: () => ({ profile: { get: getProfile } })
-    } });
+    } }, '/connectors');
     await vi.waitFor(() => expect(getProfile).toHaveBeenCalledTimes(1));
     inputs.replace(destination === 'B' ? identity('B') : { kind: 'hidden' });
     await tick();
@@ -142,12 +143,12 @@ describe('Connectors identity source epochs', () => {
     const api = new InMemoryDashboardApi(catalogueA);
     const list = vi.spyOn(api.catalogue, 'list').mockReturnValueOnce(catalogueReadA.promise).mockReturnValue(catalogueReadB.promise);
     const usage = vi.spyOn(api.usage, 'get');
-    component = mount(ConnectorsPage, { target: document.body, props: {
+    component = mountWorkspace(ConnectorsPage, { target: document.body, props: {
       accountIdentity: identity('A'),
       createApi: () => api,
       createPersonalApi: () => new InMemoryPersonalConnectionsApi([]),
       createWorkspaceApi: () => ({ profile: { get: () => profileB.promise } })
-    } });
+    } }, '/connectors');
     await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(1));
     const signalA = list.mock.calls[0][0];
     if (initialPhase === 'loaded') {

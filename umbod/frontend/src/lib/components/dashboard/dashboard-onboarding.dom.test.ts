@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { mount, unmount } from 'svelte';
+import { mountWorkspace } from '$lib/components/workspace/mount-workspace.test-support';
+import { unmount } from 'svelte';
 import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
 import { catalogue } from '$lib/dashboard/test-fixtures';
 import { InMemoryWorkspaceApi } from '$lib/workspace/in-memory-api.test-support';
 import Dashboard from './Dashboard.svelte';
 
-let component: ReturnType<typeof mount> | undefined;
+let component: ReturnType<typeof mountWorkspace> | undefined;
 
 afterEach(async (): Promise<void> => {
   if (component) await unmount(component);
@@ -15,7 +16,7 @@ afterEach(async (): Promise<void> => {
 
 describe('Dashboard onboarding entry', () => {
   test('links to Getting started without rendering duplicate setup instructions after loading', async (): Promise<void> => {
-    component = mount(Dashboard, {
+    component = mountWorkspace(Dashboard, {
       target: document.body,
       props: {
         createApi: () => new InMemoryDashboardApi({ ...catalogue, personal_enabled: false }),
@@ -24,7 +25,7 @@ describe('Dashboard onboarding entry', () => {
           capabilities: { administration: false }
         })
       }
-    });
+    }, '/dashboard');
     await vi.waitFor(() => expect(document.querySelector('h1')?.textContent).toBe('Dashboard'));
     expect(document.querySelector('a[href="/getting-started"]')?.textContent?.trim()).toBe('Getting started');
     expect(document.querySelector('[aria-label="MCP setup"]')).toBeNull();

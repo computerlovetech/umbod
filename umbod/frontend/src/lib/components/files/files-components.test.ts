@@ -1,4 +1,5 @@
 import { Window } from 'happy-dom';
+import { renderWorkspace } from '$lib/components/workspace/render-workspace.test-support';
 import { render } from 'svelte/server';
 import { describe, expect, test, vi } from 'vitest';
 import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
@@ -163,7 +164,7 @@ describe('Files user composition', () => {
     const getNode = vi.spyOn(api.filesystem, 'getNode');
     const getChildren = vi.spyOn(api.filesystem, 'listChildren');
     const currentUser = vi.fn(() => deferred<never>().promise);
-    const body = render(FilesPage, { props: { createApi: () => api, createWorkspaceApi: () => ({ profile: { get: currentUser } }) } }).body;
+    const body = renderWorkspace(FilesPage, { props: { createApi: () => api, createWorkspaceApi: () => ({ profile: { get: currentUser } }) } }, '/files').body;
     expect(body).toContain('aria-label="Workspace navigation"');
     expect(body).toContain('href="/files"');
     expect(body).not.toContain('href="/admin"');

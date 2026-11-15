@@ -6,7 +6,7 @@ description: Feature-owned MCP connection guidance and personal telemetry setup.
 
 # Files
 
-- [GettingStarted.svelte](./GettingStarted.svelte) — Exclusive harness and telemetry subpages in the shared workspace and subpage container.
+- [GettingStarted.svelte](./GettingStarted.svelte) — Exclusive harness and telemetry content under the persistent workspace frame.
 - [McpSetupGuide.svelte](./McpSetupGuide.svelte) — OS tabs, Codex and Claude Code installation commands, prerequisites, and script inspection.
 - [plugin-installation-state.svelte.ts](./plugin-installation-state.svelte.ts) — Platform and harness selection with single-URL Bash and PowerShell installation commands.
 - [plugin-installation-state.svelte.test.ts](./plugin-installation-state.svelte.test.ts) — Target selection, keyboard transitions, exactly one installer URL, and shell quoting.
