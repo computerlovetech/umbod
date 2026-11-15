@@ -47,11 +47,16 @@ class WindowsInstallerDriver:
         )
 
 
+@pytest.fixture(params=["powershell.exe", "pwsh.exe"])
+def powershell(request: pytest.FixtureRequest) -> str:
+    executable = shutil.which(request.param)
+    if executable is None:
+        pytest.fail(f"Native Windows installer tests require {request.param}")
+    return executable
+
+
 @pytest.fixture(params=["codex", "claude-code"])
-def windows_installer(tmp_path: Path, request: pytest.FixtureRequest) -> Iterator[WindowsInstallerDriver]:
-    powershell = shutil.which("powershell.exe") or shutil.which("pwsh.exe")
-    if powershell is None:
-        pytest.fail("Native Windows installer tests require Windows PowerShell 5.1+ or PowerShell 7")
+def windows_installer(tmp_path: Path, request: pytest.FixtureRequest, powershell: str) -> Iterator[WindowsInstallerDriver]:
     if shutil.which("curl.exe") is None:
         pytest.fail("Native Windows installer tests require curl.exe")
     binaries = tmp_path / "bin"

@@ -252,9 +252,15 @@ def test_browser_response_stripping_does_not_change_internal_forwardauth() -> No
                     "traefik.http.routers.umbod-browser-api.middlewares",
                     "traefik.http.routers.umbod-browser-api-secure.middlewares",
                     "traefik.http.routers.umbod-upload-transfer.middlewares",
+                    "traefik.http.routers.umbod-install.middlewares",
+                    "traefik.http.routers.umbod-install-secure.middlewares",
                     "traefik.http.routers.umbod-oauth.middlewares",
                     "traefik.http.routers.umbod-oauth-secure.middlewares",
                 }
+    for router in ("umbod-install", "umbod-install-secure"):
+        assert frontend_labels[f"traefik.http.routers.{router}.middlewares"].split(
+            ","
+        ) == ["umbod-browser-response@docker"]
     for service_name, routers in (
         ("api", ("umbod-browser-api", "umbod-browser-api-secure")),
         ("oauth2-proxy", ("umbod-oauth", "umbod-oauth-secure")),

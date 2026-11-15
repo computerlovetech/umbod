@@ -77,7 +77,7 @@ param(
         $null = Invoke-Harness -Arguments @('plugin', $Action, '--help')
         $null = Invoke-Harness -Arguments @('plugin', 'marketplace', 'list', '--help')
         $ExpectedMarketplace = 'umbod-' + (Get-EndpointIdentity $Expected).Substring(0, 12)
-        $Marketplaces = @(ConvertFrom-Json (Invoke-Harness -Arguments @('plugin', 'marketplace', 'list', '--json')))
+        $Marketplaces = @(ConvertFrom-Json (Invoke-Harness -Arguments @('plugin', 'marketplace', 'list', '--json')) | ForEach-Object { $_ })
         if ($Cli -eq 'codex') {
             $Marketplaces = @($Marketplaces[0].marketplaces)
             $Names = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
@@ -94,7 +94,7 @@ param(
                 $InitialPlugins += @($Response.installed)
             }
         } else {
-            $InitialPlugins = @(ConvertFrom-Json (Invoke-Harness -Arguments @('plugin', 'list', '--json')))
+            $InitialPlugins = @(ConvertFrom-Json (Invoke-Harness -Arguments @('plugin', 'list', '--json')) | ForEach-Object { $_ })
         }
         foreach ($Plugin in $InitialPlugins) {
             $PluginIdentity = if ($Cli -eq 'codex') { $Plugin.pluginId } else { $Plugin.id }
@@ -102,7 +102,7 @@ param(
             if ($PluginIdentity -ceq "umbod@$ExpectedMarketplace" -and $Plugin.enabled -ne $true) { throw 'The Umbod plugin is already installed but disabled. Review your harness plugin settings manually.' }
         }
         if ($Cli -eq 'codex') {
-            $Servers = @(ConvertFrom-Json (Invoke-Harness -Arguments @('mcp', 'list', '--json', '--disable', 'plugins')))
+            $Servers = @(ConvertFrom-Json (Invoke-Harness -Arguments @('mcp', 'list', '--json', '--disable', 'plugins')) | ForEach-Object { $_ })
             $Conflict = @($Servers | Where-Object { $_.name -ieq 'umbod' }).Count -gt 0
         } else {
             $ErrorActionPreference = 'Continue'
@@ -220,7 +220,7 @@ param(
         Write-Host "Verifying $Harness plugin registration..."
         $VerificationArguments = @('plugin', 'list', '--json')
         if ($Cli -eq 'codex') { $VerificationArguments += @('--marketplace', $Marketplace) }
-        $Installed = @(ConvertFrom-Json (Invoke-Harness -Arguments $VerificationArguments))
+        $Installed = @(ConvertFrom-Json (Invoke-Harness -Arguments $VerificationArguments) | ForEach-Object { $_ })
         if ($Cli -eq 'codex') {
             $Verified = @($Installed[0].installed | Where-Object { $_.pluginId -ceq "umbod@$Marketplace" -and $_.enabled -eq $true })
         } else {
