@@ -306,6 +306,10 @@ export class FilesState {
     return { name: this.namespaceLabel(node.id) ?? node.name, isHome, iconKind: isHome ? 'home' : node.kind };
   };
 
+  get contentLoading(): boolean {
+    return this.phase === 'loading' || this.node?.kind === 'file' && this.preview?.phase === 'loading';
+  }
+
   get atNamespaceRoot(): boolean {
     return !!this.node && this.namespaceEntries.some((namespace) => namespace.root_node_id === this.node?.id);
   }

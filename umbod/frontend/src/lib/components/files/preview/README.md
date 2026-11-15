@@ -15,7 +15,7 @@ description: File preview presentation with CSV tables, plain text, Markdown, PD
 - [csv-preview.dom.test.ts](./csv-preview.dom.test.ts) — Literal table rendering, content replacement, truncation and malformed CSV fallback.
 
 - [FilePreview.svelte](./FilePreview.svelte) — Preview status, retry and sign-in presentation with adapter-selected content components.
-- [MarkdownPreview.svelte](./MarkdownPreview.svelte) — Styled Markdown article accepting content without filesystem or API dependencies.
+- [MarkdownPreview.svelte](./MarkdownPreview.svelte) — Markdown article with highlighted fences and lazy Mermaid diagrams, without filesystem or API dependencies.
 - [ImagePreview.svelte](./ImagePreview.svelte) — Content-only responsive image display with decode-failure reporting.
 - [image-adapter.ts](./image-adapter.ts) — Raster image type selection and binary-to-data-URL preparation without SVG embedding.
 - [image-format.ts](./image-format.ts) — Supported raster MIME types, extensions and byte signatures.
@@ -25,7 +25,11 @@ description: File preview presentation with CSV tables, plain text, Markdown, PD
 - [pdf-adapter.ts](./pdf-adapter.ts) — PDF type selection, header validation and lossless binary-to-data-URL preparation.
 - [pdf-adapter.test.ts](./pdf-adapter.test.ts) — PDF selection, binary preservation, empty content and invalid-document rejection.
 - [markdown-adapter.ts](./markdown-adapter.ts) — Markdown MIME detection and extension fallback for unspecified or generic text formats.
-- [markdown.ts](./markdown.ts) — Escaped Markdown rendering with raw HTML, images and relative or unsafe links disabled.
+- [markdown.ts](./markdown.ts) — Bounded code highlighting and escaped Markdown rendering with diagram placeholders and restrictive resource handling.
+- [mermaid.ts](./mermaid.ts) — Lazy strict Mermaid rendering, bounded source validation, sanitized SVG insertion and attachment cleanup.
+- [markdown-highlighting.test.ts](./markdown-highlighting.test.ts) — Highlighted language aliases, escaped fallbacks and per-document rendering limits.
+- [markdown-preview.dom.test.ts](./markdown-preview.dom.test.ts) — Diagram presentation, safe fallback, content replacement and obsolete rendering cleanup.
+- [mermaid-renderer.dom.test.ts](./mermaid-renderer.dom.test.ts) — Lazy library loading, strict renderer configuration and temporary DOM cleanup.
 - [markdown.test.ts](./markdown.test.ts) — Filetype selection, Markdown formatting, HTML escaping and resource privacy tests.
 - [file-preview.dom.test.ts](./file-preview.dom.test.ts) — Renderer replacement, loading and retry interactions through the component boundary.
 - [TextPreview.svelte](./TextPreview.svelte) — Content-only, read-only plain text display with preserved whitespace and wrapped long lines.

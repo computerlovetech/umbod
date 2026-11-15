@@ -229,13 +229,36 @@ describe('Files locations panel', (): void => {
     const rail = document.querySelector('aside');
     const shared = link(folderId);
     const detail = document.querySelector('.page-container');
+    const listHeaders = Array.from(document.querySelectorAll('thead th'), (heading) => heading.textContent).slice(0, 3);
+    const rowLink = document.querySelector(`tbody a[href="${filesHref(fileId)}"]`);
+    expect(rowLink).not.toBeNull();
+    const listedTimestamp = rowLink!.closest('tr')!.querySelector('time')?.textContent;
+    expect(listHeaders).toEqual(['Name', 'Type', 'Updated']);
     await state.load(fileId);
     await tick();
-    expect(document.querySelector('[aria-label="File preview"]')?.textContent).toContain('Loading preview');
+    expect(document.querySelector('[aria-label="Files content"]')?.textContent).toContain('Loading preview');
+    expect(document.querySelector('[aria-label="Metadata"]')).toBeNull();
+    expect(document.querySelector('[aria-label="File preview"]')).toBeNull();
+    expect(document.querySelector('.file-preview-surface')).toBeNull();
+    expect(document.querySelector('[inert][aria-busy="true"]')).not.toBeNull();
     content.resolve('Preview content');
     await vi.waitFor((): void => expect(preview.phase).toBe('ready'));
     await tick();
     expect(document.querySelector('pre[aria-label="Text content"]')?.textContent).toBe('Preview content');
+    const metadata = document.querySelector('[aria-label="Metadata"]');
+    const rendered = document.querySelector('[aria-label="File preview"]');
+    expect(metadata).not.toBeNull();
+    expect(rendered).not.toBeNull();
+    const surface = metadata!.closest('.file-preview-surface');
+    expect(document.querySelector('[aria-label="Files content"] .files-view')?.contains(surface)).toBe(true);
+    expect(surface?.querySelector(':scope > .preview-document')?.contains(rendered)).toBe(true);
+    expect(metadata!.nextElementSibling?.contains(rendered)).toBe(true);
+    expect(metadata!.querySelector('h2')).toBeNull();
+    expect(Array.from(metadata!.querySelectorAll('.metadata-grid dt'), (label) => label.textContent)).toEqual(listHeaders);
+    expect(metadata!.querySelector('time')?.textContent).toBe(listedTimestamp);
+    expect(metadata!.querySelector('.metadata-filename')?.textContent).toBe('Report.txt');
+    expect(metadata!.compareDocumentPosition(rendered!) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(document.querySelector('[inert][aria-busy="true"]')).toBeNull();
     preview.createRenderErrorHandler()();
     await tick();
     expect(document.querySelector('[aria-label="File preview"]')?.textContent).toContain("Couldn't load the preview.");
@@ -243,6 +266,102 @@ describe('Files locations panel', (): void => {
     expect(link(folderId)).toBe(shared);
     expect(shared.getAttribute('aria-current')).toBe('page');
     expect(document.querySelector('.page-container')).toBe(detail);
+  });
+
+  test.each([
+    ['empty', '', 'This file is empty.'],
+    ['error', undefined, "Couldn't load the preview."]
+  ])('metadata appears above the %s preview outcome after the spinner', async (_outcome: string, result: string | undefined, message: string): Promise<void> => {
+    vi.useFakeTimers();
+    const content = deferred<string>();
+    const preview = new FilePreviewState(new InMemoryFileContent((): Promise<string> => content.promise), new PreviewRegistry([textPreviewAdapter]), new InMemoryPreviewConfiguration(1024));
+    const { state } = setup('Research', preview);
+    await state.load(fileId);
+    await tick();
+    await vi.advanceTimersByTimeAsync(300);
+    await tick();
+    expect(document.querySelector('[aria-label="Metadata"]')).toBeNull();
+    expect(document.querySelector('.delayed-loading-overlay__scrim .delayed-spinner__mark')).not.toBeNull();
+    if (result === undefined) content.reject(new Error('Private diagnostic'));
+    else content.resolve(result);
+    await vi.waitFor((): void => expect(preview.phase).not.toBe('loading'));
+    await tick();
+    const metadata = document.querySelector('[aria-label="Metadata"]');
+    const rendered = document.querySelector('[aria-label="File preview"]');
+    expect(metadata).not.toBeNull();
+    expect(rendered?.textContent).toContain(message);
+    expect(metadata!.compareDocumentPosition(rendered!) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(document.querySelector('.delayed-loading-overlay__scrim')).toBeNull();
+    expect(document.body.textContent).not.toContain('Private diagnostic');
+  });
+
+  test.each([
+    ['text/plain', 'Text file'],
+    [{}, 'Text file'],
+    ['application/pdf', 'PDF file'],
+    ['image/png', 'Image file']
+  ])('compact metadata preserves file properties and literal attributes with MIME %s', async (contentType: string | Record<string, never>, typeLabel: string): Promise<void> => {
+    const { api, state } = setup();
+    const result = await api.filesystem.browse(fileId);
+    const name = '<img src=x>-' + 'Long file name '.repeat(8) + '.txt';
+    vi.spyOn(api.filesystem, 'browse').mockResolvedValueOnce({ ...result, breadcrumbs: { ...result.breadcrumbs, items: result.breadcrumbs.items.map((item) => item.id === fileId ? { ...item, name } : item) }, node: { ...result.node, name, metadata: { content_type: contentType, attributes: { checksum: '<svg onload=alert(1)>', description: 'Private guidance' } } } });
+    await state.load(fileId);
+    await tick();
+    const metadata = document.querySelector('[aria-label="Metadata"]');
+    expect(metadata).not.toBeNull();
+    expect(metadata!.querySelector('.metadata-filename')?.textContent).toBe(name);
+    expect(metadata!.querySelector('.metadata-filename')?.getAttribute('title')).toBe(name);
+    const typeValue = metadata!.querySelectorAll('.metadata-grid dd')[1];
+    expect(typeValue.textContent).toBe(typeLabel);
+    expect(typeValue.getAttribute('title')).toBe(typeof contentType === 'string' ? contentType : null);
+    expect(metadata!.querySelector('.metadata-icon[aria-hidden="true"] svg')?.getAttribute('aria-label')).toBe(typeLabel);
+    expect(metadata!.querySelector('time')?.getAttribute('datetime')).toBe(result.node.updated_at);
+    expect(metadata!.querySelector('time')?.getAttribute('title')).toBe(result.node.updated_at);
+    expect(metadata!.querySelector('time')?.textContent).toContain('UTC');
+    expect(metadata!.querySelector('.metadata-attributes dt')?.textContent).toBe('checksum');
+    expect(metadata!.querySelector('.metadata-attributes dd')?.textContent).toBe('<svg onload=alert(1)>');
+    expect(metadata!.textContent).not.toContain('Private guidance');
+    expect(metadata!.querySelector('h2, img, [onload]')).toBeNull();
+    expect(metadata!.querySelectorAll('svg')).toHaveLength(1);
+  });
+
+  test('retry hides metadata until the replacement preview has downloaded', async (): Promise<void> => {
+    const replacement = deferred<string>();
+    let attempts = 0;
+    const source = new InMemoryFileContent(async (): Promise<string> => {
+      if (++attempts === 1) throw new Error('Temporary failure');
+      return replacement.promise;
+    });
+    const preview = new FilePreviewState(source, new PreviewRegistry([textPreviewAdapter]), new InMemoryPreviewConfiguration(1024));
+    const { state } = setup('Research', preview);
+    await state.load(fileId);
+    await vi.waitFor((): void => expect(preview.phase).toBe('error'));
+    await tick();
+    expect(document.querySelector('[aria-label="Metadata"]')).not.toBeNull();
+    const retry = Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.trim() === 'Retry preview');
+    expect(retry).toBeDefined();
+    retry!.click();
+    await tick();
+    expect(document.querySelector('[aria-label="Metadata"]')).toBeNull();
+    expect(document.querySelector('[aria-label="File preview"]')).toBeNull();
+    expect(document.querySelector('[inert][aria-busy="true"]')).not.toBeNull();
+    replacement.resolve('Recovered content');
+    await vi.waitFor((): void => expect(preview.phase).toBe('ready'));
+    await tick();
+    expect(document.querySelector('[aria-label="Metadata"]')).not.toBeNull();
+    expect(document.querySelector('pre[aria-label="Text content"]')?.textContent).toBe('Recovered content');
+  });
+
+  test('unsupported files show metadata and the preview outcome without waiting for content', async (): Promise<void> => {
+    const source = new InMemoryFileContent(async (): Promise<string> => 'Unused content');
+    const preview = new FilePreviewState(source, new PreviewRegistry([]), new InMemoryPreviewConfiguration(1024));
+    const { state } = setup('Research', preview);
+    await state.load(fileId);
+    await tick();
+    expect(state.contentLoading).toBe(false);
+    expect(document.querySelector('[aria-label="Metadata"]')).not.toBeNull();
+    expect(document.querySelector('[aria-label="File preview"]')?.textContent).toContain('Preview is not available for this file type.');
+    expect(source.requests).toHaveLength(0);
   });
 
   test('successful empty discovery is not an error or a fabricated personal location', async (): Promise<void> => {

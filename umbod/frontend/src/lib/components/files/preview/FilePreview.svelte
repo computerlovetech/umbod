@@ -33,7 +33,7 @@
 {/if}
 
 <style>
-  .file-preview { min-width: 0; margin-bottom: 1.5rem; }
+  .file-preview { min-width: 0; }
   p { color: var(--admin-muted); }
   [role='alert'] { color: var(--admin-danger); }
 </style>

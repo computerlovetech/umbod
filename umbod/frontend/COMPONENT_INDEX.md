@@ -51,7 +51,7 @@ tags:
 - [SubpageContainer](src/lib/components/shared/workspace/SubpageContainer.svelte) — Shared page heading, optional introduction, action slot and content frame; use with feature-owned navigation and selected subpage content.
 - [SubpageNavigation](src/lib/components/shared/workspace/SubpageNavigation.svelte) — Horizontal links with current-page or parent-location semantics; parents supply routes, selection and eligibility.
 
-- [AdminSplitWorkspace](src/lib/components/admin/shared/AdminSplitWorkspace.svelte) — Responsive master/detail surface; use for a labelled selector sidebar and detail pane across workspace features.
+- [AdminSplitWorkspace](src/lib/components/admin/shared/AdminSplitWorkspace.svelte) — Responsive master/detail surface; use for sidebar/detail workspaces, with optional --split-workspace-detail-padding for flush content.
 - [CapabilityCatalogGrid](src/lib/components/admin/shared/CapabilityCatalogGrid.svelte) — Responsive list grid; use to arrange capability cards consistently, supplying list items as content.
 - [ScrollableToolCatalog](src/lib/components/admin/shared/ScrollableToolCatalog.svelte) — Height-bounded tool-list region; use for independently scrolling tool catalogues with a stable scrollbar gutter.
 - [WorkspaceShell](src/lib/components/shared/workspace/WorkspaceShell.svelte) — Contextual sidebar, optional section heading and return link, account and logout frame; parents own destinations and eligibility.
@@ -83,7 +83,7 @@ tags:
 
 - [PdfPreview](src/lib/components/files/preview/PdfPreview.svelte) — Content-only PDF frame; use with a prepared PDF data URL and a browser with built-in PDF viewing.
 
-- [MarkdownPreview](src/lib/components/files/preview/MarkdownPreview.svelte) — Content-only Markdown article; escapes raw HTML, omits images and allows only HTTP(S) and mailto links.
+- [MarkdownPreview](src/lib/components/files/preview/MarkdownPreview.svelte) — Content-only Markdown with highlighted code and bounded Mermaid diagrams; escapes raw HTML, omits images and restricts links.
 
 - [PermissionBadge](src/lib/components/files/PermissionBadge.svelte) — Compact caller-permission summary for file and folder rows; accepts permissions only, without ownership or operation eligibility.
 - [FileTypeIcon](src/lib/components/files/FileTypeIcon.svelte) — Accessible file-format, folder and explicit home SVGs; groups MIME types and extensions without loading file contents.

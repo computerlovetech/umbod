@@ -347,8 +347,9 @@ describe('file row drag move UI', (): void => {
     const details = document.querySelector('[aria-label="File details"]')!;
     expect(document.querySelector('[aria-label="Description"]')).toBeNull();
     expect(document.body.textContent).not.toContain(description);
-    expect(details.querySelector('[aria-label="Metadata"] h2')?.textContent).toBe('Metadata');
-    expect(details.querySelector('[aria-label="Metadata"] dl')?.textContent).toContain('Content type');
+    expect(details.querySelector('[aria-label="Metadata"] h2')).toBeNull();
+    expect(details.querySelector('[aria-label="Metadata"] .metadata-filename')?.textContent).toBe('Notes.txt');
+    expect(details.querySelector('[aria-label="Metadata"] dt[title="Content type"]')?.textContent).toBe('Type');
     await tick();
     const actions = document.querySelector('[role="group"][aria-label="Location actions"]')!;
     expect(actions).not.toBeNull();

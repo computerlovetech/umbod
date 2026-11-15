@@ -31,10 +31,10 @@ description: "Namespace browsing, per-item sharing, node details, folder creatio
 - [files-route-navigation.dom.test.ts](./files-route-navigation.dom.test.ts) — Same-target hash, unrelated query and personal-root alias navigation preserve creation drafts without refetching.
 - [files-description.dom.test.ts](./files-description.dom.test.ts) — Description editing, clear, cancel, pending, denied, conflict and creation input interactions.
 - [Shared page container](../shared/workspace/PageContainer.svelte) — Common header, action and content slots shared with Connectors; Files owns action labels and eligibility.
-- [FilesContent.svelte](./FilesContent.svelte) — Stable Files heading and retained actions above Locations, with inert pending listings, delayed overlay feedback and upload drops.
+- [FilesContent.svelte](./FilesContent.svelte) — Files workspace with aligned headers, readable preview metadata, retained navigation, delayed loading and flush preview content.
 - [FilesLocations.svelte](./FilesLocations.svelte) — Feature-owned grouped namespace links, selected location checks and independent discovery recovery.
-- [files-locations.dom.test.ts](./files-locations.dom.test.ts) — Native grouped links, discovery recovery, reactive labels and stable rail/detail frames through loading and previews.
-- [FileTypeIcon.svelte](./FileTypeIcon.svelte) — Accessible format, folder and explicit home icons shared by list rows and filename-based drag previews.
+- [files-locations.dom.test.ts](./files-locations.dom.test.ts) — Grouped links, recovery, matching list/preview fields, safe metadata and stable frames through preview loading and retries.
+- [FileTypeIcon.svelte](./FileTypeIcon.svelte) — Accessible format, folder and home icons shared by file rows, preview metadata and filename-based drag previews.
 - [file-type-icons.ts](./file-type-icons.ts) — Common format groups and explicit home SVGs; specific MIME types precede extensions, with safe generic and text fallbacks.
 - [file-type-icons.test.ts](./file-type-icons.test.ts) — Grouped extensions, MIME precedence, normalization, unknown formats and directory overrides.
 - [file-type-icon.dom.test.ts](./file-type-icon.dom.test.ts) — Accessible category rendering and in-place row icon changes after a filename extension is renamed.

@@ -79,12 +79,12 @@
 
   .admin-split-workspace__detail {
     min-width: 0;
-    padding: 24px 28px;
+    padding: var(--split-workspace-detail-padding, 24px 28px);
   }
 
   @media (max-width: 480px) {
     .admin-split-workspace__detail {
-      padding: 20px 16px;
+      padding: var(--split-workspace-detail-padding, 20px 16px);
     }
   }
 
