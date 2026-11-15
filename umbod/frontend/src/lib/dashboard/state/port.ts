@@ -10,6 +10,7 @@ export interface DashboardController {
   readonly selectedId: string;
   readonly identityKey: string;
   readonly selectedConnector: CatalogueConnector | undefined;
+  initialize(desiredSelection: string): Promise<void>;
   selectConnector(id: string): void;
   readonly personalCards: readonly PersonalConnectionController[];
   refreshOnFocus(): Promise<void>;

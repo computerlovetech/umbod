@@ -16,7 +16,10 @@ from umbod.core.connectors.downstream_mcp.adapters.identity import authenticated
 from umbod.core.connectors.downstream_mcp.adapters.settings import personal_identity_policy_from_app_config
 from umbod.core.callers import AuthenticationProvenance
 from umbod.core.connectors.downstream_mcp.personal_connections.caller import PersonalCaller, PersonalCallerProvider, UnavailablePersonalCaller
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRequired, PersonalInventoryRefreshRequired, PersonalToolResult
+from umbod.mcp.signals.diagnostics import invocation_failure
+
+from .personal_recovery import personal_authorization_failure, personal_inventory_failure, validate_recovery_origin
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
 from umbod.core.connectors.downstream_mcp.personal_tools import InvokePersonalTool, PersonalToolRuntimeService
 from umbod.core.connectors.downstream_mcp.personal_tools.ports import PersonalToolAccessStore
@@ -62,7 +65,9 @@ class McpPersonalToolRuntime:
         access: PersonalToolAccessStore,
         transport: PersonalMcpTransport,
         clock: Callable[[], datetime],
+        recovery_origin: str,
     ) -> None:
+        self._recovery_origin = validate_recovery_origin(recovery_origin)
         self._callers = callers
         self._access = access
         self._transport = transport
@@ -74,7 +79,14 @@ class McpPersonalToolRuntime:
 
     async def execute(self, command: InvokePersonalTool) -> PersonalToolResult:
         operation = await self._operation()
-        return await operation.execute(command)
+        try:
+            return await operation.execute(command)
+        except PersonalAuthorizationRequired as error:
+            invocation_failure.set(error.diagnostic)
+            return personal_authorization_failure(self._recovery_origin, command.identity.connector_id, error)
+        except PersonalInventoryRefreshRequired as error:
+            invocation_failure.set(error.diagnostic)
+            return personal_inventory_failure(self._recovery_origin, command.identity.connector_id)
 
 
 class PersonalDiscoveryMiddleware(Middleware):

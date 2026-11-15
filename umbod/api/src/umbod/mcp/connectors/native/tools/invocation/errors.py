@@ -8,6 +8,12 @@ class ConnectorToolErrorFormatter:
         return f"The {connector_name} {operation_name} tool could not complete: {error}"
 
 
+class ConnectorToolRecoveryResult(ToolResult):
+    @property
+    def recovery_guidance(self) -> str:
+        return " ".join(item.text for item in self.content if item.type == "text")
+
+
 class ConnectorToolFailureResult(ToolResult):
     def to_mcp_result(self) -> CallToolResult:
         return CallToolResult(

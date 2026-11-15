@@ -14,7 +14,7 @@ from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, PERSO
 
 from ..models import DiscoveredTool
 from ..personal_connections.health_models import RejectPersonalAuthorization, PersonalAuthorizationHealthUnavailable
-from ..personal_connections.runtime_models import PersonalAuthorizationRejected
+from ..personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalAuthorizationRequired, PersonalInventoryRefreshRequired
 from ..personal_connections.models import PersonalConnectionKey
 from ..personal_connections.runtime_models import PersonalRuntimeAuthorizationQuery, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolResult
 from ..personal_connections.runtime_ports import PersonalMcpTransport
@@ -102,10 +102,12 @@ class PersonalToolRuntimeService:
                     key=admission.target.key,
                     expected_connection_revision=admission.target.authorization_revision,
                 ))
-                raise PersonalRuntimeUnavailable("Personal tool unavailable", diagnostic=error.diagnostic.model_copy(update={"stage": "authorization", "reason": "authorization_rejected"})) from None
+                raise PersonalAuthorizationRequired("rejected", diagnostic=error.diagnostic.model_copy(update={"stage": "authorization", "reason": "authorization_rejected"})) from None
             stage = "output"
             _validate_result(admission.tool, result)
             return result
+        except (PersonalAuthorizationRequired, PersonalInventoryRefreshRequired):
+            raise
         except PersonalAuthorizationHealthUnavailable as error:
             capture_invocation_exception(error, InvocationFailureOrigin.INTERNAL)
             raise

@@ -30,7 +30,8 @@ async def discovery_query(case: RuntimeCase) -> PersonalToolDiscoveryQuery:
 
 
 @pytest.mark.asyncio
-async def test_discovery_reads_one_snapshot_and_never_reads_or_decrypts_credentials(runtime_case: RuntimeCase) -> None:
+@pytest.mark.parametrize("executable_only", [False, True])
+async def test_discovery_reads_one_snapshot_and_never_reads_or_decrypts_credentials(runtime_case: RuntimeCase, executable_only: bool) -> None:
     policy = await replace_policy(runtime_case, (approved_tool("first"), approved_tool("second")))
     await save_matches(runtime_case, policy)
     permitted: set[str] = set()
@@ -43,7 +44,8 @@ async def test_discovery_reads_one_snapshot_and_never_reads_or_decrypts_credenti
     reader = PersonalToolDiscoveryStore(database, cipher)
     query = await discovery_query(runtime_case)
     selected = query.definitions + (query.definitions[0].model_copy(update={"connector_id": "another"}),)
-    records = await reader.read(query.model_copy(update={"definitions": selected}))
+    read = reader.read_available if executable_only else reader.read
+    records = await read(query.model_copy(update={"definitions": selected}))
     assert tuple(record.tool.identity.downstream_name for record in records) == ("first", "second")
     assert database.read_sessions == 1
     assert database.write_sessions == 0
@@ -54,7 +56,7 @@ async def test_discovery_reads_one_snapshot_and_never_reads_or_decrypts_credenti
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("change,visible", [("display_name", True), ("tool_name_prefix", True), ("endpoint_url", False), ("foreign_owner", False), ("expired", False), ("future", False)])
+@pytest.mark.parametrize("change,visible", [("display_name", True), ("tool_name_prefix", True), ("endpoint_url", False), ("foreign_owner", False), ("expired", True), ("future", False)])
 async def test_discovery_checks_security_binding_not_display_metadata(runtime_case: RuntimeCase, change: str, visible: bool) -> None:
     await save_matches(runtime_case, await replace_policy(runtime_case, (approved_tool("read"),)))
     query = await discovery_query(runtime_case)

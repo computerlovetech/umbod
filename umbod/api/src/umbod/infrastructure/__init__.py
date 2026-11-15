@@ -4,7 +4,6 @@ from umbod.infrastructure.telemetry import (
     create_disabled_analytics_runtime,
     create_sqlite_analytics_runtime,
 )
-from umbod.infrastructure.persistence.personal_discovery import PersonalDiscoveryPreparation
 from umbod.infrastructure.persistence.runtime import (
     AppPersistenceRuntime,
     ConfiguredPersistenceRuntimeProvider,
@@ -41,7 +40,6 @@ __all__ = [
     "create_request_cache",
     "AppPersistenceRuntime",
     "ConfiguredPersistenceRuntimeProvider",
-    "PersonalDiscoveryPreparation",
     "ContentConfig",
     "InMemoryContentConfig",
     "LocalContentConfig",

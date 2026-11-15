@@ -6,7 +6,7 @@ Implemented and verified. Personal selection and authorization default to automa
 
 ## Current personal tool permission contract
 
-Server publication and current connector-level group permission, together with owner enablement and valid owner OAuth, authorize all tools available to that owner. Explicit discovery saves an encrypted, complete private inventory; no administrator tool approval, activation or tool grant gates personal discovery or execution. Shared/native permissions remain unchanged. Reconnect and refresh invalidate the private snapshot through authorization revision changes, requiring fresh explicit discovery. Earlier delivery/status descriptions below are historical where they describe unavailable runtime features.
+Server publication and current connector-level group permission, together with owner enablement and valid owner OAuth, authorize all tools available to that owner. Explicit discovery saves an encrypted, complete private inventory; no administrator tool approval, activation or tool grant gates personal discovery or execution. Shared/native permissions remain unchanged. Reconnect and refresh invalidate the private snapshot for execution through authorization revision changes, requiring fresh explicit discovery. Eligible expected descriptors remain discoverable through expiry and recovery, without granting execution authority. Earlier delivery/status descriptions below are historical where they describe unavailable runtime features.
 
 ## Scope
 
@@ -58,7 +58,7 @@ This follow-up starts after the verified tools-only runtime delivery. The earlie
 
 Reconnect is an explicit owner action that starts another attempt through the existing strict-empty OAuth initiation endpoint. It does not disconnect first, enable the connection, approve capabilities or change permissions. An existing active attempt conflicts; the owner may inspect or cancel a known attempt. No automatic replacement, initiation or retry occurs.
 
-Previous authorization remains installed during a pending, failed, expired or cancelled replacement. It remains usable only while it independently satisfies current authorization and runtime gates; retaining an expired or rejected credential never restores usability. Successful completion atomically replaces authorization. Private observations bind the authorization revision, so changed authorization requires fresh, explicit user discovery before tools become available. Discovery neither grants server permission nor publishes user-derived tool metadata globally.
+Previous authorization remains installed during a pending, failed, expired or cancelled replacement. It remains usable only while it independently satisfies current authorization and runtime gates; retaining an expired or rejected credential never restores usability. Successful completion atomically replaces authorization. Private observations bind the authorization revision, so changed authorization requires fresh, explicit user discovery before tools become executable; eligible expected descriptors remain discoverable. Discovery neither grants server permission nor publishes user-derived tool metadata globally.
 
 Disablement retains authorization but invalidates pending completion. Disconnect disables the connection, removes authorization and prevents stale work from restoring it. Publication withdrawal, permission revocation and policy changes continue to win over pending recovery. These operations remain owner-scoped and revision checked.
 

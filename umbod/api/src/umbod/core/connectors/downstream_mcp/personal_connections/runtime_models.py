@@ -1,4 +1,4 @@
-from typing import TypedDict, Unpack
+from typing import Literal, TypedDict, Unpack
 
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, PERSONAL_RUNTIME_FAILURE
 
@@ -69,6 +69,17 @@ class PersonalRuntimeUnavailable(ValueError):
             raise TypeError(f"Unexpected failure options: {sorted(unknown_options)}")
         super().__init__(message)
         self.diagnostic = options.get("diagnostic", PERSONAL_RUNTIME_FAILURE)
+
+
+class PersonalAuthorizationRequired(PersonalRuntimeUnavailable):
+    def __init__(self, reason: Literal["expired", "rejected", "refresh_blocked", "refresh_in_progress"], **options: Unpack[PersonalRuntimeFailureOptions]) -> None:
+        super().__init__("Personal authorization required", **options)
+        self.reason = reason
+
+
+class PersonalInventoryRefreshRequired(PersonalRuntimeUnavailable):
+    def __init__(self) -> None:
+        super().__init__("Personal tools need to be loaded in Connections")
 
 
 class PersonalAuthorizationRejected(PersonalRuntimeUnavailable):

@@ -12,7 +12,7 @@ description: "Independent personal usage and connector catalogue contracts and p
 - [domain/](./domain/) — Catalogue validation; tool schema changes require coordinated backend/frontend deployment.
 - [infrastructure/](./infrastructure/) — Catalogue HTTP and in-memory adapters.
 - [presentation.ts](./presentation.ts) — Connector labels and sidebar identities.
-- [state/](./state/) — Separate usage and connector lifetimes with capability search.
+- [state/](./state/) — Separate usage and connector lifetimes with authorized initial selection, identity fencing and capability search.
 - [domain/usage-schemas.ts](./domain/usage-schemas.ts) — Validated personal UTC usage snapshots.
 - [infrastructure/usage-route.ts](./infrastructure/usage-route.ts) — Authenticated personal usage route.
 - [state/usage-state.svelte.ts](./state/usage-state.svelte.ts) — Independent usage loading, periods and identity fences.

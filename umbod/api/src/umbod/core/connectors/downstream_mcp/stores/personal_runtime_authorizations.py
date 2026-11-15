@@ -23,6 +23,7 @@ from ..personal_connections.authorization_models import (
 )
 from ..personal_connections.models import Authorized, PersonalConnection
 from ..personal_connections.runtime_models import (
+    PersonalAuthorizationRequired,
     PersonalRuntimeAuthorizationQuery,
     PersonalRuntimeTarget,
     PersonalRuntimeUnavailable,
@@ -41,6 +42,30 @@ from .queries import query_all as _query
 
 
 async def load_personal_runtime_target(
+    session: DatabaseSession,
+    cipher: TextCipher,
+    query: PersonalRuntimeAuthorizationQuery,
+) -> PersonalRuntimeTarget:
+    target = await load_personal_runtime_binding(session, cipher, query)
+    try:
+        connection = await load_personal_connection(session, cipher, query.key)
+        if not isinstance(connection, PersonalConnection):
+            raise PersonalRuntimeUnavailable("Personal authorization unavailable")
+        refresh = await matching_refresh(session, cipher, connection, query.now)
+        if refresh is not None:
+            raise PersonalAuthorizationRequired("refresh_in_progress" if refresh.status in ("preparing", "exchanging") and refresh.deadline > query.now else "refresh_blocked")
+        if await matching_rejection(session, cipher, connection):
+            raise PersonalAuthorizationRequired("rejected")
+        if target.expires_at <= query.now:
+            raise PersonalAuthorizationRequired("expired")
+        return target
+    except PersonalRuntimeUnavailable:
+        raise
+    except Exception:
+        raise PersonalRuntimeUnavailable("Personal authorization unavailable") from None
+
+
+async def load_personal_runtime_binding(
     session: DatabaseSession,
     cipher: TextCipher,
     query: PersonalRuntimeAuthorizationQuery,
@@ -101,14 +126,8 @@ async def _load_target(
         raise PersonalRuntimeUnavailable("Personal connector unavailable")
     grant = validated_bound_grant(connection.authorization, query.key, query.now, definition, configuration.policy)
     policy = configuration.policy
-    if await matching_refresh(session, cipher, connection, query.now):
-        raise PersonalRuntimeUnavailable("Personal authorization recovery in progress")
-    if await matching_rejection(session, cipher, connection):
-        raise PersonalRuntimeUnavailable("Personal authorization requires reconnect")
     if not isinstance(grant.lifetime, ExpiringPersonalToken):
         raise PersonalRuntimeUnavailable("Personal authorization has unsupported lifetime")
-    if grant.lifetime.expires_at <= query.now:
-        raise PersonalRuntimeUnavailable("Personal authorization expired")
     return PersonalRuntimeTarget(
         key=query.key,
         authorization_revision=connection.revision,

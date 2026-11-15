@@ -41,6 +41,7 @@ from umbod.core.invocation.tools.execution import PreparedToolExecution, ToolExe
 from umbod.mcp.connectors.native import ModernConnectorApprovalRequired
 from umbod.mcp.signals import McpToolIdentity
 from umbod.mcp.tools.errors import ToolAuthorizationDenied
+from umbod.mcp.connectors.native.tools.invocation.errors import ConnectorToolRecoveryResult
 
 
 class _InitialDownstreamContext:
@@ -203,11 +204,15 @@ class AuthorizedPersonalTool(AuthorizedDownstreamTool):
             result = await self._runtime.execute(self._command.model_copy(update={"arguments": arguments}))
             downstream = CallToolResult(
                 content=result.result["content"],
+                isError=result.result.get("isError", False),
                 structuredContent=result.result.get("structuredContent"),
                 _meta=result.result.get("_meta"),
             )
+            if downstream.is_error:
+                return ConnectorToolRecoveryResult(content=downstream.content, is_error=True)
             return ToolResult(
                 content=downstream.content,
+                is_error=downstream.is_error,
                 structured_content=downstream.structured_content,
                 meta=downstream.meta,
             )

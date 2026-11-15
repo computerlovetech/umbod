@@ -11,7 +11,7 @@ from umbod.mcp.connectors.native.tools.infrastructure.authorization import (
     ConnectorToolAuthorizationScope,
 )
 from umbod.mcp.connectors.native.tools.runtime.registry import RuntimeConnectorToolRegistry
-from umbod.mcp.connectors.native.tools.invocation.errors import ConnectorToolFailureResult
+from umbod.mcp.connectors.native.tools.invocation.errors import ConnectorToolFailureResult, ConnectorToolRecoveryResult
 
 
 class SuccessfulNestedConnectorCall(BaseModel):
@@ -179,10 +179,14 @@ class FastMcpMontyCodeModeAdapter:
         printed_lines: list[str] = []
 
         async def invoke(tool_name: str, **arguments: Any) -> Any:
+            safe_error = "connector_execution_failed"
             try:
                 result = await registry.execute_tool(tool_name, arguments, authorization_scope)
-                if isinstance(result, ConnectorToolFailureResult):
-                    raise RuntimeError("connector_execution_failed")
+                if isinstance(result, ConnectorToolRecoveryResult):
+                    safe_error = result.recovery_guidance
+                    raise RuntimeError(safe_error)
+                if isinstance(result, ConnectorToolFailureResult) or result.is_error:
+                    raise RuntimeError(safe_error)
                 value = result.structured_content
                 nested_calls.append(
                     SuccessfulNestedConnectorCall(tool_name=tool_name, arguments={}, result=value)
@@ -191,10 +195,10 @@ class FastMcpMontyCodeModeAdapter:
             except Exception:
                 nested_calls.append(
                     FailedNestedConnectorCall(
-                        tool_name=tool_name, arguments={}, error="connector_execution_failed"
+                        tool_name=tool_name, arguments={}, error=safe_error
                     )
                 )
-                raise RuntimeError("connector_execution_failed") from None
+                raise RuntimeError(safe_error) from None
 
         external_functions = {
             code_names[candidate.tool_name]: self._bound_invoker(

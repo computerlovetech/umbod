@@ -88,6 +88,9 @@ async def test_later_public_discovery_rechecks_owner_availability(runtime_case: 
         async with public.downstream_mcp_tool_provider.discovery_operation() as operation:
             operation.owner.clock = lambda: runtime_case.query.now + timedelta(days=1)
     observation = await _observe(public, "owner", exposure)
+    if change == "expiry":
+        _assert_owner(observation, "owner", exposure)
+        return
     if exposure == "flat":
         assert observation["tools"] == []
     else:

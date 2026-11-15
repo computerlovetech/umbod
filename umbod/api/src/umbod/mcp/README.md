@@ -15,6 +15,7 @@ description: "MCP application composition, capability exposure, authentication a
 - [authorization.py](./authorization.py) — FastMCP permission bridge.
 - [connectors/](./connectors/) — Connector-kind delivery adapters.
 - [Personal discovery](./connectors/downstream_mcp/personal_discovery.py) — Operation-scoped owner inventories, current connector grants and indexed authorization.
+- [Personal recovery](./connectors/downstream_mcp/personal_recovery.py) — Safe connection links and model-visible authorization or inventory recovery errors.
 - [context.py](./context.py) — Application configuration and runtime dependencies.
 - [filesystem/](./filesystem/README.md) — Personal/shared namespace browsing, content, updates, deletion and individual file/folder sharing.
 - [listeners/](./listeners/README.md) — Invocation observation adapters.

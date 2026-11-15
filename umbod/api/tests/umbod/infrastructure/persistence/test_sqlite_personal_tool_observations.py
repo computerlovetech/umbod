@@ -29,7 +29,7 @@ async def test_encrypted_personal_tool_observation_updates_survive_runtime_recre
         input_schema={"type": "object", "properties": {"value": {"type": "string"}}, "required": ["value"]},
     )
     initial = PersonalToolObservation(
-        version=2, key=owner, authorization_revision="auth-1", configuration_revision="config-1",
+        version=3, key=owner, authorization_revision="auth-1", configuration_revision="config-1",
         inventory_revision="inventory-1", tools=(tool,),
         expires_at=datetime(2026, 1, 1, 12, 30, 1, 123456, tzinfo=timezone.utc),
     )

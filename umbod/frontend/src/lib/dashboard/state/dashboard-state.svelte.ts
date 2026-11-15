@@ -20,6 +20,7 @@ export class DashboardState implements DashboardController {
   selectedId = $state('');
   identityKey = $state('');
   private observedAccount: string | undefined;
+  private initialSelection = '';
   private identitySourceAvailable = true;
   private active = true;
   private revision = 0;
@@ -50,8 +51,16 @@ export class DashboardState implements DashboardController {
     return this.connectors.find((connector) => catalogueConnectorId(connector) === this.selectedId);
   }
 
+  initialize = async (desiredSelection: string): Promise<void> => {
+    this.initialSelection = desiredSelection;
+    await this.loadCatalogue();
+  };
+
   selectConnector = (id: string): void => {
-    if (this.connectors.some((connector) => catalogueConnectorId(connector) === id)) this.selectedId = id;
+    if (this.connectors.some((connector) => catalogueConnectorId(connector) === id)) {
+      this.initialSelection = '';
+      this.selectedId = id;
+    }
   };
 
   private clearPersonal = (): void => {
@@ -121,6 +130,9 @@ export class DashboardState implements DashboardController {
       this.identityKey = result.identity_key;
       identityValidated = true;
       this.connectors = result.connectors;
+      const desired = this.initialSelection;
+      if (this.observedAccount !== '') this.initialSelection = '';
+      if (!this.selectedConnector && result.connectors.some((connector) => catalogueConnectorId(connector) === desired)) this.selectedId = desired;
       if (!this.selectedConnector) this.selectedId = result.connectors.length ? catalogueConnectorId(result.connectors[0]) : '';
       this.phase = 'ready';
       const personalIds = new Set(result.connectors.filter((entry) => entry.ownership === 'personal').map((entry) => entry.connector_id));
@@ -196,6 +208,7 @@ export class DashboardState implements DashboardController {
   };
 
   dispose = (): void => {
+    this.initialSelection = '';
     this.active = false;
     this.identityTrusted = false;
     this.releaseIdentityValidation();

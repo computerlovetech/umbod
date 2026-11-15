@@ -101,7 +101,6 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
         'migrate_local_content',
         'AppPersistenceRuntime',
         'ConfiguredPersistenceRuntimeProvider',
-        'PersonalDiscoveryPreparation',
         'create_inmemory_key_value_driver',
         'create_request_cache',
         'create_configured_analytics_runtime',

@@ -167,6 +167,27 @@ async def denied(client: Client[Any], name: str, fixture: httpx.Client) -> None:
     assert checked(fixture.get("/control"))["calls"] == before
 
 
+async def recovery_required(client: Client[Any], name: str, fixture: httpx.Client, connector_id: str, instruction: str) -> None:
+    before = checked(fixture.get("/control"))
+    assert any(tool.name == name for tool in await client.list_tools())
+    result = await client.call_tool(name, {"message": "same-arguments"}, raise_on_error=False)
+    assert result.is_error is True
+    assert result.structured_content is None
+    message = " ".join(item.text for item in result.content if item.type == "text")
+    assert instruction in message
+    destination = urlsplit(message.split("Open ", 1)[1].split(" ", 1)[0])
+    assert destination.scheme in ("https", "http")
+    assert destination.hostname
+    assert destination.username is None
+    assert destination.password is None
+    assert destination.path == "/connectors"
+    assert parse_qs(destination.query) == {"connector": [f"downstream_mcp:{connector_id}"]}
+    assert destination.fragment == ""
+    after = checked(fixture.get("/control"))
+    for counter in ("calls", "refreshes", "exchanges", "discoveries"):
+        assert after[counter] == before[counter]
+
+
 async def owner_result(client: Client[Any], name: str, owner: str) -> None:
     result = await client.call_tool(name, {"message": "same-arguments"})
     payload = result.structured_content
@@ -368,7 +389,7 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
                     assert conflicting.json() == {"detail": {"code": "personal_refresh_conflict"}}
                     assert second_worker.post(f"/api/me/connectors/mcp/{connector_id}/oauth/attempts", json={}).status_code == 409
                     assert checked(second_worker.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is False
-                    await denied(a, name, fixture)
+                    await recovery_required(a, name, fixture, connector_id, "recovery is in progress")
                     assert checked(bob.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is True
             finally:
                 checked(fixture.post("/control", json={"owner": "alice", "mode": "normal"}))
@@ -381,7 +402,7 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
             assert after_refresh["discoveries"] == before_refresh["discoveries"]
             assert after_refresh["calls"] == before_refresh["calls"]
             assert checked(alice.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is False
-            await denied(a, name, fixture)
+            await recovery_required(a, name, fixture, connector_id, "load tools")
             discover(alice, connector_id)
             await owner_result(a, name, "alice")
             await owner_result(a, exclusive, "alice")
@@ -435,11 +456,11 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
             assert checked(bob.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is False
             assert checked(alice.get(health_url)) == {"state": "not_authorized"}
             checked(fixture.post("/control", json={"owner": "bob", "mode": "normal"}))
-            await denied(b, name, fixture)
+            await recovery_required(b, name, fixture, connector_id, "Sign in again")
             authorize(bob, fixture, connector_id, "bob")
             assert checked(bob.get(health_url))["state"] == "authorized"
             assert checked(bob.get(f"/api/me/connectors/mcp/{connector_id}"))["runtime_available"] is False
-            await denied(b, name, fixture)
+            await recovery_required(b, name, fixture, connector_id, "load tools")
             discover(bob, connector_id)
             await owner_result(b, name, "bob")
             policy_url = f"/api/admin/connectors/mcp/{connector_id}/personal-oauth"

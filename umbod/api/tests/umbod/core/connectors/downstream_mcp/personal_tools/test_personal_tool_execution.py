@@ -95,7 +95,7 @@ async def assert_current_admission_rejects_withdrawn_or_invalid_authority(runtim
         await install_authorization(runtime_case, authorization)
     with pytest.raises(PersonalRuntimeUnavailable) as caught:
         await runtime.execute(execution.command)
-    assert str(caught.value) == "Personal tool unavailable"
+    assert str(caught.value) == ({"rotation": "Personal tools need to be loaded in Connections"}.get(revocation, "Personal tool unavailable"))
     assert caught.value.__context__ is None
     assert execution.transport.calls == []
 

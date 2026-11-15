@@ -14,10 +14,12 @@ from .personal_discovery_schema import PERSONAL_DISCOVERY_TABLE, PERSONAL_DISCOV
 from .queries import query_all
 from .schema import PersonalConnectionRecord, PersonalConnectionRecordKey, CONNECTOR_DEFINITION_TABLE, CONNECTOR_DEFINITION_CONNECTOR_ID
 from .personal_connection_records import load_personal_connection
-from .personal_authorization_rejection_records import matching_rejection, authorization_fingerprint
+from .personal_authorization_rejection_records import authorization_fingerprint, matching_rejection
 from .personal_oauth_configurations import load_personal_oauth_configuration
 from .personal_refresh_records import load_refresh
 from .ports import CONNECTOR_DEFINITION_ADAPTER
+from .personal_tools_schema import PERSONAL_TOOL_OBSERVATION_TABLE, PERSONAL_TOOL_OBSERVATION_NAMESPACE, PERSONAL_TOOL_OBSERVATION_SUBJECT, PERSONAL_TOOL_OBSERVATION_CONNECTOR_ID
+from ..personal_tools.models import PersonalToolObservation
 
 
 class AvailableRefresh(DomainModel):
@@ -34,14 +36,18 @@ class BlockedRefresh(DomainModel):
 
 
 class UnavailableDiscovery(DomainModel):
+    version: Literal[2]
     kind: Literal["unavailable"]
     key: PersonalConnectionKey
 
 
 class AvailableDiscovery(DomainModel):
+    version: Literal[2]
     kind: Literal["available"]
     key: PersonalConnectionKey
     authorization_revision: str = Field(min_length=1)
+    expected_authorization_revision: str = Field(min_length=1)
+    authorization_rejected: bool
     configuration_revision: str = Field(min_length=1)
     endpoint_url: str
     issued_at: AwareDatetime
@@ -60,29 +66,45 @@ def discovery_filter(key: PersonalConnectionKey) -> AllOf:
 async def _project(session: DatabaseSession, cipher: TextCipher, key: PersonalConnectionKey) -> DiscoveryAvailability:
     connection = await load_personal_connection(session, cipher, key)
     if not isinstance(connection, PersonalConnection) or not connection.enabled or not isinstance(connection.authorization, Authorized):
-        return UnavailableDiscovery(kind="unavailable", key=key)
+        return UnavailableDiscovery(version=2, kind="unavailable", key=key)
     row = await session.find_one(CONNECTOR_DEFINITION_TABLE, query_all(Equals(CONNECTOR_DEFINITION_CONNECTOR_ID, key.connector_id)))
     if row is None:
-        return UnavailableDiscovery(kind="unavailable", key=key)
+        return UnavailableDiscovery(version=2, kind="unavailable", key=key)
     definition = CONNECTOR_DEFINITION_ADAPTER.validate_python(row.document)
     if definition.connector_id != key.connector_id or not uses_personal_oauth(definition):
-        return UnavailableDiscovery(kind="unavailable", key=key)
+        return UnavailableDiscovery(version=2, kind="unavailable", key=key)
     configuration = await load_personal_oauth_configuration(session, cipher, key.connector_id)
     parsed = PersonalOAuthGrant.model_validate_json(connection.authorization.authorization.get_secret_value())
     grant = validated_bound_grant(connection.authorization, key, parsed.issued_at, definition, configuration.policy)
-    if not isinstance(grant.lifetime, ExpiringPersonalToken) or await matching_rejection(session, cipher, connection):
-        return UnavailableDiscovery(kind="unavailable", key=key)
+    if not isinstance(grant.lifetime, ExpiringPersonalToken):
+        return UnavailableDiscovery(version=2, kind="unavailable", key=key)
     refresh: AvailableRefresh | PreparingRefresh | BlockedRefresh = AvailableRefresh(kind="available")
     claim = await load_refresh(session, cipher, key)
     if claim is not None and claim.credential_fingerprint == authorization_fingerprint(connection.authorization):
         refresh = PreparingRefresh(kind="preparing", deadline=claim.deadline) if claim.status == "preparing" else BlockedRefresh(kind="blocked")
-    return AvailableDiscovery(kind="available", key=key, authorization_revision=connection.revision, configuration_revision=configuration.policy.revision, endpoint_url=definition.endpoint_url, issued_at=grant.issued_at, expires_at=grant.lifetime.expires_at, refresh=refresh)
+    expected_revision = connection.revision
+    previous_row = await session.find_one(PERSONAL_DISCOVERY_TABLE, query_all(discovery_filter(key)))
+    if previous_row is not None and (previous_row.namespace, previous_row.subject, previous_row.connector_id) == (key.principal.namespace, key.principal.subject, key.connector_id):
+        try:
+            previous = DISCOVERY_AVAILABILITY_ADAPTER.validate_json(cipher.decrypt(previous_row.document))
+        except (ValueError, TypeError, ConnectorConfigurationDecryptionError):
+            previous = UnavailableDiscovery(version=2, kind="unavailable", key=key)
+        if isinstance(previous, AvailableDiscovery) and previous.key == key and previous.endpoint_url == definition.endpoint_url and previous.configuration_revision == configuration.policy.revision:
+            observation_row = await session.find_one(PERSONAL_TOOL_OBSERVATION_TABLE, query_all(AllOf((Equals(PERSONAL_TOOL_OBSERVATION_NAMESPACE, key.principal.namespace), Equals(PERSONAL_TOOL_OBSERVATION_SUBJECT, key.principal.subject), Equals(PERSONAL_TOOL_OBSERVATION_CONNECTOR_ID, key.connector_id)))))
+            if observation_row is not None and (observation_row.namespace, observation_row.subject, observation_row.connector_id) == (key.principal.namespace, key.principal.subject, key.connector_id):
+                try:
+                    observation = PersonalToolObservation.model_validate_json(cipher.decrypt(observation_row.document))
+                except (ValueError, TypeError, ConnectorConfigurationDecryptionError):
+                    observation = None
+                if observation is not None and observation.key == key and observation.configuration_revision == previous.configuration_revision and ((observation.authorization_revision == previous.authorization_revision and previous.issued_at < observation.expires_at <= previous.expires_at) or (observation.authorization_revision == previous.expected_authorization_revision and previous.expected_authorization_revision != previous.authorization_revision)):
+                    expected_revision = observation.authorization_revision
+    return AvailableDiscovery(version=2, kind="available", key=key, authorization_revision=connection.revision, expected_authorization_revision=expected_revision, authorization_rejected=await matching_rejection(session, cipher, connection), configuration_revision=configuration.policy.revision, endpoint_url=definition.endpoint_url, issued_at=grant.issued_at, expires_at=grant.lifetime.expires_at, refresh=refresh)
 
 
 async def update_personal_discovery(session: DatabaseSession, cipher: TextCipher, key: PersonalConnectionKey) -> None:
     try:
         availability = await _project(session, cipher, key)
     except (ValueError, TypeError, KeyError, ConnectorConfigurationDecryptionError):
-        availability = UnavailableDiscovery(kind="unavailable", key=key)
+        availability = UnavailableDiscovery(version=2, kind="unavailable", key=key)
     record_key = PersonalConnectionRecordKey(namespace=key.principal.namespace, subject=key.principal.subject, connector_id=key.connector_id)
     await session.upsert(PERSONAL_DISCOVERY_TABLE, UpsertCommand(key=record_key, row=PersonalConnectionRecord(**record_key.model_dump(), document=cipher.encrypt(availability.model_dump_json()))))

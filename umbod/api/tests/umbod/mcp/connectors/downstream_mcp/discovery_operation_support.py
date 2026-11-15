@@ -17,6 +17,9 @@ class RejectingDiscoveryReader:
     async def read(self, query: PersonalToolDiscoveryQuery) -> tuple[PersonalToolRecord, ...]:
         raise AssertionError("Private discovery must not be read")
 
+    async def read_available(self, query: PersonalToolDiscoveryQuery) -> tuple[PersonalToolRecord, ...]:
+        raise AssertionError("Private readiness must not be read")
+
 
 def empty_personal_discovery(runtime: DownstreamDiscoveryRuntime) -> PersonalDiscoveryOperations:
     return personal_discovery_with_policy(runtime, UnrestrictedDownstreamToolPermissionPolicy())

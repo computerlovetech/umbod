@@ -141,7 +141,7 @@ async def install_bob(execution: ExecutionCase, principal: CanonicalPrincipal) -
     ).discover(query)
     contexts = CurrentContext(captured_personal_caller(key.principal, query.group_ids))
     runtime = McpPersonalToolRuntime(
-        contexts, bob.bundle.personal_tool_access, execution.transport, lambda: query.now
+        contexts, bob.bundle.personal_tool_access, execution.transport, lambda: query.now, "https://umbod.example",
     )
     return replace(execution, case=bob, contexts=contexts, runtime=runtime)
 
@@ -320,7 +320,7 @@ async def test_alice_revocation_concurrent_with_bob_call_preserves_bob_state_and
     permissions.grant_connector("team", "personal")
     gated = GatedPersonalTransport(bob.transport)
     bob = replace(bob, runtime=McpPersonalToolRuntime(
-        bob.contexts, bob.case.bundle.personal_tool_access, gated, lambda: bob.case.query.now,
+        bob.contexts, bob.case.bundle.personal_tool_access, gated, lambda: bob.case.query.now, "https://umbod.example",
     ))
     alice_provider = await projected_provider(alice, permissions)
     bob_provider = await projected_provider(bob, permissions)

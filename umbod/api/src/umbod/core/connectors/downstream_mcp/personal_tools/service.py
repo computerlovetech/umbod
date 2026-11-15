@@ -1,7 +1,7 @@
 from collections.abc import Callable
 from datetime import datetime
 
-from ..personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalRuntimeAuthorizationQuery, PersonalRuntimeUnavailable
+from ..personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalAuthorizationRequired, PersonalRuntimeAuthorizationQuery, PersonalRuntimeUnavailable
 from ..personal_connections.health_models import RejectPersonalAuthorization
 from ..personal_connections.runtime_ports import PersonalMcpTransport, PersonalRuntimeAuthorizationStore
 from .models import PersonalToolDiscoveryResult, SavePersonalToolObservation
@@ -30,7 +30,7 @@ class PersonalToolDiscoveryService:
             await self._authorizations.reject_authorization(RejectPersonalAuthorization(
                 key=target.key, expected_connection_revision=target.authorization_revision,
             ))
-            raise PersonalRuntimeUnavailable("Personal discovery unavailable") from None
+            raise PersonalAuthorizationRequired("rejected") from None
         try:
             command = SavePersonalToolObservation(
                 query=query.model_copy(update={"now": self._clock()}),

@@ -123,7 +123,7 @@ async def test_scripted_network_failures_reach_public_tool_and_serialized_stdout
                 cleanup_cancellations.append(True)
         monkeypatch.setattr(PersonalHttpTransport, "aclose", stall_cleanup)
     transport = FastMCPPersonalMcpTransport(limits, clock, ScriptedResolver(), lambda: network, ssl.create_default_context())
-    runtime = McpPersonalToolRuntime(execution.contexts, runtime_case.bundle.personal_tool_access, transport, lambda: runtime_case.query.now)
+    runtime = McpPersonalToolRuntime(execution.contexts, runtime_case.bundle.personal_tool_access, transport, lambda: runtime_case.query.now, "https://umbod.example")
     execution = replace(execution, runtime=runtime)
     provider = await provider_for(execution, PermitAllConnectorInvocationPolicy(), configured_signals.invocation_completed.send)
     held = await provider.get_tool("Personal_read")
@@ -134,6 +134,11 @@ async def test_scripted_network_failures_reach_public_tool_and_serialized_stdout
     assert anyio.current_time() - started_at < 2
     assert result.is_error
     assert SENSITIVE not in repr(result)
+    if scenario == "401":
+        assert "Inspect its outcome before retrying a write" in result.content[0].text
+        assert "https://umbod.example/connectors?connector=downstream_mcp%3Apersonal" in result.content[0].text
+    else:
+        assert "Sign in again" not in repr(result)
     records = completion_records(capsys, caplog)
     assert len(records) == 1
     internal_failure = scenario in {"unexpected", "inventory_snapshot", "inventory_cleanup_timeout", "cleanup_timeout"}

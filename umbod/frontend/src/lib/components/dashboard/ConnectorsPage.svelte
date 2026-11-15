@@ -39,7 +39,7 @@
   $effect.pre(identity.observe);
 
   onMount(() => {
-    void state.loadCatalogue();
+    void state.initialize(new URL(window.location.href).searchParams.get('connector') ?? '');
     return () => {
       state.dispose();
     };

@@ -76,10 +76,15 @@ class BlockingInventory:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("existing", (False, True))
-async def test_overlapping_discoveries_cannot_overwrite_completed_inventory(runtime_case: RuntimeCase, existing: bool) -> None:
-    if existing:
+@pytest.mark.parametrize("existing", ("missing", "current", "unsupported"))
+async def test_overlapping_discoveries_cannot_overwrite_completed_inventory(runtime_case: RuntimeCase, existing: str) -> None:
+    if existing != "missing":
         await discovery(runtime_case, (approved_tool("initial"),)).discover(runtime_case.query)
+    if existing == "unsupported":
+        cipher = AuthenticatedTextCipher("runtime-secret")
+        document = json.loads(cipher.decrypt((await observation_row(runtime_case)).document))
+        document["version"] = 2
+        await replace_document(runtime_case, cipher.encrypt(json.dumps(document)))
     blocked = BlockingInventory((approved_tool("older"),))
     service = PersonalToolDiscoveryService(runtime_case.store, runtime_case.bundle.personal_tool_access, blocked, lambda: runtime_case.query.now)
     pending = asyncio.create_task(service.discover(runtime_case.query))
@@ -144,14 +149,20 @@ async def test_inventory_count_is_bounded_at_private_save_boundary(runtime_case:
 
 
 @pytest.mark.asyncio
-async def test_legacy_match_cache_requires_explicit_discovery_without_reconstruction(runtime_case: RuntimeCase) -> None:
+@pytest.mark.parametrize("invalidity", ("old_version", "missing_version", "invalid_schema"))
+async def test_unsupported_inventory_requires_fresh_explicit_discovery(runtime_case: RuntimeCase, invalidity: str) -> None:
     await discovery(runtime_case, (approved_tool("read"),)).discover(runtime_case.query)
     cipher = AuthenticatedTextCipher("runtime-secret")
     row = await observation_row(runtime_case)
     observation = PersonalToolObservation.model_validate_json(cipher.decrypt(row.document))
-    legacy = observation.model_dump(mode="json", exclude={"version", "inventory_revision", "tools"})
-    legacy.update({"contract_revision": "legacy", "matches": [{"name": "read", "fingerprint": "0" * 64}]})
-    await replace_document(runtime_case, cipher.encrypt(json.dumps(legacy)))
+    invalid = observation.model_dump(mode="json")
+    if invalidity == "old_version":
+        invalid["version"] = 2
+    elif invalidity == "missing_version":
+        del invalid["version"]
+    else:
+        invalid["tools"][0]["input_schema"] = {"type": "invalid"}
+    await replace_document(runtime_case, cipher.encrypt(json.dumps(invalid)))
     access = runtime_case.bundle.personal_tool_access
     assert await read_available(runtime_case.bundle, runtime_case.query) == ()
     assert await access.read_inventory_revision(runtime_case.query) == MissingInventoryRevision(kind="missing")
@@ -160,16 +171,19 @@ async def test_legacy_match_cache_requires_explicit_discovery_without_reconstruc
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("invalidity", ("ciphertext", "malformed", "foreign_owner"))
+@pytest.mark.parametrize("invalidity", ("ciphertext", "malformed", "foreign_owner", "foreign_old_owner"))
 async def test_invalid_encrypted_inventory_fails_closed(runtime_case: RuntimeCase, invalidity: str) -> None:
     await discovery(runtime_case, (approved_tool("private"),)).discover(runtime_case.query)
     cipher = AuthenticatedTextCipher("runtime-secret")
     row = await observation_row(runtime_case)
     assert "private" not in row.document
     observation = PersonalToolObservation.model_validate_json(cipher.decrypt(row.document))
-    if invalidity == "foreign_owner":
+    if invalidity in ("foreign_owner", "foreign_old_owner"):
         key = PersonalConnectionKey(principal=CanonicalPrincipal(namespace="trusted", subject="foreign"), connector_id="personal")
-        document = cipher.encrypt(observation.model_copy(update={"key": key}).model_dump_json())
+        updates: dict[str, object] = {"key": key}
+        if invalidity == "foreign_old_owner":
+            updates["version"] = 2
+        document = cipher.encrypt(observation.model_copy(update=updates).model_dump_json())
     elif invalidity == "malformed":
         document = cipher.encrypt('{"version":2}')
     else:

@@ -25,7 +25,7 @@ async def test_refresh_projection_tracks_every_transition_and_preparing_deadline
     await save_matches(runtime_case, await replace_policy(runtime_case, (approved_tool("read"),)))
     assert len(await read_available(runtime_case.bundle, runtime_case.query)) == 1
     await refresh_store.reserve(reservation(runtime_case))
-    assert await read_available(runtime_case.bundle, runtime_case.query) == ()
+    assert len(await read_available(runtime_case.bundle, runtime_case.query)) == 1
     if phase == "release":
         await refresh_store.release(command(runtime_case))
     elif phase != "preparing":
@@ -40,12 +40,12 @@ async def test_refresh_projection_tracks_every_transition_and_preparing_deadline
             with pytest.raises(PersonalRefreshChanged):
                 await refresh_store.complete(CompletePersonalRefresh(**invalid.model_dump(exclude={"authorization"}), authorization=authorize_personal_grant(grant)))
     later = runtime_case.query.model_copy(update={"now": runtime_case.query.now + timedelta(seconds=31)})
-    assert bool(await read_available(runtime_case.bundle, later)) is (phase in ("preparing", "release"))
+    assert bool(await read_available(runtime_case.bundle, later)) is True
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mutation", ["reject", "replace_configuration", "delete_configuration"])
-async def test_rejection_and_configuration_invalidation_remove_availability(runtime_case: RuntimeCase, mutation: str) -> None:
+async def test_rejection_retains_inventory_but_configuration_invalidation_hides_it(runtime_case: RuntimeCase, mutation: str) -> None:
     await save_matches(runtime_case, await replace_policy(runtime_case, (approved_tool("read"),)))
     if mutation == "reject":
         connection = await runtime_case.bundle.personal_connections.get(runtime_case.query.key)
@@ -56,7 +56,7 @@ async def test_rejection_and_configuration_invalidation_remove_availability(runt
         configuration = await runtime_case.bundle.personal_oauth_configurations.get(PersonalOAuthConfigurationQuery(connector_id="personal"))
         settings = PersonalOAuthSettings(requested_scopes=("different",), client=PreconfiguredPublicOAuthClient(issuer_url="https://issuer.example", client_id="client"))
         await runtime_case.bundle.personal_oauth_configurations.replace(ReplacePersonalOAuthConfiguration(connector_id="personal", expected_revision=configuration.policy.revision, settings=settings))
-    assert await read_available(runtime_case.bundle, runtime_case.query) == ()
+    assert bool(await read_available(runtime_case.bundle, runtime_case.query)) is (mutation == "reject")
 
 
 class ProjectionWriteFailureCipher:

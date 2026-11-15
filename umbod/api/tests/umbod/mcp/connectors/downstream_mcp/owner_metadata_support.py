@@ -50,7 +50,7 @@ async def metadata_server(case: RuntimeCase, exposure: str) -> FastMCP:
     await _discover(execution, await _install_bob(case), "integer")
     settings = _settings(namespace="trusted")
     settings = settings.model_copy(update={"mcp": settings.mcp.model_copy(update={"permission_group_claim": "groups"})})
-    runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), case.bundle.personal_tool_access, execution.transport, lambda: case.query.now)
+    runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), case.bundle.personal_tool_access, execution.transport, lambda: case.query.now, "https://umbod.example")
     provider = await provider_for(replace(execution, runtime=runtime, contexts=McpPersonalCallerProvider(settings)), PermitAllConnectorInvocationPolicy(), InvocationLog())
     public = FastMCP("owner-metadata", middleware=[PersonalDiscoveryMiddleware(provider), AuthMiddleware(auth=personal_tool_permission_check(lambda context: True)), PersonalToolReservationMiddleware(provider)])
     public.downstream_mcp_tool_provider = provider

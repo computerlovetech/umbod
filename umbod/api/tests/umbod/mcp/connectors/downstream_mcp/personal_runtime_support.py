@@ -40,7 +40,7 @@ async def execution_case(case: RuntimeCase) -> ExecutionCase:
     transport.inventories[case.query.key] = PersonalToolInventory(tools=(tool,))
     transport.results[(case.query.key, "read")] = PersonalToolResult(result={"content": [], "structuredContent": {"owner": "owner"}})
     await PersonalToolDiscoveryService(case.store, case.bundle.personal_tool_access, transport, lambda: case.query.now).discover(case.query)
-    runtime: PersonalToolRuntime = McpPersonalToolRuntime(contexts, case.bundle.personal_tool_access, transport, lambda: case.query.now)
+    runtime: PersonalToolRuntime = McpPersonalToolRuntime(contexts, case.bundle.personal_tool_access, transport, lambda: case.query.now, "https://umbod.example")
     definition = await case.bundle.definitions.get(ConnectorIdQuery(connector_id="personal"))
     record = (await case.bundle.personal_tool_discovery.read(PersonalToolDiscoveryQuery(principal=case.query.key.principal, definitions=(definition.definition,), now=case.query.now)))[0]
     command = InvokePersonalTool(identity=CapabilityIdentity(connector_kind="downstream_mcp", connector_id="personal", capability_kind="tool", capability_key="read"), inventory_revision=record.inventory_revision, fingerprint=record.fingerprint, arguments={"value": "same"})

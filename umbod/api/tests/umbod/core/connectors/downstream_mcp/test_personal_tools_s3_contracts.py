@@ -153,7 +153,7 @@ async def assert_stale_observation_save_rejects_revocation(runtime_case: Runtime
     with pytest.raises(PersonalRuntimeUnavailable):
         await runtime_case.bundle.personal_tool_access.save_observation(command)
     records = await read_available(runtime_case.bundle, runtime_case.query)
-    assert len(records) == (1 if revocation in ("unpublish", "connector_grant") else 0)
+    assert len(records) == (1 if revocation in ("unpublish", "connector_grant", "rotate") else 0)
 
 
 @pytest.mark.asyncio

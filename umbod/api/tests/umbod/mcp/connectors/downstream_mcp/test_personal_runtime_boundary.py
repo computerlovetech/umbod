@@ -26,7 +26,7 @@ async def test_retained_runtime_recaptures_after_listing_before_execution(runtim
     ]
     runtime: PersonalToolRuntime = McpPersonalToolRuntime(
         callers, runtime_case.bundle.personal_tool_access,
-        execution.transport, lambda: runtime_case.query.now,
+        execution.transport, lambda: runtime_case.query.now, "https://umbod.example",
     )
     provider = await provider_for(replace(execution, runtime=runtime, contexts=callers), PermitAllConnectorInvocationPolicy(), InvocationLog())
     assert len(await provider.list_tools()) == 1

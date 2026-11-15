@@ -36,7 +36,7 @@ async def test_retained_tool_cannot_cross_owner_inventory_and_fresh_tool_uses_ow
     execution.transport.results[(key, "read")] = PersonalToolResult(result={"content": [], "structuredContent": {"owner": "bob"}})
     settings = _settings(namespace="trusted")
     settings = settings.model_copy(update={"mcp": settings.mcp.model_copy(update={"permission_group_claim": "groups"})})
-    runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), runtime_case.bundle.personal_tool_access, execution.transport, lambda: runtime_case.query.now)
+    runtime = McpPersonalToolRuntime(McpPersonalCallerProvider(settings), runtime_case.bundle.personal_tool_access, execution.transport, lambda: runtime_case.query.now, "https://umbod.example")
     provider = await provider_for(replace(execution, runtime=runtime, contexts=McpPersonalCallerProvider(settings)), PermitAllConnectorInvocationPolicy(), InvocationLog())
     alice_token = AccessToken(token="alice-upstream", client_id="alice-client", scopes=[], claims={"sub": "owner", "groups": ["team"]})
     marker = auth_context_var.set(AuthenticatedUser(alice_token))

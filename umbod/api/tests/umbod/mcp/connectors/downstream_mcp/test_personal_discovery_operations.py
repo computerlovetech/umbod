@@ -50,6 +50,11 @@ class CountingReader:
         return await self.reader.read(query)
 
 
+    async def read_available(self, query: PersonalToolDiscoveryQuery) -> tuple[PersonalToolRecord, ...]:
+        self.queries.append(query)
+        return await self.reader.read_available(query)
+
+
 class PausedReader(CountingReader):
     def __init__(self, reader: PersonalToolDiscoveryReader) -> None:
         super().__init__(reader)
@@ -297,7 +302,7 @@ async def test_public_execution_rechecks_admission_after_discovery_authorization
     settings = _settings(namespace="trusted")
     settings = settings.model_copy(update={"mcp": settings.mcp.model_copy(update={"permission_group_claim": "groups"})})
     callers = McpPersonalCallerProvider(settings)
-    runtime = McpPersonalToolRuntime(callers, runtime_case.bundle.personal_tool_access, execution.transport, lambda: runtime_case.query.now)
+    runtime = McpPersonalToolRuntime(callers, runtime_case.bundle.personal_tool_access, execution.transport, lambda: runtime_case.query.now, "https://umbod.example")
     policy = PausedInvocationPolicy()
     provider = await provider_for(replace(execution, runtime=runtime, contexts=callers), policy, InvocationLog())
     public = FastMCP("paused-personal-execution", providers=[provider], middleware=[PersonalDiscoveryMiddleware(provider), AuthMiddleware(auth=personal_tool_permission_check(lambda context: True)), PersonalToolReservationMiddleware(provider)])

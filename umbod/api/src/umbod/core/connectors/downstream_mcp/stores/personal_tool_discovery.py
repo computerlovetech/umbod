@@ -17,6 +17,12 @@ class PersonalToolDiscoveryStore:
         self._cipher = cipher
 
     async def read(self, query: PersonalToolDiscoveryQuery) -> tuple[PersonalToolRecord, ...]:
+        return await self._read(query, executable_only=False)
+
+    async def read_available(self, query: PersonalToolDiscoveryQuery) -> tuple[PersonalToolRecord, ...]:
+        return await self._read(query, executable_only=True)
+
+    async def _read(self, query: PersonalToolDiscoveryQuery, *, executable_only: bool) -> tuple[PersonalToolRecord, ...]:
         records: list[PersonalToolRecord] = []
         async with self._database.read_session() as session:
             for definition in query.definitions:
@@ -30,12 +36,19 @@ class PersonalToolDiscoveryStore:
                     state = DISCOVERY_AVAILABILITY_ADAPTER.validate_json(self._cipher.decrypt(availability.document))
                     if not isinstance(state, AvailableDiscovery) or state.key != key:
                         continue
-                    if state.endpoint_url != definition.endpoint_url or state.issued_at > query.now or state.expires_at <= query.now:
+                    if state.endpoint_url != definition.endpoint_url or state.issued_at > query.now or state.expires_at <= state.issued_at:
                         continue
-                    if isinstance(state.refresh, BlockedRefresh) or isinstance(state.refresh, PreparingRefresh) and state.refresh.deadline > query.now:
+                    if executable_only and (state.authorization_rejected or state.expires_at <= query.now or isinstance(state.refresh, BlockedRefresh) or isinstance(state.refresh, PreparingRefresh) and state.refresh.deadline > query.now):
                         continue
                     observation = await self._observation(session, key)
-                    if observation is None or observation.authorization_revision != state.authorization_revision or observation.configuration_revision != state.configuration_revision or observation.expires_at <= query.now or observation.expires_at > state.expires_at:
+                    if observation is None or observation.configuration_revision != state.configuration_revision:
+                        continue
+                    if executable_only and (observation.expires_at <= query.now or observation.authorization_revision != state.authorization_revision):
+                        continue
+                    if observation.authorization_revision == state.authorization_revision:
+                        if observation.expires_at <= state.issued_at or observation.expires_at > state.expires_at:
+                            continue
+                    elif observation.authorization_revision != state.expected_authorization_revision:
                         continue
                     records.extend(PersonalToolRecord(definition=definition, tool=tool, inventory_revision=observation.inventory_revision, fingerprint=contract_fingerprint(tool)) for tool in observation.tools)
                 except Exception:

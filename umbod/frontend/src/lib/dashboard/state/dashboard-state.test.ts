@@ -24,6 +24,35 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 }
 
 describe('dashboard controller contract', () => {
+  test.each(['', 'calendar', 'downstream_mcp:missing', 'https://untrusted.test', 'downstream_mcp%3Acalendar'])('initial selection %s falls back to the authorized catalogue default', async (desired): Promise<void> => {
+    const { state } = setup();
+    await state.initialize(desired);
+    expect(state.selectedConnector).toEqual(sharedConnector);
+  });
+
+  test('initial selection opens an authorized personal connector without starting sign-in and does not override later choices', async (): Promise<void> => {
+    const { state, personal, api } = setup();
+    const start = vi.spyOn(personal.authorization, 'start');
+    await state.initialize('downstream_mcp:calendar');
+    expect(state.selectedConnector).toEqual(personalConnector);
+    expect(state.personalCard('calendar')).toBeDefined();
+    expect(start).not.toHaveBeenCalled();
+    state.selectConnector('downstream_mcp:shared');
+    await state.refreshOnFocus();
+    expect(state.selectedConnector).toEqual(sharedConnector);
+    vi.spyOn(api.catalogue, 'list').mockResolvedValue({ ...catalogue, identity_key: 'another-account' });
+    await state.loadCatalogue();
+    expect(state.selectedConnector).toEqual(sharedConnector);
+  });
+
+  test('an unavailable recovery target is not selected when later granted', async (): Promise<void> => {
+    const { state, api } = setup({ ...catalogue, connectors: [sharedConnector] });
+    await state.initialize('downstream_mcp:calendar');
+    vi.spyOn(api.catalogue, 'list').mockResolvedValue(catalogue);
+    await state.loadCatalogue();
+    expect(state.selectedConnector).toEqual(sharedConnector);
+  });
+
   test('defaults to the first connector and ignores unknown selection IDs', async (): Promise<void> => {
     const { state } = setup();
     expect(state.selectedId).toBe('');

@@ -27,7 +27,7 @@ class PersonalConnectorDiscovery:
         if not self._enabled or not connector_ids:
             return frozenset()
         selected = tuple(definition for definition in (await self._definitions.list()).definitions if definition.connector_id in connector_ids)
-        records = await self._reader.read(PersonalToolDiscoveryQuery(principal=self._principal, definitions=selected, now=self._clock()))
+        records = await self._reader.read_available(PersonalToolDiscoveryQuery(principal=self._principal, definitions=selected, now=self._clock()))
         return frozenset(record.definition.connector_id for record in records)
 
 

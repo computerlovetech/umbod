@@ -102,7 +102,7 @@ PersonalInventoryRevision = Annotated[MissingInventoryRevision | PresentInventor
 
 
 class PersonalToolObservation(DomainModel):
-    version: Literal[2]
+    version: Literal[3]
     key: PersonalConnectionKey
     authorization_revision: str = Field(min_length=1)
     configuration_revision: str = Field(min_length=1)

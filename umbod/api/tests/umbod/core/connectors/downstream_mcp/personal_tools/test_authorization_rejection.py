@@ -4,7 +4,7 @@ import pytest
 
 from tests.umbod.core.connectors.downstream_mcp.test_personal_authorization_health import health_query
 from tests.umbod.core.connectors.downstream_mcp.test_personal_runtime_authorizations import RuntimeCase, runtime_case
-from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolInventory, PersonalToolResult
+from umbod.core.connectors.downstream_mcp.personal_connections.runtime_models import PersonalAuthorizationRejected, PersonalAuthorizationRequired, PersonalRuntimeTarget, PersonalRuntimeUnavailable, PersonalToolCall, PersonalToolInventory, PersonalToolResult
 from umbod.core.connectors.downstream_mcp.personal_connections.runtime_ports import PersonalMcpTransport
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolDiscoveryService, PersonalToolRuntimeService
 
@@ -16,11 +16,13 @@ __all__ = ["runtime_case"]
 class FaultPersonalMcpTransport(PersonalMcpTransport):
     def __init__(self, error: PersonalRuntimeUnavailable) -> None:
         self._error = error
+        self.calls: list[PersonalToolCall] = []
 
     async def list_tools(self, target: PersonalRuntimeTarget) -> PersonalToolInventory:
         raise self._error
 
     async def call_tool(self, command: PersonalToolCall) -> PersonalToolResult:
+        self.calls.append(command)
         raise self._error
 
 
@@ -31,15 +33,21 @@ async def test_execution_records_only_specific_admitted_rejections(runtime_case:
     error = PersonalAuthorizationRejected("Personal MCP unavailable") if specific else PersonalRuntimeUnavailable("Personal MCP unavailable")
     transport = FaultPersonalMcpTransport(error)
     runtime = PersonalToolRuntimeService(execution.caller, runtime_case.bundle.personal_tool_access, transport, lambda: runtime_case.query.now)
-    with pytest.raises(PersonalRuntimeUnavailable):
+    with pytest.raises(PersonalRuntimeUnavailable) as caught:
         await runtime.execute(execution.command)
+    assert isinstance(caught.value, PersonalAuthorizationRequired) is specific
+    if specific:
+        assert caught.value.reason == "rejected"
+    assert len(transport.calls) == 1
     health = await runtime_case.bundle.personal_authorization_health.get(health_query(runtime_case))
     assert health.state == ("reconnect_required" if specific else "authorized")
-    assert len(await read_available(runtime_case.bundle, runtime_case.query)) == (0 if specific else 1)
+    assert len(await read_available(runtime_case.bundle, runtime_case.query)) == 1
     if specific:
-        with pytest.raises(PersonalRuntimeUnavailable):
+        with pytest.raises(PersonalAuthorizationRequired) as repeated:
             await runtime.execute(execution.command)
-        with pytest.raises(PersonalRuntimeUnavailable):
+        assert repeated.value.reason == "rejected"
+        assert len(transport.calls) == 1
+        with pytest.raises(PersonalAuthorizationRequired):
             await runtime_case.store.resolve(runtime_case.query)
 
 

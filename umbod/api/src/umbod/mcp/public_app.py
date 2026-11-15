@@ -13,8 +13,6 @@ from umbod.mcp.runtime_adapters import OpenApiRuntimeAdapters, create_configured
 from umbod.core.connectors.downstream_mcp.adapters.personal_runtime.factory import create_personal_mcp_transport
 from umbod.core.connectors.downstream_mcp.management import utc_clock
 from umbod.core.connectors.downstream_mcp.personal_tools import DisabledPersonalToolRuntime, PersonalToolRuntime
-from umbod.core.configuration.persistence import AuthenticatedTextCipher
-from umbod.infrastructure import PersonalDiscoveryPreparation
 from umbod.mcp.connectors.downstream_mcp.personal_discovery import PersonalDiscoveryOperations
 from umbod.mcp.connectors.downstream_mcp.personal_runtime import McpPersonalCallerProvider, McpPersonalToolRuntime, PersonalDiscoveryMiddleware, PersonalToolReservationMiddleware, personal_tool_permission_check
 
@@ -248,8 +246,6 @@ async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettin
     stores = await create_downstream_mcp_stores(
         infrastructure_settings.credential_secret, database
     )
-    if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled:
-        await PersonalDiscoveryPreparation(database, AuthenticatedTextCipher(infrastructure_settings.credential_secret)).prepare()
     discovery = create_downstream_mcp_discovery(infrastructure_settings, create_downstream_mcp_probe(infrastructure_settings, stores.credentials))
     discovery_runtime = create_downstream_discovery_runtime(DownstreamRuntimeStores(definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, descriptions=mcp.capability_description_overrides))
     await discovery_runtime.reconcile()
@@ -258,7 +254,7 @@ async def _register_downstream_mcp_provider(mcp: FastMCP, settings: MCPAppSettin
     personal_discovery = PersonalDiscoveryOperations(discovery_runtime, callers, stores.personal_tool_discovery, mcp.group_connector_tool_permissions if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled else InMemoryGroupConnectorToolPermissions(group_claim_fields=()), utc_clock, permission_policy)
     personal_runtime: PersonalToolRuntime = DisabledPersonalToolRuntime()
     if settings.personal_connections.enabled and settings.personal_connections.oauth_enabled:
-        personal_runtime = McpPersonalToolRuntime(callers, stores.personal_tool_access, create_personal_mcp_transport(), utc_clock)
+        personal_runtime = McpPersonalToolRuntime(callers, stores.personal_tool_access, create_personal_mcp_transport(), utc_clock, settings.endpoints.site_base_url)
     provider = ConnectorAwareDownstreamMcpToolProvider(discovery_runtime=discovery_runtime, personal_runtime=personal_runtime, personal_discovery=personal_discovery, definitions=stores.definitions, credentials=stores.credentials, catalogs=stores.catalogs, publishing=stores.publishing, activations=stores.activations, client_factory=downstream_client_factory, permission_policy=permission_policy, connector_scope='', signals=mcp.invocation_signals, execution_pipelines=mcp.execution_pipelines)
     mcp.invocation_signals.tool_inventory_observed.send(shared_tool_inventory(discovery_runtime.capture().records))
     mcp.downstream_mcp_tool_provider = provider

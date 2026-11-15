@@ -4,7 +4,7 @@ import { tick, unmount } from 'svelte';
 import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
 import type { WorkspaceProfile } from '$lib/workspace/domain/profile';
 import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
-import { catalogue } from '$lib/dashboard/test-fixtures';
+import { catalogue, personalConnector, sharedConnector } from '$lib/dashboard/test-fixtures';
 import { deferred } from '$lib/dashboard/usage-fixtures.test-support';
 import { InMemoryPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/in-memory-api';
 import { DashboardIdentityProps } from './identity-props.test-support.svelte';
@@ -16,6 +16,7 @@ afterEach(async (): Promise<void> => {
   if (component) await unmount(component);
   component = undefined;
   document.body.replaceChildren();
+  window.history.replaceState(null, '', '/');
   vi.restoreAllMocks();
 });
 
@@ -37,6 +38,40 @@ const catalogueB = {
 };
 
 describe('Connectors identity source epochs', () => {
+  test.each(['pending', 'loaded'] as const)('encoded recovery selection survives initial %s identity validation without starting OAuth', async (initialPhase): Promise<void> => {
+    window.history.replaceState(null, '', '/connectors?connector=downstream_mcp%3Acalendar');
+    const initialProfile = deferred<WorkspaceProfile>();
+    const initialCatalogue = deferred<typeof catalogue>();
+    const api = new InMemoryDashboardApi(catalogue);
+    const personal = new InMemoryPersonalConnectionsApi([]);
+    const start = vi.spyOn(personal.authorization, 'start');
+    const list = vi.spyOn(api.catalogue, 'list').mockReturnValueOnce(initialCatalogue.promise).mockResolvedValue(catalogue);
+    component = mountWorkspace(ConnectorsPage, { target: document.body, props: {
+      createApi: () => api,
+      createPersonalApi: () => personal,
+      createWorkspaceApi: () => ({ profile: { get: () => initialProfile.promise } })
+    } }, '/connectors');
+    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(1));
+    if (initialPhase === 'loaded') {
+      initialCatalogue.resolve(catalogue);
+      await vi.waitFor(() => expect(document.body.textContent).toContain(personalConnector.capability_description));
+    }
+    initialProfile.resolve(profile('A'));
+    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2));
+    initialCatalogue.resolve(catalogue);
+    await vi.waitFor(() => expect(document.body.textContent).toContain(personalConnector.capability_description));
+    expect(document.body.textContent).not.toContain(sharedConnector.capability_description);
+    expect(start).not.toHaveBeenCalled();
+    const sharedButton = Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes(sharedConnector.display_name));
+    expect(sharedButton).toBeDefined();
+    sharedButton!.click();
+    await tick();
+    expect(document.body.textContent).toContain(sharedConnector.capability_description);
+    window.dispatchEvent(new Event('focus'));
+    await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(3));
+    expect(document.body.textContent).toContain(sharedConnector.capability_description);
+  });
+
   test.each([
     { destination: 'B', pending: false },
     { destination: 'hidden', pending: false },
