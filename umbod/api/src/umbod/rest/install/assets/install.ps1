@@ -47,6 +47,80 @@ param(
         try { return ([BitConverter]::ToString($Hasher.ComputeHash([Text.Encoding]::UTF8.GetBytes($Endpoint)))).Replace('-', '').ToLowerInvariant() } finally { $Hasher.Dispose() }
     }
 
+    function Get-FileDigest([string]$Path) {
+        $Hasher = [Security.Cryptography.SHA256]::Create()
+        $Stream = $null
+        try {
+            $Stream = [IO.File]::OpenRead($Path)
+            return ([BitConverter]::ToString($Hasher.ComputeHash($Stream))).Replace('-', '').ToLowerInvariant()
+        } finally {
+            if ($Stream) { $Stream.Dispose() }
+            $Hasher.Dispose()
+        }
+    }
+
+    function Get-DirectoryOwner([string]$Path) {
+        $Security = [Security.AccessControl.DirectorySecurity]::new($Path, [Security.AccessControl.AccessControlSections]::Owner)
+        return $Security.GetOwner([Security.Principal.SecurityIdentifier])
+    }
+
+    function Save-Artifact([string]$Address, [string]$Path) {
+        $Handler = [Net.Http.HttpClientHandler]::new()
+        $Handler.AllowAutoRedirect = $false
+        $Client = [Net.Http.HttpClient]::new($Handler)
+        $Cancellation = [Threading.CancellationTokenSource]::new(120000)
+        $Timer = [Diagnostics.Stopwatch]::StartNew()
+        $PreviousTls = [Net.ServicePointManager]::SecurityProtocol
+        try {
+            if ($PSVersionTable.PSVersion.Major -lt 6) { [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 }
+            $Current = [Uri]$Address
+            for ($Redirects = 0; $Redirects -le 3; $Redirects++) {
+                $Response = $null
+                $InputStream = $null
+                $OutputStream = $null
+                try {
+                    $Request = $Client.GetAsync($Current, [Net.Http.HttpCompletionOption]::ResponseHeadersRead, $Cancellation.Token)
+                    $Remaining = 120000 - [int]$Timer.ElapsedMilliseconds
+                    if ($Remaining -le 0 -or -not $Request.Wait([Math]::Min(10000, $Remaining))) { throw 'Artifact download timed out' }
+                    $Response = $Request.GetAwaiter().GetResult()
+                    $Status = [int]$Response.StatusCode
+                    if ($Status -in @(301, 302, 303, 307, 308)) {
+                        if ($Redirects -eq 3 -or $null -eq $Response.Headers.Location) { throw 'Artifact download exceeded the redirect limit or omitted its destination' }
+                        $Current = [Uri]::new($Current, $Response.Headers.Location)
+                        if ($Current.Scheme -ne 'https' -or $Current.UserInfo) { throw 'Artifact redirects must use HTTPS without credentials' }
+                        continue
+                    }
+                    if (-not $Response.IsSuccessStatusCode) { throw "Artifact download failed with HTTP status $Status" }
+                    if ($Response.Content.Headers.ContentLength -gt 10485760) { throw 'Artifact download exceeds the size limit' }
+                    $InputStream = $Response.Content.ReadAsStreamAsync().GetAwaiter().GetResult()
+                    $OutputStream = [IO.File]::Open($Path, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None)
+                    $Buffer = [byte[]]::new(81920)
+                    $Total = 0
+                    while ($true) {
+                        $Remaining = 120000 - [int]$Timer.ElapsedMilliseconds
+                        if ($Remaining -le 0) { throw 'Artifact download timed out' }
+                        $Read = $InputStream.ReadAsync($Buffer, 0, $Buffer.Length, $Cancellation.Token)
+                        if (-not $Read.Wait($Remaining)) { throw 'Artifact download timed out' }
+                        $Count = $Read.GetAwaiter().GetResult()
+                        if ($Count -eq 0) { return }
+                        $Total += $Count
+                        if ($Total -gt 10485760) { throw 'Artifact download exceeds the size limit' }
+                        $OutputStream.Write($Buffer, 0, $Count)
+                    }
+                } finally {
+                    if ($OutputStream) { $OutputStream.Dispose() }
+                    if ($InputStream) { $InputStream.Dispose() }
+                    if ($Response) { $Response.Dispose() }
+                }
+            }
+        } finally {
+            $Cancellation.Cancel()
+            $Client.Dispose()
+            $Cancellation.Dispose()
+            [Net.ServicePointManager]::SecurityProtocol = $PreviousTls
+        }
+    }
+
     function Assert-NoLinks([string]$Path) {
         $Current = [IO.Path]::GetFullPath($Path)
         while ($Current) {
@@ -69,9 +143,7 @@ param(
         if (-not ([Uri]$Base).AbsolutePath.EndsWith('/install/v1')) { throw 'Base URL must end with /install/v1' }
         $Cli = if ($Harness -eq 'codex') { 'codex' } else { 'claude' }
         Write-Host "Checking $Harness installer prerequisites..."
-        foreach ($Command in @('curl.exe', $Cli)) {
-            if (-not (Get-Command $Command -ErrorAction SilentlyContinue)) { throw "Required command is missing: $Command" }
-        }
+        if (-not (Get-Command $Cli -ErrorAction SilentlyContinue)) { throw "Required command is missing: $Cli" }
         $Action = if ($Cli -eq 'codex') { 'add' } else { 'install' }
         $null = Invoke-Harness -Arguments @('plugin', 'marketplace', 'add', '--help')
         $null = Invoke-Harness -Arguments @('plugin', $Action, '--help')
@@ -112,12 +184,12 @@ param(
         }
         if ($Conflict) { throw "A standalone umbod MCP connection already exists. Review it with $Cli mcp get umbod and resolve it manually before retrying; nothing was removed." }
         Add-Type -AssemblyName System.IO.Compression.FileSystem
+        Add-Type -AssemblyName System.Net.Http
         $Temporary = Join-Path ([IO.Path]::GetTempPath()) ('umbod-install-' + [Guid]::NewGuid().ToString('N'))
         $null = [IO.Directory]::CreateDirectory($Temporary)
         Write-Host 'Downloading and verifying Umbod plugin...'
         foreach ($Name in @('package.zip', 'package.sha256', 'marketplace.txt', 'endpoint.txt')) {
-            & curl.exe -fsSL --proto '=https,http' --proto-redir '=https' --max-redirs 3 --connect-timeout 10 --max-time 120 --max-filesize 10485760 --output (Join-Path $Temporary $Name) "$Base/$Harness/$Name"
-            if ($LASTEXITCODE -ne 0) { throw "Download failed: $Name" }
+            Save-Artifact "$Base/$Harness/$Name" (Join-Path $Temporary $Name)
         }
         $Digest = Get-Metadata (Join-Path $Temporary 'package.sha256') '[0-9a-f]{64}'
         $Marketplace = Get-Metadata (Join-Path $Temporary 'marketplace.txt') 'umbod-[0-9a-f]{12}'
@@ -125,7 +197,7 @@ param(
         if ($Endpoint -cne $Expected) { throw 'Downloaded endpoint does not match -ExpectedEndpoint; no configuration was changed' }
         $Identity = Get-EndpointIdentity $Endpoint
         if ($Marketplace -cne ('umbod-' + $Identity.Substring(0, 12))) { throw 'Marketplace does not match endpoint identity' }
-        if ((Get-FileHash -LiteralPath (Join-Path $Temporary 'package.zip') -Algorithm SHA256).Hash.ToLowerInvariant() -cne $Digest) { throw 'Package SHA256 mismatch; no configuration was changed' }
+        if ((Get-FileDigest (Join-Path $Temporary 'package.zip')) -cne $Digest) { throw 'Package SHA256 mismatch; no configuration was changed' }
         $Catalog = if ($Cli -eq 'codex') { '.agents/plugins/marketplace.json' } else { '.claude-plugin/marketplace.json' }
         $Manifest = if ($Cli -eq 'codex') { 'plugins/umbod/.codex-plugin/plugin.json' } else { 'plugins/umbod/.claude-plugin/plugin.json' }
         $Allowed = @($Catalog, $Manifest, 'plugins/umbod/.mcp.json', 'plugins/umbod/skills/umbod-connected-apps/SKILL.md', 'plugins/umbod/LICENSE')
@@ -170,13 +242,13 @@ param(
         $Ancestor = $Parent
         while ($Ancestor -and $Ancestor.Length -ge $Root.Length) {
             if (Test-Path -LiteralPath $Ancestor) {
-                $AncestorOwner = (Get-Acl -LiteralPath $Ancestor).GetOwner([Security.Principal.SecurityIdentifier])
+                $AncestorOwner = Get-DirectoryOwner $Ancestor
                 if (-not $AncestorOwner.Equals([Security.Principal.WindowsIdentity]::GetCurrent().User)) { throw 'Installation directory ancestors must be owned by the current user' }
             }
             $Ancestor = [IO.Path]::GetDirectoryName($Ancestor)
         }
         $null = [IO.Directory]::CreateDirectory($Parent)
-        $Owner = (Get-Acl -LiteralPath $Parent).GetOwner([Security.Principal.SecurityIdentifier])
+        $Owner = Get-DirectoryOwner $Parent
         if ($Owner -ne [Security.Principal.WindowsIdentity]::GetCurrent().User) { throw 'Installation directory must be owned by the current user' }
         $LockPath = Join-Path $Parent '.install.lock'
         try { $LockStream = [IO.File]::Open($LockPath, [IO.FileMode]::CreateNew, [IO.FileAccess]::Write, [IO.FileShare]::None) } catch { throw "Another installation is running or a stale lock exists: $LockPath. Retry after it finishes; review stale locks manually." }
@@ -188,7 +260,7 @@ param(
             foreach ($Name in $OwnedFiles) {
                 $Installed = Join-Path $Destination $Name
                 Assert-NoLinks $Installed
-                if (-not (Test-Path -LiteralPath $Installed -PathType Leaf) -or (Get-FileHash -LiteralPath $Installed).Hash -ne (Get-FileHash -LiteralPath (Join-Path $Extracted $Name)).Hash) { throw 'Existing content-addressed installation was modified; review it manually' }
+                if (-not (Test-Path -LiteralPath $Installed -PathType Leaf) -or (Get-FileDigest $Installed) -cne (Get-FileDigest (Join-Path $Extracted $Name))) { throw 'Existing content-addressed installation was modified; review it manually' }
             }
         } else {
             $Staging = Join-Path $Parent ('.staging-' + [Guid]::NewGuid().ToString('N'))

@@ -26,7 +26,7 @@ These values drive API and MCP URLs, allowed browser origins, OIDC metadata, and
 
 ## Harness plugin installation
 
-Getting started supplies Bash installers for macOS/Linux and PowerShell for Windows, with separate Codex and Claude Code packages. Bash requires Python 3.8 or later, curl and the selected harness; Windows requires PowerShell 5.1 or later, curl.exe and the selected harness. Installation is user-scoped and does not authenticate or verify connected-app access.
+Getting started supplies Bash installers for macOS/Linux and PowerShell for Windows, with separate Codex and Claude Code packages. Bash requires Python 3.8 or later, curl and the selected harness; Windows requires PowerShell 5.1 or later and the selected harness; downloads, hashing and ownership checks use the included .NET runtime. Installation is user-scoped and does not authenticate or verify connected-app access.
 
 The shared API serves `install.sh`, `install.ps1`, `package.zip`, `package.sha256`, `marketplace.txt` and `endpoint.txt` beneath `/api/install/v1/codex/` and `/api/install/v1/claude-code/`. Allow unauthenticated GET/HEAD to these exact paths through any external authentication gateway; terminal downloads cannot use browser sessions. Do not exempt other API routes. Docker Compose supplies finite public routing rules; custom ingress authentication policies must preserve this access explicitly.
 

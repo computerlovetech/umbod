@@ -47,7 +47,7 @@
         <span>{installation.shell}</span>
       </div>
       <CopyableValue value={installation.command} />
-      <p class="requirement">Requires {installation.harnessLabel}{installation.platform === 'windows' ? ', PowerShell 5.1+ and curl' : ', Python 3.8+ and curl'}. No administrator access required.</p>
+      <p class="requirement">Requires {installation.harnessLabel}{installation.platform === 'windows' ? ' and PowerShell 5.1+' : ', Python 3.8+ and curl'}. No administrator access required.</p>
       <div class="install-links">
         <a href={installation.scriptUrl} target="_blank" rel="noreferrer">Inspect installer</a>
         <a href={installation.documentationUrl} target="_blank" rel="noreferrer">{installation.harnessLabel} documentation</a>

@@ -6,7 +6,7 @@ This local-marketplace installation is verified with Codex CLI 0.167.0. Update C
 
 ## Install from Getting started
 
-Open **Getting started → Connect your harness**, select your operating system and **Codex**, then copy and run the installation command. macOS and Linux use Bash with Python 3.8 or later and curl. Native Windows uses PowerShell 5.1 or later and curl.exe. Codex must already be installed. Use the Linux choice inside WSL.
+Open **Getting started → Connect your harness**, select your operating system and **Codex**, then copy and run the installation command. macOS and Linux use Bash with Python 3.8 or later and curl. Native Windows uses PowerShell 5.1 or later with its included .NET runtime; no separate download or hashing utility is required. Codex must already be installed. Use the Linux choice inside WSL.
 
 The command contains a single installer URL. Its script already includes the instance's package location, MCP endpoint and selected harness, so no additional configuration arguments are needed. The installer downloads a credential-free package, verifies its checksum and endpoint, stores it in a persistent user-owned directory, registers the marketplace, and installs the plugin. Administrator access is not required. **Inspect installer** opens the same configured script before you run it.
 

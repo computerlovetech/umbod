@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import json
 import os
@@ -7,11 +8,12 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Iterator
+from ctypes import wintypes
 from dataclasses import dataclass
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from threading import Thread
+from threading import Event, Thread
 
 import pytest
 
@@ -21,6 +23,34 @@ pytestmark = pytest.mark.skipif(sys.platform != "win32", reason="Native Windows 
 
 
 class QuietArtifactHandler(SimpleHTTPRequestHandler):
+    def do_GET(self) -> None:
+        if self.path.startswith("/delayed-headers/"):
+            Event().wait(11)
+            return
+        if self.path.startswith("/redirect-http/"):
+            self.send_response(302)
+            self.send_header("Location", "/api/" + self.path.removeprefix("/redirect-http/"))
+            self.end_headers()
+            return
+        if self.path.startswith("/missing/"):
+            self.send_error(404)
+            return
+        if self.path.startswith("/oversized/"):
+            self.send_response(200)
+            self.send_header("Content-Length", str(10485761))
+            self.end_headers()
+            return
+        if self.path.startswith("/unbounded/"):
+            self.send_response(200)
+            self.end_headers()
+            try:
+                for _ in range(161):
+                    self.wfile.write(b"x" * 65536)
+            except (BrokenPipeError, ConnectionResetError):
+                return
+            return
+        super().do_GET()
+
     def log_message(self, format: str, *args: object) -> None:
         return None
 
@@ -42,7 +72,7 @@ class WindowsInstallerDriver:
             env=self.package.environment | (environment or {}),
             text=True,
             capture_output=True,
-            timeout=60,
+            timeout=150,
             check=False,
         )
 
@@ -55,10 +85,63 @@ def powershell(request: pytest.FixtureRequest) -> str:
     return executable
 
 
+@pytest.fixture
+def user_owned_default_token_owner() -> Iterator[None]:
+    class TokenOwner(ctypes.Structure):
+        _fields_ = [("Owner", wintypes.LPVOID)]
+
+    advapi32 = ctypes.WinDLL("advapi32", use_last_error=True)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetCurrentProcess.argtypes = []
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    advapi32.OpenProcessToken.restype = wintypes.BOOL
+    advapi32.GetTokenInformation.argtypes = [wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+    advapi32.GetTokenInformation.restype = wintypes.BOOL
+    advapi32.SetTokenInformation.argtypes = [wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD]
+    advapi32.SetTokenInformation.restype = wintypes.BOOL
+    token_query = 0x0008
+    token_adjust_default = 0x0080
+    token_user = 1
+    token_owner = 4
+    error_insufficient_buffer = 122
+    token = wintypes.HANDLE()
+    if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), token_query | token_adjust_default, ctypes.byref(token)):
+        raise ctypes.WinError(ctypes.get_last_error())
+
+    def token_information(information_class: int) -> ctypes.Array[ctypes.c_char]:
+        size = wintypes.DWORD()
+        if advapi32.GetTokenInformation(token, information_class, None, 0, ctypes.byref(size)):
+            raise AssertionError("GetTokenInformation unexpectedly accepted an empty buffer")
+        error = ctypes.get_last_error()
+        if error != error_insufficient_buffer:
+            raise ctypes.WinError(error)
+        buffer = ctypes.create_string_buffer(size.value)
+        if not advapi32.GetTokenInformation(token, information_class, buffer, size, ctypes.byref(size)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return buffer
+
+    try:
+        original_owner = token_information(token_owner)
+        user = token_information(token_user)
+        owner = TokenOwner(ctypes.cast(user, ctypes.POINTER(wintypes.LPVOID))[0])
+        if not advapi32.SetTokenInformation(token, token_owner, ctypes.byref(owner), ctypes.sizeof(owner)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        try:
+            yield
+        finally:
+            if not advapi32.SetTokenInformation(token, token_owner, original_owner, ctypes.sizeof(TokenOwner)):
+                raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        if not kernel32.CloseHandle(token):
+            raise ctypes.WinError(ctypes.get_last_error())
+
+
 @pytest.fixture(params=["codex", "claude-code"])
-def windows_installer(tmp_path: Path, request: pytest.FixtureRequest, powershell: str) -> Iterator[WindowsInstallerDriver]:
-    if shutil.which("curl.exe") is None:
-        pytest.fail("Native Windows installer tests require curl.exe")
+def windows_installer(user_owned_default_token_owner: None, request: pytest.FixtureRequest, powershell: str) -> Iterator[WindowsInstallerDriver]:
+    tmp_path: Path = request.getfixturevalue("tmp_path")
     binaries = tmp_path / "bin"
     binaries.mkdir()
     home = tmp_path / "home with spaces ø"
@@ -152,6 +235,31 @@ def test_windows_valid_endpoint_path_punctuation_is_installed_as_literal_data(wi
     registrations = [call for call in windows_installer.package.calls() if call[1:4] == ["plugin", "marketplace", "add"] and "--help" not in call]
     installed_mcp = Path(registrations[0][4]) / "plugins/umbod/.mcp.json"
     assert json.loads(installed_mcp.read_text())["mcpServers"]["umbod"]["url"] == endpoint
+
+
+def test_windows_installation_requires_only_the_selected_harness_on_path(windows_installer: WindowsInstallerDriver) -> None:
+    result = windows_installer.run(environment={"PATH": str(windows_installer.package.root / "bin")})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert result.stdout.endswith(completion_message(windows_installer.package.harness))
+
+
+@pytest.mark.parametrize("prefix,expected_error", [
+    ("delayed-headers", "download timed out"),
+    ("redirect-http", "redirects must use HTTPS"),
+    ("missing", "HTTP status 404"),
+    ("oversized", "size limit"),
+    ("unbounded", "size limit"),
+])
+def test_windows_unsafe_downloads_do_not_install_or_register_plugins(windows_installer: WindowsInstallerDriver, prefix: str, expected_error: str) -> None:
+    installer = WindowsInstallerDriver(
+        windows_installer.package, windows_installer.powershell,
+        windows_installer.base_url.replace("/api/", f"/{prefix}/"),
+    )
+    result = installer.run()
+    assert result.returncode != 0
+    assert expected_error in result.stdout + result.stderr
+    assert not installer.installation_parent.exists()
+    assert not any(call[1:4] == ["plugin", "marketplace", "add"] and "--help" not in call for call in installer.package.calls())
 
 
 def test_windows_public_api_path_prefix_is_preserved(windows_installer: WindowsInstallerDriver) -> None:

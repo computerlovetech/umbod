@@ -52,6 +52,9 @@ test('all OS and harness choices produce copyable shell-specific commands', asyn
       expect(command?.match(/https?:\/\//g)).toHaveLength(1);
       expect(command).not.toContain('--base-url');
       expect(command).not.toContain('--expected-endpoint');
+      const requirements = requiredElement<HTMLElement>(target, '.requirement').textContent;
+      expect(requirements).toContain(platform === 'windows' ? 'PowerShell 5.1+' : 'Python 3.8+ and curl');
+      if (platform === 'windows') expect(requirements).not.toContain('curl');
       requiredElement<HTMLButtonElement>(target, '.install-card .copyable-value button').click();
       await vi.waitFor((): void => expect(clipboard).toHaveBeenLastCalledWith(command));
       const script = requiredElement<HTMLAnchorElement>(target, '.install-links a');
