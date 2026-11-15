@@ -1,15 +1,37 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from uuid import UUID
 
 from fastmcp.tools.base import ToolResult
 from mcp.types import ResourceLink, TextContent
 from pydantic import BaseModel
 
+from umbod.config.app import validate_site_origin
+from umbod.core.filesystem.access import CallerNodeSummary
 from umbod.core.filesystem.browsing import NodeSummary
 from umbod.core.filesystem.models import NodeKind
 
+from .models import FilesystemViewNodeSummary
+
 
 FILE_RESOURCE_TEMPLATE = "umbod://filesystem/files/{node_id}"
+
+
+@dataclass(frozen=True)
+class FilesystemViewUrls:
+    site_base_url: str
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "site_base_url", validate_site_origin(self.site_base_url))
+
+    def for_node(self, node_id: UUID) -> str:
+        return f"{self.site_base_url}/files?node={node_id}"
+
+
+def project_view_node(node: CallerNodeSummary, view_url: Callable[[UUID], str]) -> FilesystemViewNodeSummary:
+    return FilesystemViewNodeSummary(
+        **node.model_dump(), view_url=view_url(node.id) if node.permissions.can_discover else None,
+    )
 
 
 def file_resource_uri(node_id: UUID) -> str:

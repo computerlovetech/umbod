@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from enum import Enum
 from typing import Protocol, Union, runtime_checkable
+from uuid import UUID
 
 from fastmcp.tools import InputRequiredToolResult
 
@@ -43,6 +44,8 @@ class FilesystemCallerCapture(Protocol):
 
 
 class FilesystemServiceFactory(Protocol):
+    def view_url(self, node_id: UUID) -> str: ...
+
     def read_max_bytes(self) -> int: ...
 
     def homes(self) -> HomeService: ...

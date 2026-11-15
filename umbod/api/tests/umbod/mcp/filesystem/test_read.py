@@ -279,7 +279,7 @@ async def test_resource_read_cap_is_independent_of_upload_limit(filesystem_invoc
     async with Client(filesystem_invocation_mcp.server) as client:
         published = await publish(client, b"readable", "text/plain")
     factory = DatabaseFilesystemServiceFactory(
-        filesystem_invocation_mcp.database, filesystem_invocation_mcp.content, 0, "https://issuer", "https://api.example", max_read_bytes=1_048_576)
+        filesystem_invocation_mcp.database, filesystem_invocation_mcp.content, 0, "https://issuer", "https://api.example", max_read_bytes=1_048_576, site_base_url="https://admin.example")
     result = await FilesystemFileResource(
         UUID(published["id"]), filesystem_invocation_mcp.callers, factory,
     ).read()
@@ -301,7 +301,7 @@ async def test_nondefault_read_limit_controls_descriptions_links_and_complete_re
     filesystem = filesystem_invocation_mcp
     services = DatabaseFilesystemServiceFactory(
         filesystem.database, filesystem.content, 1024, "https://issuer", "https://api.example",
-        max_read_bytes=37,
+        max_read_bytes=37, site_base_url="https://admin.example",
     )
     server = server_for(filesystem, services)
     register_filesystem_resources(server, filesystem.callers, services)

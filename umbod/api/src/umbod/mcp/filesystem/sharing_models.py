@@ -42,12 +42,18 @@ class ShareNodeGroupCommand(GroupPolicy):
 
 class CallerShareNodeResult(ShareNodeResult):
     visible_to: Visibility
+    view_url: str | None = Field(
+        description="Authenticated browser navigation URL for the Umbod file view, not a public share or download URL or an MCP resource URI; null when current discovery is unavailable.",
+    )
 
 
 class LegacyShareNodeGroupResult(ShareNodeGroupCommand):
     recursive: bool = Field(..., strict=True)
     changed: bool
     visible_to: Visibility
+    view_url: str | None = Field(
+        description="Authenticated browser navigation URL for the Umbod file view, not a public share or download URL or an MCP resource URI; null when current discovery is unavailable.",
+    )
 
     @field_serializer("permissions", when_used="json")
     def serialize_permissions(self, permissions: frozenset[Permission]) -> list[str]:

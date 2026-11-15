@@ -1,4 +1,5 @@
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
+from uuid import UUID
 
 from umbod.core.callers import CallerSnapshot
 from umbod.core.filesystem.access import AccessMetadataService, CallerNodeSummary
@@ -7,19 +8,21 @@ from umbod.core.filesystem.errors import PolicyDecodingFailure
 from umbod.core.filesystem.browsing import NodeSummary
 from umbod.core.filesystem.sharing import FilesystemSharing, ShareableNodeSharingSummary
 
+from .links import project_view_node
 from .models import AuthorizedSharingMetadata, FilesystemNodeSummary, RestrictedSharingMetadata
 
 
 async def enrich_nodes(
     sharing: FilesystemSharing, caller: CallerSnapshot, nodes: Sequence[NodeSummary],
-    access: AccessMetadataService,
+    access: AccessMetadataService, view_url: Callable[[UUID], str],
 ) -> list[FilesystemNodeSummary]:
     projected = await access.enrich_nodes(caller, nodes)
-    return await enrich_projected_nodes(sharing, caller, projected)
+    return await enrich_projected_nodes(sharing, caller, projected, view_url)
 
 
 async def enrich_projected_nodes(
     sharing: FilesystemSharing, caller: CallerSnapshot, nodes: Sequence[CallerNodeSummary],
+    view_url: Callable[[UUID], str],
 ) -> list[FilesystemNodeSummary]:
     node_ids = tuple(dict.fromkeys(node.id for node in nodes))
     indexed = {}
@@ -40,5 +43,5 @@ async def enrich_projected_nodes(
             if isinstance(summary, ShareableNodeSharingSummary)
             else RestrictedSharingMetadata(can_share=False)
         )
-        enriched.append(FilesystemNodeSummary(**node.model_dump(), sharing=metadata))
+        enriched.append(FilesystemNodeSummary(**project_view_node(node, view_url).model_dump(), sharing=metadata))
     return enriched

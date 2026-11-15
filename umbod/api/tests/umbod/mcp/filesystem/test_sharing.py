@@ -65,7 +65,13 @@ async def test_restricted_reads_omit_grants_in_every_read_variant(
         result = await client.call_tool(tool, arguments)
         descriptor = next(item for item in await client.list_tools() if item.name == tool)
     validate(result.structured_content, descriptor.output_schema)
-    assert all(node["sharing"] == {"can_share": False} for node in returned_nodes(variant, result.structured_content))
+    nodes = returned_nodes(variant, result.structured_content)
+    assert all(node["sharing"] == {"can_share": False} for node in nodes)
+    for node in nodes:
+        assert node["permissions"]["can_discover"] is True
+        assert node["permissions"]["can_read"] is False
+        assert node["view_url"] == f"https://admin.example/files?node={node['id']}"
+        assert any(node["view_url"] in getattr(block, "text", "") for block in result.content)
 
 
 class RecordingSharing:

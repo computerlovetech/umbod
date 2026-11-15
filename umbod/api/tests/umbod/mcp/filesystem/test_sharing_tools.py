@@ -69,7 +69,7 @@ async def test_advertised_schemas_and_annotations_are_exact(filesystem_invocatio
             (canonical, {"node_id", "recipient", "permissions"}),
             (legacy, {"node_id", "group_id", "permissions"}),
         ):
-            expected = fields | ({"changed", "visible_to"} if schema is share.output_schema else set())
+            expected = fields | ({"changed", "visible_to", "view_url"} if schema is share.output_schema else set())
             assert set(definitions[name]["properties"]) == expected | {"recursive"}
             assert set(definitions[name]["required"]) == expected | ({"recursive"} if schema is share.output_schema else set())
             assert definitions[name]["properties"]["recursive"]["type"] == "boolean"
@@ -116,8 +116,8 @@ async def test_additive_union_retry_preserves_other_grants_and_exact_ids(
         second = await client.call_tool(SHARE, {"node_id": node_id, "group_id": group_id, "permissions": ["discover"]})
         retry = await client.call_tool(SHARE, {"node_id": node_id, "group_id": group_id, "permissions": ["discover"]})
         descriptor = next(tool for tool in await client.list_tools() if tool.name == SHARE)
-    assert {key: value for key, value in first.structured_content.items() if key != "visible_to"} == {"node_id": node_id, "group_id": group_id, "permissions": ["read"], "recursive": kind == "directory", "changed": True}
-    assert {key: value for key, value in second.structured_content.items() if key != "visible_to"} == {"node_id": node_id, "group_id": group_id, "permissions": ["discover", "read"], "recursive": kind == "directory", "changed": True}
+    assert first.structured_content == {"node_id": node_id, "group_id": group_id, "permissions": ["read"], "recursive": kind == "directory", "changed": True, "visible_to": first.structured_content["visible_to"], "view_url": f"https://admin.example/files?node={node_id}"}
+    assert second.structured_content == {"node_id": node_id, "group_id": group_id, "permissions": ["discover", "read"], "recursive": kind == "directory", "changed": True, "visible_to": second.structured_content["visible_to"], "view_url": f"https://admin.example/files?node={node_id}"}
     assert retry.structured_content == {**second.structured_content, "changed": False}
     for result in (first, second, retry):
         validate(result.structured_content, descriptor.output_schema)
@@ -239,7 +239,7 @@ async def test_discovery_has_no_io_and_each_invocation_captures_and_calls_once(
     monkeypatch.setattr(filesystem_invocation_mcp.services, "sharing", factory)
     captures = filesystem_invocation_mcp.callers.count
     async with Client(filesystem_invocation_mcp.server) as client:
-        await client.list_tools()
+        descriptors = {descriptor.name: descriptor for descriptor in await client.list_tools()}
         assert factory.call_count == 0
         assert filesystem_invocation_mcp.callers.count == captures
         payload = (
@@ -248,8 +248,12 @@ async def test_discovery_has_no_io_and_each_invocation_captures_and_calls_once(
         )
         for _ in range(2):
             response = await client.call_tool(tool, payload)
+            if tool == SHARE:
+                assert response.structured_content["view_url"] is None
+                assert json.loads(response.content[0].text) == response.structured_content
+                validate(response.structured_content, descriptors[SHARE].output_schema)
             if recipient_type != "legacy":
-                assert response.structured_content == {**authoritative.model_dump(mode="json"), "visible_to": {"type": "restricted"}}
+                assert response.structured_content == {**authoritative.model_dump(mode="json"), "visible_to": {"type": "restricted"}, "view_url": None}
     assert filesystem_invocation_mcp.callers.count == captures + 2
     assert factory.call_count == 2
     if tool == LIST:
@@ -388,8 +392,8 @@ async def test_canonical_recipients_union_retry_and_direct_node_access(
         first = await client.call_tool(SHARE, {**command, "permissions": ["read"]})
         second = await client.call_tool(SHARE, {**command, "permissions": ["discover"]})
         retry = await client.call_tool(SHARE, {**command, "permissions": ["discover"]})
-        assert {key: value for key, value in first.structured_content.items() if key != "visible_to"} == {**command, "permissions": ["read"], "recursive": kind == "directory", "changed": True}
-        assert {key: value for key, value in second.structured_content.items() if key != "visible_to"} == {**command, "permissions": ["discover", "read"], "recursive": kind == "directory", "changed": True}
+        assert first.structured_content == {**command, "permissions": ["read"], "recursive": kind == "directory", "changed": True, "visible_to": first.structured_content["visible_to"], "view_url": f"https://admin.example/files?node={node_id}"}
+        assert second.structured_content == {**command, "permissions": ["discover", "read"], "recursive": kind == "directory", "changed": True, "visible_to": second.structured_content["visible_to"], "view_url": f"https://admin.example/files?node={node_id}"}
         assert retry.structured_content == {**second.structured_content, "changed": False}
         for response in (first, second, retry):
             validate(response.structured_content, descriptor.output_schema)

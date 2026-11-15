@@ -4,7 +4,6 @@ from fastmcp.tools.base import Tool, ToolResult
 from mcp.types import ToolAnnotations
 from pydantic import PrivateAttr, ValidationError as ModelValidationError
 
-from umbod.core.filesystem.access import CallerNodeSummary
 from umbod.core.filesystem.content.errors import UploadTooLarge
 from umbod.core.filesystem.ports import ByteStream
 
@@ -12,7 +11,8 @@ from .argument_errors import invalid_content_error
 from umbod.mcp.responses.progress import operation_completed
 
 from .errors import filesystem_operation
-from .links import file_link_result
+from .links import file_link_result, project_view_node
+from .models import FilesystemViewNodeSummary
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
 from .upload_models import MAX_UPLOAD_BYTES, UploadCommand
 
@@ -34,10 +34,11 @@ class FilesystemUploadTool(Tool):
                 "Maximum 10485760 decoded bytes (10 MiB); lower server limits apply. "
                 "One-shot upload, without chunking or resumability. Retrying is not idempotent. "
                 "Returns file metadata and an MCP resource link, never uploaded content. "
+                "view_url opens the authenticated Umbod browser view, not a public share, download, or MCP resource read. "
                 f"Use resources/read for current content up to {services.read_max_bytes()} bytes; larger files require an HTTP download."
             ),
             parameters=UploadCommand.model_json_schema(),
-            output_schema=CallerNodeSummary.model_json_schema(),
+            output_schema=FilesystemViewNodeSummary.model_json_schema(),
             annotations=ToolAnnotations(
                 readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=False,
             ),
@@ -74,5 +75,6 @@ class FilesystemUploadTool(Tool):
             )
             result = await uploads.complete(caller, session.id)
             operation_completed()
-            node = (await self._services.access().enrich_nodes(caller, [result.node]))[0]
+            projected = (await self._services.access().enrich_nodes(caller, [result.node]))[0]
+            node = project_view_node(projected, self._services.view_url)
             return file_link_result(node, [node], "File uploaded successfully.\n" + node.model_dump_json(), self._services.read_max_bytes())

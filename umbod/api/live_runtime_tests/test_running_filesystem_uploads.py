@@ -17,7 +17,7 @@ from mcp.types import BlobResourceContents, TextResourceContents
 
 from conftest import RuntimeEndpoints
 from test_running_filesystem import (
-    FILESYSTEM, checked_namespace_browse, checked_summary, file_resource_link, file_resource_uri, tool_payload, wait_for_filesystem_tools,
+    FILESYSTEM, check_mcp_view_url, checked_namespace_browse, checked_summary, file_resource_link, file_resource_uri, tool_payload, wait_for_filesystem_tools,
 )
 from test_running_personal_mcp_execution import mcp_client, proxy_token
 from upload_transfer_support import assert_s3_transfer, assert_transfer_succeeded, s3_runtime, transfer_upload
@@ -85,6 +85,7 @@ async def test_deployed_preview_limit_preserves_full_rest_downloads(
         "content": {"encoding": "utf-8", "text": data.decode("ascii")},
     })
     node = tool_payload(uploaded)
+    check_mcp_view_url(node)
     uri = file_resource_link(uploaded, node["id"])
     downloaded = runtime.api.get(FILESYSTEM + "/nodes/" + node["id"] + "/content?delivery=stream")
     assert downloaded.status_code == 200
@@ -130,11 +131,12 @@ async def test_native_upload_is_readable_through_rest_and_private_across_workers
         "content": content,
     })
     node = tool_payload(result)
+    check_mcp_view_url(node)
     uri = file_resource_link(result, node["id"])
     assert node["parent_id"] == runtime.directory_id
     assert node["metadata"]["content_type"] == content_type
     path = FILESYSTEM + "/nodes/" + node["id"]
-    assert checked_summary(runtime.api.get(path), 200) == node
+    assert checked_summary(runtime.api.get(path), 200) == {key: value for key, value in node.items() if key != "view_url"}
     response = runtime.api.get(path + "/content?delivery=stream")
     assert response.status_code == 200
     assert response.headers["content-type"].split(";")[0] == content_type
@@ -273,6 +275,7 @@ async def test_upload_session_transfers_original_bytes_without_oauth_credentials
     completed = await runtime.client.call_tool("filesystem_complete_upload", {"upload_id": begun["upload_id"]})
     receipt = tool_payload(completed)
     node = receipt["node"]
+    check_mcp_view_url(node)
     uri = file_resource_link(completed, node["id"])
     assert receipt["size_bytes"] == len(data)
     assert receipt["sha256"] == digest

@@ -102,7 +102,7 @@ async def test_proxy_request_scope_does_not_leak_into_flat_root_tools_list(monke
     monkeypatch.setattr(CurrentFilesystemCallerCapture, 'capture', Mock(return_value=snapshot))
     services = DatabaseFilesystemServiceFactory(
         persistence_runtime.database, create_content_driver(InMemoryContentConfig(type="inmemory")),
-        1024, "https://issuer", "https://api.example", 1024,
+        1024, "https://issuer", "https://api.example", 1024, site_base_url="https://admin.example",
     )
     home = await services.homes().get_or_provision(snapshot)
     browsing = services.browsing()

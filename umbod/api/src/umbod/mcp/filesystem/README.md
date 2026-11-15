@@ -19,8 +19,8 @@ description: "MCP adapters for namespace-aware browsing, content, updates, file 
 - [deletion.py](./deletion.py) — Human-approved, revision-checked removal of one file and its policies, never directories or stored bytes.
 - [errors.py](./errors.py) — Safe public failures with recovery guidance and authorization-denial classification, without hidden-node disclosure.
 - [factory.py](./factory.py) — Operation-local service composition.
-- [links.py](./links.py) — Canonical current-file URIs and native resource links alongside structured tool results.
-- [models.py](./models.py) — Namespace-aware node summaries with manageable sharing metadata, child envelopes and deletion contracts.
+- [links.py](./links.py) — Configured authenticated browser view URLs and canonical current-file MCP resource links.
+- [models.py](./models.py) — Node response view URLs, manageable sharing metadata, child envelopes and deletion contracts.
 - [ports.py](./ports.py) — Caller, service factory and mandatory deletion approval contracts.
 - [resources.py](./resources.py) — Authorized current-file resources with MIME-aware text/blob content, captured revisions and the configured preview read limit.
 - [registration.py](./registration.py) — Built-in response metadata, explicit output schemas, observed filesystem tools, and native file links.

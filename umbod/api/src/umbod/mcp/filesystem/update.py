@@ -38,6 +38,7 @@ class FilesystemUpdateNodeTool(Tool):
                 "Before moving, warn that recursive folder access follows the destination and may change the audience. "
                 "Namespace root metadata may change, but roots cannot be renamed or moved. "
                 "An empty attributes.description clears the description. Returns file resource links when discover access remains. "
+                "view_url opens the authenticated Umbod browser view, not a public share, download, or MCP resource read; null when discovery is lost. "
                 "Permissions and visibility reflect the committed update transaction; later policy changes require fresh inspection. "
                 "A successful update may return can_discover=false if discovery is revoked concurrently; "
                 "the update is complete and must not be retried for that reason."
@@ -59,7 +60,7 @@ class FilesystemUpdateNodeTool(Tool):
                 caller, command.node_id, command.to_core_patch(), expected_revision=command.expected_revision,
             )
             operation_completed()
-            result = (await enrich_projected_nodes(self._services.sharing(), caller, [node]))[0]
+            result = (await enrich_projected_nodes(self._services.sharing(), caller, [node], self._services.view_url))[0]
             return file_link_result(
                 result, [result] if result.permissions.can_discover else [], result.model_dump_json(), self._services.read_max_bytes(),
             )

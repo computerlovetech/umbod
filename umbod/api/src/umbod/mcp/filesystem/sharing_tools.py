@@ -15,6 +15,7 @@ from .argument_errors import argument_json
 from umbod.mcp.responses.progress import operation_completed
 
 from .errors import filesystem_operation
+from .links import project_view_node
 from .ports import FilesystemCallerCapture, FilesystemServiceFactory
 from .sharing_models import (
     SEARCH_RECIPIENTS_COMMAND, SHARE_COMMAND, FilteredSearchSharingRecipientsCommand,
@@ -89,7 +90,8 @@ class FilesystemShareTool(Tool):
                 "recursive folder inheritance stops at the namespace boundary. "
                 "Find recipients with filesystem_search_sharing_recipients. Use the returned type and "
                 "group_id or user_id in recipient, omitting the display label. "
-                "Legacy top-level group_id requests retain their original response shape."
+                "view_url opens the authenticated Umbod browser view, not a public share, download, or MCP resource read; null when current discovery is unavailable. "
+                "Legacy top-level group_id requests retain their existing fields."
             ),
             parameters={"type": "object", **SHARE_COMMAND.json_schema()},
             output_schema={"type": "object", **TypeAdapter(CallerShareNodeResult | LegacyShareNodeGroupResult).json_schema()},
@@ -116,14 +118,19 @@ class FilesystemShareTool(Tool):
             operation_completed()
             try:
                 node = await self._services.browsing().get_node(snapshot, command.node_id)
-                visible_to = (await self._services.access().enrich_nodes(snapshot, [node]))[0].visible_to
+                projected = (await self._services.access().enrich_nodes(snapshot, [node]))[0]
+                view_node = project_view_node(projected, self._services.view_url)
+                visible_to = view_node.visible_to
+                view_url = view_node.view_url
             except PermissionDenied:
                 visible_to = RestrictedVisibility(type="restricted")
-            result = CallerShareNodeResult(**result.model_dump(), visible_to=visible_to)
+                view_url = None
+            result = CallerShareNodeResult(**result.model_dump(), visible_to=visible_to, view_url=view_url)
             if isinstance(command, ShareNodeGroupCommand):
                 result = LegacyShareNodeGroupResult(
                     node_id=result.node_id, group_id=command.group_id,
                     permissions=result.permissions, recursive=result.recursive, changed=result.changed, visible_to=visible_to,
+                    view_url=view_url,
                 )
             return ToolResult(
                 content=result.model_dump_json(),

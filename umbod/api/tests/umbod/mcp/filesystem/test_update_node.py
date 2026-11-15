@@ -48,6 +48,8 @@ async def test_move_completes_without_resource_links_when_mover_loses_inherited_
         assert result.structured_content["parent_id"] == destination
         assert result.structured_content["revision"] == 2
         assert result.structured_content["permissions"]["can_discover"] is False
+        assert result.structured_content["view_url"] is None
+        assert "https://admin.example/files?node=" not in json.dumps([item.model_dump() for item in result.content])
         assert result.structured_content["visible_to"] == {"type": "restricted"}
         assert result.structured_content["sharing"] == {"can_share": False}
         assert not any(isinstance(item, ResourceLink) for item in result.content)
@@ -95,6 +97,7 @@ async def test_node_update_schema_description_browsing_clearing_and_stale_revisi
         node = updated.structured_content
         assert node["metadata"]["attributes"] == {"description": description, "team": "research"}
         assert node["revision"] == 2
+        assert node["view_url"] == f"https://admin.example/files?node={node_id}"
         assert any(isinstance(item, ResourceLink) for item in updated.content) == (kind == "file")
         stale = await client.call_tool(TOOL, {**arguments, "metadata": {"attributes": {"description": "stale"}}}, raise_on_error=False)
         assert stale.is_error

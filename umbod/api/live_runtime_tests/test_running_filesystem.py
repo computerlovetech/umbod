@@ -93,10 +93,15 @@ def check_access_metadata(node: dict[str, Any]) -> None:
 
 
 def node_identity(node: dict[str, Any]) -> dict[str, Any]:
-    return {key: value for key, value in node.items() if key not in {"permissions", "visible_to", "sharing"}}
+    return {key: value for key, value in node.items() if key not in {"permissions", "visible_to", "sharing", "view_url"}}
+
+
+def check_mcp_view_url(node: dict[str, Any], identity_field: str = "id") -> None:
+    assert node["view_url"] == f"https://umbod.example.invalid/files?node={node[identity_field]}"
 
 
 def mcp_node_summary(node: dict[str, Any]) -> dict[str, Any]:
+    check_mcp_view_url(node)
     sharing = node["sharing"]
     assert sharing["can_share"] is node["permissions"]["can_share"]
     if sharing["can_share"]:
@@ -104,16 +109,17 @@ def mcp_node_summary(node: dict[str, Any]) -> dict[str, Any]:
         assert isinstance(sharing["grants"], list)
     else:
         assert sharing == {"can_share": False}
-    summary = {key: value for key, value in node.items() if key != "sharing"}
+    summary = {key: value for key, value in node.items() if key not in {"sharing", "view_url"}}
     check_access_metadata(summary)
     return summary
 
 
 def sharing_write_payload(result: CallToolResult) -> dict[str, Any]:
     payload = tool_payload(result)
+    check_mcp_view_url(payload, "node_id")
     assert payload["visible_to"]["type"] in {"namespace", "restricted"}
     assert type(payload["recursive"]) is bool
-    return {key: value for key, value in payload.items() if key != "visible_to"}
+    return {key: value for key, value in payload.items() if key not in {"visible_to", "view_url"}}
 
 
 def checked_summary(response: httpx.Response, status: int) -> dict[str, Any]:

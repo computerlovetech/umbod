@@ -117,6 +117,7 @@ class FilesystemCompleteUploadTool(Tool):
                 "Publish a staged file using the current authenticated caller and current destination namespace access. "
                 "Files in shared namespaces remain governed by namespace-wide access. "
                 "Returns node metadata, verified byte count and SHA256, and a native MCP resource link. "
+                "view_url opens the authenticated Umbod browser view, not a public share, download, or MCP resource read. "
                 "Replay a known completed upload with the same upload ID to retrieve its persisted verified receipt "
                 "and file identity. Deleted files are not restored; deleted or legacy-unverified receipts cannot "
                 "provide a verified completion result. Inspect session progress before replaying an uncertain "
@@ -140,7 +141,7 @@ class FilesystemCompleteUploadTool(Tool):
             operation_completed()
             if not isinstance(result.receipt, VerifiedReceipt):
                 raise UploadReceiptUnavailable()
-            node = (await enrich_nodes(self._services.sharing(), caller, [result.node], self._services.access()))[0]
+            node = (await enrich_nodes(self._services.sharing(), caller, [result.node], self._services.access(), self._services.view_url))[0]
             response = CompleteUploadResult(
                 node=node, size_bytes=result.receipt.size_bytes, sha256=result.receipt.sha256,
             )

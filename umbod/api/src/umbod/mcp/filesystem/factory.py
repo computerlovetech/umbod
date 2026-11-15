@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from umbod.core.filesystem.authorization import VerifiedIdentityResolver
 from umbod.core.filesystem.browsing import FilesystemBrowsing
 from umbod.core.filesystem.creation import FilesystemCreation
@@ -18,20 +20,25 @@ from umbod.infrastructure import (
     create_filesystem_transactions, create_filesystem_uploads,
 )
 
+from .links import FilesystemViewUrls
 from .upload_models import MAX_UPLOAD_BYTES
 
 
 class DatabaseFilesystemServiceFactory:
     def __init__(
         self, database: Database, content: ContentDriver, max_upload_bytes: int, managed_issuer: str,
-        api_base_url: str, max_read_bytes: int,
+        api_base_url: str, max_read_bytes: int, site_base_url: str,
     ) -> None:
+        self._view_urls = FilesystemViewUrls(site_base_url)
         self._database = database
         self._managed_issuer = managed_issuer
         self._content = content
         self._max_upload_bytes = max_upload_bytes
         self._api_base_url = api_base_url
         self._max_read_bytes = max_read_bytes
+
+    def view_url(self, node_id: UUID) -> str:
+        return self._view_urls.for_node(node_id)
 
     def read_max_bytes(self) -> int:
         return self._max_read_bytes

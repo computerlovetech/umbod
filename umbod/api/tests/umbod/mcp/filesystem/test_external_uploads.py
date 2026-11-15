@@ -21,7 +21,7 @@ async def test_external_mcp_begin_needs_no_api_origin_and_inline_remains_interna
 
     content = MemoryExternalContent(filesystem_state.content, inspect_namespace)
     services = DatabaseFilesystemServiceFactory(
-        filesystem_state.database, content, 1024, "https://issuer", "invalid-api-origin", max_read_bytes=1_048_576)
+        filesystem_state.database, content, 1024, "https://issuer", "invalid-api-origin", max_read_bytes=1_048_576, site_base_url="https://admin.example")
     assert services.upload_sessions() is not services.upload_sessions()
     assert services.upload_sessions().supports_external_transfer
     server = FastMCP()
@@ -46,10 +46,13 @@ async def test_external_mcp_begin_needs_no_api_origin_and_inline_remains_interna
         retry = await client.call_tool("filesystem_complete_upload", {"upload_id": data["upload_id"]})
         assert complete.structured_content == retry.structured_content
         assert complete.structured_content["sha256"] == hashlib.sha256(b"abc").hexdigest()
+        node = complete.structured_content["node"]
+        assert node["view_url"] == f"https://admin.example/files?node={node['id']}"
         assert content.verifications == 1
         inline = await client.call_tool("filesystem_upload", {
             "parent_id": str(home.id), "name": "inline", "metadata": METADATA,
             "content": {"encoding": "utf-8", "text": "inline"},
         })
         assert inline.structured_content["name"] == "inline"
+        assert inline.structured_content["view_url"] == f"https://admin.example/files?node={inline.structured_content['id']}"
         assert len(content.preparations) == content.verifications == 1

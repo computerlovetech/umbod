@@ -66,12 +66,29 @@ def validate_collector_base_url(value: str) -> str:
     return value.rstrip("/")
 
 
+def validate_site_origin(value: str) -> str:
+    try:
+        origin = validate_collector_base_url(value)
+        if not origin or urlsplit(value).path not in ("", "/"):
+            raise ValueError("Invalid origin")
+    except ValueError:
+        raise ValueError(
+            "Public site origin must be an absolute HTTPS origin without credentials, path, query, fragment, whitespace, controls, or backslashes; HTTP requires loopback"
+        ) from None
+    return origin
+
+
 class EndpointsConfig(ConfigModel):
     site_base_url: str = defaults.PUBLIC_SITE_ORIGIN
     api_base_url: str = defaults.PUBLIC_API_ORIGIN
     private_api_base_url: str = defaults.INTERNAL_API_ORIGIN
     mcp_base_url: str = defaults.PUBLIC_MCP_ORIGIN
     collector_base_url: str = ""
+
+    @field_validator("site_base_url")
+    @classmethod
+    def validate_public_site_origin(cls, value: str) -> str:
+        return validate_site_origin(value)
 
     @field_validator("collector_base_url")
     @classmethod

@@ -26,7 +26,15 @@ SharingMetadata = Annotated[
 ]
 
 
-class FilesystemNodeSummary(CallerNodeSummary):
+class FilesystemViewNodeSummary(CallerNodeSummary):
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    view_url: str | None = Field(
+        description="Authenticated browser navigation URL for the Umbod file view, not a public share or download URL or an MCP resource URI; null when can_discover is false.",
+    )
+
+
+class FilesystemNodeSummary(FilesystemViewNodeSummary):
     model_config = ConfigDict(frozen=True, extra="forbid")
 
     sharing: SharingMetadata

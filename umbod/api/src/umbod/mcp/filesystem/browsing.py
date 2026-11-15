@@ -58,6 +58,7 @@ class FilesystemBrowseTool(Tool):
                 "breadcrumbs may be partial. Limits bound returned entries, not storage work. "
                 "Separate reads may observe concurrent changes. No file bytes are read. "
                 f"File entries include MCP resource links; use resources/read to read their current content (maximum {services.read_max_bytes()} bytes). "
+                "view_url opens the authenticated Umbod browser view, not a public share, download, or MCP resource read. "
                 "Visibility identifies the containing namespace, not the complete audience. "
                 "Sharing metadata describes manageable direct group and user grants; inherited folder shares also apply."
             ),
@@ -93,7 +94,7 @@ class FilesystemBrowseTool(Tool):
             if isinstance(command, ResolveHome):
                 node = await self._services.homes().get_or_provision(caller)
                 operation_completed()
-                nodes = await enrich_nodes(self._services.sharing(), caller, [node], self._services.access())
+                nodes = await enrich_nodes(self._services.sharing(), caller, [node], self._services.access(), self._services.view_url)
                 breadcrumbs = await self._services.browsing().get_breadcrumbs(caller, node.id)
                 inspection = FilesystemNodeInspection(node=nodes[0], breadcrumbs=breadcrumbs)
                 response = HomeResponse(operation="home", result=inspection)
@@ -101,7 +102,7 @@ class FilesystemBrowseTool(Tool):
             elif isinstance(command, InspectNode):
                 inspection = await explorer.inspect_node(caller, await targets.resolve(caller, command.target))
                 operation_completed()
-                nodes = await enrich_nodes(self._services.sharing(), caller, [inspection.node], self._services.access())
+                nodes = await enrich_nodes(self._services.sharing(), caller, [inspection.node], self._services.access(), self._services.view_url)
                 inspection = FilesystemNodeInspection(node=nodes[0], breadcrumbs=inspection.breadcrumbs)
                 response = NodeInspectionResponse(operation="stat", result=inspection)
                 rendered = render_inspection(inspection)
@@ -112,7 +113,7 @@ class FilesystemBrowseTool(Tool):
                 )
                 operation_completed()
                 nodes = await enrich_nodes(
-                    self._services.sharing(), caller, [tree.node, *(entry.node for entry in tree.entries)], self._services.access(),
+                    self._services.sharing(), caller, [tree.node, *(entry.node for entry in tree.entries)], self._services.access(), self._services.view_url,
                 )
                 tree = FilesystemDirectoryTree(
                     node=nodes[0], breadcrumbs=tree.breadcrumbs, expansion=tree.expansion,
@@ -128,7 +129,7 @@ class FilesystemBrowseTool(Tool):
                 )
                 operation_completed()
                 nodes = await enrich_nodes(
-                    self._services.sharing(), caller, [listing.node, *listing.entries], self._services.access(),
+                    self._services.sharing(), caller, [listing.node, *listing.entries], self._services.access(), self._services.view_url,
                 )
                 listing = FilesystemDirectoryListing(
                     node=nodes[0], breadcrumbs=listing.breadcrumbs,

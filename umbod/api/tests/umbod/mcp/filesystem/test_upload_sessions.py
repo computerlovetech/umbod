@@ -36,6 +36,7 @@ async def test_begin_complete_resource_link_and_owner_isolation(filesystem_invoc
         })
         data = begin.structured_content
         assert data["complete_tool"] == "filesystem_complete_upload"
+        assert "view_url" not in data
         assert data["transfer"]["type"] == "single"
         assert data["transfer"]["method"] == "PUT"
         assert data["transfer"]["url"] == f"https://api.example/api/filesystem/uploads/{data['upload_id']}/transfer"
@@ -53,6 +54,7 @@ async def test_begin_complete_resource_link_and_owner_isolation(filesystem_invoc
         rendered = json.loads(complete.content[0].text)
         assert rendered == complete.structured_content
         assert rendered["node"]["permissions"]["can_write"] is True
+        assert rendered["node"]["view_url"] == f"https://admin.example/files?node={rendered['node']['id']}"
         assert rendered["node"]["visible_to"]["type"] == "namespace"
         assert "sharing" in complete.structured_content["node"]
         assert complete.structured_content["node"]["visible_to"]["kind"] == "personal"
@@ -110,7 +112,7 @@ async def test_shared_inmemory_local_storage_mcp_begin_capability_only_rest_put_
         await rest.put(f"/api/filesystem/uploads/{UUID(int=0)}/transfer", content=b"")
         runtime = captured[0].persistence_runtime
         services = DatabaseFilesystemServiceFactory(
-            runtime.database, create_content_driver(content_config), 20_971_520, "https://issuer", "http://localhost", max_read_bytes=1_048_576)
+            runtime.database, create_content_driver(content_config), 20_971_520, "https://issuer", "http://localhost", max_read_bytes=1_048_576, site_base_url="https://admin.example")
         callers = ScopedCallerCapture()
         callers.current.set(caller_snapshot("alice", "https://issuer", (), AuthenticationProvenance.UPSTREAM_VERIFIED))
         home = await services.homes().get_or_provision(callers.current.get())

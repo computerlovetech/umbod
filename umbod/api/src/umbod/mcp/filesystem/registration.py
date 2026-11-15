@@ -53,7 +53,7 @@ def register_filesystem_tools(
             snapshot = callers.capture()
             node = await services.browsing().get_node(snapshot, node_id)
             operation_completed()
-            result = (await enrich_nodes(services.sharing(), snapshot, [node], services.access()))[0]
+            result = (await enrich_nodes(services.sharing(), snapshot, [node], services.access(), services.view_url))[0]
             return file_link_result(result, [result], result.model_dump_json(), services.read_max_bytes())
 
     async def list_filesystem_children(parent_id: UUID) -> ToolResult:
@@ -61,7 +61,7 @@ def register_filesystem_tools(
             snapshot = callers.capture()
             nodes = await services.browsing().list_children(snapshot, parent_id)
             operation_completed()
-            result = FilesystemChildren(nodes=await enrich_nodes(services.sharing(), snapshot, nodes, services.access()))
+            result = FilesystemChildren(nodes=await enrich_nodes(services.sharing(), snapshot, nodes, services.access(), services.view_url))
             return file_link_result(result, result.nodes, result.model_dump_json(), services.read_max_bytes())
 
     async def create_filesystem_file(
@@ -71,7 +71,7 @@ def register_filesystem_tools(
             snapshot = callers.capture()
             node = await services.creation().create_file(snapshot, parent_id, name, metadata)
             operation_completed()
-            result = (await enrich_nodes(services.sharing(), snapshot, [node], services.access()))[0]
+            result = (await enrich_nodes(services.sharing(), snapshot, [node], services.access(), services.view_url))[0]
             return file_link_result(result, [result], result.model_dump_json(), services.read_max_bytes())
 
     async def create_filesystem_directory(
@@ -81,7 +81,7 @@ def register_filesystem_tools(
             snapshot = callers.capture()
             node = await services.creation().create_directory(snapshot, parent_id, name, metadata)
             operation_completed()
-            return (await enrich_nodes(services.sharing(), snapshot, [node], services.access()))[0]
+            return (await enrich_nodes(services.sharing(), snapshot, [node], services.access(), services.view_url))[0]
 
     for function, description, readonly, output_model in (
         (get_filesystem_node, "Get a filesystem node by UUID with an MCP resource link for files.", True, FilesystemNodeSummary),
@@ -90,7 +90,7 @@ def register_filesystem_tools(
         (create_filesystem_directory, "Create an empty directory governed by its namespace's access policy.", False, FilesystemNodeSummary),
     ):
         tool = FunctionTool.from_function(
-            function, name=function.__name__, description=description,
+            function, name=function.__name__, description=description + " view_url opens the authenticated Umbod browser view, not a public share, download, or MCP resource read.",
             auth=visibility.authorize, tags=set(), meta={},
         )
         tool.output_schema = output_model.model_json_schema()

@@ -47,7 +47,7 @@ async def test_upload_publishes_readable_private_content(
     assert json.loads(rendered)["permissions"]["can_write"] is True
     assert json.loads(rendered)["visible_to"]["type"] == "namespace"
     assert set(result.structured_content) == {
-        "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision", "permissions", "visible_to",
+        "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision", "permissions", "visible_to", "view_url",
     }
     download = await filesystem_invocation_mcp.files.open_download(
         filesystem_invocation_mcp.callers.current.get(), UUID(result.structured_content["id"]),

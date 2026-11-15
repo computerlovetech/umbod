@@ -177,7 +177,7 @@ async def test_creation_is_observed_and_projects_no_storage_keys(
         root = await root_id(client)
         result = await client.call_tool(tool, {"parent_id": root, "name": "empty", "metadata": METADATA})
         assert set(result.structured_content) == {
-            "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision", "sharing", "permissions", "visible_to"
+            "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision", "sharing", "permissions", "visible_to", "view_url"
         }
     assert any(sample.labels["tool_name"] == tool and sample.labels["outcome"] == "success"
                for sample in filesystem_invocation_mcp.metrics.metric_samples())
