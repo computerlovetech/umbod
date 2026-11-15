@@ -117,7 +117,6 @@ from umbod.mcp.connectors.openapi.discovery_runtime import initialize_openapi_di
 from umbod.mcp.runtime_options import ConnectorRuntimeSourceStores, ConnectorStorePair, HttpConnectorRuntimeStateSourceStrategy, LocalConnectorRuntimeStateSourceStrategy, StoreBackedConnectorRuntimeStateSourceStrategy, resolve_connector_runtime_state_source_strategy
 from umbod.config.defaults import LOCAL_CONNECTOR_CONFIGURATION_SECRET
 from umbod.config import AppConfig, InMemoryConnectorStoreConfig, SQLiteConnectorStoreConfig, load_server_app_config
-from umbod.core.agent_behaviour.retention import create_diagnostic_retention
 from umbod.logging import flush_logging
 from umbod.mcp.settings import MCPAppSettings
 from umbod.mcp.usage import McpUsageRuntime, create_mcp_usage_runtime
@@ -473,7 +472,6 @@ def _create_public_http_lifespan(context: PublicAppRuntimeContext, *, owns_persi
             synchronizer = await _initialize_runtime_projection(context)
             async with AsyncExitStack() as stack:
                 await stack.enter_async_context(context.http_app.lifespan(context.http_app))
-                await stack.enter_async_context(create_diagnostic_retention(context.persistence_runtime.database, context.telemetry.application_failures).lifespan())
                 if context.settings.mcp.metrics_enabled:
                     metrics_server = context.telemetry.metrics_server_factory.create()
                     await metrics_server.start()

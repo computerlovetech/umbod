@@ -48,6 +48,8 @@ Set `persistence.enabled=true` to create a ReadWriteOnce PersistentVolumeClaim. 
 
 Umbod does not migrate SQLite schemas or persisted documents between incompatible versions. Reset persistent storage before installing an incompatible Umbod version.
 
+Physical usage-history and agent-behaviour retention runs only through `umbod cleanup`, not server lifecycles. Configure an external schedule against the same persistent database before rollout; see [scheduled cleanup](cleanup.md).
+
 ## Analytics backend
 
 The chart configures the SQLite analytics backend separately from application persistence:

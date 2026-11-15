@@ -20,6 +20,7 @@ from umbod.config.app import (
     OpenApiConnectorConfig,
     OtlpReceiverConfig,
     PersonalConnectionsConfig,
+    CleanupConfig,
     PersonalUsageConfig,
     RestConfig,
     RuntimeConfig,
@@ -260,6 +261,7 @@ def assemble_app_config(operator: OperatorSettings, auth_recipe: str) -> AppConf
         ),
         connector_security=connector_security,
         connector_store=connector_store,
+        cleanup=CleanupConfig(job_timeout_seconds=operator.cleanup_job_timeout_seconds),
         personal_usage=PersonalUsageConfig(
             enabled=operator.personal_usage_enabled,
             queue_capacity=operator.personal_usage_queue_capacity,

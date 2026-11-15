@@ -14,6 +14,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [caching](./caching/README.md) — Request-local result reuse.
 - [callers](./callers/README.md) — Transport-neutral caller facts.
 - [capabilities](./capabilities/README.md) — Capability identity and catalogues.
+- [cleanup](./cleanup/README.md) — Explicit one-shot jobs, sequential time bounds and safe failure continuation.
 - [configuration](./configuration/) — Encrypted connector configuration.
 - [connectors](./connectors/) — Native, OpenAPI and downstream MCP connectors.
 - [diagnostics](./diagnostics/README.md) — Safe failure-event snapshots and signal publication contracts.

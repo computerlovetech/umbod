@@ -7,6 +7,8 @@ from .models import OwnedUsageQuery, UsageBatch, UsageSummary
 class UsageWriter(Protocol):
     async def append_usage(self, batch: UsageBatch) -> None: ...
 
+
+class UsageRetentionStore(Protocol):
     async def prune_usage(self, before: date) -> None: ...
 
 

@@ -63,7 +63,7 @@ def harness() -> UsageHarness:
         delays.append(delay)
 
     runtime = UsageWriteBehind(settings, writer, UsageObservations(failures, lambda: 0.0),
-                              lambda: asyncio.get_running_loop().time(), lambda: 1_735_689_600_000_000_000, sleep)
+                              lambda: asyncio.get_running_loop().time(), sleep)
     return UsageHarness(settings, writer, failures, delays, runtime)
 
 

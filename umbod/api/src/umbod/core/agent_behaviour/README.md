@@ -16,7 +16,7 @@ description: Published behaviour patterns, collection playbooks and acknowledged
 - [factory.py](./factory.py) — Shared database composition with UTC time and random report identifiers.
 - [schema.py](./schema.py) — Backend-neutral configuration, report and receipt tables.
 - [store.py](./store.py) — Serialized publication, deduplicated reporting, filtering, deletion and expiry.
-- [retention.py](./retention.py) — Lifespan-owned bounded cleanup with safe failure publication.
+- [retention.py](./retention.py) — One-shot batched report and receipt expiration for the explicitly composed cleanup runner.
 
 # Related links
 

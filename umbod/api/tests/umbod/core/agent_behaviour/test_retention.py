@@ -1,97 +1,70 @@
 import asyncio
+from datetime import timedelta
 
 import pytest
 
-from tests.support.application_failures import CapturingApplicationFailures
+from umbod.core.agent_behaviour import AgentBehaviourService, PublishConfiguration, SubmitDiagnosticReport
 from umbod.core.agent_behaviour.retention import DiagnosticRetention
-from umbod.core.diagnostics import ApplicationFailureKind
+from umbod.core.agent_behaviour.schema import DEDUPE_TABLE, REPORT_LIST_TABLE, REPORT_TABLE
+from umbod.core.callers import CallerContext
+from umbod.core.persistence import AllFields, Database, NoFilter, Query, Unordered
+
+from .conftest import Clock
+
+
+@pytest.mark.asyncio
+async def test_one_shot_expires_reports_then_receipts_at_exact_boundaries(
+    service: AgentBehaviourService, publication: PublishConfiguration, caller: CallerContext,
+    submission: SubmitDiagnosticReport, clock: Clock, database: Database,
+) -> None:
+    await service.publish_configuration(publication)
+    await service.submit_report(caller, submission)
+    clock.now += timedelta(days=30)
+    await DiagnosticRetention(service.purge_expired).run()
+    async with database.read_session() as session:
+        assert not await session.find_many(REPORT_TABLE, Query(NoFilter(), AllFields(), Unordered()))
+        assert not await session.find_many(REPORT_LIST_TABLE, Query(NoFilter(), AllFields(), Unordered()))
+        assert len(await session.find_many(DEDUPE_TABLE, Query(NoFilter(), AllFields(), Unordered()))) == 1
+    clock.now += timedelta(days=30)
+    await DiagnosticRetention(service.purge_expired).run()
+    async with database.read_session() as session:
+        assert not await session.find_many(DEDUPE_TABLE, Query(NoFilter(), AllFields(), Unordered()))
 
 
 class RetentionDriver:
-    def __init__(self) -> None:
+    def __init__(self, remaining: int) -> None:
         self.calls = 0
-        self.intervals: list[float] = []
-        self.waiting = asyncio.Event()
-        self.tick = asyncio.Event()
-        self.cleaned = asyncio.Event()
-        self.stopped = asyncio.Event()
-        self.fail = False
-        self.remaining = 0
+        self.remaining = remaining
 
     async def purge(self) -> int:
         self.calls += 1
-        self.cleaned.set()
-        if self.fail:
-            raise RuntimeError("private-report-evidence")
         removed = min(100, self.remaining)
         self.remaining -= removed
         return removed
 
-    async def wait(self, seconds: float) -> None:
-        self.intervals.append(seconds)
-        self.waiting.set()
-        try:
-            await self.tick.wait()
-            self.tick.clear()
-        except asyncio.CancelledError:
-            self.stopped.set()
-            raise
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("remaining,calls", [(0, 1), (1, 2), (251, 4)])
+async def test_cleanup_drains_all_batches_and_returns(remaining: int, calls: int) -> None:
+    driver = RetentionDriver(remaining)
+    await DiagnosticRetention(driver.purge).run()
+    assert driver.remaining == 0
+    assert driver.calls == calls
 
 
 @pytest.mark.asyncio
-async def test_cleanup_runs_on_startup_and_stops_before_lifespan_returns() -> None:
-    driver = RetentionDriver()
-    failures = CapturingApplicationFailures()
-    runtime = DiagnosticRetention(driver.purge, failures, driver.wait)
-    async with runtime.lifespan():
-        assert driver.calls == 1
-        await asyncio.wait_for(driver.waiting.wait(), timeout=1)
-    assert driver.stopped.is_set()
-    assert failures.events == []
+async def test_cleanup_propagates_failure_to_runner() -> None:
+    async def purge() -> int:
+        raise RuntimeError("private-report-evidence")
+
+    with pytest.raises(RuntimeError):
+        await DiagnosticRetention(purge).run()
 
 
 @pytest.mark.asyncio
-async def test_cleanup_repeats_only_after_hourly_wait() -> None:
-    driver = RetentionDriver()
-    runtime = DiagnosticRetention(driver.purge, CapturingApplicationFailures(), driver.wait)
-    async with runtime.lifespan():
-        await asyncio.wait_for(driver.waiting.wait(), timeout=1)
-        driver.cleaned.clear()
-        driver.tick.set()
-        await asyncio.wait_for(driver.cleaned.wait(), timeout=1)
-        assert driver.calls == 2
-        assert all(interval == 3600 for interval in driver.intervals)
+async def test_cleanup_propagates_cancellation() -> None:
+    async def purge() -> int:
+        raise asyncio.CancelledError
 
-
-@pytest.mark.asyncio
-async def test_cleanup_failure_is_sanitized_and_does_not_prevent_startup() -> None:
-    driver = RetentionDriver()
-    driver.fail = True
-    failures = CapturingApplicationFailures()
-    runtime = DiagnosticRetention(driver.purge, failures, driver.wait)
-    async with runtime.lifespan():
-        assert len(failures.events) == 1
-        assert failures.events[0].kind is ApplicationFailureKind.AGENT_BEHAVIOUR_RETENTION
-        assert "private-report-evidence" not in failures.events[0].model_dump_json()
-
-
-@pytest.mark.asyncio
-async def test_cleanup_drains_backlog_larger_than_one_transaction_before_idle_wait() -> None:
-    driver = RetentionDriver()
-    driver.remaining = 251
-    runtime = DiagnosticRetention(driver.purge, CapturingApplicationFailures(), driver.wait)
-    async with runtime.lifespan():
-        assert driver.remaining == 0
-        assert driver.calls == 4
-        await asyncio.wait_for(driver.waiting.wait(), timeout=1)
-        assert driver.intervals == [3600]
-
-
-@pytest.mark.asyncio
-async def test_failed_cleanup_retries_after_one_minute_instead_of_waiting_an_hour() -> None:
-    driver = RetentionDriver()
-    driver.fail = True
-    runtime = DiagnosticRetention(driver.purge, CapturingApplicationFailures(), driver.wait)
-    async with runtime.lifespan():
-        await asyncio.wait_for(driver.waiting.wait(), timeout=1)
-        assert driver.intervals == [60]
+    with pytest.raises(asyncio.CancelledError):
+        await DiagnosticRetention(purge).run()

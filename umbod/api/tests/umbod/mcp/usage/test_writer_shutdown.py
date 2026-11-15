@@ -1,5 +1,4 @@
 import asyncio
-from datetime import date
 
 import pytest
 
@@ -29,14 +28,11 @@ class CleanupWriter:
                     continue
             self.finished.set()
 
-    async def prune_usage(self, before: date) -> None:
-        pass
-
 
 def runtime(harness: UsageHarness, writer: CleanupWriter) -> UsageWriteBehind:
     return UsageWriteBehind(
         harness.settings, writer, UsageObservations(harness.failures, lambda: 0.0),
-        asyncio.get_running_loop().time, lambda: 1_735_689_600_000_000_000, asyncio.sleep,
+        asyncio.get_running_loop().time, asyncio.sleep,
     )
 
 
@@ -82,17 +78,12 @@ async def test_cleanup_overrun_is_reported_only_after_worker_termination(
 async def test_worker_failure_is_not_hidden_by_shutdown(
     harness: UsageHarness, record: UsageRecord,
 ) -> None:
-    calls: list[int] = []
-
     def failing_clock() -> float:
-        calls.append(1)
-        if len(calls) > 1:
-            raise RuntimeError("worker clock failed")
-        return 0.0
+        raise RuntimeError("worker clock failed")
 
     worker = UsageWriteBehind(
         harness.settings, harness.writer, UsageObservations(harness.failures, lambda: 0.0),
-        failing_clock, lambda: 1_735_689_600_000_000_000, asyncio.sleep,
+        failing_clock, asyncio.sleep,
     )
     worker.start()
     worker.enqueue(record)

@@ -15,6 +15,10 @@ class ConfigModel(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
 
+class CleanupConfig(ConfigModel):
+    job_timeout_seconds: float = Field(default=5.0, gt=0, le=3600, allow_inf_nan=False)
+
+
 class RuntimeConfig(ConfigModel):
     app_name: str = defaults.APP_NAME
     log_level: str = defaults.LOG_LEVEL
@@ -424,6 +428,7 @@ class AppConfig(ConfigModel):
     endpoints: EndpointsConfig = Field(default_factory=EndpointsConfig)
     rest: RestConfig = Field(default_factory=RestConfig)
     otlp_receiver: OtlpReceiverConfig = Field(default_factory=OtlpReceiverConfig)
+    cleanup: CleanupConfig = Field(default_factory=CleanupConfig)
     personal_usage: PersonalUsageConfig = Field(default_factory=PersonalUsageConfig)
     telemetry_analytics: TelemetryAnalyticsConfig = Field(
         default_factory=TelemetryAnalyticsConfig

@@ -19,7 +19,6 @@ class UsageCollectionSettings(Protocol):
     write_timeout_seconds: float
     max_retries: int
     shutdown_timeout_seconds: float
-    retention_days: int
 
 
 class UsageAdmission(Protocol):

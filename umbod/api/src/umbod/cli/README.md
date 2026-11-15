@@ -8,6 +8,7 @@ description: "Service startup, configuration inspection, connector validation an
 
 - [__init__.py](./__init__.py) — Package exports.
 - [api.py](./api.py) — REST service commands.
+- [cleanup.py](./cleanup.py) — Explicit one-shot retention jobs and shared persistence lifetime.
 - [config.py](./config.py) — Configuration inspection commands.
 - [connectors.py](./connectors.py) — Connector validation commands.
 - [main.py](./main.py) — Command registration.

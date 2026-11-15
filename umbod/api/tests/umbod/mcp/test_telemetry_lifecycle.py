@@ -1,6 +1,7 @@
 import asyncio
 from dataclasses import replace
 from pathlib import Path
+from unittest.mock import AsyncMock
 
 import pytest
 from starlette.applications import Starlette
@@ -9,6 +10,8 @@ from tests.mcp_fixtures import empty_connector_plugins
 from umbod.mcp import public_app
 from tests.mcp_telemetry_fixtures import RecordingMetricsServer, RecordingMetricsServerFactory
 from umbod.config import AppConfig
+from umbod.core.agent_behaviour.store import DatabaseAgentBehaviourStore
+from umbod.core.usage.store import DatabaseUsageStore
 from umbod.core.persistence import Database, PersistenceRuntime
 from umbod.core.persistence.runtime import PersistenceReadiness
 from umbod.mcp.public_app import build_starlette_app, create_runtime_context, load_configured_public_app_config
@@ -83,6 +86,20 @@ async def test_enabled_listener_starts_and_stops_once_per_fresh_lifespan() -> No
     assert listeners.servers[0] is not listeners.servers[1]
     assert [(server.starts, server.stops) for server in listeners.servers] == [(1, 1), (1, 1)]
     assert persistence.shutdowns == 2
+
+
+@pytest.mark.asyncio
+async def test_server_lifespan_never_prunes_diagnostics_or_usage(monkeypatch: pytest.MonkeyPatch) -> None:
+    purge = AsyncMock(return_value=0)
+    prune = AsyncMock()
+    monkeypatch.setattr(DatabaseAgentBehaviourStore, "purge_expired", purge)
+    monkeypatch.setattr(DatabaseUsageStore, "prune_usage", prune)
+    app, persistence = await create_application(False, RecordingMetricsServerFactory())
+    async with app.router.lifespan_context(app):
+        await asyncio.sleep(0)
+    purge.assert_not_awaited()
+    prune.assert_not_awaited()
+    assert persistence.shutdowns == 1
 
 
 @pytest.mark.asyncio

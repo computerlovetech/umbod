@@ -51,7 +51,7 @@ def create_mcp_usage_runtime(
     observations = UsageObservations(application_failures, time.monotonic)
     writer = UsageWriteBehind(
         settings.personal_usage, DatabaseUsageStore(database), observations,
-        time.monotonic, time.time_ns, asyncio.sleep,
+        time.monotonic, asyncio.sleep,
     )
     if settings.personal_usage.enabled:
         for signal, name in (

@@ -12,7 +12,6 @@ from starlette.middleware import Middleware
 from starlette.routing import BaseRoute
 from umbod.core.connectors.native.registry import ConnectorRegistration
 from umbod.core.persistence import PersistenceRuntime
-from umbod.core.agent_behaviour.retention import create_diagnostic_retention
 from umbod.core.telemetry.analytics import TelemetryAnalyticsRuntime
 from umbod.infrastructure import create_configured_analytics_runtime
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
@@ -334,8 +333,7 @@ def _create_configured_lifespan(
                     await metrics_server.stop()
                 raise
             try:
-                async with create_diagnostic_retention(persistence_runtime.database, create_application_failure_signal()).lifespan():
-                    yield {"profile_signing_key_resolver": resolver}
+                yield {"profile_signing_key_resolver": resolver}
             finally:
                 if metrics_enabled:
                     await metrics_server.stop()

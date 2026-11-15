@@ -1,12 +1,10 @@
 import asyncio
-from datetime import datetime, timedelta, timezone
 
-from umbod.core.diagnostics import ApplicationFailureKind
 from umbod.core.usage.models import UsageBatch, UsageRecord
 from umbod.core.usage.otel import serialize_usage_otel
 from umbod.core.usage.ports import UsageWriter
 
-from .ports import MonotonicClock, NanosecondClock, UsageCollectionSettings, UsageSleeper
+from .ports import MonotonicClock, UsageCollectionSettings, UsageSleeper
 from .statistics import UsageDropReason, UsageObservations, UsageStatistics
 
 
@@ -14,19 +12,17 @@ class UsageWriteBehind:
     def __init__(
         self, settings: UsageCollectionSettings, writer: UsageWriter,
         observations: UsageObservations, monotonic: MonotonicClock,
-        clock: NanosecondClock, sleep: UsageSleeper,
+        sleep: UsageSleeper,
     ) -> None:
         self._settings = settings
         self._writer = writer
         self._observations = observations
         self._monotonic = monotonic
-        self._clock = clock
         self._sleep = sleep
         self._queue: asyncio.Queue[UsageRecord] = asyncio.Queue(maxsize=settings.queue_capacity)
         self._worker: asyncio.Task[None] | None = None
         self._accepting = False
         self._inflight: list[UsageRecord] = []
-        self._next_prune = 0.0
 
     @property
     def statistics(self) -> UsageStatistics:
@@ -40,7 +36,6 @@ class UsageWriteBehind:
         if self.running or not self._settings.enabled:
             return
         self._accepting = True
-        self._next_prune = self._monotonic()
         self._worker = asyncio.create_task(self._run(), name='mcp-usage-writer')
 
     def enqueue(self, record: UsageRecord) -> None:
@@ -98,7 +93,6 @@ class UsageWriteBehind:
     async def _run(self) -> None:
         try:
             while True:
-                await self._prune_if_due()
                 try:
                     async with asyncio.timeout(self._settings.flush_interval_seconds):
                         first = await self._queue.get()
@@ -144,16 +138,3 @@ class UsageWriteBehind:
                 if attempt < self._settings.max_retries:
                     await self._sleep(0.25 * 4**attempt)
         return False
-
-    async def _prune_if_due(self) -> None:
-        now = self._monotonic()
-        if now < self._next_prune:
-            return
-        self._next_prune = now + 86400
-        today = datetime.fromtimestamp(self._clock() / 1_000_000_000, tz=timezone.utc).date()
-        before = today - timedelta(days=self._settings.retention_days - 1)
-        try:
-            async with asyncio.timeout(self._settings.write_timeout_seconds):
-                await self._writer.prune_usage(before)
-        except Exception:
-            self._observations.failure(ApplicationFailureKind.USAGE_RETENTION)

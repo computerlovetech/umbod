@@ -34,6 +34,7 @@ class OperatorSettings(BaseSettings):
     personal_connections_enabled: PersonalConnectionsMode = "auto"
     personal_connections_oauth_enabled: PersonalConnectionsMode = "auto"
     personal_connections_identity_namespace: str = ""
+    cleanup_job_timeout_seconds: FiniteFloat = Field(default=5.0, gt=0, le=3600)
     personal_usage_enabled: bool = True
     personal_usage_queue_capacity: int = Field(default=4096, ge=1, le=65536)
     personal_usage_max_record_bytes: int = Field(default=2048, ge=256, le=65536)

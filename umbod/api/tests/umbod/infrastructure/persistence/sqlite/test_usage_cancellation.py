@@ -12,6 +12,8 @@ import pytest_asyncio
 from tests.support.persistence_contracts import table
 from umbod.config.usage import PersonalUsageConfig
 from umbod.core.diagnostics import ApplicationFailure
+from umbod.core.cleanup import CleanupRunner
+from umbod.core.usage.retention import UsageRetention
 from umbod.mcp.usage.statistics import UsageDropReason, UsageObservations
 from umbod.mcp.usage.writer import UsageWriteBehind
 from umbod.core.persistence import AllFields, NoFilter, Query, Unordered
@@ -41,7 +43,7 @@ def worker(store: DatabaseUsageStore, settings: PersonalUsageConfig) -> UsageWri
     clock = asyncio.get_running_loop().time
     return UsageWriteBehind(
         settings, store, UsageObservations(FailureCollector(), clock), clock,
-        lambda: (int(AS_OF.timestamp()) + 2 * 86400) * 1_000_000_000, asyncio.sleep,
+        asyncio.sleep,
     )
 
 
@@ -197,7 +199,7 @@ async def test_schema_query_cancellation_interrupts_sql_and_rolls_back_ddl(sqlit
 
 
 @pytest.mark.asyncio
-async def test_worker_stop_interrupts_real_retention_and_finishes_before_persistence_close(sqlite: SQLiteHarness) -> None:
+async def test_cleanup_cancellation_interrupts_real_retention_before_persistence_close(sqlite: SQLiteHarness) -> None:
     store = DatabaseUsageStore(sqlite.database)
     await store.append_usage(batch())
     async with sqlite.database.schema_connection() as connection:
@@ -206,40 +208,22 @@ async def test_worker_stop_interrupts_real_retention_and_finishes_before_persist
         )
         await cursor.close()
     started = await watch_statement(sqlite.connection, "DELETE ")
-    settings = PersonalUsageConfig(
-        shutdown_timeout_seconds=0.3, write_timeout_seconds=5, retention_days=1,
-        queue_capacity=4, batch_size=2, flush_interval_seconds=0.001,
-    )
-    usage = worker(store, settings)
-    usage.start()
-    stopping: asyncio.Task[None] | None = None
+    job = UsageRetention(store, 1, lambda: datetime(2026, 5, 12, tzinfo=timezone.utc))
+    task = asyncio.create_task(job.run())
     try:
         await asyncio.wait_for(started.wait(), 1)
-        for _ in range(3):
-            usage.enqueue(batch().records[0])
-        before = asyncio.get_running_loop().time()
-        stopping = asyncio.create_task(usage.stop())
-        done, _ = await asyncio.wait((stopping,), timeout=0.3)
-        assert stopping in done
-        await stopping
-        assert asyncio.get_running_loop().time() - before < 0.3
-        assert not usage.running
-        assert dict(usage.statistics.dropped)[UsageDropReason.SHUTDOWN] == 3
-        async with sqlite.connections.get_connection() as connection:
-            assert not connection.in_transaction
+        await cancel_and_assert_released(task, sqlite)
         summary = await store.count_usage(OwnedUsageQuery(owner_id=OWNER, days=7, as_of=AS_OF))
         assert summary.totals.total == 1
-        await asyncio.wait_for(sqlite.connections.close(), 0.3)
     finally:
-        if stopping is None or not stopping.done():
-            await sqlite.connection.interrupt()
-        if stopping is not None:
-            await asyncio.gather(stopping, return_exceptions=True)
-        await usage.stop()
+        await sqlite.connection.interrupt()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+    await asyncio.wait_for(sqlite.connections.close(), 0.3)
 
 
 @pytest.mark.asyncio
-async def test_retention_attempt_timeout_interrupts_sql_and_allows_next_batch(sqlite: SQLiteHarness) -> None:
+async def test_cleanup_timeout_interrupts_sql_and_allows_next_batch(sqlite: SQLiteHarness) -> None:
     store = DatabaseUsageStore(sqlite.database)
     await store.append_usage(batch())
     async with sqlite.database.schema_connection() as connection:
@@ -247,12 +231,16 @@ async def test_retention_attempt_timeout_interrupts_sql_and_allows_next_batch(sq
             f"CREATE TRIGGER slow_retention BEFORE DELETE ON personal_usage_events BEGIN {LONG_QUERY}; END"
         )
         await cursor.close()
-    inserted = await watch_statement(sqlite.connection, 'INSERT INTO "personal_usage_events"')
+    failures = FailureCollector()
+    job = UsageRetention(store, 1, lambda: datetime(2026, 5, 12, tzinfo=timezone.utc))
+    assert not await CleanupRunner((job,), 0.02, failures).run()
+    assert len(failures.events) == 1
     settings = PersonalUsageConfig(
-        write_timeout_seconds=0.02, shutdown_timeout_seconds=0.5, retention_days=1,
+        write_timeout_seconds=0.5, shutdown_timeout_seconds=1,
         max_retries=0, batch_size=1, flush_interval_seconds=0.001,
     )
     usage = worker(store, settings)
+    inserted = await watch_statement(sqlite.connection, 'INSERT INTO "personal_usage_events"')
     usage.start()
     usage.enqueue(batch().records[0])
     try:

@@ -12,7 +12,7 @@ description: Trusted completion projections and bounded application-local asynch
 - [ports.py](./ports.py) — Admission, validated settings, clocks, and retry scheduler boundaries.
 - [receivers.py](./receivers.py) — Trusted, privacy-safe tool/resource/prompt projections excluding discovery and orchestration wrappers.
 - [statistics.py](./statistics.py) — Bounded aggregate loss counters and rate-limited sanitized application-failure observations.
-- [writer.py](./writer.py) — Bounded admission, retries, retention, and a shared shutdown budget that reserves worker cancellation and cleanup time.
+- [writer.py](./writer.py) — Bounded admission, batch retries and a shared shutdown budget; retention runs separately through the cleanup CLI.
 
 # Contracts
 

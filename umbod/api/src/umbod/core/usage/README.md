@@ -11,6 +11,7 @@ description: Owner-scoped MCP completion records, canonical OTEL projection and 
 - [ports.py](./ports.py) — Batch persistence, retention and owner-scoped read contracts.
 - [ownership.py](./ownership.py) — Trusted issuer/subject ownership resolution.
 - [otel.py](./otel.py) — Allowlisted canonical OTEL Logs serialization.
+- [retention.py](./retention.py) — One-shot UTC retention with an inclusive retained-day boundary, independent of usage collection.
 - [schema.py](./schema.py) — Backend-neutral event ledger and owner/day/category/outcome rollup tables.
 - [store.py](./store.py) — Fail-fast serialized deduplicated writes, indexed retention, and bounded zero-filled daily reads.
 

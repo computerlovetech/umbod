@@ -1,5 +1,4 @@
 import asyncio
-from datetime import date
 from uuid import UUID
 
 import pytest
@@ -93,11 +92,11 @@ async def test_oversized_utf8_projection_is_rejected_before_queueing(harness: Us
 
 
 @pytest.mark.asyncio
-async def test_startup_prunes_using_utc_retention_boundary(harness: UsageHarness, record: UsageRecord) -> None:
+async def test_startup_and_shutdown_never_prune_usage(harness: UsageHarness, record: UsageRecord) -> None:
     harness.runtime.start()
     harness.runtime.enqueue(record)
     await harness.runtime.stop()
-    assert harness.writer.pruned == [date(2024, 10, 4)]
+    assert harness.writer.pruned == []
 
 
 @pytest.mark.asyncio
@@ -112,10 +111,10 @@ async def test_partial_batch_flushes_on_deadline_without_shutdown(harness: Usage
 
 
 @pytest.mark.asyncio
-async def test_retention_runs_again_after_one_day(harness: UsageHarness, record: UsageRecord) -> None:
+async def test_worker_never_prunes_after_one_day(harness: UsageHarness, record: UsageRecord) -> None:
     monotonic = [0.0]
     runtime = UsageWriteBehind(harness.settings, harness.writer, UsageObservations(harness.failures, lambda: monotonic[0]),
-                              lambda: monotonic[0], lambda: 1_735_689_600_000_000_000, asyncio.sleep)
+                              lambda: monotonic[0], asyncio.sleep)
     runtime.start()
     try:
         runtime.enqueue(record)
@@ -128,7 +127,7 @@ async def test_retention_runs_again_after_one_day(harness: UsageHarness, record:
         await asyncio.wait_for(harness.writer.attempted.wait(), timeout=1)
     finally:
         await runtime.stop()
-    assert len(harness.writer.pruned) == 2
+    assert harness.writer.pruned == []
 
 
 @pytest.mark.asyncio
