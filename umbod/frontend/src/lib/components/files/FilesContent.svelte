@@ -207,7 +207,7 @@
 </PageContainer>
 
 <style>
-  .location-actions { display: flex; flex-wrap: wrap; align-items: center; gap: inherit; }
+  .location-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: inherit; width: calc(76px + 2.75rem + 1.2rem); min-height: 2.75rem; }
   .files-view { display: grid; grid-template-columns: minmax(0, 1fr); min-width: 0; height: 100%; }
   .location-navigation { flex: 1; min-width: 0; }
   .file-drag-image { position: fixed; top: 0; left: 0; width: 1px; height: 1px; pointer-events: none; }

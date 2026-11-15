@@ -122,6 +122,34 @@ describe('Files retained navigation rendering', (): void => {
     expect(document.querySelector('thead')).not.toBeNull();
   });
 
+  test('folder and file navigation retain the path bar and action container while creation controls disappear', async (): Promise<void> => {
+    const { state } = await setup();
+    await state.load(folderId);
+    await tick();
+    const path = document.querySelector('.location-navigation');
+    const actions = document.querySelector('[aria-label="Location actions"]');
+    const menu = currentMenu();
+    expect(path).not.toBeNull();
+    expect(actions).not.toBeNull();
+    expect(button('#upload-file-button').isConnected).toBe(true);
+    expect(button('#new-folder-button').isConnected).toBe(true);
+
+    await state.load(fileId);
+    await tick();
+    expect(document.querySelector('.location-navigation')).toBe(path);
+    expect(document.querySelector('[aria-label="Location actions"]')).toBe(actions);
+    expect(currentMenu()).toBe(menu);
+    expect(actions!.querySelector('#upload-file-button, #new-folder-button')).toBeNull();
+
+    await state.load(folderId);
+    await tick();
+    expect(document.querySelector('.location-navigation')).toBe(path);
+    expect(document.querySelector('[aria-label="Location actions"]')).toBe(actions);
+    expect(currentMenu()).toBe(menu);
+    expect(button('#upload-file-button').disabled).toBe(false);
+    expect(button('#new-folder-button').disabled).toBe(false);
+  });
+
   test('same-folder refresh keeps rows, icons and menu triggers while closing details and popups permanently', async (): Promise<void> => {
     const { api, state } = await setup();
     await state.load(folderId);
