@@ -5,7 +5,7 @@ import httpx
 from conftest import RuntimeEndpoints
 
 
-def test_personal_mcp_available_by_default_preserves_explicit_user_opt_in(
+def test_unvalidated_personal_mcp_is_not_exposed_to_end_users(
     runtime_endpoints: RuntimeEndpoints,
 ) -> None:
     headers = {"Authorization": f"Bearer {runtime_endpoints.bearer_token}"}
@@ -26,26 +26,15 @@ def test_personal_mcp_available_by_default_preserves_explicit_user_opt_in(
             assert created.json()["credential_configured"] is False
             assert created.json()["health"]["status"] == "unknown"
             assert client.get(personal_url).status_code == 404
-            assert client.put(admin_url + "/publication").status_code == 200
+            publication = client.put(admin_url + "/publication")
+            assert publication.status_code == 409
+            assert publication.json()["detail"]["code"] == "personal_oauth_setup_required"
             assert client.put(permissions_url, json={"connectors": [{
                 "connector_id": connector_id, "permission_status": "enabled",
-            }]}).status_code == 200
-            initial = client.get(personal_url)
-            assert initial.status_code == 200
-            assert initial.json()["enabled"] is False
-            enabled = client.put(personal_url + "/enablement", json={"enabled": True})
-            assert enabled.status_code == 200
-            assert enabled.json()["enabled"] is True
-            assert enabled.json()["has_authorization"] is False
-            assert enabled.json()["runtime_available"] is False
-            assert "endpoint_url" not in enabled.json()
-            assert client.put(personal_url + "/enablement", headers={
-                "Cookie": "session=runtime", "Origin": "https://untrusted.invalid",
-            }, json={"enabled": False}).status_code == 403
-            assert client.delete(personal_url + "/authorization").status_code == 204
-            assert client.get(personal_url).json()["enabled"] is False
-            with httpx.Client(base_url=runtime_endpoints.api_base_url) as anonymous:
-                assert anonymous.get("/api/me/connectors/mcp").status_code == 200
+            }]}).status_code == 404
+            assert client.get(personal_url).status_code == 404
+            assert client.put(personal_url + "/enablement", json={"enabled": True}).status_code == 404
+            assert client.get(admin_url).json()["publication_status"] == "unpublished"
         finally:
             client.put(permissions_url, json={"connectors": [{
                 "connector_id": connector_id, "permission_status": "disabled",

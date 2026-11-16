@@ -4,6 +4,7 @@ import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memo
 import { policyFixture, serverFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
 import { configurationFixture } from '$lib/admin/personal-mcp-servers/availability.test-support';
 import PersonalServerEditDialog from './PersonalServerEditDialog.svelte';
+import type { PolicyProposal } from './policy-form.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
 
@@ -39,7 +40,7 @@ function createApi(): InMemoryPersonalServers {
   }]);
 }
 
-async function openEditor(api: InMemoryPersonalServers): Promise<{ close: ReturnType<typeof vi.fn> }> {
+async function openEditor(api: InMemoryPersonalServers, proposal?: PolicyProposal): Promise<{ close: ReturnType<typeof vi.fn> }> {
   const target = document.createElement('div');
   document.body.append(target);
   const close = vi.fn(async (): Promise<void> => {
@@ -50,7 +51,7 @@ async function openEditor(api: InMemoryPersonalServers): Promise<{ close: Return
   component = mount(PersonalServerEditDialog, {
     target,
     props: {
-      connectorId: 'personal', api, configuration: { get: async () => configurationFixture() },
+      connectorId: 'personal', api, proposal, configuration: { get: async () => configurationFixture() },
       close, accessLost: vi.fn(), lockChanged: vi.fn(), reconciliationRequired: vi.fn()
     }
   });
@@ -87,6 +88,23 @@ describe('personal server OAuth editing', (): void => {
       expect(input(id).matches(':disabled')).toBe(false);
     }
     expect(document.getElementById('personal-edit-client-kind')?.textContent).toContain('Use an existing client ID');
+  });
+
+  test('discovered settings remain suggestions until explicitly accepted and saved', async (): Promise<void> => {
+    const api = createApi();
+    const replace = vi.spyOn(api, 'replacePolicy');
+    await openEditor(api, { issuer: 'https://suggested.test', scopes: ['records:write'] });
+    expect(input('personal-edit-issuer').value).toBe('https://issuer.test/Exact/');
+    expect(input('personal-edit-scopes').value).toBe('records:read');
+    button('Use discovered issuer').click();
+    button('Use selected scopes').click();
+    await tick();
+    expect(input('personal-edit-issuer').value).toBe('https://suggested.test');
+    expect(input('personal-edit-scopes').value).toBe('records:write');
+    expect(replace).not.toHaveBeenCalled();
+    button('Cancel').click();
+    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    expect((await api.policy('personal')).requested_scopes).toEqual(['records:read']);
   });
 
   test('cancelling and reopening discards unsaved OAuth changes', async (): Promise<void> => {
@@ -126,7 +144,8 @@ describe('personal server OAuth editing', (): void => {
     expect(dialog?.textContent).toContain('Save OAuth settings?');
     expect(dialog?.textContent).toContain('An effective change erases ALL users');
     expect(dialog?.textContent).toContain('saved authorizations and pending sign-ins for this server');
-    expect(dialog?.textContent).toContain('User enablement, publication and group grants persist');
+    expect(dialog?.textContent).toContain('The server is unpublished and setup validation is cleared');
+    expect(dialog?.textContent).toContain('User enablement and group grants persist');
     expect(dialog?.textContent).toContain('Remote tokens are not revoked');
     expect(replace).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();

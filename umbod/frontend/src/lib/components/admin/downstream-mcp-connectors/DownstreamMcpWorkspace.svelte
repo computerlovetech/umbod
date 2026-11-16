@@ -27,6 +27,7 @@
   import { DownstreamMcpWorkspaceState, type DownstreamMcpCreateValues } from './downstream-mcp-workspace-state.svelte';
   import PersonalServerEditDialog from '../personal-mcp-servers/PersonalServerEditDialog.svelte';
   import PersonalServerPolicyPanel from '../personal-mcp-servers/PersonalServerPolicyPanel.svelte';
+  import PersonalOAuthSetupPanel from '../personal-mcp-servers/PersonalOAuthSetupPanel.svelte';
   import { useToast } from '$lib/components/feedback';
   let { connectors, selected: loadedDetail, catalog, promptCatalog, resourceCatalog, invocationPolicies = [], form, state }: { connectors: DownstreamMcpConnectorSummary[]; selected?: DownstreamMcpConnector; catalog?: DownstreamMcpToolList; promptCatalog?: PromptCatalogData; resourceCatalog?: ResourceCatalogData; invocationPolicies?: InvocationPolicyTool[]; form?: { message?: string; status?: string; mode?: string; values?: DownstreamMcpCreateValues }; state: DownstreamMcpWorkspaceState } = $props();
   type SidebarConnector = {
@@ -84,7 +85,7 @@
 {#if !state.operations.authenticationLost}
 <DownstreamMcpSetupModal {state} connector={state.modal === 'configure' ? detailSelected : undefined} message={form?.message} values={form?.mode === 'create' ? form.values : undefined} />
 {#if state.modal === 'personal-edit' && detailSelected?.authorization_mode === 'personal'}
-  <PersonalServerEditDialog connectorId={detailSelected.connector_id} close={state.close} accessLost={state.operations.loseAccess} lockChanged={state.operations.setFormLocked} reconciliationRequired={state.operations.requireReload} />
+  <PersonalServerEditDialog connectorId={detailSelected.connector_id} close={state.close} accessLost={state.operations.loseAccess} lockChanged={state.operations.setFormLocked} reconciliationRequired={state.operations.requireReload} saved={state.personalSetup.policyChanged} proposal={state.personalSetup.discovery ? { issuer: state.personalSetup.discovery.issuer_url, scopes: state.personalSetup.scopes } : undefined} />
 {/if}
 {#if state.capabilityDescriptionConnectorId}
   <CapabilityDescriptionOverrideModal kind="downstream_mcp" connectorId={state.capabilityDescriptionConnectorId} close={state.closeCapabilityDescription} />
@@ -121,7 +122,7 @@
     <span class="connector-meta">{item.connector.authorization_mode === 'personal' ? 'Personal authorization' : 'Shared authorization'} · {item.connector.authorization_mode === 'shared' ? `${item.connector.health.status} · ` : ''}{item.connector.publication_status}</span>
    {/snippet}
    {#snippet actions(item)}
-    {#if item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}{#if selected.authorization_mode === 'personal'}<button role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.open('personal-edit', event.currentTarget, detailSelected)}>Edit</button>{/if}{#if selected.authorization_mode === 'shared'}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem" disabled={state.operations.locked}>Refresh discovery</button></form>{/if}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={() => state.requestPublication(selected)}>{selected.publication_status === 'published' ? 'Unpublish' : 'Publish'}</button>{#if selected.authorization_mode === 'personal'}<button role="menuitem" disabled={state.operations.locked} onclick={() => state.operations.request('delete', selected.connector_id, selected.display_name)}>Delete</button>{:else}<button role="menuitem" class="danger-text" type="button" disabled={state.operations.locked} onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/if}{/snippet}</AdminSidebarActionMenu>{/if}
+    {#if item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}{#if selected.authorization_mode === 'personal'}<button role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.open('personal-edit', event.currentTarget, detailSelected)}>Edit</button>{/if}{#if selected.authorization_mode === 'shared'}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem" disabled={state.operations.locked}>Refresh discovery</button></form>{/if}{#if selected.publication_status === 'published' || state.operations.canPublish(selected)}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={() => state.requestPublication(selected)}>{selected.publication_status === 'published' ? 'Unpublish' : 'Publish'}</button>{/if}{#if selected.authorization_mode === 'personal'}<button role="menuitem" disabled={state.operations.locked} onclick={() => state.operations.request('delete', selected.connector_id, selected.display_name)}>Delete</button>{:else}<button role="menuitem" class="danger-text" type="button" disabled={state.operations.locked} onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/if}{/snippet}</AdminSidebarActionMenu>{/if}
    {/snippet}
   </ConnectorSidebarList>
  {/snippet}
@@ -152,6 +153,7 @@
    {/if}
   {/snippet}
   {#if detailSelected.authorization_mode === 'personal'}
+    {#key detailSelected.connector_id}<PersonalOAuthSetupPanel state={state.personalSetup} connectorId={detailSelected.connector_id} />{/key}
     <PersonalServerPolicyPanel />
   {:else}
   <ConnectorCapabilities selected={selectedCapability} counts={capabilityCounts} currentUrl={page.url}>

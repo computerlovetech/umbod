@@ -5,7 +5,7 @@ import httpx
 from conftest import RuntimeEndpoints
 
 
-def test_personal_authorization_rejects_private_provider_without_authentication_changes(
+def test_personal_setup_rejects_private_provider_before_publication(
     runtime_endpoints: RuntimeEndpoints,
 ) -> None:
     headers = {"Authorization": f"Bearer {runtime_endpoints.bearer_token}"}
@@ -21,37 +21,26 @@ def test_personal_authorization_rejects_private_provider_without_authentication_
         assert created.status_code == 201
         connector_id = created.json()["connector_id"]
         admin_url = f"/api/admin/connectors/mcp/{connector_id}"
+        setup_url = admin_url + "/personal-oauth/setup"
         personal_url = f"/api/me/connectors/mcp/{connector_id}"
-        attempts_url = personal_url + "/oauth/attempts"
-        permissions_url = "/api/admin/mcp-permissions/groups/admin/permissions"
         try:
-            assert client.put(admin_url + "/publication").status_code == 200
-            assert client.put(permissions_url, json={"connectors": [{
-                "connector_id": connector_id, "permission_status": "enabled",
-            }]}).status_code == 200
-            assert client.post(attempts_url, json={}).status_code == 404
-            assert client.put(personal_url + "/enablement", json={"enabled": True}).status_code == 200
-            assert client.post(attempts_url, json={"scope": "administrator"}).status_code == 422
-            assert client.post(attempts_url, headers={
+            policy = client.get(admin_url + "/personal-oauth").json()
+            assert client.get(setup_url).json()["state"]["status"] == "required"
+            assert client.put(admin_url + "/publication").status_code == 409
+            blocked = client.post(setup_url + "/validation", headers={
                 "Cookie": "session=runtime", "Origin": "https://untrusted.invalid",
-            }, json={}).status_code == 403
-            failed = client.post(attempts_url, json={})
-            assert failed.status_code in (422, 502)
+            }, json={"expected_revision": policy["revision"]})
+            assert blocked.status_code == 403
+            failed = client.post(setup_url + "/validation", json={"expected_revision": client.get(setup_url).json()["revision"]})
+            assert failed.status_code == 200
+            assert failed.json()["state"]["status"] == "failed"
             assert "127.0.0.1" not in failed.text
-            assert client.post(attempts_url, json={}).status_code == failed.status_code
-            selection = client.get(personal_url)
-            assert selection.status_code == 200
-            assert selection.json()["has_authorization"] is False
-            assert selection.json()["runtime_available"] is False
-            assert client.get(attempts_url + "/" + uuid4().hex).status_code == 404
-            with httpx.Client(base_url=runtime_endpoints.api_base_url) as anonymous:
-                assert anonymous.get(personal_url).status_code == 200
+            assert client.put(admin_url + "/publication").status_code == 409
+            assert client.get(personal_url).status_code == 404
+            assert client.post(personal_url + "/oauth/attempts", json={}).status_code == 404
+            assert client.get(admin_url).json()["publication_status"] == "unpublished"
         finally:
-            client.put(permissions_url, json={"connectors": [{
-                "connector_id": connector_id, "permission_status": "disabled",
-            }]})
-            client.delete(admin_url + "/publication")
-            client.delete(admin_url)
+            assert client.delete(admin_url).status_code == 204
 
 
 def test_personal_authorization_callback_is_public_but_state_bound_and_secret_free(

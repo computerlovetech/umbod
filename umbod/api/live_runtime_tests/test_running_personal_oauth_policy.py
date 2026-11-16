@@ -16,7 +16,7 @@ def _confidential_settings(secret: str) -> dict[str, object]:
         "requested_scopes": ["documents.read"],
         "client": {
             "kind": "preconfigured_confidential",
-            "issuer_url": "https://issuer.runtime.invalid",
+            "issuer_url": "https://personal-runtime.kind.invalid",
             "client_id": "runtime-personal-client",
             "token_endpoint_auth_method": "client_secret_basic",
             "client_secret": secret,
@@ -37,7 +37,7 @@ def personal_policy_client(
                 "public_path": f"/mcp/proxies/policy-{uuid4().hex}",
             },
             "configuration": {
-                "endpoint_url": "https://127.0.0.1/mcp",
+                "endpoint_url": "https://personal-runtime.kind.invalid/mcp",
                 "oauth_configuration": _confidential_settings(CLIENT_SECRET),
             },
         })
@@ -48,6 +48,12 @@ def personal_policy_client(
         admin_url = f"/api/admin/connectors/mcp/{connector_id}"
         permissions_url = "/api/admin/mcp-permissions/groups/admin/permissions"
         try:
+            setup_url = admin_url + "/personal-oauth/setup"
+            setup = client.get(setup_url).json()
+            validated = client.post(setup_url + "/validation", json={"expected_revision": setup["revision"]})
+            assert validated.status_code == 200
+            assert validated.json()["state"]["status"] == "validated"
+            assert CLIENT_SECRET not in validated.text
             assert client.put(admin_url + "/publication").status_code == 200
             assert client.put(permissions_url, json={"connectors": [{
                 "connector_id": connector_id, "permission_status": "enabled",
@@ -98,10 +104,8 @@ def test_personal_oauth_policy_rotation_is_revision_bound_and_secret_free(
     })
     assert stale.status_code == 409
     selection = client.get(personal_url)
-    assert selection.status_code == 200
-    assert selection.json()["enabled"] is True
-    assert selection.json()["has_authorization"] is False
-    assert selection.json()["runtime_available"] is False
+    assert selection.status_code == 404
+    assert client.get(f"/api/admin/connectors/mcp/{connector_id}").json()["publication_status"] == "unpublished"
     public = client.put(policy_url, json={
         "expected_revision": rotated.json()["revision"],
         "settings": {"requested_scopes": [], "client": {"kind": "dynamic_public"}},
@@ -137,10 +141,10 @@ def test_personal_oauth_policy_validation_and_cookie_checks_do_not_reflect_secre
     assert unchanged.status_code == 200
     assert unchanged.json() == initial.json()
     with httpx.Client(base_url=str(client.base_url)) as anonymous:
-        assert anonymous.get(f"/api/me/connectors/mcp/{connector_id}").status_code == 200
+        assert anonymous.get(f"/api/me/connectors/mcp/{connector_id}").status_code == 401
 
 
-def test_scoped_configured_client_still_rejects_private_provider_and_user_overrides(
+def test_scoped_configured_client_validation_does_not_authorize_an_account_or_accept_user_overrides(
     personal_policy_client: tuple[httpx.Client, str],
 ) -> None:
     client, connector_id = personal_policy_client
@@ -151,10 +155,11 @@ def test_scoped_configured_client_still_rejects_private_provider_and_user_overri
     })
     assert overrides.status_code == 422
     assert CLIENT_SECRET not in overrides.text
-    rejected = client.post(personal_url + "/oauth/attempts", json={})
-    assert rejected.status_code in (422, 502)
-    assert CLIENT_SECRET not in rejected.text
-    assert "127.0.0.1" not in rejected.text
+    validated = client.post(f"/api/admin/connectors/mcp/{connector_id}/personal-oauth/setup/validation", json={"expected_revision": client.get(f"/api/admin/connectors/mcp/{connector_id}/personal-oauth/setup").json()["revision"]})
+    assert validated.status_code == 200
+    assert validated.json()["state"]["status"] == "validated"
+    assert validated.json()["state"]["result"]["scope_source"] == "not_checked"
+    assert CLIENT_SECRET not in validated.text
     selection = client.get(personal_url)
     assert selection.status_code == 200
     assert selection.json()["has_authorization"] is False

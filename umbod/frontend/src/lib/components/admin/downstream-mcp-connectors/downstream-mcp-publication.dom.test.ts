@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import * as adminApiModule from '$lib/admin/infrastructure/admin-api';
+import { InMemoryPersonalOAuthSetup } from '$lib/admin/personal-mcp-servers/setup.test-support';
 import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
 import { policyFixture, serverFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
 import { HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
@@ -91,19 +92,22 @@ async function openConfirmation(label: string): Promise<HTMLElement> {
   return dialog;
 }
 
-function renderPersonalWorkspace(): {
+async function renderPersonalWorkspace(validated: boolean = true): Promise<{
   composite: adminApiModule.AdminApi;
   state: DownstreamMcpWorkspaceState;
   operations: DownstreamMcpMutationState;
   api: ReturnType<typeof mutationApi>;
   navigate: ReturnType<typeof vi.fn>;
-} {
+}> {
   const connector = serverFixture();
   const personalApi = new InMemoryPersonalServers([connector], [policyFixture()]);
   const composite = new adminApiModule.AdminApi({ request: vi.fn().mockRejectedValue(new Error('Unexpected transport request')) });
   vi.spyOn(composite.personalServers, 'get').mockImplementation((id) => personalApi.get(id));
   vi.spyOn(composite.personalServers, 'policy').mockImplementation((id) => personalApi.policy(id));
   vi.spyOn(composite.personalServers, 'replacePolicy').mockImplementation((id, input) => personalApi.replacePolicy(id, input));
+  const setup = new InMemoryPersonalOAuthSetup();
+  if (validated) setup.current = setup.validation;
+  vi.spyOn(composite.personalOAuthSetup, 'status').mockImplementation((id) => setup.status(id));
   vi.spyOn(adminApiModule, 'adminApi').mockReturnValue(composite);
   const bundle: DownstreamMcpWorkspaceBundle = { mode: 'personal', connector };
   const api = mutationApi(bundle);
@@ -117,6 +121,7 @@ function renderPersonalWorkspace(): {
     target, props: { connectors: [connector], selected: connector, state }
   });
   flushSync();
+  await vi.waitFor(() => expect(state.personalSetup.pending).toBeNull());
   return { composite, state, operations, api, navigate };
 }
 
@@ -140,8 +145,37 @@ async function beginPolicyReplacement(): Promise<HTMLDialogElement> {
 }
 
 describe('personal MCP editing from the action menu', (): void => {
+  test('unvalidated personal servers have no publication action', async (): Promise<void> => {
+    const { api } = await renderPersonalWorkspace(false);
+    button('Open actions for Personal server').click();
+    await tick();
+    const menu = document.querySelector('[role="menu"]');
+    expect(menu).not.toBeNull();
+    expect(menu?.textContent).not.toContain('Publish');
+    expect(button('Edit', menu!).disabled).toBe(false);
+    expect(api.publish).not.toHaveBeenCalled();
+  });
+
+  test('validated personal publication reconciles in place without testing sign-in', async (): Promise<void> => {
+    const { api, navigate } = await renderPersonalWorkspace();
+    const workspace = document.querySelector('[aria-label="MCP connectors workspace"]');
+    const panel = document.querySelector('[aria-label="Personal OAuth setup"]');
+    button('Open actions for Personal server').click();
+    await tick();
+    button('Publish', document.querySelector('[role="menu"]')!).click();
+    await tick();
+    const dialog = document.querySelector('[role="dialog"]');
+    if (!dialog) throw new Error('Publication confirmation is missing');
+    button('Publish', dialog).click();
+    await vi.waitFor(() => expect(api.publish).toHaveBeenCalledExactlyOnceWith('personal'));
+    await vi.waitFor(() => expect(document.querySelector('[aria-pressed="true"]')?.textContent).toContain('published'));
+    expect(document.querySelector('[aria-label="MCP connectors workspace"]')).toBe(workspace);
+    expect(document.querySelector('[aria-label="Personal OAuth setup"]')).toBe(panel);
+    expect(document.body.textContent).toContain('Sign-in not tested');
+    expect(navigate).not.toHaveBeenCalled();
+  });
   test('keeps a pending policy replacement mounted and locked through window Escape and native cancel', async (): Promise<void> => {
-    const { composite, operations, state, api } = renderPersonalWorkspace();
+    const { composite, operations, state, api } = await renderPersonalWorkspace();
     type Policy = Awaited<ReturnType<typeof composite.personalServers.replacePolicy>>;
     let complete!: (policy: Policy) => void;
     vi.mocked(composite.personalServers.replacePolicy).mockImplementation(() => new Promise<Policy>((resolve) => { complete = resolve; }));
@@ -180,7 +214,7 @@ describe('personal MCP editing from the action menu', (): void => {
   });
 
   test('retains unknown-outcome blocking after closing the editor and offers reload without retrying', async (): Promise<void> => {
-    const { composite, operations, api, navigate } = renderPersonalWorkspace();
+    const { composite, operations, api, navigate } = await renderPersonalWorkspace();
     let reject!: (error: Error) => void;
     vi.mocked(composite.personalServers.replacePolicy).mockImplementation(() => new Promise((_resolve, rejectReplacement) => { reject = rejectReplacement; }));
     const dialog = await beginPolicyReplacement();
@@ -224,11 +258,11 @@ describe('personal MCP editing from the action menu', (): void => {
   });
 
   test('opens the selected personal server editor and dismisses it without changing the server', async (): Promise<void> => {
-    const { composite, state } = renderPersonalWorkspace();
+    const { composite, state } = await renderPersonalWorkspace();
     const { get, policy, replacePolicy: replace } = composite.personalServers;
     expect(document.querySelector('[role="dialog"]')).toBeNull();
-    expect(get).not.toHaveBeenCalled();
-    expect(policy).not.toHaveBeenCalled();
+    vi.mocked(get).mockClear();
+    vi.mocked(policy).mockClear();
     button('Open actions for Personal server').click();
     await tick();
     const menu = document.querySelector('[role="menu"]');

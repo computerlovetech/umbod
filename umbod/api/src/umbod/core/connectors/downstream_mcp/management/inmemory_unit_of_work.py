@@ -7,6 +7,11 @@ from umbod.core.publishing.events import connector_publication_changed_event
 from umbod.core.messaging.discovery_events import connector_discovery_changed_event
 import asyncio
 
+from umbod.core.connectors.downstream_mcp.personal_oauth_setup.ports import PersonalOAuthSetupStore
+from umbod.core.connectors.downstream_mcp.personal_oauth_setup.state import PersonalOAuthSetupBinding
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_setup import definition_fingerprint
+from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationQuery
+
 from ..personal_tools import PersonalToolAccessStore, PersonalToolPolicyStore
 
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationStore, ReplacePersonalOAuthConfiguration
@@ -78,8 +83,10 @@ class InMemoryDownstreamConnectorUnitOfWork:
         personal_tool_policies: PersonalToolPolicyStore,
         personal_tool_access: PersonalToolAccessStore,
         events: EventStream,
+        personal_oauth_setup: PersonalOAuthSetupStore,
     ) -> None:
         self._events = events
+        self._personal_oauth_setup = personal_oauth_setup
         self._definitions = definitions
         self._credentials = credentials
         self._catalogs = catalogs
@@ -131,6 +138,9 @@ class InMemoryDownstreamConnectorUnitOfWork:
     async def publish(self, command: PublishDownstreamConnectorAggregate) -> bool:
         async def mutate() -> bool:
             definition = await self._definition(command.connector_id)
+            if uses_personal_oauth(definition):
+                configuration = await self._personal_oauth_configurations.get(PersonalOAuthConfigurationQuery(connector_id=command.connector_id))
+                await self._personal_oauth_setup.require_current(PersonalOAuthSetupBinding(connector_id=command.connector_id, definition_fingerprint=definition_fingerprint(definition), policy_revision=configuration.policy.revision, redirect_uri=command.personal_oauth_redirect_uri))
             if await self._publishing.is_published(command.connector_id):
                 return False
             catalog = await self._catalogs.get(ConnectorIdQuery(connector_id=command.connector_id))

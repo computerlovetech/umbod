@@ -24,7 +24,7 @@ from ...personal_connections.oauth_callback_models import (
     GenericBinding, IssuerBinding, PresentCallbackIssuer, issuer_callback_uri, issuer_route_key, validate_callback_binding,
 )
 from ...personal_connections.models import Authorized
-from ...personal_connections.oauth_failure_models import OAuthFailureEvidence, OAuthFailureStage
+from ...personal_connections.oauth_failure_models import OAuthFailureEvidence, OAuthFailureReason, OAuthFailureStage
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse, NoDownstreamResponse
 from .failure import OAuthOperationProgress, oauth_failure_boundary, rejected_response, request_with_progress
 from ...personal_connections.oauth_models import (
@@ -36,6 +36,7 @@ from ...personal_connections.oauth_models import (
 )
 from ...personal_oauth_configuration.models import (
     PersonalOAuthClient,
+    PersonalOAuthPolicy,
     parse_oauth_scopes,
 )
 from .callback import CallbackURLPolicy, validate_callback_url
@@ -45,13 +46,16 @@ from .transport import (
     OAuthDestination,
     OAuthHttpAuthentication,
     OAuthHttpRequest,
+    OAuthHttpResponse,
     OAuthHttpTransport,
 )
 from .validation import (
     AuthorizationServer,
+    DiscoveredOAuthServer,
     ProtectedResource,
     ProviderContext,
     RegisteredClient,
+    RegisteredOAuthClient,
     TokenResponse,
     parse_json,
     validated_url,
@@ -71,16 +75,21 @@ def client_authentication_method(client: PersonalOAuthClient) -> Literal["none",
     return "none"
 
 
+def unsupported_configuration(reason: OAuthFailureReason, stage: OAuthFailureStage) -> PersonalOAuthProviderUnsupported:
+    return PersonalOAuthProviderUnsupported(OAuthFailureEvidence(
+        stage=stage, reason=reason, downstream_response=NoDownstreamResponse(),
+    ))
+
+
 class DiscoveredPersonalOAuthProvider:
     def __init__(self, callback_policy: CallbackURLPolicy, transport: OAuthHttpTransport) -> None:
         self._callback_policy = callback_policy
         self._transport = transport
 
-    @asynccontextmanager
-    async def _request(
+    async def _response(
         self, method: Literal["GET", "POST"], url: str, body: str,
         content_type: str, authentication: OAuthHttpAuthentication, stage: OAuthFailureStage, progress: OAuthOperationProgress,
-    ) -> AsyncIterator[dict[str, object]]:
+    ) -> OAuthHttpResponse:
         with oauth_failure_boundary(stage, NoDownstreamResponse()):
             validated_url(url)
             response = await request_with_progress(self._transport, OAuthHttpRequest(
@@ -89,6 +98,14 @@ class DiscoveredPersonalOAuthProvider:
             ), progress, stage)
         if response.status not in (200, 201):
             raise rejected_response(stage, response.status)
+        return response
+
+    @asynccontextmanager
+    async def _request(
+        self, method: Literal["GET", "POST"], url: str, body: str,
+        content_type: str, authentication: OAuthHttpAuthentication, stage: OAuthFailureStage, progress: OAuthOperationProgress,
+    ) -> AsyncIterator[dict[str, object]]:
+        response = await self._response(method, url, body, content_type, authentication, stage, progress)
         with oauth_failure_boundary(stage, DownstreamHttpResponse(status_code=response.status)):
             yield parse_json(response.body)
 
@@ -107,69 +124,31 @@ class DiscoveredPersonalOAuthProvider:
             raise PersonalOAuthProviderFailure(progress.failure_evidence(error)) from None
 
     async def _prepare(self, command: PreparePersonalOAuth, progress: OAuthOperationProgress) -> PreparedPersonalOAuth:
-        endpoint = validated_url(command.endpoint_url)
-        validate_callback_url(command.redirect_uri, self._callback_policy)
         challenge = verifier_digest(command.code_verifier)
-        state_secret = command.state
-        state = state_secret.get_secret_value()
+        state = command.state.get_secret_value()
         if not state:
             raise ValueError("Invalid state")
-        metadata_url = urlunsplit((endpoint.scheme, endpoint.netloc, "/.well-known/oauth-protected-resource" + endpoint.path.rstrip("/"), "", ""))
-        with oauth_failure_boundary("discovery", NoDownstreamResponse()):
-            response = await request_with_progress(self._transport, OAuthHttpRequest(
-                method="GET", url=metadata_url, content_type="", body=SecretStr(""),
-            ), progress, "discovery")
-            if response.status == 404 and endpoint.path.rstrip("/"):
-                metadata_url = urlunsplit((endpoint.scheme, endpoint.netloc, "/.well-known/oauth-protected-resource", "", ""))
-                response = await request_with_progress(self._transport, OAuthHttpRequest(
-                    method="GET", url=metadata_url, content_type="", body=SecretStr(""),
-                ), progress, "discovery")
-        with oauth_failure_boundary("discovery", DownstreamHttpResponse(status_code=response.status)):
-            if response.status != 200:
-                raise rejected_response("discovery", response.status)
-            resource = ProtectedResource.model_validate(parse_json(response.body))
-            if resource.resource != command.endpoint_url:
-                raise PersonalOAuthProviderUnsupported(OAuthFailureEvidence(
-                    stage="discovery", reason="invalid_response",
-                    downstream_response=DownstreamHttpResponse(status_code=response.status),
-                ))
-            policy = command.policy
-            configured_client = policy.client
-            auth_method = client_authentication_method(configured_client)
-            issuer = resource.authorization_servers[0]
-            if configured_client.kind != "dynamic_public":
-                issuer = configured_client.issuer_url
-                if issuer not in resource.authorization_servers:
-                    raise ValueError("Configured issuer is not advertised")
-            issuer_parts = validated_url(issuer)
-        issuer_url = urlunsplit((issuer_parts.scheme, issuer_parts.netloc, "/.well-known/oauth-authorization-server" + issuer_parts.path.rstrip("/"), "", ""))
-        async with self._request("GET", issuer_url, "", "", NoOAuthHttpAuthentication(), "discovery", progress) as raw_server:
-            server = AuthorizationServer.model_validate(raw_server)
-            if (
-                server.issuer != issuer
-                or "S256" not in server.code_challenge_methods_supported
-                or "authorization_code" not in server.grant_types_supported
-                or "code" not in server.response_types_supported
-                or auth_method not in server.token_endpoint_auth_methods_supported
-            ):
-                raise ValueError("Unsupported authorization server")
-            for url in (server.authorization_endpoint, server.token_endpoint):
-                validated_url(url)
-            progress.begin("discovery")
-            with oauth_failure_boundary("discovery", NoDownstreamResponse()):
-                await self._transport.validate_destination(OAuthDestination(url=server.authorization_endpoint))
-        binding = (
-            GenericBinding(kind="generic", expected_issuer=issuer)
-            if server.authorization_response_iss_parameter_supported else IssuerBinding(
-                kind="issuer", expected_issuer=issuer,
-                issuer_key=issuer_route_key(issuer), redirect_uri=issuer_callback_uri(command.redirect_uri, issuer),
-            )
-        )
-        redirect_uri = binding.redirect_uri if isinstance(binding, IssuerBinding) else command.redirect_uri
+        discovered = await self._discover(command.endpoint_url, command.redirect_uri, command.policy, progress, False)
+        server = discovered.server
+        binding = discovered.callback_binding
+        redirect_uri = discovered.redirect_uri
+        issuer = server.issuer
+        policy = command.policy
+        configured_client = policy.client
+        auth_method = client_authentication_method(configured_client)
         if configured_client.kind == "dynamic_public":
             progress.begin("registration")
             with oauth_failure_boundary("registration", NoDownstreamResponse()):
-                client_id = await self._register(command.model_copy(update={"redirect_uri": redirect_uri}), server, progress)
+                registered = await self._register(redirect_uri, policy, server, progress)
+                if (
+                    "scope" in registered.client.model_fields_set
+                    and parse_oauth_scopes(registered.client.scope) != policy.requested_scopes
+                ):
+                    raise PersonalOAuthProviderUnsupported(OAuthFailureEvidence(
+                        stage="registration", reason="scope_mismatch",
+                        downstream_response=DownstreamHttpResponse(status_code=registered.status_code),
+                    ))
+                client_id = registered.client.client_id
         else:
             client_id = configured_client.client_id
         authorization_parameters = {
@@ -193,40 +172,110 @@ class DiscoveredPersonalOAuthProvider:
             callback_binding=binding,
         )
 
-    async def _register(self, command: PreparePersonalOAuth, server: AuthorizationServer, progress: OAuthOperationProgress) -> str:
+    async def _discover(
+        self, endpoint_url: str, redirect_uri: str, policy: PersonalOAuthPolicy, progress: OAuthOperationProgress,
+        select_advertised_issuer: bool,
+    ) -> DiscoveredOAuthServer:
+        endpoint = validated_url(endpoint_url)
+        validate_callback_url(redirect_uri, self._callback_policy)
+        metadata_url = urlunsplit((endpoint.scheme, endpoint.netloc, "/.well-known/oauth-protected-resource" + endpoint.path.rstrip("/"), "", ""))
+        with oauth_failure_boundary("discovery", NoDownstreamResponse()):
+            response = await request_with_progress(self._transport, OAuthHttpRequest(
+                method="GET", url=metadata_url, content_type="", body=SecretStr(""),
+            ), progress, "discovery")
+            if response.status == 404 and endpoint.path.rstrip("/"):
+                metadata_url = urlunsplit((endpoint.scheme, endpoint.netloc, "/.well-known/oauth-protected-resource", "", ""))
+                response = await request_with_progress(self._transport, OAuthHttpRequest(
+                    method="GET", url=metadata_url, content_type="", body=SecretStr(""),
+                ), progress, "discovery")
+        with oauth_failure_boundary("discovery", DownstreamHttpResponse(status_code=response.status)):
+            if response.status != 200:
+                raise rejected_response("discovery", response.status)
+            resource = ProtectedResource.model_validate(parse_json(response.body))
+            if resource.resource != endpoint_url:
+                raise PersonalOAuthProviderUnsupported(OAuthFailureEvidence(
+                    stage="discovery", reason="resource_mismatch",
+                    downstream_response=DownstreamHttpResponse(status_code=response.status),
+                ))
+            configured_client = policy.client
+            auth_method = client_authentication_method(configured_client)
+            issuer = resource.authorization_servers[0]
+            if (configured_client.kind == "dynamic_public" or select_advertised_issuer) and len(resource.authorization_servers) != 1:
+                raise unsupported_configuration("ambiguous_issuer", "discovery")
+            if configured_client.kind != "dynamic_public" and not select_advertised_issuer:
+                issuer = configured_client.issuer_url
+                if issuer not in resource.authorization_servers:
+                    raise unsupported_configuration("issuer_mismatch", "discovery")
+            issuer_parts = validated_url(issuer)
+        issuer_url = urlunsplit((issuer_parts.scheme, issuer_parts.netloc, "/.well-known/oauth-authorization-server" + issuer_parts.path.rstrip("/"), "", ""))
+        async with self._request("GET", issuer_url, "", "", NoOAuthHttpAuthentication(), "discovery", progress) as raw_server:
+            server = AuthorizationServer.model_validate(raw_server)
+            requirements: tuple[tuple[bool, OAuthFailureReason], ...] = (
+                (server.issuer == issuer, "issuer_mismatch"),
+                ("S256" in server.code_challenge_methods_supported, "pkce_s256_required"),
+                ("authorization_code" in server.grant_types_supported, "authorization_code_required"),
+                ("code" in server.response_types_supported, "code_response_required"),
+                (auth_method in server.token_endpoint_auth_methods_supported, "client_auth_required"),
+            )
+            for supported, reason in requirements:
+                if not supported:
+                    raise unsupported_configuration(reason, "discovery")
+            for url in (server.authorization_endpoint, server.token_endpoint):
+                validated_url(url)
+            progress.begin("discovery")
+            with oauth_failure_boundary("discovery", NoDownstreamResponse()):
+                await self._transport.validate_destination(OAuthDestination(url=server.authorization_endpoint))
+        binding = (
+            GenericBinding(kind="generic", expected_issuer=issuer)
+            if server.authorization_response_iss_parameter_supported else IssuerBinding(
+                kind="issuer", expected_issuer=issuer,
+                issuer_key=issuer_route_key(issuer), redirect_uri=issuer_callback_uri(redirect_uri, issuer),
+            )
+        )
+        effective_redirect = binding.redirect_uri if isinstance(binding, IssuerBinding) else redirect_uri
+        return DiscoveredOAuthServer(
+            server=server, resource=resource, callback_binding=binding, redirect_uri=effective_redirect,
+        )
+
+    async def _register(
+        self, redirect_uri: str, policy: PersonalOAuthPolicy, server: AuthorizationServer, progress: OAuthOperationProgress,
+    ) -> RegisteredOAuthClient:
+        if not server.registration_endpoint:
+            raise unsupported_configuration("registration_unavailable", "registration")
         validated_url(server.registration_endpoint)
         grant_types = ["authorization_code"] + (
             ["refresh_token"] if "refresh_token" in server.grant_types_supported else []
         )
         registration: dict[str, object] = {
             "client_name": "Umbod",
-            "application_type": "native" if command.redirect_uri.startswith("http://") else "web",
-            "redirect_uris": [command.redirect_uri],
+            "application_type": "native" if redirect_uri.startswith("http://") else "web",
+            "redirect_uris": [redirect_uri],
             "token_endpoint_auth_method": "none",
             "grant_types": grant_types,
             "response_types": ["code"],
         }
-        if command.policy.requested_scopes:
-            registration["scope"] = " ".join(command.policy.requested_scopes)
-        async with self._request(
+        if policy.requested_scopes:
+            registration["scope"] = " ".join(policy.requested_scopes)
+        response = await self._response(
             "POST", server.registration_endpoint, json.dumps(registration),
             "application/json", NoOAuthHttpAuthentication(), "registration", progress,
-        ) as raw_client:
+        )
+        with oauth_failure_boundary("registration", DownstreamHttpResponse(status_code=response.status)):
+            raw_client = parse_json(response.body)
             client = RegisteredClient.model_validate(raw_client)
             if (
                 "client_secret" in raw_client
                 or client.token_endpoint_auth_method != "none"
-                or client.redirect_uris != [command.redirect_uri]
+                or client.redirect_uris != [redirect_uri]
                 or "authorization_code" not in client.grant_types
                 or not set(client.grant_types) <= set(grant_types)
                 or client.response_types != ["code"]
                 or ("application_type" in raw_client and raw_client["application_type"] != registration["application_type"])
-                or ("scope" in raw_client and parse_oauth_scopes(client.scope) != command.policy.requested_scopes)
             ):
                 raise PersonalOAuthProviderUnsupported(OAuthFailureEvidence(
-                    stage="registration", reason="invalid_response", downstream_response=NoDownstreamResponse(),
+                    stage="registration", reason="registration_contract_mismatch", downstream_response=NoDownstreamResponse(),
                 ))
-            return client.client_id
+            return RegisteredOAuthClient(client=client, status_code=response.status)
 
     async def exchange(self, command: ExchangePersonalOAuth) -> Authorized:
         progress = OAuthOperationProgress("token_exchange")

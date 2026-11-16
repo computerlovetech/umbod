@@ -2,7 +2,8 @@
   import AdminConfigurationField from '../shared/AdminConfigurationField.svelte';
   import Select from '../shared/Select.svelte';
   import type { SelectOption } from '../shared/select-state.svelte';
-  import type { PolicyForm } from './policy-form.svelte';
+  import type { PolicyForm, PolicyProposal } from './policy-form.svelte';
+  import Button from '../shared/Button.svelte';
 
   const clientOptions: SelectOption[] = [
     { value: 'dynamic_public', label: 'Automatic registration' },
@@ -13,7 +14,7 @@
     { value: 'client_secret_basic', label: 'Basic (client_secret_basic)' },
     { value: 'client_secret_post', label: 'POST (client_secret_post)' }
   ];
-  let { form, idPrefix }: { form: PolicyForm; idPrefix: string } = $props();
+  let { form, idPrefix, proposal }: { form: PolicyForm; idPrefix: string; proposal?: PolicyProposal } = $props();
 </script>
 
 <div class="fields">
@@ -28,8 +29,10 @@
   {:else}
     <p>An administrator provides an existing application's client ID and secret. The secret is not a user's password.</p>
   {/if}
-  <AdminConfigurationField id={`${idPrefix}-scopes`} name="scopes" label="Requested scopes" placeholder="Leave empty to use provider defaults" value={form.scopes} oninput={(event) => form.set('scopes', (event.currentTarget as HTMLInputElement).value)} helperText="Choose only the permissions this server needs, using scope names from the provider's documentation. Case-sensitive, unique ASCII scope tokens separated by ordinary spaces. Up to 64 tokens, 256 characters each and 4,096 joined characters. Empty scopes use provider defaults, not a guarantee of no access." />
+  <AdminConfigurationField id={`${idPrefix}-scopes`} name="scopes" label="Requested scopes" placeholder="Explicit provider scope names" value={form.scopes} oninput={(event) => form.set('scopes', (event.currentTarget as HTMLInputElement).value)} helperText="Choose only the permissions this server needs, using scope names from the provider's documentation. Case-sensitive, unique ASCII scope tokens separated by ordinary spaces. Up to 64 tokens, 256 characters each and 4,096 joined characters. An empty list requests no explicit scopes. Provider behavior must be validated; advertised scopes are never approved automatically." />
+  {#if proposal?.scopes.length}<Button variant="secondary" onclick={() => form.set('scopes', proposal!.scopes.join(' '))}>Use selected scopes</Button>{/if}
   {#if form.kind !== 'dynamic_public'}
+    {#if proposal}<p>Discovered issuer: <code>{proposal.issuer}</code></p><Button variant="secondary" onclick={() => form.set('issuer', proposal!.issuer)}>Use discovered issuer</Button>{/if}
     <AdminConfigurationField id={`${idPrefix}-issuer`} name="issuer" label="Exact HTTPS issuer URL" type="url" placeholder="https://auth.example.com" value={form.issuer} required oninput={(event) => form.set('issuer', (event.currentTarget as HTMLInputElement).value)} helperText="The OAuth issuer from the provider's documentation, which may differ from the MCP endpoint. Preserve the provider's exact issuer spelling. No query, fragment or credentials." />
     <AdminConfigurationField id={`${idPrefix}-client-id`} name="clientId" label="Client ID" placeholder="Client ID from the provider" helperText="Copy the identifier of the application registered for Umbod with the provider. This is not a user's account ID or access token." value={form.clientId} required oninput={(event) => form.set('clientId', (event.currentTarget as HTMLInputElement).value)} />
   {/if}

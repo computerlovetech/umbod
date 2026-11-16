@@ -62,6 +62,7 @@ from umbod.core.connectors.downstream_mcp.probe import (
     DownstreamConnectorValidationError,
 )
 from umbod.core.connectors.downstream_mcp.publishing import DownstreamConnectorPublisher
+from umbod.core.connectors.downstream_mcp.personal_oauth_setup.state import PersonalOAuthSetupRequired
 from umbod.core.connectors.downstream_mcp.stores import (
     ConnectorHealthFound,
     ToolCatalogFound,
@@ -79,6 +80,7 @@ from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
 )
 from umbod.rest.connectors.downstream_mcp.personal_validation import PersonalConfigurationValidationRoute
 from umbod.rest.connectors.downstream_mcp.personal_tools import router as personal_tools_router
+from umbod.rest.connectors.downstream_mcp.personal_oauth_setup import router as personal_oauth_setup_router
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.connectors.dependencies import (
     get_capability_activation_store,
@@ -150,6 +152,7 @@ router = APIRouter(
     route_class=PersonalConfigurationValidationRoute,
 )
 router.include_router(personal_tools_router)
+router.include_router(personal_oauth_setup_router)
 ConfigurationStore = Annotated[
     PersonalOAuthConfigurationStore, Depends(get_personal_oauth_configuration_store)
 ]
@@ -833,7 +836,7 @@ async def list_tools(
 async def publish_connector(connector_id: str, publisher: Publisher) -> PublicationResponse:
     try:
         await publisher.publish(connector_id)
-    except (PublicToolNameConflictError, DownstreamConnectorConflictError) as error:
+    except (PublicToolNameConflictError, DownstreamConnectorConflictError, PersonalOAuthSetupRequired) as error:
         raise present_downstream_mcp_error(error) from error
     return PublicationResponse(connector_id=connector_id, publication_status="published")
 

@@ -113,8 +113,8 @@ def get_downstream_connector_catalog_lifecycle(stores: Annotated[DownstreamMcpSt
     discovery = create_downstream_mcp_discovery(downstream_mcp_infrastructure_settings_from_app_config(factories.settings), probe)
     return DownstreamConnectorCatalogLifecycle(discovery, stores.unit_of_work, queries, identity_source)
 
-def get_downstream_connector_publisher(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], publishing: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)], identity_source: Annotated[PublicToolIdentitySource, Depends(get_public_tool_identity_source)]) -> DownstreamConnectorPublisher:
-    return DownstreamConnectorPublisher(publishing, queries, stores.unit_of_work, identity_source)
+def get_downstream_connector_publisher(factories: Factories, stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], publishing: Annotated[ConnectorPublishingStore, Depends(get_connector_publishing_store)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)], identity_source: Annotated[PublicToolIdentitySource, Depends(get_public_tool_identity_source)]) -> DownstreamConnectorPublisher:
+    return DownstreamConnectorPublisher(publishing, queries, stores.unit_of_work, identity_source, factories.settings.endpoints.api_base_url.rstrip("/") + "/api/oauth/downstream-mcp/callback")
 
 def get_downstream_connector_deleter(stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)], permissions: Annotated[GroupPermissionStore, Depends(get_group_permission_store)], queries: Annotated[DownstreamConnectorQueries, Depends(get_downstream_connector_queries)]) -> DownstreamConnectorDeleter:
     return DownstreamConnectorDeleter(permissions, stores.unit_of_work, queries)

@@ -2,6 +2,7 @@ import { NamespacesRoute } from '../filesystem/namespaces-route';
 import { AnalyticsRoute } from '../analytics/http-route';
 import { GroupsRoute } from '../groups/http-route';
 import { PersonalServersRoute } from '../personal-mcp-servers/http-route';
+import { PersonalOAuthSetupRoute } from '../personal-mcp-servers/setup-route';
 import { CapabilityDescriptionsRoute } from '../capability-descriptions-api';
 import { ConnectorsApi } from '../connectors-api';
 import { DownstreamMcpConnectorsRoute } from '../downstream-mcp-connectors-api';
@@ -16,6 +17,7 @@ export class AdminApi {
   readonly analytics: AnalyticsRoute;
   readonly groups: GroupsRoute;
   readonly personalServers: PersonalServersRoute;
+  readonly personalOAuthSetup: PersonalOAuthSetupRoute;
   readonly capabilityDescriptions: CapabilityDescriptionsRoute;
   readonly connectors: ConnectorsApi;
   readonly groupPermissions: GroupPermissionsApi;
@@ -28,6 +30,7 @@ export class AdminApi {
     this.analytics = new AnalyticsRoute(transport);
     this.groups = new GroupsRoute(transport);
     this.personalServers = new PersonalServersRoute(transport);
+    this.personalOAuthSetup = new PersonalOAuthSetupRoute(transport);
     this.capabilityDescriptions = new CapabilityDescriptionsRoute(transport);
     this.connectors = new ConnectorsApi(transport);
     this.groupPermissions = new GroupPermissionsApi(transport, this.groups);

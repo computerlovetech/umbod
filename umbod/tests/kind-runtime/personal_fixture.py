@@ -25,7 +25,7 @@ identity_codes: dict[str, dict[str, str]] = {}
 codes: dict[str, dict[str, str]] = {}
 tokens: dict[str, str] = {}
 refresh_tokens: dict[str, str] = {}
-counters: dict[str, int] = {"calls": 0, "exchanges": 0, "refreshes": 0, "unauthorized": 0, "discoveries": 0}
+counters: dict[str, int] = {"calls": 0, "exchanges": 0, "refreshes": 0, "unauthorized": 0, "discoveries": 0, "registrations": 0, "authorizations": 0}
 modes: dict[str, str] = {}
 refresh_release: dict[str, asyncio.Event] = {}
 
@@ -82,7 +82,8 @@ async def metadata(request: Request) -> Response:
         return JSONResponse({"error": "not_found"}, status_code=404)
     if "oauth-protected-resource" in request.url.path:
         return JSONResponse({"resource": RESOURCE, "authorization_servers": [ISSUER], "scopes_supported": ["read"], "bearer_methods_supported": ["header"]})
-    document = {"issuer": ISSUER, "authorization_endpoint": ISSUER + "/authorize", "token_endpoint": ISSUER + "/token", "response_types_supported": ["code"], "grant_types_supported": ["authorization_code", "refresh_token"], "token_endpoint_auth_methods_supported": ["none"], "code_challenge_methods_supported": ["S256"], "authorization_response_iss_parameter_supported": True}
+    document = {"issuer": ISSUER, "authorization_endpoint": ISSUER + "/authorize", "token_endpoint": ISSUER + "/token", "response_types_supported": ["code"], "grant_types_supported": ["authorization_code", "refresh_token"], "token_endpoint_auth_methods_supported": ["none", "client_secret_basic"], "code_challenge_methods_supported": ["S256"], "authorization_response_iss_parameter_supported": True}
+    document["registration_endpoint"] = ISSUER + "/register"
     if modes.get("metadata") == "issuer_omitted":
         document.pop("authorization_response_iss_parameter_supported")
     elif modes.get("metadata") == "issuer_false":
@@ -126,9 +127,24 @@ async def identity_exchange(request: Request) -> Response:
     return JSONResponse({"access_token": token, "token_type": "Bearer", "expires_in": 3600, "scope": "openid profile email groups"})
 
 
+async def register(request: Request) -> Response:
+    counters["registrations"] += 1
+    payload = await request.json()
+    return JSONResponse({
+        "client_id": "kind-personal-client",
+        "redirect_uris": payload["redirect_uris"],
+        "application_type": payload["application_type"],
+        "token_endpoint_auth_method": "none",
+        "grant_types": payload["grant_types"],
+        "response_types": ["code"],
+        "scope": payload.get("scope", "read"),
+    }, status_code=201)
+
+
 async def authorize(request: Request) -> Response:
     if request.url.hostname == "identity.personal-runtime.kind.invalid":
         return await identity_authorize(request)
+    counters["authorizations"] += 1
     parameters = dict(request.query_params)
     owner = parameters.pop("owner", "")
     redirect_uri = "https://umbod-runtime.kind.invalid/api/oauth/downstream-mcp/callback"
@@ -195,7 +211,7 @@ async def control(request: Request) -> Response:
     return JSONResponse(counters)
 
 
-router = Starlette(routes=[Route("/.well-known/{path:path}", metadata), Route("/authorize", authorize), Route("/token", exchange, methods=["POST"]), Route("/oauth/token", identity_exchange, methods=["POST"]), Route("/control", control, methods=["GET", "POST"]), Route("/health", control)], lifespan=lifespan)
+router = Starlette(routes=[Route("/.well-known/{path:path}", metadata), Route("/authorize", authorize), Route("/token", exchange, methods=["POST"]), Route("/register", register, methods=["POST"]), Route("/oauth/token", identity_exchange, methods=["POST"]), Route("/control", control, methods=["GET", "POST"]), Route("/health", control)], lifespan=lifespan)
 
 
 async def application(scope: dict[str, Any], receive: Any, send: Any) -> None:

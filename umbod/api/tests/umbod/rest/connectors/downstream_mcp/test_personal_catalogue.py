@@ -1,4 +1,5 @@
 from pathlib import Path
+from tests.support.personal_oauth_setup import install_api_setup_validation
 from typing import Any, cast
 
 import pytest
@@ -93,6 +94,7 @@ def test_publication_allows_group_connector_assignment_without_capabilities(clie
     connector_id = client.post("/api/admin/connectors/mcp/personal-oauth", json=payload()).json()["connector_id"]
     target_url = "/api/admin/mcp-permissions/assignable-targets"
     assert client.get(target_url).json() == {"connectors": [], "capabilities": []}
+    install_api_setup_validation(client, {}, connector_id)
     assert client.put(f"/api/admin/connectors/mcp/{connector_id}/publication").status_code == 200
     assert client.get(target_url).json() == {
         "connectors": [{"connector_id": connector_id, "display_name": "Personal"}],

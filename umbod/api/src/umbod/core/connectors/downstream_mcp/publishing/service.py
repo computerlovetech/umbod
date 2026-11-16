@@ -11,16 +11,19 @@ class DownstreamConnectorPublisher:
         queries: DownstreamConnectorQueries,
         unit_of_work: DownstreamConnectorUnitOfWork,
         identity_source: PublicToolIdentitySource,
+        personal_oauth_redirect_uri: str,
     ) -> None:
         self._publishing = publishing
         self._queries = queries
         self._unit_of_work = unit_of_work
         self._identity_source = identity_source
+        self._personal_oauth_redirect_uri = personal_oauth_redirect_uri
 
     async def publish(self, connector_id: str) -> None:
         await self._unit_of_work.publish(PublishDownstreamConnectorAggregate(
             connector_id=connector_id,
             native_identities=await self._identity_source.identities(),
+            personal_oauth_redirect_uri=self._personal_oauth_redirect_uri,
         ))
 
     async def unpublish(self, connector_id: str) -> None:

@@ -26,7 +26,7 @@ export class PersonalServerFormState {
   private pathEdited = false;
   private epoch = 0;
   private disposed = false;
-  constructor(private readonly api: PersonalServerAdministration, private readonly configuration: InstanceConfigurationRoute, private readonly targetId: string | null, private readonly completed: (id: string) => Promise<void> = async () => {}, private readonly accessLost: () => void = () => {}, private readonly lockChanged: (locked: boolean) => void = () => {}) {}
+  constructor(private readonly api: PersonalServerAdministration, private readonly configuration: InstanceConfigurationRoute, private readonly targetId: string | null, private readonly completed: (id: string, connector?: DownstreamMcpConnector) => Promise<void> = async () => {}, private readonly accessLost: () => void = () => {}, private readonly lockChanged: (locked: boolean) => void = () => {}) {}
   get editing(): boolean { return this.targetId !== null; }
   get canRegister(): boolean { return !this.targetId && !this.disposed && !this.locked && this.availability.registration === 'enabled'; }
   private async readAvailability(token: number): Promise<PersonalServerAvailability> {
@@ -200,7 +200,7 @@ export class PersonalServerFormState {
         catch { if (this.current(token)) { this.blocked = true; this.message = 'Registration completed, but inventory could not be reconciled. Reload before making further changes.'; } }
       } else {
         await this.reload();
-        if (selectedId && !this.blocked && !this.disposed && !this.authenticationLost) await this.completed(selectedId);
+        if (selectedId && !this.blocked && !this.disposed && !this.authenticationLost) await this.completed(selectedId, this.selected ?? undefined);
       }
       if (!this.selected && this.blocked) this.message = 'The change completed, but state could not be reconciled. Reload before making further changes.';
     }

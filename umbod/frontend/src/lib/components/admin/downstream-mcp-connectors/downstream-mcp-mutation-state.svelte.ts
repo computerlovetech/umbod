@@ -9,6 +9,15 @@ export type CommonMcpAction = 'publish' | 'unpublish' | 'delete';
 export class DownstreamMcpMutationState {
   pending = $state<{ action: CommonMcpAction; id: string; name: string } | null>(null);
   readonly publicationStatuses = new SvelteMap<string, DownstreamMcpConnectorSummary['publication_status']>();
+  private readonly personalValidation = new SvelteMap<string, boolean>();
+  canPublish = (connector: DownstreamMcpConnectorSummary): boolean => connector.authorization_mode !== 'personal' || this.personalValidation.get(connector.connector_id) === true;
+  setPersonalValidation = (id: string, validated: boolean): void => {
+    this.personalValidation.set(id, validated);
+    if (!validated && this.pending?.action === 'publish' && this.pending.id === id) this.pending = null;
+  };
+  reconcilePublication = (id: string, status: DownstreamMcpConnectorSummary['publication_status']): void => {
+    if (!this.disposed && !this.authenticationLost) this.publicationStatuses.set(id, status);
+  };
   busy = $state(false);
   formLocked = $state(false);
   registrationLocked = $state(false);

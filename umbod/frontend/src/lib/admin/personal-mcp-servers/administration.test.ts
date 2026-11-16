@@ -25,10 +25,16 @@ describe('personal server administration port', () => {
     expect(JSON.stringify([server, policy, await api.get(server.connector_id)])).not.toContain('sentinel');
     if (client.kind === 'preconfigured_confidential') expect(policy.client).toMatchObject({ client_secret_configured: true, token_endpoint_auth_method: client.token_endpoint_auth_method });
   });
-  test('policy replacement preserves existing publication', async () => {
+  test('effective policy replacement unpublishes the server', async () => {
     const api: PersonalServerAdministration = new InMemoryPersonalServers([{ ...serverFixture(), publication_status: 'published' }], [policyFixture()]);
     const next = await api.replacePolicy('personal', { expected_revision: 'r1', settings: { requested_scopes: ['read'], client: { kind: 'dynamic_public' } } });
     expect(next.revision).not.toBe('r1');
+    expect((await api.get('personal')).publication_status).toBe('unpublished');
+  });
+  test('unchanged policy preserves existing publication', async (): Promise<void> => {
+    const api: PersonalServerAdministration = new InMemoryPersonalServers([{ ...serverFixture(), publication_status: 'published' }], [policyFixture()]);
+    const next = await api.replacePolicy('personal', { expected_revision: 'r1', settings: { requested_scopes: [], client: { kind: 'dynamic_public' } } });
+    expect(next.revision).toBe('r1');
     expect((await api.get('personal')).publication_status).toBe('published');
   });
   test('rejects stale concurrent policies without overwriting the winner', async () => {

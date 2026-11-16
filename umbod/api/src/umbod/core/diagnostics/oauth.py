@@ -1,3 +1,5 @@
+from typing import Literal
+
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_failure_models import OAuthFailureEvidence
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse
 from umbod.core.signals import SignalPublisher
@@ -10,8 +12,10 @@ class PublishingOAuthFailureObserver:
     def __init__(
         self, publisher: SignalPublisher[ApplicationFailure],
         correlation: CorrelatedFailureContext | NoFailureContext,
+        operation: Literal["authorize", "validate_setup"],
     ) -> None:
         self._publisher = publisher
+        self._operation = operation
         self._correlation = (
             CorrelatedFailureContext(
                 _safe_correlation_id(correlation.trace_id, 32),
@@ -24,7 +28,7 @@ class PublishingOAuthFailureObserver:
         attributes: dict[FailureAttribute, str | int | bool] = {
             "event.name": "application.failure",
             "component": "personal_oauth",
-            "operation": "authorize",
+            "operation": self._operation,
             "reason": evidence.reason,
             "outcome": "failure",
             "failure.origin": "internal" if evidence.reason == "unexpected_failure" else "downstream_mcp",

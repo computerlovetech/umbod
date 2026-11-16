@@ -6,7 +6,8 @@
   import PolicyFields from './PolicyFields.svelte';
   import { captureInvalidSubmission } from './form-validation';
   import type { PersonalServerFormState } from './personal-server-form-state.svelte';
-  let { state, close, reload }: { state: PersonalServerFormState; close: () => void; reload: () => void } = $props();
+  import type { PolicyProposal } from './policy-form.svelte';
+  let { state, close, reload, proposal }: { state: PersonalServerFormState; close: () => void; reload: () => void; proposal?: PolicyProposal } = $props();
   onDestroy(untrack(() => state.form.clearSecret));
 </script>
   <PersonalServerDialog title={state.editing ? "Edit MCP server with personal authorization" : "Register MCP server with personal authorization"} titleId="personal-create-title" descriptionId="personal-create-description" {close}>
@@ -18,7 +19,7 @@
       {#if state.confirmation}
         <section aria-labelledby="personal-confirm-title">
           <h3 id="personal-confirm-title" tabindex="-1" {@attach (element: HTMLHeadingElement): void => element.focus()}>Save OAuth settings?</h3>
-          <p>An effective change erases ALL users' saved authorizations and pending sign-ins for this server. User enablement, publication and group grants persist. Remote tokens are not revoked. Every confidential save explicitly rotates the client secret.</p>
+          <p>An effective change erases ALL users' saved authorizations and pending sign-ins for this server. The server is unpublished and setup validation is cleared. User enablement and group grants persist. Remote tokens are not revoked. Every confidential save explicitly rotates the client secret.</p>
           <div class="actions"><Button variant="secondary" onclick={state.close}>Back</Button><Button variant="danger" disabled={state.locked} onclick={state.confirm}>Save settings</Button></div>
         </section>
       {:else}
@@ -37,7 +38,7 @@
             <h3>OAuth application</h3>
             <p>Choose how Umbod identifies itself to the provider. These settings do not sign users in or grant them access.</p>
           </div>
-          <PolicyFields form={state.form} idPrefix={state.editing ? "personal-edit" : "personal-registration"} />
+          <PolicyFields form={state.form} {proposal} idPrefix={state.editing ? "personal-edit" : "personal-registration"} />
           <div class="actions"><Button variant="secondary" onclick={close}>Cancel</Button><Button type="submit">{state.editing ? "Review changes" : "Register unpublished server"}</Button></div>
         </fieldset>
       </form>

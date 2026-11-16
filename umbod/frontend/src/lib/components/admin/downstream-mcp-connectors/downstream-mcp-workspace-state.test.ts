@@ -320,6 +320,20 @@ describe('DownstreamMcpWorkspaceState', () => {
     expect(state.operations.pending).toBeNull();
   });
 
+  test('personal publication requires current validation while published servers remain withdrawable', (): void => {
+    const state = new DownstreamMcpWorkspaceState();
+    const connector = summaryFixture();
+    state.requestPublication(connector);
+    expect(state.operations.pending).toBeNull();
+    state.operations.setPersonalValidation(connector.connector_id, true);
+    state.requestPublication(connector);
+    expect(state.operations.pending?.action).toBe('publish');
+    state.operations.setPersonalValidation(connector.connector_id, false);
+    expect(state.operations.pending).toBeNull();
+    state.requestPublication({ ...connector, publication_status: 'published' });
+    expect(state.operations.pending?.action).toBe('unpublish');
+  });
+
   test('changing selection cancels pending publication', (): void => {
     const state = new DownstreamMcpWorkspaceState(undefined, undefined, createBundle('a'), undefined, undefined, undefined, sharedRows);
     state.requestPublication(createBundle('a').connector);

@@ -86,7 +86,9 @@ describe('downstream MCP connector administration', () => {
     expect(personal).toContain('Search records');
     expect(personal).toContain('Registration path');
     expect(personal).toContain('Unpublished');
-    expect(personal).toContain('>Publish</button>');
+    expect(personal).not.toContain('>Publish</button>');
+    expect(personal).toContain('Configuration not validated');
+    expect(personal).toContain('Sign-in not tested');
     expect(personal).toContain('>Delete</button>');
     expect(personal).toContain('href="/dashboard"');
     expect(personal).toContain("do not show a user's authorization or private inventory");
@@ -95,6 +97,13 @@ describe('downstream MCP connector administration', () => {
     const shared = workspace(sharedConnector());
     for (const present of ['Discovery health', 'Discovered tools', 'Search tools', '>Configure</button>', 'Refresh discovery', 'Edit capability description', '>Publish</button>', '>Delete</button>']) expect(shared).toContain(present);
     expect(shared).not.toContain('Personal OAuth settings');
+  });
+
+  test('existing published personal connectors remain withdrawable without a setup receipt', (): void => {
+    const personal = workspace({ ...serverFixture(), publication_status: 'published' });
+    expect(personal).toContain('>Unpublish</button>');
+    expect(personal).not.toContain('>Publish</button>');
+    expect(personal).toContain('Configuration not validated');
   });
 
   test('captures and displays the connector capability description', async (): Promise<void> => {

@@ -72,10 +72,12 @@ Personal connector OAuth services publish one sanitized failure snapshot before 
 | Field | Meaning |
 | --- | --- |
 | `oauth.stage` | `discovery`, `registration`, `token_exchange`, or `refresh`. |
-| `oauth.reason` | `provider_rejected`, `timeout`, `invalid_response`, `network_failure`, or `unexpected_failure`. |
+| `oauth.reason` | `provider_rejected`, `timeout`, `invalid_response`, `network_failure`, `scope_mismatch`, `resource_mismatch`, `issuer_mismatch`, `ambiguous_issuer`, `pkce_s256_required`, `authorization_code_required`, `code_response_required`, `client_auth_required`, `registration_unavailable`, `registration_contract_mismatch`, or `unexpected_failure`. |
 | `oauth.downstream.response_received` | Whether the failing exchange supplied HTTP response evidence. |
 | `oauth.downstream.http.status_code` | Actual downstream status, omitted when no response evidence exists. |
 | `connector.id_hash` | Deterministic fingerprint of the connector ID; not an owner identity. |
+
+Setup discovery and validation use this same observer with `operation=validate_setup`; user authorization retains `operation=authorize`. A registration scope mismatch publishes `registration` / `scope_mismatch` with the actual registration HTTP status, including successful 201 responses. Scope names, metadata documents, client identifiers and secrets never enter diagnostic events.
 
 The server-generated request ID supplies trace correlation without inventing a tracing span. Start, callback, and refresh are separate requests. Expected provider failures log at WARNING; unexpected failures remain ERROR and alertable. These records do not contain provider error codes, descriptions, response bodies, callback parameters, or unrestricted URLs.
 

@@ -114,6 +114,7 @@ class ReplaceDownstreamConnectorAggregate(DomainModel):
 class PublishDownstreamConnectorAggregate(DomainModel):
     connector_id: str
     native_identities: tuple[PublicToolIdentity, ...]
+    personal_oauth_redirect_uri: str = ""
 
 
 class UpdatePublishedConnectorPrefix(DomainModel):

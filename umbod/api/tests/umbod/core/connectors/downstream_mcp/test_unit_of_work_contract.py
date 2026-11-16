@@ -1,4 +1,6 @@
 from messaging.ports import EventStream
+from umbod.core.connectors.downstream_mcp.personal_oauth_setup.ports import PersonalOAuthSetupStore
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_setup import PersonalOAuthSetupStoreService
 from umbod.core.messaging.stores.event_stream import DatabaseEventStream
 from dataclasses import replace
 from umbod.core.connectors.downstream_mcp.personal_connections import CanonicalPrincipal, PersonalConnectionKey, PersonalConnectionStore, SetPersonalConnectionEnabled, InMemoryPersonalConnectionStore
@@ -31,6 +33,7 @@ from umbod.core.connectors.downstream_mcp.stores import ConnectorDefinitionStore
 from umbod.core.connectors.downstream_mcp.management import CreateDownstreamConnectorAggregate, DownstreamConnectorUnitOfWork, PreservePublication, ReconcileActivation, ReplaceCatalog, ReplaceCredential, ReplaceHealth, UpdatePublishedConnectorPrefix
 
 class AggregateHarness(Protocol):
+    personal_oauth_setup: PersonalOAuthSetupStore
     unit_of_work: DownstreamConnectorUnitOfWork
     events: EventStream
     personal_connections: PersonalConnectionStore
@@ -43,7 +46,8 @@ class AggregateHarness(Protocol):
 
 class Harness:
 
-    def __init__(self, unit_of_work: DownstreamConnectorUnitOfWork, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, health: ConnectorHealthStore, publishing: ConnectorPublishingStore, activations: ActivationStore, personal_connections: PersonalConnectionStore, events: EventStream) -> None:
+    def __init__(self, unit_of_work: DownstreamConnectorUnitOfWork, definitions: ConnectorDefinitionStore, credentials: EncryptedCredentialStore, catalogs: ToolCatalogStore, health: ConnectorHealthStore, publishing: ConnectorPublishingStore, activations: ActivationStore, personal_connections: PersonalConnectionStore, events: EventStream, personal_oauth_setup: PersonalOAuthSetupStore) -> None:
+        self.personal_oauth_setup = personal_oauth_setup
         self.events = events
         self.unit_of_work = unit_of_work
         self.personal_connections = personal_connections
@@ -77,7 +81,8 @@ async def _inmemory(_: Path, fault: Callable[[str], None]) -> AggregateHarness:
     publishing = ConnectorPublishingStoreService(database, PUBLICATION_STATE_TABLE)
     personal = InMemoryPersonalConnectionStore()
     events = DatabaseEventStream(create_inmemory_runtime().database)
-    return Harness(InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activations, publishing, fault, personal, configurations, personal_policies, personal_access, events), definitions, credentials, catalogs, health, publishing, activations, personal, events)
+    setup = PersonalOAuthSetupStoreService(definition_database, AuthenticatedTextCipher('unit-of-work-secret'), utc_clock)
+    return Harness(InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activations, publishing, fault, personal, configurations, personal_policies, personal_access, events, setup), definitions, credentials, catalogs, health, publishing, activations, personal, events, setup)
 
 async def _database_harness(database: Database, fault: Callable[[str], None]) -> AggregateHarness:
     definitions = ConnectorDefinitionStoreService(database, CONNECTOR_DEFINITION_TABLE)
@@ -86,7 +91,7 @@ async def _database_harness(database: Database, fault: Callable[[str], None]) ->
     health = ConnectorHealthStoreService(database, CONNECTOR_HEALTH_TABLE)
     activations = await create_capability_activation_store(database)
     publishing = await create_connector_publishing_store(database)
-    return Harness(DownstreamConnectorUnitOfWorkService(database, AuthenticatedTextCipher('unit-of-work-secret'), fault, utc_clock), definitions, credentials, catalogs, health, publishing, activations, EncryptedPersonalConnectionStore(database, AuthenticatedTextCipher('unit-of-work-secret')), DatabaseEventStream(database))
+    return Harness(DownstreamConnectorUnitOfWorkService(database, AuthenticatedTextCipher('unit-of-work-secret'), fault, utc_clock), definitions, credentials, catalogs, health, publishing, activations, EncryptedPersonalConnectionStore(database, AuthenticatedTextCipher('unit-of-work-secret')), DatabaseEventStream(database), PersonalOAuthSetupStoreService(database, AuthenticatedTextCipher('unit-of-work-secret'), utc_clock))
 
 
 async def _database_inmemory(_: Path, fault: Callable[[str], None]) -> AggregateHarness:

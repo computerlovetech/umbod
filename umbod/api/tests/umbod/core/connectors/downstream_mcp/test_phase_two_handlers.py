@@ -130,7 +130,7 @@ class DownstreamConnectorFixture:
         validator = PublicToolNameValidator()
         identity_source = PublicToolIdentitySourceFake(native_identities)
         self.updater = DownstreamConnectorUpdater(credentials, publishing, unit_of_work, preparation, self.queries, validator, identity_source)
-        self.publisher = DownstreamConnectorPublisher(publishing, self.queries, unit_of_work, identity_source)
+        self.publisher = DownstreamConnectorPublisher(publishing, self.queries, unit_of_work, identity_source, "")
         self.deleter = DownstreamConnectorDeleter(permissions, unit_of_work, self.queries)
 
     async def create(self, request: Any) -> Any:
@@ -165,14 +165,17 @@ def service(definitions: Any, credentials: Any, catalogs: Any, health: Any, nati
     from umbod.core.connectors.downstream_mcp.stores.personal_tool_access import EncryptedPersonalToolAccessStore
     from umbod.core.connectors.downstream_mcp.management import utc_clock
 
+    from umbod.core.connectors.downstream_mcp.stores.personal_oauth_setup import PersonalOAuthSetupStoreService
+
     personal_database = create_inmemory_runtime().database
+    setup = PersonalOAuthSetupStoreService(personal_database, AuthenticatedTextCipher('phase-two-secret'), utc_clock)
     personal_policies = PersonalToolPolicyStoreService(personal_database, utc_clock, lambda phase: None)
     personal_access = EncryptedPersonalToolAccessStore(personal_database, AuthenticatedTextCipher('phase-two-secret'))
     configurations = EncryptedPersonalOAuthConfigurationStore(create_inmemory_runtime().database, AuthenticatedTextCipher('phase-two-secret'))
     publishing = ConnectorPublishingStoreService(create_inmemory_runtime().database, PUBLICATION_STATE_TABLE)
     events = EventStreamFake()
     activation = ActivationFake()
-    return (DownstreamConnectorFixture(definitions, credentials, catalogs, health, UnusedDiscovery(), activation, publishing, activation, PermissionsFake(), FixedIdGenerator(), AvailableIdentities(), SuccessfulDownstreamMcpProbe(), InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activation, publishing, lambda phase: None, InMemoryPersonalConnectionStore(), configurations, personal_policies, personal_access, events), native_identities), definitions, credentials, catalogs, health, publishing, events)
+    return (DownstreamConnectorFixture(definitions, credentials, catalogs, health, UnusedDiscovery(), activation, publishing, activation, PermissionsFake(), FixedIdGenerator(), AvailableIdentities(), SuccessfulDownstreamMcpProbe(), InMemoryDownstreamConnectorUnitOfWork(definitions, credentials, catalogs, health, activation, publishing, lambda phase: None, InMemoryPersonalConnectionStore(), configurations, personal_policies, personal_access, events, setup), native_identities), definitions, credentials, catalogs, health, publishing, events)
 
 def standard_service() -> tuple[DownstreamConnectorFixture, Any, Any, Any, Any, ConnectorPublishingStoreService, EventStreamFake]:
     return service(ConnectorDefinitionStoreService(create_inmemory_runtime().database, CONNECTOR_DEFINITION_TABLE), EncryptedCredentialStoreService(create_inmemory_runtime().database, CONNECTOR_CREDENTIAL_TABLE, AuthenticatedTextCipher('phase-two-secret')), ToolCatalogStoreService(create_inmemory_runtime().database, TOOL_CATALOG_TABLE), ConnectorHealthStoreService(create_inmemory_runtime().database, CONNECTOR_HEALTH_TABLE))

@@ -17,7 +17,9 @@ from ..stores.personal_tools_schema import PERSONAL_TOOL_POLICY_TABLE, PERSONAL_
 
 from umbod.core.connectors.downstream_mcp.models import uses_personal_oauth
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthConfigurationUnavailable
-from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import install_personal_oauth_configuration
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import install_personal_oauth_configuration, load_personal_oauth_configuration
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_setup import require_current_setup
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_setup_schema import PERSONAL_OAUTH_SETUP_TABLE, PERSONAL_OAUTH_SETUP_CONNECTOR_ID
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configuration_schema import PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID
 
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_schema import PERSONAL_OAUTH_ATTEMPT_TABLE, PERSONAL_OAUTH_ATTEMPT_CONNECTOR_ID
@@ -409,10 +411,13 @@ async def _publish(
     )
     if row is None:
         raise DownstreamConnectorNotFoundError(command.connector_id)
+    definition = CONNECTOR_DEFINITION_ADAPTER.validate_python(row.document)
+    if uses_personal_oauth(definition):
+        configuration = await load_personal_oauth_configuration(session, context.cipher, command.connector_id)
+        await require_current_setup(session, definition, configuration.policy.revision, command.personal_oauth_redirect_uri)
     current = await _publication(session, command.connector_id)
     if current is not None and current.published:
         return False
-    definition = CONNECTOR_DEFINITION_ADAPTER.validate_python(row.document)
     catalog = await find_catalog_record(session, TOOL_CATALOG_TABLE, command.connector_id)
     if not uses_personal_oauth(definition):
         if catalog is None:
@@ -476,6 +481,7 @@ async def _delete(
         ("personal_connections", PERSONAL_CONNECTION_TABLE, PERSONAL_CONNECTION_CONNECTOR_ID),
         ("personal_oauth_attempts", PERSONAL_OAUTH_ATTEMPT_TABLE, PERSONAL_OAUTH_ATTEMPT_CONNECTOR_ID),
         ("personal_oauth_configuration", PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID),
+        ("personal_oauth_setup", PERSONAL_OAUTH_SETUP_TABLE, PERSONAL_OAUTH_SETUP_CONNECTOR_ID),
         ("credential", CONNECTOR_CREDENTIAL_TABLE, CONNECTOR_CREDENTIAL_CONNECTOR_ID),
         ("catalog", TOOL_CATALOG_TABLE, TOOL_CATALOG_CONNECTOR_ID),
         ("health", CONNECTOR_HEALTH_TABLE, CONNECTOR_HEALTH_CONNECTOR_ID),

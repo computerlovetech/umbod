@@ -6,6 +6,7 @@ import pytest
 import pytest_asyncio
 
 from tests.persistence_runtime import prepared_inmemory_runtime
+from tests.support.personal_oauth_setup import SETUP_CALLBACK, install_setup_validation, install_store_setup_validation
 from tests.umbod.core.connectors.downstream_mcp.test_unit_of_work_contract import (
     AggregateHarness,
     Harness,
@@ -37,7 +38,7 @@ from umbod.core.persistence import Database
 
 async def _database_inmemory(database: Database) -> AggregateHarness:
     stores = await create_downstream_mcp_stores("namespace-secret", database)
-    return Harness(stores.unit_of_work, stores.definitions, stores.credentials, stores.catalogs, stores.health, stores.publishing, stores.activations, stores.personal_connections, DatabaseEventStream(database))
+    return Harness(stores.unit_of_work, stores.definitions, stores.credentials, stores.catalogs, stores.health, stores.publishing, stores.activations, stores.personal_connections, DatabaseEventStream(database), stores.personal_oauth_setup)
 
 
 @pytest_asyncio.fixture
@@ -62,7 +63,7 @@ async def aggregate(request: pytest.FixtureRequest) -> AsyncIterator[AggregateHa
 
 
 def _publish(connector_id: str, native: tuple[PublicToolIdentity, ...]) -> PublishDownstreamConnectorAggregate:
-    return PublishDownstreamConnectorAggregate(connector_id=connector_id, native_identities=native)
+    return PublishDownstreamConnectorAggregate(connector_id=connector_id, native_identities=native, personal_oauth_redirect_uri=SETUP_CALLBACK)
 
 
 @pytest.mark.asyncio
@@ -165,8 +166,28 @@ async def test_personal_publication_does_not_require_catalogue(aggregate: Aggreg
     await aggregate.definitions.save(SaveConnectorDefinition(definition=OAuthConnectorDefinition(
         connector_id="personal", display_name="Personal", endpoint_url="https://personal.test/mcp", authorization_mode="personal",
     )))
+    await install_store_setup_validation(aggregate.personal_oauth_setup, "personal")
     assert await aggregate.unit_of_work.publish(_publish("personal", ()))
     assert not await aggregate.unit_of_work.publish(_publish("personal", ()))
+    assert await aggregate.publishing.is_published("personal")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failed", (False, True), ids=("pending", "failed"))
+async def test_revalidation_blocks_repeat_publication_without_revoking_existing_publication(aggregate: AggregateHarness, failed: bool) -> None:
+    from datetime import UTC, datetime
+    from umbod.core.connectors.downstream_mcp.personal_oauth_setup.state import CompletePersonalOAuthSetup, PersonalOAuthSetupQuery, PersonalOAuthSetupRequired, SetupFailed, StartPersonalOAuthSetup
+
+    await aggregate.definitions.save(SaveConnectorDefinition(definition=OAuthConnectorDefinition(connector_id="personal", display_name="Personal", endpoint_url="https://personal.test/mcp", authorization_mode="personal")))
+    await install_store_setup_validation(aggregate.personal_oauth_setup, "personal")
+    await aggregate.unit_of_work.publish(_publish("personal", ()))
+    query = PersonalOAuthSetupQuery(connector_id="personal", redirect_uri=SETUP_CALLBACK)
+    status = await aggregate.personal_oauth_setup.get(query)
+    started = await aggregate.personal_oauth_setup.start(StartPersonalOAuthSetup(**query.model_dump(), expected_revision=status.revision, operation="validation"))
+    if failed:
+        await aggregate.personal_oauth_setup.complete(CompletePersonalOAuthSetup(started=started, state=SetupFailed(stage="registration", reason="provider_rejected", checked_at=datetime.now(UTC))))
+    with pytest.raises(PersonalOAuthSetupRequired):
+        await aggregate.unit_of_work.publish(_publish("personal", ()))
     assert await aggregate.publishing.is_published("personal")
 
 
@@ -179,7 +200,7 @@ class NativeIdentities:
 async def test_repeated_and_concurrent_publication_emits_only_one_event(aggregate: AggregateHarness) -> None:
     await aggregate.unit_of_work.create(_published_prefix_command("alpha", "Alpha"))
     queries = DownstreamConnectorQueries(aggregate.definitions, aggregate.credentials, aggregate.catalogs, aggregate.health, aggregate.publishing)
-    publisher = DownstreamConnectorPublisher(aggregate.publishing, queries, aggregate.unit_of_work, NativeIdentities())
+    publisher = DownstreamConnectorPublisher(aggregate.publishing, queries, aggregate.unit_of_work, NativeIdentities(), SETUP_CALLBACK)
     await asyncio.gather(publisher.publish("alpha"), publisher.publish("alpha"))
     await publisher.publish("alpha")
     persisted = await aggregate.events.list_after(0, 100)
@@ -197,6 +218,7 @@ async def test_personal_policy_publication_and_prefix_race_preserves_unique_publ
     alpha = _published_prefix_command("alpha", "Alpha")
     await bundle.unit_of_work.create(alpha)
     await bundle.unit_of_work.create(_published_prefix_command("beta", "Shared"))
+    await install_setup_validation(bundle, "personal")
     await bundle.unit_of_work.publish(_publish("personal", ()))
     await bundle.unit_of_work.publish(_publish("alpha", ()))
     results = await asyncio.gather(
@@ -228,6 +250,7 @@ async def test_personal_tool_replacement_and_published_prefix_change_serialize_n
     previous = (await bundle.personal_tool_policies.replace(ReplacePersonalToolPolicy(connector_id="personal", expected_revision="unconfigured", tools=(old_tool,), native_identities=()))).policy
     alpha = _published_prefix_command("alpha", "Alpha")
     await bundle.unit_of_work.create(alpha)
+    await install_setup_validation(bundle, "personal")
     await bundle.unit_of_work.publish(_publish("personal", ()))
     await bundle.unit_of_work.publish(_publish("alpha", ()))
     replacement = bundle.personal_tool_policies.replace(ReplacePersonalToolPolicy(connector_id="personal", expected_revision=previous.revision, tools=(tool,), native_identities=()))

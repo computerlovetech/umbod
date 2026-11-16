@@ -16,7 +16,7 @@ from umbod.logging import OpenTelemetryJsonFormatter, create_application_failure
 @pytest.mark.parametrize("response", [NoDownstreamResponse(), DownstreamHttpResponse(status_code=403)])
 def test_observer_publishes_immutable_sanitized_evidence(response: DownstreamResponseEvidence) -> None:
     captured = CapturingApplicationFailures()
-    observer = PublishingOAuthFailureObserver(captured, CorrelatedFailureContext("a" * 32, None))
+    observer = PublishingOAuthFailureObserver(captured, CorrelatedFailureContext("a" * 32, None), operation="authorize")
     evidence = OAuthFailureEvidence(stage="registration", reason="provider_rejected", downstream_response=response)
 
     observer.report("private-connector", evidence)
@@ -46,7 +46,7 @@ def test_logging_distinguishes_expected_provider_failures_from_alertable_errors(
     caplog: pytest.LogCaptureFixture, reason: OAuthFailureReason, level: int,
 ) -> None:
     caplog.set_level(logging.WARNING)
-    observer = PublishingOAuthFailureObserver(create_application_failure_signal(), NoFailureContext())
+    observer = PublishingOAuthFailureObserver(create_application_failure_signal(), NoFailureContext(), operation="authorize")
 
     observer.report("private-connector", OAuthFailureEvidence(stage="refresh", reason=reason, downstream_response=NoDownstreamResponse()))
 
@@ -72,7 +72,7 @@ def test_receiver_failure_is_isolated_and_other_application_channels_are_indepen
     first.connect("failing-observer", fail)
     first.connect("capture", observed.send)
     second.connect("capture", other_application.send)
-    observer = PublishingOAuthFailureObserver(first, NoFailureContext())
+    observer = PublishingOAuthFailureObserver(first, NoFailureContext(), operation="authorize")
 
     observer.report("private-connector", OAuthFailureEvidence(stage="discovery", reason="timeout", downstream_response=NoDownstreamResponse()))
 
@@ -85,7 +85,7 @@ def test_receiver_failure_is_isolated_and_other_application_channels_are_indepen
 
 def test_observer_sanitizes_untrusted_correlation_before_publication() -> None:
     captured = CapturingApplicationFailures()
-    observer = PublishingOAuthFailureObserver(captured, CorrelatedFailureContext("https://private.example", "private-token"))
+    observer = PublishingOAuthFailureObserver(captured, CorrelatedFailureContext("https://private.example", "private-token"), operation="authorize")
 
     observer.report("connector", OAuthFailureEvidence(stage="discovery", reason="timeout", downstream_response=NoDownstreamResponse()))
 

@@ -378,7 +378,10 @@ async def test_personal_publication_checks_approved_names_but_allows_catalogue_f
 
     bundle = runtime_case.bundle
     queries = DownstreamConnectorQueries(bundle.definitions, bundle.credentials, bundle.catalogs, bundle.health, bundle.publishing)
-    publisher = DownstreamConnectorPublisher(bundle.publishing, queries, bundle.unit_of_work, NativeIdentities())
+    from tests.support.personal_oauth_setup import SETUP_CALLBACK, install_setup_validation
+
+    publisher = DownstreamConnectorPublisher(bundle.publishing, queries, bundle.unit_of_work, NativeIdentities(), SETUP_CALLBACK)
+    await install_setup_validation(bundle, "personal")
     await bundle.publishing.unpublish_connector("personal")
     await publisher.publish("personal")
     assert await bundle.publishing.is_published("personal")
@@ -404,7 +407,7 @@ async def test_detached_inmemory_unit_of_work_snapshots_personal_tool_stores(run
 
     from umbod.core.messaging.stores.event_stream import DatabaseEventStream
 
-    unit_of_work = InMemoryDownstreamConnectorUnitOfWork(bundle.definitions, bundle.credentials, bundle.catalogs, bundle.health, bundle.activations, bundle.publishing, fail, bundle.personal_connections, bundle.personal_oauth_configurations, bundle.personal_tool_policies, bundle.personal_tool_access, DatabaseEventStream(runtime_case.database))
+    unit_of_work = InMemoryDownstreamConnectorUnitOfWork(bundle.definitions, bundle.credentials, bundle.catalogs, bundle.health, bundle.activations, bundle.publishing, fail, bundle.personal_connections, bundle.personal_oauth_configurations, bundle.personal_tool_policies, bundle.personal_tool_access, DatabaseEventStream(runtime_case.database), bundle.personal_oauth_setup)
     with pytest.raises(RuntimeError, match="injected"):
         await unit_of_work.delete(DeleteDownstreamConnectorAggregate(connector_id="personal"))
     assert await bundle.personal_tool_policies.get(ConnectorIdQuery(connector_id="personal")) == policy

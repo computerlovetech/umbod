@@ -1,4 +1,9 @@
 import json
+from datetime import UTC, datetime
+
+from umbod.core.publishing.events import connector_publication_changed_event
+from umbod.core.publishing.stores.schema import PUBLICATION_STATE_CONNECTOR_ID, PUBLICATION_STATE_TABLE, PublicationStateKey, PublicationStateRecord
+from .personal_oauth_setup_schema import PERSONAL_OAUTH_SETUP_TABLE, PERSONAL_OAUTH_SETUP_CONNECTOR_ID
 
 from .personal_discovery_schema import PERSONAL_DISCOVERY_TABLE, PERSONAL_DISCOVERY_CONNECTOR_ID
 from uuid import uuid4
@@ -114,6 +119,14 @@ async def _invalidate_connections(session: DatabaseSession, cipher: TextCipher, 
     return invalidated
 
 
+async def _invalidate_setup(session: DatabaseSession, connector_id: str) -> None:
+    await session.delete(PERSONAL_OAUTH_SETUP_TABLE, DeleteQuery(Equals(PERSONAL_OAUTH_SETUP_CONNECTOR_ID, connector_id)))
+    publication = await session.find_one(PUBLICATION_STATE_TABLE, Query(filter=Equals(PUBLICATION_STATE_CONNECTOR_ID, connector_id), projection=AllFields(), ordering=Unordered()))
+    if publication is not None and publication.published:
+        await session.upsert(PUBLICATION_STATE_TABLE, UpsertCommand(key=PublicationStateKey(connector_id=connector_id), row=PublicationStateRecord(connector_id=connector_id, published=False, previously_published=True, revision=publication.revision + 1, updated_at=datetime.now(UTC).isoformat())))
+        await append_event_in_session(session, connector_publication_changed_event(connector_id, "unpublished"))
+
+
 class EncryptedPersonalOAuthConfigurationStore:
     def __init__(self, database: Database, cipher: TextCipher) -> None:
         self._database = database
@@ -125,6 +138,7 @@ class EncryptedPersonalOAuthConfigurationStore:
                 PERSONAL_OAUTH_CONFIGURATION_TABLE,
                 DeleteQuery(Equals(PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID, connector_id)),
             )
+            await _invalidate_setup(session, connector_id)
             invalidated = await _invalidate_connections(session, self._cipher, connector_id, rotate_unauthorized=bool(removed))
             if removed or invalidated:
                 await append_event_in_session(session, connector_discovery_changed_event("downstream_mcp", connector_id))
@@ -142,6 +156,7 @@ class EncryptedPersonalOAuthConfigurationStore:
                 command.settings.requested_scopes == current.policy.requested_scopes and command.settings.client == current.policy.client
             ):
                 return current
+            await _invalidate_setup(session, command.connector_id)
             await session.delete(PERSONAL_OAUTH_ATTEMPT_TABLE, DeleteQuery(Equals(PERSONAL_OAUTH_ATTEMPT_CONNECTOR_ID, command.connector_id)))
             await _invalidate_connections(session, self._cipher, command.connector_id, rotate_unauthorized=True)
             configuration = await install_personal_oauth_configuration(session, self._cipher, command.connector_id, command.settings)

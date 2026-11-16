@@ -1,5 +1,10 @@
 import { parseScopeText, settingsSchema, type ClientKind, type PersonalPolicy, type PersonalSettings } from '$lib/admin/personal-mcp-servers/domain/schemas';
 
+export interface PolicyProposal {
+  issuer: string;
+  scopes: readonly string[];
+}
+
 export class PolicyForm {
   scopes = $state('');
   kind = $state<ClientKind>('dynamic_public');

@@ -14,6 +14,8 @@ from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_mo
 from pydantic import BaseModel
 
 from tests.persistence_runtime import prepared_inmemory_runtime
+from tests.support.personal_oauth_setup import SETUP_CALLBACK, install_setup_validation
+from umbod.core.connectors.downstream_mcp.management import PublishDownstreamConnectorAggregate
 from umbod.core.configuration.persistence import AuthenticatedTextCipher
 from umbod.core.connectors.downstream_mcp.management import (
     DeleteDownstreamConnectorAggregate,
@@ -930,6 +932,8 @@ async def test_policy_rotation_erases_authority_and_attempts_preserving_enableme
     configured = await configurations.replace(ReplacePersonalOAuthConfiguration(
         connector_id="personal", expected_revision="legacy", settings=confidential_settings(),
     ))
+    await install_setup_validation(case.bundle, "personal")
+    await case.bundle.unit_of_work.publish(PublishDownstreamConnectorAggregate(connector_id="personal", native_identities=(), personal_oauth_redirect_uri=SETUP_CALLBACK))
     current = await case.bundle.personal_connections.get(case.query.key)
     assert isinstance(current, PersonalConnection)
     command = case.command.model_copy(update={

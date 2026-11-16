@@ -37,7 +37,7 @@ export class InMemoryPersonalServers implements PersonalServerAdministration {
   }
   async replacePolicy(id: string, input: PersonalPolicyReplace): Promise<PersonalPolicy> {
     const parsed = replacePolicySchema.parse(input);
-    await this.get(id);
+    const server = await this.get(id);
     const current = this.policies.get(id);
     if (!current) throw new HttpError(404, '', null);
     if (current.revision !== parsed.expected_revision) throw new HttpError(409, '', { detail: { code: 'personal_oauth_configuration_conflict' } });
@@ -45,6 +45,7 @@ export class InMemoryPersonalServers implements PersonalServerAdministration {
     const unchanged = client.kind !== 'preconfigured_confidential' && JSON.stringify({ requested_scopes: current.requested_scopes, client: current.client }) === JSON.stringify({ requested_scopes: parsed.settings.requested_scopes, client });
     const next = { connector_id: id, revision: unchanged ? current.revision : crypto.randomUUID(), requested_scopes: parsed.settings.requested_scopes, client };
     this.policies.set(id, next);
+    if (!unchanged) this.servers.set(id, { ...server, publication_status: 'unpublished' });
     return structuredClone(next);
   }
 }

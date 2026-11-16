@@ -6,7 +6,9 @@
   import PersonalServerRegistration from './PersonalServerRegistration.svelte';
   import { PersonalServerFormState } from './personal-server-form-state.svelte';
 
-  let { connectorId, close, api, configuration, accessLost, lockChanged, reconciliationRequired }: {
+  import type { DownstreamMcpConnector } from '$lib/admin/downstream-mcp-connectors';
+  import type { PolicyProposal } from './policy-form.svelte';
+  let { connectorId, close, api, configuration, accessLost, lockChanged, reconciliationRequired, saved, proposal }: {
     connectorId: string;
     close: () => void;
     api?: PersonalServerAdministration;
@@ -14,12 +16,14 @@
     accessLost: () => void;
     lockChanged: (locked: boolean) => void;
     reconciliationRequired: (message: string) => void;
+    saved?: (connector: DownstreamMcpConnector) => void;
+    proposal?: PolicyProposal;
   } = $props();
   const dependencies = untrack(() => {
     const composite = api && configuration ? null : adminApi();
     return { api: api ?? composite!.personalServers, configuration: configuration ?? composite!.instanceConfiguration };
   });
-  const state = new PersonalServerFormState(dependencies.api, dependencies.configuration, untrack(() => connectorId), async () => close(), untrack(() => accessLost), untrack(() => lockChanged));
+  const state = new PersonalServerFormState(dependencies.api, dependencies.configuration, untrack(() => connectorId), async (_id, connector) => { if (connector) saved?.(connector); close(); }, untrack(() => accessLost), untrack(() => lockChanged));
   onMount(() => { void state.reload(); return state.dispose; });
 
   function closeEditor(): void {
@@ -30,4 +34,4 @@
   }
 </script>
 
-<PersonalServerRegistration {state} close={closeEditor} reload={state.reload} />
+<PersonalServerRegistration {state} {proposal} close={closeEditor} reload={state.reload} />

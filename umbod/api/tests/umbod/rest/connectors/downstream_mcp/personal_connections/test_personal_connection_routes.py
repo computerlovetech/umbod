@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from umbod.config import AppConfig
+from tests.support.personal_oauth_setup import install_api_setup_validation
 from umbod.core.connectors.downstream_mcp.connection import DownstreamMcpConnectionConfiguration
 from umbod.core.connectors.downstream_mcp.probe import ProbeResult
 from umbod.rest.authentication.authorization import JwtClaims, JwtVerificationError
@@ -59,7 +60,9 @@ def _create_connector(client: TestClient, headers: dict[str, str], slug: str) ->
         "configuration": {"endpoint_url": "https://tools.example/mcp"},
     })
     response.raise_for_status()
-    return response.json()["connector_id"]
+    connector_id = response.json()["connector_id"]
+    install_api_setup_validation(client, headers, connector_id)
+    return connector_id
 
 
 @pytest.fixture

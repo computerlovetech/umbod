@@ -1,5 +1,6 @@
+import { PersonalOAuthSetupState } from '../personal-mcp-servers/personal-oauth-setup-state.svelte';
 import type { PersonalServerAvailability } from '$lib/admin/personal-mcp-servers/domain/availability';
-import { AdminApi } from '$lib/admin/infrastructure/admin-api';
+import { AdminApi, adminApi } from '$lib/admin/infrastructure/admin-api';
 import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
 import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
 import { browserTransport } from '$lib/admin/infrastructure/transport';
@@ -57,6 +58,7 @@ export class DownstreamMcpWorkspaceState {
   publicPathEdited = $state(false);
   toolNamePrefixEdited = $state(false);
   capabilityDescriptionConnectorId = $state<string | null>(null);
+  readonly personalSetup: PersonalOAuthSetupState;
   private readonly selection: SelectionDetailController<{ connector_id: string }, DownstreamMcpWorkspaceBundle>;
 
   get bundle(): DownstreamMcpWorkspaceBundle | null { return this.operations.authenticationLost || this.operations.blocked ? null : this.selection.detail; }
@@ -65,6 +67,8 @@ export class DownstreamMcpWorkspaceState {
   get selectedConnectorId(): string | null { return this.selection.selectedId; }
 
   constructor(failedMode?: string, values?: DownstreamMcpCreateValues, initialBundle?: DownstreamMcpWorkspaceBundle, bundleLoader: DownstreamBundleLoader = loadDownstreamBundle, initialConnectorId?: string, initialDetailFailed?: boolean, connectors: { connector_id: string }[] = initialBundle ? [initialBundle.connector] : [], selectionUrl: SelectionUrlPort = new InMemorySelectionUrlAdapter(), readonly operations: DownstreamMcpMutationState = new DownstreamMcpMutationState()) {
+    const api = adminApi();
+    this.personalSetup = new PersonalOAuthSetupState(api.personalOAuthSetup, api.personalServers, this.operations.setPersonalValidation, this.operations.reconcilePublication, this.operations.loseAccess, this.operations.setFormLocked, () => !this.operations.locked);
     this.selection = new SelectionDetailController({
       items: connectors,
       itemId: (connector) => connector.connector_id,
@@ -81,6 +85,7 @@ export class DownstreamMcpWorkspaceState {
       allowUnknownSelection: false,
       url: selectionUrl,
       onSelectionChange: () => {
+        this.personalSetup.detach();
         this.capabilityDescriptionConnectorId = null;
         this.menuOpen = false;
         this.modal = null;
@@ -144,7 +149,7 @@ export class DownstreamMcpWorkspaceState {
   };
 
   requestPublication = (connector: DownstreamMcpConnectorSummary): void => {
-    if (this.operations.locked) return;
+    if (this.operations.locked || connector.publication_status !== 'published' && !this.operations.canPublish(connector)) return;
     this.operations.request(connector.publication_status === 'published' ? 'unpublish' : 'publish', connector.connector_id, connector.display_name);
     this.menuOpen = false;
   };

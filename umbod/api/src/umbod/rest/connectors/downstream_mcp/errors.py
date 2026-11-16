@@ -4,6 +4,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from umbod.core.identity import ConnectorIdentityConflictError
+from umbod.core.connectors.downstream_mcp.personal_oauth_setup.state import PersonalOAuthSetupRequired
 from umbod.core.capabilities.tools.names import PublicToolNameConflictError
 from umbod.core.connectors.downstream_mcp.errors import (
     DownstreamConnectorConflictError,
@@ -28,6 +29,7 @@ DownstreamMcpErrorPhase = Literal[
 ]
 DownstreamMcpErrorCode = Literal[
     "oauth_disabled",
+    "personal_oauth_setup_required",
     "endpoint_not_found",
     "auth_rejected",
     "unreachable",
@@ -146,6 +148,8 @@ def present_downstream_mcp_error(error: Exception) -> HTTPException:
                 phase="credentials",
             ),
         )
+    if isinstance(error, PersonalOAuthSetupRequired):
+        return _exception(409, DownstreamMcpErrorDetail(code="personal_oauth_setup_required", message="Validate the current personal OAuth setup before publication.", phase="publication"))
     if isinstance(error, DownstreamConnectorUnavailableError):
         return _exception(
             409,

@@ -15,6 +15,8 @@ from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import Pe
 from umbod.core.connectors.downstream_mcp.personal_tools import MissingInventoryRevision, ReplacePersonalToolPolicy, SavePersonalToolObservation
 from umbod.core.connectors.downstream_mcp.stores.personal_authorization_health_schema import PERSONAL_AUTHORIZATION_REJECTION_TABLE
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configuration_schema import PERSONAL_OAUTH_CONFIGURATION_TABLE
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_setup_schema import PERSONAL_OAUTH_SETUP_TABLE
+from umbod.core.publishing.stores.schema import PUBLICATION_STATE_TABLE
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_schema import PERSONAL_OAUTH_ATTEMPT_TABLE
 from umbod.core.connectors.downstream_mcp.stores.personal_refresh_schema import PERSONAL_REFRESH_TABLE
 from umbod.core.connectors.downstream_mcp.stores.personal_discovery_schema import PERSONAL_DISCOVERY_TABLE
@@ -35,7 +37,7 @@ async def events(database: Database) -> list[StreamEvent]:
 
 
 async def snapshot(database: Database) -> tuple[object, ...]:
-    tables = (PERSONAL_DISCOVERY_TABLE, PERSONAL_CONNECTION_TABLE, PERSONAL_AUTHORIZATION_REJECTION_TABLE, PERSONAL_REFRESH_TABLE, PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_ATTEMPT_TABLE, PERSONAL_TOOL_OBSERVATION_TABLE, PERSONAL_TOOL_POLICY_TABLE)
+    tables = (PERSONAL_OAUTH_SETUP_TABLE, PUBLICATION_STATE_TABLE, PERSONAL_DISCOVERY_TABLE, PERSONAL_CONNECTION_TABLE, PERSONAL_AUTHORIZATION_REJECTION_TABLE, PERSONAL_REFRESH_TABLE, PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_ATTEMPT_TABLE, PERSONAL_TOOL_OBSERVATION_TABLE, PERSONAL_TOOL_POLICY_TABLE)
     async with database.session(mode=TransactionMode.READ_WRITE) as session:
         return tuple([tuple(await session.find_many(table, Query(filter=NoFilter(), projection=AllFields(), ordering=Unordered()))) for table in tables])
 
@@ -105,7 +107,12 @@ async def test_personal_mutations_publish_only_sanitized_connector_notification(
     run = await mutation(runtime_case, operation)
     before = await events(runtime_case.database)
     await run()
-    assert_notification((await events(runtime_case.database))[len(before):])
+    emitted = (await events(runtime_case.database))[len(before):]
+    if operation in {"configuration", "delete_configuration"}:
+        assert [entry.event.event_type for entry in emitted] == ["connector.publication.changed", "connector.discovery.changed"]
+        assert not await runtime_case.bundle.publishing.is_published("personal")
+        emitted = emitted[1:]
+    assert_notification(emitted)
 
 
 @pytest.mark.asyncio

@@ -173,6 +173,7 @@ def _mount_admin_app(
     verifier_factory: JwtVerifierFactory,
     oauth_dependencies: OAuthDependencyOverrides,
     analytics_runtime: TelemetryAnalyticsRuntime,
+    application_failures: SignalPublisher[ApplicationFailure],
 ) -> tuple[BaseRoute, ...]:
     admin_router = APIRouter()
     admin_router.include_router(connector_router)
@@ -196,6 +197,7 @@ def _mount_admin_app(
         return app_config
 
     _attach_dependency_factories(admin_app, dependency_factories)
+    install_oauth_diagnostics(admin_app, application_failures)
     install_analytics_dependencies(admin_app, analytics_runtime)
     admin_app.dependency_overrides[get_app_config] = provide_app_config
     _attach_admin_authorization(admin_app, settings, verifier_factory)
@@ -207,6 +209,7 @@ def _mount_admin_app(
         if (
             request.url.path.startswith("/api/admin/telemetry/")
             or "/agent-behaviour" in request.url.path
+            or "/personal-oauth/setup" in request.url.path
         ):
             response.headers["Cache-Control"] = "no-store"
         return response
@@ -456,7 +459,7 @@ def _assemble_application(
     application_failures = create_application_failure_signal()
     admin_routes = _mount_admin_app(
         app, app_settings, dependency_factories, app_settings, verifier_factory,
-        create_app_arguments.oauth_dependencies, analytics_runtime,
+        create_app_arguments.oauth_dependencies, analytics_runtime, application_failures,
     )
     _mount_personal_connections_app(
         app, app_settings, dependency_factories, application_failures,

@@ -14,5 +14,6 @@ description: "Resumable authorization and refresh integration for personal downs
 - [provider.py](./provider.py) — Discovery and authorization exchange.
 - [refresh_logging.py](./refresh_logging.py) — Refresh diagnostic redaction.
 - [refresh.py](./refresh.py) — Refresh exchange.
+- [setup.py](./setup.py) — Login-free metadata discovery and public registration compatibility checks.
 - [transport.py](./transport.py) — HTTP contracts and in-memory adapter.
 - [validation.py](./validation.py) — Wire and provider-context validation.

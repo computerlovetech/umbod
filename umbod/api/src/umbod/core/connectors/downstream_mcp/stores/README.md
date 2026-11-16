@@ -24,6 +24,8 @@ description: "Neutral encrypted stores, atomic lifecycle mutations and credentia
 - [personal_tools_schema.py](./personal_tools_schema.py) — Private observations and administrator policy tables.
 - [personal_runtime_authorizations.py](./personal_runtime_authorizations.py) — Operation-scoped credential retrieval and current authority checks.
 - [personal_oauth_attempts.py](./personal_oauth_attempts.py) — Durable OAuth attempts and atomic connection installation.
+- [personal_oauth_setup.py](./personal_oauth_setup.py) — Revision-bound validation receipts, recovery leases and stale-result rejection.
+- [personal_oauth_setup_schema.py](./personal_oauth_setup_schema.py) — Neutral nonsecret setup receipt table.
 - [personal_oauth_schema.py](./personal_oauth_schema.py) — OAuth attempt table.
 - [personal_oauth_configurations.py](./personal_oauth_configurations.py) — OAuth policy lifecycle and owner invalidation.
 - [personal_oauth_configuration_schema.py](./personal_oauth_configuration_schema.py) — OAuth configuration table.

@@ -11,6 +11,7 @@ description: "Downstream MCP administration with separately mounted personal-use
 - [errors.py](./errors.py) — Public error adaptation.
 - [oauth.py](./oauth.py) — Shared OAuth administration.
 - [personal_connections/](./personal_connections/README.md) — Personal selection and durable OAuth.
+- [personal_oauth_setup.py](./personal_oauth_setup.py) — Administrator-only bounded discovery and validation endpoints.
 - [personal_tools.py](./personal_tools.py) — Administrator tool-contract approval.
 - [personal_validation.py](./personal_validation.py) — Secret-safe write validation.
 - [routes.py](./routes.py) — Connector administration routes.

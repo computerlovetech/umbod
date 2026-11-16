@@ -107,7 +107,8 @@ describe('personal server administration presentation', () => {
     expect(body).toContain('value="dynamic_public"');
     expect(body).toContain('Requested scopes');
     expect(body).toContain('ordinary spaces');
-    expect(body).toContain('provider defaults');
+    expect(body).toContain('An empty list requests no explicit scopes');
+    expect(body).not.toContain('provider defaults');
     expect(body).not.toContain('id="personal-client-secret"');
     expect(body).not.toContain('id="personal-issuer"');
     expect(body).not.toContain('bearerToken');

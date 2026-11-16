@@ -21,6 +21,7 @@ description: "Reusable and actor-owned Svelte presentation and interaction modul
 - [Identity observation](./identity-directory/README.md) — Root-mounted browser observation lifecycle.
 - [header/](./header/) — Header and account presentation.
 - [personal-connections](./personal-connections/README.md) — Owner-scoped connection controls.
+- [Personal MCP administration](./admin/personal-mcp-servers/README.md) — Actor-owned policy editing and pre-publication OAuth setup.
 - [shared](./shared/README.md) — Actor-independent presentation.
 
 # Context not available from the code

@@ -18,7 +18,15 @@ def get_oauth_failure_observer(
 ) -> PersonalOAuthFailureObserver:
     request_id = current_request_id()
     correlation = CorrelatedFailureContext(request_id, None) if request_id is not None else NoFailureContext()
-    return PublishingOAuthFailureObserver(publisher, correlation)
+    return PublishingOAuthFailureObserver(publisher, correlation, operation="authorize")
+
+
+def get_setup_failure_observer(
+    publisher: Annotated[SignalPublisher[ApplicationFailure], Depends(get_oauth_application_failures)],
+) -> PersonalOAuthFailureObserver:
+    request_id = current_request_id()
+    correlation = CorrelatedFailureContext(request_id, None) if request_id is not None else NoFailureContext()
+    return PublishingOAuthFailureObserver(publisher, correlation, operation="validate_setup")
 
 
 def install_oauth_diagnostics(app: FastAPI, publisher: SignalPublisher[ApplicationFailure]) -> None:

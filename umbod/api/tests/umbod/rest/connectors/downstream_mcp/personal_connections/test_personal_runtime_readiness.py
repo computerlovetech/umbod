@@ -1,4 +1,5 @@
 from datetime import timedelta
+from tests.support.personal_oauth_setup import install_api_setup_validation
 
 import pytest
 from pydantic import SecretStr
@@ -55,6 +56,8 @@ def test_runtime_available_uses_executable_readiness_not_retained_descriptors(di
     api = discovery_api
     stores = api.client.portal.call(stores_with_grants, api)
     api.client.portal.call(configure_renewable_grant, api, stores)
+    install_api_setup_validation(api.client, api.admin_headers, api.connector_id)
+    api.client.put(f"/api/admin/connectors/mcp/{api.connector_id}/publication", headers=api.admin_headers).raise_for_status()
     transport = InMemoryPersonalMcpTransport()
     observed = DiscoveredToolWithoutOutputSchema(identity=ToolIdentity(connector_id=api.connector_id, downstream_name="lookup"), title="Private lookup", description="Private owner descriptor", input_schema={"type": "object"})
     transport.inventories[query(api, "alice").key] = PersonalToolInventory(tools=(observed,))

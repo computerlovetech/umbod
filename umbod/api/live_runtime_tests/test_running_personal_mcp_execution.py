@@ -42,6 +42,7 @@ def personal_clients(endpoints: RuntimeEndpoints) -> Iterator[tuple[httpx.Client
         connector_id = created["connector_id"]
         admin = f"/api/admin/connectors/mcp/{connector_id}"
         try:
+            validate_setup(alice, connector_id)
             checked(alice.put(admin + "/publication"))
             grant(alice, connector_id, "enabled", connector=True)
             for client in (alice, bob):
@@ -52,6 +53,12 @@ def personal_clients(endpoints: RuntimeEndpoints) -> Iterator[tuple[httpx.Client
             grant(alice, connector_id, "disabled", connector=True)
             checked(alice.delete(admin + "/publication"))
             checked(alice.delete(admin), 204)
+
+
+def validate_setup(client: httpx.Client, connector_id: str) -> None:
+    policy_url = f"/api/admin/connectors/mcp/{connector_id}/personal-oauth"
+    result = checked(client.post(policy_url + "/setup/validation", json={"expected_revision": client.get(policy_url + "/setup").json()["revision"]}))
+    assert result["state"]["status"] == "validated"
 
 
 def grant(client: httpx.Client, connector_id: str, status: str, connector: bool = False) -> None:
@@ -470,6 +477,8 @@ async def test_personal_oauth_execution_is_owner_bound_and_rechecks_live_policy(
             await denied(b, name, fixture)
             settings["requested_scopes"] = ["read"]
             checked(alice.put(policy_url, json={"expected_revision": rotated["revision"], "settings": settings}))
+            validate_setup(alice, connector_id)
+            checked(alice.put(f"/api/admin/connectors/mcp/{connector_id}/publication"))
             authorize(bob, fixture, connector_id, "bob")
             discover(bob, connector_id)
             await owner_result(b, name, "bob")

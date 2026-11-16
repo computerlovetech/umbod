@@ -1,4 +1,6 @@
 from tests.support.personal_oauth_diagnostics import RecordingOAuthFailureObserver
+from tests.support.personal_oauth_setup import SETUP_CALLBACK, install_setup_validation
+from umbod.core.connectors.downstream_mcp.management import PublishDownstreamConnectorAggregate
 from tests.umbod.core.connectors.downstream_mcp.personal_caller_support import captured_personal_caller
 import asyncio
 import json
@@ -47,6 +49,8 @@ async def start_configured(case: AttemptCase, method: str) -> tuple[str, str]:
     configured = await case.bundle.personal_oauth_configurations.replace(ReplacePersonalOAuthConfiguration(
         connector_id="personal", expected_revision="legacy", settings=PersonalOAuthSettings(requested_scopes=("read",), client=configured_client),
     ))
+    await install_setup_validation(case.bundle, "personal")
+    await case.bundle.unit_of_work.publish(PublishDownstreamConnectorAggregate(connector_id="personal", native_identities=(), personal_oauth_redirect_uri=SETUP_CALLBACK))
     inventory = AsyncMock(spec=PersonalConnectorInventory)
     inventory.get.return_value = PersonalConnectorSelection(connector_id="personal", display_name="Personal", capability_description="Personal access", enabled=True, has_authorization=False)
     transport = InMemoryOAuthHttpTransport([

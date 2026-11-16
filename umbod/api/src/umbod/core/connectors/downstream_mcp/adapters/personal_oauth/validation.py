@@ -6,6 +6,7 @@ from urllib.parse import SplitResult, unquote, urlsplit
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from umbod.core.network import validate_public_address
+from ...personal_connections.oauth_callback_models import GenericBinding, IssuerBinding
 
 
 MAX_BODY_BYTES = 1_048_576
@@ -64,7 +65,8 @@ class WireModel(BaseModel):
 
 class ProtectedResource(WireModel):
     resource: str
-    authorization_servers: list[str] = Field(min_length=1)
+    authorization_servers: list[str] = Field(min_length=1, max_length=16)
+    scopes_supported: list[str] = Field(default_factory=list, max_length=64)
 
 
 class AuthorizationServer(WireModel):
@@ -77,6 +79,16 @@ class AuthorizationServer(WireModel):
     response_types_supported: list[str]
     token_endpoint_auth_methods_supported: list[str] = Field(default_factory=lambda: ["client_secret_basic"])
     authorization_response_iss_parameter_supported: bool = False
+    scopes_supported: list[str] = Field(default_factory=list, max_length=64)
+
+
+class DiscoveredOAuthServer(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    server: AuthorizationServer
+    resource: ProtectedResource
+    callback_binding: GenericBinding | IssuerBinding
+    redirect_uri: str
 
 
 class RegisteredClient(WireModel):
@@ -86,6 +98,13 @@ class RegisteredClient(WireModel):
     grant_types: list[str]
     response_types: list[str]
     scope: str = ""
+
+
+class RegisteredOAuthClient(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    client: RegisteredClient
+    status_code: Literal[200, 201]
 
 
 class TokenResponse(WireModel):

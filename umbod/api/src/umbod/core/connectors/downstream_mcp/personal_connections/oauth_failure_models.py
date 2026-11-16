@@ -6,7 +6,12 @@ from umbod.core.invocation.diagnostics import DownstreamResponseEvidence, NoDown
 
 
 OAuthFailureStage = Literal["discovery", "registration", "token_exchange", "refresh"]
-OAuthFailureReason = Literal["provider_rejected", "timeout", "invalid_response", "network_failure", "unexpected_failure"]
+OAuthFailureReason = Literal[
+    "provider_rejected", "timeout", "invalid_response", "network_failure", "unexpected_failure", "scope_mismatch",
+    "resource_mismatch", "issuer_mismatch", "ambiguous_issuer", "pkce_s256_required",
+    "authorization_code_required", "code_response_required", "client_auth_required",
+    "registration_unavailable", "registration_contract_mismatch",
+]
 
 
 class OAuthFailureEvidence(BaseModel):
