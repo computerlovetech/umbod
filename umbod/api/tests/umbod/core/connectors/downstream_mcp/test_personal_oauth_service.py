@@ -1,3 +1,4 @@
+from tests.support.personal_oauth_diagnostics import RecordingOAuthFailureObserver
 from tests.umbod.core.connectors.downstream_mcp.personal_caller_support import captured_personal_caller
 import asyncio
 from datetime import UTC, datetime, timedelta
@@ -14,6 +15,8 @@ from umbod.core.connectors.downstream_mcp.personal_connections.inventory_ports i
 from umbod.core.connectors.downstream_mcp.personal_connections.models import CanonicalPrincipal, PersonalConnection, PersonalConnectionKey, Unauthorized
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthConflict, PersonalOAuthProviderFailure, PreparedPersonalOAuth
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthAttemptStore, PersonalOAuthProvider
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_failure_models import OAuthFailureEvidence
+from umbod.core.invocation.diagnostics import DownstreamHttpResponse
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_service import PersonalOAuthService
 from umbod.core.connectors.downstream_mcp.personal_connections.ports import PersonalConnectionStore
 
@@ -27,7 +30,12 @@ def anyio_backend() -> str:
 
 
 @pytest.fixture
-def service_dependencies() -> tuple[PersonalOAuthService, AsyncMock, AsyncMock]:
+def failure_observer() -> RecordingOAuthFailureObserver:
+    return RecordingOAuthFailureObserver()
+
+
+@pytest.fixture
+def service_dependencies(failure_observer: RecordingOAuthFailureObserver) -> tuple[PersonalOAuthService, AsyncMock, AsyncMock]:
     now = datetime(2026, 1, 1, tzinfo=UTC)
     principal = CanonicalPrincipal(namespace="test:oauth", subject="alice")
     connections = AsyncMock(spec=PersonalConnectionStore)
@@ -53,7 +61,7 @@ def service_dependencies() -> tuple[PersonalOAuthService, AsyncMock, AsyncMock]:
     return PersonalOAuthService(
         captured_personal_caller(principal, ("team",)), inventory, definitions,
         connections, attempts, provider, "https://api.example/api/oauth/downstream-mcp/callback",
-        lambda: next(ticks), configurations,
+        lambda: next(ticks), configurations, failures=failure_observer,
     ), attempts, provider
 
 
@@ -79,6 +87,22 @@ async def test_failed_or_cancelled_preparation_aborts_reserved_attempt(
     attempts.reserve.assert_awaited_once()
     attempts.abort_preparation.assert_awaited_once()
     attempts.publish.assert_not_awaited()
+
+
+async def test_provider_evidence_is_reported_once_and_preserved_in_public_failure(
+    service_dependencies: tuple[PersonalOAuthService, AsyncMock, AsyncMock],
+    failure_observer: RecordingOAuthFailureObserver,
+) -> None:
+    service, attempts, provider = service_dependencies
+    evidence = OAuthFailureEvidence(stage="registration", reason="provider_rejected", downstream_response=DownstreamHttpResponse(status_code=403))
+    provider.prepare.side_effect = PersonalOAuthProviderFailure(evidence=evidence)
+
+    with pytest.raises(PersonalOAuthProviderFailure) as caught:
+        await service.start("connector")
+
+    assert caught.value.evidence == evidence
+    assert failure_observer.failures == [("connector", evidence)]
+    attempts.abort_preparation.assert_awaited_once()
 
 
 async def test_publication_uses_reserved_preparation_and_fresh_time(

@@ -1,3 +1,4 @@
+from tests.support.personal_oauth_diagnostics import RecordingOAuthFailureObserver
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock
 
@@ -37,7 +38,7 @@ async def test_unavailable_caller_cannot_start_oauth_before_any_owner_lookup() -
         UnavailablePersonalCaller(kind="unavailable"), inventory,
         AsyncMock(spec=ConnectorDefinitionStore), connections, attempts,
         AsyncMock(spec=PersonalOAuthProvider), "https://umbod.example/callback",
-        lambda: datetime.now(UTC), AsyncMock(spec=PersonalOAuthConfigurationStore),
+        lambda: datetime.now(UTC), AsyncMock(spec=PersonalOAuthConfigurationStore), failures=RecordingOAuthFailureObserver(),
     )
     with pytest.raises(MissingCanonicalPrincipal):
         await service.start("connector")
@@ -50,7 +51,7 @@ async def test_unavailable_caller_cannot_reserve_refresh() -> None:
     store = AsyncMock(spec=PersonalRefreshStore)
     service = PersonalRefreshService(
         UnavailablePersonalCaller(kind="unavailable"), inventory, store,
-        AsyncMock(spec=PersonalOAuthRefreshProvider), lambda: datetime.now(UTC),
+        AsyncMock(spec=PersonalOAuthRefreshProvider), lambda: datetime.now(UTC), failures=RecordingOAuthFailureObserver(),
     )
     with pytest.raises(MissingCanonicalPrincipal):
         await service.refresh("connector")

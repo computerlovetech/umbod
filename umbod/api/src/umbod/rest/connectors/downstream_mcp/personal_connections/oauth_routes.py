@@ -31,8 +31,12 @@ async def safe_oauth_operation(operation: Awaitable[Result]) -> Result:
         raise HTTPException(409, detail={"code": "personal_oauth_conflict"}) from None
     except PersonalOAuthProviderUnsupported:
         raise HTTPException(422, detail={"code": "personal_oauth_provider_unsupported"}) from None
-    except PersonalOAuthProviderFailure:
-        raise HTTPException(502, detail={"code": "personal_oauth_provider_failure"}) from None
+    except PersonalOAuthProviderFailure as failure:
+        raise HTTPException(502, detail={
+            "code": "personal_oauth_provider_failure",
+            "stage": failure.evidence.stage,
+            "reason": failure.evidence.reason,
+        }) from None
 
 
 async def require_empty_oauth_body(request: Request) -> PersonalOAuthStartRequest:

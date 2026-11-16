@@ -11,15 +11,18 @@ from .refresh_models import CompletePersonalRefresh, FailPersonalRefresh, Person
 from .refresh_ports import PersonalRefreshStore
 from .refresh_provider_models import PersonalOAuthRefreshDenied, RefreshPersonalOAuth
 from .refresh_provider_ports import PersonalOAuthRefreshProvider
+from .oauth_diagnostics import PersonalOAuthFailureObserver
+from .oauth_failure_models import oauth_failure_evidence
 
 
 class PersonalRefreshService:
-    def __init__(self, caller: PersonalCaller | UnavailablePersonalCaller, inventory: PersonalConnectorInventory, store: PersonalRefreshStore, provider: PersonalOAuthRefreshProvider, clock: Callable[[], datetime]) -> None:
+    def __init__(self, caller: PersonalCaller | UnavailablePersonalCaller, inventory: PersonalConnectorInventory, store: PersonalRefreshStore, provider: PersonalOAuthRefreshProvider, clock: Callable[[], datetime], *, failures: PersonalOAuthFailureObserver) -> None:
         self._caller = caller
         self._inventory = inventory
         self._store = store
         self._provider = provider
         self._clock = clock
+        self._failures = failures
 
     async def refresh(self, connector_id: str) -> None:
         caller = require_personal_caller(self._caller)
@@ -44,6 +47,8 @@ class PersonalRefreshService:
                 authorization = await self._provider.refresh(command)
             await self._store.complete(CompletePersonalRefresh(key=key, claim_id=claim_id, now=self._clock(), authorization=authorization))
         except BaseException as error:
+            if isinstance(error, Exception):
+                self._failures.report(connector_id, oauth_failure_evidence(error, "refresh"))
             reason = "refresh_denied" if isinstance(error, PersonalOAuthRefreshDenied) else "refresh_uncertain"
             try:
                 await asyncio.shield(asyncio.wait_for(self._store.fail(FailPersonalRefresh(key=key, claim_id=claim_id, now=self._clock(), reason=reason)), timeout=2))

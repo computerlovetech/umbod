@@ -8,6 +8,7 @@ description: "Resumable authorization and refresh integration for personal downs
 
 - [__init__.py](./__init__.py) — Public module exports.
 - [callback.py](./callback.py) — Issuer-bound callback policy for externally registered provider clients.
+- [failure.py](./failure.py) — Provider stage attribution and safe transport failure translation.
 - [factory.py](./factory.py) — Provider composition.
 - [network.py](./network.py) — Bounded public HTTP transport.
 - [provider.py](./provider.py) — Discovery and authorization exchange.

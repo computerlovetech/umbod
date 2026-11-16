@@ -40,6 +40,8 @@ from umbod.core.connectors.downstream_mcp.personal_oauth_configuration.models im
     PreconfiguredPublicOAuthClient,
 )
 
+from umbod.core.invocation.diagnostics import DownstreamHttpResponse
+
 from .test_network import MemoryNetwork, MemoryStream
 
 
@@ -175,6 +177,9 @@ async def test_invalid_success_is_uncertain_without_retry(refresh_command: Refre
     with pytest.raises(PersonalOAuthRefreshUncertain) as caught:
         await provider.refresh(refresh_command)
     assert caught.value.__context__ is None
+    assert caught.value.evidence.stage == "refresh"
+    assert caught.value.evidence.reason == "invalid_response"
+    assert caught.value.evidence.downstream_response == DownstreamHttpResponse(status_code=200)
     assert len(transport.requests) == 1
 
 
@@ -196,6 +201,9 @@ async def test_only_definitive_endpoint_errors_are_denied(
     with pytest.raises(PersonalOAuthRefreshDenied if denied else PersonalOAuthRefreshUncertain) as caught:
         await provider.refresh(refresh_command)
     assert caught.value.__context__ is None
+    assert caught.value.evidence.stage == "refresh"
+    assert caught.value.evidence.reason == ("provider_rejected" if not 200 <= status < 300 else "invalid_response")
+    assert caught.value.evidence.downstream_response == DownstreamHttpResponse(status_code=status)
     assert len(transport.requests) == 1
 
 

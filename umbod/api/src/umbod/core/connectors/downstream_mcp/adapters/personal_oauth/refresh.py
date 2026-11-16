@@ -13,6 +13,8 @@ from ...personal_connections.authorization_models import (
     authorize_personal_grant,
 )
 from ...personal_connections.models import Authorized
+from umbod.core.invocation.diagnostics import DownstreamHttpResponse, NoDownstreamResponse
+from .failure import OAuthOperationProgress, oauth_failure_boundary, rejected_response, request_with_progress
 from ...personal_connections.refresh_provider_models import (
     PersonalOAuthRefreshDenied,
     PersonalOAuthRefreshUncertain,
@@ -55,19 +57,17 @@ class StoredPersonalOAuthRefreshProvider:
         self._transport = transport
 
     async def refresh(self, command: RefreshPersonalOAuth) -> Authorized:
-        outcome: Authorized | Literal["denied", "uncertain"] = "uncertain"
+        progress = OAuthOperationProgress("refresh")
         try:
             with private_refresh_network_logs(), anyio.fail_after(command.timeout_seconds):
-                outcome = await self._refresh(command)
-        except Exception:
-            pass
-        if isinstance(outcome, Authorized):
-            return outcome
-        if outcome == "denied":
-            raise PersonalOAuthRefreshDenied("Personal OAuth refresh denied")
-        raise PersonalOAuthRefreshUncertain("Personal OAuth refresh outcome uncertain")
+                return await self._refresh(command, progress)
+        except PersonalOAuthRefreshDenied as error:
+            failure: PersonalOAuthRefreshDenied | PersonalOAuthRefreshUncertain = error
+        except Exception as error:
+            failure = PersonalOAuthRefreshUncertain(progress.failure_evidence(error))
+        raise failure from None
 
-    async def _refresh(self, command: RefreshPersonalOAuth) -> Authorized | Literal["denied"]:
+    async def _refresh(self, command: RefreshPersonalOAuth, progress: OAuthOperationProgress) -> Authorized:
         grant = PersonalOAuthGrant.model_validate(command.grant.model_dump())
         policy = command.policy
         client = policy.client
@@ -100,31 +100,38 @@ class StoredPersonalOAuthRefreshProvider:
             parameters["client_id"] = grant.client_id
             if client.kind == "preconfigured_confidential":
                 parameters["client_secret"] = client.client_secret.get_secret_value()
-        response = await self._transport.request(OAuthHttpRequest(
-            method="POST", url=grant.token_endpoint, body=SecretStr(urlencode(parameters)),
-            content_type="application/x-www-form-urlencoded", authentication=authentication,
-        ))
-        raw = parse_json(response.body)
+        with oauth_failure_boundary("refresh", NoDownstreamResponse()):
+            response = await request_with_progress(self._transport, OAuthHttpRequest(
+                method="POST", url=grant.token_endpoint, body=SecretStr(urlencode(parameters)),
+                content_type="application/x-www-form-urlencoded", authentication=authentication,
+            ), progress, "refresh")
         if not 200 <= response.status < 300:
-            if _definitive_denial(response.status, raw):
-                return "denied"
-            raise ValueError("Uncertain token endpoint response")
-        token = TokenResponse.model_validate(raw)
-        if "error" in raw or token.token_type.lower() != "bearer" or token.expires_in <= 0:
-            raise ValueError("Unsupported refresh response")
-        scopes = parse_oauth_scopes(token.scope) if "scope" in raw else grant.granted_scopes
-        if not set(scopes).issubset(grant.granted_scopes):
-            raise ValueError("Expanded refresh scopes")
-        expiry = command.now + timedelta(seconds=token.expires_in)
-        if expiry <= command.now:
-            raise ValueError("Unsupported refresh expiry")
-        refresh_token = PresentPersonalRefreshToken(token=token.refresh_token) if "refresh_token" in raw else grant.refresh_token
-        renewed = PersonalOAuthGrant.model_validate({
-            **grant.model_dump(),
-            "issued_at": command.now,
-            "lifetime": ExpiringPersonalToken(expires_at=expiry),
-            "access_token": token.access_token,
-            "refresh_token": refresh_token,
-            "granted_scopes": scopes,
-        })
-        return authorize_personal_grant(renewed)
+            evidence = rejected_response("refresh", response.status).evidence
+            try:
+                denied = _definitive_denial(response.status, parse_json(response.body))
+            except (ValueError, TypeError):
+                denied = False
+            if denied:
+                raise PersonalOAuthRefreshDenied(evidence)
+            raise PersonalOAuthRefreshUncertain(evidence)
+        with oauth_failure_boundary("refresh", DownstreamHttpResponse(status_code=response.status)):
+            raw = parse_json(response.body)
+            token = TokenResponse.model_validate(raw)
+            if "error" in raw or token.token_type.lower() != "bearer" or token.expires_in <= 0:
+                raise ValueError("Unsupported refresh response")
+            scopes = parse_oauth_scopes(token.scope) if "scope" in raw else grant.granted_scopes
+            if not set(scopes).issubset(grant.granted_scopes):
+                raise ValueError("Expanded refresh scopes")
+            expiry = command.now + timedelta(seconds=token.expires_in)
+            if expiry <= command.now:
+                raise ValueError("Unsupported refresh expiry")
+            refresh_token = PresentPersonalRefreshToken(token=token.refresh_token) if "refresh_token" in raw else grant.refresh_token
+            renewed = PersonalOAuthGrant.model_validate({
+                **grant.model_dump(),
+                "issued_at": command.now,
+                "lifetime": ExpiringPersonalToken(expires_at=expiry),
+                "access_token": token.access_token,
+                "refresh_token": refresh_token,
+                "granted_scopes": scopes,
+            })
+            return authorize_personal_grant(renewed)

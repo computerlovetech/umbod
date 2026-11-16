@@ -5,6 +5,7 @@ from umbod.config import AppConfig
 from umbod.rest.authentication.authorization import JwtVerifier
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_callback_app import create_personal_oauth_callback_app
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_policy import PersonalOAuthPolicy, get_personal_oauth_policy
+from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_diagnostics import get_oauth_application_failures
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.main import create_app_with_dependency_factories
 from tests.persistence_runtime import create_inmemory_runtime
@@ -25,5 +26,6 @@ def create_personal_oauth_app(factories: ConnectorApiDependencyFactories, user_v
 
     personal_app = next(route.app for route in app.routes if isinstance(route, Mount) and route.path == "/api/me")
     personal_app.dependency_overrides[get_personal_oauth_policy] = provide_policy
-    app.mount("/api/oauth/downstream-mcp", create_personal_oauth_callback_app(factories, policy))
+    publisher = personal_app.dependency_overrides[get_oauth_application_failures]()
+    app.mount("/api/oauth/downstream-mcp", create_personal_oauth_callback_app(factories, policy, publisher))
     return app

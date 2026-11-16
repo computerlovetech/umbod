@@ -27,6 +27,7 @@ from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories, LifespanRootApiAppFactory, SubApiAppFactory
 from umbod.rest.filesystem.upload_transfers import router as filesystem_transfer_router
 from umbod.rest.main import _attach_dependency_factories, _mount_personal_connections_app, create_app
+from umbod.logging import create_application_failure_signal
 
 
 class AcceptedTestVerifier:
@@ -120,7 +121,7 @@ def _create_filesystem_app(settings: AppConfig) -> FastAPI:
             await runtime.shutdown()
 
     root = LifespanRootApiAppFactory(settings, lifespan).create()
-    _mount_personal_connections_app(root, settings, factories)
+    _mount_personal_connections_app(root, settings, factories, create_application_failure_signal())
     transfer_app = SubApiAppFactory(
         title="umbod-filesystem-transfer-api", router=filesystem_transfer_router,
     ).create()

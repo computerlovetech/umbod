@@ -1,3 +1,4 @@
+from tests.support.personal_oauth_diagnostics import RecordingOAuthFailureObserver
 from tests.umbod.core.connectors.downstream_mcp.personal_caller_support import captured_personal_caller
 import asyncio
 from collections.abc import Callable
@@ -15,6 +16,8 @@ from umbod.core.connectors.downstream_mcp.personal_connections.refresh_models im
 from umbod.core.connectors.downstream_mcp.personal_connections.refresh_ports import PersonalRefreshStore
 from umbod.core.connectors.downstream_mcp.personal_connections.refresh_provider_models import PersonalOAuthRefreshDenied, RefreshPersonalOAuth
 from umbod.core.connectors.downstream_mcp.personal_connections.refresh_service import PersonalRefreshService
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_failure_models import OAuthFailureEvidence
+from umbod.core.invocation.diagnostics import NoDownstreamResponse
 
 __all__ = ["runtime_case", "refresh_store"]
 
@@ -40,7 +43,7 @@ class ControlledRefreshProvider:
 
 
 def service(case: RuntimeCase, store: PersonalRefreshStore, provider: ControlledRefreshProvider) -> PersonalRefreshService:
-    return PersonalRefreshService(captured_personal_caller(case.query.key.principal, case.query.group_ids), AvailableInventory(), store, provider, lambda: case.query.now)
+    return PersonalRefreshService(captured_personal_caller(case.query.key.principal, case.query.group_ids), AvailableInventory(), store, provider, lambda: case.query.now, failures=RecordingOAuthFailureObserver())
 
 
 def success(command: RefreshPersonalOAuth) -> Authorized:
@@ -48,7 +51,9 @@ def success(command: RefreshPersonalOAuth) -> Authorized:
 
 
 def denial(command: RefreshPersonalOAuth) -> Authorized:
-    raise PersonalOAuthRefreshDenied("secret-raw-provider-error")
+    raise PersonalOAuthRefreshDenied(OAuthFailureEvidence(
+        stage="refresh", reason="provider_rejected", downstream_response=NoDownstreamResponse(),
+    ))
 
 
 def operational_failure(command: RefreshPersonalOAuth) -> Authorized:
@@ -68,8 +73,17 @@ async def test_service_exchanges_exactly_once_and_never_discovers(refresh_store:
 @pytest.mark.parametrize("provider_result,expected,reason", [(denial, PersonalRefreshReconnectRequired, "refresh_denied"), (operational_failure, PersonalRefreshUnavailable, "refresh_uncertain")])
 async def test_failure_is_secret_free_and_durable(refresh_store: PersonalRefreshStore, runtime_case: RuntimeCase, provider_result: Callable[[RefreshPersonalOAuth], Authorized], expected: type[Exception], reason: str) -> None:
     provider = ControlledRefreshProvider(provider_result)
+    failures = RecordingOAuthFailureObserver()
+    refresh = PersonalRefreshService(
+        captured_personal_caller(runtime_case.query.key.principal, runtime_case.query.group_ids),
+        AvailableInventory(), refresh_store, provider, lambda: runtime_case.query.now, failures=failures,
+    )
     with pytest.raises(expected) as caught:
-        await service(runtime_case, refresh_store, provider).refresh("personal")
+        await refresh.refresh("personal")
+    assert failures.failures == [("personal", OAuthFailureEvidence(
+        stage="refresh", reason="provider_rejected" if provider_result is denial else "unexpected_failure",
+        downstream_response=NoDownstreamResponse(),
+    ))]
     assert "secret-raw" not in str(caught.value)
     assert len(provider.commands) == 1
     health = await runtime_case.bundle.personal_authorization_health.get(PersonalAuthorizationHealthQuery(key=runtime_case.query.key, now=runtime_case.query.now))

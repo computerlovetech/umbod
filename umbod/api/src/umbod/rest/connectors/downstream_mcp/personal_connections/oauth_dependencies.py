@@ -20,6 +20,8 @@ from .dependencies import (
 )
 from umbod.core.connectors.downstream_mcp.personal_connections import PersonalCaller, PersonalConnectorInventory
 from .oauth_policy import OAuthPolicy
+from .oauth_diagnostics import get_oauth_failure_observer
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_diagnostics import PersonalOAuthFailureObserver
 
 
 def require_personal_oauth(policy: OAuthPolicy) -> None:
@@ -49,12 +51,13 @@ async def get_personal_oauth_service(
     stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     provider: Annotated[PersonalOAuthProvider, Depends(get_personal_oauth_provider)],
     factories: Factories,
+    failures: Annotated[PersonalOAuthFailureObserver, Depends(get_oauth_failure_observer)],
 ) -> PersonalOAuthService:
     return PersonalOAuthService(
         caller, inventory, stores.definitions, stores.personal_connections,
         stores.personal_oauth_attempts, provider,
         factories.settings.endpoints.api_base_url.rstrip("/") + "/api/oauth/downstream-mcp/callback",
-        oauth_clock, stores.personal_oauth_configurations,
+        oauth_clock, stores.personal_oauth_configurations, failures=failures,
     )
 
 
@@ -62,5 +65,6 @@ async def get_personal_oauth_callback_service(
     enabled: Annotated[None, Depends(require_personal_oauth)],
     stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     provider: Annotated[PersonalOAuthProvider, Depends(get_personal_oauth_provider)],
+    failures: Annotated[PersonalOAuthFailureObserver, Depends(get_oauth_failure_observer)],
 ) -> PersonalOAuthCallbackService:
-    return PersonalOAuthCallbackService(stores.personal_oauth_attempts, provider, oauth_clock)
+    return PersonalOAuthCallbackService(stores.personal_oauth_attempts, provider, oauth_clock, failures=failures)

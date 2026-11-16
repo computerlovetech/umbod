@@ -9,7 +9,8 @@ from fastapi import APIRouter, Depends, Request
 from pydantic import SecretStr
 
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import CallbackRoute, GenericRoute, IssuerRoute, MissingCallbackIssuer, PresentCallbackIssuer
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import FinishCallback
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import FinishCallback, PersonalOAuthProviderFailure
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_failure_models import OAuthFailureEvidence
 from starlette.responses import HTMLResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
@@ -73,6 +74,21 @@ def get_personal_oauth_return_destination(factories: Factories) -> str:
 
 
 def callback_response(status_code: int, return_destination: str) -> HTMLResponse:
+    return _callback_response(status_code, return_destination, "")
+
+
+def callback_failure_response(return_destination: str, failure: OAuthFailureEvidence) -> HTMLResponse:
+    explanations = {
+        "provider_rejected": "The provider rejected sign-in.",
+        "timeout": "The sign-in provider did not respond in time.",
+        "invalid_response": "The provider returned an unsupported sign-in response. Ask an administrator to check OAuth compatibility.",
+        "network_failure": "The sign-in provider could not be reached.",
+        "unexpected_failure": "The sign-in outcome could not be confirmed.",
+    }
+    return _callback_response(400, return_destination, explanations[failure.reason])
+
+
+def _callback_response(status_code: int, return_destination: str, explanation: str) -> HTMLResponse:
     succeeded = status_code == 200
     title = "Sign-in complete" if succeeded else "Sign-in could not be completed"
     message = (
@@ -81,6 +97,8 @@ def callback_response(status_code: int, return_destination: str) -> HTMLResponse
         "Return to the dashboard and check the existing sign-in attempt. "
         "Cancel it or wait for expiry before trying again."
     )
+    if not succeeded and explanation:
+        message = explanation + " " + message
     guidance = (
         "This window will try to close automatically. If it stays open, you may close it or return to Umbod."
         if succeeded else "You can close this window after returning to Umbod."
@@ -162,6 +180,8 @@ async def finish_callback(
             error=parameters.get("error", ""),
             scope=parameters.get("scope", ""), route=route,
         ))
+    except PersonalOAuthProviderFailure as failure:
+        return callback_failure_response(return_destination, failure.evidence)
     except Exception:
         return callback_response(400, return_destination)
     return callback_response(200, return_destination)

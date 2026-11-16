@@ -12,6 +12,8 @@ from umbod.core.connectors.downstream_mcp.stores import DownstreamMcpStores
 from umbod.rest.connectors.downstream_mcp.dependencies import get_downstream_stores
 
 from .dependencies import get_personal_connector_inventory, get_personal_caller
+from .oauth_diagnostics import get_oauth_failure_observer
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_diagnostics import PersonalOAuthFailureObserver
 from .oauth_dependencies import get_personal_callback_policy, oauth_clock, require_personal_oauth
 
 
@@ -28,5 +30,6 @@ async def get_personal_refresh_service(
     inventory: Annotated[PersonalConnectorInventory, Depends(get_personal_connector_inventory)],
     stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     provider: Annotated[PersonalOAuthRefreshProvider, Depends(get_personal_refresh_provider)],
+    failures: Annotated[PersonalOAuthFailureObserver, Depends(get_oauth_failure_observer)],
 ) -> PersonalRefreshService:
-    return PersonalRefreshService(caller, inventory, stores.personal_refresh, provider, oauth_clock)
+    return PersonalRefreshService(caller, inventory, stores.personal_refresh, provider, oauth_clock, failures=failures)

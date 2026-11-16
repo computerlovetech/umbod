@@ -1,3 +1,4 @@
+from tests.support.personal_oauth_diagnostics import RecordingOAuthFailureObserver
 from tests.umbod.core.connectors.downstream_mcp.personal_caller_support import captured_personal_caller
 import asyncio
 import json
@@ -10,7 +11,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 from pydantic import SecretStr
-from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import FinishCallback
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import (
+    FinishCallback, ClaimPersonalOAuthAttempt, ClaimedPersonalOAuthAttempt, CompletePersonalOAuthAttempt,
+    FailPersonalOAuthAttempt, PersonalOAuthAttemptQuery, PersonalOAuthAttemptView, PublishPersonalOAuthAttempt,
+    ReservePersonalOAuthAttempt,
+)
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_ports import PersonalOAuthAttemptStore
+from umbod.core.connectors.downstream_mcp.personal_connections.oauth_failure_models import OAuthFailureEvidence
+from umbod.core.invocation.diagnostics import DownstreamHttpResponse
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_callback_models import GenericRoute, PresentCallbackIssuer
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
@@ -53,7 +61,7 @@ async def start_configured(case: AttemptCase, method: str) -> tuple[str, str]:
         captured_personal_caller(case.query.key.principal, ("team",)), inventory, case.bundle.definitions,
         case.bundle.personal_connections, case.bundle.personal_oauth_attempts,
         DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), "https://umbod.example/api/oauth/downstream-mcp/callback",
-        case.clock, case.bundle.personal_oauth_configurations,
+        case.clock, case.bundle.personal_oauth_configurations, failures=RecordingOAuthFailureObserver(),
     )
     started = await service.start("personal")
     state = parse_qs(urlsplit(started.authorization_url.get_secret_value()).query)["state"][0]
@@ -67,7 +75,7 @@ async def test_configured_workflow_completes_on_recreated_worker_with_scoped_cal
     state, revision = await start_configured(case, method)
     recreated = await create_downstream_mcp_stores("test-secret", case.database)
     transport = InMemoryOAuthHttpTransport([response({"access_token": "user-access-token", "token_type": "Bearer", "expires_in": 3600})])
-    callback = PersonalOAuthCallbackService(recreated.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), case.clock)
+    callback = PersonalOAuthCallbackService(recreated.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), case.clock, failures=RecordingOAuthFailureObserver())
     await callback.finish(FinishCallback(state=SecretStr(state), code=SecretStr("authorization-code"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), error="", scope="read", route=GenericRoute(kind="generic")))
     connection = await recreated.personal_connections.get(case.query.key)
     assert connection.authorization.kind == "authorized"
@@ -79,6 +87,64 @@ async def test_configured_workflow_completes_on_recreated_worker_with_scoped_cal
     assert target.expires_at == datetime.fromisoformat(saved["issued_at"]) + timedelta(hours=1)
     assert len(transport.requests) == 1
     assert "client-secret" not in connection.authorization.authorization.get_secret_value()
+
+
+class CleanupFailingAttemptStore:
+    def __init__(self, wrapped: PersonalOAuthAttemptStore) -> None:
+        self._wrapped = wrapped
+        self.failures: list[FailPersonalOAuthAttempt] = []
+
+    async def reserve(self, command: ReservePersonalOAuthAttempt) -> PersonalOAuthAttemptView:
+        return await self._wrapped.reserve(command)
+
+    async def publish(self, command: PublishPersonalOAuthAttempt) -> PersonalOAuthAttemptView:
+        return await self._wrapped.publish(command)
+
+    async def get(self, query: PersonalOAuthAttemptQuery) -> PersonalOAuthAttemptView:
+        return await self._wrapped.get(query)
+
+    async def cancel(self, query: PersonalOAuthAttemptQuery) -> PersonalOAuthAttemptView:
+        return await self._wrapped.cancel(query)
+
+    async def abort_preparation(self, query: PersonalOAuthAttemptQuery) -> None:
+        await self._wrapped.abort_preparation(query)
+
+    async def claim(self, command: ClaimPersonalOAuthAttempt) -> ClaimedPersonalOAuthAttempt:
+        return await self._wrapped.claim(command)
+
+    async def complete(self, command: CompletePersonalOAuthAttempt) -> PersonalOAuthAttemptView:
+        return await self._wrapped.complete(command)
+
+    async def fail(self, command: FailPersonalOAuthAttempt) -> None:
+        self.failures.append(command)
+        raise RuntimeError("sentinel-cleanup-secret")
+
+    async def delete_connector(self, connector_id: str) -> None:
+        await self._wrapped.delete_connector(connector_id)
+
+
+@pytest.mark.asyncio
+async def test_callback_cleanup_failure_does_not_replace_original_provider_evidence(case: AttemptCase) -> None:
+    state, _ = await start_configured(case, "none")
+    store = CleanupFailingAttemptStore(case.bundle.personal_oauth_attempts)
+    transport = InMemoryOAuthHttpTransport([OAuthHttpResponse(status=403, body=b"sentinel-provider-token")])
+    failures = RecordingOAuthFailureObserver()
+    callback = PersonalOAuthCallbackService(
+        store, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), case.clock, failures=failures,
+    )
+
+    with pytest.raises(PersonalOAuthProviderFailure) as caught:
+        await callback.finish(FinishCallback(
+            state=SecretStr(state), code=SecretStr("authorization-code"),
+            issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), error="", scope="read", route=GenericRoute(kind="generic"),
+        ))
+
+    evidence = OAuthFailureEvidence(stage="token_exchange", reason="provider_rejected", downstream_response=DownstreamHttpResponse(status_code=403))
+    assert caught.value.evidence == evidence
+    assert failures.failures == [("personal", evidence)]
+    assert len(store.failures) == 1
+    assert "sentinel" not in str(caught.value)
+    assert len(transport.requests) == 1
 
 
 class PausingTokenTransport:
@@ -100,7 +166,7 @@ class PausingTokenTransport:
 async def test_policy_change_during_exchange_cannot_install_old_authorization(case: AttemptCase) -> None:
     state, revision = await start_configured(case, "client_secret_basic")
     started, release = asyncio.Event(), asyncio.Event()
-    callback = PersonalOAuthCallbackService(case.bundle.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, PausingTokenTransport(started, release)), case.clock)
+    callback = PersonalOAuthCallbackService(case.bundle.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, PausingTokenTransport(started, release)), case.clock, failures=RecordingOAuthFailureObserver())
     task = asyncio.create_task(callback.finish(FinishCallback(state=SecretStr(state), code=SecretStr("authorization-code"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), error="", scope="read", route=GenericRoute(kind="generic"))))
     try:
         await asyncio.wait_for(started.wait(), timeout=5)
@@ -122,7 +188,7 @@ async def test_policy_change_during_exchange_cannot_install_old_authorization(ca
 async def test_callback_scope_escalation_or_invalid_syntax_never_exchanges_code(case: AttemptCase, callback_scope: str) -> None:
     state, _ = await start_configured(case, "client_secret_basic")
     transport = InMemoryOAuthHttpTransport([])
-    callback = PersonalOAuthCallbackService(case.bundle.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), case.clock)
+    callback = PersonalOAuthCallbackService(case.bundle.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), case.clock, failures=RecordingOAuthFailureObserver())
     with pytest.raises(PersonalOAuthProviderFailure):
         await callback.finish(FinishCallback(state=SecretStr(state), code=SecretStr("authorization-code"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), error="", scope=callback_scope, route=GenericRoute(kind="generic")))
     assert transport.requests == []

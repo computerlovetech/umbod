@@ -83,7 +83,7 @@ async def test_preparation_and_exchange_resume_with_only_persisted_context(
 async def test_resource_fallback_is_not_used_except_for_not_found(preparation: PreparePersonalOAuth, status: int) -> None:
     transport = InMemoryOAuthHttpTransport(responses=[OAuthHttpResponse(status=status, body=b"{}")])
     provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
-    with pytest.raises(PersonalOAuthProviderUnsupported):
+    with pytest.raises(PersonalOAuthProviderFailure):
         await provider.prepare(preparation)
     assert len(transport.requests) == 1
 

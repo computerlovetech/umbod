@@ -9,6 +9,7 @@ description: Immutable safe failure notifications published through application-
 - [__init__.py](./__init__.py) — Public diagnostic event and publishing API.
 - [models.py](./models.py) — Typed failure kinds, approved contexts, and immutable event snapshots.
 - [capture.py](./capture.py) — Safe snapshots, signal publication, and publishing receiver-failure handling.
+- [oauth.py](./oauth.py) — Sanitized OAuth evidence publication with connector fingerprints and request correlation.
 
 # Related modules
 

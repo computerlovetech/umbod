@@ -62,6 +62,9 @@ from umbod.rest.metrics import (
 )
 from umbod.config import AppConfig, load_server_app_config
 from umbod.logging import create_application_failure_signal, flush_logging
+from umbod.core.diagnostics import ApplicationFailure
+from umbod.core.signals import SignalPublisher
+from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_diagnostics import install_oauth_diagnostics
 from umbod.rest.settings import APISettings
 from umbod.rest.install import router as install_router
 from umbod.rest.system import router as system_router
@@ -216,6 +219,7 @@ def _mount_personal_connections_app(
     app: FastAPI,
     settings: APISettings,
     dependency_factories: ConnectorApiDependencyFactories,
+    application_failures: SignalPublisher[ApplicationFailure],
 ) -> None:
     user_router = APIRouter()
     user_router.include_router(create_user_profile_router())
@@ -239,6 +243,7 @@ def _mount_personal_connections_app(
         )
 
     _attach_dependency_factories(personal_app, dependency_factories)
+    install_oauth_diagnostics(personal_app, application_failures)
 
     def provide_app_config() -> AppConfig:
         return settings
@@ -259,11 +264,12 @@ def _mount_personal_oauth_callback_app(
     app: FastAPI,
     settings: APISettings,
     dependency_factories: ConnectorApiDependencyFactories,
+    application_failures: SignalPublisher[ApplicationFailure],
 ) -> None:
     if not (settings.personal_connections.enabled and settings.personal_connections.oauth_enabled):
         return
     callback_app = create_personal_oauth_callback_app(
-        dependency_factories, PersonalOAuthPolicy(enabled=True),
+        dependency_factories, PersonalOAuthPolicy(enabled=True), application_failures,
     )
     app.mount("/api/oauth/downstream-mcp", callback_app)
 
@@ -447,17 +453,18 @@ def _assemble_application(
         SuppliedJwtVerifierFactory(create_app_arguments.admin_verifier)
         if create_app_arguments.admin_verifier is not None else JwtVerifierFactory()
     )
+    application_failures = create_application_failure_signal()
     admin_routes = _mount_admin_app(
         app, app_settings, dependency_factories, app_settings, verifier_factory,
         create_app_arguments.oauth_dependencies, analytics_runtime,
     )
     _mount_personal_connections_app(
-        app, app_settings, dependency_factories
+        app, app_settings, dependency_factories, application_failures,
     )
     transfer_app = SubApiAppFactory(title="umbod-filesystem-transfer-api", router=filesystem_transfer_router).create()
     _attach_dependency_factories(transfer_app, dependency_factories)
     app.mount("/api/filesystem", transfer_app)
-    _mount_personal_oauth_callback_app(app, app_settings, dependency_factories)
+    _mount_personal_oauth_callback_app(app, app_settings, dependency_factories, application_failures)
     _mount_system_app(app, dependency_factories)
     install_app = SubApiAppFactory(title="umbod-install-api", router=install_router).create()
     _attach_dependency_factories(install_app, dependency_factories)
@@ -465,7 +472,7 @@ def _assemble_application(
     app.user_middleware.extend([
         Middleware(
             AdminRestMetricsMiddleware, recorder=metrics_recorder, routes=admin_routes,
-            mount_path="/api/admin", application_failures=create_application_failure_signal(),
+            mount_path="/api/admin", application_failures=application_failures,
         ),
         Middleware(
             RestCookieCsrfMiddleware,

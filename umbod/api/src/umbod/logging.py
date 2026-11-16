@@ -142,7 +142,14 @@ class ApplicationFailureLoggingReceiver:
         extra: dict[str, Any] = {"structured_attributes": dict(event.attributes)}
         if isinstance(event.correlation, CorrelatedFailureContext):
             extra.update(trace_id=event.correlation.trace_id, span_id=event.correlation.span_id)
-        logging.getLogger("umbod.application.failure").error(event.kind.value[0], extra=extra)
+        logger = logging.getLogger("umbod.application.failure")
+        if (
+            event.kind is ApplicationFailureKind.PERSONAL_OAUTH
+            and dict(event.attributes).get("oauth.reason") != "unexpected_failure"
+        ):
+            logger.warning(event.kind.value[0], extra=extra)
+        else:
+            logger.error(event.kind.value[0], extra=extra)
 
 
 class LoggingSignalFailureHandler:

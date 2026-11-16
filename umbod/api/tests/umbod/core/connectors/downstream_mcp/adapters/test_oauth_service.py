@@ -76,7 +76,7 @@ async def test_sign_in_distinguishes_authorization_from_discovery(failure: str) 
         rejected = await oauth.callback("fixture", {"state": "wrong", "code": "secret"})
         assert rejected.status_code == 400
         assert not oauth.callbacks["fixture"].done()
-        accepted = await oauth.callback(None, {"state": "expected", "code": "secret"})
+        accepted = await oauth.callback_from_state({"state": "expected", "code": "secret"})
         assert accepted.status_code == 200
         await oauth.tasks["fixture"]
         details = await oauth.details("fixture")
@@ -99,6 +99,36 @@ async def test_sign_in_distinguishes_authorization_from_discovery(failure: str) 
         assert sessions.options[0].requested_scopes == "read write"
         assert sessions.options[0].redirect_uri == "http://127.0.0.1/callback/fixture"
         assert sessions.options[0].metadata_mode == "registration"
+    finally:
+        await oauth.close()
+
+
+@pytest.mark.parametrize("parameters", [{}, {"state": "wrong", "code": "secret"}])
+async def test_callback_from_state_rejects_unmatched_state_without_completing_sign_in(
+    parameters: dict[str, str],
+) -> None:
+    oauth = OAuthService(MemoryHost(), ScriptedSessionFactory(""), MemoryDiscovery())
+    try:
+        await oauth.begin("fixture", "", RetainOAuthScopes())
+        result = await oauth.callback_from_state(parameters)
+        assert result.status_code == 400
+        assert result.content == "Sign-in has expired. Return to Umbod and retry."
+        assert not oauth.callbacks["fixture"].done()
+    finally:
+        await oauth.close()
+
+
+async def test_callback_from_state_preserves_provider_decline_behavior() -> None:
+    oauth = OAuthService(MemoryHost(), ScriptedSessionFactory(""), MemoryDiscovery())
+    try:
+        await oauth.begin("fixture", "", RetainOAuthScopes())
+        result = await oauth.callback_from_state(
+            {"state": "expected", "error": "access_denied"}
+        )
+        assert result.status_code == 200
+        assert result.content == "Sign-in was not approved. Return to Umbod to try again."
+        await oauth.tasks["fixture"]
+        assert oauth.results["fixture"] == "failed"
     finally:
         await oauth.close()
 

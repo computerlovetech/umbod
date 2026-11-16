@@ -14,6 +14,7 @@ class ApplicationFailureKind(Enum):
     USAGE_WRITE = ('MCP usage batch dropped', 'mcp_usage', 'append', 'retries_exhausted')
     USAGE_SHUTDOWN = ('MCP usage shutdown loss', 'mcp_usage', 'shutdown', 'shutdown_loss')
     USAGE_RETENTION = ('MCP usage retention failed', 'mcp_usage', 'prune', 'prune_failed')
+    PERSONAL_OAUTH = ("Personal OAuth operation failed", "personal_oauth", "authorize", "oauth_failed")
     REST_METRICS = ("REST metrics recording failed", "rest_metrics", "record_request", "recorder_failed")
     CONNECTOR_LOOKUP = (
         "OpenAPI connector display name lookup failed", "openapi_codemode",
@@ -60,7 +61,8 @@ FailureAttribute: TypeAlias = Literal[
     "event.name", "component", "operation", "reason", "outcome", "failure.origin",
     "exception.type", "exception.stacktrace", "method", "status_code",
     "normalized_route", "connector.id_hash", "operation.name_hash",
-    "receiver.name", "receiver.name_hash",
+    "receiver.name", "receiver.name_hash", "oauth.stage", "oauth.reason",
+    "oauth.downstream.response_received", "oauth.downstream.http.status_code",
 ]
 
 
@@ -68,5 +70,5 @@ class ApplicationFailure(BaseModel):
     model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
 
     kind: ApplicationFailureKind
-    attributes: tuple[tuple[FailureAttribute, Annotated[str, Field(max_length=4096)] | int], ...] = Field(max_length=18)
+    attributes: tuple[tuple[FailureAttribute, Annotated[str, Field(max_length=4096)] | int | bool], ...] = Field(max_length=18)
     correlation: CorrelatedFailureContext | NoFailureContext

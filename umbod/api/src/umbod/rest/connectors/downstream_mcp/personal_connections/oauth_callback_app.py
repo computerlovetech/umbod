@@ -2,6 +2,9 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import FastAPI, Request, Response
 
+from umbod.core.diagnostics import ApplicationFailure
+from umbod.core.signals import SignalPublisher
+from .oauth_diagnostics import install_oauth_diagnostics
 from umbod.rest.dependencies import get_connector_api_dependency_factories
 from umbod.rest.factories import ConnectorApiDependencyFactories
 
@@ -12,6 +15,7 @@ from .oauth_policy import PersonalOAuthPolicy, get_personal_oauth_policy
 def create_personal_oauth_callback_app(
     dependency_factories: ConnectorApiDependencyFactories,
     policy: PersonalOAuthPolicy,
+    application_failures: SignalPublisher[ApplicationFailure],
 ) -> FastAPI:
     settings = dependency_factories.settings
     callback_app = FastAPI(
@@ -19,6 +23,7 @@ def create_personal_oauth_callback_app(
         openapi_url=None, redirect_slashes=False,
     )
     callback_app.include_router(router)
+    install_oauth_diagnostics(callback_app, application_failures)
 
     def provide_dependency_factories() -> ConnectorApiDependencyFactories:
         return dependency_factories
@@ -37,7 +42,7 @@ def create_personal_oauth_callback_app(
             response = await call_next(request)
         except Exception:
             return callback_response(400, settings.endpoints.site_base_url.rstrip("/") + "/dashboard")
-        if response.status_code != 200:
+        if response.status_code not in (200, 400):
             return callback_response(400, settings.endpoints.site_base_url.rstrip("/") + "/dashboard")
         return response
 

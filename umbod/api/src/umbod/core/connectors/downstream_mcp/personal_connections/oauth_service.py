@@ -9,6 +9,7 @@ from uuid import uuid4
 from pydantic import SecretStr
 
 from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
+from umbod.core.invocation.diagnostics import NoDownstreamResponse
 from umbod.core.connectors.downstream_mcp.stores.ports import (
     ConnectorDefinitionFound,
     ConnectorDefinitionStore,
@@ -41,6 +42,8 @@ from .oauth_models import (
     ReservePersonalOAuthAttempt,
 )
 from .oauth_ports import PersonalOAuthAttemptStore, PersonalOAuthProvider
+from .oauth_diagnostics import PersonalOAuthFailureObserver
+from .oauth_failure_models import OAuthFailureEvidence, oauth_failure_evidence
 from .caller import PersonalCaller, UnavailablePersonalCaller, require_personal_caller
 from .ports import PersonalConnectionStore
 
@@ -57,6 +60,7 @@ class PersonalOAuthService:
         redirect_uri: str,
         clock: Callable[[], datetime],
         configurations: PersonalOAuthConfigurationStore,
+        *, failures: PersonalOAuthFailureObserver,
     ) -> None:
         self._caller = caller
         self._inventory = inventory
@@ -67,6 +71,7 @@ class PersonalOAuthService:
         self._redirect_uri = redirect_uri
         self._clock = clock
         self._configurations = configurations
+        self._failures = failures
 
     async def _key(self, connector_id: str) -> PersonalConnectionKey:
         principal = require_personal_caller(self._caller).principal
@@ -124,15 +129,21 @@ class PersonalOAuthService:
                 prepared=prepared,
             ))
         except BaseException as error:
-            await asyncio.shield(self._attempts.abort_preparation(PersonalOAuthAttemptQuery(
-                key=key, attempt_id=attempt_id, now=self._clock(),
-            )))
+            evidence = oauth_failure_evidence(error, "discovery")
+            if isinstance(error, Exception) and not isinstance(error, (PersonalOAuthUnavailable, PersonalOAuthConflict)):
+                self._failures.report(connector_id, evidence)
+            try:
+                await asyncio.shield(self._attempts.abort_preparation(PersonalOAuthAttemptQuery(
+                    key=key, attempt_id=attempt_id, now=self._clock(),
+                )))
+            except Exception:
+                pass
             if isinstance(error, (PersonalOAuthProviderUnsupported, PersonalOAuthProviderFailure,
                                   PersonalOAuthUnavailable, PersonalOAuthConflict, asyncio.CancelledError)):
                 raise
             if not isinstance(error, Exception):
                 raise
-            raise PersonalOAuthProviderFailure() from None
+            raise PersonalOAuthProviderFailure(evidence=evidence) from None
         return PersonalOAuthStartResult(attempt=attempt, authorization_url=prepared.authorization_url)
 
     async def get(self, connector_id: str, attempt_id: str) -> PersonalOAuthAttemptView:
@@ -150,7 +161,9 @@ class PersonalOAuthCallbackService:
     def __init__(
         self, attempts: PersonalOAuthAttemptStore, provider: PersonalOAuthProvider,
         clock: Callable[[], datetime],
+        *, failures: PersonalOAuthFailureObserver,
     ) -> None:
+        self._failures = failures
         self._attempts = attempts
         self._provider = provider
         self._clock = clock
@@ -162,7 +175,9 @@ class PersonalOAuthCallbackService:
         ))
         try:
             if command.error or not set(parse_oauth_scopes(command.scope)).issubset(attempt.preparation.policy.requested_scopes):
-                raise PersonalOAuthProviderFailure()
+                raise PersonalOAuthProviderFailure(evidence=OAuthFailureEvidence(
+                    stage="token_exchange", reason="provider_rejected", downstream_response=NoDownstreamResponse(),
+                ))
             authorization = await self._provider.exchange(ExchangePersonalOAuth(
                 attempt=attempt, code=command.code, issuer=command.issuer, route=command.route,
             ))
@@ -171,10 +186,16 @@ class PersonalOAuthCallbackService:
                 claim_id=attempt.claim_id, authorization=authorization,
             ))
         except BaseException as failure:
-            await asyncio.shield(self._attempts.fail(FailPersonalOAuthAttempt(
-                query=attempt.query.model_copy(update={"now": self._clock()}),
-                claim_id=attempt.claim_id,
-            )))
+            evidence = oauth_failure_evidence(failure, "token_exchange")
+            if isinstance(failure, Exception):
+                self._failures.report(attempt.query.key.connector_id, evidence)
+            try:
+                await asyncio.shield(self._attempts.fail(FailPersonalOAuthAttempt(
+                    query=attempt.query.model_copy(update={"now": self._clock()}),
+                    claim_id=attempt.claim_id,
+                )))
+            except Exception:
+                pass
             if not isinstance(failure, Exception):
                 raise
-            raise PersonalOAuthProviderFailure() from None
+            raise PersonalOAuthProviderFailure(evidence=evidence) from None

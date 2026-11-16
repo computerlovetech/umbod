@@ -65,6 +65,24 @@ The diagnostic model is defined in [invocation diagnostics](https://github.com/c
 
 The first meaningful failure must survive cancellation, task-group wrapping, session shutdown, and connection cleanup. Cleanup must not replace the primary reason, response evidence, or exception origin. A cleanup failure without an earlier operation failure must remain observable.
 
+## Personal OAuth failures
+
+Personal connector OAuth services publish one sanitized failure snapshot before attempt or refresh cleanup. Discovery, OAuth client registration, token exchange, and refresh use `ApplicationFailureKind.PERSONAL_OAUTH` on the REST application's shared failure channel. The separately mounted callback application receives the same explicitly composed publisher.
+
+| Field | Meaning |
+| --- | --- |
+| `oauth.stage` | `discovery`, `registration`, `token_exchange`, or `refresh`. |
+| `oauth.reason` | `provider_rejected`, `timeout`, `invalid_response`, `network_failure`, or `unexpected_failure`. |
+| `oauth.downstream.response_received` | Whether the failing exchange supplied HTTP response evidence. |
+| `oauth.downstream.http.status_code` | Actual downstream status, omitted when no response evidence exists. |
+| `connector.id_hash` | Deterministic fingerprint of the connector ID; not an owner identity. |
+
+The server-generated request ID supplies trace correlation without inventing a tracing span. Start, callback, and refresh are separate requests. Expected provider failures log at WARNING; unexpected failures remain ERROR and alertable. These records do not contain provider error codes, descriptions, response bodies, callback parameters, or unrestricted URLs.
+
+The initiation API retains `personal_oauth_provider_failure` and HTTP 502, adding approved `stage` and `reason` fields. The frontend and callback page map approved categories to fixed explanations and authorization-status guidance. Internal HTTP status is not exposed as Umbod's response status. Unsupported providers retain HTTP 422. Refresh retains definitive-denial versus uncertain-outcome handling and must not automatically replay requests.
+
+Investigate by correlating the request ID and connector fingerprint, then inspect the stage, reason, and response evidence. An `unexpected_failure` needs an isolated reproduction and instrumentation of the failing branch, not raw provider logging or production replay.
+
 ## Privacy rules
 
 Never include credentials, tokens, authorization headers, OAuth codes or state, request/response bodies, tool arguments/results, personal data, or unrestricted endpoint URLs in application logs. Provider error descriptions are untrusted input: truncation does not make them safe. Map recognized provider codes to approved local reasons; use a fixed fallback for unknown codes.
@@ -113,4 +131,4 @@ The shared [production design rules](https://github.com/computerlovetech/umbod/b
 
 ## Rollout scope
 
-The implementation hardens shared exception formatting, routes metrics, connector-name lookup, and audit-write failures through application-local typed signals, retains a direct terminal signal-delivery failure fallback, restricts authentication and MCP debug records to approved categories, presence booleans and counts, and adds personal MCP transport diagnostics. OAuth provider failures, OpenAPI execution diagnostics, filesystem conflict classification, and storage-provider evidence require subsequent migrations to the same standard; they must not be described as fixed by the shared formatter alone.
+The implementation hardens shared exception formatting, routes metrics, connector-name lookup, and audit-write failures through application-local typed signals, retains a direct terminal signal-delivery failure fallback, restricts authentication and MCP debug records to approved categories, presence booleans and counts, and adds personal MCP transport diagnostics. Personal connector OAuth failures now preserve typed evidence through service publication and controlled public guidance. OpenAPI execution diagnostics, filesystem conflict classification, and storage-provider evidence require subsequent migrations to the same standard; they must not be described as fixed by the shared formatter alone.

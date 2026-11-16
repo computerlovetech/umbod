@@ -260,17 +260,19 @@ class OAuthService:
             "Sign-in or tool discovery failed. Try again in Connection settings.",
         )
 
-    async def callback(self, nonce: str | None, parameters: dict[str, str]):
+    async def callback_from_state(self, parameters: dict[str, str]) -> CallbackResult:
         state = parameters.get("state", "")
-        if nonce is None:
-            nonce = next(
-                (
-                    key
-                    for key, expected in self.expected_states.items()
-                    if secrets.compare_digest(state, expected)
-                ),
-                "",
-            )
+        nonce = next(
+            (
+                key
+                for key, expected in self.expected_states.items()
+                if secrets.compare_digest(state, expected)
+            ),
+            "",
+        )
+        return await self.callback(nonce, parameters)
+
+    async def callback(self, nonce: str, parameters: dict[str, str]) -> CallbackResult:
         future = self.callbacks.get(nonce)
         if future is None or future.done():
             return CallbackResult(

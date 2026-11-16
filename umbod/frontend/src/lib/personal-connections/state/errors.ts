@@ -1,4 +1,4 @@
-import { discoveryErrorSchema, oauthInitiationErrorSchema, renewalErrorSchema } from '../domain/schemas';
+import { discoveryErrorSchema, oauthInitiationErrorSchema, oauthProviderFailureSchema, renewalErrorSchema } from '../domain/schemas';
 import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
 
 export function requiresSignIn(error: unknown): boolean {
@@ -40,6 +40,27 @@ export function safeActionError(error: unknown): string {
         personal_oauth_invalid_request: 'Sign-in request rejected.'
       };
       return `${messages[parsed.data.detail.code]} Check authorization status before another action.`;
+    }
+  }
+  if (error instanceof HttpError && error.status === 502) {
+    const parsed = oauthProviderFailureSchema.safeParse(error.body);
+    if (parsed.success) {
+      const rejectionMessages = {
+        discovery: 'The provider rejected OAuth discovery. Ask an administrator to check the provider and OAuth configuration.',
+        registration: 'The provider rejected client registration. Ask an administrator to check the OAuth configuration.',
+        token_exchange: 'The provider rejected the token exchange. Check authorization status before signing in again.',
+        refresh: 'Operation failed.'
+      };
+      const messages = {
+        provider_rejected: rejectionMessages[parsed.data.detail.stage],
+        timeout: 'The provider did not respond in time.',
+        invalid_response: 'The provider returned an invalid response. Ask an administrator to check OAuth compatibility.',
+        network_failure: 'The provider could not be reached.',
+        unexpected_failure: 'Operation failed.'
+      };
+      if (messages[parsed.data.detail.reason] !== 'Operation failed.') {
+        return `${messages[parsed.data.detail.reason]} Check authorization status before another action. Do not retry automatically.`;
+      }
     }
   }
   return 'Operation failed. Check authorization status before another action.';

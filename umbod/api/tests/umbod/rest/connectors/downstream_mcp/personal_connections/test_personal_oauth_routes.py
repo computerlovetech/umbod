@@ -156,7 +156,10 @@ def test_start_sanitizes_provider_failures(oauth_api: OAuthApi, failure: Excepti
     oauth_api.provider.preparation_failures.append(failure)
     response = oauth_api.client.post(oauth_api.url, headers={"X-Access": "alice"}, json={})
     assert response.status_code == status
-    assert response.json() == {"detail": {"code": code}}
+    detail = {"code": code}
+    if status == 502:
+        detail.update(stage="discovery", reason="unexpected_failure")
+    assert response.json() == {"detail": detail}
     assert "secret-provider-detail" not in response.text
 
 

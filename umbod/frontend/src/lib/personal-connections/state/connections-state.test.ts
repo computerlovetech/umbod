@@ -7,6 +7,7 @@ import { InMemoryPersonalConnectionsApi } from '../infrastructure/in-memory-api'
 import { authorizationHealth, completedAttempt, deferred, pendingAttempt, selection } from '../test-fixtures';
 import { ConnectionState } from './connection-state.svelte';
 import { createPersonalDashboard } from './dashboard-test-helper';
+import { safeActionError } from './errors';
 
 function setup(): { api: PersonalConnectionsApi; card: ConnectionState; authenticationLost: () => void } {
   const api: PersonalConnectionsApi = new InMemoryPersonalConnectionsApi([selection], { calendar: authorizationHealth });
@@ -384,6 +385,23 @@ describe('personal connection public state behavior', () => {
     expect(card.error).toBe('Operation failed. Check authorization status before another action.');
     expect(card.needsRefresh).toBe(true);
   });
+  test('provider failure keeps sign-in locked without automatic retries', async (): Promise<void> => {
+    const { card, api } = setup();
+    const start = vi.spyOn(api.authorization, 'start').mockRejectedValue(new HttpError(502, 'PRIVATE_PROVIDER_SENTINEL', {
+      detail: { code: 'personal_oauth_provider_failure', stage: 'registration', reason: 'provider_rejected' }
+    }));
+    await card.start();
+    expect(card.error).toContain('The provider rejected client registration.');
+    expect(card.error).toContain('Check authorization status before another action.');
+    expect(card.error).toContain('Do not retry automatically.');
+    expect(card.error).not.toContain('PRIVATE_PROVIDER_SENTINEL');
+    expect(card.needsRefresh).toBe(true);
+    expect(card.attempt).toBeNull();
+    expect(card.authorizationUrl).toBe('');
+    await card.start();
+    expect(start).toHaveBeenCalledOnce();
+    card.dispose();
+  });
   test('disposing clears secrets and prevents late start responses', async () => {
     const { card, api } = setup();
     const started = deferred<typeof pendingAttempt>();
@@ -394,5 +412,71 @@ describe('personal connection public state behavior', () => {
     await starting;
     expect(card.attempt).toBeNull();
     expect(card.authorizationUrl).toBe('');
+  });
+});
+
+describe('safe OAuth provider action errors', (): void => {
+  const fallback = 'Operation failed. Check authorization status before another action.';
+  const instruction = 'Check authorization status before another action. Do not retry automatically.';
+  const sentinel = 'PRIVATE_PROVIDER_SENTINEL';
+
+  test.each([
+    { stage: 'discovery', message: 'The provider rejected OAuth discovery. Ask an administrator to check the provider and OAuth configuration.' },
+    { stage: 'registration', message: 'The provider rejected client registration. Ask an administrator to check the OAuth configuration.' },
+    { stage: 'token_exchange', message: 'The provider rejected the token exchange. Check authorization status before signing in again.' }
+  ])('gives controlled guidance for $stage rejection', ({ stage, message }): void => {
+    const result = safeActionError(new HttpError(502, sentinel, {
+      detail: { code: 'personal_oauth_provider_failure', stage, reason: 'provider_rejected' }
+    }));
+    expect(result).toBe(`${message} ${instruction}`);
+    expect(result).not.toContain(sentinel);
+  });
+
+  describe.each(['discovery', 'registration', 'token_exchange', 'refresh'])('%s provider failure', (stage: string): void => {
+    test.each([
+      { reason: 'timeout', message: 'The provider did not respond in time.' },
+      { reason: 'invalid_response', message: 'The provider returned an invalid response. Ask an administrator to check OAuth compatibility.' },
+      { reason: 'network_failure', message: 'The provider could not be reached.' }
+    ])('gives controlled guidance for $reason', ({ reason, message }): void => {
+      const result = safeActionError(new HttpError(502, sentinel, {
+        detail: { code: 'personal_oauth_provider_failure', stage, reason }
+      }));
+      expect(result).toBe(`${message} ${instruction}`);
+      expect(result).not.toContain(sentinel);
+    });
+
+    test('keeps unexpected failures generic', (): void => {
+      expect(safeActionError(new HttpError(502, sentinel, {
+        detail: { code: 'personal_oauth_provider_failure', stage, reason: 'unexpected_failure' }
+      }))).toBe(fallback);
+    });
+  });
+
+  test.each([
+    null,
+    {},
+    { detail: null },
+    { detail: 'PRIVATE_PROVIDER_SENTINEL' },
+    { detail: { code: 'personal_oauth_provider_failure' } },
+    { detail: { code: 'personal_oauth_provider_failure', stage: 'registration' } },
+    { detail: { code: 'personal_oauth_provider_failure', reason: 'timeout' } },
+    { detail: { code: 'PRIVATE_PROVIDER_SENTINEL', stage: 'registration', reason: 'timeout' } },
+    { detail: { code: 'personal_oauth_provider_failure', stage: 'PRIVATE_PROVIDER_SENTINEL', reason: 'timeout' } },
+    { detail: { code: 'personal_oauth_provider_failure', stage: 'registration', reason: 'PRIVATE_PROVIDER_SENTINEL' } },
+    { detail: { code: 'personal_oauth_provider_failure', stage: null, reason: 'timeout' } },
+    { detail: { code: 'personal_oauth_provider_failure', stage: 'registration', reason: ['timeout'] } },
+    { detail: { code: 'personal_oauth_provider_failure', stage: 'registration', reason: 'timeout', message: 'PRIVATE_PROVIDER_SENTINEL' } },
+    { detail: { code: 'personal_oauth_provider_failure', stage: 'registration', reason: 'timeout' }, body: 'PRIVATE_PROVIDER_SENTINEL' },
+    { detail: { code: 'personal_oauth_provider_failure', stage: 'refresh', reason: 'provider_rejected' } }
+  ])('keeps incomplete, unapproved or refresh rejection details generic %#', (body: unknown): void => {
+    const result = safeActionError(new HttpError(502, sentinel, body));
+    expect(result).toBe(fallback);
+    expect(result).not.toContain(sentinel);
+  });
+
+  test.each([400, 422, 500, 503])('ignores provider details for HTTP %s', (status: number): void => {
+    expect(safeActionError(new HttpError(status, sentinel, {
+      detail: { code: 'personal_oauth_provider_failure', stage: 'registration', reason: 'provider_rejected' }
+    }))).toBe(fallback);
   });
 });

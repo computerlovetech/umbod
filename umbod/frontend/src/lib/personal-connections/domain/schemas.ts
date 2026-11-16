@@ -42,6 +42,13 @@ export const oauthInitiationErrorSchema = z.object({
     code: z.enum(['personal_oauth_provider_unsupported', 'personal_oauth_invalid_request'])
   })
 });
+export const oauthProviderFailureSchema = z.object({
+  detail: z.object({
+    code: z.literal('personal_oauth_provider_failure'),
+    stage: z.enum(['discovery', 'registration', 'token_exchange', 'refresh']),
+    reason: z.enum(['provider_rejected', 'timeout', 'invalid_response', 'network_failure', 'unexpected_failure'])
+  }).strict()
+}).strict();
 export const discoveryErrorSchema = z.object({
   detail: z.object({ code: z.literal('personal_tool_discovery_unavailable') }).strict()
 }).strict();

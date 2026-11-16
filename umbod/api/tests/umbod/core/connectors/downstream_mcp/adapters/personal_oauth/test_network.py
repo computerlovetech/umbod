@@ -190,3 +190,43 @@ async def test_private_literal_fails_without_dns_or_connection(public_dns: list[
         with pytest.raises(PersonalOAuthProviderFailure):
             await transport.request(request("https://127.0.0.1/mcp"))
     assert not public_dns
+
+
+class FailingEvidenceStream(MemoryStream):
+    def __init__(self, content: bytes, error: Exception, cleanup_error: bool) -> None:
+        super().__init__(content)
+        self.error = error
+        self.cleanup_error = cleanup_error
+
+    async def read(self, max_bytes: int, timeout: Optional[float]) -> bytes:
+        if not self.content:
+            raise self.error
+        return await super().read(max_bytes, timeout)
+
+    async def aclose(self) -> None:
+        self.closed = True
+        if self.cleanup_error:
+            raise RuntimeError("cleanup-credential-sentinel")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("error,reason", [
+    (httpcore.ReadTimeout("credential-sentinel"), "timeout"),
+    (httpcore.ReadError("credential-sentinel"), "network_failure"),
+    (RuntimeError("credential-sentinel"), "unexpected_failure"),
+])
+@pytest.mark.parametrize("received", [True, False])
+async def test_transport_snapshots_failure_before_cleanup(
+    public_dns: list[str], error: Exception, reason: str, received: bool,
+) -> None:
+    content = b"HTTP/1.1 200 OK\r\nContent-Length: 20\r\n\r\n" if received else b""
+    stream = FailingEvidenceStream(content, error, cleanup_error=received)
+    network = MemoryNetwork(stream)
+    async with httpcore.AsyncConnectionPool(network_backend=PublicAddressNetworkBackend(network), retries=0) as pool:
+        with pytest.raises(PersonalOAuthProviderFailure) as caught:
+            await SafeOAuthHttpTransport(pool).request(request("https://issuer.example/token"))
+    assert caught.value.evidence.reason == reason
+    expected = {"kind": "http_response", "status_code": 200} if received else {"kind": "no_response"}
+    assert caught.value.evidence.downstream_response.model_dump() == expected
+    assert "credential-sentinel" not in str(caught.value) + caught.value.evidence.model_dump_json()
+    assert len(network.targets) == 1

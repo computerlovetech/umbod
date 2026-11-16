@@ -4,6 +4,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr
 
 from ..personal_oauth_configuration import PersonalOAuthPolicy, legacy_personal_oauth_policy
 
+from .oauth_failure_models import OAuthEvidenceError, OAuthFailureReason
 from .models import Authorized, PersonalConnectionKey
 from .oauth_callback_models import CallbackBinding, CallbackIssuer, CallbackRoute, LegacyGenericBinding
 
@@ -110,9 +111,10 @@ class PersonalOAuthConflict(ValueError):
     pass
 
 
-class PersonalOAuthProviderUnsupported(ValueError):
-    pass
+class PersonalOAuthProviderUnsupported(OAuthEvidenceError):
+    reason: OAuthFailureReason = "invalid_response"
+    message = "Personal OAuth provider is unsupported"
 
 
-class PersonalOAuthProviderFailure(ValueError):
+class PersonalOAuthProviderFailure(OAuthEvidenceError):
     pass

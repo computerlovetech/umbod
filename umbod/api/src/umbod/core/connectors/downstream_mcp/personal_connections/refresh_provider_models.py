@@ -2,6 +2,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from ..personal_oauth_configuration import PersonalOAuthPolicy
 from .authorization_models import PersonalOAuthGrant
+from .oauth_failure_models import OAuthEvidenceError, OAuthFailureReason, OAuthFailureStage
 
 
 class RefreshPersonalOAuth(BaseModel):
@@ -13,9 +14,12 @@ class RefreshPersonalOAuth(BaseModel):
     timeout_seconds: float = Field(gt=0, le=20)
 
 
-class PersonalOAuthRefreshDenied(ValueError):
-    pass
+class PersonalOAuthRefreshDenied(OAuthEvidenceError):
+    stage: OAuthFailureStage = "refresh"
+    reason: OAuthFailureReason = "provider_rejected"
+    message = "Personal OAuth refresh denied"
 
 
-class PersonalOAuthRefreshUncertain(ValueError):
-    pass
+class PersonalOAuthRefreshUncertain(OAuthEvidenceError):
+    stage: OAuthFailureStage = "refresh"
+    message = "Personal OAuth refresh outcome uncertain"
