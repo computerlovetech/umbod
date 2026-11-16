@@ -26,8 +26,9 @@
   import DownstreamMcpResourceCatalog from './DownstreamMcpResourceCatalog.svelte';
   import { DownstreamMcpWorkspaceState, type DownstreamMcpCreateValues } from './downstream-mcp-workspace-state.svelte';
   import PersonalServerEditDialog from '../personal-mcp-servers/PersonalServerEditDialog.svelte';
-  import PersonalServerPolicyPanel from '../personal-mcp-servers/PersonalServerPolicyPanel.svelte';
-  import PersonalOAuthSetupPanel from '../personal-mcp-servers/PersonalOAuthSetupPanel.svelte';
+  import PersonalMcpDetails from '../personal-mcp-servers/PersonalMcpDetails.svelte';
+  import PersonalMcpPublicationModal from '../personal-mcp-servers/PersonalMcpPublicationModal.svelte';
+  import PersonalOAuthSetupDialog from '../personal-mcp-servers/PersonalOAuthSetupDialog.svelte';
   import { useToast } from '$lib/components/feedback';
   let { connectors, selected: loadedDetail, catalog, promptCatalog, resourceCatalog, invocationPolicies = [], form, state }: { connectors: DownstreamMcpConnectorSummary[]; selected?: DownstreamMcpConnector; catalog?: DownstreamMcpToolList; promptCatalog?: PromptCatalogData; resourceCatalog?: ResourceCatalogData; invocationPolicies?: InvocationPolicyTool[]; form?: { message?: string; status?: string; mode?: string; values?: DownstreamMcpCreateValues }; state: DownstreamMcpWorkspaceState } = $props();
   type SidebarConnector = {
@@ -85,19 +86,26 @@
 {#if !state.operations.authenticationLost}
 <DownstreamMcpSetupModal {state} connector={state.modal === 'configure' ? detailSelected : undefined} message={form?.message} values={form?.mode === 'create' ? form.values : undefined} />
 {#if state.modal === 'personal-edit' && detailSelected?.authorization_mode === 'personal'}
-  <PersonalServerEditDialog connectorId={detailSelected.connector_id} close={state.close} accessLost={state.operations.loseAccess} lockChanged={state.operations.setFormLocked} reconciliationRequired={state.operations.requireReload} saved={state.personalSetup.policyChanged} proposal={state.personalSetup.discovery ? { issuer: state.personalSetup.discovery.issuer_url, scopes: state.personalSetup.scopes } : undefined} />
+  <PersonalServerEditDialog connectorId={detailSelected.connector_id} close={state.close} accessLost={state.operations.loseAccess} lockChanged={state.operations.setFormLocked} reconciliationRequired={state.operations.requireReload} saved={state.personalSetup.policyChanged} proposal={state.personalSetup.editProposal} />
+{/if}
+{#if state.modal === 'personal-setup' && detailSelected?.authorization_mode === 'personal'}
+  <PersonalOAuthSetupDialog state={state.personalSetup} close={state.close} edit={(trigger) => state.open('personal-edit', trigger, detailSelected)} published={detailSelected.publication_status === 'published'} publish={() => state.publishChecked(detailSelected)} />
 {/if}
 {#if state.capabilityDescriptionConnectorId}
   <CapabilityDescriptionOverrideModal kind="downstream_mcp" connectorId={state.capabilityDescriptionConnectorId} close={state.closeCapabilityDescription} />
 {/if}
+{#if state.operations.pending?.action === 'publish' && connectors.find((connector) => connector.connector_id === state.operations.pending?.id)?.authorization_mode === 'personal'}
+  <PersonalMcpPublicationModal name={state.operations.pending.name} onconfirm={state.confirmPublication} oncancel={state.cancelPublication} />
+{:else}
 <PublicationConfirmationModal
   open={Boolean(state.operations.pending)}
   title={state.operations.pending ? `${state.operations.pending.action === 'publish' ? 'Publish' : state.operations.pending.action === 'unpublish' ? 'Unpublish' : 'Delete'} ${state.operations.pending.name}?` : ''}
-  message={state.operations.pending && state.operations.pending.action !== 'delete' && connectors.find((connector) => connector.connector_id === state.operations.pending?.id)?.authorization_mode === 'shared' ? `Please confirm that you want to ${state.operations.pending.action} the MCP proxy connector ${state.operations.pending.name}.` : state.operations.pending?.action === 'publish' ? 'Publication and current Group connector access trust all provider-exposed tools, including future tools after explicit rediscovery. Only explicitly permitted groups can select this server. Publication does not provide OAuth authorization, owner enablement or discovery.' : state.operations.pending?.action === 'delete' ? 'This permanently removes the server and saved local authorizations and policy. Existing connector and tool grants must be removed explicitly in Group permissions first; deletion never removes grants automatically. Remote tokens are not revoked.' : 'After catalogue reload, withdrawal prevents new selection. It does not revoke remote tokens or disconnect owners.'}
+  message={state.operations.pending && state.operations.pending.action !== 'delete' && connectors.find((connector) => connector.connector_id === state.operations.pending?.id)?.authorization_mode === 'shared' ? `Please confirm that you want to ${state.operations.pending.action} the MCP proxy connector ${state.operations.pending.name}.` : state.operations.pending?.action === 'delete' ? 'This permanently removes the server and saved local authorizations and policy. Existing connector and tool grants must be removed explicitly in Group permissions first; deletion never removes grants automatically. Remote tokens are not revoked.' : 'After catalogue reload, withdrawal prevents new selection. It does not revoke remote tokens or disconnect owners.'}
   confirmLabel={state.operations.pending?.action === 'delete' ? 'Delete server' : state.operations.pending?.action === 'unpublish' ? 'Unpublish' : 'Publish'}
-  onconfirm={state.operations.confirm}
-  oncancel={state.operations.cancel}
+  onconfirm={state.confirmPublication}
+  oncancel={state.cancelPublication}
 />
+{/if}
 {#if confirmation && selected}
   <ModalShell title="Delete connector?" titleId="confirm-title" descriptionId="confirm-description" close={state.close} closeDisabled={state.submitting} role="alertdialog" --modal-width="28rem" --modal-overflow="auto">
     <p id="confirm-description" class="deletion-description">This permanently removes the connector and its discovered catalog.</p>
@@ -119,10 +127,10 @@
  {#snippet sidebar()}
   <ConnectorSidebarList items={sidebarConnectors} selectedId={selected.connector_id} ariaLabel="MCP connectors" onselect={(connector) => state.selectConnector(connector.id)}>
    {#snippet metadata(item)}
-    <span class="connector-meta">{item.connector.authorization_mode === 'personal' ? 'Personal authorization' : 'Shared authorization'} · {item.connector.authorization_mode === 'shared' ? `${item.connector.health.status} · ` : ''}{item.connector.publication_status}</span>
+    <span class="connector-meta">{item.connector.authorization_mode === 'personal' ? 'Personal authorization' : 'Shared authorization'} · {item.connector.authorization_mode === 'shared' ? `${item.connector.health.status} · ` : ''}{item.connector.publication_status}{#if item.connector.authorization_mode === 'personal'}{' · '}<span role="status">{state.personalSetup.sidebarLabel(item.id)}</span>{/if}</span>
    {/snippet}
    {#snippet actions(item)}
-    {#if item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}{#if selected.authorization_mode === 'personal'}<button role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.open('personal-edit', event.currentTarget, detailSelected)}>Edit</button>{/if}{#if selected.authorization_mode === 'shared'}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem" disabled={state.operations.locked}>Refresh discovery</button></form>{/if}{#if selected.publication_status === 'published' || state.operations.canPublish(selected)}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={() => state.requestPublication(selected)}>{selected.publication_status === 'published' ? 'Unpublish' : 'Publish'}</button>{/if}{#if selected.authorization_mode === 'personal'}<button role="menuitem" disabled={state.operations.locked} onclick={() => state.operations.request('delete', selected.connector_id, selected.display_name)}>Delete</button>{:else}<button role="menuitem" class="danger-text" type="button" disabled={state.operations.locked} onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/if}{/snippet}</AdminSidebarActionMenu>{/if}
+    {#if item.id === selected.connector_id}<AdminSidebarActionMenu open={state.menuOpen} label={`Open actions for ${item.name}`} onopenchange={state.setMenuOpen}>{#snippet menu()}{#if selected.authorization_mode === 'personal'}<button role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.open('personal-edit', event.currentTarget, detailSelected)}>Edit</button><button role="menuitem" type="button" disabled={state.operations.locked || !selectedDetailReady} onclick={(event) => state.checkConfiguration(event.currentTarget, detailSelected)}>Check configuration</button>{/if}{#if selected.authorization_mode === 'shared'}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.open('configure', event.currentTarget, detailSelected)}>Configure</button><button role="menuitem" type="button" disabled={state.operations.locked} onclick={(event) => state.openCapabilityDescription(selected.connector_id, event.currentTarget)}>Edit capability description</button><form method="POST" data-operation="refresh" use:browserSubmit={mutationSubmit('refresh', selected.display_name)}><input type="hidden" name="connectorId" value={selected.connector_id}/><button role="menuitem" disabled={state.operations.locked}>Refresh discovery</button></form>{/if}{#if selected.publication_status === 'published' || state.operations.canPublish(selected)}<button role="menuitem" type="button" disabled={state.operations.locked} onclick={() => state.requestPublication(selected)}>{selected.publication_status === 'published' ? 'Unpublish' : 'Publish'}</button>{/if}{#if selected.authorization_mode === 'personal'}<button role="menuitem" disabled={state.operations.locked} onclick={() => state.operations.request('delete', selected.connector_id, selected.display_name)}>Delete</button>{:else}<button role="menuitem" class="danger-text" type="button" disabled={state.operations.locked} onclick={(event) => state.open('delete', event.currentTarget)}>Delete</button>{/if}{/snippet}</AdminSidebarActionMenu>{/if}
    {/snippet}
   </ConnectorSidebarList>
  {/snippet}
@@ -153,8 +161,7 @@
    {/if}
   {/snippet}
   {#if detailSelected.authorization_mode === 'personal'}
-    {#key detailSelected.connector_id}<PersonalOAuthSetupPanel state={state.personalSetup} connectorId={detailSelected.connector_id} />{/key}
-    <PersonalServerPolicyPanel />
+    {#key detailSelected.connector_id}<PersonalMcpDetails state={state.personalSetup} connectorId={detailSelected.connector_id} />{/key}
   {:else}
   <ConnectorCapabilities selected={selectedCapability} counts={capabilityCounts} currentUrl={page.url}>
    {#snippet children(activeCapability)}

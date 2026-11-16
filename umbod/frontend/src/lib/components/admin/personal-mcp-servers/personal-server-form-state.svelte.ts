@@ -7,6 +7,9 @@ import { PolicyForm } from './policy-form.svelte';
 import type { InstanceConfigurationRoute } from '$lib/admin/instance-configuration-api';
 import { personalServerAvailability, type PersonalServerAvailability } from '$lib/admin/personal-mcp-servers/domain/availability';
 
+import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
+import { PersonalServerDiscoveryState } from './personal-server-discovery-state.svelte';
+
 export type Confirmation = 'policy';
 export class PersonalServerFormState {
   selected = $state.raw<DownstreamMcpConnector | null>(null);
@@ -21,12 +24,14 @@ export class PersonalServerFormState {
   creating = $state(false);
   confirmation = $state<Confirmation | null>(null);
   metadata = $state({ name: '', prefix: '', description: '', path: '', endpoint: '' });
-  readonly form = new PolicyForm();
+  readonly discovery: PersonalServerDiscoveryState;
+  readonly form = new PolicyForm(() => this.discovery.invalidateApproval());
   private prefixEdited = false;
   private pathEdited = false;
   private epoch = 0;
   private disposed = false;
-  constructor(private readonly api: PersonalServerAdministration, private readonly configuration: InstanceConfigurationRoute, private readonly targetId: string | null, private readonly completed: (id: string, connector?: DownstreamMcpConnector) => Promise<void> = async () => {}, private readonly accessLost: () => void = () => {}, private readonly lockChanged: (locked: boolean) => void = () => {}) {}
+  constructor(private readonly api: PersonalServerAdministration, private readonly configuration: InstanceConfigurationRoute, private readonly targetId: string | null, discovery: PersonalServerDiscovery | null, private readonly completed: (id: string, connector?: DownstreamMcpConnector) => Promise<void> = async () => {}, private readonly accessLost: () => void = () => {}, private readonly lockChanged: (locked: boolean) => void = () => {}) { this.discovery = new PersonalServerDiscoveryState(discovery, (error) => { this.fail(error, false); this.lockChanged(this.locked); }); }
+  get canSaveCreation(): boolean { return this.canRegister && this.discovery.canSave(this.form.kind); }
   get editing(): boolean { return this.targetId !== null; }
   get canRegister(): boolean { return !this.targetId && !this.disposed && !this.locked && this.availability.registration === 'enabled'; }
   private async readAvailability(token: number): Promise<PersonalServerAvailability> {
@@ -39,6 +44,7 @@ export class PersonalServerFormState {
   get locked(): boolean { return this.busy || this.loading || this.blocked || this.authenticationLost || this.unavailable; }
   private current(token: number): boolean { return !this.disposed && token === this.epoch; }
   private clear(): void {
+    this.discovery.reset(false);
     this.availability = { registration: 'unknown', authorization: 'unknown' };
     this.selected = null;
     this.policy = null;
@@ -112,12 +118,14 @@ export class PersonalServerFormState {
     if (!this.canRegister) return;
     this.form.reset();
     this.resetMetadata();
+    this.discovery.reset(true);
     this.creating = true;
     this.message = '';
   };
   close = (): void => {
     if (this.busy) return;
     this.creating = false;
+    this.discovery.reset(false);
     this.confirmation = null;
     this.form.reset(this.policy ?? undefined);
   };
@@ -133,6 +141,7 @@ export class PersonalServerFormState {
   setMetadata = (field: keyof PersonalServerFormState['metadata'], value: string): void => {
     if (this.editing || this.locked || this.disposed) return;
     this.metadata[field] = value;
+    if (field === 'endpoint') this.discovery.setEndpoint(value);
     if (field === 'prefix') this.prefixEdited = true;
     if (field === 'path') this.pathEdited = true;
     if (field !== 'name') return;
@@ -147,10 +156,10 @@ export class PersonalServerFormState {
     this.confirmation = action;
   };
   create = async (): Promise<void> => {
-    if (!this.canRegister || !this.creating) { this.form.clearSecret(); return; }
+    if (!this.canSaveCreation || !this.creating) { this.form.clearSecret(); return; }
     let input: PersonalServerCreate;
     try {
-      input = createPersonalServerSchema.parse({ metadata: { display_name: this.metadata.name, tool_name_prefix: this.metadata.prefix, capability_description: this.metadata.description, public_path: `/mcp/proxies/${this.metadata.path}` }, configuration: { endpoint_url: this.metadata.endpoint, oauth_configuration: this.form.settings() } });
+      input = createPersonalServerSchema.parse({ metadata: { display_name: this.metadata.name, tool_name_prefix: this.metadata.prefix, capability_description: this.metadata.description, public_path: `/mcp/proxies/${this.metadata.path}` }, configuration: { endpoint_url: this.metadata.endpoint, oauth_configuration: this.form.settings(this.discovery.proposal) } });
     } catch {
       this.form.clearSecret();
       this.message = 'Check all server and OAuth settings. Scopes must be unique ASCII tokens separated by ordinary spaces; confidential writes require a fresh secret.';
@@ -193,6 +202,7 @@ export class PersonalServerFormState {
     } catch (error) { if (this.current(token)) this.fail(error, true); }
     finally { if (!this.disposed) { this.busy = completed && !this.targetId; this.lockChanged(this.locked); } }
     if (completed && this.current(token)) {
+      this.discovery.reset(false);
       this.creating = false;
       this.form.reset();
       if (selectedId && !this.targetId) {

@@ -1,3 +1,4 @@
+import { tick } from 'svelte';
 import { PersonalOAuthSetupState } from '../personal-mcp-servers/personal-oauth-setup-state.svelte';
 import type { PersonalServerAvailability } from '$lib/admin/personal-mcp-servers/domain/availability';
 import { AdminApi, adminApi } from '$lib/admin/infrastructure/admin-api';
@@ -26,7 +27,7 @@ export type DownstreamMcpWorkspaceBundle = {
   invocationPolicies?: InvocationPolicyTool[];
 };
 
-export type DownstreamMcpModal = 'choose' | 'personal' | 'personal-edit' | 'create' | 'configure' | 'delete' | null;
+export type DownstreamMcpModal = 'choose' | 'personal' | 'personal-edit' | 'personal-setup' | 'create' | 'configure' | 'delete' | null;
 
 export interface DownstreamMcpCreateValues {
   displayName: string;
@@ -59,6 +60,7 @@ export class DownstreamMcpWorkspaceState {
   toolNamePrefixEdited = $state(false);
   capabilityDescriptionConnectorId = $state<string | null>(null);
   readonly personalSetup: PersonalOAuthSetupState;
+  private publicationFromCheck = false;
   private readonly selection: SelectionDetailController<{ connector_id: string }, DownstreamMcpWorkspaceBundle>;
 
   get bundle(): DownstreamMcpWorkspaceBundle | null { return this.operations.authenticationLost || this.operations.blocked ? null : this.selection.detail; }
@@ -85,6 +87,7 @@ export class DownstreamMcpWorkspaceState {
       allowUnknownSelection: false,
       url: selectionUrl,
       onSelectionChange: () => {
+        this.publicationFromCheck = false;
         this.personalSetup.detach();
         this.capabilityDescriptionConnectorId = null;
         this.menuOpen = false;
@@ -110,9 +113,10 @@ export class DownstreamMcpWorkspaceState {
   open = (modal: Exclude<DownstreamMcpModal, null>, trigger: HTMLElement, connector?: DownstreamMcpConnector): void => {
     if (this.operations.locked) return;
     if (modal === 'configure' && connector && connector.authorization_mode !== 'shared') return;
-    if (modal === 'personal-edit' && (!connector || connector.authorization_mode !== 'personal')) return;
+    if ((modal === 'personal-edit' || modal === 'personal-setup') && (!connector || connector.authorization_mode !== 'personal')) return;
+    const menuTrigger = typeof trigger.closest === 'function' ? trigger.closest('[role="menu"]')?.parentElement?.querySelector<HTMLElement>('button[aria-haspopup="menu"]') : null;
+    this.returnFocus = this.modal === 'personal-setup' && this.returnFocus ? this.returnFocus : menuTrigger ?? trigger;
     this.menuOpen = false;
-    this.returnFocus = trigger;
     this.authMode = connector?.auth_mode === 'static_bearer' ? 'static_bearer' : 'none';
     this.headerType = connector?.header_type ?? 'bearer';
     this.customHeaderName = connector?.custom_header_name ?? '';
@@ -132,7 +136,9 @@ export class DownstreamMcpWorkspaceState {
     this.modal = null;
     this.submitting = false;
     this.submitError = null;
-    this.returnFocus?.focus();
+    const trigger = this.returnFocus;
+    trigger?.focus();
+    void tick().then(() => { if (this.modal === null && trigger?.isConnected) trigger.focus(); });
   };
 
   openCapabilityDescription = (connectorId: string, trigger: HTMLElement): void => {
@@ -147,6 +153,36 @@ export class DownstreamMcpWorkspaceState {
     this.capabilityDescriptionConnectorId = null;
     this.returnFocus?.focus();
   };
+
+  checkConfiguration = (trigger: HTMLElement, connector: DownstreamMcpConnector | undefined): void => {
+    if (!connector || this.operations.locked || connector.authorization_mode !== 'personal' || this.selectedConnectorId !== connector.connector_id) return;
+    this.open('personal-setup', trigger, connector);
+    void this.personalSetup.check();
+  };
+
+  publishChecked = (connector: DownstreamMcpConnectorSummary): void => {
+    if (this.modal !== 'personal-setup' || this.selectedConnectorId !== connector.connector_id || connector.publication_status === 'published' || !this.personalSetup.validated || this.operations.locked || !this.operations.canPublish(connector)) return;
+    this.close();
+    this.requestPublication(connector);
+    this.publicationFromCheck = true;
+  };
+
+  cancelPublication = (): void => {
+    if (this.operations.busy) return;
+    this.operations.cancel();
+    this.finishCheckedPublication();
+  };
+
+  confirmPublication = async (): Promise<void> => {
+    await this.operations.confirm();
+    if (!this.operations.pending) this.finishCheckedPublication();
+  };
+
+  private finishCheckedPublication(): void {
+    if (!this.publicationFromCheck) return;
+    this.publicationFromCheck = false;
+    if (!this.operations.locked && this.modal === null) this.close();
+  }
 
   requestPublication = (connector: DownstreamMcpConnectorSummary): void => {
     if (this.operations.locked || connector.publication_status !== 'published' && !this.operations.canPublish(connector)) return;
@@ -212,7 +248,7 @@ export class DownstreamMcpWorkspaceState {
   finishSubmit = (): void => { this.submitting = false; };
   failSubmit = (message: string): void => { this.submitError = message; this.submitting = false; };
   setMenuOpen = (open: boolean): void => { this.menuOpen = open; };
-  handleKeydown = (event: KeyboardEvent): void => { if (event.key === 'Escape' && this.modal !== 'personal-edit') this.close(); };
+  handleKeydown = (event: KeyboardEvent): void => { if (event.key === 'Escape' && this.modal !== 'personal-edit' && this.modal !== 'personal-setup') this.close(); };
 }
 
 async function loadDownstreamBundle(connectorId: string, signal?: AbortSignal): Promise<DownstreamMcpWorkspaceBundle> {

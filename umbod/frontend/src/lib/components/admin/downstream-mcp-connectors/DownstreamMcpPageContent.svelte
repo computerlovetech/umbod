@@ -54,7 +54,7 @@
     new BrowserSelectionUrlAdapter({ readUrl: () => page.url, replaceUrl: (url) => replaceState(url, {}) })
   ] as const));
   const api = adminApi();
-  const registration = new PersonalServerFormState(api.personalServers, api.instanceConfiguration, null, async (id) => { state.close(); window.location.assign(`/admin/downstream-mcp-connectors?connector=${encodeURIComponent(id)}`); }, state.operations.loseAccess, state.operations.setRegistrationLocked);
+  const registration = new PersonalServerFormState(api.personalServers, api.instanceConfiguration, null, api.personalServerDiscovery, async (id) => { state.close(); window.location.assign(`/admin/downstream-mcp-connectors?connector=${encodeURIComponent(id)}`); }, state.operations.loseAccess, state.operations.setRegistrationLocked);
   onMount(() => { void registration.reload(); return () => { registration.dispose(); state.personalSetup.dispose(); state.operations.dispose(); }; });
   function reloadRegistration(): void {
     if (registration.busy || registration.authenticationLost) return;

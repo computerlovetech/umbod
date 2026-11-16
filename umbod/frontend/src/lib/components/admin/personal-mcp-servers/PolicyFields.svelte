@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import AdminConfigurationField from '../shared/AdminConfigurationField.svelte';
   import Select from '../shared/Select.svelte';
   import type { SelectOption } from '../shared/select-state.svelte';
@@ -14,35 +15,28 @@
     { value: 'client_secret_basic', label: 'Basic (client_secret_basic)' },
     { value: 'client_secret_post', label: 'POST (client_secret_post)' }
   ];
-  let { form, idPrefix, proposal }: { form: PolicyForm; idPrefix: string; proposal?: PolicyProposal } = $props();
+  let { form, idPrefix, proposal, scopes, discoveredIssuer }: { form: PolicyForm; idPrefix: string; proposal?: PolicyProposal; scopes?: Snippet; discoveredIssuer?: string } = $props();
 </script>
 
 <div class="fields">
-  {#key form.kind}
-    <Select id={`${idPrefix}-client-kind`} label="OAuth application setup" options={clientOptions} value={form.kind} onchange={form.setKind} />
-  {/key}
-  <p>These settings identify Umbod's application, not a user's login method. Users still connect their own accounts.</p>
-  {#if form.kind === 'dynamic_public'}
-    <p>The provider registers Umbod's application automatically.</p>
-  {:else if form.kind === 'preconfigured_public'}
-    <p>An administrator provides the client ID of an existing application registered with the provider.</p>
-  {:else}
-    <p>An administrator provides an existing application's client ID and secret. The secret is not a user's password.</p>
-  {/if}
-  <AdminConfigurationField id={`${idPrefix}-scopes`} name="scopes" label="Requested scopes" placeholder="Explicit provider scope names" value={form.scopes} oninput={(event) => form.set('scopes', (event.currentTarget as HTMLInputElement).value)} helperText="Choose only the permissions this server needs, using scope names from the provider's documentation. Case-sensitive, unique ASCII scope tokens separated by ordinary spaces. Up to 64 tokens, 256 characters each and 4,096 joined characters. An empty list requests no explicit scopes. Provider behavior must be validated; advertised scopes are never approved automatically." />
-  {#if proposal?.scopes.length}<Button variant="secondary" onclick={() => form.set('scopes', proposal!.scopes.join(' '))}>Use selected scopes</Button>{/if}
-  {#if form.kind !== 'dynamic_public'}
+  <Select id={`${idPrefix}-client-kind`} label="OAuth application setup" options={clientOptions} value={form.kind} onchange={form.setKind} />
+  {#if form.kind !== 'dynamic_public' || form.issuer}
     {#if proposal}<p>Discovered issuer: <code>{proposal.issuer}</code></p><Button variant="secondary" onclick={() => form.set('issuer', proposal!.issuer)}>Use discovered issuer</Button>{/if}
-    <AdminConfigurationField id={`${idPrefix}-issuer`} name="issuer" label="Exact HTTPS issuer URL" type="url" placeholder="https://auth.example.com" value={form.issuer} required oninput={(event) => form.set('issuer', (event.currentTarget as HTMLInputElement).value)} helperText="The OAuth issuer from the provider's documentation, which may differ from the MCP endpoint. Preserve the provider's exact issuer spelling. No query, fragment or credentials." />
-    <AdminConfigurationField id={`${idPrefix}-client-id`} name="clientId" label="Client ID" placeholder="Client ID from the provider" helperText="Copy the identifier of the application registered for Umbod with the provider. This is not a user's account ID or access token." value={form.clientId} required oninput={(event) => form.set('clientId', (event.currentTarget as HTMLInputElement).value)} />
+    <AdminConfigurationField id={`${idPrefix}-issuer`} name="issuer" label="Exact HTTPS issuer URL" type="url" placeholder="https://auth.example.com" readonly={!!discoveredIssuer} value={discoveredIssuer ?? form.issuer} required oninput={(event) => form.set('issuer', (event.currentTarget as HTMLInputElement).value)} />
+  {/if}
+  {#if form.kind !== 'dynamic_public'}
+    <AdminConfigurationField id={`${idPrefix}-client-id`} name="clientId" label="Client ID" placeholder="Client ID from the provider" value={form.clientId} required oninput={(event) => form.set('clientId', (event.currentTarget as HTMLInputElement).value)} />
   {/if}
   {#if form.kind === 'preconfigured_confidential'}
-    {#if form.configured}<p>Client secret configured. The stored value is never displayed.</p>{/if}
-    {#key form.method}
-      <Select id={`${idPrefix}-auth-method`} label="Token endpoint authentication" options={authenticationOptions} value={form.method} onchange={form.setMethod} />
-    {/key}
-    <p>Use the token endpoint authentication method required by the provider: Basic sends application credentials in an HTTP header; POST sends them in the request body.</p>
-    <AdminConfigurationField id={`${idPrefix}-client-secret`} name="clientSecret" label="Fresh client secret" placeholder="Client secret from the provider" type="password" autocomplete="new-password" required value={form.secret} oninput={(event) => form.set('secret', (event.currentTarget as HTMLInputElement).value)} helperText="Required for every confidential write. Cleared after submission, failure or closing. This identifies Umbod's OAuth application, not a user's account." />
+    {#if form.configured}<p>Client secret configured. Enter a fresh secret to save.</p>{/if}
+    <Select id={`${idPrefix}-auth-method`} label="Token endpoint authentication" options={authenticationOptions} value={form.method} onchange={form.setMethod} />
+    <AdminConfigurationField id={`${idPrefix}-client-secret`} name="clientSecret" label="Fresh client secret" placeholder="Client secret from the provider" type="password" autocomplete="new-password" required value={form.secret} oninput={(event) => form.set('secret', (event.currentTarget as HTMLInputElement).value)} />
+  {/if}
+  {#if scopes}
+    {@render scopes()}
+  {:else}
+    <AdminConfigurationField id={`${idPrefix}-scopes`} name="scopes" label="Requested scopes" placeholder="Space-separated scope tokens" value={form.scopes} oninput={(event) => form.set('scopes', (event.currentTarget as HTMLInputElement).value)} />
+    {#if proposal?.scopes.length}<Button variant="secondary" onclick={() => form.set('scopes', proposal!.scopes.join(' '))}>Use selected scopes</Button>{/if}
   {/if}
 </div>
 

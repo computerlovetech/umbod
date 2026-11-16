@@ -6,7 +6,7 @@
   let { title, titleId, descriptionId, close, children }: {
     title: string;
     titleId: string;
-    descriptionId: string;
+    descriptionId?: string;
     close: () => void;
     children: Snippet;
   } = $props();

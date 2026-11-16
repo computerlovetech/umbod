@@ -83,6 +83,7 @@ OAuthIssuer = Annotated[
 
 class DynamicPublicOAuthClient(OAuthConfigurationModel):
     kind: Literal["dynamic_public"] = "dynamic_public"
+    approved_issuers: tuple[OAuthIssuer, ...] = Field(default=(), max_length=1, exclude_if=lambda value: not value)
 
 
 class PreconfiguredPublicOAuthClient(OAuthConfigurationModel):

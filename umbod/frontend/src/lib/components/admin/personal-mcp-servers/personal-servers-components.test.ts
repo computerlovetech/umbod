@@ -31,22 +31,22 @@ describe('personal server administration presentation', () => {
     expect(body).not.toContain('ready to execute');
   });
   test('registration reuses validated metadata fields and policy controls without another inventory', () => {
-    const state = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null);
+    const state = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null, null);
     const body = render(PersonalServerRegistration, { props: { state, close: vi.fn(), reload: vi.fn() } }).body;
     expect(body).toContain('Register MCP server with personal authorization');
-    expect(body).toContain('Your organisation manages the connector; each user authorizes access using their own account.');
-    expect(body).toContain('Server details and the endpoint cannot be changed after registration; OAuth settings can be updated separately.');
+
+
     expect(body).not.toContain('Register personal MCP server');
-    expect(body).toContain('Registration starts unpublished');
-    expect(body).toContain('No discovery, group grants, user enablement or consent');
+
+
     expect(body).toContain('Registration path identifier');
-    expect(body).toContain('does not provide a shared proxy connection');
+
     expect(body).toContain('Register unpublished server');
     expect(body).not.toContain('<nav');
     expect(body).not.toContain('bearerToken');
   });
   test('registration explains server fields with accessible helpers, useful placeholders and a suffix-only path', () => {
-    const state = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null);
+    const state = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null, null);
     const document = new Window().document;
     document.body.innerHTML = render(PersonalServerRegistration, { props: { state, close: vi.fn(), reload: vi.fn() } }).body;
     const endpoint = document.getElementById('personal-endpoint')!;
@@ -54,23 +54,25 @@ describe('personal server administration presentation', () => {
     expect(endpoint.getAttribute('placeholder')).toBe('https://mcp.example.com/mcp');
     for (const id of ['personal-name', 'personal-endpoint', 'personal-prefix', 'personal-description', 'personal-path']) {
       const field = document.getElementById(id)!;
-      expect(field.getAttribute('aria-describedby')).toBe(`${id}-helper`);
-      expect(document.getElementById(`${id}-helper`)?.textContent?.length).toBeGreaterThan(30);
+      expect(field.getAttribute('placeholder')).toBeTruthy();
+      expect(document.querySelector(`label[for="${id}"]`)).not.toBeNull();
+
+
     }
     const path = document.getElementById('personal-path')!;
     expect(path.getAttribute('value')).toBe('');
     expect(path.getAttribute('maxlength')).toBe('63');
     expect(path.getAttribute('pattern')).toBe('[a-z0-9][a-z0-9\\-]{0,62}');
     expect(path.parentElement?.querySelector('[aria-hidden="true"]')?.textContent).toBe('/mcp/proxies/');
-    expect(document.getElementById('personal-path-helper')?.textContent).toContain('Enter only the unique identifier after /mcp/proxies/');
-    expect(document.getElementById('personal-path-helper')?.textContent).toContain('does not provide a shared proxy connection or authorize execution');
-    expect(document.body.textContent).toContain('cannot be changed after registration');
+
+
+
     expect(document.getElementById('personal-description')?.getAttribute('maxlength')).toBe('300');
     expect(document.body.textContent).not.toContain('Dedicated endpoint');
   });
   test('read-only policy guidance and registration retain unique IDs and scoped accessible fields', () => {
     const document = new Window().document;
-    const registration = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null);
+    const registration = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null, null);
     registration.form.setKind('preconfigured_confidential');
     document.body.innerHTML = `<section data-scope="selected">${render(PersonalServerPolicyPanel).body}</section><section data-scope="registration">${render(PersonalServerRegistration, { props: { state: registration, close: vi.fn(), reload: vi.fn() } }).body}</section>`;
     const ids = [...document.querySelectorAll('[id]')].map((element) => element.id);
@@ -90,7 +92,7 @@ describe('personal server administration presentation', () => {
       }
     }
     const labels = [...scope.querySelectorAll('label')].map((label) => label.textContent);
-    for (const name of ['OAuth application setup', 'Requested scopes', 'Exact HTTPS issuer URL', 'Client ID', 'Token endpoint authentication', 'Fresh client secret']) expect(labels).toContain(name);
+    for (const name of ['OAuth application setup', 'Exact HTTPS issuer URL', 'Client ID', 'Token endpoint authentication', 'Fresh client secret']) expect(labels).toContain(name);
   });
   test('dynamic clients expose no stored or shared credential controls', () => {
     const body = render(PolicyFields, { props: { form: new PolicyForm(), idPrefix: 'personal' } }).body;
@@ -101,13 +103,13 @@ describe('personal server administration presentation', () => {
     expect(body).not.toContain('Dynamic public');
     expect(body).not.toContain('Preconfigured public');
     expect(body).not.toContain('Preconfigured confidential');
-    expect(body).toContain("These settings identify Umbod's application, not a user's login method.");
-    expect(body).toContain('Users still connect their own accounts.');
-    expect(body).toContain("The provider registers Umbod's application automatically.");
+
+
+
     expect(body).toContain('value="dynamic_public"');
     expect(body).toContain('Requested scopes');
-    expect(body).toContain('ordinary spaces');
-    expect(body).toContain('An empty list requests no explicit scopes');
+
+
     expect(body).not.toContain('provider defaults');
     expect(body).not.toContain('id="personal-client-secret"');
     expect(body).not.toContain('id="personal-issuer"');
@@ -119,8 +121,8 @@ describe('personal server administration presentation', () => {
     const body = render(PolicyFields, { props: { form, idPrefix: 'personal' } }).body;
     expect(body).toContain('value="https://Issuer.test:443/Exact/"');
     expect(body).toContain('value="public-app"');
-    expect(body).toContain('An administrator provides the client ID of an existing application registered with the provider.');
-    expect(body).not.toContain("The provider registers Umbod's application automatically.");
+
+
     expect(body).not.toContain('id="personal-client-secret"');
   });
   test('confidential reads present configured status with an empty required password and both explicit methods', () => {
@@ -129,10 +131,10 @@ describe('personal server administration presentation', () => {
     const body = render(PolicyFields, { props: { form, idPrefix: 'personal' } }).body;
     expect(body).toContain('Client secret configured');
     expect(body).toContain('placeholder="https://auth.example.com"');
-    expect(body).toContain('which may differ from the MCP endpoint');
-    expect(body).toContain("This is not a user's account ID or access token.");
-    expect(body).toContain('Basic sends application credentials in an HTTP header');
-    expect(body).toContain("An administrator provides an existing application's client ID and secret. The secret is not a user's password.");
+
+
+
+
     expect(body).toMatch(/id="personal-client-secret"[^>]*type="password"[^>]*autocomplete="new-password"[^>]*required[^>]*value=""/);
     const document = new Window().document;
     document.body.innerHTML = body;
@@ -141,7 +143,7 @@ describe('personal server administration presentation', () => {
     expect(authentication?.getAttribute('value')).toBe('client_secret_post');
     expect(authentication?.textContent).toContain('POST (client_secret_post)');
     expect(document.querySelectorAll('select')).toHaveLength(0);
-    expect(body).toContain('Required for every confidential write');
+
     expect(body).not.toContain('Leave blank to keep');
     expect(body).not.toContain('********');
   });

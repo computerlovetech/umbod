@@ -3,11 +3,48 @@ import ssl
 from uuid import uuid4
 
 import httpx
+import pytest
 
 from conftest import RuntimeEndpoints
 
 
 ISSUER = "https://personal-runtime.kind.invalid"
+
+
+@pytest.mark.parametrize("metadata_mode,automatic_registration", [
+    ("preview_oauth", "available"),
+    ("preview_openid", "available"),
+    ("preview_no_registration", "unavailable"),
+])
+def test_unsaved_discovery_reads_metadata_without_registration_or_inventory_changes(
+    runtime_endpoints: RuntimeEndpoints, metadata_mode: str, automatic_registration: str,
+) -> None:
+    context = ssl.create_default_context(cafile=os.environ["UMBOD_TEST_PERSONAL_CA"])
+    headers = {"Authorization": f"Bearer {runtime_endpoints.bearer_token}"}
+    with httpx.Client(base_url=runtime_endpoints.api_base_url, headers=headers, timeout=90) as client, httpx.Client(
+        base_url=os.environ["UMBOD_TEST_PERSONAL_URL"], verify=context, timeout=30,
+    ) as provider:
+        before_inventory = {connector["connector_id"] for connector in client.get("/api/admin/connectors/mcp").json()["connectors"]}
+        changed = provider.post("/control", json={"owner": "metadata", "mode": metadata_mode})
+        assert changed.status_code == 200
+        before = changed.json()
+        try:
+            discovered = client.post("/api/admin/connectors/mcp/personal-oauth/discovery", json={
+                "endpoint_url": ISSUER + "/mcp", "issuer_selection": {"kind": "automatic"},
+            })
+            assert discovered.status_code == 200
+            assert discovered.headers["cache-control"] == "no-store"
+            assert discovered.json() == {
+                "kind": "discovered", "endpoint_url": ISSUER + "/mcp", "issuer_url": ISSUER,
+                "available_scopes": ["read"], "scope_source": "resource",
+                "automatic_registration": automatic_registration,
+                "token_endpoint_auth_methods": ["none", "client_secret_basic"],
+            }
+            assert provider.get("/control").json() == before
+            after_inventory = {connector["connector_id"] for connector in client.get("/api/admin/connectors/mcp").json()["connectors"]}
+            assert after_inventory == before_inventory
+        finally:
+            assert provider.post("/control", json={"owner": "metadata", "mode": "normal"}).status_code == 200
 
 
 def test_default_scopes_are_approved_and_validated_before_publication_without_login(runtime_endpoints: RuntimeEndpoints) -> None:
@@ -51,9 +88,10 @@ def test_default_scopes_are_approved_and_validated_before_publication_without_lo
             assert client.put(admin + "/publication").status_code == 409
             approved = client.put(policy_url, json={
                 "expected_revision": policy["revision"],
-                "settings": {"requested_scopes": ["read"], "client": {"kind": "dynamic_public"}},
+                "settings": {"requested_scopes": ["read"], "client": {"kind": "dynamic_public", "approved_issuers": [ISSUER]}},
             })
             assert approved.status_code == 200
+            assert client.get(policy_url).json()["client"] == {"kind": "dynamic_public", "approved_issuers": [ISSUER]}
             assert client.get(setup).json()["state"]["status"] == "required"
             assert client.put(admin + "/publication").status_code == 409
             validated = client.post(setup + "/validation", json={"expected_revision": client.get(setup).json()["revision"]})

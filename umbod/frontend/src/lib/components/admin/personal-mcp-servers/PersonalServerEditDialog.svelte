@@ -23,7 +23,7 @@
     const composite = api && configuration ? null : adminApi();
     return { api: api ?? composite!.personalServers, configuration: configuration ?? composite!.instanceConfiguration };
   });
-  const state = new PersonalServerFormState(dependencies.api, dependencies.configuration, untrack(() => connectorId), async (_id, connector) => { if (connector) saved?.(connector); close(); }, untrack(() => accessLost), untrack(() => lockChanged));
+  const state = new PersonalServerFormState(dependencies.api, dependencies.configuration, untrack(() => connectorId), null, async (_id, connector) => { if (connector) saved?.(connector); close(); }, untrack(() => accessLost), untrack(() => lockChanged));
   onMount(() => { void state.reload(); return state.dispose; });
 
   function closeEditor(): void {

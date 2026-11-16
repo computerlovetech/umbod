@@ -82,8 +82,14 @@ async def metadata(request: Request) -> Response:
         return JSONResponse({"error": "not_found"}, status_code=404)
     if "oauth-protected-resource" in request.url.path:
         return JSONResponse({"resource": RESOURCE, "authorization_servers": [ISSUER], "scopes_supported": ["read"], "bearer_methods_supported": ["header"]})
+    if modes.get("metadata") == "preview_openid" and request.url.path == "/.well-known/oauth-authorization-server":
+        return JSONResponse({"error": "not_found"}, status_code=404)
     document = {"issuer": ISSUER, "authorization_endpoint": ISSUER + "/authorize", "token_endpoint": ISSUER + "/token", "response_types_supported": ["code"], "grant_types_supported": ["authorization_code", "refresh_token"], "token_endpoint_auth_methods_supported": ["none", "client_secret_basic"], "code_challenge_methods_supported": ["S256"], "authorization_response_iss_parameter_supported": True}
     document["registration_endpoint"] = ISSUER + "/register"
+    if modes.get("metadata", "").startswith("preview_"):
+        document["scopes_supported"] = ["openid", "profile"]
+    if modes.get("metadata") == "preview_no_registration":
+        document.pop("registration_endpoint")
     if modes.get("metadata") == "issuer_omitted":
         document.pop("authorization_response_iss_parameter_supported")
     elif modes.get("metadata") == "issuer_false":

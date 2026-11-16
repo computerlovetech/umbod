@@ -142,11 +142,9 @@ describe('personal server OAuth editing', (): void => {
     expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
     expect(document.querySelector('[role="dialog"]')).toBe(dialog);
     expect(dialog?.textContent).toContain('Save OAuth settings?');
-    expect(dialog?.textContent).toContain('An effective change erases ALL users');
-    expect(dialog?.textContent).toContain('saved authorizations and pending sign-ins for this server');
-    expect(dialog?.textContent).toContain('The server is unpublished and setup validation is cleared');
-    expect(dialog?.textContent).toContain('User enablement and group grants persist');
+    expect(dialog?.textContent).toContain('Changed settings disconnect all users, cancel pending sign-ins and unpublish the server');
     expect(dialog?.textContent).toContain('Remote tokens are not revoked');
+    expect(dialog?.textContent).toContain('Confidential saves rotate the secret');
     expect(replace).not.toHaveBeenCalled();
     expect(close).not.toHaveBeenCalled();
 

@@ -46,7 +46,7 @@ function dialogFixture(): { dialog: HTMLDialogElement; opener: HTMLButtonElement
 
 describe('personal form native invalid capture', () => {
   test.each(['registration', 'policy'])('clears state and DOM secret before submit on invalid %s fields without cancelling native feedback', async (formKind) => {
-    const state = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null);
+    const state = new PersonalServerFormState(new InMemoryPersonalServers(), { get: async () => configurationFixture() }, null, null);
     await state.reload();
     if (formKind === 'registration') state.openCreate();
     state.form.setKind('preconfigured_confidential');

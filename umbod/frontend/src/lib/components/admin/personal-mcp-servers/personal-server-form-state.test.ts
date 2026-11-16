@@ -18,16 +18,23 @@ function setup(targetId: string | null = 'personal', lockChanged: (locked: boole
   const configuration: InstanceConfigurationRoute = { get: vi.fn(async () => configurationFixture()) };
   const completed = vi.fn(async () => {});
   const lost = vi.fn();
-  return { api, configuration, state: new PersonalServerFormState(api, configuration, targetId, completed, lost, lockChanged), completed, lost };
+  return { api, configuration, state: new PersonalServerFormState(api, configuration, targetId, null, completed, lost, lockChanged), completed, lost };
 }
 function confidential(state: PersonalServerFormState): void {
   state.form.setKind('preconfigured_confidential');
   state.form.set('issuer', 'https://Issuer.test:443/Exact/');
   state.form.set('clientId', 'app');
   state.form.set('secret', 'secret-sentinel');
+  if (state.discovery.manual) state.discovery.acknowledge(true);
 }
-function metadata(state: PersonalServerFormState): void {
+async function acknowledgeManual(state: PersonalServerFormState): Promise<void> {
+  await state.discovery.blur();
+  state.discovery.configureManually();
+  state.discovery.acknowledge(true);
+}
+async function metadata(state: PersonalServerFormState): Promise<void> {
   for (const [field, value] of Object.entries({ name: 'New server', prefix: 'new', description: 'Search records', path: 'new', endpoint: 'https://provider.test/mcp' })) state.setMetadata(field as keyof typeof state.metadata, value);
+  await acknowledgeManual(state);
 }
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: unknown) => void } {
   let resolve!: (value: T) => void;
@@ -70,7 +77,7 @@ describe('personal registration and selected policy through administration port'
     const { state } = setup(null);
     await state.reload();
     state.openCreate();
-    metadata(state);
+    await metadata(state);
     confidential(state);
     state.close();
     state.openCreate();
@@ -101,6 +108,7 @@ describe('personal registration and selected policy through administration port'
     state.setMetadata('name', 'Acme MCP');
     state.setMetadata('endpoint', 'https://provider.test/mcp');
     state.setMetadata('description', 'Search projects');
+    await acknowledgeManual(state);
     await state.create();
     expect(api.create).toHaveBeenCalledWith({
       metadata: { display_name: 'Acme MCP', tool_name_prefix: 'Acme_MCP', capability_description: 'Search projects', public_path: '/mcp/proxies/acme-mcp' },
@@ -112,7 +120,7 @@ describe('personal registration and selected policy through administration port'
     const { api, state } = setup(null, workspace.operations.setRegistrationLocked);
     await state.reload();
     state.openCreate();
-    metadata(state);
+    await metadata(state);
     confidential(state);
     vi.mocked(api.create).mockRejectedValueOnce(new NetworkError(new Error('lost-response')));
     await state.create();
@@ -143,7 +151,7 @@ describe('personal registration and selected policy through administration port'
     const { state, completed } = setup(null, workspace.operations.setRegistrationLocked);
     await state.reload();
     state.openCreate();
-    metadata(state);
+    await metadata(state);
     const reconciliation = deferred<void>();
     completed.mockReturnValueOnce(reconciliation.promise);
     const operation = state.create();
@@ -200,7 +208,7 @@ describe('personal registration and selected policy through administration port'
     const { api, state, completed } = setup(null);
     await state.reload();
     state.openCreate();
-    metadata(state);
+    await metadata(state);
     await state.create();
     expect(api.create).toHaveBeenCalledTimes(1);
     expect(completed).toHaveBeenCalledWith('new');
@@ -211,7 +219,7 @@ describe('personal registration and selected policy through administration port'
     const { api, state } = setup(null);
     await state.reload();
     state.openCreate();
-    metadata(state);
+    await metadata(state);
     confidential(state);
     vi.mocked(api.create).mockRejectedValueOnce(new HttpError(404, 'secret-sentinel', { detail: { code } }));
     await state.create();
@@ -228,7 +236,7 @@ describe('personal registration and selected policy through administration port'
     const { api, state } = setup(null);
     await state.reload();
     state.openCreate();
-    metadata(state);
+    await metadata(state);
     confidential(state);
     vi.mocked(api.create).mockRejectedValueOnce(new NetworkError(new Error('secret-sentinel')));
     await state.create();

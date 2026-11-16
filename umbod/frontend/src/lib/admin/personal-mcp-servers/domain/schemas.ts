@@ -12,7 +12,7 @@ export const issuerSchema = z.string().min(1).max(4096).refine((value) => {
     return /^https:\/\//i.test(value) && url.protocol === 'https:' && !!url.hostname && !authority.includes('@') && !url.username && !url.password && !/[?#\\\s\x00-\x20\x7f-\uffff]/.test(value) && !authority.includes('%') && url.port !== '0' && !/[\x00-\x1f\x7f]/.test(decodeURIComponent(value));
   } catch { return false; }
 });
-const dynamicClientSchema = z.object({ kind: z.literal('dynamic_public') }).strict();
+const dynamicClientSchema = z.object({ kind: z.literal('dynamic_public'), approved_issuers: z.array(issuerSchema).max(1).optional() }).strict();
 const publicClientSchema = z.object({ kind: z.literal('preconfigured_public'), issuer_url: issuerSchema, client_id: clientTextSchema }).strict();
 const confidentialFields = { kind: z.literal('preconfigured_confidential'), issuer_url: issuerSchema, client_id: clientTextSchema, token_endpoint_auth_method: z.enum(['client_secret_basic', 'client_secret_post']) };
 export const clientRequestSchema = z.discriminatedUnion('kind', [dynamicClientSchema, publicClientSchema, z.object({ ...confidentialFields, client_secret: clientTextSchema }).strict()]);

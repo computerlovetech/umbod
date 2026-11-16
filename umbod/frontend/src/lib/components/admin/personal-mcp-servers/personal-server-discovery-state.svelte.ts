@@ -1,0 +1,111 @@
+import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
+import { discoveryEndpointSchema, type EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
+import { parseScopeText, scopesSchema, type ClientKind } from '$lib/admin/personal-mcp-servers/domain/schemas';
+import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import type { PolicyProposal } from './policy-form.svelte';
+
+type Discovered = Extract<EndpointDiscoveryResult, { kind: 'discovered' }>;
+export class PersonalServerDiscoveryState {
+  endpoint = $state('');
+  pending = $state(false);
+  attempted = $state(false);
+  failed = $state(false);
+  manual = $state(false);
+  acknowledged = $state(false);
+  approved = $state(false);
+  result = $state.raw<Discovered | null>(null);
+  issuers = $state.raw<readonly string[]>([]);
+  selectedIssuer = $state('');
+  selectedScopes = $state.raw<readonly string[]>([]);
+  customScopes = $state('');
+  automaticRegistrationUnavailable = $state(false);
+  private generation = 0;
+  private active = false;
+  constructor(private readonly api: PersonalServerDiscovery | null, private readonly accessLost: (error: unknown) => void) {}
+  reset = (active: boolean): void => {
+    this.generation++;
+    this.active = active;
+    this.endpoint = '';
+    this.automaticRegistrationUnavailable = false;
+    this.pending = false;
+    this.attempted = false;
+    this.failed = false;
+    this.manual = false;
+    this.acknowledged = false;
+    this.result = null;
+    this.issuers = [];
+    this.selectedIssuer = '';
+    this.selectedScopes = [];
+    this.customScopes = '';
+    this.approved = false;
+  };
+  setEndpoint = (endpoint: string): void => {
+    if (endpoint === this.endpoint) return;
+    this.reset(this.active);
+    this.endpoint = endpoint;
+  };
+  invalidateApproval = (): void => { this.approved = false; this.acknowledged = false; };
+  blur = async (): Promise<void> => { if (!this.attempted) await this.discover(); };
+  retry = async (): Promise<void> => { await this.discover(); };
+  selectIssuer = async (issuer: string): Promise<void> => {
+    if (!this.issuers.includes(issuer)) return;
+    this.generation++;
+    this.pending = false;
+    this.selectedIssuer = issuer;
+    await this.discover();
+  };
+  private async discover(): Promise<void> {
+    if (!this.active || this.pending) return;
+    if (!discoveryEndpointSchema.safeParse(this.endpoint).success) { this.attempted = true; this.failed = true; return; }
+    const generation = ++this.generation;
+    this.attempted = true;
+    this.pending = true;
+    this.failed = false;
+    this.manual = false;
+    this.invalidateApproval();
+    this.result = null;
+    this.selectedScopes = [];
+    this.customScopes = '';
+    try {
+      if (!this.api) throw new Error('Discovery unavailable');
+      const result = await this.api.discover({ endpoint_url: this.endpoint, issuer_selection: this.selectedIssuer ? { kind: 'selected', issuer_url: this.selectedIssuer } : { kind: 'automatic' } });
+      if (!this.active || generation !== this.generation) return;
+      if (result.endpoint_url !== this.endpoint) throw new Error('Endpoint mismatch');
+      if (result.kind === 'issuer_selection_required') {
+        this.issuers = result.issuer_urls;
+        this.selectedIssuer = '';
+      } else {
+        this.result = result;
+        this.automaticRegistrationUnavailable = result.automatic_registration === 'unavailable';
+        this.selectedIssuer = result.issuer_url;
+      }
+    } catch (error) {
+      if (!this.active || generation !== this.generation) return;
+      if (error instanceof AuthenticationRequiredError || error instanceof HttpError && (error.status === 401 || error.status === 403)) {
+        this.reset(false);
+        this.accessLost(error);
+      } else this.failed = true;
+    } finally { if (generation === this.generation) this.pending = false; }
+  }
+  configureManually = (): void => { if (this.failed && !this.pending) { this.manual = true; this.invalidateApproval(); } };
+  acknowledge = (value: boolean): void => { this.acknowledged = this.manual && value; };
+  toggleScope = (scope: string, checked: boolean): void => {
+    if (!this.result?.available_scopes.includes(scope)) return;
+    this.selectedScopes = checked ? [...this.selectedScopes.filter((value) => value !== scope), scope] : this.selectedScopes.filter((value) => value !== scope);
+    this.invalidateApproval();
+  };
+  setCustomScopes = (value: string): void => { this.customScopes = value; this.invalidateApproval(); };
+  get scopes(): readonly string[] { return scopesSchema.parse([...this.selectedScopes, ...parseScopeText(this.customScopes)]); }
+  get scopeError(): string { try { this.scopes; return ''; } catch { return 'Use unique ASCII scope tokens separated by spaces (up to 64 scopes).'; } }
+  get scopeSummary(): string { return this.scopeError || this.scopes.join(' ') || 'No explicit scopes'; }
+  get failureMessage(): string { return discoveryEndpointSchema.safeParse(this.endpoint).success ? 'Discovery failed. Scopes unavailable.' : 'Use an HTTPS endpoint without a query, fragment or credentials, or configure manually.'; }
+  get issuerOptions(): { value: string; label: string }[] { return [{ value: '', label: 'Choose an issuer' }, ...this.issuers.map((issuer) => ({ value: issuer, label: issuer }))]; }
+  get scopeSource(): string { return { resource: 'MCP permissions', authorization_server: 'Provider permissions', unavailable: 'Scopes' }[this.result?.scope_source ?? 'unavailable']; }
+  approve = (value: boolean): void => { this.approved = value && !!this.result && !this.scopeError; };
+  canSave = (kind: ClientKind): boolean => {
+    if (!this.active || this.pending || kind === 'dynamic_public' && this.automaticRegistrationUnavailable) return false;
+    if (this.result) return this.approved && !this.scopeError && !(kind === 'dynamic_public' && this.result.automatic_registration === 'unavailable');
+    return this.failed && this.manual && this.acknowledged;
+  };
+  get proposal(): PolicyProposal | undefined { return this.result && this.approved ? { issuer: this.result.issuer_url, scopes: this.scopes } : undefined; }
+}

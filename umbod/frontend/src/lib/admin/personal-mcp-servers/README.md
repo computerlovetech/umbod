@@ -9,6 +9,10 @@ description: Validated personal server registration, revision-safe policy editin
 - [Domain contracts](domain/README.md) — Policy, endpoint, scope and setup status schemas.
 - [administration.ts](administration.ts) — Injectable personal server and policy administration port.
 - [http-route.ts](http-route.ts) — Transport-backed registration and revision-safe policy adapter.
+- [discovery-administration.ts](discovery-administration.ts) — Unsaved endpoint read-only metadata discovery port.
+- [discovery-route.ts](discovery-route.ts) — Validated metadata discovery route with endpoint and issuer identity fencing.
+- [discovery-route.test.ts](discovery-route.test.ts) — Discovery contracts, response privacy and durable issuer approval tests.
+- [discovery.test-support.ts](discovery.test-support.ts) — Test-only queued metadata discovery adapter without implicit success.
 - [setup-administration.ts](setup-administration.ts) — Saved setup, explicit discovery and validation port.
 - [setup-route.ts](setup-route.ts) — Validated setup HTTP routes without automatic replay.
 - [setup-route.test.ts](setup-route.test.ts) — Request validation, safe response boundaries and route dispatch tests.

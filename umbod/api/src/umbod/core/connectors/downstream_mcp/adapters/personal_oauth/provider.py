@@ -7,7 +7,7 @@ import json
 import re
 from datetime import timedelta
 from typing import Literal
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit
 
 import anyio
 from pydantic import SecretStr
@@ -40,10 +40,10 @@ from ...personal_oauth_configuration.models import (
     parse_oauth_scopes,
 )
 from .callback import CallbackURLPolicy, validate_callback_url
+from .discovery import authorization_server_metadata, protected_resource_metadata
 from .transport import (
     BasicOAuthHttpAuthentication,
     NoOAuthHttpAuthentication,
-    OAuthDestination,
     OAuthHttpAuthentication,
     OAuthHttpRequest,
     OAuthHttpResponse,
@@ -52,7 +52,6 @@ from .transport import (
 from .validation import (
     AuthorizationServer,
     DiscoveredOAuthServer,
-    ProtectedResource,
     ProviderContext,
     RegisteredClient,
     RegisteredOAuthClient,
@@ -176,55 +175,27 @@ class DiscoveredPersonalOAuthProvider:
         self, endpoint_url: str, redirect_uri: str, policy: PersonalOAuthPolicy, progress: OAuthOperationProgress,
         select_advertised_issuer: bool,
     ) -> DiscoveredOAuthServer:
-        endpoint = validated_url(endpoint_url)
         validate_callback_url(redirect_uri, self._callback_policy)
-        metadata_url = urlunsplit((endpoint.scheme, endpoint.netloc, "/.well-known/oauth-protected-resource" + endpoint.path.rstrip("/"), "", ""))
-        with oauth_failure_boundary("discovery", NoDownstreamResponse()):
-            response = await request_with_progress(self._transport, OAuthHttpRequest(
-                method="GET", url=metadata_url, content_type="", body=SecretStr(""),
-            ), progress, "discovery")
-            if response.status == 404 and endpoint.path.rstrip("/"):
-                metadata_url = urlunsplit((endpoint.scheme, endpoint.netloc, "/.well-known/oauth-protected-resource", "", ""))
-                response = await request_with_progress(self._transport, OAuthHttpRequest(
-                    method="GET", url=metadata_url, content_type="", body=SecretStr(""),
-                ), progress, "discovery")
-        with oauth_failure_boundary("discovery", DownstreamHttpResponse(status_code=response.status)):
-            if response.status != 200:
-                raise rejected_response("discovery", response.status)
-            resource = ProtectedResource.model_validate(parse_json(response.body))
-            if resource.resource != endpoint_url:
-                raise PersonalOAuthProviderUnsupported(OAuthFailureEvidence(
-                    stage="discovery", reason="resource_mismatch",
-                    downstream_response=DownstreamHttpResponse(status_code=response.status),
-                ))
+        resource = await protected_resource_metadata(endpoint_url, self._transport, progress)
+        with oauth_failure_boundary("discovery", DownstreamHttpResponse(status_code=200)):
             configured_client = policy.client
             auth_method = client_authentication_method(configured_client)
             issuer = resource.authorization_servers[0]
-            if (configured_client.kind == "dynamic_public" or select_advertised_issuer) and len(resource.authorization_servers) != 1:
-                raise unsupported_configuration("ambiguous_issuer", "discovery")
-            if configured_client.kind != "dynamic_public" and not select_advertised_issuer:
+            if configured_client.kind == "dynamic_public" and configured_client.approved_issuers:
+                issuer = configured_client.approved_issuers[0]
+                if issuer not in resource.authorization_servers:
+                    raise unsupported_configuration("issuer_mismatch", "discovery")
+            elif configured_client.kind == "dynamic_public" or select_advertised_issuer:
+                if len(resource.authorization_servers) != 1:
+                    raise unsupported_configuration("ambiguous_issuer", "discovery")
+            else:
                 issuer = configured_client.issuer_url
                 if issuer not in resource.authorization_servers:
                     raise unsupported_configuration("issuer_mismatch", "discovery")
-            issuer_parts = validated_url(issuer)
-        issuer_url = urlunsplit((issuer_parts.scheme, issuer_parts.netloc, "/.well-known/oauth-authorization-server" + issuer_parts.path.rstrip("/"), "", ""))
-        async with self._request("GET", issuer_url, "", "", NoOAuthHttpAuthentication(), "discovery", progress) as raw_server:
-            server = AuthorizationServer.model_validate(raw_server)
-            requirements: tuple[tuple[bool, OAuthFailureReason], ...] = (
-                (server.issuer == issuer, "issuer_mismatch"),
-                ("S256" in server.code_challenge_methods_supported, "pkce_s256_required"),
-                ("authorization_code" in server.grant_types_supported, "authorization_code_required"),
-                ("code" in server.response_types_supported, "code_response_required"),
-                (auth_method in server.token_endpoint_auth_methods_supported, "client_auth_required"),
-            )
-            for supported, reason in requirements:
-                if not supported:
-                    raise unsupported_configuration(reason, "discovery")
-            for url in (server.authorization_endpoint, server.token_endpoint):
-                validated_url(url)
-            progress.begin("discovery")
-            with oauth_failure_boundary("discovery", NoDownstreamResponse()):
-                await self._transport.validate_destination(OAuthDestination(url=server.authorization_endpoint))
+        server, metadata_status = await authorization_server_metadata(issuer, self._transport, progress)
+        with oauth_failure_boundary("discovery", DownstreamHttpResponse(status_code=metadata_status)):
+            if auth_method not in server.token_endpoint_auth_methods_supported:
+                raise unsupported_configuration("client_auth_required", "discovery")
         binding = (
             GenericBinding(kind="generic", expected_issuer=issuer)
             if server.authorization_response_iss_parameter_supported else IssuerBinding(
@@ -299,6 +270,7 @@ class DiscoveredPersonalOAuthProvider:
                 or context.client_mode != client.kind
                 or context.token_endpoint_auth_method != client_authentication_method(client)
                 or (client.kind != "dynamic_public" and (client.client_id != context.client_id or client.issuer_url != context.issuer))
+                or (client.kind == "dynamic_public" and client.approved_issuers and context.issuer not in client.approved_issuers)
             ):
                 raise ValueError("Invalid policy binding")
             redirect_uri = validate_callback_binding(

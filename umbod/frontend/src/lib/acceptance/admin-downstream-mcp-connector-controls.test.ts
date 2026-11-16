@@ -87,8 +87,10 @@ describe('downstream MCP connector administration', () => {
     expect(personal).toContain('Registration path');
     expect(personal).toContain('Unpublished');
     expect(personal).not.toContain('>Publish</button>');
-    expect(personal).toContain('Configuration not validated');
-    expect(personal).toContain('Sign-in not tested');
+    expect(personal).toContain('Check unavailable');
+    expect(personal).toContain('Check configuration');
+    expect(personal).not.toContain('Personal OAuth setup');
+    expect(personal).not.toContain('Sign-in not tested');
     expect(personal).toContain('>Delete</button>');
     expect(personal).toContain('href="/dashboard"');
     expect(personal).toContain("do not show a user's authorization or private inventory");
@@ -103,7 +105,7 @@ describe('downstream MCP connector administration', () => {
     const personal = workspace({ ...serverFixture(), publication_status: 'published' });
     expect(personal).toContain('>Unpublish</button>');
     expect(personal).not.toContain('>Publish</button>');
-    expect(personal).toContain('Configuration not validated');
+    expect(personal).toContain('Check unavailable');
   });
 
   test('captures and displays the connector capability description', async (): Promise<void> => {

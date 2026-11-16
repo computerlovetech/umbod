@@ -14,6 +14,7 @@ from umbod.core.connectors.downstream_mcp.models import (
     validate_custom_header_name,
 )
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
+    OAuthIssuer,
     PersonalOAuthSettings,
     legacy_personal_oauth_settings,
 )
@@ -112,6 +113,7 @@ class ReplacePersonalOAuthConfigurationRequest(ApiModel):
 
 class DynamicPublicClientResponse(ApiModel):
     kind: Literal["dynamic_public"]
+    approved_issuers: tuple[OAuthIssuer, ...] = Field(default=(), max_length=1, exclude_if=lambda value: not value)
 
 
 class PreconfiguredPublicClientResponse(ApiModel):

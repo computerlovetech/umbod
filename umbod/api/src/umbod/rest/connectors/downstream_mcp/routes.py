@@ -147,12 +147,16 @@ from umbod.rest.connectors.downstream_mcp.schemas import (
 )
 
 
+from .personal_oauth_metadata import router as personal_oauth_metadata_router
+
+
 router = APIRouter(
     prefix="/connectors/mcp", tags=["downstream-mcp-connectors"],
     route_class=PersonalConfigurationValidationRoute,
 )
 router.include_router(personal_tools_router)
 router.include_router(personal_oauth_setup_router)
+router.include_router(personal_oauth_metadata_router)
 ConfigurationStore = Annotated[
     PersonalOAuthConfigurationStore, Depends(get_personal_oauth_configuration_store)
 ]
@@ -430,7 +434,7 @@ def _personal_configuration_response(
             kind=client.kind, issuer_url=client.issuer_url, client_id=client.client_id,
         )
     else:
-        projection = DynamicPublicClientResponse(kind=client.kind)
+        projection = DynamicPublicClientResponse(kind=client.kind, approved_issuers=client.approved_issuers)
     return PersonalOAuthConfigurationResponse(
         connector_id=configuration.connector_id, revision=configuration.policy.revision,
         requested_scopes=configuration.policy.requested_scopes, client=projection,

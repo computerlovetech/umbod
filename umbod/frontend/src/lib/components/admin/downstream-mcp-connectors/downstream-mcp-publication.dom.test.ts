@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import * as adminApiModule from '$lib/admin/infrastructure/admin-api';
-import { InMemoryPersonalOAuthSetup } from '$lib/admin/personal-mcp-servers/setup.test-support';
+import { InMemoryPersonalOAuthSetup, setupFixture } from '$lib/admin/personal-mcp-servers/setup.test-support';
 import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
 import { policyFixture, serverFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
 import { HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
@@ -92,14 +92,14 @@ async function openConfirmation(label: string): Promise<HTMLElement> {
   return dialog;
 }
 
-async function renderPersonalWorkspace(validated: boolean = true): Promise<{
+async function renderPersonalWorkspace(validated: boolean = true, name: string = 'Personal server', published: boolean = false): Promise<{
   composite: adminApiModule.AdminApi;
   state: DownstreamMcpWorkspaceState;
   operations: DownstreamMcpMutationState;
   api: ReturnType<typeof mutationApi>;
   navigate: ReturnType<typeof vi.fn>;
 }> {
-  const connector = serverFixture();
+  const connector = { ...serverFixture(), display_name: name, publication_status: published ? 'published' as const : 'unpublished' as const };
   const personalApi = new InMemoryPersonalServers([connector], [policyFixture()]);
   const composite = new adminApiModule.AdminApi({ request: vi.fn().mockRejectedValue(new Error('Unexpected transport request')) });
   vi.spyOn(composite.personalServers, 'get').mockImplementation((id) => personalApi.get(id));
@@ -108,6 +108,8 @@ async function renderPersonalWorkspace(validated: boolean = true): Promise<{
   const setup = new InMemoryPersonalOAuthSetup();
   if (validated) setup.current = setup.validation;
   vi.spyOn(composite.personalOAuthSetup, 'status').mockImplementation((id) => setup.status(id));
+  vi.spyOn(composite.personalOAuthSetup, 'validate').mockImplementation((id, input) => setup.validate(id, input));
+  vi.spyOn(composite.personalOAuthSetup, 'discover').mockImplementation((id, input) => setup.discover(id, input));
   vi.spyOn(adminApiModule, 'adminApi').mockReturnValue(composite);
   const bundle: DownstreamMcpWorkspaceBundle = { mode: 'personal', connector };
   const api = mutationApi(bundle);
@@ -145,33 +147,230 @@ async function beginPolicyReplacement(): Promise<HTMLDialogElement> {
 }
 
 describe('personal MCP editing from the action menu', (): void => {
+  test('personal publication names the pending connector and discloses access details on demand', async (): Promise<void> => {
+    const name = 'Records & reports';
+    const { api } = await renderPersonalWorkspace(true, name);
+    button(`Open actions for ${name}`).click();
+    await tick();
+    button('Publish', document.querySelector('[role="menu"]')!).click();
+    await tick();
+    const dialog = document.querySelector('dialog');
+    if (!dialog) throw new Error('Publication confirmation is missing');
+    expect(dialog.querySelector('h2')?.textContent).toBe('Publish connector?');
+    expect(dialog.querySelector('.identity strong')?.textContent).toBe(name);
+    expect(dialog.querySelector('small')?.textContent).toBe('Personal MCP connector');
+    const notice = document.getElementById(dialog.getAttribute('aria-describedby') ?? '');
+    expect(notice).not.toBeNull();
+    expect(notice?.closest('details')).toBeNull();
+    expect(notice?.querySelector('strong')?.textContent).toBe('This changes who can use it');
+    expect(notice?.querySelector('p')?.textContent).toBe('Permitted groups can use all its tools, including future tools after discovery.');
+    const details = dialog.querySelector('details');
+    if (!details) throw new Error('Access details are missing');
+    expect(details.open).toBe(false);
+    const summary = details.querySelector('summary');
+    if (!summary) throw new Error('Access details summary is missing');
+    expect(summary.textContent).toBe('Access & setup details');
+    summary.click();
+    await tick();
+    expect(details.open).toBe(true);
+    expect(details.querySelector('p')?.textContent).toBe('This does not make the connector available to everyone. Account authorization, owner enablement, and tool discovery remain separate steps.');
+    expect(dialog.querySelector('[data-dialog-cancel]')).toBe(button('Cancel', dialog));
+    expect(document.activeElement).toBe(button('Cancel', dialog));
+    expect(api.publish).not.toHaveBeenCalled();
+  });
+
+  test.each(['Cancel', 'Close', 'Escape'] as const)('%s dismisses personal publication without publishing', async (dismissal): Promise<void> => {
+    const { api, navigate } = await renderPersonalWorkspace();
+    const trigger = button('Open actions for Personal server');
+    trigger.click();
+    await tick();
+    button('Publish', document.querySelector('[role="menu"]')!).click();
+    await tick();
+    const dialog = document.querySelector('dialog');
+    if (!dialog) throw new Error('Publication confirmation is missing');
+    if (dismissal === 'Escape') {
+      const cancel = new Event('cancel', { cancelable: true });
+      dialog.dispatchEvent(cancel);
+      expect(cancel.defaultPrevented).toBe(true);
+    } else {
+      button(dismissal, dialog).click();
+    }
+    await tick();
+    expect(document.querySelector('dialog')).toBeNull();
+    expect(api.publish).not.toHaveBeenCalled();
+    expect(api.unpublish).not.toHaveBeenCalled();
+    expect(api.delete).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  test.each([
+    { action: 'Unpublish', published: true, confirm: 'Unpublish', message: 'After catalogue reload, withdrawal prevents new selection.' },
+    { action: 'Delete', published: false, confirm: 'Delete server', message: 'This permanently removes the server and saved local authorizations and policy.' }
+  ])('personal $action retains generic confirmation', async ({ action, published, confirm, message }): Promise<void> => {
+    const { api } = await renderPersonalWorkspace(true, 'Personal server', published);
+    button('Open actions for Personal server').click();
+    await tick();
+    button(action, document.querySelector('[role="menu"]')!).click();
+    await tick();
+    const dialog = document.querySelector('dialog');
+    if (!dialog) throw new Error('Mutation confirmation is missing');
+    expect(dialog.querySelector('h2')?.textContent).toBe(`${action} Personal server?`);
+    expect(dialog.textContent).toContain(message);
+    expect(dialog.querySelector('details')).toBeNull();
+    expect(button(confirm, dialog).disabled).toBe(false);
+    button('Cancel', dialog).click();
+    await tick();
+    expect(document.querySelector('dialog')).toBeNull();
+    expect(api.publish).not.toHaveBeenCalled();
+    expect(api.unpublish).not.toHaveBeenCalled();
+    expect(api.delete).not.toHaveBeenCalled();
+  });
+
   test('unvalidated personal servers have no publication action', async (): Promise<void> => {
-    const { api } = await renderPersonalWorkspace(false);
+    const { api, composite } = await renderPersonalWorkspace(false);
+    expect(document.querySelector('[aria-label="Personal OAuth setup"]')).toBeNull();
+    expect(document.querySelector('dialog')).toBeNull();
+    expect(document.querySelector('[aria-pressed="true"]')?.textContent).toContain('Check required');
+    expect(composite.personalOAuthSetup.status).toHaveBeenCalledExactlyOnceWith('personal');
+    expect(composite.personalOAuthSetup.validate).not.toHaveBeenCalled();
     button('Open actions for Personal server').click();
     await tick();
     const menu = document.querySelector('[role="menu"]');
     expect(menu).not.toBeNull();
     expect(menu?.textContent).not.toContain('Publish');
     expect(button('Edit', menu!).disabled).toBe(false);
+    expect(button('Check configuration', menu!).disabled).toBe(false);
     expect(api.publish).not.toHaveBeenCalled();
+  });
+
+  test('checks OAuth from the menu and updates sidebar publication eligibility without reloading details', async (): Promise<void> => {
+    const { composite, api } = await renderPersonalWorkspace(false);
+    const article = document.querySelector('article');
+    button('Open actions for Personal server').click();
+    await tick();
+    button('Check configuration', document.querySelector('[role="menu"]')!).click();
+    await tick();
+    const dialog = document.querySelector('[role="dialog"]');
+    if (!dialog) throw new Error('Configuration check dialog is missing');
+    expect(document.querySelector('[role="menu"]')).toBeNull();
+    expect(dialog.textContent).not.toContain('Discover settings');
+    expect(dialog.textContent).not.toContain('Validate setup');
+    await vi.waitFor(() => expect(document.querySelector('[aria-pressed="true"]')?.textContent).toContain('Configuration ready'));
+    expect(dialog.textContent).toContain('Ready to publish');
+    expect(composite.personalOAuthSetup.validate).toHaveBeenCalledOnce();
+    expect(composite.personalOAuthSetup.discover).not.toHaveBeenCalled();
+    expect(api.publish).not.toHaveBeenCalled();
+    button('Close', dialog).click();
+    await tick();
+    expect(document.querySelector('dialog')).toBeNull();
+    expect(document.querySelector('article')).toBe(article);
+    expect(composite.personalOAuthSetup.status).toHaveBeenCalledTimes(1);
+    button('Open actions for Personal server').click();
+    await tick();
+    expect(button('Publish', document.querySelector('[role="menu"]')!).disabled).toBe(false);
+  });
+
+  test('explicit checks lead to publication confirmation without implicit repeats or stacked dialogs', async (): Promise<void> => {
+    const { composite, api } = await renderPersonalWorkspace(false);
+    const trigger = button('Open actions for Personal server');
+    trigger.click();
+    await tick();
+    button('Check configuration', document.querySelector('[role="menu"]')!).click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Ready to publish'));
+    expect(composite.personalOAuthSetup.validate).toHaveBeenCalledOnce();
+    button('Publish', document.querySelector('dialog')!).click();
+    await tick();
+    expect(document.querySelectorAll('dialog')).toHaveLength(1);
+    const confirmation = document.querySelector('dialog');
+    expect(confirmation?.textContent).toContain('Publish connector?');
+    expect(confirmation?.querySelector('.identity strong')?.textContent).toBe('Personal server');
+    expect(api.publish).not.toHaveBeenCalled();
+    button('Cancel', confirmation!).click();
+    await tick();
+    expect(document.querySelector('dialog')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
+    trigger.click();
+    await tick();
+    button('Check configuration', document.querySelector('[role="menu"]')!).click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Ready to publish'));
+    expect(composite.personalOAuthSetup.validate).toHaveBeenCalledTimes(2);
+    button('Publish', document.querySelector('dialog')!).click();
+    await tick();
+    button('Publish connector', document.querySelector('dialog')!).click();
+    await vi.waitFor(() => expect(api.publish).toHaveBeenCalledExactlyOnceWith('personal'));
+    await vi.waitFor(() => expect(document.querySelector('[aria-pressed="true"]')?.textContent).toContain('· published ·'));
+    expect(document.querySelector('dialog')).toBeNull();
+    trigger.click();
+    await tick();
+    button('Check configuration', document.querySelector('[role="menu"]')!).click();
+    await vi.waitFor(() => expect(document.querySelector('dialog')?.textContent).toContain('Configuration ready'));
+    expect(button('Done', document.querySelector('dialog')!).disabled).toBe(false);
+    expect(composite.personalOAuthSetup.validate).toHaveBeenCalledTimes(3);
+    expect(composite.personalOAuthSetup.status).toHaveBeenCalledOnce();
+  });
+
+  test.each([false, true])('a failed explicit check blocks publication even when previously validated=%s', async (validated): Promise<void> => {
+    const { composite, api } = await renderPersonalWorkspace(validated);
+    vi.mocked(composite.personalOAuthSetup.validate).mockRejectedValueOnce(new NetworkError(new Error('private-provider-response')));
+    button('Open actions for Personal server').click();
+    await tick();
+    button('Check configuration', document.querySelector('[role="menu"]')!).click();
+    await tick();
+    const dialog = document.querySelector('[role="dialog"]');
+    if (!dialog) throw new Error('Configuration check dialog is missing');
+    await vi.waitFor(() => expect(dialog.textContent).toContain('Check result unavailable'));
+    expect(composite.personalOAuthSetup.validate).toHaveBeenCalledOnce();
+    expect(dialog.textContent).not.toContain('private-provider-response');
+    expect(button('Refresh status', dialog).disabled).toBe(false);
+    button('Close', dialog).click();
+    await tick();
+    button('Open actions for Personal server').click();
+    await tick();
+    expect(document.querySelector('[role="menu"]')?.textContent).not.toContain('Publish');
+    expect(api.publish).not.toHaveBeenCalled();
+  });
+
+  test('moving from setup into Edit restores focus to the persistent action trigger on close', async (): Promise<void> => {
+    const { composite } = await renderPersonalWorkspace(false);
+    vi.mocked(composite.personalOAuthSetup.validate).mockResolvedValueOnce(setupFixture({ status: 'failed', checked_at: '2026-01-01T00:00:00Z', stage: 'discovery', reason: 'registration_unavailable' }));
+    const trigger = button('Open actions for Personal server');
+    trigger.click();
+    await tick();
+    button('Check configuration', document.querySelector('[role="menu"]')!).click();
+    await tick();
+    const setupDialog = document.querySelector('[role="dialog"]');
+    if (!setupDialog) throw new Error('Configuration check dialog is missing');
+    await vi.waitFor(() => expect(setupDialog.textContent).toContain('Changes required'));
+    button('Edit settings', setupDialog).click();
+    await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>('#personal-name')?.value).toBe('Personal server'));
+    const editor = document.querySelector('[role="dialog"]');
+    if (!editor) throw new Error('Personal editor is missing');
+    expect(editor).not.toBe(setupDialog);
+    button('Cancel', editor).click();
+    await tick();
+    expect(document.querySelector('dialog')).toBeNull();
+    expect(document.activeElement).toBe(trigger);
   });
 
   test('validated personal publication reconciles in place without testing sign-in', async (): Promise<void> => {
     const { api, navigate } = await renderPersonalWorkspace();
     const workspace = document.querySelector('[aria-label="MCP connectors workspace"]');
-    const panel = document.querySelector('[aria-label="Personal OAuth setup"]');
+    const personalGuidance = document.querySelector('[aria-label="Personal authorization"]');
     button('Open actions for Personal server').click();
     await tick();
     button('Publish', document.querySelector('[role="menu"]')!).click();
     await tick();
     const dialog = document.querySelector('[role="dialog"]');
     if (!dialog) throw new Error('Publication confirmation is missing');
-    button('Publish', dialog).click();
+    const confirm = button('Publish connector', dialog);
+    confirm.click();
+    confirm.click();
     await vi.waitFor(() => expect(api.publish).toHaveBeenCalledExactlyOnceWith('personal'));
     await vi.waitFor(() => expect(document.querySelector('[aria-pressed="true"]')?.textContent).toContain('published'));
     expect(document.querySelector('[aria-label="MCP connectors workspace"]')).toBe(workspace);
-    expect(document.querySelector('[aria-label="Personal OAuth setup"]')).toBe(panel);
-    expect(document.body.textContent).toContain('Sign-in not tested');
+    expect(document.querySelector('[aria-label="Personal authorization"]')).toBe(personalGuidance);
+    expect(document.querySelector('[aria-pressed="true"]')?.textContent).toContain('Configuration ready');
+    expect(document.querySelector('[aria-label="Personal OAuth setup"]')).toBeNull();
     expect(navigate).not.toHaveBeenCalled();
   });
   test('keeps a pending policy replacement mounted and locked through window Escape and native cancel', async (): Promise<void> => {

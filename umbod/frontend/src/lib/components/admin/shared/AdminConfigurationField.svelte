@@ -23,7 +23,8 @@
     helperText,
     describedBy,
     invalid = false,
-    oninput
+    oninput,
+    onblur
   }: {
     id: string;
     name: string;
@@ -44,6 +45,7 @@
     describedBy?: string;
     invalid?: boolean;
     oninput?: (event: Event) => void;
+    onblur?: (event: FocusEvent) => void;
   } = $props();
 
   const helperId = $derived(helperText || configuredSecret ? `${id}-helper` : undefined);
@@ -71,6 +73,7 @@
         {readonly}
         {value}
         {oninput}
+        {onblur}
         aria-describedby={ariaDescribedBy}
         aria-invalid={invalid || undefined}
       />

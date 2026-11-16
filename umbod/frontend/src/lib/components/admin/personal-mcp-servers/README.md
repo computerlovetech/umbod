@@ -6,10 +6,17 @@ description: Actor-owned registration, OAuth policy editing and pre-publication 
 
 # Files
 
-- [PersonalOAuthSetupPanel.svelte](PersonalOAuthSetupPanel.svelte) — Saved setup status, explicit discovery, scope approval and validation; no personal login.
-- [personal-oauth-setup-state.svelte.ts](personal-oauth-setup-state.svelte.ts) — Fenced setup requests, explicit policy saves and in-place publication reconciliation.
-- [personal-oauth-setup-state.test.ts](personal-oauth-setup-state.test.ts) — Scope mismatch, revision-safe approval, disposal, pending and safe failure tests.
-- [personal-oauth-setup-panel.dom.test.ts](personal-oauth-setup-panel.dom.test.ts) — Unchecked candidate, explicit approval, validation and failure interaction tests.
+- [PersonalMcpPublicationModal.svelte](PersonalMcpPublicationModal.svelte) — Personal publication consequences and optional access details using shared modal mechanics.
+
+- [PersonalOAuthSetupDialog.svelte](PersonalOAuthSetupDialog.svelte) — Configuration readiness, required corrections and publication handoff without personal login or inline policy editing.
+- [PersonalMcpDetails.svelte](PersonalMcpDetails.svelte) — Personal detail lifecycle loads saved setup status independently of check dialogs.
+- [personal-oauth-setup-state.svelte.ts](personal-oauth-setup-state.svelte.ts) — Fenced configuration checks, readiness outcomes, correction proposals and in-place publication reconciliation.
+- [personal-oauth-setup-state.test.ts](personal-oauth-setup-state.test.ts) — Readiness, no implicit policy writes, revision fencing, pending checks and safe recovery tests.
+- [personal-oauth-setup-dialog.dom.test.ts](personal-oauth-setup-dialog.dom.test.ts) — Minimal readiness results, corrective actions, callback reminders and refresh-only unknown outcomes.
+- [PersonalServerDiscoveryFields.svelte](PersonalServerDiscoveryFields.svelte) — Creation-only permission choices, issuer selection and explicit approval controls.
+- [personal-server-discovery-state.svelte.ts](personal-server-discovery-state.svelte.ts) — Blur-triggered metadata requests, lifecycle fencing and creation approval ownership.
+- [personal-server-discovery-state.test.ts](personal-server-discovery-state.test.ts) — Discovery lifecycle, scope validation, issuer choice and fallback behavior tests.
+- [personal-server-registration.dom.test.ts](personal-server-registration.dom.test.ts) — Endpoint blur, permission approval, exact registration payload and manual fallback interaction tests.
 - [PersonalServerRegistration.svelte](PersonalServerRegistration.svelte) — Registration and policy edit forms with immutable server identity.
 - [PersonalServerEditDialog.svelte](PersonalServerEditDialog.svelte) — Menu-opened policy editor and in-place save reconciliation.
 - [personal-server-form-state.svelte.ts](personal-server-form-state.svelte.ts) — Registration and revision-safe policy editing state.
