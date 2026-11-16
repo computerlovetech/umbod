@@ -3,12 +3,28 @@ import { browserRequest } from '$lib/admin/infrastructure/browser-request';
 import { AdminApi } from '$lib/admin/infrastructure/admin-api';
 import { browserTransport } from '$lib/admin/infrastructure/transport';
 
+export type ConnectorPresentationSummary = {
+  id: string;
+  displayName: string;
+  publicationStatus: 'published' | 'unpublished';
+};
+
 export interface GroupPermissionsLoader {
+  loadConnectorSummaries(signal?: AbortSignal): Promise<ConnectorPresentationSummary[]>;
   loadGroup(groupId: string, signal?: AbortSignal): Promise<GroupPermissionSet>;
   loadAssignableTargets(signal?: AbortSignal): Promise<ConnectorPermissionTarget[]>;
 }
 
 export class BrowserGroupPermissionsLoader implements GroupPermissionsLoader {
+  async loadConnectorSummaries(signal?: AbortSignal): Promise<ConnectorPresentationSummary[]> {
+    const inventory = await browserRequest(() => this.api(signal).downstreamMcpConnectors.list());
+    return inventory.connectors.map((connector) => ({
+      id: connector.connector_id,
+      displayName: connector.display_name,
+      publicationStatus: connector.publication_status
+    }));
+  }
+
   async loadGroup(groupId: string, signal?: AbortSignal): Promise<GroupPermissionSet> {
     return browserRequest(() => this.api(signal).groupPermissions.permissions.get(groupId));
   }
@@ -26,8 +42,13 @@ export class BrowserGroupPermissionsLoader implements GroupPermissionsLoader {
 export class InMemoryGroupPermissionsLoader implements GroupPermissionsLoader {
   constructor(
     private readonly groups: Map<string, GroupPermissionSet>,
-    private readonly targets: ConnectorPermissionTarget[]
+    private readonly targets: ConnectorPermissionTarget[],
+    private readonly summaries: ConnectorPresentationSummary[] = []
   ) {}
+
+  async loadConnectorSummaries(): Promise<ConnectorPresentationSummary[]> {
+    return structuredClone(this.summaries);
+  }
 
   async loadGroup(groupId: string): Promise<GroupPermissionSet> {
     const group = this.groups.get(groupId);

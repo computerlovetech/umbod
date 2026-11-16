@@ -65,7 +65,7 @@
 
         <div class="group-permissions__stats">
           <div class="group-permissions__stat-card">
-            <div>{state.selectedPermissionSet.connectorIds.length}<span> / {state.connectors.length}</span></div>
+            <div>{state.selectedPermissionSet.connectorIds.length}<span> / {state.visibleConnectorCount}</span></div>
             <p>Connectors</p>
           </div>
         </div>
@@ -80,6 +80,25 @@
             <Button variant="danger" onclick={() => state.resolveUnsavedChanges('discard')}>Discard changes</Button>
             <Button variant="secondary" onclick={() => state.resolveUnsavedChanges('cancel')}>Cancel</Button>
           </div>
+        {/if}
+
+        {#if state.unavailableGrantedConnectors.length > 0}
+          <section class="permission-block" aria-labelledby="unavailable-connector-grants-heading">
+            <h3 id="unavailable-connector-grants-heading">Unavailable connectors</h3>
+            <p>Removals apply after Save permissions.</p>
+            <ul class="group-permissions__unavailable-grants">
+              {#each state.unavailableGrantedConnectors as connector (connector.id)}
+                <li>
+                  <span class="group-permissions__connector-name">
+                    {connector.displayName}
+                    <span>{connector.id}</span>
+                  </span>
+                  <span class="group-permissions__tag group-permissions__tag-muted">{connector.status}</span>
+                  <Button variant="secondary" aria-label={`Remove saved grants for ${connector.displayName}`} disabled={state.saving} onclick={() => state.removeUnavailableConnectorGrants(connector.id)}>Remove saved grants</Button>
+                </li>
+              {/each}
+            </ul>
+          </section>
         {/if}
 
         <div class="permission-block">
@@ -128,21 +147,6 @@
             {/each}
           </div>
         </div>
-
-        {#if state.unavailableGrantedConnectorIds.length > 0}
-          <section class="permission-block" aria-labelledby="unavailable-connector-grants-heading">
-            <h3 id="unavailable-connector-grants-heading">Saved grants for unavailable connectors</h3>
-            <p>These connectors may be unpublished or otherwise unavailable for assignment. Remove their saved connector and capability grants here. Changes apply only after Save permissions.</p>
-            <ul class="group-permissions__unavailable-grants">
-              {#each state.unavailableGrantedConnectorIds as connectorId (connectorId)}
-                <li>
-                  <code>{connectorId}</code>
-                  <Button variant="secondary" aria-label={`Remove saved grants for ${connectorId}`} disabled={state.saving} onclick={() => state.removeUnavailableConnectorGrants(connectorId)}>Remove saved grants</Button>
-                </li>
-              {/each}
-            </ul>
-          </section>
-        {/if}
 
         {@const currentSaveFeedback = saveFeedback()}
         <form class="permission-save" onsubmit={(event) => { event.preventDefault(); void state.save(); }}>
@@ -370,11 +374,6 @@
     gap: 12px;
     justify-content: space-between;
     padding: 10px 0;
-  }
-
-  .group-permissions__unavailable-grants code {
-    overflow-wrap: anywhere;
-    min-width: 0;
   }
 
   .group-permissions__error,

@@ -39,6 +39,10 @@ class ControllableLoader implements GroupPermissionsLoader {
     return structuredClone(value);
   }
 
+  async loadConnectorSummaries(_signal?: AbortSignal): Promise<import('./group-permissions-loader').ConnectorPresentationSummary[]> {
+    return [];
+  }
+
   async loadAssignableTargets(): Promise<ConnectorPermissionTarget[]> {
     this.targetCalls += 1;
     if (this.targetFailure) {
@@ -71,12 +75,95 @@ const unavailableGrantData = (): GroupPermissionsInitialData => ({
 });
 
 describe('unavailable saved connector grants', () => {
+  test('loads named unpublished presentation once across workspace selections without changing grants', async (): Promise<void> => {
+    const loader = new ControllableLoader();
+    loader.groups.set('b', detail('b', ['z-unavailable']));
+    const summaries = vi.spyOn(loader, 'loadConnectorSummaries').mockResolvedValue([
+      { id: 'z-unavailable', displayName: 'Retired search', publicationStatus: 'unpublished' },
+      { id: 'other-unavailable', displayName: 'Other search', publicationStatus: 'published' }
+    ]);
+    const initial = unavailableGrantData();
+    const state = new GroupPermissionsState(initial, null, null, loader);
+    await vi.waitFor(() => expect(state.unavailableGrantedConnectors).toContainEqual({ id: 'z-unavailable', displayName: 'Retired search', status: 'Unpublished' }));
+    expect(state.unavailableGrantedConnectors).toContainEqual({ id: 'other-unavailable', displayName: 'Other search', status: 'Unavailable' });
+    expect(state.selectedPermissionSet).toEqual(initial.preloadedGroup);
+    expect(state.hasUnsavedChanges).toBe(false);
+    state.selectGroup('b');
+    await ready(state);
+    expect(state.unavailableGrantedConnectors).toEqual([{ id: 'z-unavailable', displayName: 'Retired search', status: 'Unpublished' }]);
+    expect(summaries).toHaveBeenCalledTimes(1);
+  });
+
+  test('lazily loads metadata after selection and tolerates lookup failure', async (): Promise<void> => {
+    const loader = new ControllableLoader();
+    loader.groups.set('a', detail('a', ['unknown']));
+    const summaries = vi.spyOn(loader, 'loadConnectorSummaries').mockRejectedValue(new Error('Unavailable'));
+    const state = new GroupPermissionsState(data(['a']), null, null, loader);
+    expect(summaries).not.toHaveBeenCalled();
+    state.selectGroup('a');
+    await ready(state);
+    expect(summaries).toHaveBeenCalledTimes(1);
+    expect(state.editorError).toBeNull();
+    expect(state.unavailableGrantedConnectors).toEqual([{ id: 'unknown', displayName: 'unknown', status: 'Unavailable' }]);
+    state.removeUnavailableConnectorGrants('unknown');
+    expect(state.canSave).toBe(true);
+    state.discardSelectedDraft();
+    expect(state.unavailableGrantedConnectorIds).toEqual(['unknown']);
+  });
+
+  test('aborts metadata and fences completion after disposal even when the loader ignores cancellation', async (): Promise<void> => {
+    const loader = new ControllableLoader();
+    let complete!: (value: import('./group-permissions-loader').ConnectorPresentationSummary[]) => void;
+    let signal: AbortSignal | undefined;
+    vi.spyOn(loader, 'loadConnectorSummaries').mockImplementation((requestSignal?: AbortSignal) => {
+      signal = requestSignal;
+      return new Promise((resolve) => { complete = resolve; });
+    });
+    const state = new GroupPermissionsState(unavailableGrantData(), null, null, loader);
+    const before = state.unavailableGrantedConnectors;
+    state.dispose();
+    expect(signal?.aborted).toBe(true);
+    complete([{ id: 'z-unavailable', displayName: 'Obsolete', publicationStatus: 'unpublished' }]);
+    await Promise.resolve();
+    expect(state.unavailableGrantedConnectors).toEqual(before);
+  });
+
+  test('refuses unavailable and unknown enables while allowing their revocation', (): void => {
+    const initial = unavailableGrantData();
+    const state = new GroupPermissionsState(initial, null, null, new ControllableLoader());
+    for (const connectorId of ['unknown', 'z-unavailable']) {
+      state.setConnectorPermission(connectorId, true);
+      state.setCapabilityPermission({ connectorId, kind: 'tool', key: 'new-tool' }, true);
+    }
+    expect(state.selectedPermissionSet).toEqual(initial.preloadedGroup);
+    expect(state.hasUnsavedChanges).toBe(false);
+    state.setCapabilityPermission({ connectorId: 'z-unavailable', kind: 'tool', key: 'removed-tool' }, false);
+    expect(state.selectedPermissionSet?.capabilities).not.toContainEqual({ connectorId: 'z-unavailable', kind: 'tool', key: 'removed-tool' });
+    state.setConnectorPermission('z-unavailable', false);
+    expect(state.selectedPermissionSet?.connectorIds).not.toContain('z-unavailable');
+  });
+
+  test('only enables exact assignable connector, kind and key capability matches', (): void => {
+    const initial = unavailableGrantData();
+    initial.assignableTargets[0].capabilities = [{ kind: 'tool', key: 'search', label: 'Search', description: '' }];
+    const state = new GroupPermissionsState(initial, null, null, new ControllableLoader());
+    for (const capability of [
+      { connectorId: 'unknown', kind: 'tool' as const, key: 'search' },
+      { connectorId: 'available', kind: 'prompt' as const, key: 'search' },
+      { connectorId: 'available', kind: 'tool' as const, key: 'unknown' }
+    ]) state.setCapabilityPermission(capability, true);
+    expect(state.hasUnsavedChanges).toBe(false);
+    const exact = { connectorId: 'available', kind: 'tool' as const, key: 'search' };
+    state.setCapabilityPermission(exact, true);
+    expect(state.capabilityIsGranted(exact)).toBe(true);
+  });
   test('derives sorted unique IDs including capability-only grants without synthesizing permissions', () => {
     const initial = unavailableGrantData();
     const loader = new ControllableLoader();
     const state = new GroupPermissionsState(initial, null, null, loader);
 
     expect(state.unavailableGrantedConnectorIds).toEqual(['capability-only', 'other-unavailable', 'z-unavailable']);
+    expect(state.visibleConnectorCount).toBe(4);
     expect(state.selectedPermissionSet).toEqual(initial.preloadedGroup);
     expect(state.hasUnsavedChanges).toBe(false);
     expect(JSON.parse(state.selectedPermissionChangesJson)).toEqual({ connectors: [], capabilities: [] });
@@ -92,6 +179,7 @@ describe('unavailable saved connector grants', () => {
     state.removeUnavailableConnectorGrants('z-unavailable');
 
     expect(state.unavailableGrantedConnectorIds).toEqual(['capability-only', 'other-unavailable']);
+    expect(state.visibleConnectorCount).toBe(3);
     expect(state.selectedPermissionSet).toEqual({
       ...initial.preloadedGroup,
       connectorIds: ['available', 'other-unavailable'],
@@ -162,14 +250,14 @@ describe('GroupPermissionsState public behavior', () => {
     const state = new GroupPermissionsState(data(['a', 'b']), null, null, loader);
     state.selectGroup('a');
     await ready(state);
-    state.setConnectorPermission('draft', true);
+    state.setConnectorPermission('target', true);
     state.selectGroup('b');
     const updated = [{ ...data(['a']).groups[0], label: 'Renamed', description: 'Updated' }, ...data(['c']).groups];
     state.synchronizeCatalogue(updated);
     expect(state.groups.map((group) => group.groupId)).toEqual(['a', 'c']);
     expect(state.groupMetadata('a')?.label).toBe('Renamed');
     expect(state.selectedGroupId).toBe('a');
-    expect(state.selectedPermissionSet?.connectorIds).toEqual(['draft']);
+    expect(state.selectedPermissionSet?.connectorIds).toEqual(['target']);
     expect(state.hasUnsavedChanges).toBe(true);
     expect(state.unsavedChangesWarning).toBeNull();
     state.selectGroup('b');
@@ -187,6 +275,7 @@ describe('GroupPermissionsState public behavior', () => {
     let complete!: (value: GroupPermissionSet) => void;
     const loader: GroupPermissionsLoader = {
       loadGroup: vi.fn().mockImplementationOnce(() => new Promise<GroupPermissionSet>((resolve) => { complete = resolve; })).mockResolvedValue(detail('a', ['fresh'])),
+      loadConnectorSummaries: async (): Promise<[]> => [],
       loadAssignableTargets: async (): Promise<ConnectorPermissionTarget[]> => targets('target')
     };
     const state = new GroupPermissionsState(data(['a']), null, null, loader);
@@ -287,7 +376,7 @@ describe('GroupPermissionsState public behavior', () => {
     const state = new GroupPermissionsState(data(['a', 'b']), null, null, loader);
     state.selectGroup('a');
     await ready(state);
-    state.setConnectorPermission('changed', true);
+    state.setConnectorPermission('target', true);
     state.selectGroup('b');
     state.resolveUnsavedChanges('discard');
     await ready(state);
@@ -302,7 +391,7 @@ describe('GroupPermissionsState public behavior', () => {
     const state = new GroupPermissionsState(data(['a']), null, null, loader);
     state.selectGroup('a');
     await ready(state);
-    state.setConnectorPermission('changed', true);
+    state.setConnectorPermission('target', true);
     state.markGroupSaveRejected('a', 'Could not save permissions');
     await ready(state);
     expect(state.hasUnsavedChanges).toBe(true);
@@ -315,7 +404,7 @@ describe('GroupPermissionsState public behavior', () => {
     const state = new GroupPermissionsState(data(['a']), null, null, loader);
     state.selectGroup('a');
     await ready(state);
-    state.setConnectorPermission('draft', true);
+    state.setConnectorPermission('target', true);
     loader.groups.set('a', detail('a', ['canonical']));
     state.markGroupSaved('a');
     await ready(state);

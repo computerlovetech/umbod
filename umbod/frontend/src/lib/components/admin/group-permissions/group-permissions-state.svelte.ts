@@ -1,6 +1,6 @@
 import { capabilityKindSections, capabilityPermissionId, permissionSetDifference, type CapabilityKind, type GroupPermissionSummary } from '$lib/admin/group-permissions';
 import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
-import { BrowserGroupPermissionsLoader, type GroupPermissionsLoader } from './group-permissions-loader';
+import { BrowserGroupPermissionsLoader, type GroupPermissionsLoader, type ConnectorPresentationSummary } from './group-permissions-loader';
 import { BrowserGroupPermissionsSaver, type GroupPermissionsSaver } from './group-permissions-saver';
 
 export type GroupPermissionCapabilityRef = {
@@ -255,6 +255,8 @@ export class GroupPermissionsState {
   readonly originHref: string | null;
   deepLinkedTargetAvailable = $state(true);
   private catalogue = $state.raw<GroupPermissionSummary[]>([]);
+  private connectorSummaries = $state.raw<ConnectorPresentationSummary[] | null>(null);
+  private metadataController: AbortController | null = null;
   private disposed = false;
   private serverData: GroupPermissionsInitialData;
   private readonly loader: GroupPermissionsLoader;
@@ -291,6 +293,7 @@ export class GroupPermissionsState {
     this.applyInitialTarget(this.connectors);
     this.editorStatus = selectedGroup === null ? 'unselected' : selectedGroup === data.preloadedGroup?.groupId ? 'ready' : 'loading';
     this.saveMessage = saveMessage;
+    if (this.editorStatus === 'ready') void this.loadConnectorSummaries();
     if (selectedGroup !== null && selectedGroup !== data.preloadedGroup?.groupId) void this.loadSelection(selectedGroup);
   }
 
@@ -323,6 +326,8 @@ export class GroupPermissionsState {
 
   dispose = (): void => {
     this.disposed = true;
+    this.metadataController?.abort();
+    this.metadataController = null;
     ++this.requestGeneration;
     this.abortController?.abort();
   };
@@ -349,6 +354,15 @@ export class GroupPermissionsState {
     ]);
     return [...grantedIds].filter((connectorId) => !assignableIds.has(connectorId)).sort();
   });
+  visibleConnectorCount = $derived(this.connectors.length + this.unavailableGrantedConnectorIds.length);
+  unavailableGrantedConnectors = $derived(this.unavailableGrantedConnectorIds.map((id) => {
+    const summary = this.connectorSummaries?.find((connector) => connector.id === id);
+    return {
+      id,
+      displayName: summary?.displayName ?? id,
+      status: summary?.publicationStatus === 'unpublished' ? 'Unpublished' : 'Unavailable'
+    };
+  }));
   selectedPermissionSetJson = $derived(JSON.stringify(this.selectedPermissionSet ?? { groupId: '', connectorIds: [], capabilities: [] }));
   selectedPermissionChangesJson = $derived.by(() => {
     if (this.selectedGroupId === null || this.selectedPermissionSet === null) {
@@ -449,6 +463,22 @@ export class GroupPermissionsState {
     if (this.selectedGroupId !== null) void this.loadSelection(this.selectedGroupId);
   };
 
+  private loadConnectorSummaries = async (): Promise<void> => {
+    if (this.disposed || this.connectorSummaries !== null || this.metadataController !== null || this.unavailableGrantedConnectorIds.length === 0) return;
+    const controller = new AbortController();
+    this.metadataController = controller;
+    try {
+      const summaries = await this.loader.loadConnectorSummaries(controller.signal);
+      if (!this.disposed && this.metadataController === controller && !controller.signal.aborted) {
+        this.connectorSummaries = summaries.map((summary) => ({ ...summary }));
+      }
+    } catch {
+      return;
+    } finally {
+      if (this.metadataController === controller) this.metadataController = null;
+    }
+  };
+
   private loadSelection = async (groupId: string): Promise<void> => {
     if (this.disposed || !this.groupMetadata(groupId)) return;
     const generation = ++this.requestGeneration;
@@ -481,6 +511,7 @@ export class GroupPermissionsState {
         groups: groups.map((group) => group.groupId === groupId ? clonePermissionSet(detail) : group)
       };
       this.editorStatus = 'ready';
+      void this.loadConnectorSummaries();
       this.applyInitialTarget(targets);
     } catch (error) {
       if (generation !== this.requestGeneration || this.selectedGroupId !== groupId) return;
@@ -592,6 +623,8 @@ export class GroupPermissionsState {
       return;
     }
 
+    if (checked && !this.connectors.some((connector) => connector.id === connectorId)) return;
+
     if (!checked && this.expandedConnectorId === connectorId) {
       this.expandedConnectorId = null;
     }
@@ -627,6 +660,8 @@ export class GroupPermissionsState {
     if (this.disposed || this.saving || this.editorStatus !== 'ready' || this.selectedGroupId === null) {
       return;
     }
+
+    if (checked && !this.connectors.some((connector) => connector.id === capability.connectorId && connector.capabilities.some((target) => target.kind === capability.kind && target.key === capability.key))) return;
 
     this.pageData = checked
       ? grantPermissionInState(this.pageData, this.selectedGroupId, capability)

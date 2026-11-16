@@ -2,6 +2,9 @@ import { render } from 'svelte/server';
 import { Window } from 'happy-dom';
 import { describe, expect, test } from 'vitest';
 import GroupPermissionsManager from './GroupPermissionsManager.svelte';
+import { InMemoryGroupPermissionsLoader } from './group-permissions-loader';
+
+const loader = new InMemoryGroupPermissionsLoader(new Map(), []);
 import { GroupPermissionsState, type GroupPermissionsInitialData } from './group-permissions-state.svelte';
 
 
@@ -22,21 +25,20 @@ describe('unavailable saved grant presentation', () => {
   test('keeps catalogue guidance out of the permission editor', (): void => {
     const data = initialData();
     data.preloadedGroup = { groupId: 'team', connectorIds: [], capabilities: [] };
-    const body = render(GroupPermissionsManager, { props: { state: new GroupPermissionsState(data, null, null) } }).body;
+    const body = render(GroupPermissionsManager, { props: { state: new GroupPermissionsState(data, null, null, loader) } }).body;
     expect(body).not.toContain('Groups are shared with filesystem access');
     expect(body).not.toContain('Registration alone grants no access');
     expect(body).not.toContain('Delete group');
     expect(body).toContain('Available server access');
-    expect(body).not.toContain('Saved grants for unavailable connectors');
+    expect(body).not.toContain('Unavailable connectors');
   });
 
   test('labels unavailable connector and capability-only grants with explicit staging buttons and native save form', (): void => {
-    const state = new GroupPermissionsState(initialData(), null, null);
+    const state = new GroupPermissionsState(initialData(), null, null, loader);
     const body = render(GroupPermissionsManager, { props: { state } }).body.replace(/<!--.*?-->/g, '');
     expect(body).toContain('aria-labelledby="unavailable-connector-grants-heading"');
-    expect(body).toContain('Saved grants for unavailable connectors');
-    expect(body).toContain('may be unpublished');
-    expect(body).toContain('Changes apply only after Save permissions');
+    expect(body).toContain('Unavailable connectors');
+    expect(body).toContain('Removals apply after Save permissions');
     const document = new Window().document;
     document.body.innerHTML = body;
     for (const connectorId of ['unpublished', 'capability-only']) {
@@ -58,8 +60,8 @@ describe('unavailable saved grant presentation', () => {
   test('does not invent saved grants when all selected targets are assignable', (): void => {
     const data = initialData();
     data.preloadedGroup = { groupId: 'team', connectorIds: ['available'], capabilities: [] };
-    const body = render(GroupPermissionsManager, { props: { state: new GroupPermissionsState(data, null, null) } }).body;
-    expect(body).not.toContain('Saved grants for unavailable connectors');
+    const body = render(GroupPermissionsManager, { props: { state: new GroupPermissionsState(data, null, null, loader) } }).body;
+    expect(body).not.toContain('Unavailable connectors');
     expect(body).toContain('Available server access');
   });
 
@@ -67,7 +69,7 @@ describe('unavailable saved grant presentation', () => {
     const data = initialData();
     const connectorId = 'unavailable-'.repeat(50);
     data.preloadedGroup = { groupId: 'team', connectorIds: [connectorId], capabilities: [] };
-    const body = render(GroupPermissionsManager, { props: { state: new GroupPermissionsState(data, null, null) } }).body.replace(/<!--.*?-->/g, '');
+    const body = render(GroupPermissionsManager, { props: { state: new GroupPermissionsState(data, null, null, loader) } }).body.replace(/<!--.*?-->/g, '');
     expect(body).toContain(`aria-label="Remove saved grants for ${connectorId}"`);
     expect(body).toContain('>Remove saved grants</button>');
     expect(body).not.toContain('>Remove saved grants for ');
@@ -76,8 +78,8 @@ describe('unavailable saved grant presentation', () => {
   test('does not offer cleanup without ready selected detail', (): void => {
     const data = initialData();
     data.preloadedGroup = null;
-    const body = render(GroupPermissionsManager, { props: { state: new GroupPermissionsState(data, null, null) } }).body;
-    expect(body).not.toContain('Saved grants for unavailable connectors');
+    const body = render(GroupPermissionsManager, { props: { state: new GroupPermissionsState(data, null, null, loader) } }).body;
+    expect(body).not.toContain('Unavailable connectors');
     expect(body).not.toContain('Remove saved grants');
   });
 });

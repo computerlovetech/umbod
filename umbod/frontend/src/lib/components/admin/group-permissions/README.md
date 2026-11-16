@@ -7,10 +7,10 @@ description: "Persistent group permissions workspace, tab editors and permission
 # Files
 
 - [group-permissions-components.test.ts](./group-permissions-components.test.ts) — Permission workspace presentation tests.
-- [group-permissions-catalogue.dom.test.ts](./group-permissions-catalogue.dom.test.ts) — Reactive catalogue replacement and draft preservation tests.
-- [group-permissions-loader.ts](./group-permissions-loader.ts) — Selected group reads.
-- [group-permissions-state.svelte.ts](./group-permissions-state.svelte.ts) — Connector grant draft state.
-- [group-permissions-state.test.ts](./group-permissions-state.test.ts) — Group selection and draft tests.
+- [group-permissions-catalogue.dom.test.ts](./group-permissions-catalogue.dom.test.ts) — Mounted catalogue updates and named unavailable-grant removal, save and failure interactions.
+- [group-permissions-loader.ts](./group-permissions-loader.ts) — Selected group reads, assignable targets and display-only connector inventory.
+- [group-permissions-state.svelte.ts](./group-permissions-state.svelte.ts) — Connector grant drafts, eligibility and named unavailable-grant projections.
+- [group-permissions-state.test.ts](./group-permissions-state.test.ts) — Group selection, exact grant eligibility, metadata fallback and disposal fencing tests.
 - [GroupPermissionsManager.svelte](./GroupPermissionsManager.svelte) — Connector permission detail and state-owned save controls.
 - [GroupPermissionsWorkspace.svelte](./GroupPermissionsWorkspace.svelte) — Persistent group sidebar, selected-group header and editor slot.
 - [group-permissions-context.ts](./group-permissions-context.ts) — Layout-scoped workspace context.

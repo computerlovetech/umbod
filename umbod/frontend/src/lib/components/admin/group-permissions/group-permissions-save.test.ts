@@ -24,6 +24,7 @@ const initialData = (): GroupPermissionsInitialData => ({
 
 const createLoader = (): GroupPermissionsLoader => ({
   loadGroup: vi.fn(async (groupId: string): Promise<GroupPermissionSet> => ({ groupId, connectorIds: [], capabilities: [] })),
+  loadConnectorSummaries: async (): Promise<[]> => [],
   loadAssignableTargets: vi.fn(async () => initialData().assignableTargets)
 });
 
@@ -31,7 +32,7 @@ const setup = (): { state: GroupPermissionsState; saver: ControllableSaver; load
   const saver = new ControllableSaver();
   const loader = createLoader();
   const state = new GroupPermissionsState(initialData(), 'Previous message', null, loader, saver);
-  state.setConnectorPermission('draft', true);
+  state.setConnectorPermission('target', true);
   return { state, saver, loader };
 };
 
@@ -50,8 +51,8 @@ describe('state-owned connector permission saves', () => {
     state.setCapabilityPermission({ connectorId: 'target', kind: 'tool', key: 'operation' }, true);
     state.discardSelectedDraft();
     expect(state.selectedGroupId).toBe('a');
-    expect(state.selectedPermissionSet?.connectorIds).toEqual(['draft']);
-    expect(saver.calls).toEqual([{ groupId: 'a', changes: { connectors: [{ connector_id: 'draft', permission_status: 'enabled' }], capabilities: [] } }]);
+    expect(state.selectedPermissionSet?.connectorIds).toEqual(['target']);
+    expect(saver.calls).toEqual([{ groupId: 'a', changes: { connectors: [{ connector_id: 'target', permission_status: 'enabled' }], capabilities: [] } }]);
     const canonical = { groupId: 'a', connectorIds: ['canonical'], capabilities: [] };
     saver.complete(canonical);
     expect(await pending).toBe(true);
@@ -80,7 +81,7 @@ describe('state-owned connector permission saves', () => {
     expect(state.canSave).toBe(true);
     const retry = state.save();
     expect(state.saveMessage).toBeNull();
-    saver.complete({ groupId: 'a', connectorIds: ['draft'], capabilities: [] });
+    saver.complete({ groupId: 'a', connectorIds: ['target'], capabilities: [] });
     expect(await retry).toBe(true);
     expect(saver.calls).toHaveLength(2);
   });
