@@ -30,4 +30,3 @@ description: "Storage-independent filesystem operations with separate authorizat
 # Related links
 
 - [Filesystem infrastructure](../../infrastructure/filesystem/README.md) — Configured composition and concrete content adapters under ADR-006.
-- [Filesystem acceptance tests](../../../../tests/umbod/core/filesystem/) — Namespace, authorization and persistence acceptance coverage.

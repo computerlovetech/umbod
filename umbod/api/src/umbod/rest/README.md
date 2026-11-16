@@ -37,5 +37,3 @@ description: "FastAPI delivery for administration, authenticated users, system e
 # Related links
 
 - [Hosting boundary](../hosting/README.md) — Supported composition API.
-- [Operator configuration](../../../../docs/operations/configuration.md) — Gateway authentication and user-profile deployment requirements.
-- [Personal authorization specification](../../../../docs/operations/personal-downstream-mcp-authorization-specification.md) — Personal credential and public callback boundary.

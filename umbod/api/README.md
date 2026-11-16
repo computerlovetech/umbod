@@ -8,7 +8,7 @@ Minimal FastAPI, FastMCP, and Typer scaffold for Umbod.
 
 ## Telemetry ingestion
 
-The private collector listener accepts authenticated OTLP/HTTP JSON and protobuf logs, metrics, and traces under `/v1` (default port 4318). Public REST never exposes ingestion routes. The API host shares one analytics runtime between collector writes and administrator queries. `--reload` adds a development watcher; its serving child still owns both listeners in one PID. `umbod telemetry serve` remains available for independent external deployments, whose analytics history is not automatically dashboard-visible. Accepted exports use the shared structured stdout logger with checked write acknowledgements; ingestion is disabled by default. See [telemetry ingestion](../docs/reference/telemetry-ingestion.md) for operator settings and deployment paths, and the [receiver module](src/umbod/rest/telemetry/README.md) for module responsibilities.
+The private collector listener accepts authenticated OTLP/HTTP JSON and protobuf logs, metrics, and traces under `/v1` (default port 4318). Public REST never exposes ingestion routes. The API host shares one analytics runtime between collector writes and administrator queries. `--reload` adds a development watcher; its serving child still owns both listeners in one PID. `umbod telemetry serve` remains available for independent external deployments, whose analytics history is not automatically dashboard-visible. Accepted exports use the shared structured stdout logger with checked write acknowledgements; ingestion is disabled by default. See the [receiver module](src/umbod/rest/telemetry/README.md) for module responsibilities.
 
 ## Development
 

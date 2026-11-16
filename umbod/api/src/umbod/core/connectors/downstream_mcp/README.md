@@ -27,9 +27,3 @@ description: "Shared and personal downstream MCP connector coordination."
 - [stores/](./stores/README.md) — Persistence, credential-free owner discovery and atomic discovery notifications.
 - [personal_refresh.py](./stores/personal_refresh.py) — Refresh transitions atomically update owner availability and connector-wide events, including committed uncertainty.
 - [user_catalogue.py](./user_catalogue.py) — User-facing catalogue projections.
-
-# Related links
-
-- [Foundation specification](../../../../../../docs/operations/personal-downstream-mcp-oauth-specification.md) — Personal ownership and authorization boundaries.
-- [Catalogue specification](../../../../../../docs/operations/personal-downstream-mcp-catalogue-specification.md) — Personal selection and catalogue scope.
-- [Authorization specification](../../../../../../docs/operations/personal-downstream-mcp-authorization-specification.md) — Durable personal sign-in scope.

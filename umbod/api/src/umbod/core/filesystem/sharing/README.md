@@ -17,4 +17,3 @@ description: "Caller-authorized group and observed-user sharing with combined br
 
 - [Group policy rules](../group_policy.py) — Per-node group validation and grant canonicalization.
 - [Sharing persistence](../stores/sharing.py) — Collaborators composed from one serialized database session.
-- [Sharing tests](../../../../../tests/umbod/core/filesystem/sharing/) — Public behavior across ports, persistence drivers and concurrent writers.

@@ -21,4 +21,3 @@ description: Built-in MCP guidance rendering and versioned client metadata witho
 - [Core responses](../../core/responses/README.md) — Transport-neutral metadata DTOs and construction rules.
 - [Observed registration](../tools/registration.py) — Explicit built-in opt-in and successful-output validation.
 - [Response middleware](../middleware/response_metadata.py) — HTTP correlation and conversation-visible error context.
-- [Application diagnostics](../../../../../docs/operations/application-diagnostics.md) — Privacy, operation-state, and retry contracts.

@@ -16,7 +16,3 @@ description: "Downstream MCP administration with separately mounted personal-use
 - [personal_validation.py](./personal_validation.py) — Secret-safe write validation.
 - [routes.py](./routes.py) — Connector administration routes.
 - [schemas.py](./schemas.py) — Administration transport models.
-
-# Context not available from the code
-
-- [Personal authorization specification](../../../../../../docs/operations/personal-downstream-mcp-authorization-specification.md) — Personal credential ownership remains separate from shared administrator OAuth; package nesting does not merge authentication boundaries.

@@ -19,4 +19,3 @@ description: "Concrete storage adapters and composition boundaries for persisten
 - [ADR-006](../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Filesystem composition boundary.
 - [ADR-010](../../../../project/architecture-records/ADR-010-key-value-storage-drivers.md) — Key-value drivers remain separate from cache policy; remote retention needs an explicit design.
 - [Telemetry analytics](../core/telemetry/analytics/README.md) — Neutral analytical reader, normalized writer and runtime contracts.
-- [Telemetry ingestion](../../../../docs/reference/telemetry-ingestion.md) — Read scope, aggregation semantics and future analytics driver placement.

@@ -6,7 +6,6 @@ description: "Reusable and actor-owned Svelte presentation and interaction modul
 
 # Files
 
-- [Component index](../../../COMPONENT_INDEX.md) — Reusable UI building blocks, their locations, and when to use them.
 - [admin/](./admin/) — Administration views and controls.
 - [Insights](./admin/insights/README.md) — Identity-scoped administration insights navigation and feature lifetimes.
 - [Log analytics](./admin/analytics/README.md) — Feature-owned administrator query form and results table.

@@ -20,7 +20,3 @@ description: "Operator settings, validation and conversion into runtime applicat
 - [usage.py](./usage.py) — Bounded personal usage collection settings and queue/batch validation.
 - [validate.py](./validate.py) — Cross-field validation.
 - [telemetry.py](./telemetry.py) — Collector-only settings and security validation independent of REST and MCP configuration.
-
-# Related documentation
-
-- [Operator configuration](../../../../docs/operations/configuration.md) — Deployment settings, filesystem storage, authentication and personal identity policy.

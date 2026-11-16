@@ -15,4 +15,3 @@ description: "Administrator-only aggregate log reads through the independent ana
 - [Analytics contracts](../../core/telemetry/analytics/README.md) — Backend-neutral query dimensions, grouping, filters and UTC buckets.
 - [Reader composition](../telemetry/composition.py) — Request-created readers over the shared root-owned analytics runtime.
 - [Application assembly](../main.py) — Administrator authorization, mounted dependency wiring and runtime lifetime.
-- [Telemetry ingestion](../../../../../docs/reference/telemetry-ingestion.md) — Collection prerequisites and aggregate query semantics.

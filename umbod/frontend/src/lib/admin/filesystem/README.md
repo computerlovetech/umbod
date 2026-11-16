@@ -10,4 +10,3 @@ description: "Shared namespace administration ports, schemas and validated HTTP 
 - [namespaces-port.ts](./namespaces-port.ts) — Shared namespace administration port, separate from content access.
 - [namespaces-route.ts](./namespaces-route.ts) — Validated shared namespace listing, creation and revision-safe replacement adapter.
 - [namespaces-route.test.ts](./namespaces-route.test.ts) — Transport-port request contracts and invalid authority-bearing input tests.
-- [Namespace test support](../../../../tests/support/filesystem/README.md) — Test-only revision-aware shared namespace adapter outside the application source.

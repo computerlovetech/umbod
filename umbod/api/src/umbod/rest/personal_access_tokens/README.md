@@ -15,5 +15,4 @@ description: General authenticated token issuance with explicit resource permiss
 # Related links
 
 - [Token core](../../core/personal_access_tokens/README.md) — Hash-only storage, supported access grants, identity, expiry and revocation.
-- [Personal token contract](../../../../../docs/reference/personal-access-tokens.md) — General management endpoints, requested permissions and authentication boundaries.
 - [Telemetry receiver](../telemetry/README.md) — The first consumer of permission-restricted personal tokens.

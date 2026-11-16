@@ -20,7 +20,3 @@ description: "OTLP HTTP JSON and protobuf ingestion for logs, metrics and traces
 - [routes.py](./routes.py) — Ingestion coordination.
 - [validation.py](./validation.py) — OTLP JSON and binary protobuf validation with canonical payload conversion.
 - [normalization.py](./normalization.py) — Allowlisted OTLP wire decoding into core normalization evidence and ownerless analytics projections.
-
-# Related links
-
-- [Telemetry ingestion](../../../../../docs/reference/telemetry-ingestion.md) — Operator and deployment contract.

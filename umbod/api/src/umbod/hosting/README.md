@@ -20,5 +20,3 @@ description: "Supported composition boundary for REST, MCP, telemetry services a
 # Related links
 
 - [ADR-004](../../../../project/architecture-records/ADR-004-single-backend-api-and-desktop-boundary.md) — Backend-owned composition and host boundary; the retired Desktop product is not a supported host.
-- [Service topology](../../../../docs/operations/service-topology.md) — API and private collector listeners, MCP deployment and storage boundaries.
-- [Personal authorization specification](../../../../docs/operations/personal-downstream-mcp-authorization-specification.md) — Gateway callback exemptions and credential ownership requirements.

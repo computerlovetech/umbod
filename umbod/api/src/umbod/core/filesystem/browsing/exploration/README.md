@@ -15,4 +15,3 @@ description: "Transport-neutral inspection, directory listing and bounded tree c
 # Related links
 
 - [Browsing](../README.md) — Permission-filtered low-level operations; independently shared nodes retain partial breadcrumbs.
-- [Tests](../../../../../../tests/umbod/core/filesystem/browsing/exploration/) — Resolution, limits, hierarchy failures and validation behavior.

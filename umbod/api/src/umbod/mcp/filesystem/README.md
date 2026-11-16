@@ -37,7 +37,6 @@ description: "MCP adapters for namespace-aware browsing, content, updates, file 
 
 # Related links
 
-- [Capability upload protocol](../../../../../docs/reference/filesystem-upload-transfers.md) — Larger HTTP transfers without MCP bearer delegation; crashed claims are not recovered.
 
 - [ADR-012](../../../../../project/architecture-records/ADR-012-permission-aware-mcp-tool-visibility.md) — At-least-one-authorized-operation visibility with independent invocation authorization.
 - [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Filesystem ownership and storage boundary.

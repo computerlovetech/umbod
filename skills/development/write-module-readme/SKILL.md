@@ -50,7 +50,8 @@ The following restrictions are repository policy, not requirements imposed by OK
 - A module README primarily helps an agent decide which files to read. Use `type: Software Module`, a concise title and description, and a linked file table of contents.
 - Keep descriptions to short relevance cues of at most 160 characters, excluding the leading link and optional separator. Do not reproduce implementation walkthroughs, function or class inventories, signatures, schemas, branching logic, dependency lists, or examples that merely restate the source or tests.
 - Limit module README bodies to headings and bullet entries containing a Markdown link followed by one short relevance sentence. Do not include standalone paragraphs, code blocks, tables, or extra context sections, including “Context not available from the code”.
-- Link to authoritative ADRs, specifications, or runbooks when relevant; do not copy their explanations, constraints, or rationale into the README.
+- A README under a package's `src/` tree may link anywhere within that same source tree, including sibling modules, plus repository-root `umbod/project/architecture-records/`. Other local targets outside that source tree are forbidden. Nested `src/` folders do not shrink the outer source boundary. Resolve paths and symlinks before checking containment.
+- READMEs outside `src/` retain existence-only local link checks. External URLs and same-page anchors are unchanged. Do not copy ADR explanations, constraints, or rationale into the README.
 - Link to child module READMEs rather than flattening their file lists. Exclude caches and generated build artifacts. Never invent links or create a companion knowledge document per source file merely to satisfy OKF.
 - Keep the existing `README.md` entrypoint. Do not rename files or add parallel `index.md` files unless explicitly creating an OKF bundle.
 - Applying these conventions to selected READMEs does not make the entire repository an OKF bundle. Full bundle conformance requires every non-reserved Markdown file within the declared bundle boundary to have parseable frontmatter and a non-empty `type`.
@@ -72,7 +73,8 @@ Resolve the paths below relative to this skill directory, whether using the repo
 - [requirements.txt](requirements.txt) — Python dependencies shared by agents and CI; use `uv run --with-requirements` with this manifest when running each script.
 - [check_module_readmes.py](scripts/check_module_readmes.py) — Run with the repository argument to validate YAML frontmatter in READMEs beneath `src` directories.
 - [check_readme_bodies.py](scripts/check_readme_bodies.py) — Run with the repository argument to enforce headings and linked bullets with descriptions of at most 160 characters.
-- [check_readme_links.py](scripts/check_readme_links.py) — Run with the repository argument to validate local file and directory links in all repository READMEs, excluding dependencies and generated files.
+- [check_readme_links.py](scripts/check_readme_links.py) — Validate target existence in all READMEs and source-tree containment under `src/`, with the repository ADR exception.
+- [Link-checker tests](tests/test_check_readme_links.py) — Run `python -m unittest discover -s skills/development/write-module-readme/tests` with the skill requirements installed.
 
 All three scripts must exit successfully before reporting README work complete. The harness workflow runs these same source scripts directly without installing the skill.
 

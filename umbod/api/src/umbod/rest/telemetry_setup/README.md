@@ -13,5 +13,4 @@ description: "Authenticated discovery of the configured public collector logs en
 
 # Related documentation
 
-- [Telemetry ingestion](../../../../../docs/reference/telemetry-ingestion.md) — Collector configuration and setup discovery contract.
 - [Personal access tokens](../personal_access_tokens/README.md) — Shared owner eligibility and generic token management.

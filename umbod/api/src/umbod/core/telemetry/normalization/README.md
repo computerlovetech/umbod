@@ -15,7 +15,3 @@ description: Transport-neutral, privacy-limited producer evidence and canonical 
 - [accounting.py](./accounting.py) — Producer-specific token accounting and decimal estimated-cost alternatives without inferred pricing.
 - [requests.py](./requests.py) — Source-gated model requests, completion usage, stream diagnostics and turn-scoped estimates.
 - [mapping.py](./mapping.py) — Deterministic versioned replay, semantic event precedence and explicit conflict metadata.
-
-# Related links
-
-- [Telemetry ingestion](../../../../../../docs/reference/telemetry-ingestion.md) — Receiver, normalization, privacy and compatibility contracts.

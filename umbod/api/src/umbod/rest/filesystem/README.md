@@ -21,7 +21,6 @@ description: "Authenticated namespace filesystem browsing, item sharing, creatio
 
 # Related links
 
-- [Capability upload protocol](../../../../../docs/reference/filesystem-upload-transfers.md) — Exact public transfer admission, header credentials and operational limitations.
 
 - [ADR-006](../../../../../project/architecture-records/ADR-006-filesystem-infrastructure-boundary.md) — Filesystem storage and ownership boundary.
 - [ADR-009](../../../../../project/architecture-records/ADR-009-transport-neutral-upload-sessions.md) — Accepted upload contract; abandoned sessions and unreferenced bytes have no automatic cleanup guarantee.

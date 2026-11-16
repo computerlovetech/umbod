@@ -9,7 +9,6 @@ description: Immutable response guidance, schema-version-1 identity metadata, re
 - [Public API](__init__.py) — Exported metadata types and factory.
 - [Models](models.py) — Immutable guidance, bounded recovery/notices, conservative retry validation, and closed audience-specific extension DTOs.
 - [Factory](factory.py) — Metadata construction with caller-supplied request and server identity.
-- [Tests](../../../../tests/umbod/core/responses/) — Public construction, wire shape, validation, and immutability checks.
 
 # Related links
 

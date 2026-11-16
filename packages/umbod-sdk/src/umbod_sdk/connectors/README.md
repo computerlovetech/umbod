@@ -20,4 +20,3 @@ description: Public connector authoring contracts, capability metadata and plugi
 # Related guidance
 
 - [Connector authoring skill](../skills/draft-agent-connector/SKILL.md) — Authoring workflow and contract reference.
-- [SDK package](../../../README.md) — Distribution packaging, installation and deployment enablement.

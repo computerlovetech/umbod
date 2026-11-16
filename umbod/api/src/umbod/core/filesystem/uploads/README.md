@@ -14,7 +14,6 @@ description: "Persisted upload staging, authorization and atomic file publicatio
 
 # Related links
 
-- [Capability upload protocol](../../../../../../docs/reference/filesystem-upload-transfers.md) — Transfer deadlines, completion and crash-recovery limitations.
 
 - [Session persistence](../stores/README.md) — Neutral database storage shared with namespace and ownership.
 - [ADR-009](../../../../../../project/architecture-records/ADR-009-transport-neutral-upload-sessions.md) — Accepted contract; abandoned rows and unreferenced bytes persist without automatic reclamation.

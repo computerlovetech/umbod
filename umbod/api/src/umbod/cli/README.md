@@ -19,5 +19,4 @@ description: "Service startup, configuration inspection, connector validation an
 # Related knowledge
 
 - [Hosting boundary](../hosting/README.md) — Supported service composition.
-- [S3 operations](../../../../docs/operations/s3-file-storage.md) — Storage configuration and offline migration procedure.
 - [ADR-003](../../../../project/architecture-records/ADR-003-umbod-specific-connector-cli.md) — Umbod-specific CLI ownership versus SDK authoring tools.
