@@ -8,7 +8,7 @@ description: Review reported tool calls, file-tool calls and skill activations b
 
 Administrators can open **Log analytics** in workspace navigation or visit `/admin/analytics`. Queries cover the whole instance, including unowned exports; ordinary users cannot access this page or its API.
 
-This explorer counts accepted OTLP log records, not application stdout, metrics, traces, tokens or costs. Historical stdout is not imported. The analytics backend and authenticated private collector must both be enabled before new client exports can appear. The API host shares one analytics runtime between collector writes and administrator queries; an external `umbod telemetry serve` deployment owns separate storage whose history is not automatically visible here. See [telemetry ingestion](../reference/telemetry-ingestion.md).
+This explorer counts accepted OTLP log records, not application stdout, metrics, traces, tokens or costs. Historical stdout is not imported. The analytics backend and authenticated private collector must both be enabled before new client exports can appear. The API host shares one analytics runtime between collector writes and administrator queries; an external `umbod telemetry serve` deployment owns separate storage whose history is not automatically visible here. See [telemetry ingestion](../operations/telemetry-ingestion.md).
 
 ## Session activity reports
 
@@ -21,7 +21,7 @@ Select a session in the results to focus the report on that exact session ID. Se
 - **Skill activity** counts dedicated skill activation or invocation events by source and session. It does not count distinct skills, skill installations, reads of skill files, or the Skill tool as a substitute for activation events.
 - **Log classifications** includes all stored logs, grouped by activity kind, source, event name, tool name and session. It is an inspection view, not a count of tool activity. Missing or empty activity kinds appear as **Unclassified**.
 
-Missing source or session attributes are shown as **Not reported**. Missing or empty session IDs cannot be selected for drill-down. An empty report means no matching activity was reported; it does not establish that the agent performed none. Client versions and exporter settings determine which events are available. See [supported telemetry mappings](../reference/telemetry-ingestion.md#normalized-activity-fields).
+Missing source or session attributes are shown as **Not reported**. Missing or empty session IDs cannot be selected for drill-down. An empty report means no matching activity was reported; it does not establish that the agent performed none. Client versions and exporter settings determine which events are available. See [supported telemetry mappings](../operations/telemetry-ingestion.md#normalized-activity-fields).
 
 ## Log classification coverage
 
@@ -31,7 +31,7 @@ Select **Inspect log classifications** to open the underlying classifications us
 
 Classification counts are separate live reads. They may differ from table counts if late records arrive. Paging reuses counts for the same scope. An unavailable classification count is shown as unavailable, not zero, and can be retried without losing the report.
 
-Producers can supply the explicit normalized activity contract described in [telemetry ingestion](../reference/telemetry-ingestion.md), or use supported producer event formats. Historical records can only be classified from retained information. Discarded result attributes and tool provenance cannot be reconstructed, and unrelated logs are not converted into activity to fill a report.
+Producers can supply the explicit normalized activity contract described in [telemetry ingestion](../operations/telemetry-ingestion.md), or use supported producer event formats. Historical records can only be classified from retained information. Discarded result attributes and tool provenance cannot be reconstructed, and unrelated logs are not converted into activity to fill a report.
 
 ## Time range and pagination
 

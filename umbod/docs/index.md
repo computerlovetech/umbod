@@ -35,9 +35,9 @@ Install, configure, and run Umbod on your own infrastructure. Start with a local
 
 -   :material-code-braces: **Look up a setting**
 
-    Find chart defaults, configuration constraints, and connection addresses.
+    Find Helm configuration defaults and built-in MCP tool input and output contracts.
 
-    [Helm values](reference/helm-values.md) · [Endpoints and ports](reference/endpoints-and-ports.md)
+    [Helm values](reference/helm-values.md) · [Built-in MCP tools](reference/built-in-tools.md)
 
 </div>
 

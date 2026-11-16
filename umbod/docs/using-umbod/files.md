@@ -54,7 +54,7 @@ Folder shares can **Include contents**, applying recursively to existing and fut
 
 Recipients can follow an item's UUID link without access to its parent or namespace root. Such items do not automatically add the containing namespace to their namespace list. Observed-user discovery uses verified identities and is not a complete or live identity-provider directory. Use returned opaque recipient IDs, not names or email addresses, as mutation targets.
 
-See [File and folder sharing](../reference/filesystem-sharing.md) for recipient, revision and API contracts.
+See [File and folder sharing](../operations/filesystem-sharing.md) for recipient, revision and API contracts.
 
 ## Read, download and delete
 
@@ -72,7 +72,7 @@ Files have resource URIs of the form `umbod://filesystem/files/{node_id}`. Brows
 
 Known textual MIME types return UTF-8 text; binary or unspecified types return base64 blobs. Invalid UTF-8 in declared text fails rather than being silently replaced. Reads have no partial results or silent truncation. Use authenticated REST downloads for larger files.
 
-Full summaries report the caller's discover, read, write and supported file-delete permissions, plus the governing namespace. See [Homes and permissions](../reference/filesystem-homes-and-permissions.md) and [Upload transfers](../reference/filesystem-upload-transfers.md).
+Full summaries report the caller's discover, read, write and supported file-delete permissions, plus the governing namespace. See [Homes and permissions](../operations/filesystem-homes-and-permissions.md) and [Upload transfers](../operations/filesystem-upload-transfers.md).
 
 ## Shared namespace administration
 
@@ -88,7 +88,7 @@ Permission saves apply per namespace. If a save partially fails, successful chan
 
 Read permits discovery and content reading. Read/write also permits creation, uploads, metadata updates, renaming, moves within the namespace and file deletion. Management authority does not itself grant content access: administrators must also have an assigned group to browse its root, or independent item access to follow an individual shared link.
 
-Administrator REST clients use `/api/admin/filesystem/namespaces`. Updates replace group assignments and require the current `expected_revision`. Stale saves must be reloaded and reconciled. See [Namespace access](../reference/filesystem-namespaces.md).
+Administrator REST clients use `/api/admin/filesystem/namespaces`. Updates replace group assignments and require the current `expected_revision`. Stale saves must be reloaded and reconciled. See [Namespace access](../operations/filesystem-namespaces.md).
 
 Preserve the application database and matching content storage together. A bucket alone cannot restore namespace structure and policy. Local-content workers must share a content directory; S3 workers must share the bucket and configuration. See [Filesystem runtime configuration](../operations/configuration.md#filesystem-runtime) and [S3 file storage](../operations/s3-file-storage.md).
 

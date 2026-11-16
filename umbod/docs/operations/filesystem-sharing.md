@@ -18,42 +18,7 @@ Groups must already be registered. User recipients come from Umbod's login-obser
 
 The directory can be incomplete or historical. Search is not an account-activity check. Do not send an email, subject, issuer, or display label as a mutation target; use the returned `type` and `group_id` or opaque `user_id`.
 
-### `filesystem_search_sharing_recipients`
-
-Available through the root MCP endpoint.
-
-| Input field | Contract |
-| --- | --- |
-| `node_id` | Required node UUID. |
-| `query` | Required nonblank search text, trimmed, at most 200 characters. |
-| `recipient_type` | Optional `group` or `user`; omission searches both. |
-
-Matching is a case-insensitive literal substring with normalized whitespace. Groups match IDs or labels; users match names only, not email addresses or subjects. Results contain `recipients` and `has_more`, with at most 50 eligible recipients, groups first. There are no limit, offset, or cursor arguments; narrow the query when `has_more` is true.
-
-Each result has `type`, `label`, and either `group_id` or `user_id`. Discovery neither creates recipients nor grants access.
-
-## Add permissions with MCP
-
-### `filesystem_share`
-
-| Input field | Contract |
-| --- | --- |
-| `node_id` | Required node UUID. |
-| `recipient` | Required typed target: `type=group` with `group_id`, or `type=user` with `user_id`. Omit the search result's label. |
-| `permissions` | Nonempty list drawn from `discover`, `read`, `write`, `delete`, and `share`. |
-| `recursive` | Optional boolean. Omission preserves existing scope, defaults true for new directories. Files always normalize to false. |
-
-For ordinary read access, request both `discover` and `read`. The operation unions the requested permissions with the recipient's existing manageable direct grant. It preserves other permissions and recipients, is idempotent, and cannot revoke access. Recursive scope is additive too: an existing true scope remains true even when false is requested. Widening a legacy false grant to true counts as a change even when permissions are unchanged.
-
-The response contains `node_id`, `recipient`, `permissions`, required `recursive`, `changed`, and `visible_to`. Returned permissions are the authoritative recipient union, not the caller's own permissions or just the requested additions. Visibility identifies the containing namespace, not a complete audience or the direct grants.
-
-Legacy requests using top-level `group_id` instead of `recipient` remain supported, returning `node_id`, `group_id`, `permissions`, required `recursive`, `changed`, and `visible_to`. Do not mix legacy and canonical target fields.
-
-### Tool schema compatibility
-
-`filesystem_search_sharing_recipients` replaces `filesystem_list_sharing_groups` and `search_users`; the removed names have no aliases. Refresh cached discovery results rather than invoking those names.
-
-Search inputs and share inputs/outputs advertise alternative `anyOf` schema branches. Clients must resolve the advertised branches and references rather than assuming one flat object with every field. A canonical share returns a typed recipient; a legacy group share retains its legacy identity fields. Both include the containing namespace descriptor or restricted visibility. MCP's legacy compatibility does not apply to REST policy replacement.
+See the [built-in tool reference](../reference/built-in-tools.md#filesystem-sharing-tools) for recipient search and additive sharing inputs, outputs, and schema compatibility.
 
 ## Search recipients with REST
 

@@ -90,7 +90,7 @@ The transfer URL is a bearer capability. Keep the entire URL and required header
 
 The configured S3 endpoint must be reachable by clients as well as both backend services. Presigned URLs bind the endpoint hostname, path and signed headers: do not rewrite them through the Umbod API or an authentication gateway. Browsers require HTTPS and a bucket CORS policy permitting the actual frontend origin, PUT, and the returned request headers, including `Content-Type` and `If-None-Match`. Configure CORS separately using the storage provider; Umbod does not modify bucket policy or CORS. CORS is not authorization and is not needed by non-browser MCP clients.
 
-Direct transfers use a single PUT, not resumable or client-managed multipart uploads. The configured application limit and the storage service's single-PUT limit both apply. See [filesystem upload transfers](../reference/filesystem-upload-transfers.md) for the shared coordination and retry contract.
+Direct transfers use a single PUT, not resumable or client-managed multipart uploads. The configured application limit and the storage service's single-PUT limit both apply. See [filesystem upload transfers](filesystem-upload-transfers.md) for the shared coordination and retry contract.
 
 ## Direct downloads
 

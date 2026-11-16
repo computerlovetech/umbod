@@ -38,5 +38,5 @@ Edit `skills/integrations/umbod-connected-apps/SKILL.md` in the repository root 
 
 - [Codex plugins](https://developers.openai.com/codex/plugins) — Supported CLI installation and plugin lifecycle.
 - [OpenAI plugin packaging](https://developers.openai.com/plugins/build/plugins) — Manifest, local-marketplace, and MCP configuration contracts.
-- [Endpoints and ports](../reference/endpoints-and-ports.md) — Umbod's public and private service boundaries.
+- [Endpoints and ports](../operations/endpoints-and-ports.md) — Umbod's public and private service boundaries.
 - [Harness installation configuration](../operations/configuration.md#harness-plugin-installation) — Public artifact routing, prerequisites, and endpoint authority.
