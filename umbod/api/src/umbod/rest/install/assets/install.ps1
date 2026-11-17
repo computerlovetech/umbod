@@ -200,7 +200,7 @@ param(
         if ((Get-FileDigest (Join-Path $Temporary 'package.zip')) -cne $Digest) { throw 'Package SHA256 mismatch; no configuration was changed' }
         $Catalog = if ($Cli -eq 'codex') { '.agents/plugins/marketplace.json' } else { '.claude-plugin/marketplace.json' }
         $Manifest = if ($Cli -eq 'codex') { 'plugins/umbod/.codex-plugin/plugin.json' } else { 'plugins/umbod/.claude-plugin/plugin.json' }
-        $Allowed = @($Catalog, $Manifest, 'plugins/umbod/.mcp.json', 'plugins/umbod/skills/umbod-connected-apps/SKILL.md', 'plugins/umbod/LICENSE')
+        $Allowed = @($Catalog, $Manifest, 'plugins/umbod/.mcp.json', 'plugins/umbod/skills/umbod-connected-apps/SKILL.md', 'plugins/umbod/skills/umbod-agent-behaviour/SKILL.md', 'plugins/umbod/LICENSE')
         $Extracted = Join-Path $Temporary 'extracted'
         $null = [IO.Directory]::CreateDirectory($Extracted)
         $Archive = [IO.Compression.ZipFile]::OpenRead((Join-Path $Temporary 'package.zip'))

@@ -9,6 +9,7 @@ class PackageResources(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     skill: ResourceText
+    behaviour_skill: ResourceText
     license_text: ResourceText
 
 

@@ -61,6 +61,8 @@ def test_running_public_plugin_artifacts_use_configured_endpoint(
             assert json.loads(package.read("plugins/umbod/.mcp.json")) == {
                 "mcpServers": {"umbod": {"type": "http", "url": expected_endpoint}},
             }
+            for skill_name in ("umbod-connected-apps", "umbod-agent-behaviour"):
+                assert package.read(f"plugins/umbod/skills/{skill_name}/SKILL.md").strip()
             catalog_path = (
                 ".agents/plugins/marketplace.json" if harness == "codex" else ".claude-plugin/marketplace.json"
             )

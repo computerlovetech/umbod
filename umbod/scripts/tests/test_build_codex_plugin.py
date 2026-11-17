@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 from scripts.build_codex_plugin import (
+    BEHAVIOUR_SKILL_PATH,
     PLUGIN_VERSION,
     SKILL_PATH,
     build_package,
@@ -59,7 +60,7 @@ def test_marketplace_identity_is_stable_per_endpoint_and_distinguishes_deploymen
 
 
 def test_package_wires_mcp_and_canonical_skill_without_credentials() -> None:
-    files = render_package("https://umbod.test/team/mcp", "canonical skill", "license")
+    files = render_package("https://umbod.test/team/mcp", "canonical skill", "license", "behaviour skill")
     catalog = json.loads(files[".agents/plugins/marketplace.json"])
     manifest = json.loads(files["plugins/umbod/.codex-plugin/plugin.json"])
     mcp = json.loads(files["plugins/umbod/.mcp.json"])
@@ -71,13 +72,16 @@ def test_package_wires_mcp_and_canonical_skill_without_credentials() -> None:
     assert manifest["mcpServers"] == "./.mcp.json"
     assert mcp == {"mcpServers": {"umbod": {"type": "http", "url": "https://umbod.test/team/mcp"}}}
     assert files["plugins/umbod/skills/umbod-connected-apps/SKILL.md"] == "canonical skill"
+    assert files["plugins/umbod/skills/umbod-agent-behaviour/SKILL.md"] == "behaviour skill"
     assert files["plugins/umbod/LICENSE"] == "license"
 
 
-@pytest.mark.parametrize(("skill", "license_text"), [("", "license"), ("skill", " ")])
-def test_package_rejects_missing_distribution_content(skill: str, license_text: str) -> None:
+@pytest.mark.parametrize(("skill", "license_text", "behaviour_skill"), [
+    ("", "license", "behaviour"), ("skill", " ", "behaviour"), ("skill", "license", ""), ("skill", "license", " "),
+])
+def test_package_rejects_missing_distribution_content(skill: str, license_text: str, behaviour_skill: str) -> None:
     with pytest.raises(ValueError, match="must not be empty"):
-        render_package("https://umbod.test", skill, license_text)
+        render_package("https://umbod.test", skill, license_text, behaviour_skill)
 
 
 def test_build_copies_the_skill_source_and_preserves_existing_destination(tmp_path: Path) -> None:
@@ -85,6 +89,7 @@ def test_build_copies_the_skill_source_and_preserves_existing_destination(tmp_pa
     name = build_package("https://umbod.test", destination)
     assert name == marketplace_name("https://umbod.test")
     assert (destination / "plugins/umbod/skills/umbod-connected-apps/SKILL.md").read_text() == SKILL_PATH.read_text()
+    assert (destination / "plugins/umbod/skills/umbod-agent-behaviour/SKILL.md").read_text() == BEHAVIOUR_SKILL_PATH.read_text()
     sentinel = destination / "keep.txt"
     sentinel.write_text("keep")
     with pytest.raises(FileExistsError):
@@ -220,10 +225,11 @@ def test_codex_installs_generated_plugin_and_loads_its_http_server(tmp_path: Pat
     assert plugin["installed"] is True
     assert plugin["enabled"] is True
     skills = loaded_codex_skills(tmp_path, environment)
-    connected_apps = [skill for skill in skills if skill["name"] == "umbod:umbod-connected-apps"]
-    assert len(connected_apps) == 1
-    assert connected_apps[0]["enabled"] is True
-    assert connected_apps[0]["pluginId"] == f"umbod@{name}"
+    for skill_name in ("umbod-connected-apps", "umbod-agent-behaviour"):
+        selected = [skill for skill in skills if skill["name"] == f"umbod:{skill_name}"]
+        assert len(selected) == 1
+        assert selected[0]["enabled"] is True
+        assert selected[0]["pluginId"] == f"umbod@{name}"
     codex("plugin", "remove", f"umbod@{name}")
     codex("plugin", "marketplace", "remove", name)
     assert codex("mcp", "list") == []

@@ -71,6 +71,9 @@ def test_package_contains_actual_harness_schema_and_canonical_resources(
         assert package.read("plugins/umbod/skills/umbod-connected-apps/SKILL.md") == (
             root / "skills/integrations/umbod-connected-apps/SKILL.md"
         ).read_bytes()
+        assert package.read("plugins/umbod/skills/umbod-agent-behaviour/SKILL.md") == (
+            root / "skills/integrations/umbod-agent-behaviour/SKILL.md"
+        ).read_bytes()
         assert package.read("plugins/umbod/LICENSE") == (root / "LICENSE").read_bytes()
 
 

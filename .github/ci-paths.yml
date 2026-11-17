@@ -8,6 +8,7 @@ backend:
   - 'umbod/api/**'
   - 'packages/umbod-sdk/**'
   - 'skills/integrations/umbod-connected-apps/**'
+  - 'skills/integrations/umbod-agent-behaviour/**'
   - 'umbod/docker-compose*.yml'
   - 'umbod/frontend/deployment/**'
   - 'umbod/frontend/static/signed-out.html'
@@ -68,6 +69,7 @@ core:
   - 'umbod/api/src/**'
   - 'packages/umbod-sdk/**'
   - 'skills/integrations/umbod-connected-apps/**'
+  - 'skills/integrations/umbod-agent-behaviour/**'
   - 'LICENSE'
 connector:
   - '.github/workflows/**'
@@ -97,6 +99,7 @@ kind:
   - 'umbod/api/README.md'
   - 'umbod/api/src/**'
   - 'skills/integrations/umbod-connected-apps/**'
+  - 'skills/integrations/umbod-agent-behaviour/**'
   - 'LICENSE'
   - 'umbod/frontend/**'
   - 'umbod/deploy/helm/umbod/**'

@@ -140,7 +140,7 @@ class InstallerDriver:
         path = self.root / "calls.jsonl"
         return [json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
 
-    def write_archive(self, extra: str = "", symlink: bool = False, endpoint: str = ENDPOINT, marketplace: str = MARKETPLACE) -> None:
+    def write_archive(self, extra: str = "", symlink: bool = False, endpoint: str = ENDPOINT, marketplace: str = MARKETPLACE, missing: str = "") -> None:
         catalog = ".agents/plugins/marketplace.json" if self.harness == "codex" else ".claude-plugin/marketplace.json"
         manifest = "plugins/umbod/" + (".codex-plugin" if self.harness == "codex" else ".claude-plugin") + "/plugin.json"
         source: str | dict[str, str] = {"source": "local", "path": "./plugins/umbod"} if self.harness == "codex" else "./plugins/umbod"
@@ -149,8 +149,11 @@ class InstallerDriver:
             manifest: json.dumps({"name": "umbod", "version": "0.1.0", "skills": "./skills/", "mcpServers": "./.mcp.json"}),
             "plugins/umbod/.mcp.json": json.dumps({"mcpServers": {"umbod": {"type": "http", "url": endpoint}}}),
             "plugins/umbod/skills/umbod-connected-apps/SKILL.md": "Umbod skill",
+            "plugins/umbod/skills/umbod-agent-behaviour/SKILL.md": "Umbod behaviour skill",
             "plugins/umbod/LICENSE": "MIT",
         }
+        if missing:
+            del files[missing]
         with zipfile.ZipFile(self.downloads / "package.zip", "w") as archive:
             for name, content in files.items():
                 entry = zipfile.ZipInfo(name)
@@ -200,6 +203,9 @@ def test_installs_verified_package_and_reruns_without_duplicate_marketplace(inst
     assert len(registrations) == 1
     assert Path(registrations[0][4]).is_absolute()
     assert len(list(installer.installation_parent.glob("*/plugins/umbod/.mcp.json"))) == 1
+    behaviour_skills = list(installer.installation_parent.glob("*/plugins/umbod/skills/umbod-agent-behaviour/SKILL.md"))
+    assert len(behaviour_skills) == 1
+    assert behaviour_skills[0].read_text() == "Umbod behaviour skill"
     assert not (installer.installation_parent / ".install.lock").exists()
     installations = [call for call in installer.calls() if call[1:3] == ["plugin", "add" if installer.harness == "codex" else "install"] and "--help" not in call]
     assert len(installations) == 1
@@ -316,6 +322,15 @@ def test_rejects_unexpected_and_traversing_zip_entries(installer: InstallerDrive
     assert result.returncode != 0
     assert "unsafe ZIP entries" in result.stderr
     assert not installer.installation_parent.exists()
+
+
+def test_rejects_missing_behaviour_skill_without_installation(installer: InstallerDriver) -> None:
+    installer.write_archive(missing="plugins/umbod/skills/umbod-agent-behaviour/SKILL.md")
+    result = installer.run()
+    assert result.returncode != 0
+    assert "unsafe ZIP entries" in result.stderr
+    assert not installer.installation_parent.exists()
+    assert not any(call[1:4] == ["plugin", "marketplace", "add"] and "--help" not in call for call in installer.calls())
 
 
 def test_rejects_zip_symlinks(installer: InstallerDriver) -> None:
