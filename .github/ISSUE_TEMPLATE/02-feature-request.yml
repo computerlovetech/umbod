@@ -1,0 +1,52 @@
+name: Feature request
+description: Propose an improvement to Umbod.
+title: "[Feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Describe the user need and the outcome, not just a proposed implementation.
+        Do not disclose vulnerabilities here; use [private security reporting](https://github.com/computerlovetech/umbod/security/policy).
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and the roadmap and did not find this request.
+          required: true
+        - label: This request contains no suspected vulnerability details or sensitive data.
+          required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or user need
+      description: Who needs this, what are they trying to do, and what is difficult or missing today?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the desired behavior from the user's perspective.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Describe existing options or workarounds and their limitations. If none, say so.
+    validations:
+      required: true
+  - type: textarea
+    id: success
+    attributes:
+      label: Success criteria
+      description: What observable outcome would show that this need has been met?
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional context
+      description: Optional sanitized mockups, references, compatibility needs, or deployment constraints.

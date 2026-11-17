@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security report (private)
+    url: https://github.com/computerlovetech/umbod/security/policy
+    about: Follow the security policy and report template to disclose a suspected vulnerability privately.

@@ -1,0 +1,75 @@
+name: Bug report
+description: Report a reproducible problem in Umbod.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For suspected vulnerabilities, use [private security reporting](https://github.com/computerlovetech/umbod/security/policy), not a public issue.
+        Remove credentials, tokens, personal data, and private connector payloads from all details and attachments.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched existing issues and did not find a report of this problem.
+          required: true
+        - label: This report does not disclose a suspected security vulnerability or sensitive data.
+          required: true
+  - type: input
+    id: version
+    attributes:
+      label: Umbod version
+      description: Include the release, Helm chart version, image tag, or source commit.
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Affected area
+      options:
+        - Workspace UI
+        - API
+        - MCP
+        - Connectors
+        - SDK or CLI
+        - Files and sharing
+        - Deployment or Helm chart
+        - Documentation
+        - Other or unsure
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include deployment method, OS, Kubernetes version, browser, or MCP client as relevant. Do not include secrets or a full configuration dump.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to reproduce
+      description: Provide the smallest reproducible sequence, including any necessary sanitized setup.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should have happened?
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Include the exact sanitized error message if available.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Sanitized logs, screenshots, or additional context
+      description: Optional supporting evidence. Check screenshots and attachments for secrets and personal data before uploading.
