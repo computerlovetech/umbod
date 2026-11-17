@@ -117,6 +117,14 @@ def validate_connector(definition: ConnectorDefinition) -> None:
         raise ValueError("connector requires a configuration check")
     if not definition.tools and not definition.prompts and not definition.resources:
         raise ValueError("connector requires at least one documented capability")
+    seen_operation_names: set[str] = set()
+    for tool in definition.tools:
+        if tool.operation_name in seen_operation_names:
+            raise ValueError(
+                f"connector '{definition.id}' has duplicate tool operation name: "
+                f"{tool.operation_name}"
+            )
+        seen_operation_names.add(tool.operation_name)
     _validate_prompts(definition.prompts)
     _validate_resources(definition.resources)
     for tool in definition.tools:

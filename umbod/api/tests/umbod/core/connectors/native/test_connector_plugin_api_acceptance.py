@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 import pytest
 from fastmcp import Client
+from jsonschema import Draft202012Validator
 from jsonschema.exceptions import SchemaError
 from pydantic import ConfigDict, Field, SecretStr
 from umbod_sdk.connectors.proxies import Model
@@ -147,7 +148,8 @@ def test_tool_metadata_can_be_generated_from_pydantic_field_descriptions() -> No
     plugin = _project_board_connector(plugin_api, variant='search')
     mapping = connector_tool_mappings(plugin.definition(), tool_name_prefix='project_board', configuration_store=InMemoryConnectorCurrentConfigurationStore())[0]
     request_schema = mapping.parameters['properties']['request']
-    request_definitions = request_schema['$defs']['SearchTasksRequest']['properties']
+    request_definitions = mapping.parameters['$defs']['SearchTasksRequest']['properties']
+    Draft202012Validator(mapping.parameters).validate({'request': {'project_id': 'PB-1', 'query': 'launch'}})
     assert mapping.description == 'Search Project Board tasks.'
     assert request_schema['description'] == 'Search task parameters.'
     assert request_definitions['project_id']['description'] == 'Project identifier to search within.'

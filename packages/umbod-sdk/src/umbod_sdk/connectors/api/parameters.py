@@ -61,7 +61,7 @@ class ParameterDescriptionResolver(Protocol):
 
 
 class ParameterSchemaFactory(Protocol):
-    def schema(self, parameter: Parameter) -> dict[str, Any]: ...
+    def schema(self, parameters: list[Parameter]) -> dict[str, Any]: ...
 
 
 class ParameterDescriber(Protocol):
@@ -90,26 +90,29 @@ class ToolParameterMetadata:
                 description=self._parameter_describer.required_description(
                     self._capability, parameter
                 ),
-                required=parameter.default is Parameter.empty,
+                required=_parameter_is_required(parameter),
             )
             for parameter in self._parameters
         ]
 
     def schema(self) -> dict[str, Any]:
-        properties: dict[str, Any] = {}
+        schema = self._schema_factory.schema(self._parameters)
         required: list[str] = []
         for parameter in self._parameters:
-            parameter_schema = self._schema_factory.schema(parameter)
-            parameter_schema["description"] = self._parameter_describer.required_description(
-                self._capability, parameter
+            schema["properties"][parameter.name]["description"] = (
+                self._parameter_describer.required_description(self._capability, parameter)
             )
-            properties[parameter.name] = parameter_schema
-            if parameter.default is Parameter.empty:
+            if _parameter_is_required(parameter):
                 required.append(parameter.name)
-        schema: dict[str, Any] = {"type": "object", "properties": properties}
         if required:
             schema["required"] = required
         return schema
+
+
+def _parameter_is_required(parameter: Parameter) -> bool:
+    if isinstance(parameter.default, FieldInfo):
+        return parameter.default.is_required()
+    return parameter.default is Parameter.empty
 
 
 def capability_parameters(capability: CapabilityDefinition) -> list[Parameter]:
@@ -193,17 +196,23 @@ class PydanticModelParameterDescriptionResolver:
 
 
 class PydanticParameterSchemaFactory:
-    def schema(self, parameter: Parameter) -> dict[str, Any]:
-        annotation = Any if parameter.annotation is Parameter.empty else parameter.annotation
-        resolved_annotation = get_args(annotation)[0] if get_origin(annotation) is Annotated else annotation
-        if resolved_annotation is UploadedFile:
-            return {"type": "string", "format": "binary", "x-umbod-file-input": True}
-        if isinstance(annotation, type) and issubclass(annotation, Model):
-            return {
-                "$ref": f"#/$defs/{annotation.__name__}",
-                "$defs": {annotation.__name__: annotation.model_json_schema()},
-            }
-        schema = TypeAdapter(annotation).json_schema()
-        if "$defs" in schema:
-            return schema
-        return dict(schema)
+    def schema(self, parameters: list[Parameter]) -> dict[str, Any]:
+        adapters: dict[str, TypeAdapter[Any]] = {}
+        properties: dict[str, Any] = {}
+        for parameter in parameters:
+            annotation = Any if parameter.annotation is Parameter.empty else parameter.annotation
+            resolved_annotation = get_args(annotation)[0] if get_origin(annotation) is Annotated else annotation
+            if resolved_annotation is UploadedFile:
+                properties[parameter.name] = {
+                    "type": "string", "format": "binary", "x-umbod-file-input": True
+                }
+            else:
+                adapters[parameter.name] = TypeAdapter(annotation)
+        parameter_schemas, definitions = TypeAdapter.json_schemas(
+            (name, "validation", adapter) for name, adapter in adapters.items()
+        )
+        properties.update(
+            (name, parameter_schema)
+            for (name, _), parameter_schema in parameter_schemas.items()
+        )
+        return {"type": "object", "properties": properties, **definitions}

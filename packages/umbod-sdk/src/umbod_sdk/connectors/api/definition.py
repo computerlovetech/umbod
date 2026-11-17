@@ -121,6 +121,11 @@ def prompt_decorator(
     *,
     options: Mapping[str, Any],
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    unknown_options = set(options) - {"name", "description", "parameters"}
+    if unknown_options:
+        option = sorted(unknown_options)[0]
+        raise TypeError(f"prompt() got an unexpected keyword argument '{option}'")
+
     def decorate(function: Callable[..., Any]) -> Callable[..., Any]:
         definition.prompts.append(
             PromptDefinition(
@@ -141,6 +146,11 @@ def resource_decorator(
     *,
     options: Mapping[str, Any],
 ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    unknown_options = set(options) - {"name", "description", "parameters"}
+    if unknown_options:
+        option = sorted(unknown_options)[0]
+        raise TypeError(f"resource() got an unexpected keyword argument '{option}'")
+
     def decorate(function: Callable[..., Any]) -> Callable[..., Any]:
         definition.resources.append(
             ResourceDefinition(

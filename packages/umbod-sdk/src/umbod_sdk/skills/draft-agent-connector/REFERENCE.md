@@ -9,7 +9,7 @@ from umbod_sdk.connectors.plugin_api import Connector, ConfigurationCheckResult
 from umbod_sdk.connectors.proxies import Model  # Pydantic BaseModel proxy — base for config models
 ```
 
-- `Connector(*, id, name, description, configuration)` — declares the connector. `configuration` is your config `Model` subclass.
+- `Connector(*, id, name, description, capability_description, configuration)` — declares the connector. `configuration` is your config `Model` subclass.
 - `@connector.configuration_check` — decorates a function `(configuration) -> ConfigurationCheckResult` run before publish.
 - `@connector.tool(description=...)` — decorates a function that becomes an MCP tool.
 - `ConfigurationCheckResult.valid()` / `ConfigurationCheckResult.invalid(message=..., field_messages={...})` — check results. `field_messages` maps a config field name to an error shown on that field in the UI.
@@ -52,6 +52,7 @@ connector = Connector(
     id="myservice",
     name="My Service",
     description="What agents can do with this service.",
+    capability_description="Search records in My Service.",
     configuration=MyAdminConfiguration,
 )
 

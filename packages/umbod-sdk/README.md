@@ -160,7 +160,9 @@ The public [connector authoring guide](https://umbod.ai/docs/plugins/build-a-con
 
 ## Tool schemas
 
-The tool decorator requires `description` and accepts optional `name`, `parameters`, and `output_schema` settings. Input schemas are derived from public function parameters and their type annotations; parameters without defaults are required. Injected arguments such as `configuration` are excluded from the agent-facing schema. The `parameters` setting supplies parameter descriptions, not a replacement input schema.
+The tool decorator requires `description` and accepts optional `name`, `parameters`, and `output_schema` settings. Input schemas are derived from public function parameters and their type annotations; parameters without defaults and required Pydantic `Field(...)` declarations are required. Shared model definitions live in the input schema's root `$defs`, with references resolved from that root. Injected arguments such as `configuration` are excluded from the agent-facing schema. The `parameters` setting supplies parameter descriptions, not a replacement input schema.
+
+Declaration validation deliberately rejects duplicate tool operation names within a connector and unknown prompt/resource decorator options. Prompt and resource decorators accept only `name`, `description`, and `parameters`.
 
 An explicit `output_schema` must be a JSON Schema dictionary. Omitting it means no declared output schema, which is distinct from supplying an empty dictionary; `None` is invalid. Registration metadata represents this distinction with `output_schema_status` set to `absent` or `present`, and includes `output_schema` when present.
 
@@ -198,6 +200,7 @@ connector = Connector(
     id="my-service",
     name="My Service",
     description="Connects agents to My Service.",
+    capability_description="Read records from My Service.",
     configuration=MyServiceAdminConfiguration,
 )
 
