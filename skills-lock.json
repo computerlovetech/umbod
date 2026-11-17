@@ -105,6 +105,11 @@
       "source": "./skills",
       "sourceType": "local",
       "computedHash": "963f4ad3b33075bf637fcafdc5570d84dabaadebf73bb73afd4e02b7b4f31b91"
+    },
+    "write-skill": {
+      "source": "./skills",
+      "sourceType": "local",
+      "computedHash": "ce7aa09f3096a106754755403e9b9fb33969cde455206131e7987aeb707688aa"
     }
   }
 }
