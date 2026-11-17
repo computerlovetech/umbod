@@ -3,6 +3,21 @@ import { endpointSchema, issuerSchema, scopesSchema } from './schemas';
 
 export const discoveryEndpointSchema = endpointSchema.and(issuerSchema);
 
+export const endpointResourceMismatchSchema = z.object({
+  detail: z.object({
+    code: z.literal('personal_oauth_discovery_failed'),
+    stage: z.literal('discovery'),
+    reason: z.literal('resource_mismatch')
+  }).strict()
+}).strict();
+
+export class EndpointResourceMismatchError extends Error {
+  constructor() {
+    super('The MCP endpoint does not match the advertised resource');
+    this.name = 'EndpointResourceMismatchError';
+  }
+}
+
 export const endpointDiscoveryRequestSchema = z.object({
   endpoint_url: discoveryEndpointSchema,
   issuer_selection: z.discriminatedUnion('kind', [

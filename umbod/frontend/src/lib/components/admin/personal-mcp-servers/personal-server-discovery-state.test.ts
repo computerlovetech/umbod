@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
+import { EndpointResourceMismatchError, type EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
 import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
 import { HttpError } from '$lib/admin/infrastructure/transport';
 import { PersonalServerDiscoveryState } from './personal-server-discovery-state.svelte';
@@ -128,6 +128,48 @@ describe('creation metadata discovery', (): void => {
     state.acknowledge(true);
     expect(state.canSave('dynamic_public')).toBe(false);
     expect(state.canSave('preconfigured_public')).toBe(true);
+  });
+  test.each(['https://mcp.dinero.dk', 'https://mcp.dinero.dk/mcp'])('explains exact resource matching and trailing slashes for %s without changing the endpoint', async (value): Promise<void> => {
+    const { state, api } = setup();
+    state.setEndpoint(value);
+    vi.mocked(api.discover).mockRejectedValueOnce(new EndpointResourceMismatchError());
+    await state.blur();
+    expect(state.failed).toBe(true);
+    expect(state.failureMessage).toContain('exactly match');
+    expect(state.failureMessage).toContain('path and trailing slash (/)');
+    expect(state.failureMessage).toContain('retry discovery');
+    expect(state.endpoint).toBe(value);
+    expect(state.canSave('dynamic_public')).toBe(false);
+  });
+  test('retry clears obsolete mismatch guidance and a different failure stays generic', async (): Promise<void> => {
+    const { state, api } = setup();
+    vi.mocked(api.discover).mockRejectedValueOnce(new EndpointResourceMismatchError());
+    await state.blur();
+    const pending = deferred<EndpointDiscoveryResult>();
+    vi.mocked(api.discover).mockReturnValueOnce(pending.promise);
+    const operation = state.retry();
+    expect(state.pending).toBe(true);
+    expect(state.failed).toBe(false);
+    expect(state.failureMessage).not.toContain('trailing slash');
+    pending.reject(new Error('private provider diagnostic'));
+    await operation;
+    expect(state.failureMessage).toBe('Discovery failed. Scopes unavailable.');
+  });
+  test.each(['edit', 'reset'] as const)('%s clears mismatch guidance and fences a late mismatch', async (action): Promise<void> => {
+    const { state, api } = setup();
+    vi.mocked(api.discover).mockRejectedValueOnce(new EndpointResourceMismatchError());
+    await state.blur();
+    const pending = deferred<EndpointDiscoveryResult>();
+    vi.mocked(api.discover).mockReturnValueOnce(pending.promise);
+    const operation = state.retry();
+    if (action === 'edit') state.setEndpoint('https://mcp.dinero.dk/');
+    else { state.reset(true); state.setEndpoint(endpoint); }
+    vi.mocked(api.discover).mockResolvedValueOnce(discovered({ endpoint_url: state.endpoint }));
+    await state.blur();
+    pending.reject(new EndpointResourceMismatchError());
+    await operation;
+    expect(state.failed).toBe(false);
+    expect(state.failureMessage).not.toContain('trailing slash');
   });
   test('failed metadata requires explicit manual configuration and acknowledgement', async (): Promise<void> => {
     const { state, api } = setup();

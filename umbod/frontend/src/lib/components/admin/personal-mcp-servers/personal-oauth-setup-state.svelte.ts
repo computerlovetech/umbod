@@ -8,7 +8,7 @@ import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '$
 type SetupSnapshot<T> = T extends readonly unknown[] ? ReadonlyArray<SetupSnapshot<T[number]>> : T extends object ? { readonly [Key in keyof T]: SetupSnapshot<T[Key]> } : T;
 
 const compatibilityGuidance: Record<Extract<SetupStatus['state'], { status: 'failed' }>['reason'], string> = {
-  resource_mismatch: 'The server identifies a different MCP resource. Fix the MCP endpoint in Edit.',
+  resource_mismatch: 'The MCP endpoint must exactly match the server’s resource URL, including its path and trailing slash (/). Check whether a final / is required in Edit, then check again.',
   issuer_mismatch: 'The authorization provider does not match. Choose the correct provider in Edit.',
   ambiguous_issuer: 'The server lists multiple providers. Select an authorization provider in Edit.',
   pkce_s256_required: 'This provider does not support secure sign-in. Ask its administrator to update the server.',

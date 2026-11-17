@@ -1,5 +1,5 @@
 import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
-import { discoveryEndpointSchema, type EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
+import { EndpointResourceMismatchError, discoveryEndpointSchema, type EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
 import { parseScopeText, scopesSchema, type ClientKind } from '$lib/admin/personal-mcp-servers/domain/schemas';
 import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
 import type { PolicyProposal } from './policy-form.svelte';
@@ -19,6 +19,7 @@ export class PersonalServerDiscoveryState {
   selectedScopes = $state.raw<readonly string[]>([]);
   customScopes = $state('');
   automaticRegistrationUnavailable = $state(false);
+  private resourceMismatch = $state(false);
   private generation = 0;
   private active = false;
   constructor(private readonly api: PersonalServerDiscovery | null, private readonly accessLost: (error: unknown) => void) {}
@@ -30,6 +31,7 @@ export class PersonalServerDiscoveryState {
     this.pending = false;
     this.attempted = false;
     this.failed = false;
+    this.resourceMismatch = false;
     this.manual = false;
     this.acknowledged = false;
     this.result = null;
@@ -61,6 +63,7 @@ export class PersonalServerDiscoveryState {
     this.attempted = true;
     this.pending = true;
     this.failed = false;
+    this.resourceMismatch = false;
     this.manual = false;
     this.invalidateApproval();
     this.result = null;
@@ -84,7 +87,10 @@ export class PersonalServerDiscoveryState {
       if (error instanceof AuthenticationRequiredError || error instanceof HttpError && (error.status === 401 || error.status === 403)) {
         this.reset(false);
         this.accessLost(error);
-      } else this.failed = true;
+      } else {
+        this.failed = true;
+        this.resourceMismatch = error instanceof EndpointResourceMismatchError;
+      }
     } finally { if (generation === this.generation) this.pending = false; }
   }
   configureManually = (): void => { if (this.failed && !this.pending) { this.manual = true; this.invalidateApproval(); } };
@@ -98,7 +104,11 @@ export class PersonalServerDiscoveryState {
   get scopes(): readonly string[] { return scopesSchema.parse([...this.selectedScopes, ...parseScopeText(this.customScopes)]); }
   get scopeError(): string { try { this.scopes; return ''; } catch { return 'Use unique ASCII scope tokens separated by spaces (up to 64 scopes).'; } }
   get scopeSummary(): string { return this.scopeError || this.scopes.join(' ') || 'No explicit scopes'; }
-  get failureMessage(): string { return discoveryEndpointSchema.safeParse(this.endpoint).success ? 'Discovery failed. Scopes unavailable.' : 'Use an HTTPS endpoint without a query, fragment or credentials, or configure manually.'; }
+  get failureMessage(): string {
+    if (!discoveryEndpointSchema.safeParse(this.endpoint).success) return 'Use an HTTPS endpoint without a query, fragment or credentials, or configure manually.';
+    if (this.resourceMismatch) return 'The MCP endpoint must exactly match the server’s resource URL, including its path and trailing slash (/). Check whether a final / is required, then retry discovery.';
+    return 'Discovery failed. Scopes unavailable.';
+  }
   get issuerOptions(): { value: string; label: string }[] { return [{ value: '', label: 'Choose an issuer' }, ...this.issuers.map((issuer) => ({ value: issuer, label: issuer }))]; }
   get scopeSource(): string { return { resource: 'MCP permissions', authorization_server: 'Provider permissions', unavailable: 'Scopes' }[this.result?.scope_source ?? 'unavailable']; }
   approve = (value: boolean): void => { this.approved = value && !!this.result && !this.scopeError; };

@@ -2,7 +2,7 @@ import { describe, expect, test, vi } from 'vitest';
 import { AdminApi } from '../infrastructure/admin-api';
 import { browserTransport } from '../infrastructure/transport';
 import { InMemoryPublicConfigurationProvider } from '../infrastructure/public-configuration';
-import { endpointDiscoveryRequestSchema, endpointDiscoveryResultSchema, type EndpointDiscoveryRequest, type EndpointDiscoveryResult } from './domain/discovery';
+import { EndpointResourceMismatchError, endpointDiscoveryRequestSchema, endpointDiscoveryResultSchema, type EndpointDiscoveryRequest, type EndpointDiscoveryResult } from './domain/discovery';
 import { clientRequestSchema, clientResponseSchema } from './domain/schemas';
 import { InMemoryPersonalServerDiscovery } from './discovery.test-support';
 import { InMemoryPersonalServers } from './in-memory';
@@ -78,6 +78,32 @@ describe('unsaved personal endpoint discovery', (): void => {
   test('preserves issuer strings exactly and accepts sixteen unique issuers', (): void => {
     const result = { ...selectionRequired, issuer_urls: Array.from({ length: 16 }, (_, index): string => `https://issuer${index}.test/path/`) };
     expect(endpointDiscoveryResultSchema.parse(result)).toEqual(result);
+  });
+
+  test('maps the validated resource mismatch into a safe domain failure without retrying', async (): Promise<void> => {
+    const { api, request } = harness();
+    request.mockResolvedValueOnce(Response.json({ detail: { code: 'personal_oauth_discovery_failed', stage: 'discovery', reason: 'resource_mismatch' } }, { status: 422 }));
+    await expect(api.personalServerDiscovery.discover(automaticRequest)).rejects.toBeInstanceOf(EndpointResourceMismatchError);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  test.each([
+    { detail: { code: 'unrelated', stage: 'discovery', reason: 'resource_mismatch' } },
+    { detail: { code: 'personal_oauth_discovery_failed', stage: 'registration', reason: 'resource_mismatch' } },
+    { detail: { code: 'personal_oauth_discovery_failed', stage: 'discovery', reason: 'network_failure' } },
+    { detail: { code: 'personal_oauth_discovery_failed', stage: 'discovery', reason: 'resource_mismatch', raw_metadata: 'private' } },
+    { detail: 'resource_mismatch' },
+    null
+  ])('does not reinterpret unrelated or malformed HTTP errors', async (body): Promise<void> => {
+    const { api, request } = harness();
+    request.mockResolvedValueOnce(Response.json(body, { status: 422 }));
+    await expect(api.personalServerDiscovery.discover(automaticRequest)).rejects.toMatchObject({ name: 'HttpError', status: 422 });
+  });
+
+  test.each([401, 403, 500])('preserves status %s even with a mismatch-shaped body', async (status): Promise<void> => {
+    const { api, request } = harness();
+    request.mockResolvedValueOnce(Response.json({ detail: { code: 'personal_oauth_discovery_failed', stage: 'discovery', reason: 'resource_mismatch' } }, { status }));
+    await expect(api.personalServerDiscovery.discover(automaticRequest)).rejects.toMatchObject({ name: status === 401 ? 'AuthenticationRequiredError' : 'HttpError' });
   });
 
   test('leaves HTTP and network failures to the transport without retries', async (): Promise<void> => {

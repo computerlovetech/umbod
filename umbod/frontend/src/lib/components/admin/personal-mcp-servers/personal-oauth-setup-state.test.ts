@@ -274,6 +274,7 @@ describe('personal OAuth pre-publication setup', (): void => {
   });
 
   test.each([
+    ['resource_mismatch', 'path and trailing slash (/)'],
     ['pkce_s256_required', 'does not support secure sign-in'],
     ['registration_unavailable', 'Use an existing client'],
     ['issuer_mismatch', 'Choose the correct provider in Edit']
