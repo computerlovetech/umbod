@@ -13,6 +13,7 @@ description: Test-only adapters and acceptance drivers for backend behavior test
 - [configuration.py](./configuration.py) — In-memory current configurations and unavailable-secret adapter.
 - [connector_capabilities.py](./connector_capabilities.py) — Connector capability test support.
 - [connector_plugins.py](./connector_plugins.py) — Connector plugin test support.
+- [downstream_mcp_aggregates.py](./downstream_mcp_aggregates.py) — Database-backed connector aggregate arrangements.
 - [filesystem](./filesystem/) — Filesystem acceptance drivers, policy decoding failures, and test adapters.
 - [groups.py](./groups.py) — In-memory group catalogue with transactional rollback.
 - [icons.py](./icons.py) — Scripted favicon HTTP and discovery adapters.
@@ -21,6 +22,10 @@ description: Test-only adapters and acceptance drivers for backend behavior test
 - [normalized_log_v1.json](./normalized_log_v1.json) — Frozen canonical version-1 evidence for backward-read, replay and persistence checks.
 - [persistence_contracts.py](./persistence_contracts.py) — Backend-neutral records, schemas and operations shared by kernel and adapter contracts.
 - [persistence_processes.py](./persistence_processes.py) — Spawn-safe SQLite claim and insert workers for process coordination checks.
+- [persistence_reads.py](./persistence_reads.py) — Typed read-session recording for deferred-read execution budgets.
+- [personal_discovery_events.py](./personal_discovery_events.py) — Discovery notifications, selective append failures and deterministic rollback snapshots.
+- [personal_oauth_cases.py](./personal_oauth_cases.py) — OAuth attempt arrangements and controlled clock.
+- [personal_runtime_cases.py](./personal_runtime_cases.py) — Authorized personal runtime arrangements.
 - [personal_oauth.py](./personal_oauth.py) — Real memory persistence and explicit OAuth policy with production REST assembly.
 - [rest_metrics.py](./rest_metrics.py) — In-memory REST request metrics.
 - [signals.py](./signals.py) — Captured signal receiver failures.

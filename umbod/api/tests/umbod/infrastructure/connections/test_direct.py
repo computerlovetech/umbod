@@ -1,5 +1,3 @@
-import asyncio
-
 import anyio
 import pytest
 
@@ -65,5 +63,6 @@ async def test_direct_closer_failure_propagates(driver: FakeConnectionDriver) ->
     driver.fail_close = True
     provider = UnpooledConnectionProvider(driver.connect, driver.close)
     with pytest.raises(RuntimeError, match="close failed"):
-        async with provider.get_connection():
-            await asyncio.sleep(0)
+        async with provider.get_connection() as connection:
+            pass
+    assert driver.closed == [connection]

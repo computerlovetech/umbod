@@ -11,7 +11,7 @@ from umbod.core.callers import CallerSnapshot
 from umbod.core.filesystem import MissingNode, NamespaceDriver, Node, Permission, StorageFailure
 from umbod.core.filesystem.authorization import FilesystemAuthorization, FilesystemIdentityResolver, PermissionDenied
 from umbod.core.filesystem.transactions import FilesystemTransactions
-from umbod.core.filesystem.browsing import BrowsingService, FilesystemBrowsing, NodeSummary
+from umbod.core.filesystem.browsing import BrowsingService, FilesystemBrowsing, NodeSummary, summary
 from umbod.core.filesystem.namespace import initial_root
 from tests.support.filesystem.authorization import caller
 
@@ -205,14 +205,14 @@ async def test_summaries_detach_metadata_even_when_namespace_returns_shared_obje
     "id", "parent_id", "name", "kind", "metadata", "created_at", "updated_at", "revision"
 ])
 def test_summary_requires_every_explicit_field(field: str) -> None:
-    payload = initial_root().model_dump(exclude={"content", field})
+    payload = summary(initial_root()).model_dump(exclude={field})
     with pytest.raises(ValidationError):
         NodeSummary.model_validate(payload)
 
 
 @pytest.mark.parametrize("field", ["content", "key", "size"])
 def test_summary_rejects_content_or_storage_fields(field: str) -> None:
-    payload = initial_root().model_dump(exclude={"content"})
+    payload = summary(initial_root()).model_dump()
     payload[field] = "forbidden"
     with pytest.raises(ValidationError):
         NodeSummary.model_validate(payload)

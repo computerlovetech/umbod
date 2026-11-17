@@ -10,21 +10,26 @@ from pydantic import BaseModel
 
 from messaging.models import MessagingEvent, MessagingEventType, StreamEvent
 from messaging.ports import EventStream, EventStreamFactory
-from umbod.core.messaging.stores.schema import EVENT_TABLE
+from umbod.core.messaging.stores.schema import EVENT_TABLE, MessagingEventRecord
 from umbod.core.persistence import Database, DatabaseSession, GeneratedIntegerKeyInsertCommand, Table, TransactionMode
 
 RowT = TypeVar("RowT", bound=BaseModel)
 KeyT = TypeVar("KeyT", bound=BaseModel)
 
 
-def reject_database_event_appends(database: Database, monkeypatch: pytest.MonkeyPatch) -> None:
+def reject_database_event_appends(
+    database: Database,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    event_types: Sequence[MessagingEventType] = (),
+) -> None:
     original_session = database.session
 
     @asynccontextmanager
     async def rejecting_session(*, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:
         async with original_session(mode=mode) as session:
             async def insert_event(table: Table[RowT, KeyT], command: GeneratedIntegerKeyInsertCommand[RowT]) -> int:
-                if table == EVENT_TABLE:
+                if table == EVENT_TABLE and (not event_types or isinstance(command.row, MessagingEventRecord) and command.row.event_type in event_types):
                     raise RuntimeError("event append failed")
                 return await session.insert_generated_integer_key(table, command)
 

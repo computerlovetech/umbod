@@ -17,11 +17,16 @@ async def test_cleanup_operation_failure_propagates() -> None:
 
 
 async def test_cleanup_operation_cancellation_propagates_without_retrying() -> None:
+    invocations = 0
+
     async def cancel() -> None:
+        nonlocal invocations
+        invocations += 1
         raise asyncio.CancelledError
 
     with pytest.raises(asyncio.CancelledError):
         await asyncio.wait_for(complete_cleanup(cancel()), 2)
+    assert invocations == 1
 
 
 async def test_anyio_cancelled_scope_still_finishes_cleanup() -> None:

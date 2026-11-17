@@ -3,9 +3,11 @@ from uuid import uuid4
 import pytest
 
 from umbod.core.callers import AuthenticationProvenance
-from umbod.core.filesystem import AccessGrant, NodeId, Permission, Principal, PrincipalType
+from umbod.core.filesystem import AccessGrant, NodeId, Ownership, Permission, Principal, PrincipalType
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
-from tests.support.filesystem.group_sharing import sharing_node
+from tests.support.filesystem.group_sharing import SharingPolicies, sharing_node
+from tests.support.identity_directory import InMemoryIdentityDirectory
+from umbod.core.identity_directory.user_models import ObservedUserProfile, SubjectUsersLookup
 from umbod.core.filesystem.sharing import InvalidSharingPolicy, ReplaceNodePolicy, SharingService
 from tests.support.filesystem.sharing_policy import GROUP_SCOPE
 from tests.umbod.core.filesystem.test_authorized_content import caller
@@ -15,6 +17,42 @@ from .test_ports import transactions
 from .test_user_policy import observation, observe, user_command
 from .test_user_ports import UnreadableUsers
 from .test_user_summaries import CountingUsers, ExplicitLocalResolver
+
+
+class MutationGuardPolicies(SharingPolicies):
+    def __init__(self, ownership: Ownership, grants: tuple[AccessGrant, ...]) -> None:
+        super().__init__(ownership, grants)
+        self.mutations_allowed = True
+
+    def reject_mutations(self) -> None:
+        self.mutations_allowed = False
+
+    async def remove_grant(self, node_id: NodeId, principal: Principal) -> None:
+        if not self.mutations_allowed:
+            raise AssertionError("Mutation preceded complete target validation")
+        await super().remove_grant(node_id, principal)
+
+    async def upsert(self, grant: AccessGrant) -> None:
+        if not self.mutations_allowed:
+            raise AssertionError("Mutation preceded complete target validation")
+        await super().upsert(grant)
+
+
+class RebindingUsers(InMemoryIdentityDirectory):
+    def __init__(self) -> None:
+        super().__init__()
+        self.bindings: dict[tuple[str, str], str] = {}
+
+    def rebind(self, issuer: str, subject: str, user_id: str) -> None:
+        self.bindings[issuer, subject] = user_id
+
+    async def find_subject_users(self, lookup: SubjectUsersLookup) -> tuple[ObservedUserProfile, ...]:
+        profiles = await super().find_subject_users(lookup)
+        return tuple(
+            profile.model_copy(update={"user_id": self.bindings[profile.issuer, profile.subject]})
+            if (profile.issuer, profile.subject) in self.bindings else profile
+            for profile in profiles
+        )
 
 
 @pytest.mark.asyncio
@@ -70,8 +108,10 @@ async def test_inspection_and_replacement_authorize_node_before_any_directory_lo
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("invalid_target", ["unknown", "foreign"])
-async def test_all_user_targets_resolve_before_any_mutation(monkeypatch: pytest.MonkeyPatch, invalid_target: str) -> None:
+async def test_all_user_targets_resolve_before_any_mutation(invalid_target: str) -> None:
     ports = transactions()
+    policies = MutationGuardPolicies(await ports.policies.get_owner(sharing_node().id), ())
+    ports.policies = policies
     identifier = await observe(ports.users, "issuer", "recipient")
     invalid_identifier = await observe(ports.users, "foreign", "recipient") if invalid_target == "foreign" else "unknown"
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
@@ -79,14 +119,7 @@ async def test_all_user_targets_resolve_before_any_mutation(monkeypatch: pytest.
     await service.share(caller(), node_id, user_command(identifier, Permission.READ))
     view = await service.inspect(caller(), node_id, USER_SCOPE)
 
-    async def reject_remove(node_id: NodeId, principal: Principal) -> None:
-        raise AssertionError("Mutation preceded complete target validation")
-
-    async def reject_upsert(grant: AccessGrant) -> None:
-        raise AssertionError("Mutation preceded complete target validation")
-
-    monkeypatch.setattr(ports.policies, "remove_grant", reject_remove)
-    monkeypatch.setattr(ports.policies, "upsert", reject_upsert)
+    policies.reject_mutations()
     with pytest.raises(InvalidSharingPolicy):
         await service.replace(caller(), node_id, ReplaceNodePolicy(
             recipient_type="user", expected_revision=view.revision,
@@ -117,12 +150,13 @@ async def test_inspect_without_users_never_reads_directory_but_group_filtered_us
 @pytest.mark.asyncio
 async def test_user_binding_changes_revision_without_changing_grants() -> None:
     ports = transactions()
-    identifier = await observe(ports.users, "issuer", "recipient")
+    users = RebindingUsers()
+    ports.users = users
+    identifier = await observe(users, "issuer", "recipient")
     service = SharingService(VerifiedIdentityResolver(), ports, "issuer")
     node_id = sharing_node().id
     await service.share(caller(), node_id, user_command(identifier, Permission.READ))
     before = await service.inspect(caller(), node_id, GROUP_SCOPE)
-    stored = ports.users.users["issuer", "recipient"]
-    ports.users.users["issuer", "recipient"] = stored.model_copy(update={"user_id": "new-opaque-id"})
+    users.rebind("issuer", "recipient", "new-opaque-id")
     after = await service.inspect(caller(), node_id, GROUP_SCOPE)
     assert after.revision != before.revision

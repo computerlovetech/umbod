@@ -3,7 +3,13 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from tests.umbod.core.caching.support import ControlledLoader, read_after_signalling, wait_for_signal
+from tests.umbod.core.caching.support import (
+    ControlledLoader,
+    OwnedTasks,
+    owned_tasks as owned_tasks,
+    read_after_signalling,
+    wait_for_signal,
+)
 from umbod.core.caching import AsyncRequestCache
 
 
@@ -36,6 +42,7 @@ async def test_clear_forgets_every_key_and_is_repeatable(cache: AsyncRequestCach
 @pytest.mark.parametrize("old_load_fails", [False, True])
 async def test_invalidated_inflight_load_cannot_replace_or_evict_new_result(
     cache: AsyncRequestCache[str, object], invalidate_all: bool, old_load_fails: bool,
+    owned_tasks: OwnedTasks,
 ) -> None:
     gate = ControlledLoader("old")
 
@@ -45,10 +52,10 @@ async def test_invalidated_inflight_load_cannot_replace_or_evict_new_result(
             raise ValueError("old load failed")
         return value
 
-    leader = asyncio.create_task(cache.get_or_load("key", load_old))
+    leader = owned_tasks.create(cache.get_or_load("key", load_old))
     await wait_for_signal(gate.started)
     entered = asyncio.Event()
-    waiter = asyncio.create_task(read_after_signalling(cache, "key", AsyncMock(), entered))
+    waiter = owned_tasks.create(read_after_signalling(cache, "key", AsyncMock(), entered))
     await wait_for_signal(entered)
     if invalidate_all:
         cache.clear()
@@ -59,7 +66,7 @@ async def test_invalidated_inflight_load_cannot_replace_or_evict_new_result(
     assert not leader.done()
     assert not waiter.done()
     gate.release.set()
-    results = await asyncio.gather(leader, waiter, return_exceptions=True)
+    results = await owned_tasks.results(leader, waiter, return_exceptions=True)
     if old_load_fails:
         assert all(isinstance(result, ValueError) for result in results)
     else:

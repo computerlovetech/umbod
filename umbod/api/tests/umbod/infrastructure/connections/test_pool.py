@@ -1,6 +1,6 @@
 import asyncio
 from collections.abc import AsyncIterator, Coroutine
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from typing import TypeVar
 
 import anyio
@@ -36,6 +36,13 @@ async def running_task(
 async def lease(provider: ConnectionProvider[object]) -> object:
     async with provider.get_connection() as connection:
         return connection
+
+
+async def lease_when_started(
+    provider: ConnectionProvider[object], started: asyncio.Event
+) -> object:
+    started.set()
+    return await lease(provider)
 
 
 @pytest.mark.parametrize("size", [0, -1])
@@ -100,33 +107,32 @@ async def test_leases_are_exclusive_and_reused(
 async def test_capacity_waiter_receives_released_connection(
     driver: FakeConnectionDriver, provider: ConnectionProvider[object]
 ) -> None:
+    started = asyncio.Event()
     async with provider.get_connection():
-        context = provider.get_connection()
-        released = await context.__aenter__()
-        try:
-            async with running_task(lease(provider), driver) as waiting:
-                await asyncio.sleep(0)
+        async with AsyncExitStack() as leases:
+            released = await leases.enter_async_context(provider.get_connection())
+            async with running_task(lease_when_started(provider, started), driver) as waiting:
+                await asyncio.wait_for(started.wait(), 2)
                 assert not waiting.done()
-                await context.__aexit__(None, None, None)
+                await leases.aclose()
                 assert await asyncio.wait_for(waiting, 2) is released
-        finally:
-            if released not in driver.reset_connections:
-                await context.__aexit__(None, None, None)
 
 
 async def test_cancelled_waiter_does_not_lose_capacity(
     driver: FakeConnectionDriver, provider: ConnectionProvider[object]
 ) -> None:
+    started = asyncio.Event()
     async with provider.get_connection():
         async with provider.get_connection():
-            async with running_task(lease(provider), driver) as waiting:
-                await asyncio.sleep(0)
+            async with running_task(lease_when_started(provider, started), driver) as waiting:
+                await asyncio.wait_for(started.wait(), 2)
                 waiting.cancel()
                 with pytest.raises(asyncio.CancelledError):
                     await asyncio.wait_for(waiting, 2)
-    async with provider.get_connection() as first:
-        async with provider.get_connection() as second:
-            assert first is not second
+    async with asyncio.timeout(2):
+        async with provider.get_connection() as first:
+            async with provider.get_connection() as second:
+                assert first is not second
 
 
 async def test_reset_failure_discards_connection_and_replaces_lazily(
@@ -184,9 +190,10 @@ async def test_repeated_cancellation_waits_for_reset_before_returning_capacity(
         driver.reset_allowed.set()
         with pytest.raises(asyncio.CancelledError):
             await asyncio.wait_for(releasing, 2)
-    async with provider.get_connection() as first:
-        async with provider.get_connection() as second:
-            assert first is not second
+    async with asyncio.timeout(2):
+        async with provider.get_connection() as first:
+            async with provider.get_connection() as second:
+                assert first is not second
 
 
 async def test_initialization_failure_closes_every_opened_connection(
@@ -254,6 +261,7 @@ async def test_close_drains_active_leases_and_rejects_blocked_waiters(
 ) -> None:
     acquired = asyncio.Event()
     release = asyncio.Event()
+    started = asyncio.Event()
 
     async def hold_capacity() -> None:
         async with provider.get_connection():
@@ -263,8 +271,8 @@ async def test_close_drains_active_leases_and_rejects_blocked_waiters(
 
     async with running_task(hold_capacity(), driver):
         await asyncio.wait_for(acquired.wait(), 2)
-        async with running_task(lease(provider), driver) as waiting:
-            await asyncio.sleep(0)
+        async with running_task(lease_when_started(provider, started), driver) as waiting:
+            await asyncio.wait_for(started.wait(), 2)
             async with running_task(provider.close(), driver) as closing:
                 with pytest.raises(ConnectionPoolUnavailableError):
                     await asyncio.wait_for(waiting, 2)
@@ -335,6 +343,7 @@ async def test_anyio_level_cancellation_completes_release(
             scope.cancel()
             await anyio.lowlevel.checkpoint()
     assert len(driver.reset_connections) == 1
-    async with provider.get_connection() as first:
-        async with provider.get_connection() as second:
-            assert first is not second
+    async with asyncio.timeout(2):
+        async with provider.get_connection() as first:
+            async with provider.get_connection() as second:
+                assert first is not second

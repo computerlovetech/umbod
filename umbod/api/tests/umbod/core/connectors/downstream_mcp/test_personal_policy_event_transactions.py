@@ -6,9 +6,10 @@ import pytest
 import pytest_asyncio
 
 from tests.persistence_runtime import prepared_inmemory_runtime
+from tests.support.personal_discovery_events import _tool as _tool
 from umbod.core.messaging.stores.schema import EVENT_TABLE, MessagingEventKey, MessagingEventRecord
 from umbod.core.persistence import Database, DatabaseSession, GeneratedIntegerKeyInsertCommand, Table, TransactionMode
-from umbod.core.connectors.downstream_mcp.models import DiscoveredTool, DiscoveredToolWithoutOutputSchema, OAuthConnectorDefinition, ToolIdentity
+from umbod.core.connectors.downstream_mcp.models import OAuthConnectorDefinition
 from umbod.core.connectors.downstream_mcp.personal_tools import PersonalToolPolicyStore, ReplacePersonalToolPolicy
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery, SaveConnectorDefinition, ToolCatalogFound, create_downstream_mcp_stores
 from umbod.core.messaging.stores.event_stream import DatabaseEventStream
@@ -21,14 +22,6 @@ async def database() -> AsyncIterator[Database]:
         yield runtime.database
     finally:
         await runtime.shutdown()
-
-
-def _tool(name: str) -> DiscoveredTool:
-    return DiscoveredToolWithoutOutputSchema(
-        identity=ToolIdentity(connector_id="personal", downstream_name=name),
-        title="Private metadata", description="Private administrator description",
-        input_schema={"type": "object"},
-    )
 
 
 @pytest.mark.asyncio

@@ -8,14 +8,12 @@ from pydantic import BaseModel
 from umbod.core.filesystem import NodeId, NodeKind, NodeMetadata
 from umbod.core.filesystem.authorization import PermissionDenied
 from umbod.core.filesystem.namespace import ROOT_ID
-from umbod.core.filesystem.stores.namespace import node_record
 from umbod.core.filesystem.stores.namespaces import persist_policy
-from umbod.core.filesystem.stores.schema import NODE_TABLE
-from umbod.core.persistence import DatabaseSession, InsertCommand, PersistenceRuntime, Query, ReadSession, Table, TransactionMode, OneOf
+from umbod.core.persistence import DatabaseSession, PersistenceRuntime, Query, ReadSession, Table, TransactionMode, OneOf
 from umbod.infrastructure import create_filesystem_explorer, create_namespace_driver
 from tests.umbod.rest.user_catalogue.query_budget_support import CountingDatabase, CountingReadSession, QueryCounts
 from tests.support.filesystem.authorization import caller
-from tests.support.filesystem.exploration import CountingIdentityResolver, child
+from tests.support.filesystem.exploration import CountingIdentityResolver
 from tests.support.filesystem.namespaces import personal_directory
 from tests.umbod.core.filesystem.test_effective_permissions import policy
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
@@ -47,9 +45,12 @@ class ReadOnlyAuditDatabase(CountingDatabase):
 
 async def seed_directory(runtime: PersistenceRuntime, count: int) -> NodeId:
     root = await personal_directory(runtime.database, snapshot("alice", "issuer", ()))
-    async with runtime.database.session(mode=TransactionMode.READ_WRITE) as session:
-        for index in range(count):
-            await session.insert(NODE_TABLE, InsertCommand(row=node_record(child(root.id, f"file-{index:04}", NodeKind.FILE))))
+    namespace = create_namespace_driver(database=runtime.database)
+    for index in range(count):
+        await namespace.create_node(
+            root.id, f"file-{index:04}", NodeKind.FILE,
+            NodeMetadata(content_type={}, attributes={}),
+        )
     return root.id
 
 

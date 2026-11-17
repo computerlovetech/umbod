@@ -5,7 +5,7 @@ import pytest_asyncio
 
 from tests.persistence_runtime import prepared_inmemory_runtime
 from tests.support.messaging import reject_database_event_appends
-from tests.umbod.core.connectors.downstream_mcp.test_unit_of_work_contract import _command, _database_harness
+from tests.support.downstream_mcp_aggregates import _command, _database_harness
 from umbod.core.persistence import Database
 from umbod.core.connectors.downstream_mcp.management import DeleteDownstreamConnectorAggregate
 from umbod.core.connectors.downstream_mcp.stores import ConnectorIdQuery

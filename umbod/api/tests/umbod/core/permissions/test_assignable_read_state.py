@@ -1,11 +1,10 @@
 from collections.abc import AsyncIterator
-from typing import cast
-from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
 
 from tests.persistence_runtime import create_inmemory_runtime
+from tests.support.persistence_reads import RecordingReadSession
 from umbod.core.activation.domain import ActivationStatus, CapabilityRef
 from umbod.core.activation.stores.schema import (
     CAPABILITY_ACTIVATION_STATE_CONNECTOR_ID,
@@ -19,7 +18,6 @@ from umbod.core.permissions.read_state import (
 )
 from umbod.core.persistence import (
     Database,
-    DatabaseSession,
     DeleteQuery,
     Equals,
     InsertCommand,
@@ -89,37 +87,36 @@ async def _load(
 async def test_registration_defers_reads_and_resolved_readers_never_query(database: Database) -> None:
     await _seed(database)
     async with database.session(mode=TransactionMode.READ_WRITE) as session:
-        observed = AsyncMock(wraps=session)
+        observed = RecordingReadSession(session)
         plan: ReadPlanOperations = ReadPlan()
         reads = plan_assignable_state(plan, ("personal", "personal"), ("other", "other"))
-        observed.find_many.assert_not_awaited()
-        state = reads.resolve(await plan.execute(cast(DatabaseSession, observed)))
-        assert observed.find_many.await_count == 2
+        assert (observed.find_one_calls, observed.find_many_calls) == (0, 0)
+        state = reads.resolve(await plan.execute(observed))
+        assert (observed.find_one_calls, observed.find_many_calls) == (0, 2)
     for _ in range(3):
         assert await state.publishing.is_published("personal")
         assert await state.publishing.was_previously_published("personal")
         assert await state.activations.get_status(
             CapabilityRef("native", "other", "tool", "same"),
         ) == ActivationStatus.ENABLED
-    assert observed.find_many.await_count == 2
+    assert (observed.find_one_calls, observed.find_many_calls) == (0, 2)
 
 
 async def test_empty_inputs_and_empty_state_exclude_populated_database(database: Database) -> None:
     await _seed(database)
     async with database.session(mode=TransactionMode.READ_WRITE) as session:
-        observed = AsyncMock(wraps=session)
+        observed = RecordingReadSession(session)
         plan = ReadPlan()
         reads = plan_assignable_state(plan, (), ())
-        assert reads.publications == ()
-        assert reads.activations == ()
-        resolved = reads.resolve(await plan.execute(cast(DatabaseSession, observed)))
-        observed.find_many.assert_not_awaited()
+        resolved = reads.resolve(await plan.execute(observed))
+        assert (observed.find_one_calls, observed.find_many_calls) == (0, 0)
     for state in (resolved, AssignableReadState.empty()):
         assert not await state.publishing.is_published("personal")
         assert not await state.publishing.was_previously_published("personal")
         assert await state.activations.get_status(
             CapabilityRef("native", "personal", "tool", "same"),
         ) == ActivationStatus.DISABLED
+    assert (observed.find_one_calls, observed.find_many_calls) == (0, 0)
 
 
 @pytest.mark.parametrize("publication_ids,activation_ids", [(("personal",), ()), ((), ("other",))])
@@ -128,14 +125,15 @@ async def test_empty_scope_does_not_suppress_independent_scope(
 ) -> None:
     await _seed(database)
     async with database.session(mode=TransactionMode.READ_WRITE) as session:
-        observed = AsyncMock(wraps=session)
+        observed = RecordingReadSession(session)
         plan = ReadPlan()
         reads = plan_assignable_state(plan, publication_ids, activation_ids)
-        state = reads.resolve(await plan.execute(cast(DatabaseSession, observed)))
-        assert observed.find_many.await_count == 1
+        state = reads.resolve(await plan.execute(observed))
+        assert (observed.find_one_calls, observed.find_many_calls) == (0, 1)
     assert await state.publishing.is_published("personal") == bool(publication_ids)
     expected = ActivationStatus.ENABLED if activation_ids else ActivationStatus.DISABLED
     assert await state.activations.get_status(CapabilityRef("native", "other", "tool", "same")) == expected
+    assert (observed.find_one_calls, observed.find_many_calls) == (0, 1)
 
 
 async def test_scopes_are_independent_and_activation_requires_complete_identity(database: Database) -> None:
@@ -210,16 +208,19 @@ async def test_large_independent_scopes_are_deduplicated_into_five_batches(datab
                 connector_kind="native", connector_id=identifier, capability_kind="tool",
                 capability_key="read", status="enabled", updated_at="now",
             )))
-        observed = AsyncMock(wraps=session)
+        observed = RecordingReadSession(session)
         plan = ReadPlan()
         reads = plan_assignable_state(plan, publication_ids + publication_ids, activation_ids + activation_ids)
-        assert len(reads.publications) == 3
-        assert len(reads.activations) == 2
-        observed.find_many.assert_not_awaited()
-        state = reads.resolve(await plan.execute(cast(DatabaseSession, observed)))
-        assert observed.find_many.await_count == 5
+        assert (observed.find_one_calls, observed.find_many_calls) == (0, 0)
+        state = reads.resolve(await plan.execute(observed))
+        assert (observed.find_one_calls, observed.find_many_calls) == (0, 5)
+        assert observed.find_many_tables == {
+            PUBLICATION_STATE_TABLE.name: 3,
+            CAPABILITY_ACTIVATION_STATE_TABLE.name: 2,
+        }
     for identifier in publication_ids:
         assert await state.publishing.is_published(identifier)
         assert await state.publishing.was_previously_published(identifier)
         expected = ActivationStatus.ENABLED if identifier in activation_ids else ActivationStatus.DISABLED
         assert await state.activations.get_status(CapabilityRef("native", identifier, "tool", "read")) == expected
+    assert (observed.find_one_calls, observed.find_many_calls) == (0, 5)

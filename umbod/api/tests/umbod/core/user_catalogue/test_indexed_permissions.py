@@ -1,6 +1,3 @@
-from typing import cast
-from unittest.mock import AsyncMock
-
 import pytest
 
 from umbod.core.capabilities.availability import CapabilityPermissionPolicy
@@ -96,12 +93,24 @@ async def test_new_capture_observes_revocation_without_mutating_previous_request
     assert grants.calls == ["team", "team"]
 
 
+class FailingGroupLookup:
+    def __init__(self, available_grants: GroupPermissionSet) -> None:
+        self.available_grants = available_grants
+        self.calls: list[str] = []
+
+    async def list_group_permissions(self, group_id: str) -> GroupPermissionSet:
+        self.calls.append(group_id)
+        if group_id == self.available_grants.group_id:
+            return self.available_grants
+        raise RuntimeError("Grant lookup unavailable")
+
+
 @pytest.mark.asyncio
 async def test_failed_group_capture_does_not_return_partial_policy() -> None:
-    lookup = AsyncMock(spec=GroupPermissionLookup)
-    lookup.list_group_permissions.side_effect = [
+    lookup = FailingGroupLookup(
         GroupPermissionSet("first", (), (ConnectorCapabilityRef("connector", "tool", "read"),)),
-        RuntimeError("Grant lookup unavailable"),
-    ]
+    )
+    permissions: GroupPermissionLookup = lookup
     with pytest.raises(RuntimeError, match="Grant lookup unavailable"):
-        await IndexedCapabilityPermissions.capture(cast(GroupPermissionLookup, lookup), ("first", "second"))
+        await IndexedCapabilityPermissions.capture(permissions, ("first", "second"))
+    assert lookup.calls == ["first", "second"]

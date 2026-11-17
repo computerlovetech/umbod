@@ -1,11 +1,12 @@
+from collections.abc import AsyncIterator
 from typing import cast
-from unittest.mock import AsyncMock
 
 import pytest
 import pytest_asyncio
 from pydantic import BaseModel
 
 from tests.persistence_runtime import create_inmemory_runtime
+from tests.support.persistence_reads import RecordingReadSession
 from umbod.core.activation.domain import ActivationStatus, CapabilityRef
 from umbod.core.activation.stores.schema import (
     CAPABILITY_ACTIVATION_STATE_CONNECTOR_ID,
@@ -42,15 +43,18 @@ pytestmark = pytest.mark.asyncio
 
 
 @pytest_asyncio.fixture
-async def database() -> Database:
-    database = create_inmemory_runtime().database
-    await database.ensure_schema(cast(tuple[Table[BaseModel, BaseModel], ...], (
-        PUBLICATION_STATE_TABLE,
-        CAPABILITY_ACTIVATION_STATE_TABLE,
-        CONNECTOR_PERMISSION_TABLE,
-        CAPABILITY_PERMISSION_TABLE,
-    )))
-    return database
+async def database() -> AsyncIterator[Database]:
+    runtime = create_inmemory_runtime()
+    try:
+        await runtime.database.ensure_schema(cast(tuple[Table[BaseModel, BaseModel], ...], (
+            PUBLICATION_STATE_TABLE,
+            CAPABILITY_ACTIVATION_STATE_TABLE,
+            CONNECTOR_PERMISSION_TABLE,
+            CAPABILITY_PERMISSION_TABLE,
+        )))
+        yield runtime.database
+    finally:
+        await runtime.shutdown()
 
 
 async def _load(
@@ -97,35 +101,36 @@ async def _seed(database: Database) -> None:
 async def test_registration_defers_four_bulk_reads_and_readers_never_query(database: Database) -> None:
     await _seed(database)
     async with database.session(mode=TransactionMode.READ_WRITE) as session:
-        observed = AsyncMock(wraps=session)
+        observed = RecordingReadSession(session)
         plan = ReadPlan()
         reads = plan_catalogue_state(
             plan, tuple(str(index) for index in range(100)) + ("a", "a"),
             tuple(str(index) for index in range(100)) + ("caller", "caller"),
         )
-        observed.find_many.assert_not_awaited()
-        state = reads.resolve(await plan.execute(cast(DatabaseSession, observed)))
-        assert observed.find_many.await_count == 4
+        assert (observed.find_one_calls, observed.find_many_calls) == (0, 0)
+        state = reads.resolve(await plan.execute(observed))
+        assert (observed.find_one_calls, observed.find_many_calls) == (0, 4)
     for _ in range(3):
         assert await state.publishing.is_published("a")
         assert await state.publishing.was_previously_published("a")
         assert await state.activations.get_status(CapabilityRef("native", "a", "tool", "same")) == ActivationStatus.ENABLED
         assert (await state.permissions.list_group_permissions("caller")).connector_ids == ("a", "z")
-    assert observed.find_many.await_count == 4
+    assert (observed.find_one_calls, observed.find_many_calls) == (0, 4)
 
 
 async def test_empty_inputs_register_no_reads_and_missing_facts_fail_closed(database: Database) -> None:
     await _seed(database)
     async with database.session(mode=TransactionMode.READ_WRITE) as session:
-        observed = AsyncMock(wraps=session)
+        observed = RecordingReadSession(session)
         plan = ReadPlan()
         reads = plan_catalogue_state(plan, (), ())
-        state = reads.resolve(await plan.execute(cast(DatabaseSession, observed)))
-        observed.find_many.assert_not_awaited()
+        state = reads.resolve(await plan.execute(observed))
+        assert (observed.find_one_calls, observed.find_many_calls) == (0, 0)
     assert not await state.publishing.is_published("a")
     assert not await state.publishing.was_previously_published("a")
     assert await state.activations.get_status(CapabilityRef("native", "a", "tool", "same")) == ActivationStatus.DISABLED
     assert await state.permissions.list_group_permissions("caller") == GroupPermissionSet("caller", (), ())
+    assert (observed.find_one_calls, observed.find_many_calls) == (0, 0)
 
 
 async def test_reads_are_scoped_and_activation_uses_complete_compound_identity(database: Database) -> None:
@@ -189,14 +194,15 @@ async def test_large_inputs_are_deduplicated_and_split_into_bounded_batches(data
     identifiers = tuple(str(index) for index in range(401))
     async with database.session(mode=TransactionMode.READ_WRITE) as session:
         await _seed_identifiers(session, identifiers)
-        observed = AsyncMock(wraps=session)
+        observed = RecordingReadSession(session)
         plan = ReadPlan()
         reads = plan_catalogue_state(plan, identifiers + identifiers, identifiers + identifiers)
-        state = reads.resolve(await plan.execute(cast(DatabaseSession, observed)))
-        assert observed.find_many.await_count == 12
+        state = reads.resolve(await plan.execute(observed))
+        assert (observed.find_one_calls, observed.find_many_calls) == (0, 12)
     for identifier in identifiers:
         assert await state.publishing.is_published(identifier)
         assert await state.activations.get_status(CapabilityRef("native", identifier, "tool", "read")) == ActivationStatus.ENABLED
         assert await state.permissions.list_group_permissions(identifier) == GroupPermissionSet(
             identifier, (identifier,), (ConnectorCapabilityRef(identifier, "tool", "read"),),
         )
+    assert (observed.find_one_calls, observed.find_many_calls) == (0, 12)
