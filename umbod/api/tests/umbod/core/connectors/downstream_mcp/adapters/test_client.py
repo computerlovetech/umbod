@@ -1,15 +1,21 @@
 from tests.umbod.core.connectors.downstream_mcp.adapters.credential_fakes import MemoryCredentialStore
 
+import httpx2
 import pytest
+from pydantic import SecretStr
 from fastmcp.client.transports import StreamableHttpTransport
 
 from umbod.core.connectors.downstream_mcp.models import (
     NoAuthConnectorDefinition,
     NoAuthCredentialState,
+    OAuthConnectorDefinition,
+    OAuthCredentialState,
     StaticBearerConnectorDefinition,
     StaticBearerCredentialState,
 )
 from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage import AuthorizationDocument
+from umbod.core.connectors.downstream_mcp.oauth.provider import InteractiveConnectorOAuth
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.client import (
     FastMCPDownstreamClientFactory,
 )
@@ -37,6 +43,41 @@ def test_factory_creates_no_auth_streamable_http_client_with_tls_verification() 
     assert client.transport.verify == "/tmp/test-ca.pem"
     assert client.transport.auth is None
     assert client.transport.headers == {}
+
+
+@pytest.mark.asyncio
+async def test_factory_creates_oauth_client_with_isolated_auth_and_network_configuration() -> None:
+    credentials = MemoryCredentialStore()
+    factory = FastMCPDownstreamClientFactory(
+        FastMCPDownstreamConnectionFactory(False, credentials, oauth_enabled=True)
+    )
+    command = DiscoverDownstreamTools(
+        definition=OAuthConnectorDefinition(
+            connector_id="weather",
+            display_name="Weather",
+            endpoint_url="https://weather.example/mcp",
+        ),
+        credential=OAuthCredentialState(
+            connector_id="weather",
+            authorization=SecretStr(
+                AuthorizationDocument(endpoint_url="https://weather.example/mcp").model_dump_json()
+            ),
+        ),
+    )
+
+    client = factory.create(command)
+    transport = client.transport
+
+    assert isinstance(transport, StreamableHttpTransport)
+    assert isinstance(transport.auth, InteractiveConnectorOAuth)
+    assert transport.auth.storage.connector_id == "weather"
+    assert transport.headers == {}
+    assert transport.verify is False
+    assert transport.httpx_client_factory is not None
+    async with transport.httpx_client_factory(follow_redirects=True) as http_client:
+        assert http_client.follow_redirects is False
+        assert http_client.timeout == httpx2.Timeout(30.0, read=300.0)
+    assert credentials.reads == credentials.writes == 0
 
 
 def test_factory_uses_only_connector_owned_static_bearer_token() -> None:

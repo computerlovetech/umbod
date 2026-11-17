@@ -32,13 +32,16 @@ class DefaultOpenApiImportPreparer:
     def prepare(self, request: ImportOpenApiCatalog) -> PreparedOpenApiImport:
         approved_hosts = self._normalize_hosts(request.approved_hosts)
         eligible_servers = self._eligible_servers(request.candidate, approved_hosts)
+        selected_server_url = request.selected_server_url
+        if selected_server_url is None:
+            selected_server_url = self._single_eligible_server(eligible_servers)
         return PreparedOpenApiImport(
             connector_id=request.connector_id,
             source_document=request.source_document,
             candidate=request.candidate,
             approved_hosts=approved_hosts,
-            selected_server_url=self._select_server_url(
-                request.selected_server_url, eligible_servers
+            selected_server_url=self._validated_server_url(
+                selected_server_url, eligible_servers
             ),
             operation_ids=self._validated_operation_ids(request.candidate),
         )
@@ -57,17 +60,18 @@ class DefaultOpenApiImportPreparer:
             return (f"https://{approved_hosts[0]}",)
         return eligible_servers
 
-    def _select_server_url(
+    def _single_eligible_server(self, eligible_servers: tuple[str, ...]) -> str:
+        if len(eligible_servers) != 1:
+            raise OpenApiServerSelectionRequired(
+                "OpenAPI import requires one selected eligible server"
+            )
+        return eligible_servers[0]
+
+    def _validated_server_url(
         self,
-        selected_server_url: str | None,
+        selected_server_url: str,
         eligible_servers: tuple[str, ...],
     ) -> str:
-        if selected_server_url is None:
-            if len(eligible_servers) != 1:
-                raise OpenApiServerSelectionRequired(
-                    "OpenAPI import requires one selected eligible server"
-                )
-            return eligible_servers[0]
         if selected_server_url not in eligible_servers:
             raise ValueError("Selected server must use an approved exact host")
         return selected_server_url

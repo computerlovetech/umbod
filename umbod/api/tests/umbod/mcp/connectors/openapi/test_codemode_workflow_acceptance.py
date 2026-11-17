@@ -31,6 +31,7 @@ from umbod.core.connectors.openapi.catalog import StoreBackedOpenApiCapabilityCa
 from umbod.core.permissions import CapabilityPermissionCatalog, ConnectorPermissionUpdate, ConnectorToolRef, SaveGroupPermissionsRequest, ToolPermissionUpdate, UpdateGroupPermissionsRequest
 from umbod.core.permissions.management import GroupPermissionManagementService
 from umbod.mcp.auth import MCPAuthProviderFactory
+from umbod.mcp.auth.transport import configured_mcp_transport_authentication
 from tests.mcp_fixtures import empty_connector_plugins
 from umbod.mcp.connectors.native import create_default_mcp_connector_runtime, default_runtime
 from umbod.mcp.runtime_adapters import create_configured_downstream_client_factory
@@ -86,7 +87,7 @@ def _unused_connector_operation() -> dict[str, object]:
 async def _build(settings: AppConfig, factory: RecordingOutboundHttpClientFactory, persistence_runtime: PersistenceRuntime) -> FastMCP:
     default_runtime = await create_default_mcp_connector_runtime(settings, persistence_runtime)
     runtime = ConnectorRuntime(connector_registrations=({'id': 'acceptance', 'display_name': 'Acceptance', 'description': 'Acceptance boundary'},), connector_configuration_store=default_runtime.connector_configuration_store, connector_publishing_store=default_runtime.connector_publishing_store, connector_tool_mappings=(ConcreteConnectorToolMapping('acceptance', 'unused', 'Unused', _unused_connector_operation, {}),))
-    return await build_mcp_with_openapi_adapters(settings, MCPAuthProviderFactory().create(settings), runtime, (), OpenApiRuntimeAdapters(factory), persistence_runtime, telemetry=create_configured_mcp_telemetry(settings), downstream_client_factory=await create_configured_downstream_client_factory(settings, persistence_runtime.database))
+    return await build_mcp_with_openapi_adapters(settings, configured_mcp_transport_authentication(settings), runtime, (), OpenApiRuntimeAdapters(factory), persistence_runtime, telemetry=create_configured_mcp_telemetry(settings), downstream_client_factory=await create_configured_downstream_client_factory(settings, persistence_runtime.database))
 
 async def _build_default(settings: AppConfig, persistence_runtime: PersistenceRuntime) -> FastMCP:
     default_runtime = await create_default_mcp_connector_runtime(settings, persistence_runtime)

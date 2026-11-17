@@ -56,7 +56,7 @@ from umbod.mcp.agent_behaviour.composition import register_configured_agent_beha
 from umbod.mcp.agent_behaviour.reservations import ensure_connector_tool_name_available
 from umbod.mcp.http_transport import MAX_MCP_REQUEST_BODY_BYTES, create_mcp_http_app
 from umbod.mcp.administrator.composition import register_configured_administrator_tools
-from umbod.mcp.auth import MCPAuthProviderFactory
+from umbod.mcp.auth.transport import AuthenticatedMcpTransport, McpTransportAuthentication, UnauthenticatedMcpTransport, configured_mcp_transport_authentication, fastmcp_authentication_provider
 from umbod.mcp.auth.consent_screen import install_umbod_consent_screen
 from umbod.mcp.auth.factory import MCPAuthProvider
 from umbod.mcp.auth.debug_middleware import MCPAuthDebugMiddleware
@@ -133,9 +133,11 @@ OPENAPI_CODEMODE_DISCOVERY_EXPOSURE_MODES: frozenset[OpenApiCodemodeDiscoveryExp
 
 async def build_mcp(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, persistence_runtime: PersistenceRuntime, *runtime_state: RuntimeStateArgument) -> FastMCP:
     downstream_client_factory = await create_configured_downstream_client_factory(settings, persistence_runtime.database)
-    return await build_mcp_with_openapi_adapters(settings, auth_provider, runtime, runtime_state, create_configured_openapi_runtime_adapters(settings), persistence_runtime, telemetry=create_configured_mcp_telemetry(settings), downstream_client_factory=downstream_client_factory)
+    authentication = UnauthenticatedMcpTransport() if auth_provider is None else AuthenticatedMcpTransport(auth_provider)
+    return await build_mcp_with_openapi_adapters(settings, authentication, runtime, runtime_state, create_configured_openapi_runtime_adapters(settings), persistence_runtime, telemetry=create_configured_mcp_telemetry(settings), downstream_client_factory=downstream_client_factory)
 
-async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, runtime_state: tuple[RuntimeStateArgument, ...], openapi_adapters: OpenApiRuntimeAdapters, persistence_runtime: PersistenceRuntime, *, telemetry: McpTelemetryDependencies, downstream_client_factory: DownstreamClientFactory) -> FastMCP:
+async def build_mcp_with_openapi_adapters(settings: MCPAppSettings, authentication: McpTransportAuthentication, runtime: ConnectorRuntime, runtime_state: tuple[RuntimeStateArgument, ...], openapi_adapters: OpenApiRuntimeAdapters, persistence_runtime: PersistenceRuntime, *, telemetry: McpTelemetryDependencies, downstream_client_factory: DownstreamClientFactory) -> FastMCP:
+    auth_provider = fastmcp_authentication_provider(authentication)
     (requested_tool_state, group_permission_runtime_state) = _resolve_runtime_state(runtime_state)
     connector_tool_runtime_state_store = requested_tool_state if requested_tool_state is not None else _default_connector_tool_runtime_state_store(runtime)
     audit_recorder = telemetry.audit_recorder
@@ -326,9 +328,9 @@ async def create_runtime_context(config: PublicAppConfig, *, downstream_client_f
     group_permission_runtime_state = config.group_permission_runtime_state
     if group_permission_runtime_state is None and config.settings.mcp.auth_mode != "none":
         group_permission_runtime_state = InMemoryGroupConnectorToolPermissions(group_claim_fields=(config.settings.mcp.permission_group_claim,))
-    auth_provider = config.auth_provider if config.auth_provider is not None else MCPAuthProviderFactory().create(config.settings)
+    authentication = AuthenticatedMcpTransport(config.auth_provider) if config.auth_provider is not None else configured_mcp_transport_authentication(config.settings)
     persistence_runtime = config.persistence_runtime
-    mcp = await build_mcp_with_openapi_adapters(config.settings, auth_provider, config.connector_runtime, (connector_tool_runtime_state_store, group_permission_runtime_state), openapi_adapters, persistence_runtime, telemetry=config.telemetry, downstream_client_factory=downstream_client_factory)
+    mcp = await build_mcp_with_openapi_adapters(config.settings, authentication, config.connector_runtime, (connector_tool_runtime_state_store, group_permission_runtime_state), openapi_adapters, persistence_runtime, telemetry=config.telemetry, downstream_client_factory=downstream_client_factory)
     return PublicAppRuntimeContext(mcp=mcp, http_app=create_mcp_http_app(mcp, path=_MCP_HTTP_PATH, stateless_http=config.stateless_http, max_request_body_bytes=MAX_MCP_REQUEST_BODY_BYTES), telemetry=config.telemetry, settings=config.settings, connector_runtime=config.connector_runtime, connector_tool_runtime_state_store=connector_tool_runtime_state_store, group_permission_runtime_state=group_permission_runtime_state, target_stores=ConnectorStorePair(connector_configuration_store=config.connector_runtime.connector_configuration_store, connector_publishing_store=config.connector_runtime.connector_publishing_store), source_strategy=source_strategy, api_base_url=config.api_base_url, persistence_runtime=persistence_runtime)
 
 async def health_response(_request: Request) -> JSONResponse:

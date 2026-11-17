@@ -1,6 +1,7 @@
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from types import TracebackType
 from typing import cast
 
 import httpx2
@@ -13,7 +14,14 @@ from tests.umbod.core.connectors.downstream_mcp.adapters.test_oauth_service impo
 )
 from umbod.core.connectors.downstream_mcp.adapters import oauth_composition
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_session import (
+    FastMCPOAuthSession,
     FastMCPOAuthSessionFactory,
+)
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage import (
+    AuthorizationDocument,
+)
+from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage_adapters import (
+    DetachedConnectorOAuthStorage,
 )
 from umbod.core.connectors.downstream_mcp.oauth.ports import AuthorizationBeginOptions
 from umbod.core.connectors.downstream_mcp.oauth.provider import (
@@ -22,6 +30,66 @@ from umbod.core.connectors.downstream_mcp.oauth.provider import (
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+class RecordingClientContext:
+    def __init__(self, suppression: bool | None) -> None:
+        self.suppression = suppression
+        self.exits: list[
+            tuple[type[BaseException] | None, BaseException | None, TracebackType | None]
+        ] = []
+
+    async def __aenter__(self) -> Client:
+        return Client("https://tools.example/mcp")
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> bool | None:
+        self.exits.append((exc_type, exc, traceback))
+        return self.suppression
+
+
+def recording_session(context: RecordingClientContext) -> FastMCPOAuthSession:
+    storage = DetachedConnectorOAuthStorage(
+        AuthorizationDocument(endpoint_url="https://tools.example/mcp"), "fixture"
+    )
+    return FastMCPOAuthSession(InteractiveConnectorOAuth(storage), context)
+
+
+@pytest.mark.parametrize("suppression", [True, False, None])
+async def test_exit_forwards_exact_exception_and_preserves_suppression(
+    suppression: bool | None,
+) -> None:
+    context = RecordingClientContext(suppression)
+    session = recording_session(context)
+    await session.__aenter__()
+    try:
+        raise ValueError("session failure")
+    except ValueError as error:
+        traceback = error.__traceback__
+        assert traceback is not None
+        result = await session.__aexit__(type(error), error, traceback)
+        assert len(context.exits) == 1
+        forwarded_type, forwarded_error, forwarded_traceback = context.exits[0]
+        assert forwarded_type is type(error)
+        assert forwarded_error is error
+        assert forwarded_traceback is traceback
+    assert result is suppression
+
+
+@pytest.mark.parametrize("suppression", [True, False, None])
+async def test_normal_exit_forwards_no_exception_and_preserves_suppression(
+    suppression: bool | None,
+) -> None:
+    context = RecordingClientContext(suppression)
+    session = recording_session(context)
+    await session.__aenter__()
+    result = await session.__aexit__(None, None, None)
+    assert context.exits == [(None, None, None)]
+    assert result is suppression
 
 
 class ToolClient:

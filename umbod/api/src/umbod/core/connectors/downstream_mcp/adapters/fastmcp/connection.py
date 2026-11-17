@@ -8,7 +8,6 @@ from fastmcp.client.transports import StreamableHttpTransport
 from pydantic import SecretStr
 
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth import (
-    ConnectorOAuth,
     SignInRequired,
 )
 from umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage import (
@@ -73,15 +72,20 @@ class _FastMCPConnection:
     def _create_transport(
         self,
         *,
-        headers: dict[str, str] | None,
-        auth: ConnectorOAuth | None,
+        headers: dict[str, str],
     ) -> StreamableHttpTransport:
-        transport = StreamableHttpTransport(
-            url=self._configuration.endpoint_url,
-            headers=headers,
-            auth=auth,
-            httpx_client_factory=self._create_http_client,
+        return self._configure_transport(
+            StreamableHttpTransport(
+                url=self.configuration.endpoint_url,
+                headers=headers,
+                auth=None,
+                httpx_client_factory=self._create_http_client,
+            )
         )
+
+    def _configure_transport(
+        self, transport: StreamableHttpTransport
+    ) -> StreamableHttpTransport:
         transport.verify = self._tls_verification
         return transport
 
@@ -91,7 +95,7 @@ class _FastMCPConnection:
 
 class FastMCPUnauthenticatedConnection(_FastMCPConnection):
     def create_client(self) -> Client:
-        return Client(self._create_transport(headers={}, auth=None))
+        return Client(self._create_transport(headers={}))
 
 
 class FastMCPStaticBearerConnection(_FastMCPConnection):
@@ -114,7 +118,7 @@ class FastMCPStaticBearerConnection(_FastMCPConnection):
             if configuration.custom_header_name is None:
                 raise ValueError("custom header name is required")
             headers = {configuration.custom_header_name: token}
-        return Client(self._create_transport(headers=headers, auth=None))
+        return Client(self._create_transport(headers=headers))
 
 
 class FastMCPOAuthConnection(_FastMCPConnection):
@@ -133,7 +137,15 @@ class FastMCPOAuthConnection(_FastMCPConnection):
         self._oauth = InteractiveConnectorOAuth(storage)
 
     def create_client(self) -> Client:
-        return Client(self._create_transport(headers=None, auth=self._oauth))
+        return Client(
+            self._configure_transport(
+                StreamableHttpTransport(
+                    url=self.configuration.endpoint_url,
+                    auth=self._oauth,
+                    httpx_client_factory=self._create_http_client,
+                )
+            )
+        )
 
     def export_authorization(self, client: Client) -> SecretStr | None:
         return self._oauth.storage.export()

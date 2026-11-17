@@ -20,7 +20,7 @@ from umbod.core.connectors.downstream_mcp.probe import DiscoverDownstreamTools
 from umbod.mcp.settings import MCPAppSettings, MCPSettings
 from fastmcp import Client, FastMCP
 from fastmcp.tools import ToolResult
-from umbod.mcp.auth import MCPAuthProviderFactory
+from umbod.mcp.auth.transport import configured_mcp_transport_authentication
 from umbod.mcp.public_app import build_mcp_with_openapi_adapters
 from umbod.mcp.runtime_adapters import create_configured_openapi_runtime_adapters
 CONNECTOR_ID = '09ee32b6-a502-4493-977f-baaec560596f'
@@ -75,7 +75,7 @@ async def _build_public_mcp(exposure_mode: str, input_schema: dict[str, Any] | N
     recorder = DownstreamInvocationRecorder()
     settings = MCPAppSettings(mcp=MCPSettings(connector_tool_exposure_mode=exposure_mode, downstream_discovery_enabled=False, _env_file=None), connector_store=ConnectorStoreConfig(type='inmemory'), connector_security={'configuration_secret': 'test-secret'}, _env_file=None)
     connector_runtime = ConnectorRuntime(connector_registrations=[], connector_configuration_store=InMemoryConnectorCurrentConfigurationStore(), connector_publishing_store=ConnectorPublishingStoreService(persistence_runtime.database, PUBLICATION_STATE_TABLE), connector_tool_mappings=[])
-    return (await build_mcp_with_openapi_adapters(settings, MCPAuthProviderFactory().create(settings), connector_runtime, (None, None), create_configured_openapi_runtime_adapters(settings), persistence_runtime, telemetry=create_configured_mcp_telemetry(settings), downstream_client_factory=recorder), recorder)
+    return (await build_mcp_with_openapi_adapters(settings, configured_mcp_transport_authentication(settings), connector_runtime, (None, None), create_configured_openapi_runtime_adapters(settings), persistence_runtime, telemetry=create_configured_mcp_telemetry(settings), downstream_client_factory=recorder), recorder)
 
 @pytest.mark.asyncio
 async def test_persisted_downstream_catalog_preserves_empty_input_schema() -> None:

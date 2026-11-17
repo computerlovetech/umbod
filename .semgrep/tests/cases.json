@@ -1,0 +1,288 @@
+[
+  {
+    "name": "dataclass-property",
+    "source": "from dataclasses import dataclass\n\n@dataclass\nclass Record:\n    value: int\n\n    @property\n    def doubled(self) -> int:\n        return self.value * 2\n",
+    "expected": {}
+  },
+  {
+    "name": "dataclass-business",
+    "source": "from dataclasses import dataclass\n\n@dataclass\nclass Record:\n    value: int\n\n    def approve(self) -> bool:\n        return self.value > 0\n",
+    "expected": {"dataclass-with-methods": {"7": 1}}
+  },
+  {
+    "name": "dataclass-property-and-business",
+    "source": "from dataclasses import dataclass\n\n@dataclass\nclass Record:\n    value: int\n\n    @property\n    def doubled(self) -> int:\n        return self.value * 2\n\n    def approve(self) -> bool:\n        return self.value > 0\n",
+    "expected": {"dataclass-with-methods": {"11": 1}}
+  },
+  {
+    "name": "ordinary-optional-arguments",
+    "source": "from typing import Optional, Union\n\ndef optional(value: Optional[int]) -> None:\n    pass\n\ndef union_right(value: Union[int, None]) -> None:\n    pass\n\ndef union_left(value: Union[None, int]) -> None:\n    pass\n\ndef pipe_right(value: int | None) -> None:\n    pass\n\ndef pipe_left(value: None | int) -> None:\n    pass\n",
+    "expected": {"python.function-argument-none-type": {"3": 1, "6": 1, "9": 1, "12": 1, "15": 1}}
+  },
+  {
+    "name": "httpcore-backend",
+    "source": "import httpcore\n\nclass Backend(httpcore.AsyncNetworkBackend):\n    async def connect_tcp(self, host: str, port: int, timeout: float | None, local_address: str | None, socket_options: list | None) -> object:\n        raise NotImplementedError\n\n    async def connect_unix_socket(self, path: str, timeout: float | None, socket_options: list | None) -> object:\n        raise NotImplementedError\n\n    def __init__(self, configuration: str | None) -> None:\n        pass\n\n    def helper(self, value: str | None) -> None:\n        pass\n",
+    "expected": {"python.function-argument-none-type": {"10": 1, "13": 1}}
+  },
+  {
+    "name": "httpcore-backend-alias",
+    "source": "from httpcore import AsyncNetworkBackend as BackendContract\n\nclass Backend(BackendContract):\n    async def connect_tcp(self, timeout: float | None) -> object:\n        raise NotImplementedError\n\n    async def connect_unix_socket(self, timeout: float | None) -> object:\n        raise NotImplementedError\n\n    def __init__(self, configuration: str | None) -> None:\n        pass\n\n    def helper(self, value: str | None) -> None:\n        pass\n",
+    "expected": {"python.function-argument-none-type": {"10": 1, "13": 1}}
+  },
+  {
+    "name": "httpcore2-backend",
+    "source": "import httpcore2\n\nclass Backend(httpcore2.AsyncNetworkBackend):\n    async def connect_tcp(self, timeout: float | None, local_address: str | None, socket_options: list | None) -> object:\n        raise NotImplementedError\n\n    async def connect_unix_socket(self, timeout: float | None, socket_options: list | None) -> object:\n        raise NotImplementedError\n\n    def __init__(self, configuration: str | None) -> None:\n        pass\n\n    def helper(self, value: str | None) -> None:\n        pass\n",
+    "expected": {"python.function-argument-none-type": {"10": 1, "13": 1}}
+  },
+  {
+    "name": "httpcore2-backend-alias",
+    "source": "import httpcore2 as transport\n\nclass Backend(transport.AsyncNetworkBackend):\n    async def connect_tcp(self, timeout: float | None) -> object:\n        raise NotImplementedError\n\n    async def connect_unix_socket(self, timeout: float | None) -> object:\n        raise NotImplementedError\n\n    def __init__(self, configuration: str | None) -> None:\n        pass\n\n    def helper(self, value: str | None) -> None:\n        pass\n",
+    "expected": {"python.function-argument-none-type": {"10": 1, "13": 1}}
+  },
+  {
+    "name": "httpcore2-stream",
+    "source": "import httpcore2\n\nclass Stream(httpcore2.AsyncNetworkStream):\n    async def read(self, max_bytes: int, timeout: float | None) -> bytes:\n        raise NotImplementedError\n\n    async def write(self, buffer: bytes, timeout: float | None) -> None:\n        pass\n\n    async def start_tls(self, context: object, server_hostname: str | None, timeout: float | None) -> object:\n        raise NotImplementedError\n\n    def __init__(self, configuration: str | None) -> None:\n        pass\n\n    def helper(self, value: str | None) -> None:\n        pass\n",
+    "expected": {"python.function-argument-none-type": {"13": 1, "16": 1}}
+  },
+  {
+    "name": "httpcore2-stream-alias",
+    "source": "from httpcore2 import AsyncNetworkStream as StreamContract\n\nclass Stream(StreamContract):\n    async def read(self, timeout: float | None) -> bytes:\n        raise NotImplementedError\n\n    async def write(self, timeout: float | None) -> None:\n        pass\n\n    async def start_tls(self, server_hostname: str | None, timeout: float | None) -> object:\n        raise NotImplementedError\n\n    def __init__(self, configuration: str | None) -> None:\n        pass\n\n    def helper(self, value: str | None) -> None:\n        pass\n",
+    "expected": {"python.function-argument-none-type": {"13": 1, "16": 1}}
+  },
+  {
+    "name": "unrelated-transport-methods",
+    "source": "class Unrelated:\n    async def connect_tcp(self, timeout: float | None) -> None:\n        pass\n\n    async def connect_unix_socket(self, timeout: float | None) -> None:\n        pass\n\n    async def read(self, timeout: float | None) -> None:\n        pass\n\n    async def write(self, timeout: float | None) -> None:\n        pass\n\n    async def start_tls(self, timeout: float | None) -> None:\n        pass\n",
+    "expected": {"python.function-argument-none-type": {"2": 1, "5": 1, "8": 1, "11": 1, "14": 1}}
+  },
+  {
+    "name": "request-app-state",
+    "source": "from fastapi import Request\n\ndef resolve(request: Request) -> object:\n    return request.app.state.service\n\ndef assign(request: Request, service: object) -> None:\n    request.app.state.service = service\n",
+    "expected": {"python.fastapi.no-app-state-dependencies": {"4": 1, "7": 1}}
+  },
+  {
+    "name": "typed-app-state",
+    "source": "import fastapi\nimport starlette.applications\nfrom fastapi import FastAPI as Api\nfrom starlette.applications import Starlette as Web\n\ndef api(application: fastapi.FastAPI) -> object:\n    return application.state.service\n\ndef web(application: starlette.applications.Starlette) -> object:\n    return application.state.service\n\ndef aliased_api(application: Api) -> object:\n    return application.state.service\n\ndef aliased_web(application: Web, service: object) -> None:\n    application.state.service = service\n",
+    "expected": {"python.fastapi.no-app-state-dependencies": {"7": 1, "10": 1, "13": 1, "16": 1}}
+  },
+  {
+    "name": "constructed-app-state",
+    "source": "import fastapi\nimport starlette.applications\nfrom fastapi import FastAPI as Api\nfrom starlette.applications import Starlette as Web\n\ndef api(service: object) -> object:\n    application = fastapi.FastAPI()\n    application.state.service = service\n    return application.state.service\n\ndef web(service: object) -> object:\n    application = starlette.applications.Starlette()\n    application.state.service = service\n    return application.state.service\n\ndef aliased_api(service: object) -> object:\n    application = Api()\n    application.state.service = service\n    return application.state.service\n\ndef aliased_web(service: object) -> object:\n    application = Web()\n    application.state.service = service\n    return application.state.service\n",
+    "expected": {"python.fastapi.no-app-state-dependencies": {"8": 1, "9": 1, "13": 1, "14": 1, "18": 1, "19": 1, "23": 1, "24": 1}}
+  },
+  {
+    "name": "unrelated-state",
+    "source": "from domain.state import State\nfrom domain.state import service\nimport domain.state as domain_state\n\ndef resolve(state: State) -> object:\n    return state.service\n\ndef imported_service() -> object:\n    return domain_state.service\n\ndef execute(command: object) -> object:\n    return command.state.apply(service)\n",
+    "expected": {}
+  },
+  {
+    "name": "context-manager-signature",
+    "source": "import types\n\nclass Context:\n    async def __aexit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: types.TracebackType | None) -> bool:\n        raise NotImplementedError\n\n    def helper(self, value: str | None) -> None:\n        raise NotImplementedError\n\nclass Unrelated:\n    async def __aexit__(self, value: str | None) -> bool:\n        raise NotImplementedError\n\nclass ExtendedContext:\n    async def __aexit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: types.TracebackType | None, context: str | None) -> bool:\n        raise NotImplementedError\n",
+    "expected": {"python.function-argument-none-type": {"7": 1, "11": 1, "15": 4}}
+  },
+  {
+    "name": "pydantic-auth-boundaries",
+    "path": "api/src/umbod/core/connectors/downstream_mcp/adapters/fastmcp/oauth_storage.py",
+    "source": "from mcp.shared.auth import OAuthClientInformationFull, OAuthMetadata, OAuthToken\nfrom pydantic import BaseModel, Field\n\nclass AuthorizationDocument(BaseModel):\n    client_info: OAuthClientInformationFull | None = Field(default=None, repr=False)\n    tokens: OAuthToken | None = Field(default=None, repr=False)\n    expires_at: float | None = None\n    metadata: OAuthMetadata | None = None\n    authorization_server: str | None = None\n    unapproved: str | None\n\nclass DomainAuthorization(BaseModel):\n    client_info: OAuthClientInformationFull | None = Field(default=None, repr=False)\n    tokens: OAuthToken | None = Field(default=None, repr=False)\n    expires_at: float | None = None\n    metadata: OAuthMetadata | None = None\n    authorization_server: str | None = None\n",
+    "expected": {
+      "python.pydantic.none-type-field.oauth-storage": {
+        "10": 1,
+        "13": 1,
+        "14": 1,
+        "15": 1,
+        "16": 1,
+        "17": 1
+      }
+    }
+  },
+  {
+    "name": "pydantic-auth-boundary-aliases",
+    "source": "from pydantic import BaseModel as Model\n\nclass AuthorizationDocument(Model):\n    authorization_server: str | None\n\nclass BeginRequest(Model):\n    scopes: str | None\n\nclass OAuthDetails(Model):\n    error: str | None\n\nclass Domain(Model):\n    authorization_server: str | None\n    scopes: str | None\n    error: str | None\n",
+    "expected": {
+      "python.pydantic.none-type-field": {
+        "4": 1,
+        "7": 1,
+        "10": 1,
+        "13": 1,
+        "14": 1,
+        "15": 1
+      }
+    }
+  },
+  {
+    "name": "hosting-legacy-signatures",
+    "path": "api/src/umbod/hosting/applications.py",
+    "source": "from typing import Optional, Sequence\nfrom fastapi import FastAPI\nfrom starlette.applications import Starlette\nfrom fastmcp import FastMCP\nfrom umbod.hosting.contracts import AppConfig, ConnectorRegistration, InMemoryGroupConnectorToolPermissions, JwtVerifier, MCPAuthProvider, McpToolInvocationLogSink, OAuthService\nfrom umbod.core.connectors.native.runtime import ConnectorRuntime\nfrom umbod.core.persistence import PersistenceRuntime\nfrom umbod.mcp.settings import MCPAppSettings\nfrom umbod.mcp.public_app import RuntimeStateArgument\n\ndef create_rest_app(settings: AppConfig, *, connector_registrations: Optional[Sequence[ConnectorRegistration]], admin_verifier: Optional[JwtVerifier], oauth_service: Optional[OAuthService], **user_authentication: object) -> FastAPI:\n    raise NotImplementedError\n\nasync def create_mcp_app(settings: AppConfig, *, auth_provider: Optional[MCPAuthProvider], group_permission_runtime_state: Optional[InMemoryGroupConnectorToolPermissions], invocation_log_sink: Optional[McpToolInvocationLogSink]) -> Starlette:\n    raise NotImplementedError\n\ndef create_rest_application(settings: AppConfig, value: str | None) -> FastAPI:\n    raise NotImplementedError\n\nasync def create_mcp_application(settings: AppConfig, value: str | None) -> Starlette:\n    raise NotImplementedError",
+    "expected": {
+      "python.function-argument-none-type.hosting-boundary": {
+        "17": 1,
+        "20": 1
+      }
+    }
+  },
+  {
+    "name": "hosting-new-optional-parameters",
+    "path": "api/src/umbod/hosting/applications.py",
+    "source": "from typing import Optional, Sequence\nfrom fastapi import FastAPI\nfrom starlette.applications import Starlette\nfrom fastmcp import FastMCP\nfrom umbod.hosting.contracts import AppConfig, ConnectorRegistration, InMemoryGroupConnectorToolPermissions, JwtVerifier, MCPAuthProvider, McpToolInvocationLogSink, OAuthService\nfrom umbod.core.connectors.native.runtime import ConnectorRuntime\nfrom umbod.core.persistence import PersistenceRuntime\nfrom umbod.mcp.settings import MCPAppSettings\nfrom umbod.mcp.public_app import RuntimeStateArgument\n\ndef create_rest_app(settings: AppConfig, *, connector_registrations: Optional[Sequence[ConnectorRegistration]], admin_verifier: Optional[JwtVerifier], oauth_service: Optional[OAuthService], new_option: str | None, **user_authentication: object) -> FastAPI:\n    raise NotImplementedError\n\nasync def create_mcp_app(settings: AppConfig, *, auth_provider: Optional[MCPAuthProvider], group_permission_runtime_state: Optional[InMemoryGroupConnectorToolPermissions], invocation_log_sink: Optional[McpToolInvocationLogSink], new_option: str | None) -> Starlette:\n    raise NotImplementedError",
+    "expected": {
+      "python.function-argument-none-type.hosting-boundary": {
+        "11": 4,
+        "14": 4
+      }
+    }
+  },
+  {
+    "name": "hosting-different-signatures",
+    "path": "api/src/umbod/hosting/applications.py",
+    "source": "def create_rest_app(settings: object, value: str | None) -> object:\n    raise NotImplementedError\n\nasync def create_mcp_app(settings: object, value: str | None) -> object:\n    raise NotImplementedError",
+    "expected": {
+      "python.function-argument-none-type.hosting-boundary": {
+        "1": 1,
+        "4": 1
+      }
+    }
+  },
+  {
+    "name": "legacy-build-mcp-production-imports",
+    "source": "from fastmcp import FastMCP\nfrom umbod.core.connectors.native.runtime import ConnectorRuntime\nfrom umbod.core.persistence import PersistenceRuntime\nfrom umbod.mcp.auth.factory import MCPAuthProvider\nfrom umbod.mcp.settings import MCPAppSettings\nfrom umbod.mcp.public_app import RuntimeStateArgument\n\nasync def build_mcp(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, persistence_runtime: PersistenceRuntime, *runtime_state: RuntimeStateArgument) -> FastMCP:\n    raise NotImplementedError\n\nasync def build_mcp_new(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, persistence_runtime: PersistenceRuntime, *runtime_state: RuntimeStateArgument) -> FastMCP:\n    raise NotImplementedError\n",
+    "expected": {
+      "python.function-argument-none-type.mcp-boundary": {
+        "11": 1
+      }
+    },
+    "path": "api/src/umbod/mcp/public_app.py"
+  },
+  {
+    "name": "pydantic-oauth-api-boundaries",
+    "path": "api/src/umbod/rest/connectors/downstream_mcp/oauth.py",
+    "source": "from pydantic import BaseModel, Field\n\nclass BeginRequest(BaseModel):\n    scopes: str | None = Field(default=None, max_length=8192)\n    unapproved: str | None\n\nclass DomainBegin(BaseModel):\n    scopes: str | None = Field(default=None, max_length=8192)\n\nclass OAuthDetails(BaseModel):\n    error: str | None\n    granted_scopes: str | None\n    canonical_endpoint: str | None = None\n    endpoint_differs: bool | None\n    issuer: str | None\n    unapproved: str | None\n\nclass DomainOAuth(BaseModel):\n    error: str | None\n    granted_scopes: str | None\n    canonical_endpoint: str | None = None\n    endpoint_differs: bool | None\n    issuer: str | None\n",
+    "expected": {
+      "python.pydantic.none-type-field.oauth-api": {
+        "5": 1,
+        "8": 1,
+        "16": 1,
+        "19": 1,
+        "20": 1,
+        "21": 1,
+        "22": 1,
+        "23": 1
+      }
+    }
+  },
+  {
+    "name": "pydantic-storage-boundary-alias",
+    "path": "api/src/umbod/core/connectors/downstream_mcp/adapters/fastmcp/oauth_storage.py",
+    "source": "from mcp.shared.auth import OAuthClientInformationFull, OAuthMetadata, OAuthToken\nfrom pydantic import BaseModel as Model, Field\n\nclass AuthorizationDocument(Model):\n    client_info: OAuthClientInformationFull | None = Field(default=None, repr=False)\n    tokens: OAuthToken | None = Field(default=None, repr=False)\n    expires_at: float | None = None\n    metadata: OAuthMetadata | None = None\n    authorization_server: str | None = None\n    unapproved: str | None\n\nclass DomainAuthorization(Model):\n    client_info: OAuthClientInformationFull | None = Field(default=None, repr=False)\n    tokens: OAuthToken | None = Field(default=None, repr=False)\n    expires_at: float | None = None\n    metadata: OAuthMetadata | None = None\n    authorization_server: str | None = None\n",
+    "expected": {
+      "python.pydantic.none-type-field.oauth-storage": {
+        "10": 1,
+        "13": 1,
+        "14": 1,
+        "15": 1,
+        "16": 1,
+        "17": 1
+      }
+    }
+  },
+  {
+    "name": "pydantic-storage-duplicate-names",
+    "source": "from mcp.shared.auth import OAuthClientInformationFull, OAuthMetadata, OAuthToken\nfrom pydantic import BaseModel, Field\n\nclass AuthorizationDocument(BaseModel):\n    client_info: OAuthClientInformationFull | None = Field(default=None, repr=False)\n    tokens: OAuthToken | None = Field(default=None, repr=False)\n    expires_at: float | None = None\n    metadata: OAuthMetadata | None = None\n    authorization_server: str | None = None\n    unapproved: str | None\n\nclass DomainAuthorization(BaseModel):\n    client_info: OAuthClientInformationFull | None = Field(default=None, repr=False)\n    tokens: OAuthToken | None = Field(default=None, repr=False)\n    expires_at: float | None = None\n    metadata: OAuthMetadata | None = None\n    authorization_server: str | None = None\n",
+    "expected": {
+      "python.pydantic.none-type-field": {
+        "5": 1,
+        "6": 1,
+        "7": 1,
+        "8": 1,
+        "9": 1,
+        "10": 1,
+        "13": 1,
+        "14": 1,
+        "15": 1,
+        "16": 1,
+        "17": 1
+      }
+    }
+  },
+  {
+    "name": "pydantic-api-boundary-alias",
+    "path": "api/src/umbod/rest/connectors/downstream_mcp/oauth.py",
+    "source": "from pydantic import BaseModel as Model, Field\n\nclass BeginRequest(Model):\n    scopes: str | None = Field(default=None, max_length=8192)\n    unapproved: str | None\n\nclass DomainBegin(Model):\n    scopes: str | None = Field(default=None, max_length=8192)\n\nclass OAuthDetails(Model):\n    error: str | None\n    granted_scopes: str | None\n    canonical_endpoint: str | None = None\n    endpoint_differs: bool | None\n    issuer: str | None\n    unapproved: str | None\n\nclass DomainOAuth(Model):\n    error: str | None\n    granted_scopes: str | None\n    canonical_endpoint: str | None = None\n    endpoint_differs: bool | None\n    issuer: str | None\n",
+    "expected": {
+      "python.pydantic.none-type-field.oauth-api": {
+        "5": 1,
+        "8": 1,
+        "16": 1,
+        "19": 1,
+        "20": 1,
+        "21": 1,
+        "22": 1,
+        "23": 1
+      }
+    }
+  },
+  {
+    "name": "pydantic-api-duplicate-names",
+    "source": "from pydantic import BaseModel, Field\n\nclass BeginRequest(BaseModel):\n    scopes: str | None = Field(default=None, max_length=8192)\n    unapproved: str | None\n\nclass DomainBegin(BaseModel):\n    scopes: str | None = Field(default=None, max_length=8192)\n\nclass OAuthDetails(BaseModel):\n    error: str | None\n    granted_scopes: str | None\n    canonical_endpoint: str | None = None\n    endpoint_differs: bool | None\n    issuer: str | None\n    unapproved: str | None\n\nclass DomainOAuth(BaseModel):\n    error: str | None\n    granted_scopes: str | None\n    canonical_endpoint: str | None = None\n    endpoint_differs: bool | None\n    issuer: str | None\n",
+    "expected": {
+      "python.pydantic.none-type-field": {
+        "4": 1,
+        "5": 1,
+        "8": 1,
+        "11": 1,
+        "12": 1,
+        "13": 1,
+        "14": 1,
+        "15": 1,
+        "16": 1,
+        "19": 1,
+        "20": 1,
+        "21": 1,
+        "22": 1,
+        "23": 1
+      }
+    }
+  },
+  {
+    "name": "mcp-new-optional-parameters",
+    "path": "api/src/umbod/mcp/public_app.py",
+    "source": "from typing import Optional, Sequence\nfrom fastapi import FastAPI\nfrom starlette.applications import Starlette\nfrom fastmcp import FastMCP\nfrom umbod.hosting.contracts import AppConfig, ConnectorRegistration, InMemoryGroupConnectorToolPermissions, JwtVerifier, MCPAuthProvider, McpToolInvocationLogSink, OAuthService\nfrom umbod.core.connectors.native.runtime import ConnectorRuntime\nfrom umbod.core.persistence import PersistenceRuntime\nfrom umbod.mcp.settings import MCPAppSettings\nfrom umbod.mcp.public_app import RuntimeStateArgument\n\nasync def build_mcp(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, persistence_runtime: PersistenceRuntime, *runtime_state: RuntimeStateArgument, new_option: str | None) -> FastMCP:\n    raise NotImplementedError\n",
+    "expected": {
+      "python.function-argument-none-type.mcp-boundary": {
+        "11": 2
+      }
+    }
+  },
+  {
+    "name": "mcp-different-signatures",
+    "path": "api/src/umbod/mcp/public_app.py",
+    "source": "async def build_mcp(settings: object, value: str | None) -> object:\n    raise NotImplementedError\n",
+    "expected": {
+      "python.function-argument-none-type.mcp-boundary": {
+        "1": 1
+      }
+    }
+  },
+  {
+    "name": "hosting-duplicate-names-outside-boundaries",
+    "source": "from typing import Optional, Sequence\nfrom fastapi import FastAPI\nfrom starlette.applications import Starlette\nfrom fastmcp import FastMCP\nfrom umbod.hosting.contracts import AppConfig, ConnectorRegistration, InMemoryGroupConnectorToolPermissions, JwtVerifier, MCPAuthProvider, McpToolInvocationLogSink, OAuthService\nfrom umbod.core.connectors.native.runtime import ConnectorRuntime\nfrom umbod.core.persistence import PersistenceRuntime\nfrom umbod.mcp.settings import MCPAppSettings\nfrom umbod.mcp.public_app import RuntimeStateArgument\n\ndef create_rest_app(settings: AppConfig, *, connector_registrations: Optional[Sequence[ConnectorRegistration]], admin_verifier: Optional[JwtVerifier], oauth_service: Optional[OAuthService], **user_authentication: object) -> FastAPI:\n    raise NotImplementedError\n\nasync def create_mcp_app(settings: AppConfig, *, auth_provider: Optional[MCPAuthProvider], group_permission_runtime_state: Optional[InMemoryGroupConnectorToolPermissions], invocation_log_sink: Optional[McpToolInvocationLogSink]) -> Starlette:\n    raise NotImplementedError\n\nasync def build_mcp(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, persistence_runtime: PersistenceRuntime, *runtime_state: RuntimeStateArgument) -> FastMCP:\n    raise NotImplementedError\n\ndef create_rest_application(settings: AppConfig, value: str | None) -> FastAPI:\n    raise NotImplementedError\n\nasync def create_mcp_application(settings: AppConfig, value: str | None) -> Starlette:\n    raise NotImplementedError\n\nasync def build_mcp_application(settings: MCPAppSettings, value: str | None) -> FastMCP:\n    raise NotImplementedError\n",
+    "expected": {
+      "python.function-argument-none-type": {
+        "11": 3,
+        "14": 3,
+        "17": 1,
+        "20": 1,
+        "23": 1,
+        "26": 1
+      }
+    }
+  },
+  {
+    "name": "mcp-duplicate-name-outside-boundary",
+    "source": "from fastmcp import FastMCP\nfrom umbod.core.connectors.native.runtime import ConnectorRuntime\nfrom umbod.core.persistence import PersistenceRuntime\nfrom umbod.mcp.auth.factory import MCPAuthProvider\nfrom umbod.mcp.settings import MCPAppSettings\nfrom umbod.mcp.public_app import RuntimeStateArgument\n\nasync def build_mcp(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, persistence_runtime: PersistenceRuntime, *runtime_state: RuntimeStateArgument) -> FastMCP:\n    raise NotImplementedError\n\nasync def build_mcp_new(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, persistence_runtime: PersistenceRuntime, *runtime_state: RuntimeStateArgument) -> FastMCP:\n    raise NotImplementedError\n",
+    "expected": {
+      "python.function-argument-none-type": {
+        "8": 1,
+        "11": 1
+      }
+    }
+  }
+]

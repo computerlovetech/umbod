@@ -11,7 +11,7 @@ description: "MCP application composition, capability exposure, authentication a
 - [agent_instructions.py](./agent_instructions.py) — Agent setup guidance resource.
 - [agent_behaviour/](./agent_behaviour/README.md) — Authenticated current playbooks, user-requested diagnostics and durable self-report receipts.
 - [assets/](./assets/) — MCP assets.
-- [auth/](./auth/) — Authentication and caller capture.
+- [auth/](./auth/README.md) — Provider composition, explicit transport authentication and caller capture.
 - [authorization.py](./authorization.py) — FastMCP permission bridge.
 - [connectors/](./connectors/) — Connector-kind delivery adapters.
 - [Personal discovery](./connectors/downstream_mcp/personal_discovery.py) — Operation-scoped owner inventories, current connector grants and indexed authorization.

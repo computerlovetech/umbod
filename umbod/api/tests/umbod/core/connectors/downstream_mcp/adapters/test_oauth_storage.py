@@ -1,3 +1,4 @@
+import json
 import time
 
 import pytest
@@ -100,6 +101,57 @@ async def test_save_before_load_does_not_write_or_create_credentials() -> None:
     await storage.save()
     assert store.reads == store.writes == 0
     assert store.credentials == {}
+
+
+@pytest.mark.parametrize("explicit_nulls", [False, True])
+async def test_legacy_document_round_trip_preserves_absent_authorization(
+    explicit_nulls: bool,
+) -> None:
+    payload: dict[str, object] = {"endpoint_url": ENDPOINT}
+    absent_fields = {
+        "client_info": None,
+        "tokens": None,
+        "expires_at": None,
+        "metadata": None,
+        "authorization_server": None,
+    }
+    if explicit_nulls:
+        payload.update(absent_fields)
+    document = AuthorizationDocument.model_validate_json(json.dumps(payload))
+    storage = DetachedConnectorOAuthStorage(document, "one")
+    await storage.load()
+    assert await storage.get_client_info() is None
+    assert await storage.get_tokens() is None
+    exported = json.loads(storage.export().get_secret_value())
+    assert exported == {"endpoint_url": ENDPOINT, **absent_fields}
+    restored = AuthorizationDocument.model_validate_json(storage.export().get_secret_value())
+    assert restored == document
+
+
+async def test_unknown_token_lifetime_remains_null_after_export() -> None:
+    storage = DetachedConnectorOAuthStorage(AuthorizationDocument(endpoint_url=ENDPOINT), "one")
+    await storage.set_tokens(OAuthToken(access_token="expiring", token_type="Bearer", expires_in=300))
+    await storage.set_tokens(OAuthToken(access_token="unknown", token_type="Bearer", expires_in=None))
+    exported = json.loads(storage.export().get_secret_value())
+    restored = AuthorizationDocument.model_validate_json(storage.export().get_secret_value())
+    assert exported["tokens"]["expires_in"] is None
+    assert exported["expires_at"] is None
+    assert restored.tokens is not None
+    assert restored.tokens.expires_in is None
+    assert restored.expires_at is None
+
+
+async def test_document_repr_does_not_expose_client_or_token_credentials() -> None:
+    document = AuthorizationDocument(
+        endpoint_url=ENDPOINT,
+        client_info=OAuthClientInformationFull(client_id="private-client-id", client_secret="private-client-secret"),
+        tokens=OAuthToken(access_token="private-access-token", refresh_token="private-refresh-token", token_type="Bearer"),
+    )
+    representation = repr(document)
+    for secret in ("private-client-id", "private-client-secret", "private-access-token", "private-refresh-token"):
+        assert secret not in representation
+    assert "client_info=" not in representation
+    assert "tokens=" not in representation
 
 
 async def test_detached_setters_and_export_preserve_latest_sdk_document() -> None:

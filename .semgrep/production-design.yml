@@ -134,7 +134,27 @@ rules:
     patterns:
       - pattern-either:
           - pattern: $REQUEST.app.state.$DEPENDENCY
-          - pattern: $APP.state.$DEPENDENCY
+          - patterns:
+              - pattern: $APP.state.$DEPENDENCY
+              - pattern-either:
+                  - pattern-inside: |
+                      def $FUNCTION(..., $APP: fastapi.FastAPI, ...):
+                        ...
+                  - pattern-inside: |
+                      def $FUNCTION(..., $APP: starlette.applications.Starlette, ...):
+                        ...
+                  - pattern-inside: |
+                      $APP = fastapi.FastAPI(...)
+                      ...
+                  - pattern-inside: |
+                      $APP = starlette.applications.Starlette(...)
+                      ...
+                  - pattern-inside: |
+                      $APP: fastapi.FastAPI = ...
+                      ...
+                  - pattern-inside: |
+                      $APP: starlette.applications.Starlette = ...
+                      ...
       - pattern-inside: |
           def $FUNCTION(...):
             ...
@@ -166,12 +186,17 @@ rules:
         - '**/*_test.py'
         - '**/conftest.py'
     patterns:
-      - pattern: |
+      - pattern-inside: |
           @dataclass
           class $CLASS:
             ...
-            def $METHOD(self, ...):
-              ...
+      - pattern: |
+          def $METHOD(self, ...):
+            ...
+      - pattern-not: |
+          @property
+          def $METHOD(self, ...):
+            ...
       - metavariable-regex:
           metavariable: $METHOD
           regex: ^(?!__).*
@@ -211,10 +236,18 @@ rules:
           - pattern: "$FIELD: $TYPE = None"
 
   - id: python.pydantic.none-type-field
+    metadata:
+      boundary_model_exceptions:
+        - model: umbod.core.connectors.downstream_mcp.adapters.fastmcp.oauth_storage.AuthorizationDocument
+          reason: Legacy serialized SDK credential document preserves missing registration, tokens, provider expiry, and discovery data.
+        - model: umbod.rest.connectors.downstream_mcp.oauth.BeginRequest
+          reason: Null retains configured scopes while an empty string explicitly clears them.
+        - model: umbod.rest.connectors.downstream_mcp.oauth.OAuthDetails
+          reason: Public JSON distinguishes unavailable discovery or provider scope from explicit false and empty values.
     languages:
       - python
     severity: WARNING
-    message: >-
+    message: &pydantic_none_message >-
       Design warning: Pydantic field '$FIELD' allows None. Prefer validating missing or optional user input
       at the API/request boundary and converting it into a required internal DTO before core logic sees it.
       If None means the model is in another state, split the model into explicit DTOs or domain types. Many
@@ -230,35 +263,138 @@ rules:
         - '**/test_*.py'
         - '**/*_test.py'
         - '**/conftest.py'
-    pattern-either:
-      - patterns:
-          - pattern-inside: |
-              class $CLASS(BaseModel):
-                ...
-          - pattern-either:
-              - pattern: "$FIELD: Optional[$TYPE]"
-              - pattern: "$FIELD: Union[$TYPE, None]"
-              - pattern: "$FIELD: Union[None, $TYPE]"
-              - pattern: "$FIELD: $TYPE | None"
-              - pattern: "$FIELD: None | $TYPE"
-              - pattern: "$FIELD: $TYPE = None"
-      - patterns:
-          - pattern-inside: |
-              class $CLASS(pydantic.BaseModel):
-                ...
-          - pattern-either:
-              - pattern: "$FIELD: Optional[$TYPE]"
-              - pattern: "$FIELD: Union[$TYPE, None]"
-              - pattern: "$FIELD: Union[None, $TYPE]"
-              - pattern: "$FIELD: $TYPE | None"
-              - pattern: "$FIELD: None | $TYPE"
-              - pattern: "$FIELD: $TYPE = None"
+        - '**/api/src/umbod/core/connectors/downstream_mcp/adapters/fastmcp/oauth_storage.py'
+        - '**/api/src/umbod/rest/connectors/downstream_mcp/oauth.py'
+    patterns: &pydantic_none_patterns
+      - pattern-either:
+          - patterns:
+              - pattern-inside: |
+                  class $CLASS(BaseModel):
+                    ...
+              - pattern-either:
+                  - pattern: "$FIELD: Optional[$TYPE]"
+                  - pattern: "$FIELD: Union[$TYPE, None]"
+                  - pattern: "$FIELD: Union[None, $TYPE]"
+                  - pattern: "$FIELD: $TYPE | None"
+                  - pattern: "$FIELD: None | $TYPE"
+                  - pattern: "$FIELD: $TYPE = None"
+                  - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
+                  - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
+                  - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
+                  - pattern: "$FIELD: $TYPE | None = $VALUE"
+                  - pattern: "$FIELD: None | $TYPE = $VALUE"
+          - patterns:
+              - pattern-inside: |
+                  class $CLASS(pydantic.BaseModel):
+                    ...
+              - pattern-either:
+                  - pattern: "$FIELD: Optional[$TYPE]"
+                  - pattern: "$FIELD: Union[$TYPE, None]"
+                  - pattern: "$FIELD: Union[None, $TYPE]"
+                  - pattern: "$FIELD: $TYPE | None"
+                  - pattern: "$FIELD: None | $TYPE"
+                  - pattern: "$FIELD: $TYPE = None"
+                  - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
+                  - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
+                  - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
+                  - pattern: "$FIELD: $TYPE | None = $VALUE"
+                  - pattern: "$FIELD: None | $TYPE = $VALUE"
+
+  - id: python.pydantic.none-type-field.oauth-storage
+    languages: [python]
+    severity: WARNING
+    message: *pydantic_none_message
+    paths:
+      include:
+        - '**/api/src/umbod/core/connectors/downstream_mcp/adapters/fastmcp/oauth_storage.py'
+    patterns:
+      - patterns: *pydantic_none_patterns
+      - pattern-either:
+          - patterns:
+              - pattern-either:
+                  - pattern: "$FIELD: $ANNOTATION"
+                  - pattern: "$FIELD: $ANNOTATION = $VALUE"
+              - pattern-not-inside: |
+                  class AuthorizationDocument(pydantic.BaseModel):
+                    ...
+          - patterns:
+              - pattern-either:
+                  - pattern: "$FIELD: $ANNOTATION"
+                  - pattern: "$FIELD: $ANNOTATION = $VALUE"
+              - pattern-inside: |
+                  class AuthorizationDocument(pydantic.BaseModel):
+                    ...
+              - metavariable-regex:
+                  metavariable: $FIELD
+                  regex: '^(?!(client_info|tokens|expires_at|metadata|authorization_server)$).*'
+
+  - id: python.pydantic.none-type-field.oauth-api
+    languages: [python]
+    severity: WARNING
+    message: *pydantic_none_message
+    paths:
+      include:
+        - '**/api/src/umbod/rest/connectors/downstream_mcp/oauth.py'
+    patterns:
+      - patterns: *pydantic_none_patterns
+      - pattern-either:
+          - patterns:
+              - pattern-either:
+                  - pattern: "$FIELD: $ANNOTATION"
+                  - pattern: "$FIELD: $ANNOTATION = $VALUE"
+              - pattern-not-inside: |
+                  class BeginRequest(pydantic.BaseModel):
+                    ...
+              - pattern-not-inside: |
+                  class OAuthDetails(pydantic.BaseModel):
+                    ...
+          - patterns:
+              - pattern-either:
+                  - pattern: "$FIELD: $ANNOTATION"
+                  - pattern: "$FIELD: $ANNOTATION = $VALUE"
+              - pattern-inside: |
+                  class BeginRequest(pydantic.BaseModel):
+                    ...
+              - metavariable-regex:
+                  metavariable: $FIELD
+                  regex: '^(?!(scopes)$).*'
+          - patterns:
+              - pattern-either:
+                  - pattern: "$FIELD: $ANNOTATION"
+                  - pattern: "$FIELD: $ANNOTATION = $VALUE"
+              - pattern-inside: |
+                  class OAuthDetails(pydantic.BaseModel):
+                    ...
+              - metavariable-regex:
+                  metavariable: $FIELD
+                  regex: '^(?!(error|granted_scopes|canonical_endpoint|endpoint_differs|issuer)$).*'
 
   - id: python.function-argument-none-type
+    metadata:
+      protocol_contract_exceptions:
+        - contract: __aexit__(self, exc_type, exc, traceback)
+          reason: Python context managers receive three None values on normal exit and must forward exceptions and suppression unchanged.
+      compatibility_boundary_exceptions:
+        - function: umbod.hosting.applications.create_rest_app
+          reason: Public hosting hooks preserve plugin discovery, configured verification, and absent host OAuth override semantics.
+        - function: umbod.hosting.applications.create_mcp_app
+          reason: Public hosting hooks use None to retain configured authentication, permission projection, and telemetry sink.
+        - function: umbod.mcp.public_app.build_mcp
+          reason: Legacy composition entrypoint normalizes absent authentication into an explicit unauthenticated transport before internal construction.
+      framework_contract_exceptions:
+        - contract: httpcore.AsyncNetworkBackend
+          methods: [connect_tcp, connect_unix_socket]
+          reason: Overrides must preserve HTTP transport timeout, local binding, and socket option absence semantics.
+        - contract: httpcore2.AsyncNetworkBackend
+          methods: [connect_tcp, connect_unix_socket]
+          reason: Overrides must preserve HTTP transport timeout, local binding, and socket option absence semantics.
+        - contract: httpcore2.AsyncNetworkStream
+          methods: [read, write, start_tls]
+          reason: Overrides must preserve transport timeout and TLS server hostname absence semantics.
     languages:
       - python
     severity: WARNING
-    message: >-
+    message: &function_none_message >-
       Design warning: function or method argument '$PARAM' allows None. Treat uncertainty about missing
       values as a boundary validation concern rather than a downstream core-logic concern. Validate and
       normalize inputs at API, CLI, config, file, or adapter edges, then pass required values internally. If
@@ -275,22 +411,101 @@ rules:
         - '**/test_*.py'
         - '**/*_test.py'
         - '**/conftest.py'
-    pattern-either:
-      - pattern: |
-          def $FUNCTION(..., $PARAM: Optional[$TYPE], ...):
+        - '**/api/src/umbod/hosting/applications.py'
+        - '**/api/src/umbod/mcp/public_app.py'
+    patterns: &function_none_patterns
+      - pattern-either:
+          - pattern: |
+              def $FUNCTION(..., $PARAM: Optional[$TYPE], ...):
+                ...
+          - pattern: |
+              def $FUNCTION(..., $PARAM: Union[$TYPE, None], ...):
+                ...
+          - pattern: |
+              def $FUNCTION(..., $PARAM: Union[None, $TYPE], ...):
+                ...
+          - pattern: |
+              def $FUNCTION(..., $PARAM: $TYPE | None, ...):
+                ...
+          - pattern: |
+              def $FUNCTION(..., $PARAM: None | $TYPE, ...):
+                ...
+          - pattern: |
+              def $FUNCTION(..., $PARAM: $TYPE = None, ...):
+                ...
+      - pattern-not-inside: |
+          def __aexit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: types.TracebackType | None):
             ...
-      - pattern: |
-          def $FUNCTION(..., $PARAM: Union[$TYPE, None], ...):
+      - pattern-either:
+          - patterns:
+              - pattern: |
+                  def $FUNCTION(...):
+                    ...
+              - pattern-not-inside: |
+                  class $CLASS(httpcore.AsyncNetworkBackend):
+                    ...
+              - pattern-not-inside: |
+                  class $CLASS(httpcore2.AsyncNetworkBackend):
+                    ...
+              - pattern-not-inside: |
+                  class $CLASS(httpcore2.AsyncNetworkStream):
+                    ...
+          - patterns:
+              - pattern: |
+                  def $FUNCTION(...):
+                    ...
+              - pattern-inside: |
+                  class $CLASS(httpcore.AsyncNetworkBackend):
+                    ...
+              - metavariable-regex:
+                  metavariable: $FUNCTION
+                  regex: '^(?!(connect_tcp|connect_unix_socket)$).*'
+          - patterns:
+              - pattern: |
+                  def $FUNCTION(...):
+                    ...
+              - pattern-inside: |
+                  class $CLASS(httpcore2.AsyncNetworkBackend):
+                    ...
+              - metavariable-regex:
+                  metavariable: $FUNCTION
+                  regex: '^(?!(connect_tcp|connect_unix_socket)$).*'
+          - patterns:
+              - pattern: |
+                  def $FUNCTION(...):
+                    ...
+              - pattern-inside: |
+                  class $CLASS(httpcore2.AsyncNetworkStream):
+                    ...
+              - metavariable-regex:
+                  metavariable: $FUNCTION
+                  regex: '^(?!(read|write|start_tls)$).*'
+
+  - id: python.function-argument-none-type.hosting-boundary
+    languages: [python]
+    severity: WARNING
+    message: *function_none_message
+    paths:
+      include:
+        - '**/api/src/umbod/hosting/applications.py'
+    patterns:
+      - patterns: *function_none_patterns
+      - pattern-not-inside: |
+          def create_rest_app(settings: AppConfig, *, connector_registrations: Optional[Sequence[ConnectorRegistration]], admin_verifier: Optional[JwtVerifier], oauth_service: Optional[OAuthService], **user_authentication: object):
             ...
-      - pattern: |
-          def $FUNCTION(..., $PARAM: Union[None, $TYPE], ...):
+      - pattern-not-inside: |
+          def create_mcp_app(settings: AppConfig, *, auth_provider: Optional[MCPAuthProvider], group_permission_runtime_state: Optional[InMemoryGroupConnectorToolPermissions], invocation_log_sink: Optional[McpToolInvocationLogSink]):
             ...
-      - pattern: |
-          def $FUNCTION(..., $PARAM: $TYPE | None, ...):
-            ...
-      - pattern: |
-          def $FUNCTION(..., $PARAM: None | $TYPE, ...):
-            ...
-      - pattern: |
-          def $FUNCTION(..., $PARAM: $TYPE = None, ...):
+
+  - id: python.function-argument-none-type.mcp-boundary
+    languages: [python]
+    severity: WARNING
+    message: *function_none_message
+    paths:
+      include:
+        - '**/api/src/umbod/mcp/public_app.py'
+    patterns:
+      - patterns: *function_none_patterns
+      - pattern-not-inside: |
+          def build_mcp(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, persistence_runtime: PersistenceRuntime, *runtime_state: RuntimeStateArgument):
             ...
