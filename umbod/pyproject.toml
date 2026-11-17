@@ -6,6 +6,8 @@ dependencies = []
 
 [dependency-groups]
 dev = [
-    "mkdocs-material>=9.6,<10",
     "semgrep",
+]
+docs = [
+    "mkdocs-material==9.7.7",
 ]

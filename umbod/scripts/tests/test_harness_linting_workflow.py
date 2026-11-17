@@ -1,7 +1,7 @@
+import fnmatch
 from pathlib import Path
 from typing import Dict, List, Union
 
-import pytest
 import yaml
 
 
@@ -24,9 +24,8 @@ def test_harness_linting_is_reusable_and_runs_okf_checker() -> None:
     assert "markdown-it-py" in requirements
 
 
-@pytest.mark.parametrize("filename", ["umbod-ci.yml", "website-ci.yml"])
-def test_ci_jobs_wait_for_harness_linting(filename: str) -> None:
-    workflow = yaml.load((WORKFLOWS / filename).read_text(), Loader=yaml.BaseLoader)
+def test_ci_jobs_wait_for_harness_linting() -> None:
+    workflow = yaml.load((WORKFLOWS / "umbod-ci.yml").read_text(), Loader=yaml.BaseLoader)
     jobs = workflow["jobs"]
     assert jobs["harness-linting"]["uses"] == "./.github/workflows/harness-linting.yml"
     dependencies: Dict[str, Union[str, List[str]]] = {
@@ -45,18 +44,20 @@ def test_ci_jobs_wait_for_harness_linting(filename: str) -> None:
     assert set(jobs) == gated
 
 
-@pytest.mark.parametrize("filename", ["umbod-ci.yml", "website-ci.yml"])
-def test_ci_runs_when_harness_workflow_changes(filename: str) -> None:
-    workflow = yaml.load((WORKFLOWS / filename).read_text(), Loader=yaml.BaseLoader)
-    assert ".github/workflows/harness-linting.yml" in workflow["on"]["pull_request"]["paths"]
+def test_ci_runs_when_harness_workflow_changes() -> None:
+    workflow = yaml.load((WORKFLOWS / "umbod-ci.yml").read_text(), Loader=yaml.BaseLoader)
+    assert any(
+        fnmatch.fnmatchcase(".github/workflows/harness-linting.yml", pattern)
+        for pattern in workflow["on"]["pull_request"]["paths"]
+    )
 
 
-@pytest.mark.parametrize("filename", ["umbod-ci.yml", "website-ci.yml"])
-def test_skill_source_changes_trigger_ci(filename: str) -> None:
-    workflow = yaml.load((WORKFLOWS / filename).read_text(), Loader=yaml.BaseLoader)
-    assert "skills/development/write-module-readme/**" in workflow["on"]["pull_request"]["paths"]
-    if filename == "website-ci.yml":
-        assert "skills/development/write-module-readme/**" in workflow["on"]["push"]["paths"]
+def test_skill_source_changes_trigger_ci() -> None:
+    workflow = yaml.load((WORKFLOWS / "umbod-ci.yml").read_text(), Loader=yaml.BaseLoader)
+    assert any(
+        fnmatch.fnmatchcase("skills/development/write-module-readme/SKILL.md", pattern)
+        for pattern in workflow["on"]["pull_request"]["paths"]
+    )
 
 
 def test_readmes_anywhere_in_repository_trigger_ci() -> None:

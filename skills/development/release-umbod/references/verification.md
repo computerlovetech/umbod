@@ -19,7 +19,7 @@ Record each result against the final candidate SHA. Re-run checks invalidated by
 | Backend lint | `umbod/api` | `uv run ruff check .` |
 | Release/README contracts | `umbod/api` | `PYTHONPATH=.. uv run --locked pytest ../scripts/tests -q -n 0` |
 | Frontend | `umbod/frontend` | `bun install --frozen-lockfile && bun run test && bun run check` |
-| Documentation | `umbod` | `uv run --locked mkdocs build --strict` |
+| Documentation | `umbod` | `uv run --locked --only-group docs mkdocs build --strict` |
 | Website and rendered docs | `website` | `bun install --frozen-lockfile && bun run test && bun run build` |
 | Shared analysis | `umbod` | `uv run semgrep scan --config ../.semgrep.yml --config ../.semgrep/production-design.yml --config ../.semgrep/test-correctness.yml --no-rewrite-rule-ids .`; apply repository remediation rules, never report findings as a clean scan |
 | API/MCP changes | Repository root | `bash umbod/tests/kind-runtime/run.sh`; inspect failing assertions and pod diagnostics |

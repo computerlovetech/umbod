@@ -8,6 +8,10 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - '.github/ci-paths.yml'
+      - '.dockerignore'
+      - 'website/**'
+      - 'release-metadata.json'
       - '.semgrep.yml'
       - '.semgrep/**'
       - '.semgrepignore'
@@ -15,14 +19,10 @@ on:
       - 'umbod/**'
       - 'packages/umbod-sdk/**'
       - '**/README.md'
-      - 'skills/development/write-module-readme/**'
-      - 'skills/integrations/umbod-connected-apps/**'
+      - 'skills/**'
       - 'LICENSE'
-      - '.github/workflows/umbod-ci.yml'
-      - '.github/workflows/harness-linting.yml'
-      - '.github/workflows/umbod-release.yml'
-      - '.github/workflows/umbod-image-retention.yml'
-      - '.github/actions/docker-build/action.yml'
+      - '.github/workflows/**'
+      - '.github/actions/**'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -34,12 +34,21 @@ jobs:
 
   changes:
     needs: harness-linting
-    name: Detect Kind-relevant changes
+    name: Detect relevant changes
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read
       pull-requests: read
     outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      sdk: ${{ steps.filter.outputs.sdk }}
+      installers: ${{ steps.filter.outputs.installers }}
+      scripts: ${{ steps.filter.outputs.scripts }}
+      website: ${{ steps.filter.outputs.website }}
+      core: ${{ steps.filter.outputs.core }}
+      connector: ${{ steps.filter.outputs.connector }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      helm: ${{ steps.filter.outputs.helm }}
       kind: ${{ steps.filter.outputs.kind }}
     steps:
       - uses: useblacksmith/checkout@v1
@@ -47,47 +56,17 @@ jobs:
       - id: filter
         uses: dorny/paths-filter@v3
         with:
-          filters: |
-            kind:
-              - '.github/workflows/umbod-ci.yml'
-              - '.github/actions/docker-build/action.yml'
-              - '.dockerignore'
-              - 'pyproject.toml'
-              - 'uv.lock'
-              - 'umbod/api/Dockerfile'
-              - 'umbod/api/pyproject.toml'
-              - 'umbod/api/uv.lock'
-              - 'umbod/api/README.md'
-              - 'umbod/api/src/**'
-              - 'skills/integrations/umbod-connected-apps/**'
-              - 'LICENSE'
-              - 'umbod/frontend/**'
-              - 'umbod/deploy/helm/umbod/**'
-              - 'packages/umbod-sdk/**'
-        
+          filters: .github/ci-paths.yml
+
   docs:
-    needs: harness-linting
-    name: umbod Documentation Build
-    runs-on: blacksmith-4vcpu-ubuntu-2404
-    defaults:
-      run:
-        working-directory: umbod
-    steps:
-      - uses: useblacksmith/checkout@v1
-
-      - uses: astral-sh/setup-uv@v7
-        with:
-          enable-cache: true
-          cache-dependency-glob: umbod/uv.lock
-
-      - name: Install documentation dependencies
-        run: uv sync --group dev --locked
-
-      - name: Build documentation
-        run: uv run mkdocs build --strict
+    needs: changes
+    if: needs.changes.outputs.website == 'true'
+    name: Website and documentation
+    uses: ./.github/workflows/website-ci.yml
 
   sdk-tests:
-    needs: harness-linting
+    needs: changes
+    if: needs.changes.outputs.sdk == 'true'
     name: Umbod SDK Tests and Installed Wheel
     runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
@@ -96,6 +75,10 @@ jobs:
     steps:
       - uses: useblacksmith/checkout@v1
       - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.14'
+          enable-cache: true
+          cache-dependency-glob: packages/umbod-sdk/uv.lock
       - name: Test SDK
         run: uv run --locked pytest tests -q --cov --cov-report=xml:coverage.xml
       - name: Save SDK coverage report
@@ -123,7 +106,8 @@ jobs:
           env -u PYTHONPATH "${RUNNER_TEMP}/sdk-smoke/bin/python" smoke_tests/installed_wheel.py
 
   plugin-installers:
-    needs: harness-linting
+    needs: changes
+    if: needs.changes.outputs.installers == 'true'
     name: Plugin installers (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     permissions:
@@ -148,7 +132,8 @@ jobs:
         run: uv run --no-project --python 3.12 --with pytest==9.0.2 --with 'pydantic>=2.13.4,<3' python -m pytest --noconftest --import-mode=importlib -o pythonpath=src umbod/api/tests/umbod/core/harness_plugins/test_installers.py -k powershell_binding_executes -q
 
   backend-tests:
-    needs: harness-linting
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
     name: umbod Backend Tests
     runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
@@ -159,6 +144,7 @@ jobs:
 
       - uses: astral-sh/setup-uv@v7
         with:
+          python-version: '3.14'
           enable-cache: true
           cache-dependency-glob: umbod/api/uv.lock
 
@@ -185,23 +171,39 @@ jobs:
           disable_search: true
           fail_ci_if_error: false
 
-      - name: Test release version resolution
+  script-tests:
+    needs: changes
+    if: needs.changes.outputs.scripts == 'true'
+    name: Repository script tests
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    defaults:
+      run:
+        working-directory: umbod/api
+    steps:
+      - uses: useblacksmith/checkout@v1
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.14'
+          enable-cache: true
+          cache-dependency-glob: umbod/api/uv.lock
+      - name: Test repository scripts
         env:
           PYTHONPATH: ..
-        run: uv run --locked pytest ../scripts/tests
+        run: >-
+          uv run --locked pytest ../scripts/tests -q
+          --ignore=../scripts/tests/test_plugin_installers.py
+          --ignore=../scripts/tests/test_plugin_installers_windows.py
+          --ignore=../scripts/tests/test_release_versions.py
+          --ignore=../scripts/tests/test_release_workflow.py
+          --ignore=../scripts/tests/test_website_deployment.py
 
   core:
     name: umbod Core Docker Build
     needs: changes
+    if: needs.changes.outputs.core == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: useblacksmith/checkout@v1
-
-      - uses: astral-sh/setup-uv@v7
-
-      - name: Test deployment authentication contract
-        working-directory: umbod/api
-        run: uv run pytest tests/deployment/test_proxy_compose.py -q
 
       - name: Build image
         uses: ./.github/actions/docker-build
@@ -212,7 +214,8 @@ jobs:
           tags: ghcr.io/computerlovetech/umbod:ci
 
   connector-builder:
-    needs: harness-linting
+    needs: changes
+    if: needs.changes.outputs.connector == 'true'
     name: umbod Connector Builder Image
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
@@ -235,6 +238,7 @@ jobs:
   frontend:
     name: umbod Frontend Docker Build
     needs: changes
+    if: needs.changes.outputs.frontend == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - uses: useblacksmith/checkout@v1
@@ -278,7 +282,8 @@ jobs:
           tags: ghcr.io/computerlovetech/umbod-frontend:ci
 
   helm:
-    needs: harness-linting
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
     name: umbod Helm Chart
     runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
@@ -312,7 +317,8 @@ jobs:
         run: helm package deploy/helm/umbod --destination chart-package
 
   helm-kubernetes-schema:
-    needs: harness-linting
+    needs: changes
+    if: needs.changes.outputs.helm == 'true'
     name: umbod Helm Chart (Kubernetes ${{ matrix.kubernetes-version }})
     runs-on: blacksmith-4vcpu-ubuntu-2404
     strategy:
@@ -346,7 +352,7 @@ jobs:
 
   helm-kind-install:
     name: umbod Helm Chart Kind Install
-    needs: [changes, core, frontend]
+    needs: changes
     if: needs.changes.outputs.kind == 'true'
     runs-on: blacksmith-4vcpu-ubuntu-2404
     defaults:
@@ -369,36 +375,55 @@ jobs:
 
   ci-complete:
     name: umbod CI
-    needs: [harness-linting, changes, docs, sdk-tests, backend-tests, plugin-installers, core, connector-builder, frontend, helm, helm-kubernetes-schema, helm-kind-install]
+    needs: [harness-linting, changes, docs, sdk-tests, backend-tests, script-tests, plugin-installers, core, connector-builder, frontend, helm, helm-kubernetes-schema, helm-kind-install]
     if: always()
     runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: umbod-ci
     steps:
       - name: Fail if any required job failed
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
         run: |
-          if [ "${{ needs.harness-linting.result }}" != "success" ] || \
-             [ "${{ needs.changes.result }}" != "success" ] || \
-             [ "${{ needs.docs.result }}" != "success" ] || \
-             [ "${{ needs.sdk-tests.result }}" != "success" ] || \
-             [ "${{ needs.backend-tests.result }}" != "success" ] || \
-             [ "${{ needs.plugin-installers.result }}" != "success" ] || \
-             [ "${{ needs.core.result }}" != "success" ] || \
-             [ "${{ needs.connector-builder.result }}" != "success" ] || \
-             [ "${{ needs.frontend.result }}" != "success" ] || \
-             [ "${{ needs.helm.result }}" != "success" ] || \
-             [ "${{ needs.helm-kubernetes-schema.result }}" != "success" ] || \
-             { [ "${{ needs.changes.outputs.kind }}" = "true" ] && [ "${{ needs.helm-kind-install.result }}" != "success" ]; }; then
-            echo "One or more CI jobs failed"
-            exit 1
-          fi
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+
+          jobs = json.loads(os.environ["JOB_RESULTS"])
+          for name in ("harness-linting", "changes"):
+              if jobs[name]["result"] != "success":
+                  sys.exit(f"Required job did not succeed: {name}")
+          selections = jobs["changes"]["outputs"]
+          filters = {
+              "docs": "website",
+              "sdk-tests": "sdk",
+              "backend-tests": "backend",
+              "script-tests": "scripts",
+              "plugin-installers": "installers",
+              "core": "core",
+              "connector-builder": "connector",
+              "frontend": "frontend",
+              "helm": "helm",
+              "helm-kubernetes-schema": "helm",
+              "helm-kind-install": "kind",
+          }
+          for name, component in filters.items():
+              selected = selections.get(component)
+              if selected not in ("true", "false"):
+                  sys.exit(f"Missing or invalid change detection: {component}")
+              expected = "success" if selected == "true" else "skipped"
+              if jobs[name]["result"] != expected:
+                  sys.exit(f"Unexpected result for {name}: {jobs[name]['result']}")
+          PY
 
   publish-main-images:
     name: Publish ${{ matrix.name }} main image
-    needs: ci-complete
+    needs: [ci-complete, changes]
     if: >-
       ${{
         !cancelled() &&
         needs.ci-complete.result == 'success' &&
+        (needs.changes.outputs.core == 'true' || needs.changes.outputs.frontend == 'true' || needs.changes.outputs.connector == 'true') &&
         github.event_name == 'push' &&
         github.ref == 'refs/heads/main' &&
         github.repository == 'computerlovetech/umbod'

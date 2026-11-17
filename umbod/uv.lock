@@ -3,25 +3,6 @@ revision = 3
 requires-python = ">=3.12"
 
 [[package]]
-name = "umbod-tools"
-version = "0.0.0"
-source = { virtual = "." }
-
-[package.dev-dependencies]
-dev = [
-    { name = "mkdocs-material" },
-    { name = "semgrep" },
-]
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mkdocs-material", specifier = ">=9.6,<10" },
-    { name = "semgrep" },
-]
-
-[[package]]
 name = "annotated-types"
 version = "0.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1478,6 +1459,25 @@ sdist = { url = "https://files.pythonhosted.org/packages/55/e3/70399cb7dd41c10ac
 wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/9b/47798a6c91d8bdb567fe2698fe81e0c6b7cb7ef4d13da4114b41d239f65d/typing_inspection-0.4.2-py3-none-any.whl", hash = "sha256:4ed1cacbdc298c220f1bd249ed5287caa16f34d44ef4e9c3d0cbad5b521545e7", size = 14611, upload-time = "2025-10-01T02:14:40.154Z" },
 ]
+
+[[package]]
+name = "umbod-tools"
+version = "0.0.0"
+source = { virtual = "." }
+
+[package.dev-dependencies]
+dev = [
+    { name = "semgrep" },
+]
+docs = [
+    { name = "mkdocs-material" },
+]
+
+[package.metadata]
+
+[package.metadata.requires-dev]
+dev = [{ name = "semgrep" }]
+docs = [{ name = "mkdocs-material", specifier = "==9.7.7" }]
 
 [[package]]
 name = "urllib3"

@@ -11,9 +11,12 @@ description: Backend pytest runner, README validation, release metadata checks, 
 - [release_versions.py](./release_versions.py) — Release version conversion and committed metadata validation.
 - [stamp_sdk_version.py](./stamp_sdk_version.py) — SDK build-workspace stamping.
 - [build_codex_plugin.py](./build_codex_plugin.py) — Generates credential-free deployment-specific Codex marketplaces and prints installation commands.
-- [tests](./tests/) — Pytest runner, README checks, version, release workflow, and installed Codex package-loader contracts.
+- [tests](./tests/) — CI selection and completion gates, pytest runner, README checks, release workflows, and Codex package-loader contracts.
 
 # Operations
+
+- [CI workflow](../../.github/workflows/umbod-ci.yml) — Change-selected validation and coordinated main image publication.
+- [CI input filters](../../.github/ci-paths.yml) — Component and shared-input coverage for workflow job selection.
 
 - [Release workflow](../../.github/workflows/umbod-release.yml) — Tag provenance, publication gates, artifact stamping, and production promotion.
 - [Release skill](../../skills/development/release-umbod/SKILL.md) — Manual preparation, publication approval, verification, and partial-release recovery.

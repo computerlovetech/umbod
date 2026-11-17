@@ -91,9 +91,9 @@ bun run check
 The static solution documentation is maintained in `docs/` and built with MkDocs Material. From `umbod`:
 
 ```bash
-uv sync --group dev
-uv run mkdocs serve
-uv run mkdocs build --strict
+uv sync --only-group docs
+uv run --only-group docs mkdocs serve
+uv run --only-group docs mkdocs build --strict
 ```
 
 The authoring server is available at `http://127.0.0.1:8000`.

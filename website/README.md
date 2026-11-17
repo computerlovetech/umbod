@@ -65,7 +65,7 @@ bunx wrangler dev --port 8787
 ## Deploy to Cloudflare Workers
 
 - [Deployment runbook](deployment.md) — Cloudflare branch settings, release promotion to production, versioned builds, and recovery.
-- [Website CI](../.github/workflows/website-ci.yml) — Validates website changes; Cloudflare’s Git integration handles preview deployments from main.
+- [Website CI](../.github/workflows/website-ci.yml) — Reusable website and documentation validation selected by Umbod CI; Cloudflare handles preview deployments.
 - [Release workflow](../.github/workflows/umbod-release.yml) — Promotes the verified release commit to the production branch after artifact publication.
 - [Release preparation](scripts/prepare-release.sh) — Validates the exact release tag and stamps build-local installation versions.
 - [Wrangler configuration](wrangler.jsonc) — Separate Workers and custom domains for production and the preview environment.
