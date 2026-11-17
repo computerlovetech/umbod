@@ -38,12 +38,15 @@ class ValidateCommand:
             plugin_path = kwargs.get("plugin_path")
             if plugin_path is not None:
                 _add_plugin_path(Path(plugin_path))
-            plugins = _load_and_validate_plugins()
+            sdk_version = version(canonicalize_name("umbod"))
+            plugins = _load_and_validate_plugins(sdk_version)
         except typer.Exit:
             raise
         except Exception as error:
             _fail(f"Connector plugin validation failed: {error}")
         typer.echo(f"Connector plugins valid: {len(plugins)} loaded.")
+        typer.echo(f"Validation environment: Python {sys.version.split()[0]}; SDK umbod {sdk_version}; interpreter {sys.executable}")
+        typer.echo("Structural validation only in this environment; other runtimes, credentials, and live services were not verified.")
 
 
 def _add_plugin_path(plugin_path: Path) -> None:
@@ -60,9 +63,8 @@ def _add_plugin_path(plugin_path: Path) -> None:
     importlib.invalidate_caches()
 
 
-def _load_and_validate_plugins() -> list[ConnectorPlugin]:
+def _load_and_validate_plugins(sdk_version: str) -> list[ConnectorPlugin]:
     sdk_name = canonicalize_name("umbod")
-    sdk_version = version(sdk_name)
     plugins: list[ConnectorPlugin] = []
     connector_ids: set[str] = set()
     for entry_point in entry_points(group=CONNECTOR_PLUGIN_ENTRY_POINT_GROUP):
@@ -120,4 +122,4 @@ def _fail(message: str) -> NoReturn:
     raise typer.Exit(code=1)
 
 
-app.command("validate")(ValidateCommand())
+app.command("validate", help="Load trusted connector code and validate its structure in the current Python/SDK environment, not another runtime or live services.")(ValidateCommand())

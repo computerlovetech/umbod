@@ -34,7 +34,7 @@ export class PersonalAccessViewState implements PersonalAccessViewController {
       ...(state.selection.enabled ? state.attempt
         ? [item('continue-sign-in', 'Continue sign-in', !state.authorizationUrl || state.busy || state.needsRefresh)]
         : [item('sign-in', this.signInLabel, state.busy || state.checking || state.needsRefresh || state.renewalInProgress)] : []),
-      ...(state.selection.enabled && state.selection.has_authorization ? [item('discover', 'Refresh tools', !state.canDiscover)] : []),
+      ...(state.selection.enabled && state.selection.has_authorization && state.healthPhase === 'ready' && state.health?.state === 'authorized' ? [item('discover', 'Refresh tools', !state.canDiscover)] : []),
       ...(state.renewableAuthorization ? [item('renew', 'Renew access', !state.canRenew)] : []),
       item('refresh', 'Check authorization status', state.busy || state.checking || state.loadingTools),
       ...(state.attempt ? [item('check', 'Check sign-in status', state.busy || state.checking), item('cancel', 'Cancel sign-in', state.busy || state.needsRefresh)] : []),

@@ -11,7 +11,7 @@ import { currentUserIdentitySchema, createHeaderAccountUserInfoBoundary } from '
 vi.mock('$app/state', () => ({ navigating: { to: null, from: null } }));
 
 describe('admin shell logout', () => {
-  test('nullable email hides only its row in both account presentations', () => {
+  test('nullable email hides only its row in both account presentations', (): void => {
     const profile = currentUserIdentitySchema.parse({
       id: 'admin-id', email: null, name: 'unknown', picture: 'https://example.com/admin.png'
     });
@@ -36,8 +36,8 @@ describe('admin shell logout', () => {
     expect(shell.body).toContain('aria-label="Administration navigation"');
     expect(document.querySelector('.workspace-back')?.textContent).toBe('←Back to workspace');
     expect(document.querySelector('.workspace-back')?.getAttribute('href')).toBe('/dashboard');
-    expect(document.querySelector('nav')?.textContent).not.toContain('Dashboard');
-    expect(document.querySelector('nav')?.textContent).not.toContain('Getting started');
+    expect(document.querySelector('nav')?.textContent).toContain('Dashboard');
+    expect(document.querySelector('nav')?.textContent).toContain('Getting started');
     expect(shell.body).toContain('href="/dashboard"');
     expect(shell.body).not.toContain('Administration</a>');
     expect(shell.body).not.toContain('href="/admin"');
@@ -50,9 +50,11 @@ describe('admin shell logout', () => {
     expect(shell.body).not.toContain('href="/admin/filesystem"');
     expect(shell.body).not.toContain('Filesystem</a>');
     expect(Array.from(document.querySelectorAll('nav a'), (link): string => link.textContent.trim())).toEqual([
+      'Dashboard', 'Connectors', 'Files', 'Getting started',
       'Connectors', 'Groups', 'Group permissions', 'Insights'
     ]);
-    expect(document.querySelector('nav a[aria-current="page"]')?.textContent.trim()).toBe('Connectors');
+    expect(document.querySelectorAll('nav a[aria-current="page"]')).toHaveLength(1);
+    expect(document.querySelector('nav a[aria-current="page"]')?.getAttribute('href')).toBe('/admin/connectors');
     expect(document.querySelector('h1')).toBeNull();
     expect(shell.body).toContain('Content');
     expect(logout).not.toHaveBeenCalled();

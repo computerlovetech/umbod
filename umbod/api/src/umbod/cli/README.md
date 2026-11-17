@@ -10,7 +10,7 @@ description: "Service startup, configuration inspection, connector validation an
 - [api.py](./api.py) — REST service commands.
 - [cleanup.py](./cleanup.py) — Explicit one-shot retention jobs and shared persistence lifetime.
 - [config.py](./config.py) — Configuration inspection commands.
-- [connectors.py](./connectors.py) — Connector validation commands.
+- [connectors.py](./connectors.py) — Structural connector validation with Python/SDK environment identification and explicit verification limits.
 - [main.py](./main.py) — Command registration.
 - [mcp.py](./mcp.py) — MCP startup, effective listener-port validation and supervised hosting delegation.
 - [migrate.py](./migrate.py) — Offline, verified local-to-S3 file-content migration.

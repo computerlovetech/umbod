@@ -55,6 +55,7 @@ describe('personal access presentation contract', () => {
 
   test('loading or unavailable health never reports ready or diagnoses expiration', async (): Promise<void> => {
     const { connection, view, api } = harness(authorizationHealth, {});
+    expect(view.menuActions.some((action) => action.id === 'discover')).toBe(false);
     expect(view.status.label).toBe('Checking access…');
     expect(view.status.action).toBeNull();
     vi.spyOn(api.authorization, 'getHealth').mockRejectedValue(new HttpError(503, 'private', {}));
@@ -63,7 +64,52 @@ describe('personal access presentation contract', () => {
     expect(view.status.action).toBe('refresh');
     expect(view.status.description).not.toContain('expired');
     expect(view.menuActions.some((action) => action.id === 'renew')).toBe(false);
-    expect(view.menuActions.find((action) => action.id === 'discover')?.disabled).toBe(true);
+    expect(view.menuActions.some((action) => action.id === 'discover')).toBe(false);
+    const discover = vi.spyOn(api.connections, 'discover');
+    await view.perform('discover');
+    expect(discover).not.toHaveBeenCalled();
+  });
+
+  test.each<AuthorizationHealth>([
+    { state: 'expired', expires_at: '2030-01-01T00:00:00Z', refresh_supported: true },
+    { state: 'unsupported' },
+    { state: 'reconnect_required', reason: 'provider_rejected' },
+    { state: 'not_authorized' },
+    { state: 'refreshing', deadline: '2030-01-01T00:00:00Z' }
+  ])('$state authorization hides tool refresh and cannot dispatch discovery', async (health): Promise<void> => {
+    const { connection, view, api } = harness(health, {});
+    const discover = vi.spyOn(api.connections, 'discover');
+    await connection.loadHealth();
+    expect(view.menuActions.some((action) => action.id === 'discover')).toBe(false);
+    await view.perform('discover');
+    expect(discover).not.toHaveBeenCalled();
+  });
+
+  test.each<Partial<Selection>>([{ enabled: false }, { has_authorization: false }])('ineligible selection %j hides tool refresh', async (overrides): Promise<void> => {
+    const { connection, view, api } = harness(authorizationHealth, overrides);
+    const discover = vi.spyOn(api.connections, 'discover');
+    await connection.loadHealth();
+    expect(view.menuActions.some((action) => action.id === 'discover')).toBe(false);
+    await view.perform('discover');
+    expect(discover).not.toHaveBeenCalled();
+  });
+
+  test('checking sign-in keeps tool refresh disabled until the attempt finishes', async (): Promise<void> => {
+    const { connection, view, api } = harness(authorizationHealth, {});
+    await connection.loadHealth();
+    await connection.start();
+    const pending = deferred<Attempt>();
+    vi.spyOn(api.authorization, 'get').mockReturnValue(pending.promise);
+    const discover = vi.spyOn(api.connections, 'discover');
+    const checking = connection.check();
+    expect(connection.checking).toBe(true);
+    expect(view.menuActions.find((action) => action.id === 'discover')).toMatchObject({ disabled: true });
+    await view.perform('discover');
+    expect(discover).not.toHaveBeenCalled();
+    pending.resolve({ ...pendingAttempt, status: 'cancelled' });
+    await checking;
+    expect(view.menuActions.find((action) => action.id === 'discover')).toMatchObject({ disabled: false });
+    connection.dispose();
   });
 
   test('unconfirmed mutations require safe inspection instead of another recovery mutation', async (): Promise<void> => {
@@ -145,11 +191,13 @@ describe('personal access presentation contract', () => {
     const operation = connection.discover();
     expect(view.status.tone).toBe('pending');
     expect(view.status.action).toBeNull();
+    expect(view.menuActions.find((action) => action.id === 'discover')).toMatchObject({ disabled: true });
     expect(view.menuActions.find((action) => action.id === 'sign-in')?.disabled).toBe(true);
     expect(view.menuActions.find((action) => action.id === 'sign-in')?.reason).toBe('Another action is in progress.');
     pending.resolve(undefined);
     await operation;
     expect(view.status.label).toBe('Ready to use');
+    expect(view.menuActions.find((action) => action.id === 'discover')).toMatchObject({ disabled: false });
   });
 
   test('menu actions close the menu and disconnect remains a separate confirmation', async (): Promise<void> => {

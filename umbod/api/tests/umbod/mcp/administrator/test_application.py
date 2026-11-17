@@ -1,5 +1,6 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import json
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -8,10 +9,12 @@ import jwt
 import pytest
 from fastmcp import Client
 from fastmcp.client.transports import StreamableHttpTransport
+from jsonschema import Draft202012Validator
 from starlette.applications import Starlette
 
 from tests.mcp_telemetry_fixtures import RecordingApplicationMetricsRecorder, RecordingAuditSink, RecordingMetricsServerFactory
 from umbod.config import AppConfig
+from umbod.core.administrator.connector_configuration.service import AdministratorConnectorConfigurationService
 from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
 from umbod.logging import create_application_failure_signal
 from umbod.mcp.administrator.application import build_administrator_app
@@ -105,6 +108,107 @@ async def test_unavailable_administrator_tools_cannot_be_called(
             'read_connector_configuration', {'connector_kind': 'native', 'connector_id': 'missing'}, raise_on_error=False,
         )
         assert result.is_error
+
+
+@pytest.mark.asyncio
+async def test_discovery_publishes_required_nonempty_connector_identifiers(
+    telemetry: McpTelemetryDependencies,
+) -> None:
+    settings = application_settings()
+    async with application(settings, telemetry) as app, Client(transport(app, settings.mcp.test_bearer_token)) as client:
+        descriptors = await client.list_tools()
+    for descriptor in descriptors:
+        schema = descriptor.input_schema
+        assert 'connector_id' in schema['required']
+        assert schema['properties']['connector_id']['minLength'] == 1
+        assert 'without trimming' in schema['properties']['connector_id']['description']
+
+
+@pytest.mark.asyncio
+async def test_discovery_limits_policy_to_tools_without_narrowing_other_capability_kinds(
+    telemetry: McpTelemetryDependencies,
+) -> None:
+    settings = application_settings()
+    async with application(settings, telemetry) as app, Client(transport(app, settings.mcp.test_bearer_token)) as client:
+        descriptor = next(tool for tool in await client.list_tools() if tool.name == 'upsert_connector_configuration')
+    validator = Draft202012Validator(descriptor.input_schema)
+    for kind in ('tool', 'prompt', 'resource', 'resource_template'):
+        policy = {
+            'operation': 'set_capability_invocation_policy', 'capability_kind': kind,
+            'capability_key': 'lookup', 'mode': 'ask', 'expected_revision': 0,
+        }
+        activation = {
+            'operation': 'set_capability_activation', 'capability_kind': kind,
+            'capability_key': 'lookup', 'activation_status': 'enabled',
+        }
+        permission = {
+            'operation': 'update_group_permissions', 'group_id': 'engineering',
+            'capabilities': [{'capability_kind': kind, 'capability_key': 'lookup', 'status': 'enabled'}],
+        }
+        arguments = {'connector_kind': 'native', 'connector_id': 'existing', 'desired_state': {'operations': [policy]}}
+        assert validator.is_valid(arguments) == (kind == 'tool')
+        arguments['desired_state'] = {'operations': [activation, permission]}
+        assert validator.is_valid(arguments)
+
+
+@pytest.mark.asyncio
+async def test_discovery_describes_partial_updates_and_independent_duplicate_rules(
+    telemetry: McpTelemetryDependencies,
+) -> None:
+    settings = application_settings()
+    async with application(settings, telemetry) as app, Client(transport(app, settings.mcp.test_bearer_token)) as client:
+        descriptor = next(tool for tool in await client.list_tools() if tool.name == 'upsert_connector_configuration')
+    assert 'omitted or empty operations read the current configuration without changes' in json.dumps(descriptor.input_schema)
+    for guidance in (
+        'partial desired state', 'Omitted or empty operations read the current configuration without changes',
+        'only tool capabilities', 'Do not repeat an activation target or an invocation policy target within its own operation type',
+        'activation and policy for the same tool may be combined',
+        'at most one description operation across override (set_capability_description) and restore (use_system_capability_description)',
+        'at most one permission operation per group', 'unique capability targets within that group',
+    ):
+        assert guidance in descriptor.description
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('tool_name', sorted(ADMIN_TOOLS))
+@pytest.mark.parametrize('connector_arguments', [{}, {'connector_id': ''}])
+async def test_invalid_connector_identifiers_are_rejected_before_service_admission(
+    tool_name: str, connector_arguments: dict[str, str],
+    telemetry: McpTelemetryDependencies, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    read = AsyncMock()
+    upsert = AsyncMock()
+    monkeypatch.setattr(AdministratorConnectorConfigurationService, 'read', read)
+    monkeypatch.setattr(AdministratorConnectorConfigurationService, 'upsert', upsert)
+    arguments = {'connector_kind': 'native', **connector_arguments}
+    if tool_name == 'upsert_connector_configuration':
+        arguments['desired_state'] = {'operations': []}
+    settings = application_settings()
+    async with application(settings, telemetry) as app, Client(transport(app, settings.mcp.test_bearer_token)) as client:
+        result = await client.call_tool(tool_name, arguments, raise_on_error=False)
+    assert result.is_error
+    read.assert_not_awaited()
+    upsert.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('capability_kind', ['prompt', 'resource', 'resource_template'])
+async def test_non_tool_policy_calls_are_rejected_before_mutations(
+    capability_kind: str, telemetry: McpTelemetryDependencies, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    upsert = AsyncMock()
+    monkeypatch.setattr(AdministratorConnectorConfigurationService, 'upsert', upsert)
+    settings = application_settings()
+    async with application(settings, telemetry) as app, Client(transport(app, settings.mcp.test_bearer_token)) as client:
+        result = await client.call_tool('upsert_connector_configuration', {
+            'connector_kind': 'native', 'connector_id': 'existing',
+            'desired_state': {'operations': [
+                {'operation': 'set_capability_activation', 'capability_kind': 'tool', 'capability_key': 'lookup', 'activation_status': 'disabled'},
+                {'operation': 'set_capability_invocation_policy', 'capability_kind': capability_kind, 'capability_key': 'lookup', 'mode': 'ask', 'expected_revision': 0},
+            ]},
+        }, raise_on_error=False)
+    assert result.is_error
+    upsert.assert_not_awaited()
 
 
 @pytest.mark.asyncio

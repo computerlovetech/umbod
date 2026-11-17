@@ -247,7 +247,7 @@ rules:
     languages:
       - python
     severity: WARNING
-    message: &pydantic_none_message >-
+    message: >-
       Design warning: Pydantic field '$FIELD' allows None. Prefer validating missing or optional user input
       at the API/request boundary and converting it into a required internal DTO before core logic sees it.
       If None means the model is in another state, split the model into explicit DTOs or domain types. Many
@@ -265,7 +265,7 @@ rules:
         - '**/conftest.py'
         - '**/api/src/umbod/core/connectors/downstream_mcp/adapters/fastmcp/oauth_storage.py'
         - '**/api/src/umbod/rest/connectors/downstream_mcp/oauth.py'
-    patterns: &pydantic_none_patterns
+    patterns:
       - pattern-either:
           - patterns:
               - pattern-inside: |
@@ -303,12 +303,49 @@ rules:
   - id: python.pydantic.none-type-field.oauth-storage
     languages: [python]
     severity: WARNING
-    message: *pydantic_none_message
+    message: >-
+      Design warning: Pydantic field '$FIELD' allows None. Prefer validating missing or optional user input
+      at the API/request boundary and converting it into a required internal DTO before core logic sees it.
+      If None means the model is in another state, split the model into explicit DTOs or domain types. Many
+      None-able fields in one Pydantic model usually indicate the model has too many responsibilities.
     paths:
       include:
         - '**/api/src/umbod/core/connectors/downstream_mcp/adapters/fastmcp/oauth_storage.py'
     patterns:
-      - patterns: *pydantic_none_patterns
+      - patterns:
+          - pattern-either:
+              - patterns:
+                  - pattern-inside: |
+                      class $CLASS(BaseModel):
+                        ...
+                  - pattern-either:
+                      - pattern: "$FIELD: Optional[$TYPE]"
+                      - pattern: "$FIELD: Union[$TYPE, None]"
+                      - pattern: "$FIELD: Union[None, $TYPE]"
+                      - pattern: "$FIELD: $TYPE | None"
+                      - pattern: "$FIELD: None | $TYPE"
+                      - pattern: "$FIELD: $TYPE = None"
+                      - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
+                      - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
+                      - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
+                      - pattern: "$FIELD: $TYPE | None = $VALUE"
+                      - pattern: "$FIELD: None | $TYPE = $VALUE"
+              - patterns:
+                  - pattern-inside: |
+                      class $CLASS(pydantic.BaseModel):
+                        ...
+                  - pattern-either:
+                      - pattern: "$FIELD: Optional[$TYPE]"
+                      - pattern: "$FIELD: Union[$TYPE, None]"
+                      - pattern: "$FIELD: Union[None, $TYPE]"
+                      - pattern: "$FIELD: $TYPE | None"
+                      - pattern: "$FIELD: None | $TYPE"
+                      - pattern: "$FIELD: $TYPE = None"
+                      - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
+                      - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
+                      - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
+                      - pattern: "$FIELD: $TYPE | None = $VALUE"
+                      - pattern: "$FIELD: None | $TYPE = $VALUE"
       - pattern-either:
           - patterns:
               - pattern-either:
@@ -331,12 +368,49 @@ rules:
   - id: python.pydantic.none-type-field.oauth-api
     languages: [python]
     severity: WARNING
-    message: *pydantic_none_message
+    message: >-
+      Design warning: Pydantic field '$FIELD' allows None. Prefer validating missing or optional user input
+      at the API/request boundary and converting it into a required internal DTO before core logic sees it.
+      If None means the model is in another state, split the model into explicit DTOs or domain types. Many
+      None-able fields in one Pydantic model usually indicate the model has too many responsibilities.
     paths:
       include:
         - '**/api/src/umbod/rest/connectors/downstream_mcp/oauth.py'
     patterns:
-      - patterns: *pydantic_none_patterns
+      - patterns:
+          - pattern-either:
+              - patterns:
+                  - pattern-inside: |
+                      class $CLASS(BaseModel):
+                        ...
+                  - pattern-either:
+                      - pattern: "$FIELD: Optional[$TYPE]"
+                      - pattern: "$FIELD: Union[$TYPE, None]"
+                      - pattern: "$FIELD: Union[None, $TYPE]"
+                      - pattern: "$FIELD: $TYPE | None"
+                      - pattern: "$FIELD: None | $TYPE"
+                      - pattern: "$FIELD: $TYPE = None"
+                      - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
+                      - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
+                      - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
+                      - pattern: "$FIELD: $TYPE | None = $VALUE"
+                      - pattern: "$FIELD: None | $TYPE = $VALUE"
+              - patterns:
+                  - pattern-inside: |
+                      class $CLASS(pydantic.BaseModel):
+                        ...
+                  - pattern-either:
+                      - pattern: "$FIELD: Optional[$TYPE]"
+                      - pattern: "$FIELD: Union[$TYPE, None]"
+                      - pattern: "$FIELD: Union[None, $TYPE]"
+                      - pattern: "$FIELD: $TYPE | None"
+                      - pattern: "$FIELD: None | $TYPE"
+                      - pattern: "$FIELD: $TYPE = None"
+                      - pattern: "$FIELD: Optional[$TYPE] = $VALUE"
+                      - pattern: "$FIELD: Union[$TYPE, None] = $VALUE"
+                      - pattern: "$FIELD: Union[None, $TYPE] = $VALUE"
+                      - pattern: "$FIELD: $TYPE | None = $VALUE"
+                      - pattern: "$FIELD: None | $TYPE = $VALUE"
       - pattern-either:
           - patterns:
               - pattern-either:
@@ -394,7 +468,7 @@ rules:
     languages:
       - python
     severity: WARNING
-    message: &function_none_message >-
+    message: >-
       Design warning: function or method argument '$PARAM' allows None. Treat uncertainty about missing
       values as a boundary validation concern rather than a downstream core-logic concern. Validate and
       normalize inputs at API, CLI, config, file, or adapter edges, then pass required values internally. If
@@ -413,7 +487,7 @@ rules:
         - '**/conftest.py'
         - '**/api/src/umbod/hosting/applications.py'
         - '**/api/src/umbod/mcp/public_app.py'
-    patterns: &function_none_patterns
+    patterns:
       - pattern-either:
           - pattern: |
               def $FUNCTION(..., $PARAM: Optional[$TYPE], ...):
@@ -484,12 +558,83 @@ rules:
   - id: python.function-argument-none-type.hosting-boundary
     languages: [python]
     severity: WARNING
-    message: *function_none_message
+    message: >-
+      Design warning: function or method argument '$PARAM' allows None. Treat uncertainty about missing
+      values as a boundary validation concern rather than a downstream core-logic concern. Validate and
+      normalize inputs at API, CLI, config, file, or adapter edges, then pass required values internally. If
+      None represents a separate state, model that state explicitly with separate DTOs or domain types rather
+      than adding None checks throughout the core.
     paths:
       include:
         - '**/api/src/umbod/hosting/applications.py'
     patterns:
-      - patterns: *function_none_patterns
+      - patterns:
+          - pattern-either:
+              - pattern: |
+                  def $FUNCTION(..., $PARAM: Optional[$TYPE], ...):
+                    ...
+              - pattern: |
+                  def $FUNCTION(..., $PARAM: Union[$TYPE, None], ...):
+                    ...
+              - pattern: |
+                  def $FUNCTION(..., $PARAM: Union[None, $TYPE], ...):
+                    ...
+              - pattern: |
+                  def $FUNCTION(..., $PARAM: $TYPE | None, ...):
+                    ...
+              - pattern: |
+                  def $FUNCTION(..., $PARAM: None | $TYPE, ...):
+                    ...
+              - pattern: |
+                  def $FUNCTION(..., $PARAM: $TYPE = None, ...):
+                    ...
+          - pattern-not-inside: |
+              def __aexit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: types.TracebackType | None):
+                ...
+          - pattern-either:
+              - patterns:
+                  - pattern: |
+                      def $FUNCTION(...):
+                        ...
+                  - pattern-not-inside: |
+                      class $CLASS(httpcore.AsyncNetworkBackend):
+                        ...
+                  - pattern-not-inside: |
+                      class $CLASS(httpcore2.AsyncNetworkBackend):
+                        ...
+                  - pattern-not-inside: |
+                      class $CLASS(httpcore2.AsyncNetworkStream):
+                        ...
+              - patterns:
+                  - pattern: |
+                      def $FUNCTION(...):
+                        ...
+                  - pattern-inside: |
+                      class $CLASS(httpcore.AsyncNetworkBackend):
+                        ...
+                  - metavariable-regex:
+                      metavariable: $FUNCTION
+                      regex: '^(?!(connect_tcp|connect_unix_socket)$).*'
+              - patterns:
+                  - pattern: |
+                      def $FUNCTION(...):
+                        ...
+                  - pattern-inside: |
+                      class $CLASS(httpcore2.AsyncNetworkBackend):
+                        ...
+                  - metavariable-regex:
+                      metavariable: $FUNCTION
+                      regex: '^(?!(connect_tcp|connect_unix_socket)$).*'
+              - patterns:
+                  - pattern: |
+                      def $FUNCTION(...):
+                        ...
+                  - pattern-inside: |
+                      class $CLASS(httpcore2.AsyncNetworkStream):
+                        ...
+                  - metavariable-regex:
+                      metavariable: $FUNCTION
+                      regex: '^(?!(read|write|start_tls)$).*'
       - pattern-not-inside: |
           def create_rest_app(settings: AppConfig, *, connector_registrations: Optional[Sequence[ConnectorRegistration]], admin_verifier: Optional[JwtVerifier], oauth_service: Optional[OAuthService], **user_authentication: object):
             ...
@@ -500,12 +645,83 @@ rules:
   - id: python.function-argument-none-type.mcp-boundary
     languages: [python]
     severity: WARNING
-    message: *function_none_message
+    message: >-
+      Design warning: function or method argument '$PARAM' allows None. Treat uncertainty about missing
+      values as a boundary validation concern rather than a downstream core-logic concern. Validate and
+      normalize inputs at API, CLI, config, file, or adapter edges, then pass required values internally. If
+      None represents a separate state, model that state explicitly with separate DTOs or domain types rather
+      than adding None checks throughout the core.
     paths:
       include:
         - '**/api/src/umbod/mcp/public_app.py'
     patterns:
-      - patterns: *function_none_patterns
+      - patterns:
+          - pattern-either:
+              - pattern: |
+                  def $FUNCTION(..., $PARAM: Optional[$TYPE], ...):
+                    ...
+              - pattern: |
+                  def $FUNCTION(..., $PARAM: Union[$TYPE, None], ...):
+                    ...
+              - pattern: |
+                  def $FUNCTION(..., $PARAM: Union[None, $TYPE], ...):
+                    ...
+              - pattern: |
+                  def $FUNCTION(..., $PARAM: $TYPE | None, ...):
+                    ...
+              - pattern: |
+                  def $FUNCTION(..., $PARAM: None | $TYPE, ...):
+                    ...
+              - pattern: |
+                  def $FUNCTION(..., $PARAM: $TYPE = None, ...):
+                    ...
+          - pattern-not-inside: |
+              def __aexit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, traceback: types.TracebackType | None):
+                ...
+          - pattern-either:
+              - patterns:
+                  - pattern: |
+                      def $FUNCTION(...):
+                        ...
+                  - pattern-not-inside: |
+                      class $CLASS(httpcore.AsyncNetworkBackend):
+                        ...
+                  - pattern-not-inside: |
+                      class $CLASS(httpcore2.AsyncNetworkBackend):
+                        ...
+                  - pattern-not-inside: |
+                      class $CLASS(httpcore2.AsyncNetworkStream):
+                        ...
+              - patterns:
+                  - pattern: |
+                      def $FUNCTION(...):
+                        ...
+                  - pattern-inside: |
+                      class $CLASS(httpcore.AsyncNetworkBackend):
+                        ...
+                  - metavariable-regex:
+                      metavariable: $FUNCTION
+                      regex: '^(?!(connect_tcp|connect_unix_socket)$).*'
+              - patterns:
+                  - pattern: |
+                      def $FUNCTION(...):
+                        ...
+                  - pattern-inside: |
+                      class $CLASS(httpcore2.AsyncNetworkBackend):
+                        ...
+                  - metavariable-regex:
+                      metavariable: $FUNCTION
+                      regex: '^(?!(connect_tcp|connect_unix_socket)$).*'
+              - patterns:
+                  - pattern: |
+                      def $FUNCTION(...):
+                        ...
+                  - pattern-inside: |
+                      class $CLASS(httpcore2.AsyncNetworkStream):
+                        ...
+                  - metavariable-regex:
+                      metavariable: $FUNCTION
+                      regex: '^(?!(read|write|start_tls)$).*'
       - pattern-not-inside: |
           def build_mcp(settings: MCPAppSettings, auth_provider: MCPAuthProvider | None, runtime: ConnectorRuntime, persistence_runtime: PersistenceRuntime, *runtime_state: RuntimeStateArgument):
             ...

@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -90,7 +91,10 @@ def test_validate_accepts_compatible_structurally_valid_plugins_without_registra
     connectors.ValidateCommand()(plugin_path=None)
 
     assert plugin.registration_calls == 0
-    assert capsys.readouterr().out == "Connector plugins valid: 1 loaded.\n"
+    output = capsys.readouterr().out
+    assert "Connector plugins valid: 1 loaded." in output
+    assert f"Validation environment: Python {sys.version.split()[0]}; SDK umbod 0.1.0; interpreter {sys.executable}" in output
+    assert "Structural validation only in this environment; other runtimes, credentials, and live services were not verified." in output
 
 
 def test_validate_rejects_incompatible_sdk_requirement(

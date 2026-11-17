@@ -79,7 +79,7 @@ class SetCapabilityActivation(_StrictModel):
 
 class SetCapabilityInvocationPolicy(_StrictModel):
     operation: Literal["set_capability_invocation_policy"]
-    capability_kind: Literal["tool", "prompt", "resource", "resource_template"]
+    capability_kind: Literal["tool"]
     capability_key: str = Field(min_length=1)
     mode: Literal["direct", "ask"]
     expected_revision: int = Field(ge=0)
@@ -116,7 +116,10 @@ ConnectorConfigurationOperation = Annotated[
 
 
 class ConnectorDesiredState(_StrictModel):
-    operations: tuple[ConnectorConfigurationOperation, ...] = ()
+    operations: tuple[ConnectorConfigurationOperation, ...] = Field(
+        default=(),
+        description="Partial desired state operations; omitted or empty operations read the current configuration without changes.",
+    )
 
     def is_empty(self) -> bool:
         return not self.operations

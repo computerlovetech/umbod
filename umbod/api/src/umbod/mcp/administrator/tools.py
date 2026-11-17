@@ -1,4 +1,6 @@
-from typing import Literal
+from typing import Annotated, Literal
+
+from pydantic import Field
 
 from umbod.core.administrator.connector_configuration import (
     AdministratorConnectorConfiguration,
@@ -24,7 +26,11 @@ class AdministratorConnectorConfigurationTools:
         self._membership_claim = membership_claim
 
     async def read_connector_configuration(
-        self, connector_kind: Literal["native", "openapi", "downstream_mcp"], connector_id: str
+        self,
+        connector_kind: Literal["native", "openapi", "downstream_mcp"],
+        connector_id: Annotated[
+            str, Field(min_length=1, description="Non-empty identifier of the existing connector; used without trimming.")
+        ],
     ) -> ConnectorConfigurableState:
         request = ReadConnectorConfiguration(
             principal=current_administrator_principal(self._membership_claim),
@@ -43,7 +49,9 @@ class AdministratorConnectorConfigurationTools:
     async def upsert_connector_configuration(
         self,
         connector_kind: Literal["native", "openapi", "downstream_mcp"],
-        connector_id: str,
+        connector_id: Annotated[
+            str, Field(min_length=1, description="Non-empty identifier of the existing connector; used without trimming.")
+        ],
         desired_state: ConnectorDesiredState,
     ) -> ConnectorConfigurableState:
         request = UpsertConnectorConfiguration(

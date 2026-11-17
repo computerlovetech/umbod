@@ -35,6 +35,7 @@ describe('contextual sidebar rendering', (): void => {
       expect(link.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
       expect(link.querySelector('svg')?.getAttribute('focusable')).toBe('false');
     }
+    expect(document.querySelectorAll('nav a[aria-current="page"]')).toHaveLength(1);
     expect(document.querySelector('nav a[aria-current="page"]')?.getAttribute('href')).toBe('/files');
     expect(document.querySelector('a.section-start')?.getAttribute('href')).toBe(allowed ? '/admin/connectors' : undefined);
     expect(document.querySelector('.workspace-back')).toBeNull();
@@ -51,7 +52,13 @@ describe('contextual sidebar rendering', (): void => {
     });
     await tick();
     const links = Array.from(document.querySelectorAll('nav[aria-label="Administration navigation"] a'));
-    expect(links.map((link): string | null => link.getAttribute('href'))).toEqual(administrationNavigation.map((item): string => item.href));
+    expect(links.map((link): string | null => link.getAttribute('href'))).toEqual([
+      '/dashboard', '/connectors', '/files', '/getting-started',
+      '/admin/connectors', '/admin/groups', '/admin/group-permissions/connectors',
+      '/admin/insights/agent-behaviour'
+    ]);
+    expect(document.querySelectorAll('nav a[aria-current="page"]')).toHaveLength(1);
+    expect(document.querySelector('nav a.section-start')?.getAttribute('href')).toBe('/admin/connectors');
     for (const link of links) {
       expect(link.querySelectorAll('svg')).toHaveLength(1);
       expect(link.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');

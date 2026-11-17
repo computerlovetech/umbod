@@ -13,7 +13,7 @@ description: "Neutral authenticated profile, workspace navigation and capability
 - [profile-identity.ts](./profile-identity.ts) — Trusted opaque profile identity keys mapped to account request fences without changing displayed user fields.
 - [admin-access.ts](./admin-access.ts) — Capability-based navigation eligibility with independent visible identity.
 - [admin-access.test.ts](./admin-access.test.ts) — Access presentation tests.
-- [navigation.ts](./navigation.ts) — Separate workspace and administration destinations, sidebar labels, icons and route matching.
+- [navigation.ts](./navigation.ts) — Workspace destinations retained in administration navigation, sidebar labels, icons and route matching.
 - [navigation.test.ts](./navigation.test.ts) — Eligible entry points, administration order and preview icon assignments.
 - [navigation-history.svelte.ts](./navigation-history.svelte.ts) — Root-owned successful workspace location history and directional sidebar transitions.
 - [navigation-history-context.ts](./navigation-history-context.ts) — Application-scoped navigation history composition for workspace shells.
