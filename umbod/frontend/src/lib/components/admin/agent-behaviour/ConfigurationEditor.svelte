@@ -1,11 +1,11 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import AdminToggle from '$lib/components/admin/shared/AdminToggle.svelte';
-  import Select from '$lib/components/admin/shared/Select.svelte';
-  import TextField from '$lib/components/shared/TextField.svelte';
-  import TextAreaField from '$lib/components/shared/TextAreaField.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import type { ConfigurationState } from '$lib/agent-behaviour/state/configuration-state.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import AdminToggle from '#lib/components/admin/shared/AdminToggle.svelte';
+  import Select from '#lib/components/admin/shared/Select.svelte';
+  import TextField from '#lib/components/shared/TextField.svelte';
+  import TextAreaField from '#lib/components/shared/TextAreaField.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import type { ConfigurationState } from '#lib/agent-behaviour/state/configuration-state.svelte.js';
   let { state }: { state: ConfigurationState } = $props();
 </script>
 

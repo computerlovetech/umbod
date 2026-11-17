@@ -1,5 +1,5 @@
 import { discoveryErrorSchema, oauthInitiationErrorSchema, oauthProviderFailureSchema, renewalErrorSchema } from '../domain/schemas';
-import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError, NetworkError } from '#lib/admin/infrastructure/transport.js';
 
 export function requiresSignIn(error: unknown): boolean {
   return error instanceof AuthenticationRequiredError || (error instanceof HttpError && error.status === 401);

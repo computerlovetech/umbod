@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { PersonalConnectionsApi } from '../api';
 import type { AuthorizationHealth } from '../domain/schemas';
 import { InMemoryPersonalConnectionsApi } from '../infrastructure/in-memory-api';

@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { OpenApiBearerConfigurationState } from './openapi-bearer-configuration-state.svelte';
 
-vi.mock('$lib/admin/infrastructure/public-configuration', () => ({
+vi.mock('#lib/admin/infrastructure/public-configuration.js', () => ({
   publicConfigurationProvider: { get: async () => ({ apiBaseUrl: '/api', mcpBaseUrl: 'http://localhost:8011' }) }
 }));
 

@@ -1,9 +1,9 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
-  import type { NodeUpdateState } from '$lib/files/state/node-update-state.svelte';
-  import type { DestinationFolder } from '$lib/files/state/move-destination-state.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
+  import type { NodeUpdateState } from '#lib/files/state/node-update-state.svelte.js';
+  import type { DestinationFolder } from '#lib/files/state/move-destination-state.svelte.js';
   import { FolderPickerFocusState } from './folder-picker-focus-state.svelte';
 
   let { state }: { state: NodeUpdateState } = $props();

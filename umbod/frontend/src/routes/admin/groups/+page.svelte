@@ -1,6 +1,6 @@
 <script lang="ts">
-  import AdminShell from '$lib/components/admin/AdminShell.svelte';
-  import GroupsWorkspace from '$lib/components/admin/groups/GroupsWorkspace.svelte';
+  import AdminShell from '#lib/components/admin/AdminShell.svelte';
+  import GroupsWorkspace from '#lib/components/admin/groups/GroupsWorkspace.svelte';
   import type { PageData } from './$types';
   let { data }: { data: PageData } = $props();
 </script>

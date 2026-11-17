@@ -1,4 +1,4 @@
-import type { InstanceConfiguration } from '$lib/admin/instance-configuration';
+import type { InstanceConfiguration } from '#lib/admin/instance-configuration.js';
 
 export type Availability = 'enabled' | 'disabled' | 'unknown';
 export type PersonalServerAvailability = { registration: Availability; authorization: Availability };

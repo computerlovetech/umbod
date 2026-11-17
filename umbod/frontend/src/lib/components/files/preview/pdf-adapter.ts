@@ -1,5 +1,5 @@
-import type { NodeSummary } from '$lib/files/domain/schemas';
-import { PreviewReadError, type FileContentPort, type FilePreviewAdapter } from '$lib/files/preview/ports';
+import type { NodeSummary } from '#lib/files/domain/schemas.js';
+import { PreviewReadError, type FileContentPort, type FilePreviewAdapter } from '#lib/files/preview/ports.js';
 import PdfPreview from './PdfPreview.svelte';
 
 export const pdfPreviewAdapter: FilePreviewAdapter = {

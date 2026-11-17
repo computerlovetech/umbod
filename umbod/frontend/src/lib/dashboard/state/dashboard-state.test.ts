@@ -1,9 +1,9 @@
-import { InMemoryAttemptScheduler } from '$lib/personal-connections/infrastructure/in-memory-attempt-scheduler';
+import { InMemoryAttemptScheduler } from '#lib/personal-connections/infrastructure/in-memory-attempt-scheduler.js';
 import { describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
-import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
-import { InMemoryPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/in-memory-api';
-import { authorizationHealth, selection } from '$lib/personal-connections/test-fixtures';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
+import type { PersonalConnectionsApi } from '#lib/personal-connections/api.js';
+import { InMemoryPersonalConnectionsApi } from '#lib/personal-connections/infrastructure/in-memory-api.js';
+import { authorizationHealth, selection } from '#lib/personal-connections/test-fixtures.js';
 import type { DashboardApi } from '../api';
 import type { UserCatalogue } from '../domain/schemas';
 import { InMemoryDashboardApi } from '../infrastructure/in-memory-api';

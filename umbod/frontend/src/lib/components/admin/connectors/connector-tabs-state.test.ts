@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { ConnectorTabsState, type ConnectorTab } from './connector-tabs-state.svelte';
-import type { ConnectorCapability } from '$lib/admin/connector-capabilities';
+import type { ConnectorCapability } from '#lib/admin/connector-capabilities.js';
 
 describe('connector subpage navigation', (): void => {
   test('preserves current capability across every destination and follows input changes', (): void => {

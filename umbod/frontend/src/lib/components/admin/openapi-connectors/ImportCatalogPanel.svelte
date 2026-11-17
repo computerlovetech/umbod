@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { browserSubmit } from '$lib/admin/operations/browser-submit';
-  import type { BrowserSubmitFunction as SubmitFunction } from '$lib/admin/operations/browser-submit';
+  import { browserSubmit } from '#lib/admin/operations/browser-submit.js';
+  import type { BrowserSubmitFunction as SubmitFunction } from '#lib/admin/operations/browser-submit.js';
   import { untrack } from 'svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import SecurityBoundaryNotice from './SecurityBoundaryNotice.svelte';
   import { ImportCatalogState } from './import-catalog-state.svelte';
 

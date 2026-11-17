@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import type { Transport, TransportRequest } from '$lib/admin/infrastructure/transport';
+import type { Transport, TransportRequest } from '#lib/admin/infrastructure/transport.js';
 import type { UsagePort } from '../api';
 import { usageSnapshot } from '../usage-fixtures.test-support';
 import { HttpDashboardApi } from './dashboard-api';

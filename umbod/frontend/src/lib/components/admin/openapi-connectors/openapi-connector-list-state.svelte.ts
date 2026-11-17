@@ -1,8 +1,8 @@
-import type { OpenApiConnectorDetailBundle } from '$lib/admin/openapi-connector-details-browser-api';
-import type { InvocationPolicyTool } from '$lib/admin/invocation-policy';
-import type { OpenApiConnectorListItem } from '$lib/admin/openapi-connectors';
-import { SelectionDetailController } from '$lib/components/admin/shared/selection-detail-controller.svelte';
-import { InMemorySelectionUrlAdapter, type SelectionUrlPort } from '$lib/components/admin/shared/selection-url-port';
+import type { OpenApiConnectorDetailBundle } from '#lib/admin/openapi-connector-details-browser-api.js';
+import type { InvocationPolicyTool } from '#lib/admin/invocation-policy.js';
+import type { OpenApiConnectorListItem } from '#lib/admin/openapi-connectors.js';
+import { SelectionDetailController } from '#lib/components/admin/shared/selection-detail-controller.svelte.js';
+import { InMemorySelectionUrlAdapter, type SelectionUrlPort } from '#lib/components/admin/shared/selection-url-port.js';
 import { OpenApiConnectorListViewState } from './openapi-connector-list-view-state.svelte';
 import { OpenApiToolCatalogState, type OpenApiToolLoader } from './openapi-tool-catalog-state.svelte';
 

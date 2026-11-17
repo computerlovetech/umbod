@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import AdminPublicationStatus from '$lib/components/admin/shared/AdminPublicationStatus.svelte';
+  import AdminPublicationStatus from '#lib/components/admin/shared/AdminPublicationStatus.svelte';
   import ConnectorIcon from './ConnectorIcon.svelte';
 
   type Props = {

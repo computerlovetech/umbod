@@ -1,5 +1,5 @@
-import { projectActivity, projectOperationMix, projectOutcomes } from '$lib/dashboard/chart-projections';
-import type { ActivityChart, OperationChart, OutcomeChart, RankedTool } from '$lib/components/shared/dashboard/visualizations/types';
+import { projectActivity, projectOperationMix, projectOutcomes } from '#lib/dashboard/chart-projections.js';
+import type { ActivityChart, OperationChart, OutcomeChart, RankedTool } from '#lib/components/shared/dashboard/visualizations/types.js';
 
 export type PreviewPeriod = 7 | 30;
 export type PreviewScenario = 'sample' | 'empty';

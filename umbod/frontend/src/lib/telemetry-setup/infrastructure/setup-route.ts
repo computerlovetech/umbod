@@ -1,4 +1,4 @@
-import type { Transport } from '$lib/admin/infrastructure/transport';
+import type { Transport } from '#lib/admin/infrastructure/transport.js';
 import type { TelemetrySetupSource } from '../api';
 import { telemetrySetupSchema, type TelemetrySetup } from '../domain/schemas';
 

@@ -1,12 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import Select from '$lib/components/admin/shared/Select.svelte';
-  import type { SelectOption } from '$lib/components/admin/shared/select-state.svelte';
-  import DateTimeView from '$lib/components/shared/DateTimeView.svelte';
-  import QueryPanel from '$lib/components/shared/workspace/QueryPanel.svelte';
-  import type { ReportsState } from '$lib/agent-behaviour/state/reports-state.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import Select from '#lib/components/admin/shared/Select.svelte';
+  import type { SelectOption } from '#lib/components/admin/shared/select-state.svelte.js';
+  import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
+  import QueryPanel from '#lib/components/shared/workspace/QueryPanel.svelte';
+  import type { ReportsState } from '#lib/agent-behaviour/state/reports-state.svelte.js';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
   let { state }: { state: ReportsState } = $props();
   const statuses = { observed: 'Observed', not_observed: 'Not observed', not_assessed: 'Not assessed' };
   onMount((): void => state.start());

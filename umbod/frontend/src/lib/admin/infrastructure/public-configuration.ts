@@ -1,6 +1,6 @@
-import { dev } from '$app/environment';
+import { dev } from '$app/env';
 import { z } from 'zod';
-import { previewConfigurationSchema } from '$lib/files/preview/configuration';
+import { previewConfigurationSchema } from '#lib/files/preview/configuration.js';
 
 const publicBaseSchema = z.string().refine((value) => {
   if (value.startsWith('/') && !value.startsWith('//')) return !value.includes('?') && !value.includes('#');

@@ -1,4 +1,4 @@
-import { createHeaderAccountUserInfoBoundary, type HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+import { createHeaderAccountUserInfoBoundary, type HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
 import type { WorkspaceProfile } from './domain/profile';
 
 export function workspaceAccountIdentity(profile: WorkspaceProfile): HeaderAccountIdentityState {

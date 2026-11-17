@@ -2,7 +2,7 @@
   import type { ComponentProps, Snippet } from 'svelte';
   import type { HTMLAnchorAttributes } from 'svelte/elements';
   import type Button from './Button.svelte';
-  import '$lib/styles/buttons.css';
+  import '#lib/styles/buttons.css';
 
   type Props = Omit<HTMLAnchorAttributes, 'children'> & Pick<ComponentProps<typeof Button>, 'variant' | 'size'> & {
     children: Snippet;

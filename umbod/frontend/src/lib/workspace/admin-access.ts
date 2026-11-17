@@ -1,7 +1,7 @@
-import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
 import { workspaceAccountIdentity } from './profile-identity';
 import type { WorkspaceApi } from './api';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 
 export type AdminAccess = 'allowed' | 'denied' | 'sign-in' | 'unavailable';
 

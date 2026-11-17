@@ -1,6 +1,6 @@
-import { HttpError } from '$lib/admin/infrastructure/transport';
-import type { NamespaceAdministration } from '$lib/admin/filesystem/namespaces-port';
-import { createNamespaceSchema, type SharedNamespace, type NamespaceGroup } from '$lib/admin/filesystem/domain/namespaces';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
+import type { NamespaceAdministration } from '#lib/admin/filesystem/namespaces-port.js';
+import { createNamespaceSchema, type SharedNamespace, type NamespaceGroup } from '#lib/admin/filesystem/domain/namespaces.js';
 
 type AccessDraft = Readonly<{ access: 'none' | NamespaceGroup['access']; revision: number }>;
 
@@ -85,7 +85,7 @@ export class NamespaceManagementState {
     if (decision === 'discard') void this.load();
   };
 
-  observeAccountIdentity = (identity: import('$lib/header/accountIdentity').HeaderAccountIdentityState): void => {
+  observeAccountIdentity = (identity: import('#lib/header/accountIdentity.js').HeaderAccountIdentityState): void => {
     const fingerprint = JSON.stringify(identity.kind === 'visible' ? ['visible', identity.hiddenValues.id] : ['hidden']);
     if (this.disposed || fingerprint === this.identityFingerprint) return;
     const previous = this.identityFingerprint;

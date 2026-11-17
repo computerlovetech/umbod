@@ -1,7 +1,7 @@
 import type { Component } from 'svelte';
 import { render } from 'svelte/server';
-import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
-import type { WorkspaceApi } from '$lib/workspace/api';
+import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
+import type { WorkspaceApi } from '#lib/workspace/api.js';
 import WorkspacePageHarness from './WorkspacePageHarness.test-support.svelte';
 
 export function renderWorkspace<Props extends Record<string, unknown>>(

@@ -1,4 +1,4 @@
-import { browserTransport, type Transport } from '$lib/admin/infrastructure/transport';
+import { browserTransport, type Transport } from '#lib/admin/infrastructure/transport.js';
 import type { FilesApi as FilesApiPort } from '../api';
 import { NodeSharingRoute } from './sharing-route';
 import { FilesystemRoute } from './filesystem-route';

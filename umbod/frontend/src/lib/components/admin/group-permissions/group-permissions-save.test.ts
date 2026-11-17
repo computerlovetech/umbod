@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { GroupPermissionSet, UpdateGroupPermissionsRequest } from '$lib/admin/group-permissions';
+import type { GroupPermissionSet, UpdateGroupPermissionsRequest } from '#lib/admin/group-permissions.js';
 import type { GroupPermissionsLoader } from './group-permissions-loader';
 import type { GroupPermissionsSaver } from './group-permissions-saver';
 import { GroupPermissionsState, type GroupPermissionsInitialData } from './group-permissions-state.svelte';

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import { InMemoryFilesApi } from '../infrastructure/in-memory-api.test-support';
 import { deferred, fileId, filesystemFixture, folderId, rootId } from '../fixtures.test-support';
 import type { NodeSummary } from '../domain/schemas';

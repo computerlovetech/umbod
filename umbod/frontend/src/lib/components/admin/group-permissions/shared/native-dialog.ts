@@ -1,1 +1,1 @@
-export { nativeDialog } from '$lib/components/shared/dialogs/native-dialog';
+export { nativeDialog } from '#lib/components/shared/dialogs/native-dialog.js';

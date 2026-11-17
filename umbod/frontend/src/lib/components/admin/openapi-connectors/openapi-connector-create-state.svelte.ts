@@ -1,4 +1,4 @@
-import { normalizeToolNamePrefix } from '$lib/admin/openapi-connectors';
+import { normalizeToolNamePrefix } from '#lib/admin/openapi-connectors.js';
 
 export class OpenApiConnectorCreateState {
   displayName = $state('');

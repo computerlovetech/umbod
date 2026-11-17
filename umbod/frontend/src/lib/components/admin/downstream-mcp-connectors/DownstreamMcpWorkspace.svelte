@@ -1,25 +1,25 @@
 <script lang="ts">
-  import { browserSubmit } from '$lib/admin/operations/browser-submit';
+  import { browserSubmit } from '#lib/admin/operations/browser-submit.js';
   import { page } from '$app/state';
-  import type { BrowserSubmitFunction as SubmitFunction } from '$lib/admin/operations/browser-submit';
-  import { parseConnectorCapability } from '$lib/admin/connector-capabilities';
-  import type { DownstreamMcpConnector, DownstreamMcpConnectorSummary, DownstreamMcpToolList } from '$lib/admin/downstream-mcp-connectors';
-  import { emptyPromptCatalog, emptyResourceCatalog, type PromptCatalog as PromptCatalogData, type ResourceCatalog as ResourceCatalogData } from '$lib/admin/capability-catalogs';
-  import type { InvocationPolicyTool } from '$lib/admin/invocation-policy';
-  import CapabilityDescriptionOverrideModal from '$lib/components/admin/capability-descriptions/CapabilityDescriptionOverrideModal.svelte';
-  import ConnectorListEmptyState from '$lib/components/admin/connectors/ConnectorListEmptyState.svelte';
-  import ConnectorCapabilities from '$lib/components/admin/connectors/ConnectorCapabilities.svelte';
-  import ConnectorDetailItem from '$lib/components/admin/connectors/ConnectorDetailItem.svelte';
-  import CopyableValue from '$lib/components/admin/connectors/CopyableValue.svelte';
-  import ConnectorDetailSummary from '$lib/components/admin/connectors/ConnectorDetailSummary.svelte';
-  import ConnectorSidebarList from '$lib/components/admin/connectors/ConnectorSidebarList.svelte';
-  import PublicationConfirmationModal from '$lib/components/admin/connectors/PublicationConfirmationModal.svelte';
-  import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import AdminSidebarActionMenu from '$lib/components/admin/shared/AdminSidebarActionMenu.svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
-  import DateTimeView from '$lib/components/shared/DateTimeView.svelte';
+  import type { BrowserSubmitFunction as SubmitFunction } from '#lib/admin/operations/browser-submit.js';
+  import { parseConnectorCapability } from '#lib/admin/connector-capabilities.js';
+  import type { DownstreamMcpConnector, DownstreamMcpConnectorSummary, DownstreamMcpToolList } from '#lib/admin/downstream-mcp-connectors.js';
+  import { emptyPromptCatalog, emptyResourceCatalog, type PromptCatalog as PromptCatalogData, type ResourceCatalog as ResourceCatalogData } from '#lib/admin/capability-catalogs.js';
+  import type { InvocationPolicyTool } from '#lib/admin/invocation-policy.js';
+  import CapabilityDescriptionOverrideModal from '#lib/components/admin/capability-descriptions/CapabilityDescriptionOverrideModal.svelte';
+  import ConnectorListEmptyState from '#lib/components/admin/connectors/ConnectorListEmptyState.svelte';
+  import ConnectorCapabilities from '#lib/components/admin/connectors/ConnectorCapabilities.svelte';
+  import ConnectorDetailItem from '#lib/components/admin/connectors/ConnectorDetailItem.svelte';
+  import CopyableValue from '#lib/components/admin/connectors/CopyableValue.svelte';
+  import ConnectorDetailSummary from '#lib/components/admin/connectors/ConnectorDetailSummary.svelte';
+  import ConnectorSidebarList from '#lib/components/admin/connectors/ConnectorSidebarList.svelte';
+  import PublicationConfirmationModal from '#lib/components/admin/connectors/PublicationConfirmationModal.svelte';
+  import AdminSplitWorkspace from '#lib/components/admin/shared/AdminSplitWorkspace.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import AdminSidebarActionMenu from '#lib/components/admin/shared/AdminSidebarActionMenu.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import DelayedSpinner from '#lib/components/admin/shared/DelayedSpinner.svelte';
+  import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
   import DownstreamMcpSetupModal from './DownstreamMcpSetupModal.svelte';
   import DownstreamMcpToolCatalog from './DownstreamMcpToolCatalog.svelte';
   import DownstreamMcpPromptCatalog from './DownstreamMcpPromptCatalog.svelte';
@@ -29,7 +29,7 @@
   import PersonalMcpDetails from '../personal-mcp-servers/PersonalMcpDetails.svelte';
   import PersonalMcpPublicationModal from '../personal-mcp-servers/PersonalMcpPublicationModal.svelte';
   import PersonalOAuthSetupDialog from '../personal-mcp-servers/PersonalOAuthSetupDialog.svelte';
-  import { useToast } from '$lib/components/feedback';
+  import { useToast } from '#lib/components/feedback/index.js';
   let { connectors, selected: loadedDetail, catalog, promptCatalog, resourceCatalog, invocationPolicies = [], form, state }: { connectors: DownstreamMcpConnectorSummary[]; selected?: DownstreamMcpConnector; catalog?: DownstreamMcpToolList; promptCatalog?: PromptCatalogData; resourceCatalog?: ResourceCatalogData; invocationPolicies?: InvocationPolicyTool[]; form?: { message?: string; status?: string; mode?: string; values?: DownstreamMcpCreateValues }; state: DownstreamMcpWorkspaceState } = $props();
   type SidebarConnector = {
     id: string;
@@ -46,7 +46,7 @@
   const selectedDetailReady = $derived(detailSelected?.connector_id === selected?.connector_id && !state.detailLoading && !state.detailFailed);
   const sidebarConnectors = $derived(currentConnectors.map((connector): SidebarConnector => ({ id: connector.connector_id, name: connector.display_name, iconDataUrl: connector.icon_url || undefined, connector })));
   const sharedMcpUri = $derived(detailSelected ? `${new URL(detailSelected.public_url).origin}/mcp` : '');
-  const selectedCapability = $derived(parseConnectorCapability(page.url.searchParams.get('capability')));
+  const selectedCapability = $derived(parseConnectorCapability((page.shallow?.url ?? page.url).searchParams.get('capability')));
   const capabilityCounts = $derived({
     tools: catalog?.tools.length ?? 0,
     prompts: promptCatalog?.prompts.length ?? 0,
@@ -163,7 +163,7 @@
   {#if detailSelected.authorization_mode === 'personal'}
     {#key detailSelected.connector_id}<PersonalMcpDetails state={state.personalSetup} connectorId={detailSelected.connector_id} />{/key}
   {:else}
-  <ConnectorCapabilities selected={selectedCapability} counts={capabilityCounts} currentUrl={page.url}>
+  <ConnectorCapabilities selected={selectedCapability} counts={capabilityCounts} currentUrl={new URL((page.shallow?.url ?? page.url).href)}>
    {#snippet children(activeCapability)}
    {#if activeCapability === 'tools'}
     <section class="tools" aria-labelledby="mcp-tools-heading"><h3 id="mcp-tools-heading">Tools</h3>{#key detailSelected.connector_id}<DownstreamMcpToolCatalog connectorId={detailSelected.connector_id} tools={catalog?.tools ?? []} policies={invocationPolicies} onsaved={(connectorId, tools) => state.reconcileTools(connectorId, tools)} />{/key}</section>

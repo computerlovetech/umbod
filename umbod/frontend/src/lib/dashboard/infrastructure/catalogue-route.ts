@@ -1,4 +1,4 @@
-import type { Transport } from '$lib/admin/infrastructure/transport';
+import type { Transport } from '#lib/admin/infrastructure/transport.js';
 import type { CataloguePort } from '../api';
 import { userCatalogueSchema, type UserCatalogue } from '../domain/schemas';
 

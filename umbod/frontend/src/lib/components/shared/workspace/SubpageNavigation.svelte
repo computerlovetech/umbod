@@ -7,8 +7,8 @@
 </script>
 
 <script lang="ts">
-  import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
-  import '$lib/styles/subpage-navigation.css';
+  import DelayedSpinner from '#lib/components/admin/shared/DelayedSpinner.svelte';
+  import '#lib/styles/subpage-navigation.css';
 
   let { links, activeId, label, current = 'page', pending = false, loadingLabel = 'Loading page' }: {
     links: readonly SubpageLink[];

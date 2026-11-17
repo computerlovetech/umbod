@@ -1,6 +1,6 @@
 import { expect, test, vi } from 'vitest';
-import { browserTransport } from '$lib/admin/infrastructure/transport';
-import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
+import { browserTransport } from '#lib/admin/infrastructure/transport.js';
+import { InMemoryPublicConfigurationProvider } from '#lib/admin/infrastructure/public-configuration.js';
 import { fileId } from '../fixtures.test-support';
 import { FileContentRoute } from './file-content-route';
 import type { PreviewReadFailure } from '../preview/ports';

@@ -1,8 +1,8 @@
 import { error } from '@sveltejs/kit';
 import type { LayoutLoad } from './$types';
-import { workspaceApi } from '$lib/workspace/infrastructure/workspace-api';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
-import { workspaceAccountIdentity } from '$lib/workspace/profile-identity';
+import { workspaceApi } from '#lib/workspace/infrastructure/workspace-api.js';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
+import { workspaceAccountIdentity } from '#lib/workspace/profile-identity.js';
 
 export const load: LayoutLoad = async ({ fetch }) => {
   try {

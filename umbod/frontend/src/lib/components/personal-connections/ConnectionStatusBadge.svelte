@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { AccessStatus } from '$lib/personal-connections/presentation';
+  import type { AccessStatus } from '#lib/personal-connections/presentation.js';
 
   let { status, compact = false }: { status: AccessStatus; compact?: boolean } = $props();
 </script>

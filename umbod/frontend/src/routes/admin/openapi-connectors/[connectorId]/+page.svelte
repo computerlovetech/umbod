@@ -1,6 +1,6 @@
 <script lang="ts">
-  import AdminShell from '$lib/components/admin/AdminShell.svelte';
-  import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+  import AdminShell from '#lib/components/admin/AdminShell.svelte';
+  import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
 
   let { data }: { data: { accountIdentity?: HeaderAccountIdentityState } } = $props();
   const fallbackAccountIdentity: HeaderAccountIdentityState = { kind: 'hidden' };

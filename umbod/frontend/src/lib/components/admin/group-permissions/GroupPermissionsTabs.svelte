@@ -1,5 +1,5 @@
 <script lang="ts">
-  import SubpageNavigation from '$lib/components/shared/workspace/SubpageNavigation.svelte';
+  import SubpageNavigation from '#lib/components/shared/workspace/SubpageNavigation.svelte';
 
   let { activeTab }: { activeTab: 'connectors' | 'filesystem' } = $props();
 

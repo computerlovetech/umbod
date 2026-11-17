@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { capabilityDescriptionSchema } from '$lib/admin/capability-descriptions';
+import { capabilityDescriptionSchema } from '#lib/admin/capability-descriptions.js';
 
 export const selectionSchema = z.object({
   connector_id: z.string(),

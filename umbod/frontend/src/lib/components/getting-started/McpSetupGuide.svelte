@@ -1,7 +1,7 @@
 <script lang="ts">
-  import CopyableValue from '$lib/components/admin/connectors/CopyableValue.svelte';
-  import SegmentedRadio from '$lib/components/shared/SegmentedRadio.svelte';
-  import '$lib/styles/subpage-navigation.css';
+  import CopyableValue from '#lib/components/admin/connectors/CopyableValue.svelte';
+  import SegmentedRadio from '#lib/components/shared/SegmentedRadio.svelte';
+  import '#lib/styles/subpage-navigation.css';
   import { PluginInstallationState, installationPlatforms, installationHarnesses } from './plugin-installation-state.svelte';
 
   let {

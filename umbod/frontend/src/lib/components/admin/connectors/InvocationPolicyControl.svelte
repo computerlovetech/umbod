@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { InvocationPolicyMode } from '$lib/admin/invocation-policy';
-  import Select from '$lib/components/admin/shared/Select.svelte';
-  import type { SelectOption } from '$lib/components/admin/shared/select-state.svelte';
+  import type { InvocationPolicyMode } from '#lib/admin/invocation-policy.js';
+  import Select from '#lib/components/admin/shared/Select.svelte';
+  import type { SelectOption } from '#lib/components/admin/shared/select-state.svelte.js';
 
   const invocationModeOptions: SelectOption[] = [
     { value: 'direct', label: 'Direct' },

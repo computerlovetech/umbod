@@ -1,9 +1,9 @@
 import { SvelteMap } from 'svelte/reactivity';
-import type { DownstreamMcpConnectorSummary } from '$lib/admin/downstream-mcp-connectors';
-import { adminApi } from '$lib/admin/infrastructure/admin-api';
-import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
-import { presentDownstreamMcpActionError } from '$lib/admin/downstream-mcp-errors';
-import type { DownstreamMcpConnectorsRoute } from '$lib/admin/downstream-mcp-connectors-api';
+import type { DownstreamMcpConnectorSummary } from '#lib/admin/downstream-mcp-connectors.js';
+import { adminApi } from '#lib/admin/infrastructure/admin-api.js';
+import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
+import { presentDownstreamMcpActionError } from '#lib/admin/downstream-mcp-errors.js';
+import type { DownstreamMcpConnectorsRoute } from '#lib/admin/downstream-mcp-connectors-api.js';
 
 export type CommonMcpAction = 'publish' | 'unpublish' | 'delete';
 export class DownstreamMcpMutationState {

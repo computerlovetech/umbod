@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { InMemoryGroupCatalogue } from '$lib/admin/groups/in-memory';
-import { InMemoryIdentityDirectory } from '$lib/identity-directory/in-memory.test-support';
-import type { DirectoryGroups } from '$lib/identity-directory/domain/schemas';
+import { InMemoryGroupCatalogue } from '#lib/admin/groups/in-memory.js';
+import { InMemoryIdentityDirectory } from '#lib/identity-directory/in-memory.test-support.js';
+import type { DirectoryGroups } from '#lib/identity-directory/domain/schemas.js';
 import { GroupsState } from './groups-state.svelte';
 
 const result: DirectoryGroups = { issuer: 'issuer', claim: 'groups', groups: [{ value: ' Exact / Team ', first_seen_at: '2026-01-01T00:00:00Z', last_seen_at: '2026-01-01T00:00:00Z' }], has_more: false };

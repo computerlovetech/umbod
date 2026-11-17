@@ -1,5 +1,5 @@
-import type { ClipboardWriter } from '$lib/admin/clipboard';
-import type { ToastApi } from '$lib/components/feedback/toast-state.svelte';
+import type { ClipboardWriter } from '#lib/admin/clipboard.js';
+import type { ToastApi } from '#lib/components/feedback/toast-state.svelte.js';
 
 export type CopyFeedback = 'idle' | 'copied' | 'failed';
 

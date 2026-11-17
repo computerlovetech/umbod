@@ -1,17 +1,17 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import DelayedLoadingOverlay from '$lib/components/admin/shared/DelayedLoadingOverlay.svelte';
-  import { filesHref, type FilesState } from '$lib/files/state/files-state.svelte';
-  import type { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
-  import type { UploadState } from '$lib/files/state/upload-state.svelte';
-  import { FileDropState } from '$lib/files/state/file-drop-state.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import DelayedLoadingOverlay from '#lib/components/admin/shared/DelayedLoadingOverlay.svelte';
+  import { filesHref, type FilesState } from '#lib/files/state/files-state.svelte.js';
+  import type { NewFolderState } from '#lib/files/state/new-folder-state.svelte.js';
+  import type { UploadState } from '#lib/files/state/upload-state.svelte.js';
+  import { FileDropState } from '#lib/files/state/file-drop-state.svelte.js';
   import PermissionBadge from './PermissionBadge.svelte';
   import NodeActions from './NodeActions.svelte';
   import NodeSharingDialog from './NodeSharingDialog.svelte';
   import FilesNavigation from './FilesNavigation.svelte';
   import FileUploadForm from './FileUploadForm.svelte';
-  import PageContainer from '$lib/components/shared/workspace/PageContainer.svelte';
-  import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
+  import PageContainer from '#lib/components/shared/workspace/PageContainer.svelte';
+  import AdminSplitWorkspace from '#lib/components/admin/shared/AdminSplitWorkspace.svelte';
   import FilesLocations from './FilesLocations.svelte';
   import FileTypeIcon from './FileTypeIcon.svelte';
   import { fileTypeIcon } from './file-type-icons';

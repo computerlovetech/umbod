@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import DateTimeView from '$lib/components/shared/DateTimeView.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
   import TelemetryTokenDialog from './TelemetryTokenDialog.svelte';
-  import type { PersonalAccessTokensApi } from '$lib/personal-access-tokens/api';
-  import { browserPersonalAccessTokensApi } from '$lib/personal-access-tokens/infrastructure/api';
-  import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
-  import { BrowserNavigatorClipboardWriter, type ClipboardWriter } from '$lib/admin/clipboard';
-  import type { TelemetrySetupApi } from '$lib/telemetry-setup/api';
-  import { browserTelemetrySetupApi } from '$lib/telemetry-setup/infrastructure/api';
+  import type { PersonalAccessTokensApi } from '#lib/personal-access-tokens/api.js';
+  import { browserPersonalAccessTokensApi } from '#lib/personal-access-tokens/infrastructure/api.js';
+  import { navigateToSignIn } from '#lib/admin/infrastructure/transport.js';
+  import { BrowserNavigatorClipboardWriter, type ClipboardWriter } from '#lib/admin/clipboard.js';
+  import type { TelemetrySetupApi } from '#lib/telemetry-setup/api.js';
+  import { browserTelemetrySetupApi } from '#lib/telemetry-setup/infrastructure/api.js';
   import { TelemetrySetupState } from './telemetry-setup-state.svelte';
 
   let { apiFactory = browserPersonalAccessTokensApi, setupApiFactory = browserTelemetrySetupApi, clipboardFactory = (): ClipboardWriter => new BrowserNavigatorClipboardWriter(), signIn = navigateToSignIn }: {

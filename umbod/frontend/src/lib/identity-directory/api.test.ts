@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { browserTransport, SchemaValidationError } from '$lib/admin/infrastructure/transport';
+import { browserTransport, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
 import { IdentityDirectoryApi } from './api';
 import { InMemoryIdentityDirectory } from './in-memory.test-support';
 

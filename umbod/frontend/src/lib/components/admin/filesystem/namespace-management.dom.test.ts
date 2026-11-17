@@ -3,8 +3,8 @@ import { mount, tick, unmount } from 'svelte';
 import NamespaceWorkspaceTestHarness from './NamespaceWorkspaceTestHarness.test-support.svelte';
 import { NamespaceManagementState } from './namespace-management-state.svelte';
 import { InMemoryNamespaceAdministration } from '../../../../../tests/support/filesystem/in-memory-namespace-administration';
-import type { SharedNamespace } from '$lib/admin/filesystem/domain/namespaces';
-import { deferred } from '$lib/files/fixtures.test-support';
+import type { SharedNamespace } from '#lib/admin/filesystem/domain/namespaces.js';
+import { deferred } from '#lib/files/fixtures.test-support.js';
 import { createWorkspace } from '../group-permissions/workspace.test-support';
 import type { GroupPermissionsWorkspaceState } from '../group-permissions/group-permissions-workspace-state.svelte';
 

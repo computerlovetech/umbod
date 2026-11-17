@@ -1,15 +1,15 @@
 <script lang="ts">
   import { onMount, untrack, type Snippet } from 'svelte';
-  import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
-  import type { WorkspaceApi } from '$lib/workspace/api';
-  import { workspaceApi } from '$lib/workspace/infrastructure/workspace-api';
-  import { WorkspaceAccessState } from '$lib/workspace/workspace-access-state.svelte';
-  import { WorkspaceScope } from '$lib/workspace/workspace-scope.svelte';
-  import { provideWorkspace } from '$lib/workspace/workspace-context';
-  import { WorkspaceNavigationState } from '$lib/workspace/workspace-navigation-state.svelte';
-  import { workspaceNavigation, workspacePresentation } from '$lib/workspace/navigation';
-  import { logoutNavigation } from '$lib/admin/infrastructure/logout';
-  import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
+  import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
+  import type { WorkspaceApi } from '#lib/workspace/api.js';
+  import { workspaceApi } from '#lib/workspace/infrastructure/workspace-api.js';
+  import { WorkspaceAccessState } from '#lib/workspace/workspace-access-state.svelte.js';
+  import { WorkspaceScope } from '#lib/workspace/workspace-scope.svelte.js';
+  import { provideWorkspace } from '#lib/workspace/workspace-context.js';
+  import { WorkspaceNavigationState } from '#lib/workspace/workspace-navigation-state.svelte.js';
+  import { workspaceNavigation, workspacePresentation } from '#lib/workspace/navigation.js';
+  import { logoutNavigation } from '#lib/admin/infrastructure/logout.js';
+  import WorkspaceShell from '#lib/components/shared/workspace/WorkspaceShell.svelte';
 
   let { children, pathname, accountIdentity, createWorkspaceApi = workspaceApi }: {
     children: Snippet;

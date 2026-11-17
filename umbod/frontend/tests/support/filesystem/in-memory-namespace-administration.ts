@@ -1,6 +1,6 @@
-import { HttpError } from '$lib/admin/infrastructure/transport';
-import type { NamespaceAdministration } from '$lib/admin/filesystem/namespaces-port';
-import { createNamespaceSchema, updateNamespaceSchema, sharedNamespaceSchema, type CreateNamespace, type SharedNamespace, type UpdateNamespace } from '$lib/admin/filesystem/domain/namespaces';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
+import type { NamespaceAdministration } from '#lib/admin/filesystem/namespaces-port.js';
+import { createNamespaceSchema, updateNamespaceSchema, sharedNamespaceSchema, type CreateNamespace, type SharedNamespace, type UpdateNamespace } from '#lib/admin/filesystem/domain/namespaces.js';
 
 export class InMemoryNamespaceAdministration implements NamespaceAdministration {
   private readonly entries = new Map<string, SharedNamespace>();

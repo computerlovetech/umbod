@@ -1,10 +1,10 @@
-import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
-import { HttpError } from '$lib/admin/infrastructure/transport';
-import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
-import type { AttemptScheduler } from '$lib/personal-connections/attempt-scheduler';
-import type { AuthorizationBrowser } from '$lib/personal-connections/authorization-browser';
-import { ConnectionState } from '$lib/personal-connections/state/connection-state.svelte';
-import { isUnavailable, requiresSignIn } from '$lib/personal-connections/state/errors';
+import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
+import type { PersonalConnectionsApi } from '#lib/personal-connections/api.js';
+import type { AttemptScheduler } from '#lib/personal-connections/attempt-scheduler.js';
+import type { AuthorizationBrowser } from '#lib/personal-connections/authorization-browser.js';
+import { ConnectionState } from '#lib/personal-connections/state/connection-state.svelte.js';
+import { isUnavailable, requiresSignIn } from '#lib/personal-connections/state/errors.js';
 import type { DashboardApi } from '../api';
 import type { CatalogueConnector } from '../domain/schemas';
 import type { DashboardController } from './port';

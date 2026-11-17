@@ -1,4 +1,4 @@
-import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
 
 export class DashboardIdentityProps {
   private currentIdentity = $state<HeaderAccountIdentityState>({ kind: 'hidden' });

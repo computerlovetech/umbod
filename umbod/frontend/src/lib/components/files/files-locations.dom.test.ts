@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { mount, tick, unmount } from 'svelte';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
-import { deferred, filesystemNode, rootId, folderId, fileId } from '$lib/files/fixtures.test-support';
-import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
-import { FilesState, filesHref } from '$lib/files/state/files-state.svelte';
-import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
-import { UploadState } from '$lib/files/state/upload-state.svelte';
-import type { BrowseResult, FilesystemNamespace } from '$lib/files/domain/schemas';
-import { FilePreviewState } from '$lib/files/preview/file-preview-state.svelte';
-import { InMemoryPreviewConfiguration } from '$lib/files/preview/in-memory-configuration.test-support';
-import { InMemoryFileContent } from '$lib/files/preview/in-memory-content.test-support';
-import { PreviewRegistry } from '$lib/files/preview/ports';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
+import { deferred, filesystemNode, rootId, folderId, fileId } from '#lib/files/fixtures.test-support.js';
+import { InMemoryFilesApi } from '#lib/files/infrastructure/in-memory-api.test-support.js';
+import { FilesState, filesHref } from '#lib/files/state/files-state.svelte.js';
+import { NewFolderState } from '#lib/files/state/new-folder-state.svelte.js';
+import { UploadState } from '#lib/files/state/upload-state.svelte.js';
+import type { BrowseResult, FilesystemNamespace } from '#lib/files/domain/schemas.js';
+import { FilePreviewState } from '#lib/files/preview/file-preview-state.svelte.js';
+import { InMemoryPreviewConfiguration } from '#lib/files/preview/in-memory-configuration.test-support.js';
+import { InMemoryFileContent } from '#lib/files/preview/in-memory-content.test-support.js';
+import { PreviewRegistry } from '#lib/files/preview/ports.js';
 import { textPreviewAdapter } from './preview/text-adapter';
 import FilesContent from './FilesContent.svelte';
 

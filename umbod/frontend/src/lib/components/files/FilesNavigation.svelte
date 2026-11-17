@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import type { FilesNavigationState } from '$lib/files/state/navigation-state.svelte';
-  import ActionMenu from '$lib/components/shared/ActionMenu.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import type { FilesNavigationState } from '#lib/files/state/navigation-state.svelte.js';
+  import ActionMenu from '#lib/components/shared/ActionMenu.svelte';
 
   let { state, signIn }: { state: FilesNavigationState; signIn: () => void } = $props();
 </script>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import type { Snippet } from 'svelte';
   import { modalDialog } from './modal-dialog';
 

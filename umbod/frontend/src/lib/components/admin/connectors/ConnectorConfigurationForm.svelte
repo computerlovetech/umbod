@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { browserSubmit } from '$lib/admin/operations/browser-submit';
-  import type { ConnectorConfigurationField } from '$lib/admin/connectors';
-  import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
-  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
-  import { FormPendingState } from '$lib/components/admin/shared/form-pending-state.svelte';
-  import { useToast } from '$lib/components/feedback';
+  import { browserSubmit } from '#lib/admin/operations/browser-submit.js';
+  import type { ConnectorConfigurationField } from '#lib/admin/connectors.js';
+  import AdminConfigurationField from '#lib/components/admin/shared/AdminConfigurationField.svelte';
+  import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
+  import { FormPendingState } from '#lib/components/admin/shared/form-pending-state.svelte.js';
+  import { useToast } from '#lib/components/feedback/index.js';
   import { ConnectorConfigurationFormState } from './connector-configuration-form-state.svelte';
 
   type Connector = {

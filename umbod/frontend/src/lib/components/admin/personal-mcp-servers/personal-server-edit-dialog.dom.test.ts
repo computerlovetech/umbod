@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
-import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
-import type { EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
-import type { PersonalPolicy } from '$lib/admin/personal-mcp-servers/domain/schemas';
-import { InMemoryPersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery.test-support';
-import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
-import { policyFixture, serverFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
-import { configurationFixture } from '$lib/admin/personal-mcp-servers/availability.test-support';
+import type { PersonalServerDiscovery } from '#lib/admin/personal-mcp-servers/discovery-administration.js';
+import type { EndpointDiscoveryResult } from '#lib/admin/personal-mcp-servers/domain/discovery.js';
+import type { PersonalPolicy } from '#lib/admin/personal-mcp-servers/domain/schemas.js';
+import { InMemoryPersonalServerDiscovery } from '#lib/admin/personal-mcp-servers/discovery.test-support.js';
+import { InMemoryPersonalServers } from '#lib/admin/personal-mcp-servers/in-memory.js';
+import { policyFixture, serverFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
+import { configurationFixture } from '#lib/admin/personal-mcp-servers/availability.test-support.js';
 import PersonalServerEditDialog from './PersonalServerEditDialog.svelte';
 import type { PolicyProposal } from './policy-form.svelte';
 

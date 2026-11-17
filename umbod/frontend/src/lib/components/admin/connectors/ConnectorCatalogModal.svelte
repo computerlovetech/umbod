@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import type { ConnectorListItem } from '$lib/admin/connectors';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import type { ConnectorListItem } from '#lib/admin/connectors.js';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import ConnectorConfigurationForm from './ConnectorConfigurationForm.svelte';
   import ConnectorIcon from './ConnectorIcon.svelte';
   import type { ConnectorCatalogState } from './connector-catalog-state.svelte';

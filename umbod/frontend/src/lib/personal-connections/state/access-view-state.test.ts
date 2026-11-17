@@ -1,7 +1,7 @@
 import { InMemoryAuthorizationBrowser } from '../infrastructure/in-memory-authorization-browser';
 import { InMemoryAttemptScheduler } from '../infrastructure/in-memory-attempt-scheduler';
 import { describe, expect, test, vi } from 'vitest';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { PersonalConnectionsApi } from '../api';
 import type { Attempt, AuthorizationHealth, Selection } from '../domain/schemas';
 import { InMemoryPersonalConnectionsApi } from '../infrastructure/in-memory-api';

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import type { PersonalConnectionController } from '$lib/personal-connections/state/port';
-  import { PersonalAccessViewState } from '$lib/personal-connections/state/access-view-state.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import type { PersonalConnectionController } from '#lib/personal-connections/state/port.js';
+  import { PersonalAccessViewState } from '#lib/personal-connections/state/access-view-state.svelte.js';
   import ConnectionActions from './ConnectionActions.svelte';
   import ConnectionStatusBadge from './ConnectionStatusBadge.svelte';
 

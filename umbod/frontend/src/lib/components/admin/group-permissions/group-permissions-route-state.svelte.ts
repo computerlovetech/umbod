@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { GroupPermissionsInitialTarget } from '$lib/admin/group-permissions';
+import type { GroupPermissionsInitialTarget } from '#lib/admin/group-permissions.js';
 
 const targetValue = z.string().min(1).max(200).regex(/^[^\u0000-\u001F\u007F]+$/);
 const targetSchema = z.object({ connectorId: targetValue, operationId: targetValue });

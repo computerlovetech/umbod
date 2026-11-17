@@ -1,8 +1,8 @@
 import { afterEach, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
-import { InMemoryAgentBehaviourApi } from '$lib/agent-behaviour/in-memory.test-support';
-import { InMemoryLogCounts } from '$lib/admin/analytics/in-memory.test-support';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { InMemoryAgentBehaviourApi } from '#lib/agent-behaviour/in-memory.test-support.js';
+import { InMemoryLogCounts } from '#lib/admin/analytics/in-memory.test-support.js';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import InsightsHarness from './InsightsHarness.test-support.svelte';
 import { InsightsHarnessState, configuration } from './insights.test-support.svelte';
 import { InsightsState } from './insights-state.svelte';

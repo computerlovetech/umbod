@@ -1,22 +1,22 @@
 <script lang="ts">
-  import { useWorkspace } from '$lib/workspace/workspace-context';
-  import { WorkspaceIdentityBinding } from '$lib/workspace/workspace-scope.svelte';
+  import { useWorkspace } from '#lib/workspace/workspace-context.js';
+  import { WorkspaceIdentityBinding } from '#lib/workspace/workspace-scope.svelte.js';
   import { afterNavigate, goto } from '$app/navigation';
   import { onMount, onDestroy } from 'svelte';
-  import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
-  import type { FilesApi } from '$lib/files/api';
-  import { browserFilesApi } from '$lib/files/infrastructure/files-api';
-  import { FilesState, filesHref } from '$lib/files/state/files-state.svelte';
-  import { UploadState } from '$lib/files/state/upload-state.svelte';
-  import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
+  import { navigateToSignIn } from '#lib/admin/infrastructure/transport.js';
+  import type { FilesApi } from '#lib/files/api.js';
+  import { browserFilesApi } from '#lib/files/infrastructure/files-api.js';
+  import { FilesState, filesHref } from '#lib/files/state/files-state.svelte.js';
+  import { UploadState } from '#lib/files/state/upload-state.svelte.js';
+  import { NewFolderState } from '#lib/files/state/new-folder-state.svelte.js';
   import FilesContent from './FilesContent.svelte';
-  import { publicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
-  import type { PreviewConfigurationProvider } from '$lib/files/preview/configuration';
-  import { browserTransport } from '$lib/admin/infrastructure/transport';
-  import { FileContentRoute } from '$lib/files/infrastructure/file-content-route';
-  import type { FileContentPort } from '$lib/files/preview/ports';
-  import { PreviewRegistry } from '$lib/files/preview/ports';
-  import { FilePreviewState } from '$lib/files/preview/file-preview-state.svelte';
+  import { publicConfigurationProvider } from '#lib/admin/infrastructure/public-configuration.js';
+  import type { PreviewConfigurationProvider } from '#lib/files/preview/configuration.js';
+  import { browserTransport } from '#lib/admin/infrastructure/transport.js';
+  import { FileContentRoute } from '#lib/files/infrastructure/file-content-route.js';
+  import type { FileContentPort } from '#lib/files/preview/ports.js';
+  import { PreviewRegistry } from '#lib/files/preview/ports.js';
+  import { FilePreviewState } from '#lib/files/preview/file-preview-state.svelte.js';
   import { markdownPreviewAdapter } from './preview/markdown-adapter';
   import { pdfPreviewAdapter } from './preview/pdf-adapter';
   import { imagePreviewAdapter } from './preview/image-adapter';
@@ -63,7 +63,8 @@
   onDestroy(workspace.registerDisposal(dispose));
   $effect.pre(identity.observe);
 
-  afterNavigate(({ to }) => {
+  afterNavigate(({ to, shallow }) => {
+    if (shallow) return;
     if (to?.url.pathname !== '/files') { preview.reset(); state.deletion.reset(); state.rowDeletion.reset(); state.sharing.reset(); return; }
     const target = to.url.searchParams.get('node');
     if (state.isCurrentTarget(target)) return;

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError, NetworkError } from '#lib/admin/infrastructure/transport.js';
 import type { Breadcrumbs, NodeSummary } from '../domain/schemas';
 import { deferred, fileId, filesystemFixture, filesystemNode, folderId, rootId } from '../fixtures.test-support';
 import { InMemoryFilesApi } from '../infrastructure/in-memory-api.test-support';

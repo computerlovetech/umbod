@@ -1,4 +1,5 @@
 import ast
+import asyncio
 import re
 from collections.abc import Awaitable, Callable, Mapping
 from inspect import Parameter, Signature
@@ -159,7 +160,8 @@ class OpenApiSandboxBinding:
 
 class FastMcpMontyCodeModeAdapter:
     def __init__(self, timeout_seconds: float) -> None:
-        self._sandbox = MontySandboxProvider(limits={"max_duration_secs": timeout_seconds})
+        self._sandbox = MontySandboxProvider(limits={"max_feed_duration_secs": timeout_seconds})
+        self._timeout_seconds = timeout_seconds
         self._openapi_binding = OpenApiSandboxBinding()
 
     async def execute(
@@ -224,9 +226,10 @@ class FastMcpMontyCodeModeAdapter:
             tree = ast.parse(code)
             transformed = _AwaitConnectorCalls(tool_names).visit(tree)
             ast.fix_missing_locations(transformed)
-            final_value = await self._sandbox.run(
-                ast.unparse(transformed), external_functions=external_functions
-            )
+            async with asyncio.timeout(self._timeout_seconds):
+                final_value = await self._sandbox.run(
+                    ast.unparse(transformed), external_functions=external_functions
+                )
             return SuccessfulCodeExecution(
                 final_value=final_value,
                 printed_output="".join(f"{line}\n" for line in printed_lines),

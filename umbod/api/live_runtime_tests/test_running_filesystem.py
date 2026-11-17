@@ -336,8 +336,8 @@ async def check_mcp_file_deletion(
     arguments = {"node_id": node["id"], "expected_revision": node["revision"]}
     descriptor = next(tool for tool in await alice_mcp.list_tools() if tool.name == "filesystem_delete_file")
     assert descriptor.annotations is not None
-    assert descriptor.annotations.destructiveHint is True
-    assert descriptor.annotations.readOnlyHint is False
+    assert descriptor.annotations.destructive_hint is True
+    assert descriptor.annotations.read_only_hint is False
     denied = await bob_mcp.call_tool("filesystem_delete_file", arguments, raise_on_error=False)
     missing = await bob_mcp.call_tool("filesystem_delete_file", {
         "node_id": str(uuid4()), "expected_revision": node["revision"],

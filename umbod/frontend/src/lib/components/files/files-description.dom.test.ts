@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
-import { HttpError } from '$lib/admin/infrastructure/transport';
-import { deferred, fileId, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
-import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
-import { FilesState } from '$lib/files/state/files-state.svelte';
-import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
-import { UploadState } from '$lib/files/state/upload-state.svelte';
-import type { NodeSummary } from '$lib/files/domain/schemas';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
+import { deferred, fileId, filesystemFixture, folderId, rootId } from '#lib/files/fixtures.test-support.js';
+import { InMemoryFilesApi } from '#lib/files/infrastructure/in-memory-api.test-support.js';
+import { FilesState } from '#lib/files/state/files-state.svelte.js';
+import { NewFolderState } from '#lib/files/state/new-folder-state.svelte.js';
+import { UploadState } from '#lib/files/state/upload-state.svelte.js';
+import type { NodeSummary } from '#lib/files/domain/schemas.js';
 import FilesContent from './FilesContent.svelte';
 
 let component: ReturnType<typeof mount> | undefined;

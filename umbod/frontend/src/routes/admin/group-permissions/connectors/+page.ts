@@ -1,4 +1,4 @@
-import { GroupPermissionsRouteState } from '$lib/components/admin/group-permissions/group-permissions-route-state.svelte';
+import { GroupPermissionsRouteState } from '#lib/components/admin/group-permissions/group-permissions-route-state.svelte.js';
 import type { PageLoad } from './$types';
 
 export const load: PageLoad = ({ url }) => {

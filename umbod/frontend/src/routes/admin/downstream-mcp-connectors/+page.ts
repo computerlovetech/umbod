@@ -1,7 +1,7 @@
-import { adminApi } from '$lib/admin/infrastructure/admin-api';
+import { adminApi } from '#lib/admin/infrastructure/admin-api.js';
 
-import { mapResourceCatalog } from '$lib/admin/capability-catalogs';
-import { loadSelectedDetail } from '$lib/admin/selected-detail-facade';
+import { mapResourceCatalog } from '#lib/admin/capability-catalogs.js';
+import { loadSelectedDetail } from '#lib/admin/selected-detail-facade.js';
 
 import type { PageLoad } from './$types';
 

@@ -1,12 +1,12 @@
 <script lang="ts">
-  import type { BrowserSubmitFunction as SubmitFunction } from '$lib/admin/operations/browser-submit';
-  import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
-  import AdminFileUpload from '$lib/components/admin/shared/AdminFileUpload.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import Form from '$lib/components/admin/shared/Form.svelte';
-  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
-  import Select from '$lib/components/admin/shared/Select.svelte';
-  import type { SelectOption } from '$lib/components/admin/shared/select-state.svelte';
+  import type { BrowserSubmitFunction as SubmitFunction } from '#lib/admin/operations/browser-submit.js';
+  import AdminConfigurationField from '#lib/components/admin/shared/AdminConfigurationField.svelte';
+  import AdminFileUpload from '#lib/components/admin/shared/AdminFileUpload.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import Form from '#lib/components/admin/shared/Form.svelte';
+  import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
+  import Select from '#lib/components/admin/shared/Select.svelte';
+  import type { SelectOption } from '#lib/components/admin/shared/select-state.svelte.js';
   import type { OpenApiConnectorSetupState } from './openapi-connector-setup-state.svelte';
 
   let { state }: { state: OpenApiConnectorSetupState } = $props();

@@ -1,6 +1,6 @@
-import { exactMatchGuidance, mapGroupPermissionSummary, type GroupPermissionsInitialTarget } from '$lib/admin/group-permissions';
-import type { CatalogueGroup } from '$lib/admin/groups/domain/schemas';
-import type { NamespaceAdministration } from '$lib/admin/filesystem/namespaces-port';
+import { exactMatchGuidance, mapGroupPermissionSummary, type GroupPermissionsInitialTarget } from '#lib/admin/group-permissions.js';
+import type { CatalogueGroup } from '#lib/admin/groups/domain/schemas.js';
+import type { NamespaceAdministration } from '#lib/admin/filesystem/namespaces-port.js';
 import { NamespaceManagementState } from '../filesystem/namespace-management-state.svelte';
 import { GroupPermissionsState } from './group-permissions-state.svelte';
 import type { GroupPermissionsLoader } from './group-permissions-loader';

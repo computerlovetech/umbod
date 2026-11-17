@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ResponseTooLargeError, type Transport } from '$lib/admin/infrastructure/transport';
+import { ResponseTooLargeError, type Transport } from '#lib/admin/infrastructure/transport.js';
 import { nodeIdSchema } from '../domain/schemas';
 import { PreviewReadError, type FileContentPort } from '../preview/ports';
 import { readFailure } from '../errors';

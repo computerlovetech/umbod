@@ -2,7 +2,7 @@ import json
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from urllib.error import URLError
-from urllib.request import Request
+from urllib.request import BaseHandler, Request
 
 import jwt
 import pytest
@@ -126,11 +126,15 @@ def test_jwks_source_uses_bounded_fetch_timeout(
 ) -> None:
     timeouts: list[float] = []
 
-    def unavailable(url: Request, timeout: float, context: object) -> object:
-        timeouts.append(timeout)
-        raise URLError("Unavailable")
+    class UnavailableOpener:
+        def open(self, request: Request, *, timeout: float) -> object:
+            timeouts.append(timeout)
+            raise URLError("Unavailable")
 
-    monkeypatch.setattr("urllib.request.urlopen", unavailable)
+    def build_opener(*handlers: BaseHandler | type[BaseHandler]) -> UnavailableOpener:
+        return UnavailableOpener()
+
+    monkeypatch.setattr("urllib.request.build_opener", build_opener)
     source: SigningKeySetSource = JwksSigningKeySetSource(
         "https://identity.test/jwks", 3.0
     )

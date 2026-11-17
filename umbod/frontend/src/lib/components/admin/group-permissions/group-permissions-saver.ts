@@ -1,7 +1,7 @@
-import type { GroupPermissionSet, UpdateGroupPermissionsRequest } from '$lib/admin/group-permissions';
-import { AdminApi } from '$lib/admin/infrastructure/admin-api';
-import { browserRequest } from '$lib/admin/infrastructure/browser-request';
-import { browserTransport } from '$lib/admin/infrastructure/transport';
+import type { GroupPermissionSet, UpdateGroupPermissionsRequest } from '#lib/admin/group-permissions.js';
+import { AdminApi } from '#lib/admin/infrastructure/admin-api.js';
+import { browserRequest } from '#lib/admin/infrastructure/browser-request.js';
+import { browserTransport } from '#lib/admin/infrastructure/transport.js';
 
 export interface GroupPermissionsSaver {
   save(groupId: string, changes: UpdateGroupPermissionsRequest): Promise<GroupPermissionSet>;

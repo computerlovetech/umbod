@@ -2,7 +2,7 @@ import {
   approvedHostnameSchema,
   importOpenApiCatalogUrlRequestSchema,
   OPEN_API_CATALOG_FILE_MAX_BYTES
-} from '$lib/admin/openapi-connectors';
+} from '#lib/admin/openapi-connectors.js';
 
 export type ImportMode = 'file' | 'url';
 

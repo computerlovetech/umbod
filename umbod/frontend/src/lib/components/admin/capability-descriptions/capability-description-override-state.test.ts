@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
+import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
 import { CapabilityDescriptionOverrideState } from './capability-description-override-state.svelte';
 
 const system = { connector_kind: 'native' as const, connector_id: 'slack', base_description: 'System description', effective_description: 'System description', override: { state: 'system' as const, revision: 0 } };

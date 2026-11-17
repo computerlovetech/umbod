@@ -26,7 +26,7 @@ to `/enterprise/` and the retired `/download` and `/download/` routes to `/#how`
 ## Development
 
 Run these commands from `website/` with Bun and Python (including pip) available.
-The development command installs `mkdocs-material==9.7.7` and builds the Umbod
+The development command installs `mkdocs-material==9.8.1` and builds the Umbod
 MkDocs site into `/docs/`.
 
 ```bash
@@ -41,7 +41,7 @@ bun run build
 ```
 
 The build installs only the documentation dependencies with
-`python -m pip install "mkdocs-material==9.7.7"`, then runs
+`python -m pip install "mkdocs-material==9.8.1"`, then runs
 `python -m mkdocs build --strict --site-dir ../website/public/docs` from `umbod/`,
 where `mkdocs.yml` lives. Vite then runs from `website/` and packages the complete
 site into `website/dist/`. Python is needed only during the build; the deployed

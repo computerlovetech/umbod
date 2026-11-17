@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { CreateToken } from '$lib/personal-access-tokens/domain/schemas';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
-import { InMemoryPersonalAccessTokens } from '$lib/personal-access-tokens/in-memory-api.test-support';
-import { InMemoryTelemetrySetup } from '$lib/telemetry-setup/in-memory-api.test-support';
+import type { CreateToken } from '#lib/personal-access-tokens/domain/schemas.js';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
+import { InMemoryPersonalAccessTokens } from '#lib/personal-access-tokens/in-memory-api.test-support.js';
+import { InMemoryTelemetrySetup } from '#lib/telemetry-setup/in-memory-api.test-support.js';
 import { TelemetrySetupState } from './telemetry-setup-state.svelte';
 
 function configured(api: InMemoryPersonalAccessTokens, copy: (value: string) => Promise<void> = async (): Promise<void> => {}): TelemetrySetupState {

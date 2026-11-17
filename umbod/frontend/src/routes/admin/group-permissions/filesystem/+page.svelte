@@ -1,6 +1,6 @@
 <script lang="ts">
-  import NamespaceManagement from '$lib/components/admin/filesystem/NamespaceManagement.svelte';
-  import { getGroupPermissionsWorkspace } from '$lib/components/admin/group-permissions/group-permissions-context';
+  import NamespaceManagement from '#lib/components/admin/filesystem/NamespaceManagement.svelte';
+  import { getGroupPermissionsWorkspace } from '#lib/components/admin/group-permissions/group-permissions-context.js';
 
   const workspace = getGroupPermissionsWorkspace();
 </script>

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PreviewProps } from '$lib/files/preview/ports';
+  import type { PreviewProps } from '#lib/files/preview/ports.js';
   import { CsvPreviewState } from './csv-preview-state.svelte';
   import { csvPreviewMaxColumns, csvPreviewMaxRows } from './csv';
   import TextPreview from './TextPreview.svelte';

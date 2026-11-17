@@ -32,7 +32,7 @@ from umbod.mcp.middleware import McpAuditMiddleware
 from pydantic import SecretStr
 
 
-async def _observed_server(mode: str) -> tuple[FastMCP, InMemoryMcpMetricsRecorder, InMemoryMcpToolInvocationLogSink, StringIO]:
+async def _observed_server(mode: str, *, timeout_seconds: float = 30.0) -> tuple[FastMCP, InMemoryMcpMetricsRecorder, InMemoryMcpToolInvocationLogSink, StringIO]:
     application_failures = create_application_failure_signal()
     configurations = InMemoryConnectorCurrentConfigurationStore()
     await configurations.save_current_configuration(
@@ -67,7 +67,7 @@ async def _observed_server(mode: str) -> tuple[FastMCP, InMemoryMcpMetricsRecord
             ConnectorToolMapping("slack", "second", "Second operation", operation),
         ],
         connector_tool_exposure_mode=mode,
-        connector_code_execution_timeout_seconds=0.01,
+        connector_code_execution_timeout_seconds=timeout_seconds,
     )
     return server, metrics, logs, stream
 
@@ -182,7 +182,7 @@ async def test_connector_failure_is_counted_once_independently_of_outer_request(
 @pytest.mark.asyncio
 @pytest.mark.parametrize("code,outcome", [("if :", "failure"), ("while True:\n    pass", "timeout")])
 async def test_codemode_failure_before_nested_call_records_only_request_failure(code: str, outcome: str) -> None:
-    server, metrics, logs, stream = await _observed_server("codemode")
+    server, metrics, logs, stream = await _observed_server("codemode", timeout_seconds=0.01)
     async with Client(server) as client:
         result = await client.call_tool("execute_code", {"code": code})
 

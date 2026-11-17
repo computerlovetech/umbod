@@ -1,21 +1,21 @@
 <script lang="ts">
-  import { browserSubmit } from '$lib/admin/operations/browser-submit';
+  import { browserSubmit } from '#lib/admin/operations/browser-submit.js';
   import { untrack } from 'svelte';
-  import { downstreamMcpToolActivationBatchResponseSchema, type DownstreamMcpTool } from '$lib/admin/downstream-mcp-connectors';
-  import { mapJsonSchemaToToolParameters } from '$lib/components/shared/tools/json-schema-tool-parameters';
-  import { normalizeNullableToolOutputSchema } from '$lib/admin/tool-output-schema';
-  import ToolCard from '$lib/components/admin/connectors/ToolCard.svelte';
-  import ToolSaveBar from '$lib/components/admin/connectors/ToolSaveBar.svelte';
-  import CapabilityCatalogGrid from '$lib/components/admin/shared/CapabilityCatalogGrid.svelte';
-  import ScrollableToolCatalog from '$lib/components/admin/shared/ScrollableToolCatalog.svelte';
-  import CatalogControls from '$lib/components/admin/shared/CatalogControls.svelte';
-  import CatalogPagination from '$lib/components/admin/shared/CatalogPagination.svelte';
-  import AdminSaveAction from '$lib/components/admin/shared/AdminSaveAction.svelte';
-  import type { SelectOption } from '$lib/components/admin/shared/select-state.svelte';
-  import { useToast } from '$lib/components/feedback';
+  import { downstreamMcpToolActivationBatchResponseSchema, type DownstreamMcpTool } from '#lib/admin/downstream-mcp-connectors.js';
+  import { mapJsonSchemaToToolParameters } from '#lib/components/shared/tools/json-schema-tool-parameters.js';
+  import { normalizeNullableToolOutputSchema } from '#lib/admin/tool-output-schema.js';
+  import ToolCard from '#lib/components/admin/connectors/ToolCard.svelte';
+  import ToolSaveBar from '#lib/components/admin/connectors/ToolSaveBar.svelte';
+  import CapabilityCatalogGrid from '#lib/components/admin/shared/CapabilityCatalogGrid.svelte';
+  import ScrollableToolCatalog from '#lib/components/admin/shared/ScrollableToolCatalog.svelte';
+  import CatalogControls from '#lib/components/admin/shared/CatalogControls.svelte';
+  import CatalogPagination from '#lib/components/admin/shared/CatalogPagination.svelte';
+  import AdminSaveAction from '#lib/components/admin/shared/AdminSaveAction.svelte';
+  import type { SelectOption } from '#lib/components/admin/shared/select-state.svelte.js';
+  import { useToast } from '#lib/components/feedback/index.js';
   import DownstreamMcpToolActivationToggle from './DownstreamMcpToolActivationToggle.svelte';
-  import InvocationPolicyControl from '$lib/components/admin/connectors/InvocationPolicyControl.svelte';
-  import { invocationPolicyListResponseSchema, invocationPolicyConflictSchema, type InvocationPolicyTool } from '$lib/admin/invocation-policy';
+  import InvocationPolicyControl from '#lib/components/admin/connectors/InvocationPolicyControl.svelte';
+  import { invocationPolicyListResponseSchema, invocationPolicyConflictSchema, type InvocationPolicyTool } from '#lib/admin/invocation-policy.js';
   import { DownstreamMcpToolCatalogState, downstreamMcpToolPageSizes, downstreamMcpToolStatusFilters, type DownstreamMcpToolPageSize, type DownstreamMcpToolStatusFilter } from './downstream-mcp-tool-catalog-state.svelte';
 
   let { connectorId, tools, policies = [], onsaved = () => {} }: { connectorId: string; tools: DownstreamMcpTool[]; policies?: InvocationPolicyTool[]; onsaved?: (connectorId: string, tools: DownstreamMcpTool[]) => void } = $props();

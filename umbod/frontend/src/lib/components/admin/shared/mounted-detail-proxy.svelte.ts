@@ -1,5 +1,5 @@
 import { SvelteMap } from 'svelte/reactivity';
-import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
+import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
 
 export type MountedDetailLoader<Detail> = (id: string, signal?: AbortSignal) => Promise<Detail>;
 

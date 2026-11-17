@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
 import { workspaceProfileSchema } from './domain/profile';
 import { InMemoryWorkspaceApi } from './in-memory-api.test-support';
 import { resolveWorkspaceAccess } from './admin-access';

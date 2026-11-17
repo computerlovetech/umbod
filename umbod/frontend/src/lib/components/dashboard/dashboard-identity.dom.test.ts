@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { mountWorkspace } from '$lib/components/workspace/mount-workspace.test-support';
+import { mountWorkspace } from '#lib/components/workspace/mount-workspace.test-support.js';
 import { tick, unmount } from 'svelte';
-import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
-import type { WorkspaceProfile } from '$lib/workspace/domain/profile';
-import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
-import { catalogue } from '$lib/dashboard/test-fixtures';
-import { deferred, usageSnapshot } from '$lib/dashboard/usage-fixtures.test-support';
-import type { PersonalUsage } from '$lib/dashboard/domain/usage-schemas';
+import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
+import type { WorkspaceProfile } from '#lib/workspace/domain/profile.js';
+import { InMemoryDashboardApi } from '#lib/dashboard/infrastructure/in-memory-api.js';
+import { catalogue } from '#lib/dashboard/test-fixtures.js';
+import { deferred, usageSnapshot } from '#lib/dashboard/usage-fixtures.test-support.js';
+import type { PersonalUsage } from '#lib/dashboard/domain/usage-schemas.js';
 import { DashboardIdentityProps } from './identity-props.test-support.svelte';
 import Dashboard from './Dashboard.svelte';
 

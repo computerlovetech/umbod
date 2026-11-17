@@ -1,7 +1,7 @@
 <script lang="ts">
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
   import type { PersonalOAuthSetupState } from './personal-oauth-setup-state.svelte';
 
   let { state, close, edit, published = false, publish }: {

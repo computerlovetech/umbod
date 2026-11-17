@@ -1,5 +1,5 @@
 <script lang="ts">
-  import '$lib/styles/form-fields.css';
+  import '#lib/styles/form-fields.css';
   import type { HTMLTextareaAttributes } from 'svelte/elements';
 
   let { id, label, value, ...attributes }: Omit<HTMLTextareaAttributes, 'id' | 'value' | 'children'> & {

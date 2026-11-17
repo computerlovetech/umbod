@@ -1,4 +1,4 @@
-import { goto, invalidateAll } from '$app/navigation';
+import { goto, refreshAll } from '$app/navigation';
 import { tick } from 'svelte';
 import { adminApi, type AdminApi } from '../infrastructure/admin-api';
 import { AuthenticationRequiredError, HttpError } from '../infrastructure/transport';
@@ -114,8 +114,8 @@ export const browserSubmit: BrowserSubmitAction = createBrowserSubmit({
   api: () => adminApi(),
   pathname: () => window.location.pathname,
   location: () => `${window.location.pathname}${window.location.search}`,
-  navigate: (location) => goto(location, { invalidateAll: true }),
-  invalidate: invalidateAll,
+  navigate: (location) => goto(location, { refreshAll: true }),
+  invalidate: refreshAll,
   replaceFeedback: operationState.replace,
   flush: tick
 });

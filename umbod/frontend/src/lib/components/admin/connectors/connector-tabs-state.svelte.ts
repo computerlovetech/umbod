@@ -1,5 +1,5 @@
-import type { ConnectorCapability } from '$lib/admin/connector-capabilities';
-import type { SubpageLink } from '$lib/components/shared/workspace/SubpageNavigation.svelte';
+import type { ConnectorCapability } from '#lib/admin/connector-capabilities.js';
+import type { SubpageLink } from '#lib/components/shared/workspace/SubpageNavigation.svelte';
 
 export type ConnectorTab = 'catalog' | 'openapi' | 'downstream-mcp';
 

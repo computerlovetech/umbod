@@ -1,7 +1,7 @@
-import { DashboardState } from '$lib/dashboard/state/dashboard-state.svelte';
-import type { DashboardController } from '$lib/dashboard/state/port';
-import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
-import { catalogue } from '$lib/dashboard/test-fixtures';
+import { DashboardState } from '#lib/dashboard/state/dashboard-state.svelte.js';
+import type { DashboardController } from '#lib/dashboard/state/port.js';
+import { InMemoryDashboardApi } from '#lib/dashboard/infrastructure/in-memory-api.js';
+import { catalogue } from '#lib/dashboard/test-fixtures.js';
 import type { PersonalConnectionsApi } from '../api';
 import { InMemoryAttemptScheduler } from '../infrastructure/in-memory-attempt-scheduler';
 

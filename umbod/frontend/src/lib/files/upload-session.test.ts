@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
-import { browserTransport, SchemaValidationError } from '$lib/admin/infrastructure/transport';
-import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
+import { browserTransport, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
+import { InMemoryPublicConfigurationProvider } from '#lib/admin/infrastructure/public-configuration.js';
 import { beginUploadSchema, rawUploadSchema, uploadSessionSchema, type SingleUploadTransfer, type UploadSession } from './domain/schemas';
 import { FilesApi } from './infrastructure/files-api';
 import { InMemoryFilesApi } from './infrastructure/in-memory-api.test-support';

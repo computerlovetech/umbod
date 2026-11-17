@@ -1,9 +1,9 @@
 import { render } from 'svelte/server';
 import { describe, expect, test, vi } from 'vitest';
-import type { ToastApi } from '$lib/components/feedback/toast-state.svelte';
+import type { ToastApi } from '#lib/components/feedback/toast-state.svelte.js';
 import McpSetupGuide from './McpSetupGuide.svelte';
 
-vi.mock('$lib/components/feedback', () => ({
+vi.mock('#lib/components/feedback/index.js', () => ({
   useToast: (): ToastApi => ({
     success: (): number => 1, warning: (): number => 1, error: (): number => 1,
     dismiss: (): void => {}

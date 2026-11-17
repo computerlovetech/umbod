@@ -1,9 +1,9 @@
-import { InMemoryPreviewConfiguration } from '$lib/files/preview/in-memory-configuration.test-support';
+import { InMemoryPreviewConfiguration } from '#lib/files/preview/in-memory-configuration.test-support.js';
 import { describe, expect, test, vi } from 'vitest';
 import { deferred, fileId, filesystemFixture, filesystemNode, folderId, rootId } from '../fixtures.test-support';
 import { InMemoryFilesApi } from '../infrastructure/in-memory-api.test-support';
 import { FilesState } from '../state/files-state.svelte';
-import { markdownPreviewAdapter } from '$lib/components/files/preview/markdown-adapter';
+import { markdownPreviewAdapter } from '#lib/components/files/preview/markdown-adapter.js';
 import { PreviewReadError, PreviewRegistry } from './ports';
 import { FilePreviewState } from './file-preview-state.svelte';
 import { InMemoryFileContent } from './in-memory-content.test-support';

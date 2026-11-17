@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { browserSubmit } from '$lib/admin/operations/browser-submit';
+  import { browserSubmit } from '#lib/admin/operations/browser-submit.js';
   import type { HTMLButtonAttributes } from 'svelte/elements';
-  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
-  import { useToast } from '$lib/components/feedback';
-  import { FormPendingState } from '$lib/components/admin/shared/form-pending-state.svelte';
+  import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
+  import { useToast } from '#lib/components/feedback/index.js';
+  import { FormPendingState } from '#lib/components/admin/shared/form-pending-state.svelte.js';
 
   type PublicationAction = 'publish' | 'unpublish';
   type PublicationActionLabel = 'Publish' | 'Unpublish';

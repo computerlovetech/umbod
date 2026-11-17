@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { GroupsState } from './groups-state.svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import SubpageContainer from '$lib/components/shared/workspace/SubpageContainer.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import SubpageContainer from '#lib/components/shared/workspace/SubpageContainer.svelte';
   import GroupFormModal from './GroupFormModal.svelte';
   let { state }: { state: GroupsState } = $props();
 </script>

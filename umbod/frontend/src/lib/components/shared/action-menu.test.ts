@@ -2,8 +2,8 @@ import { Window } from 'happy-dom';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { render } from 'svelte/server';
 import { ActionMenuState } from './action-menu-state.svelte';
-import { AdminSidebarActionMenuState } from '$lib/components/admin/shared/admin-sidebar-action-menu-state.svelte';
-import AdminSidebarActionMenu from '$lib/components/admin/shared/AdminSidebarActionMenu.svelte';
+import { AdminSidebarActionMenuState } from '#lib/components/admin/shared/admin-sidebar-action-menu-state.svelte.js';
+import AdminSidebarActionMenu from '#lib/components/admin/shared/AdminSidebarActionMenu.svelte';
 
 function fixture(): { state: ActionMenuState; window: Window; first: HTMLAnchorElement; last: HTMLButtonElement } {
   const window = new Window();

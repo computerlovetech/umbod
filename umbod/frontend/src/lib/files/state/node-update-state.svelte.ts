@@ -1,5 +1,5 @@
 import { SvelteSet } from 'svelte/reactivity';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { FilesystemApi } from '../api';
 import { fileNameSchema, nodeSummarySchema, type NodeSummary, type UpdateNode } from '../domain/schemas';
 import { MoveDestinationState } from './move-destination-state.svelte';

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { PersonalOAuthSetupState } from './personal-oauth-setup-state.svelte';
-import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
-import { InMemoryPersonalOAuthSetup, discoveryFixture, setupFixture } from '$lib/admin/personal-mcp-servers/setup.test-support';
-import { policyFixture, serverFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
-import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
-import type { SetupStatus } from '$lib/admin/personal-mcp-servers/domain/setup';
+import { InMemoryPersonalServers } from '#lib/admin/personal-mcp-servers/in-memory.js';
+import { InMemoryPersonalOAuthSetup, discoveryFixture, setupFixture } from '#lib/admin/personal-mcp-servers/setup.test-support.js';
+import { policyFixture, serverFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
+import { AuthenticationRequiredError, HttpError, NetworkError } from '#lib/admin/infrastructure/transport.js';
+import type { SetupStatus } from '#lib/admin/personal-mcp-servers/domain/setup.js';
 
 function harness(): { state: PersonalOAuthSetupState; setup: InMemoryPersonalOAuthSetup; servers: InMemoryPersonalServers; validationChanged: ReturnType<typeof vi.fn>; publicationChanged: ReturnType<typeof vi.fn>; accessLost: ReturnType<typeof vi.fn>; lockChanged: ReturnType<typeof vi.fn> } {
   const setup = new InMemoryPersonalOAuthSetup();

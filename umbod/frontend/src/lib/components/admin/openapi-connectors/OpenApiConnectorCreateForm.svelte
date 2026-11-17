@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { browserSubmit } from '$lib/admin/operations/browser-submit';
+  import { browserSubmit } from '#lib/admin/operations/browser-submit.js';
   import { untrack } from 'svelte';
-  import type { OpenApiConnectorCreateAction } from '$lib/admin/openapi-connectors';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
+  import type { OpenApiConnectorCreateAction } from '#lib/admin/openapi-connectors.js';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import DelayedSpinner from '#lib/components/admin/shared/DelayedSpinner.svelte';
   import { OpenApiConnectorCreateState } from './openapi-connector-create-state.svelte';
 
   let { result }: { result?: OpenApiConnectorCreateAction } = $props();

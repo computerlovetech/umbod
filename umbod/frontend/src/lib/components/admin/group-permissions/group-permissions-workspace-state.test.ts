@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { InMemoryNamespaceAdministration } from '../../../../../tests/support/filesystem/in-memory-namespace-administration';
-import { deferred } from '$lib/files/fixtures.test-support';
-import type { SharedNamespace } from '$lib/admin/filesystem/domain/namespaces';
+import { deferred } from '#lib/files/fixtures.test-support.js';
+import type { SharedNamespace } from '#lib/admin/filesystem/domain/namespaces.js';
 import { createWorkspace } from './workspace.test-support';
 
 describe('persistent group permissions state', (): void => {
@@ -114,8 +114,8 @@ describe('persistent group permissions state', (): void => {
     state.namespaces.observeAccountIdentity({ kind: 'hidden' });
     await state.namespaces.ensureLoaded();
     state.namespaces.stageAccess(entry.id, 'read');
-    const { resolveWorkspaceAccess } = await import('$lib/workspace/admin-access');
-    const { InMemoryWorkspaceApi } = await import('$lib/workspace/in-memory-api.test-support');
+    const { resolveWorkspaceAccess } = await import('#lib/workspace/admin-access.js');
+    const { InMemoryWorkspaceApi } = await import('#lib/workspace/in-memory-api.test-support.js');
     const identity = await resolveWorkspaceAccess(new InMemoryWorkspaceApi({ identity_key: 'replacement', user: { id: 'replacement', name: 'Administrator', email: null, picture: null }, capabilities: { administration: true } }));
     state.namespaces.observeAccountIdentity(identity.accountIdentity);
     expect(state.namespaces.hasUnsavedChanges).toBe(false);

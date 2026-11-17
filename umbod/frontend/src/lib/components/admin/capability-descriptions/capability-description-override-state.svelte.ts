@@ -1,6 +1,6 @@
-import { CapabilityDescriptionConflictError, type CapabilityDescriptionResponse } from '$lib/admin/capability-descriptions';
-import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
-import type { ToastApi } from '$lib/components/feedback';
+import { CapabilityDescriptionConflictError, type CapabilityDescriptionResponse } from '#lib/admin/capability-descriptions.js';
+import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
+import type { ToastApi } from '#lib/components/feedback/index.js';
 
 export type SaveResult = CapabilityDescriptionResponse | { kind: 'conflict'; current: CapabilityDescriptionResponse };
 

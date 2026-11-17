@@ -1,4 +1,4 @@
-import { HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
+import { HttpError, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
 import type { NodeSharingApi } from '../api';
 import type { NodeSummary } from '../domain/schemas';
 import { nodeAccessSchema, nodeAccessWriteSchema, replaceAccessSchema, sharingRecipientSchema, sharingRecipientSearchSchema, sharingRecipientSearchResultSchema, sharingRecipientTypeSchema, type SharingRecipientType, type NodeAccess, type ReplaceAccess, type SharingRecipient, type SharingRecipientSearchResult } from '../domain/sharing';

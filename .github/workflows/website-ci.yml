@@ -22,7 +22,8 @@ jobs:
       - name: Install documentation dependencies
         working-directory: umbod
         run: uv sync --only-group docs --locked
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
         with:
           node-version: '22'
       - uses: oven-sh/setup-bun@v2

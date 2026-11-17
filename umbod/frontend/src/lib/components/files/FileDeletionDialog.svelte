@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import type { DeletionState } from '$lib/files/state/deletion-state.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import type { DeletionState } from '#lib/files/state/deletion-state.svelte.js';
 
   let { state, oncancel = () => state.cancel(), onconfirm = () => { void state.confirm(); } }: { state: DeletionState; oncancel?: () => void; onconfirm?: () => void } = $props();
 </script>

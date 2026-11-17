@@ -1,5 +1,5 @@
 <script lang="ts">
-  import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
+  import AdminSplitWorkspace from '#lib/components/admin/shared/AdminSplitWorkspace.svelte';
 
   let {
     message,

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import { InMemoryAgentBehaviourApi, deferred } from '../in-memory.test-support';
 import { ConfigurationState } from './configuration-state.svelte';
 import { ReportsState } from './reports-state.svelte';

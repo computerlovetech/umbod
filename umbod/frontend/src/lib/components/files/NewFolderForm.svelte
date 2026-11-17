@@ -1,8 +1,8 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import type { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import type { NewFolderState } from '#lib/files/state/new-folder-state.svelte.js';
   let { state }: { state: NewFolderState } = $props();
 
   async function submit(form: HTMLFormElement): Promise<void> {

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from typing import Any
@@ -52,7 +54,11 @@ class ConnectorCodeModeDriver:
 class ConnectorCodeMode:
     def __init__(self) -> None:
         self.invocations: list[dict[str, Any]] = []
-        self._operation: Callable[..., dict[str, Any]] = self._recording_operation
+        self._operation: Callable[..., Any] = self._recording_operation
+
+    def with_operation(self, operation: Callable[..., Any]) -> ConnectorCodeMode:
+        self._operation = operation
+        return self
 
     async def running(self, timeout_seconds: float = 30.0) -> ConnectorCodeModeDriver:
         builder = ConnectorToolExposureMcpBuilder().with_operation(self._operation)

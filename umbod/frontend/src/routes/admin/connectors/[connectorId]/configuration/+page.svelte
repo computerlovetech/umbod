@@ -1,10 +1,10 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import { operationState } from '$lib/admin/operations/operation-state.svelte';
-  import AdminShell from '$lib/components/admin/AdminShell.svelte';
-  import ConnectorConfigurationForm from '$lib/components/admin/connectors/ConnectorConfigurationForm.svelte';
-  import type { ConnectorConfigurationPageData } from '$lib/admin/connectors';
-  import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+  import { operationState } from '#lib/admin/operations/operation-state.svelte.js';
+  import AdminShell from '#lib/components/admin/AdminShell.svelte';
+  import ConnectorConfigurationForm from '#lib/components/admin/connectors/ConnectorConfigurationForm.svelte';
+  import type { ConnectorConfigurationPageData } from '#lib/admin/connectors.js';
+  import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
 
   type ActionData = {
     status?: string;

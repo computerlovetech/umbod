@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { pushState } from '$app/navigation';
+  import { goto } from '$app/navigation';
   import { untrack, type Snippet } from 'svelte';
-  import { connectorCapabilities, connectorCapabilityUrl, parseConnectorCapability, type ConnectorCapability } from '$lib/admin/connector-capabilities';
+  import { useToast } from '#lib/components/feedback/index.js';
+  import { connectorCapabilities, connectorCapabilityUrl, parseConnectorCapability, type ConnectorCapability } from '#lib/admin/connector-capabilities.js';
 
   let { selected, counts, currentUrl, children }: {
     selected: ConnectorCapability;
@@ -11,17 +12,23 @@
   } = $props();
   let activeCapability = $state(untrack(() => selected));
 
+  const toast = useToast();
+
   const labels: Record<ConnectorCapability, string> = {
     tools: 'Tools',
     prompts: 'Prompts',
     resources: 'Resources'
   };
 
-  function navigate(event: MouseEvent, capability: ConnectorCapability): void {
+  async function navigate(event: MouseEvent, capability: ConnectorCapability): Promise<void> {
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
     event.preventDefault();
-    activeCapability = capability;
-    pushState(connectorCapabilityUrl(currentUrl, capability), {});
+    try {
+      await goto(connectorCapabilityUrl(currentUrl, capability), { shallow: true, state: {} });
+      activeCapability = capability;
+    } catch {
+      toast.error('Could not change connector capability');
+    }
   }
 
   function handlePopstate(): void {

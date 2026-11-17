@@ -1,4 +1,4 @@
-import type { CapabilityActivationStatus, PromptActivationBatchResponse, PromptCatalog } from '$lib/admin/capability-catalogs';
+import type { CapabilityActivationStatus, PromptActivationBatchResponse, PromptCatalog } from '#lib/admin/capability-catalogs.js';
 
 export class DownstreamMcpPromptCatalogState {
   prompts: PromptCatalog['prompts'];

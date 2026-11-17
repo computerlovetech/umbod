@@ -1,23 +1,23 @@
 import { render } from 'svelte/server';
-import { renderWorkspace } from '$lib/components/workspace/render-workspace.test-support';
-import { InMemoryAttemptScheduler } from '$lib/personal-connections/infrastructure/in-memory-attempt-scheduler';
+import { renderWorkspace } from '#lib/components/workspace/render-workspace.test-support.js';
+import { InMemoryAttemptScheduler } from '#lib/personal-connections/infrastructure/in-memory-attempt-scheduler.js';
 import { describe, expect, test, vi } from 'vitest';
-import type { ToastApi } from '$lib/components/feedback/toast-state.svelte';
-import type { DashboardApi } from '$lib/dashboard/api';
-import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
-import { catalogue, personalConnector, sharedConnector } from '$lib/dashboard/test-fixtures';
-import type { CatalogueCapability } from '$lib/dashboard/domain/schemas';
-import type { DashboardController } from '$lib/dashboard/state/port';
-import { DashboardState } from '$lib/dashboard/state/dashboard-state.svelte';
-import { authorizationHealth, selection } from '$lib/personal-connections/test-fixtures';
-import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
-import { InMemoryPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/in-memory-api';
+import type { ToastApi } from '#lib/components/feedback/toast-state.svelte.js';
+import type { DashboardApi } from '#lib/dashboard/api.js';
+import { InMemoryDashboardApi } from '#lib/dashboard/infrastructure/in-memory-api.js';
+import { catalogue, personalConnector, sharedConnector } from '#lib/dashboard/test-fixtures.js';
+import type { CatalogueCapability } from '#lib/dashboard/domain/schemas.js';
+import type { DashboardController } from '#lib/dashboard/state/port.js';
+import { DashboardState } from '#lib/dashboard/state/dashboard-state.svelte.js';
+import { authorizationHealth, selection } from '#lib/personal-connections/test-fixtures.js';
+import type { PersonalConnectionsApi } from '#lib/personal-connections/api.js';
+import { InMemoryPersonalConnectionsApi } from '#lib/personal-connections/infrastructure/in-memory-api.js';
 import CatalogueCapabilities from './CatalogueCapabilities.svelte';
 import ConnectorDetail from './ConnectorDetail.svelte';
 import ConnectorWorkspace from './ConnectorWorkspace.svelte';
 import ConnectorsPage from './ConnectorsPage.svelte';
 
-vi.mock('$lib/components/feedback', () => ({
+vi.mock('#lib/components/feedback/index.js', () => ({
   useToast: (): ToastApi => ({
     success: (): number => 1, warning: (): number => 1, error: (): number => 1, dismiss: (): void => {}
   })

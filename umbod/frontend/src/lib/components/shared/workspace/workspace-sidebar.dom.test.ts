@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
-import { administrationNavigation, workspaceNavigation, workspacePresentation } from '$lib/workspace/navigation';
-import { WorkspaceNavigationHistory } from '$lib/workspace/navigation-history.svelte';
-import { workspaceNavigationHistoryKey } from '$lib/workspace/navigation-history-context';
-import AdminShell from '$lib/components/admin/AdminShell.svelte';
+import { administrationNavigation, workspaceNavigation, workspacePresentation } from '#lib/workspace/navigation.js';
+import { WorkspaceNavigationHistory } from '#lib/workspace/navigation-history.svelte.js';
+import { workspaceNavigationHistoryKey } from '#lib/workspace/navigation-history-context.js';
+import AdminShell from '#lib/components/admin/AdminShell.svelte';
 import WorkspaceShell from './WorkspaceShell.svelte';
 
 vi.mock('$app/state', () => ({ navigating: { to: null, from: null } }));

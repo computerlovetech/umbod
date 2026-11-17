@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { useWorkspace } from '$lib/workspace/workspace-context';
-  import { WorkspaceIdentityBinding } from '$lib/workspace/workspace-scope.svelte';
+  import { useWorkspace } from '#lib/workspace/workspace-context.js';
+  import { WorkspaceIdentityBinding } from '#lib/workspace/workspace-scope.svelte.js';
   import { onMount, onDestroy } from 'svelte';
   import PersonalUsage from './PersonalUsage.svelte';
-  import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
-  import type { DashboardApi } from '$lib/dashboard/api';
-  import { browserDashboardApi } from '$lib/dashboard/infrastructure/dashboard-api';
-  import { UsagePageState } from '$lib/dashboard/state/usage-page-state.svelte';
+  import { navigateToSignIn } from '#lib/admin/infrastructure/transport.js';
+  import type { DashboardApi } from '#lib/dashboard/api.js';
+  import { browserDashboardApi } from '#lib/dashboard/infrastructure/dashboard-api.js';
+  import { UsagePageState } from '#lib/dashboard/state/usage-page-state.svelte.js';
 
   let {
     createApi = browserDashboardApi,

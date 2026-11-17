@@ -1,11 +1,11 @@
-import { resolveWorkspaceAccess } from '$lib/workspace/admin-access';
-import { InMemoryWorkspaceApi } from '$lib/workspace/in-memory-api.test-support';
+import { resolveWorkspaceAccess } from '#lib/workspace/admin-access.js';
+import { InMemoryWorkspaceApi } from '#lib/workspace/in-memory-api.test-support.js';
 import { describe, expect, test, vi } from 'vitest';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import { InMemoryNamespaceAdministration } from '../../../../../tests/support/filesystem/in-memory-namespace-administration';
-import type { NamespaceAdministration } from '$lib/admin/filesystem/namespaces-port';
-import type { SharedNamespace } from '$lib/admin/filesystem/domain/namespaces';
-import { deferred } from '$lib/files/fixtures.test-support';
+import type { NamespaceAdministration } from '#lib/admin/filesystem/namespaces-port.js';
+import type { SharedNamespace } from '#lib/admin/filesystem/domain/namespaces.js';
+import { deferred } from '#lib/files/fixtures.test-support.js';
 import { NamespaceManagementState } from './namespace-management-state.svelte';
 
 type Fixture = {

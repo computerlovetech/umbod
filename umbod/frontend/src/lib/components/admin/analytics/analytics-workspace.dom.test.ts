@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import AnalyticsWorkspace from './AnalyticsWorkspace.svelte';
-import { AnalyticsState } from '$lib/admin/analytics/analytics-state.svelte';
-import { InMemoryLogCounts } from '$lib/admin/analytics/in-memory.test-support';
-import type { LogCountResponse } from '$lib/admin/analytics/domain/schemas';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { AnalyticsState } from '#lib/admin/analytics/analytics-state.svelte.js';
+import { InMemoryLogCounts } from '#lib/admin/analytics/in-memory.test-support.js';
+import type { LogCountResponse } from '#lib/admin/analytics/domain/schemas.js';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 
 let component: ReturnType<typeof mount> | undefined;
 

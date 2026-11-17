@@ -1,11 +1,11 @@
 import { operationFailure, operationRedirect, type BrowserOperations } from './contracts';
-import { presentDownstreamMcpActionError } from '$lib/admin/downstream-mcp-errors';
-import { downstreamMcpConnectorCreateInputSchema, downstreamMcpConnectorMetadataPatchSchema, downstreamMcpConnectorConfigurationInputSchema, downstreamMcpToolActivationBatchRequestSchema, type DownstreamMcpConnectorCreateInput } from '$lib/admin/downstream-mcp-connectors';
-import { invocationPolicyBatchUpdateRequestSchema, invocationPolicyConflictResponseSchema } from '$lib/admin/invocation-policy';
-import { HttpError } from '$lib/admin/infrastructure/transport';
-import { promptActivationBatchRequestSchema, resourceActivationBatchRequestSchema } from '$lib/admin/capability-catalogs';
+import { presentDownstreamMcpActionError } from '#lib/admin/downstream-mcp-errors.js';
+import { downstreamMcpConnectorCreateInputSchema, downstreamMcpConnectorMetadataPatchSchema, downstreamMcpConnectorConfigurationInputSchema, downstreamMcpToolActivationBatchRequestSchema, type DownstreamMcpConnectorCreateInput } from '#lib/admin/downstream-mcp-connectors.js';
+import { invocationPolicyBatchUpdateRequestSchema, invocationPolicyConflictResponseSchema } from '#lib/admin/invocation-policy.js';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
+import { promptActivationBatchRequestSchema, resourceActivationBatchRequestSchema } from '#lib/admin/capability-catalogs.js';
 
-import { presentSaveFailureWithReconciliation } from '$lib/admin/tool-activation-reconciliation';
+import { presentSaveFailureWithReconciliation } from '#lib/admin/tool-activation-reconciliation.js';
 
 function location(connectorId?: string): string {
   return connectorId ? `/admin/downstream-mcp-connectors?connector=${encodeURIComponent(connectorId)}` : '/admin/downstream-mcp-connectors';

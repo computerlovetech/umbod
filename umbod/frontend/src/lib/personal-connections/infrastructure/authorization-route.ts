@@ -1,4 +1,4 @@
-import type { Transport } from '$lib/admin/infrastructure/transport';
+import type { Transport } from '#lib/admin/infrastructure/transport.js';
 import type { AuthorizationPort } from '../api';
 import { authorizationHealthSchema, renewalResultSchema, type AuthorizationHealth, type RenewalResult, attemptSchema, emptyRequestSchema, startAttemptSchema, type Attempt, type EmptyRequest, type StartAttempt } from '../domain/schemas';
 import { connectionPath } from './connections-route';

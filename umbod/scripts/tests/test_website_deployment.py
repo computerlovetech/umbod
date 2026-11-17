@@ -47,9 +47,10 @@ def test_website_ci_validates_without_deploying_or_requiring_cloudflare_secrets(
     assert workflow["jobs"]["website"]["steps"][-1]["run"] == "bun run build:ci"
 
 
-def test_website_ci_installs_only_locked_documentation_dependencies(repository: Path) -> None:
+@pytest.mark.parametrize("workflow_name", ["website-ci.yml", "umbod-release.yml"])
+def test_website_workflows_install_only_locked_documentation_dependencies(repository: Path, workflow_name: str) -> None:
     workflow = yaml.load(
-        (repository / ".github/workflows/website-ci.yml").read_text(), Loader=yaml.BaseLoader
+        (repository / ".github/workflows" / workflow_name).read_text(), Loader=yaml.BaseLoader
     )
     steps = workflow["jobs"]["website"]["steps"]
     setup = next(step for step in steps if step.get("uses") == "astral-sh/setup-uv@v7")
@@ -61,13 +62,19 @@ def test_website_ci_installs_only_locked_documentation_dependencies(repository: 
     install = next(step for step in steps if step.get("name") == "Install documentation dependencies")
     assert install["working-directory"] == "umbod"
     assert install["run"] == "uv sync --only-group docs --locked"
+    build = next(step for step in steps if step.get("run") in ("bun run build:ci", "bun run build:release"))
+    assert steps.index(setup) < steps.index(install) < steps.index(build)
+    node = next(step for step in steps if step.get("uses", "").startswith("actions/setup-node@"))
+    assert node["uses"] == "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1"
+    assert node["with"]["node-version"] == "22"
+    assert steps.index(node) < steps.index(build)
 
 
 def test_website_documentation_build_uses_the_isolated_locked_group(repository: Path) -> None:
     scripts = json.loads((repository / "website/package.json").read_text())["scripts"]
     groups = tomllib.loads((repository / "umbod/pyproject.toml").read_text())["dependency-groups"]
-    assert groups["docs"] == ["mkdocs-material==9.7.7"]
-    assert groups["dev"] == ["semgrep"]
+    assert groups["docs"] == ["mkdocs-material==9.8.1"]
+    assert groups["dev"] == ["semgrep>=1.185.0"]
     assert scripts["build:ci"] == "bun run docs:ci && vite build"
     assert scripts["docs:ci"] == (
         "cd ../umbod && uv run --project ../umbod --only-group docs --locked "
@@ -108,10 +115,10 @@ def test_production_builds_verified_release_before_advancing_branch(release_work
 
 def test_release_build_validates_metadata_before_build_without_changing_preview_build(repository: Path) -> None:
     scripts = json.loads((repository / "website/package.json").read_text())["scripts"]
-    assert scripts["build:release"] == "bash scripts/prepare-release.sh && bun run build"
+    assert scripts["build:release"] == "bash scripts/prepare-release.sh && bun run build:ci"
     assert scripts["build"] == "bun run docs && vite build"
     assert scripts["docs"] == (
-        'python -m pip install "mkdocs-material==9.7.7" && cd ../umbod && '
+        'python -m pip install "mkdocs-material==9.8.1" && cd ../umbod && '
         "python -m mkdocs build --strict --site-dir ../website/public/docs"
     )
 

@@ -1,17 +1,17 @@
 <script lang="ts">
-  import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import { workspaceNavigation, workspacePresentation } from '$lib/workspace/navigation';
+  import WorkspaceShell from '#lib/components/shared/workspace/WorkspaceShell.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import { workspaceNavigation, workspacePresentation } from '#lib/workspace/navigation.js';
   import { DashboardPreviewState } from './preview-state.svelte';
-  import DashboardContainer from '$lib/components/shared/dashboard/DashboardContainer.svelte';
-  import DashboardPeriodSwitch from '$lib/components/shared/dashboard/DashboardPeriodSwitch.svelte';
-  import DashboardRow from '$lib/components/shared/dashboard/DashboardRow.svelte';
-  import DashboardColumn from '$lib/components/shared/dashboard/DashboardColumn.svelte';
-  import DashboardPanel from '$lib/components/shared/dashboard/DashboardPanel.svelte';
-  import OutcomeRing from '$lib/components/shared/dashboard/visualizations/OutcomeRing.svelte';
-  import OperationMixChart from '$lib/components/shared/dashboard/visualizations/OperationMixChart.svelte';
-  import DailyActivityChart from '$lib/components/shared/dashboard/visualizations/DailyActivityChart.svelte';
-  import ToolRankingList from '$lib/components/shared/dashboard/visualizations/ToolRankingList.svelte';
+  import DashboardContainer from '#lib/components/shared/dashboard/DashboardContainer.svelte';
+  import DashboardPeriodSwitch from '#lib/components/shared/dashboard/DashboardPeriodSwitch.svelte';
+  import DashboardRow from '#lib/components/shared/dashboard/DashboardRow.svelte';
+  import DashboardColumn from '#lib/components/shared/dashboard/DashboardColumn.svelte';
+  import DashboardPanel from '#lib/components/shared/dashboard/DashboardPanel.svelte';
+  import OutcomeRing from '#lib/components/shared/dashboard/visualizations/OutcomeRing.svelte';
+  import OperationMixChart from '#lib/components/shared/dashboard/visualizations/OperationMixChart.svelte';
+  import DailyActivityChart from '#lib/components/shared/dashboard/visualizations/DailyActivityChart.svelte';
+  import ToolRankingList from '#lib/components/shared/dashboard/visualizations/ToolRankingList.svelte';
 
   const state = new DashboardPreviewState();
 </script>

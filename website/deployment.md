@@ -36,6 +36,11 @@ still rebuild the website with the new release’s installation versions.
 | Deploy command | bunx wrangler deploy --env preview | bunx wrangler deploy --env="" |
 | Custom domain | preview.umbod.ai | umbod.ai |
 
+Production's build image must provide `uv`, Bun, and Python. The release build
+uses the documentation group from committed `umbod/uv.lock`, matching website CI.
+Verify `uv` is available in Cloudflare's build image before promoting this change;
+GitHub Actions provisions it separately and does not configure Cloudflare.
+
 Keep each custom domain attached only to its corresponding Worker. Check zone
 redirects do not send preview traffic to the production apex.
 

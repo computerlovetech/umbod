@@ -1,4 +1,4 @@
-import { browserTransport, type Transport } from '$lib/admin/infrastructure/transport';
+import { browserTransport, type Transport } from '#lib/admin/infrastructure/transport.js';
 import type { DashboardApi } from '../api';
 import { CatalogueRoute } from './catalogue-route';
 import { UsageRoute } from './usage-route';

@@ -1,4 +1,4 @@
-import type { NodeSummary } from '$lib/files/domain/schemas';
+import type { NodeSummary } from '#lib/files/domain/schemas.js';
 
 export function permissionLabel(permissions: NodeSummary['permissions']): string {
   const { can_discover, can_read, can_write, can_delete, can_share } = permissions;

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import GroupPermissionsManager from './GroupPermissionsManager.svelte';
 import { InMemoryGroupPermissionsLoader } from './group-permissions-loader';
-import type { GroupPermissionSet, UpdateGroupPermissionsRequest } from '$lib/admin/group-permissions';
+import type { GroupPermissionSet, UpdateGroupPermissionsRequest } from '#lib/admin/group-permissions.js';
 import { GroupPermissionsState, type GroupPermissionsInitialData } from './group-permissions-state.svelte';
 
 let component: ReturnType<typeof mount> | undefined;

@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
-import { browserTransport, type Transport, type TransportRequest } from '$lib/admin/infrastructure/transport';
-import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
+import { browserTransport, type Transport, type TransportRequest } from '#lib/admin/infrastructure/transport.js';
+import { InMemoryPublicConfigurationProvider } from '#lib/admin/infrastructure/public-configuration.js';
 import { workspaceProfileSchema } from '../domain/profile';
 import { WorkspaceAccessState } from '../workspace-access-state.svelte';
 import { workspaceNavigation } from '../navigation';

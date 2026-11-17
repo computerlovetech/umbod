@@ -1,4 +1,4 @@
-import { browserTransport, type Transport } from '$lib/admin/infrastructure/transport';
+import { browserTransport, type Transport } from '#lib/admin/infrastructure/transport.js';
 import type { WorkspaceApi } from '../api';
 import { ProfileRoute } from './profile-route';
 

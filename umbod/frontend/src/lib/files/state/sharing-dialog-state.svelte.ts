@@ -1,5 +1,5 @@
 import { tick } from 'svelte';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { NodeSharingApi } from '../api';
 import type { NodeSummary } from '../domain/schemas';
 import { nodeAccessSchema, replaceAccessSchema, sharingPermissions, type NodeAccess, type ReplaceAccess, type SharingRecipient, type SharingRecipientType, type SharingPermission } from '../domain/sharing';

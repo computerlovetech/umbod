@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { browserSubmit } from '$lib/admin/operations/browser-submit';
-  import type { BrowserSubmitFunction as SubmitFunction } from '$lib/admin/operations/browser-submit';
+  import { browserSubmit } from '#lib/admin/operations/browser-submit.js';
+  import type { BrowserSubmitFunction as SubmitFunction } from '#lib/admin/operations/browser-submit.js';
   import type { Snippet } from 'svelte';
 
   let {

@@ -1,4 +1,4 @@
-import type { DownstreamMcpTool } from '$lib/admin/downstream-mcp-connectors';
+import type { DownstreamMcpTool } from '#lib/admin/downstream-mcp-connectors.js';
 import { describe, expect, test } from 'vitest';
 import { DownstreamMcpToolCatalogState } from './downstream-mcp-tool-catalog-state.svelte';
 

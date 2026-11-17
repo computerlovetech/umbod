@@ -1,12 +1,12 @@
 import { Window } from 'happy-dom';
 import { render } from 'svelte/server';
 import { describe, expect, test, vi } from 'vitest';
-import { HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
-import { deferred, fileId, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
-import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
-import { FilesState } from '$lib/files/state/files-state.svelte';
-import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
-import { UploadState } from '$lib/files/state/upload-state.svelte';
+import { HttpError, NetworkError } from '#lib/admin/infrastructure/transport.js';
+import { deferred, fileId, filesystemFixture, folderId, rootId } from '#lib/files/fixtures.test-support.js';
+import { InMemoryFilesApi } from '#lib/files/infrastructure/in-memory-api.test-support.js';
+import { FilesState } from '#lib/files/state/files-state.svelte.js';
+import { NewFolderState } from '#lib/files/state/new-folder-state.svelte.js';
+import { UploadState } from '#lib/files/state/upload-state.svelte.js';
 import FileDeletionDialog from './FileDeletionDialog.svelte';
 import FilesContent from './FilesContent.svelte';
 
@@ -91,7 +91,7 @@ describe('file deletion presentation', (): void => {
 
   test('shows successful deletion alongside loading and failed parent reads with only read retry', async (): Promise<void> => {
     const { api, files, content } = fixture();
-    const parentListing = deferred<import('$lib/files/domain/schemas').NodeSummary[]>();
+    const parentListing = deferred<import('#lib/files/domain/schemas.js').NodeSummary[]>();
     vi.spyOn(api.filesystem, 'listChildren').mockReturnValueOnce(parentListing.promise);
     const remove = vi.spyOn(api.filesystem, 'deleteFile');
     await files.load(fileId);

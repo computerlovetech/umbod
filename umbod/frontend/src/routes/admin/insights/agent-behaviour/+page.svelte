@@ -1,6 +1,6 @@
 <script lang="ts">
-  import AgentBehaviourView from '$lib/components/admin/agent-behaviour/AgentBehaviourView.svelte';
-  import { getInsightsState } from '$lib/components/admin/insights/insights-context';
+  import AgentBehaviourView from '#lib/components/admin/agent-behaviour/AgentBehaviourView.svelte';
+  import { getInsightsState } from '#lib/components/admin/insights/insights-context.js';
 
   const state = getInsightsState();
 </script>

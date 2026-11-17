@@ -1,5 +1,5 @@
-import type { AutomaticClient } from '$lib/admin/personal-mcp-servers/domain/discovery';
-import { parseScopeText, settingsSchema, type ClientKind, type PersonalPolicy, type PersonalSettings } from '$lib/admin/personal-mcp-servers/domain/schemas';
+import type { AutomaticClient } from '#lib/admin/personal-mcp-servers/domain/discovery.js';
+import { parseScopeText, settingsSchema, type ClientKind, type PersonalPolicy, type PersonalSettings } from '#lib/admin/personal-mcp-servers/domain/schemas.js';
 
 export interface PolicyProposal {
   issuer: string;

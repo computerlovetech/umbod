@@ -1,4 +1,4 @@
-import { HttpError, NetworkError, SchemaValidationError, type Transport } from '$lib/admin/infrastructure/transport';
+import { HttpError, NetworkError, SchemaValidationError, type Transport } from '#lib/admin/infrastructure/transport.js';
 import type { UploadTransferPort } from '../api';
 import { nodeIdSchema, rawUploadSchema, uploadTransferSchema, type UploadTransfer } from '../domain/schemas';
 

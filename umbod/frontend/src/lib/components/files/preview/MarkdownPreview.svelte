@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PreviewProps } from '$lib/files/preview/ports';
+  import type { PreviewProps } from '#lib/files/preview/ports.js';
   import { renderMarkdown } from './markdown';
   import { attachDiagrams, mermaidRenderer, type DiagramRenderer } from './mermaid';
 

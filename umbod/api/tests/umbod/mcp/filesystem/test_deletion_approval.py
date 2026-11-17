@@ -10,7 +10,7 @@ from fastmcp import Client, FastMCP
 from fastmcp.client.elicitation import ElicitResult
 from fastmcp.client.transports import FastMCPTransport
 from mcp.shared.exceptions import MCPError
-from mcp.types import InputRequiredResult
+from mcp.types import CallToolResult, ElicitResult as WireElicitResult, InputRequiredResult
 
 from umbod.core.callers import AuthenticationProvenance
 from umbod.core.filesystem import (
@@ -228,10 +228,49 @@ async def test_nonboolean_wire_approval_cannot_delete(
         return ElicitResult(action="accept", content={"value": value})
 
     async with Client(filesystem.server, mode=mode, elicitation_handler=approve_with_nonboolean) as client:
-        result = await client.call_tool(
-            TOOL, {"node_id": node_id, "expected_revision": 1}, raise_on_error=False,
+        if mode == "auto":
+            with pytest.raises(MCPError, match="is not of type 'boolean'"):
+                await client.call_tool(
+                    TOOL, {"node_id": node_id, "expected_revision": 1}, raise_on_error=False,
+                )
+        else:
+            result = await client.call_tool(
+                TOOL, {"node_id": node_id, "expected_revision": 1}, raise_on_error=False,
+            )
+            assert result.is_error
+    assert await namespace.get_node(UUID(node_id)) == before
+    assert await policies.get_owner(UUID(node_id)) == owner
+    assert await policies.list_grants(UUID(node_id)) == []
+    assert deletion_successes(filesystem) == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("value", [1, "true", "yes"])
+async def test_server_rejects_nonboolean_continuation_without_client_validation(
+    filesystem_invocation_mcp: FilesystemMcp, value: object,
+) -> None:
+    filesystem = filesystem_invocation_mcp
+    node_id, policy = await prepare_file(filesystem)
+    namespace = create_namespace_driver(database=filesystem.database)
+    policies = create_access_control_driver(database=filesystem.database)
+    before = await namespace.get_node(UUID(node_id))
+    owner = await policies.get_owner(UUID(node_id))
+    arguments = {"node_id": node_id, "expected_revision": 1}
+
+    async with Client(filesystem.server) as client:
+        pending = await client.session.call_tool(TOOL, arguments, allow_input_required=True)
+        assert isinstance(pending, InputRequiredResult)
+        result = await client.session.call_tool(
+            TOOL, arguments,
+            request_state=pending.request_state,
+            input_responses={
+                "filesystem_delete_approval": WireElicitResult(action="accept", content={"value": value}),
+            },
         )
+
+    assert isinstance(result, CallToolResult)
     assert result.is_error
+    assert result.meta["computerlove.tech/umbod"]["guidance"]["operation_state"] == "not_started"
     assert await namespace.get_node(UUID(node_id)) == before
     assert await policies.get_owner(UUID(node_id)) == owner
     assert await policies.list_grants(UUID(node_id)) == []

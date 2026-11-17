@@ -1,4 +1,4 @@
-import type { OpenApiOperationToolUiModel } from '$lib/admin/openapi-connectors';
+import type { OpenApiOperationToolUiModel } from '#lib/admin/openapi-connectors.js';
 import { describe, expect, test } from 'vitest';
 import { OpenApiOperationCatalogState } from './openapi-operation-catalog-state.svelte';
 

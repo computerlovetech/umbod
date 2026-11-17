@@ -1,4 +1,4 @@
-import { OPEN_API_CATALOG_FILE_MAX_BYTES } from '$lib/admin/openapi-connectors';
+import { OPEN_API_CATALOG_FILE_MAX_BYTES } from '#lib/admin/openapi-connectors.js';
 import { describe, expect, test, vi } from 'vitest';
 import { ImportCatalogState } from './import-catalog-state.svelte';
 

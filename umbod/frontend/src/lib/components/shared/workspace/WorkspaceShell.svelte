@@ -1,13 +1,13 @@
 <script lang="ts">
   import { navigating } from '$app/state';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import { logoutNavigation, type LogoutNavigation } from '$lib/admin/infrastructure/logout';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import { logoutNavigation, type LogoutNavigation } from '#lib/admin/infrastructure/logout.js';
   import type { Snippet } from 'svelte';
-  import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
-  import AccountPicture from '$lib/components/header/AccountPicture.svelte';
-  import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+  import DelayedSpinner from '#lib/components/admin/shared/DelayedSpinner.svelte';
+  import AccountPicture from '#lib/components/header/AccountPicture.svelte';
+  import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
   import { WorkspaceShellState, type WorkspaceNavigationItem } from './workspace-shell-state.svelte';
-  import { useWorkspaceNavigationHistory } from '$lib/workspace/navigation-history-context';
+  import { useWorkspaceNavigationHistory } from '#lib/workspace/navigation-history-context.js';
   import WorkspaceNavigationIcon from './WorkspaceNavigationIcon.svelte';
 
   type Props = {

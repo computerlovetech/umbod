@@ -1,8 +1,8 @@
-import type { LogoutNavigation } from '$lib/admin/infrastructure/logout';
+import type { LogoutNavigation } from '#lib/admin/infrastructure/logout.js';
 
-import type { SidebarTransition } from '$lib/workspace/navigation-history.svelte';
-import type { WorkspaceNavigationItem } from '$lib/workspace/navigation';
-export type { WorkspaceNavigationItem } from '$lib/workspace/navigation';
+import type { SidebarTransition } from '#lib/workspace/navigation-history.svelte.js';
+import type { WorkspaceNavigationItem } from '#lib/workspace/navigation.js';
+export type { WorkspaceNavigationItem } from '#lib/workspace/navigation.js';
 
 export interface WorkspaceNavigationContext {
   activeItem: string;

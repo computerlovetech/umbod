@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
+import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
 import { SelectionDetailController } from './selection-detail-controller.svelte';
 import { InMemorySelectionUrlAdapter } from './selection-url-port';
 

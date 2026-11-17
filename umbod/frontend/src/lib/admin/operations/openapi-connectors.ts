@@ -7,12 +7,12 @@ async function readCatalogFile(file: File): Promise<Record<string, unknown>> {
   if (file.size > OPEN_API_CATALOG_FILE_MAX_BYTES) throw new Error('The JSON file must be 10 MiB or smaller.');
   return z.record(z.string(), z.unknown()).parse(JSON.parse(await file.text()));
 }
-import { HttpError, isOperationalError } from '$lib/admin/infrastructure/transport';
-import { approvedHostnameSchema, importOpenApiCatalogDocumentRequestSchema, openApiToolActivationBatchRequestSchema, OPEN_API_CATALOG_FILE_MAX_BYTES } from '$lib/admin/openapi-connectors';
-import { createOpenApiConnector, openApiImportConflictResult, setOpenApiPublication } from '$lib/admin/openapi-connectors-api';
+import { HttpError, isOperationalError } from '#lib/admin/infrastructure/transport.js';
+import { approvedHostnameSchema, importOpenApiCatalogDocumentRequestSchema, openApiToolActivationBatchRequestSchema, OPEN_API_CATALOG_FILE_MAX_BYTES } from '#lib/admin/openapi-connectors.js';
+import { createOpenApiConnector, openApiImportConflictResult, setOpenApiPublication } from '#lib/admin/openapi-connectors-api.js';
 
-import { invocationPolicyBatchUpdateRequestSchema, invocationPolicyConflictResponseSchema } from '$lib/admin/invocation-policy';
-import { presentSaveFailureWithReconciliation } from '$lib/admin/tool-activation-reconciliation';
+import { invocationPolicyBatchUpdateRequestSchema, invocationPolicyConflictResponseSchema } from '#lib/admin/invocation-policy.js';
+import { presentSaveFailureWithReconciliation } from '#lib/admin/tool-activation-reconciliation.js';
 
 function listLocation(connectorId: string, query?: Record<string, string>): string {
   const params = new URLSearchParams({ connector: connectorId, ...query });

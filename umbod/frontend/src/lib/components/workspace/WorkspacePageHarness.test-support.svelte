@@ -1,7 +1,7 @@
 <script lang="ts" generics="Props extends Record<string, unknown>">
   import type { Component } from 'svelte';
-  import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
-  import type { WorkspaceApi } from '$lib/workspace/api';
+  import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
+  import type { WorkspaceApi } from '#lib/workspace/api.js';
   import WorkspaceFrame from './WorkspaceFrame.svelte';
 
   let { Page, pageProps, inputs, pathname }: {

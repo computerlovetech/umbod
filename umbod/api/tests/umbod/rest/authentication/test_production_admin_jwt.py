@@ -31,13 +31,18 @@ def client(signing_key: rsa.RSAPrivateKey, tmp_path: Path, monkeypatch: pytest.M
     public_key["kid"] = "trusted-key"
     jwks = json.dumps({"keys": [public_key]}).encode("utf-8")
 
-    def open_jwks(request: urllib.request.Request, *, timeout: float, context: object) -> BytesIO:
-        assert request.get_full_url() == settings.admin_authentication.jwks_url
-        assert timeout == 30
-        assert context is None
-        return BytesIO(jwks)
+    class JwksOpener:
+        def open(self, request: urllib.request.Request, *, timeout: float) -> BytesIO:
+            assert request.get_full_url() == settings.admin_authentication.jwks_url
+            assert timeout == 30
+            return BytesIO(jwks)
 
-    monkeypatch.setattr(urllib.request, "urlopen", open_jwks)
+    def build_opener(
+        *handlers: urllib.request.BaseHandler | type[urllib.request.BaseHandler],
+    ) -> JwksOpener:
+        return JwksOpener()
+
+    monkeypatch.setattr(urllib.request, "build_opener", build_opener)
     settings = APISettings(
         runtime={"profile": "production", "auth": "auth0"},
         rest={"metrics_enabled": False},

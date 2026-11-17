@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
 import { UploadPhaseError } from '../errors';
 import type { FilesApi } from '../api';
 import type { NodeSummary } from '../domain/schemas';

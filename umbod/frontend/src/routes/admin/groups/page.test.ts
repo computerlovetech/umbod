@@ -3,9 +3,9 @@ import { render } from 'svelte/server';
 import { Window } from 'happy-dom';
 import { load } from './+page';
 import GroupsPage from './+page.svelte';
-import { publicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
-import { AuthenticationRequiredError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
-import { administrationNavigation, workspaceNavigation } from '$lib/workspace/navigation';
+import { publicConfigurationProvider } from '#lib/admin/infrastructure/public-configuration.js';
+import { AuthenticationRequiredError, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
+import { administrationNavigation, workspaceNavigation } from '#lib/workspace/navigation.js';
 
 vi.mock('$app/state', () => ({ navigating: { to: null, from: null }, page: { url: new URL('https://umbod.test/admin/groups') } }));
 afterEach((): void => { vi.restoreAllMocks(); });

@@ -1,15 +1,15 @@
 import { tick } from 'svelte';
 import { PersonalOAuthSetupState } from '../personal-mcp-servers/personal-oauth-setup-state.svelte';
-import type { PersonalServerAvailability } from '$lib/admin/personal-mcp-servers/domain/availability';
-import { AdminApi, adminApi } from '$lib/admin/infrastructure/admin-api';
-import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
-import { browserTransport } from '$lib/admin/infrastructure/transport';
-import { mapResourceCatalog, type PromptCatalog, type ResourceCatalog } from '$lib/admin/capability-catalogs';
-import { type DownstreamMcpConnector, type DownstreamMcpConnectorSummary, type DownstreamMcpToolList } from '$lib/admin/downstream-mcp-connectors';
-import { type InvocationPolicyTool } from '$lib/admin/invocation-policy';
-import { SelectionDetailController } from '$lib/components/admin/shared/selection-detail-controller.svelte';
-import { InMemorySelectionUrlAdapter, type SelectionUrlPort } from '$lib/components/admin/shared/selection-url-port';
+import type { PersonalServerAvailability } from '#lib/admin/personal-mcp-servers/domain/availability.js';
+import { AdminApi, adminApi } from '#lib/admin/infrastructure/admin-api.js';
+import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
+import { browserTransport } from '#lib/admin/infrastructure/transport.js';
+import { mapResourceCatalog, type PromptCatalog, type ResourceCatalog } from '#lib/admin/capability-catalogs.js';
+import { type DownstreamMcpConnector, type DownstreamMcpConnectorSummary, type DownstreamMcpToolList } from '#lib/admin/downstream-mcp-connectors.js';
+import { type InvocationPolicyTool } from '#lib/admin/invocation-policy.js';
+import { SelectionDetailController } from '#lib/components/admin/shared/selection-detail-controller.svelte.js';
+import { InMemorySelectionUrlAdapter, type SelectionUrlPort } from '#lib/components/admin/shared/selection-url-port.js';
 
 export type DownstreamMcpWorkspaceBundle = {
   mode: 'personal';

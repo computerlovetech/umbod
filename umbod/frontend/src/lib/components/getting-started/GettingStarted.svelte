@@ -1,6 +1,6 @@
 <script lang="ts">
-  import SubpageContainer from '$lib/components/shared/workspace/SubpageContainer.svelte';
-  import SubpageNavigation, { type SubpageLink } from '$lib/components/shared/workspace/SubpageNavigation.svelte';
+  import SubpageContainer from '#lib/components/shared/workspace/SubpageContainer.svelte';
+  import SubpageNavigation, { type SubpageLink } from '#lib/components/shared/workspace/SubpageNavigation.svelte';
   import McpSetupGuide from './McpSetupGuide.svelte';
   import TelemetrySetup from './TelemetrySetup.svelte';
 

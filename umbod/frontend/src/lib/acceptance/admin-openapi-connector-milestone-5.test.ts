@@ -1,8 +1,8 @@
 import { render } from 'svelte/server';
 import { Window } from 'happy-dom';
 import { describe, expect, test, vi } from 'vitest';
-import type { OpenApiOperationToolUiModel } from '$lib/admin/openapi-connectors';
-import OpenApiOperationCatalog from '$lib/components/admin/openapi-connectors/OpenApiOperationCatalog.svelte';
+import type { OpenApiOperationToolUiModel } from '#lib/admin/openapi-connectors.js';
+import OpenApiOperationCatalog from '#lib/components/admin/openapi-connectors/OpenApiOperationCatalog.svelte';
 
 function createTools(count: number): OpenApiOperationToolUiModel[] {
   const methods = ['get', 'POST', 'patch'];

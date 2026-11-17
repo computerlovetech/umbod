@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
-import { HttpError } from '$lib/admin/infrastructure/transport';
-import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
+import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
 import { InMemoryDashboardApi } from '../infrastructure/in-memory-api';
 import { catalogue } from '../test-fixtures';
 import { deferred, usageSnapshot } from '../usage-fixtures.test-support';

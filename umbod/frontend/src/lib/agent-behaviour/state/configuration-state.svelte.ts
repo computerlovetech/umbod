@@ -1,4 +1,4 @@
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { ConfigurationPort } from '../api';
 import { configurationFeedback } from '../domain/editing';
 import { conflictSchema, identifierSchema, publishSchema, type Configuration, type BehaviourPattern, type DiagnosticPlaybook } from '../domain/schemas';

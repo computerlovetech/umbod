@@ -1,8 +1,8 @@
 import { render } from 'svelte/server';
 import { describe, expect, test, vi } from 'vitest';
-import { loadOpenApiConnectorList } from '$lib/admin/openapi-connectors-api';
-import ImportCatalogPanel from '$lib/components/admin/openapi-connectors/ImportCatalogPanel.svelte';
-import { ImportCatalogState } from '$lib/components/admin/openapi-connectors/import-catalog-state.svelte';
+import { loadOpenApiConnectorList } from '#lib/admin/openapi-connectors-api.js';
+import ImportCatalogPanel from '#lib/components/admin/openapi-connectors/ImportCatalogPanel.svelte';
+import { ImportCatalogState } from '#lib/components/admin/openapi-connectors/import-catalog-state.svelte.js';
 
 const catalogImport = {
   connector_id: 'billing',

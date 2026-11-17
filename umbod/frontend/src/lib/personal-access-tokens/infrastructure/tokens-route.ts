@@ -1,4 +1,4 @@
-import type { Transport } from '$lib/admin/infrastructure/transport';
+import type { Transport } from '#lib/admin/infrastructure/transport.js';
 import type { PersonalAccessTokensPort } from '../api';
 import { createdTokenSchema, createTokenSchema, tokenIdSchema, tokenListSchema, type CreatedToken, type CreateToken, type TokenMetadata } from '../domain/schemas';
 

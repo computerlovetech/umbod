@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import type { OpenApiConnectorListItem, OpenApiOperationToolUiModel } from '$lib/admin/openapi-connectors';
+import type { OpenApiConnectorListItem, OpenApiOperationToolUiModel } from '#lib/admin/openapi-connectors.js';
 import { OpenApiToolCatalogState, type OpenApiToolCatalogDetailAccess } from './openapi-tool-catalog-state.svelte';
 
 function connector(updatedAt = 'old'): OpenApiConnectorListItem {

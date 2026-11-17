@@ -1,7 +1,7 @@
 <script lang="ts">
-  import GroupPermissionsManager from '$lib/components/admin/group-permissions/GroupPermissionsManager.svelte';
-  import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
-  import { getGroupPermissionsWorkspace } from '$lib/components/admin/group-permissions/group-permissions-context';
+  import GroupPermissionsManager from '#lib/components/admin/group-permissions/GroupPermissionsManager.svelte';
+  import DelayedSpinner from '#lib/components/admin/shared/DelayedSpinner.svelte';
+  import { getGroupPermissionsWorkspace } from '#lib/components/admin/group-permissions/group-permissions-context.js';
 
   const workspace = getGroupPermissionsWorkspace();
 </script>

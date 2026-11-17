@@ -1,8 +1,8 @@
 import { describe, expect, test, vi } from 'vitest';
-import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
-import type { ConnectorListItem } from '$lib/admin/connectors';
-import type { ConnectorDetailBundle } from '$lib/admin/connector-details-browser-api';
-import { ConnectorListState } from '$lib/components/admin/connectors/connector-list-state.svelte';
+import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
+import type { ConnectorListItem } from '#lib/admin/connectors.js';
+import type { ConnectorDetailBundle } from '#lib/admin/connector-details-browser-api.js';
+import { ConnectorListState } from '#lib/components/admin/connectors/connector-list-state.svelte.js';
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (reason: unknown) => void } {
   let resolve!: (value: T) => void;

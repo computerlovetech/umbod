@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
 
   let { id, summary, pending, onrun, onreset, children }: {
     id: string;

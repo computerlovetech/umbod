@@ -1,8 +1,8 @@
 import { DownstreamMcpMutationState } from './downstream-mcp-mutation-state.svelte';
-import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
-import { summaryFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
+import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
+import { summaryFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
 import { describe, expect, test, vi } from 'vitest';
-import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
+import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
 import { DownstreamMcpWorkspaceState, type DownstreamMcpWorkspaceBundle } from './downstream-mcp-workspace-state.svelte';
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {

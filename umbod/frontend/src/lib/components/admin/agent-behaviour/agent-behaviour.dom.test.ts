@@ -1,8 +1,8 @@
 import { expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
-import { InMemoryAgentBehaviourApi } from '$lib/agent-behaviour/in-memory.test-support';
-import { ConfigurationState } from '$lib/agent-behaviour/state/configuration-state.svelte';
-import { ReportsState } from '$lib/agent-behaviour/state/reports-state.svelte';
+import { InMemoryAgentBehaviourApi } from '#lib/agent-behaviour/in-memory.test-support.js';
+import { ConfigurationState } from '#lib/agent-behaviour/state/configuration-state.svelte.js';
+import { ReportsState } from '#lib/agent-behaviour/state/reports-state.svelte.js';
 import ConfigurationEditor from './ConfigurationEditor.svelte';
 import ReportsView from './ReportsView.svelte';
 

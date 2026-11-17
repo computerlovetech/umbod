@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onDestroy, onMount } from 'svelte';
-  import type { AnalyticsState } from '$lib/admin/analytics/analytics-state.svelte';
-  import { dimensions } from '$lib/admin/analytics/domain/schemas';
-  import { bucketOptions, dimensionLabels, dimensionOptions, rangeOptions } from '$lib/admin/analytics/query-draft.svelte';
-  import { reportOptions } from '$lib/admin/analytics/reports';
+  import type { AnalyticsState } from '#lib/admin/analytics/analytics-state.svelte.js';
+  import { dimensions } from '#lib/admin/analytics/domain/schemas.js';
+  import { bucketOptions, dimensionLabels, dimensionOptions, rangeOptions } from '#lib/admin/analytics/query-draft.svelte.js';
+  import { reportOptions } from '#lib/admin/analytics/reports.js';
   import Button from '../shared/Button.svelte';
-  import QueryPanel from '$lib/components/shared/workspace/QueryPanel.svelte';
+  import QueryPanel from '#lib/components/shared/workspace/QueryPanel.svelte';
   import Select from '../shared/Select.svelte';
-  import DateTimeView from '$lib/components/shared/DateTimeView.svelte';
+  import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
 
   let { state }: { state: AnalyticsState } = $props();
   onMount(() => { void state.start(); });

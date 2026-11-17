@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { filesystemNode } from '$lib/files/fixtures.test-support';
+import { filesystemNode } from '#lib/files/fixtures.test-support.js';
 import { renderMarkdown } from './markdown';
 import { markdownPreviewAdapter } from './markdown-adapter';
 

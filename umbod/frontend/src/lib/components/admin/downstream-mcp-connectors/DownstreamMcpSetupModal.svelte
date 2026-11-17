@@ -1,14 +1,14 @@
 <script lang="ts">
-  import type { BrowserSubmitFunction as SubmitFunction } from '$lib/admin/operations/browser-submit';
-  import type { DownstreamMcpConnector } from '$lib/admin/downstream-mcp-connectors';
-  import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import Form from '$lib/components/admin/shared/Form.svelte';
-  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
-  import Select from '$lib/components/admin/shared/Select.svelte';
-  import type { SelectOption } from '$lib/components/admin/shared/select-state.svelte';
+  import type { BrowserSubmitFunction as SubmitFunction } from '#lib/admin/operations/browser-submit.js';
+  import type { DownstreamMcpConnector } from '#lib/admin/downstream-mcp-connectors.js';
+  import AdminConfigurationField from '#lib/components/admin/shared/AdminConfigurationField.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import Form from '#lib/components/admin/shared/Form.svelte';
+  import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
+  import Select from '#lib/components/admin/shared/Select.svelte';
+  import type { SelectOption } from '#lib/components/admin/shared/select-state.svelte.js';
   import type { DownstreamMcpCreateValues, DownstreamMcpWorkspaceState } from './downstream-mcp-workspace-state.svelte';
-  import { useToast } from '$lib/components/feedback';
+  import { useToast } from '#lib/components/feedback/index.js';
 
   let { state, connector, message, values }: { state: DownstreamMcpWorkspaceState; connector?: DownstreamMcpConnector; message?: string; values?: DownstreamMcpCreateValues } = $props();
   const configuring = $derived(state.modal === 'configure');

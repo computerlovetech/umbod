@@ -1,10 +1,10 @@
 import { afterEach, expect, it, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
-import { InMemoryPersonalAccessTokens } from '$lib/personal-access-tokens/in-memory-api.test-support';
-import { InMemoryTelemetrySetup } from '$lib/telemetry-setup/in-memory-api.test-support';
-import type { ClipboardWriter } from '$lib/admin/clipboard';
+import { InMemoryPersonalAccessTokens } from '#lib/personal-access-tokens/in-memory-api.test-support.js';
+import { InMemoryTelemetrySetup } from '#lib/telemetry-setup/in-memory-api.test-support.js';
+import type { ClipboardWriter } from '#lib/admin/clipboard.js';
 import TelemetrySetup from './TelemetrySetup.svelte';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 
 const cleanups: Array<() => Promise<void>> = [];
 

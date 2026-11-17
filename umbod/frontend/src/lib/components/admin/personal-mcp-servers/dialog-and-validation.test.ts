@@ -3,8 +3,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { captureInvalidSubmission } from './form-validation';
 import { modalDialog } from './modal-dialog';
 import { PersonalServerFormState } from './personal-server-form-state.svelte';
-import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
-import { configurationFixture } from '$lib/admin/personal-mcp-servers/availability.test-support';
+import { InMemoryPersonalServers } from '#lib/admin/personal-mcp-servers/in-memory.js';
+import { configurationFixture } from '#lib/admin/personal-mcp-servers/availability.test-support.js';
 
 let document: Document;
 let window: Window;

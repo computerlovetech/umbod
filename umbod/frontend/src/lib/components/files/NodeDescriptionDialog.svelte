@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import type { DescriptionState } from '$lib/files/state/description-state.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import type { DescriptionState } from '#lib/files/state/description-state.svelte.js';
   let { state, name }: { state: DescriptionState; name: string } = $props();
   const id = $props.id();
 </script>

@@ -1,11 +1,11 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import FileTypeIcon from './FileTypeIcon.svelte';
   import { FileThumbnailState } from './file-thumbnail-state.svelte';
   import { tick } from 'svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import { FileDropState } from '$lib/files/state/file-drop-state.svelte';
-  import { formatFileSize, type UploadState } from '$lib/files/state/upload-state.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import { FileDropState } from '#lib/files/state/file-drop-state.svelte.js';
+  import { formatFileSize, type UploadState } from '#lib/files/state/upload-state.svelte.js';
 
   let { state, destination, signIn }: { state: UploadState; destination: string; signIn: () => void } = $props();
   const id = $props.id();

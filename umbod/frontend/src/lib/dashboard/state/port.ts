@@ -1,5 +1,5 @@
 import type { CatalogueConnector } from '../domain/schemas';
-import type { PersonalConnectionController } from '$lib/personal-connections/state/port';
+import type { PersonalConnectionController } from '#lib/personal-connections/state/port.js';
 
 export interface DashboardController {
   readonly phase: 'loading' | 'ready' | 'error' | 'sign-in' | 'forbidden';

@@ -1,4 +1,4 @@
-import type { Transport } from '$lib/admin/infrastructure/transport';
+import type { Transport } from '#lib/admin/infrastructure/transport.js';
 import type { UsagePort } from '../api';
 import { personalUsageSchema, usageDaysSchema, type PersonalUsage, type UsageDays } from '../domain/usage-schemas';
 

@@ -1,18 +1,23 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
-import * as adminApiModule from '$lib/admin/infrastructure/admin-api';
-import { InMemoryPersonalOAuthSetup, setupFixture } from '$lib/admin/personal-mcp-servers/setup.test-support';
-import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
-import { policyFixture, serverFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
-import { HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
-import type { DownstreamMcpConnectorsRoute } from '$lib/admin/downstream-mcp-connectors-api';
+import { goto } from '$app/navigation';
+import * as adminApiModule from '#lib/admin/infrastructure/admin-api.js';
+import { InMemoryPersonalOAuthSetup, setupFixture } from '#lib/admin/personal-mcp-servers/setup.test-support.js';
+import { InMemoryPersonalServers } from '#lib/admin/personal-mcp-servers/in-memory.js';
+import { policyFixture, serverFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
+import { HttpError, NetworkError } from '#lib/admin/infrastructure/transport.js';
+import type { DownstreamMcpConnectorsRoute } from '#lib/admin/downstream-mcp-connectors-api.js';
 import DownstreamMcpWorkspace from './DownstreamMcpWorkspace.svelte';
 import { DownstreamMcpMutationState } from './downstream-mcp-mutation-state.svelte';
 import { DownstreamMcpWorkspaceState, type DownstreamMcpWorkspaceBundle } from './downstream-mcp-workspace-state.svelte';
 
-vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/admin/downstream-mcp-connectors?capability=tools') } }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn(), invalidateAll: vi.fn() }));
-vi.mock('$lib/components/feedback', () => ({ useToast: (): object => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }));
+const navigationPage = vi.hoisted(() => ({ shallow: null as { url: URL } | null }));
+vi.mock('$app/state', () => ({ page: {
+  url: new URL('http://localhost/admin/downstream-mcp-connectors?capability=tools'),
+  get shallow(): { url: URL } | null { return navigationPage.shallow; }
+} }));
+vi.mock('$app/navigation', () => ({ goto: vi.fn(), refreshAll: vi.fn() }));
+vi.mock('#lib/components/feedback/index.js', () => ({ useToast: (): object => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }));
 
 function grafanaBundle(published: boolean): DownstreamMcpWorkspaceBundle {
   return {
@@ -60,6 +65,7 @@ afterEach(async (): Promise<void> => {
   if (component) await unmount(component);
   component = undefined;
   document.body.replaceChildren();
+  navigationPage.shallow = null;
   vi.clearAllMocks();
   vi.restoreAllMocks();
 });
@@ -80,6 +86,18 @@ function renderWorkspace(published: boolean): { api: ReturnType<typeof mutationA
   flushSync();
   return { api, navigate };
 }
+
+test('shallow capability navigation uses the selected connector URL rather than the last loaded page URL', async (): Promise<void> => {
+  navigationPage.shallow = { url: new URL('http://localhost/admin/downstream-mcp-connectors?connector=grafana&capability=prompts') };
+  vi.mocked(goto).mockResolvedValue(undefined);
+  renderWorkspace(false);
+  expect(document.querySelector('nav[aria-label="Connector capabilities"] a[aria-current="page"]')?.textContent).toContain('Prompts');
+  const resources = document.querySelector<HTMLAnchorElement>('nav[aria-label="Connector capabilities"] a[href*="capability=resources"]');
+  expect(resources).not.toBeNull();
+  resources!.click();
+  await tick();
+  expect(goto).toHaveBeenCalledWith(new URL('http://localhost/admin/downstream-mcp-connectors?connector=grafana&capability=resources'), { shallow: true, state: {} });
+});
 
 async function openConfirmation(label: string): Promise<HTMLElement> {
   button('Open actions for Grafana').click();

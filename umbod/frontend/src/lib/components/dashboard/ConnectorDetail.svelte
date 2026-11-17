@@ -1,9 +1,9 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { CatalogueConnector } from '$lib/dashboard/domain/schemas';
-  import { connectorKindLabels } from '$lib/dashboard/presentation';
-  import ConnectorDetailSummary from '$lib/components/admin/connectors/ConnectorDetailSummary.svelte';
-  import ConnectorDetailItem from '$lib/components/admin/connectors/ConnectorDetailItem.svelte';
+  import type { CatalogueConnector } from '#lib/dashboard/domain/schemas.js';
+  import { connectorKindLabels } from '#lib/dashboard/presentation.js';
+  import ConnectorDetailSummary from '#lib/components/admin/connectors/ConnectorDetailSummary.svelte';
+  import ConnectorDetailItem from '#lib/components/admin/connectors/ConnectorDetailItem.svelte';
   import CatalogueCapabilities from './CatalogueCapabilities.svelte';
 
   let { connector, children: personalActions }: { connector: CatalogueConnector; children?: Snippet } = $props();

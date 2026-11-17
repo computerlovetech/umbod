@@ -305,7 +305,7 @@ async def test_fastmcp_exposes_only_namespaced_tools_and_preserves_result() -> N
     assert result.is_error is False
     assert result.meta is not None
     assert result.meta['response'] == 'unchanged'
-    assert result.meta['io.modelcontextprotocol/serverInfo']['name'] == 'downstream'
+    assert result.meta['io.modelcontextprotocol/serverInfo']['name'] == 'public'
 
 @pytest.mark.asyncio
 async def test_fastmcp_forwards_prompt_arguments_and_resource_reads(caplog: pytest.LogCaptureFixture) -> None:

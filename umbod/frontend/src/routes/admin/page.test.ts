@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { workspaceNavigation } from '$lib/workspace/navigation';
+import { workspaceNavigation } from '#lib/workspace/navigation.js';
 import { load } from './+page';
 
 describe('administration entry', (): void => {

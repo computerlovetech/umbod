@@ -1,7 +1,7 @@
-import { importOpenApiCatalogUrlRequestSchema, normalizeToolNamePrefix } from '$lib/admin/openapi-connectors';
-import type { ToastApi } from '$lib/components/feedback';
-import { adminApi } from '$lib/admin/infrastructure/admin-api';
-import { isOperationalError } from '$lib/admin/infrastructure/transport';
+import { importOpenApiCatalogUrlRequestSchema, normalizeToolNamePrefix } from '#lib/admin/openapi-connectors.js';
+import type { ToastApi } from '#lib/components/feedback/index.js';
+import { adminApi } from '#lib/admin/infrastructure/admin-api.js';
+import { isOperationalError } from '#lib/admin/infrastructure/transport.js';
 
 export type OpenApiSetupMode = 'create' | 'configure';
 export type OpenApiAuthenticationType = 'none' | 'bearer';

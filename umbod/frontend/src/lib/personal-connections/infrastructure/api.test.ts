@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, browserTransport, HttpError, type Transport, type TransportRequest } from '$lib/admin/infrastructure/transport';
-import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
+import { AuthenticationRequiredError, browserTransport, HttpError, type Transport, type TransportRequest } from '#lib/admin/infrastructure/transport.js';
+import { InMemoryPublicConfigurationProvider } from '#lib/admin/infrastructure/public-configuration.js';
 import { authorizationHealthSchema, emptyRequestSchema, renewalResultSchema, type AuthorizationHealth } from '../domain/schemas';
 import type { PersonalConnectionsApi } from '../api';
 import { InMemoryPersonalConnectionsApi } from './in-memory-api';

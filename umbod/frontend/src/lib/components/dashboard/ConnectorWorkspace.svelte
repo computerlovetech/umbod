@@ -1,12 +1,12 @@
 <script lang="ts">
-  import type { DashboardController } from '$lib/dashboard/state/port';
-  import { catalogueSidebarItem, connectorKindLabels } from '$lib/dashboard/presentation';
-  import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
-  import ConnectorSidebarList from '$lib/components/admin/connectors/ConnectorSidebarList.svelte';
-  import ConnectionCard from '$lib/components/personal-connections/ConnectionCard.svelte';
-  import ConnectionActions from '$lib/components/personal-connections/ConnectionActions.svelte';
-  import ConnectionStatusBadge from '$lib/components/personal-connections/ConnectionStatusBadge.svelte';
-  import { personalAccessStatus } from '$lib/personal-connections/presentation';
+  import type { DashboardController } from '#lib/dashboard/state/port.js';
+  import { catalogueSidebarItem, connectorKindLabels } from '#lib/dashboard/presentation.js';
+  import AdminSplitWorkspace from '#lib/components/admin/shared/AdminSplitWorkspace.svelte';
+  import ConnectorSidebarList from '#lib/components/admin/connectors/ConnectorSidebarList.svelte';
+  import ConnectionCard from '#lib/components/personal-connections/ConnectionCard.svelte';
+  import ConnectionActions from '#lib/components/personal-connections/ConnectionActions.svelte';
+  import ConnectionStatusBadge from '#lib/components/personal-connections/ConnectionStatusBadge.svelte';
+  import { personalAccessStatus } from '#lib/personal-connections/presentation.js';
   import ConnectorDetail from './ConnectorDetail.svelte';
 
   let { state }: { state: DashboardController } = $props();

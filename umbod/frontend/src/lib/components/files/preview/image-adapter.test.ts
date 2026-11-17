@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
-import { filesystemNode } from '$lib/files/fixtures.test-support';
-import { InMemoryFileContent } from '$lib/files/preview/in-memory-content.test-support';
-import { PreviewReadError } from '$lib/files/preview/ports';
+import { filesystemNode } from '#lib/files/fixtures.test-support.js';
+import { InMemoryFileContent } from '#lib/files/preview/in-memory-content.test-support.js';
+import { PreviewReadError } from '#lib/files/preview/ports.js';
 import { imagePreviewAdapter } from './image-adapter';
 
 test.each<[string, string | undefined, boolean]>([

@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { logoutNavigation, type LogoutNavigation } from '$lib/admin/infrastructure/logout';
+  import { logoutNavigation, type LogoutNavigation } from '#lib/admin/infrastructure/logout.js';
   import type { Snippet } from 'svelte';
-  import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
-  import WorkspaceShell from '$lib/components/shared/workspace/WorkspaceShell.svelte';
-  import { administrationNavigation, administrationPresentation } from '$lib/workspace/navigation';
-  import { useWorkspaceNavigationHistory } from '$lib/workspace/navigation-history-context';
+  import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
+  import WorkspaceShell from '#lib/components/shared/workspace/WorkspaceShell.svelte';
+  import { administrationNavigation, administrationPresentation } from '#lib/workspace/navigation.js';
+  import { useWorkspaceNavigationHistory } from '#lib/workspace/navigation-history-context.js';
 
   type AdminShellActiveItem =
     | 'insights'

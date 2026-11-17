@@ -1,6 +1,6 @@
 import { expect, test } from 'vitest';
-import { filesystemNode } from '$lib/files/fixtures.test-support';
-import { InMemoryFileContent } from '$lib/files/preview/in-memory-content.test-support';
+import { filesystemNode } from '#lib/files/fixtures.test-support.js';
+import { InMemoryFileContent } from '#lib/files/preview/in-memory-content.test-support.js';
 import { pdfPreviewAdapter } from './pdf-adapter';
 
 test.each<[string, string | undefined, boolean]>([

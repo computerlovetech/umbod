@@ -1,8 +1,8 @@
 <script lang="ts">
-  import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import Form from '$lib/components/admin/shared/Form.svelte';
-  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
+  import AdminConfigurationField from '#lib/components/admin/shared/AdminConfigurationField.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import Form from '#lib/components/admin/shared/Form.svelte';
+  import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
   import type { GroupsState } from './groups-state.svelte';
 
   let { state }: { state: GroupsState } = $props();

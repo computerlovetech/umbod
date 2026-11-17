@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
-import { resolveWorkspaceAccess } from '$lib/workspace/admin-access';
-import { InMemoryWorkspaceApi } from '$lib/workspace/in-memory-api.test-support';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
+import { resolveWorkspaceAccess } from '#lib/workspace/admin-access.js';
+import { InMemoryWorkspaceApi } from '#lib/workspace/in-memory-api.test-support.js';
 import { FilesState } from './files-state.svelte';
 import { InMemoryFilesApi } from '../infrastructure/in-memory-api.test-support';
 import { deferred, filesystemNode, rootId, folderId, fileId } from '../fixtures.test-support';

@@ -4,8 +4,8 @@ import { createRawSnippet } from 'svelte';
 import { describe, expect, test, vi } from 'vitest';
 import AdminShell from './AdminShell.svelte';
 import AppHeader from '../header/AppHeader.svelte';
-import { WorkspaceNavigationHistory } from '$lib/workspace/navigation-history.svelte';
-import { workspaceNavigationHistoryKey } from '$lib/workspace/navigation-history-context';
+import { WorkspaceNavigationHistory } from '#lib/workspace/navigation-history.svelte.js';
+import { workspaceNavigationHistoryKey } from '#lib/workspace/navigation-history-context.js';
 import { currentUserIdentitySchema, createHeaderAccountUserInfoBoundary } from '../../header/accountIdentity';
 
 vi.mock('$app/state', () => ({ navigating: { to: null, from: null } }));

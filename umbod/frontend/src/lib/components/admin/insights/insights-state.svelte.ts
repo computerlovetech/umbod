@@ -1,7 +1,7 @@
-import type { AgentBehaviourPort } from '$lib/agent-behaviour/api';
-import { AgentBehaviourPageState } from '$lib/agent-behaviour/state/page-state.svelte';
-import { AnalyticsState } from '$lib/admin/analytics/analytics-state.svelte';
-import type { LogCountSource } from '$lib/admin/analytics/port';
+import type { AgentBehaviourPort } from '#lib/agent-behaviour/api.js';
+import { AgentBehaviourPageState } from '#lib/agent-behaviour/state/page-state.svelte.js';
+import { AnalyticsState } from '#lib/admin/analytics/analytics-state.svelte.js';
+import type { LogCountSource } from '#lib/admin/analytics/port.js';
 
 export class InsightsState {
   readonly behaviour: AgentBehaviourPageState;

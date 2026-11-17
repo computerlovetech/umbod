@@ -1,5 +1,5 @@
-import type { CapabilityActivationStatus, ResourceActivationBatchResponse, ResourceCatalog } from '$lib/admin/capability-catalogs';
-import { resourceActivationKey } from '$lib/admin/capability-catalogs';
+import type { CapabilityActivationStatus, ResourceActivationBatchResponse, ResourceCatalog } from '#lib/admin/capability-catalogs.js';
+import { resourceActivationKey } from '#lib/admin/capability-catalogs.js';
 
 export class DownstreamMcpResourceCatalogState {
   resources: ResourceCatalog['resources'];

@@ -1,8 +1,8 @@
 import { afterEach, expect, test, vi } from 'vitest';
-import { InMemoryAgentBehaviourApi, deferred } from '$lib/agent-behaviour/in-memory.test-support';
-import { InMemoryLogCounts } from '$lib/admin/analytics/in-memory.test-support';
-import type { LogCountResponse } from '$lib/admin/analytics/domain/schemas';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { InMemoryAgentBehaviourApi, deferred } from '#lib/agent-behaviour/in-memory.test-support.js';
+import { InMemoryLogCounts } from '#lib/admin/analytics/in-memory.test-support.js';
+import type { LogCountResponse } from '#lib/admin/analytics/domain/schemas.js';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import { InsightsState } from './insights-state.svelte';
 import { configuration } from './insights.test-support.svelte';
 

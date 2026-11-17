@@ -1,23 +1,23 @@
 import { Window } from 'happy-dom';
-import { renderWorkspace } from '$lib/components/workspace/render-workspace.test-support';
+import { renderWorkspace } from '#lib/components/workspace/render-workspace.test-support.js';
 import { render } from 'svelte/server';
 import { describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
-import type { FilesApi } from '$lib/files/api';
-import type { NodeSummary } from '$lib/files/domain/schemas';
-import { deferred, fileId, filesystemFixture, filesystemNode, folderId, rootId } from '$lib/files/fixtures.test-support';
-import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
-import { FilesState, filesHref } from '$lib/files/state/files-state.svelte';
-import { UploadState } from '$lib/files/state/upload-state.svelte';
-import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
-import { workspaceNavigation } from '$lib/workspace/navigation';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
+import type { FilesApi } from '#lib/files/api.js';
+import type { NodeSummary } from '#lib/files/domain/schemas.js';
+import { deferred, fileId, filesystemFixture, filesystemNode, folderId, rootId } from '#lib/files/fixtures.test-support.js';
+import { InMemoryFilesApi } from '#lib/files/infrastructure/in-memory-api.test-support.js';
+import { FilesState, filesHref } from '#lib/files/state/files-state.svelte.js';
+import { UploadState } from '#lib/files/state/upload-state.svelte.js';
+import { NewFolderState } from '#lib/files/state/new-folder-state.svelte.js';
+import { workspaceNavigation } from '#lib/workspace/navigation.js';
 import FilesContent from './FilesContent.svelte';
 import FilesPage from './FilesPage.svelte';
 import NewFolderForm from './NewFolderForm.svelte';
 
 const navigation = vi.hoisted(() => ({ callback: undefined as ((event: { to: { url: URL } | null }) => void) | undefined }));
 vi.mock('$app/navigation', () => ({
-  invalidateAll: vi.fn(),
+  refreshAll: vi.fn(),
   goto: vi.fn(),
   afterNavigate: (callback: (event: { to: { url: URL } | null }) => void): void => { navigation.callback = callback; }
 }));

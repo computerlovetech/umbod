@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { useWorkspace } from '$lib/workspace/workspace-context';
-  import { WorkspaceIdentityBinding } from '$lib/workspace/workspace-scope.svelte';
+  import { useWorkspace } from '#lib/workspace/workspace-context.js';
+  import { WorkspaceIdentityBinding } from '#lib/workspace/workspace-scope.svelte.js';
   import { onMount, onDestroy } from 'svelte';
-  import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
-  import type { DashboardApi } from '$lib/dashboard/api';
-  import { browserDashboardApi } from '$lib/dashboard/infrastructure/dashboard-api';
-  import { DashboardState } from '$lib/dashboard/state/dashboard-state.svelte';
-  import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
-  import type { AuthorizationBrowser } from '$lib/personal-connections/authorization-browser';
-  import { browserAuthorizationBrowser } from '$lib/personal-connections/infrastructure/browser-authorization-browser';
-  import { browserPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/personal-connections-api';
-  import PageContainer from '$lib/components/shared/workspace/PageContainer.svelte';
+  import DelayedSpinner from '#lib/components/admin/shared/DelayedSpinner.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import { navigateToSignIn } from '#lib/admin/infrastructure/transport.js';
+  import type { DashboardApi } from '#lib/dashboard/api.js';
+  import { browserDashboardApi } from '#lib/dashboard/infrastructure/dashboard-api.js';
+  import { DashboardState } from '#lib/dashboard/state/dashboard-state.svelte.js';
+  import type { PersonalConnectionsApi } from '#lib/personal-connections/api.js';
+  import type { AuthorizationBrowser } from '#lib/personal-connections/authorization-browser.js';
+  import { browserAuthorizationBrowser } from '#lib/personal-connections/infrastructure/browser-authorization-browser.js';
+  import { browserPersonalConnectionsApi } from '#lib/personal-connections/infrastructure/personal-connections-api.js';
+  import PageContainer from '#lib/components/shared/workspace/PageContainer.svelte';
   import ConnectorWorkspace from './ConnectorWorkspace.svelte';
 
   let {

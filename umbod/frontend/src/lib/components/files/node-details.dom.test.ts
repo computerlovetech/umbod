@@ -1,16 +1,16 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { mount, tick, unmount } from 'svelte';
-import { fileId, filesystemFixture, filesystemNode, folderId, rootId } from '$lib/files/fixtures.test-support';
-import type { NodeSummary } from '$lib/files/domain/schemas';
-import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
-import { FilesState } from '$lib/files/state/files-state.svelte';
-import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
-import { UploadState } from '$lib/files/state/upload-state.svelte';
+import { fileId, filesystemFixture, filesystemNode, folderId, rootId } from '#lib/files/fixtures.test-support.js';
+import type { NodeSummary } from '#lib/files/domain/schemas.js';
+import { InMemoryFilesApi } from '#lib/files/infrastructure/in-memory-api.test-support.js';
+import { FilesState } from '#lib/files/state/files-state.svelte.js';
+import { NewFolderState } from '#lib/files/state/new-folder-state.svelte.js';
+import { UploadState } from '#lib/files/state/upload-state.svelte.js';
 import FilesContent from './FilesContent.svelte';
 import NodeActions from './NodeActions.svelte';
 import { NodeDetailsInputs } from './node-details-inputs.svelte.test-support';
-import { NodeUpdateState } from '$lib/files/state/node-update-state.svelte';
-import { DescriptionState } from '$lib/files/state/description-state.svelte';
+import { NodeUpdateState } from '#lib/files/state/node-update-state.svelte.js';
+import { DescriptionState } from '#lib/files/state/description-state.svelte.js';
 
 let component: ReturnType<typeof mount> | undefined;
 let files: FilesState | undefined;

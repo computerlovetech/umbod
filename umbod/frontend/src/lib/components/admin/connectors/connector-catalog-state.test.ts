@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import type { ConnectorListItem } from '$lib/admin/connectors';
+import type { ConnectorListItem } from '#lib/admin/connectors.js';
 import { ConnectorCatalogState } from './connector-catalog-state.svelte';
 
 const connector = (id: string, isConfigured: boolean): ConnectorListItem => ({

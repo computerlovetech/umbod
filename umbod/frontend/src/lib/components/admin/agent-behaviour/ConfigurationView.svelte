@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
-  import type { ConfigurationState } from '$lib/agent-behaviour/state/configuration-state.svelte';
+  import type { ConfigurationState } from '#lib/agent-behaviour/state/configuration-state.svelte.js';
   import ConfigurationEditor from './ConfigurationEditor.svelte';
   let { state }: { state: ConfigurationState } = $props();
   onDestroy((): void => state.closeEditor());

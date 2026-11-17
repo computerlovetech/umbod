@@ -1,10 +1,10 @@
-import { InMemoryPreviewConfiguration } from '$lib/files/preview/in-memory-configuration.test-support';
+import { InMemoryPreviewConfiguration } from '#lib/files/preview/in-memory-configuration.test-support.js';
 import { afterEach, expect, test, vi } from 'vitest';
 import { mount, tick, unmount } from 'svelte';
-import { filesystemNode } from '$lib/files/fixtures.test-support';
-import { FilePreviewState } from '$lib/files/preview/file-preview-state.svelte';
-import { InMemoryFileContent } from '$lib/files/preview/in-memory-content.test-support';
-import { PreviewRegistry } from '$lib/files/preview/ports';
+import { filesystemNode } from '#lib/files/fixtures.test-support.js';
+import { FilePreviewState } from '#lib/files/preview/file-preview-state.svelte.js';
+import { InMemoryFileContent } from '#lib/files/preview/in-memory-content.test-support.js';
+import { PreviewRegistry } from '#lib/files/preview/ports.js';
 import FilePreview from './FilePreview.svelte';
 import { imagePreviewAdapter } from './image-adapter';
 import { markdownPreviewAdapter } from './markdown-adapter';

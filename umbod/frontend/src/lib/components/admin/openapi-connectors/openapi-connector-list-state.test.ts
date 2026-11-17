@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
-import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
-import type { OpenApiConnectorListItem } from '$lib/admin/openapi-connectors';
+import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
+import type { OpenApiConnectorListItem } from '#lib/admin/openapi-connectors.js';
 import { OpenApiConnectorListState } from './openapi-connector-list-state.svelte';
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {

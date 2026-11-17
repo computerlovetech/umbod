@@ -1,5 +1,5 @@
-import type { DownstreamMcpTool, DownstreamMcpToolActivationBatchRequest, DownstreamMcpToolActivationBatchResponse } from '$lib/admin/downstream-mcp-connectors';
-import type { InvocationPolicyMode, InvocationPolicyTool } from '$lib/admin/invocation-policy';
+import type { DownstreamMcpTool, DownstreamMcpToolActivationBatchRequest, DownstreamMcpToolActivationBatchResponse } from '#lib/admin/downstream-mcp-connectors.js';
+import type { InvocationPolicyMode, InvocationPolicyTool } from '#lib/admin/invocation-policy.js';
 
 export const downstreamMcpToolStatusFilters = ['all', 'enabled', 'disabled'] as const;
 export const downstreamMcpToolPageSizes = [20, 50, 100] as const;

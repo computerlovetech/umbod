@@ -1,14 +1,14 @@
-import { downstreamMcpProxySlugSchema, type DownstreamMcpConnector } from '$lib/admin/downstream-mcp-connectors';
+import { downstreamMcpProxySlugSchema, type DownstreamMcpConnector } from '#lib/admin/downstream-mcp-connectors.js';
 import { suggestedConnectorId, suggestedToolNamePrefix } from '../shared/connector-name-suggestions';
-import type { PersonalServerAdministration } from '$lib/admin/personal-mcp-servers/administration';
-import { createPersonalServerSchema, type PersonalServerCreate, type PersonalSettings, type PersonalPolicy } from '$lib/admin/personal-mcp-servers/domain/schemas';
-import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
+import type { PersonalServerAdministration } from '#lib/admin/personal-mcp-servers/administration.js';
+import { createPersonalServerSchema, type PersonalServerCreate, type PersonalSettings, type PersonalPolicy } from '#lib/admin/personal-mcp-servers/domain/schemas.js';
+import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
 import { PolicyForm } from './policy-form.svelte';
-import type { InstanceConfigurationRoute } from '$lib/admin/instance-configuration-api';
-import { personalServerAvailability, type PersonalServerAvailability } from '$lib/admin/personal-mcp-servers/domain/availability';
+import type { InstanceConfigurationRoute } from '#lib/admin/instance-configuration-api.js';
+import { personalServerAvailability, type PersonalServerAvailability } from '#lib/admin/personal-mcp-servers/domain/availability.js';
 
-import type { AutomaticClient } from '$lib/admin/personal-mcp-servers/domain/discovery';
-import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
+import type { AutomaticClient } from '#lib/admin/personal-mcp-servers/domain/discovery.js';
+import type { PersonalServerDiscovery } from '#lib/admin/personal-mcp-servers/discovery-administration.js';
 import { PersonalServerDiscoveryState } from './personal-server-discovery-state.svelte';
 
 export type Confirmation = 'policy';

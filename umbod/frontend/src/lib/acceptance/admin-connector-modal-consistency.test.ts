@@ -83,7 +83,7 @@ const mcpPage = readFileSync('src/lib/components/admin/downstream-mcp-connectors
     expect(mcpPage).toContain('<Button aria-label="Add MCP connector"');
     const button = readFileSync('src/lib/components/admin/shared/Button.svelte', 'utf8');
     const buttonStyles = readFileSync('src/lib/styles/buttons.css', 'utf8');
-    expect(button).toContain("import '$lib/styles/buttons.css'");
+    expect(button).toContain("import '#lib/styles/buttons.css'");
     expect(buttonStyles).toContain('cursor: pointer');
     expect(buttonStyles).toContain('cursor: not-allowed');
     expect(buttonStyles).toContain('.admin-shared-button:focus-visible');

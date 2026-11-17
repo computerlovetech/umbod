@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { identityDirectoryApi } from '$lib/identity-directory/api';
-  import { browserObservationEnvironment } from '$lib/identity-directory/browser-environment';
-  import { ObservationCoordinator } from '$lib/identity-directory/observation-coordinator';
-  import type { IdentityObservation, ObservationEnvironment } from '$lib/identity-directory/port';
+  import { identityDirectoryApi } from '#lib/identity-directory/api.js';
+  import { browserObservationEnvironment } from '#lib/identity-directory/browser-environment.js';
+  import { ObservationCoordinator } from '#lib/identity-directory/observation-coordinator.js';
+  import type { IdentityObservation, ObservationEnvironment } from '#lib/identity-directory/port.js';
 
   let { observation = identityDirectoryApi().observations, environment = browserObservationEnvironment() }: {
     observation?: IdentityObservation;

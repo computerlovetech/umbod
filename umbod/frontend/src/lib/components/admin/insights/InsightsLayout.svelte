@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
-  import AdminShell from '$lib/components/admin/AdminShell.svelte';
+  import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
+  import AdminShell from '#lib/components/admin/AdminShell.svelte';
   import InsightsWorkspace from './InsightsWorkspace.svelte';
   import { createInsightsState } from './insights-factory';
   import type { InsightsState } from './insights-state.svelte';

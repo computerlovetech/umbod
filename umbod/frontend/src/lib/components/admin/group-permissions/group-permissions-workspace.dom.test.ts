@@ -2,7 +2,7 @@ import { InMemoryNamespaceAdministration } from '../../../../../tests/support/fi
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { SvelteMap } from 'svelte/reactivity';
-import type { GroupPermissionSet } from '$lib/admin/group-permissions';
+import type { GroupPermissionSet } from '#lib/admin/group-permissions.js';
 import type { GroupPermissionsTab } from './group-permissions-route-state.svelte';
 import WorkspaceTestHarness from './WorkspaceTestHarness.test-support.svelte';
 import { createWorkspace } from './workspace.test-support';

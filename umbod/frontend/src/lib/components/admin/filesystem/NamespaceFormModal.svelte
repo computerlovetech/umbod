@@ -1,9 +1,9 @@
 <script lang="ts">
-  import TextField from '$lib/components/shared/TextField.svelte';
+  import TextField from '#lib/components/shared/TextField.svelte';
   import Button from '../shared/Button.svelte';
   import Form from '../shared/Form.svelte';
   import LoadingButton from '../shared/LoadingButton.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import type { NamespaceManagementState } from './namespace-management-state.svelte';
 
   let { state }: { state: NamespaceManagementState } = $props();

@@ -1,10 +1,10 @@
 <script lang="ts">
   import { onMount, onDestroy, untrack, type Snippet } from 'svelte';
-  import '$lib/styles/insights.css';
-  import SubpageContainer from '$lib/components/shared/workspace/SubpageContainer.svelte';
-  import SubpageNavigation from '$lib/components/shared/workspace/SubpageNavigation.svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import ButtonLink from '$lib/components/admin/shared/ButtonLink.svelte';
+  import '#lib/styles/insights.css';
+  import SubpageContainer from '#lib/components/shared/workspace/SubpageContainer.svelte';
+  import SubpageNavigation from '#lib/components/shared/workspace/SubpageNavigation.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import ButtonLink from '#lib/components/admin/shared/ButtonLink.svelte';
   import { setInsightsState } from './insights-context';
   import { createInsightsState } from './insights-factory';
   import { InsightsNavigation, insightsLinks } from './insights-navigation';

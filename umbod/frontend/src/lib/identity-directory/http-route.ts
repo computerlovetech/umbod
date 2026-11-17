@@ -1,4 +1,4 @@
-import type { Transport } from '$lib/admin/infrastructure/transport';
+import type { Transport } from '#lib/admin/infrastructure/transport.js';
 import { directoryGroupsSchema, directoryQuerySchema, type DirectoryGroups, type DirectoryQuery } from './domain/schemas';
 import type { IdentityGroupDirectory, IdentityObservation } from './port';
 

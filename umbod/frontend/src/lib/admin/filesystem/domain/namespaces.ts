@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { fileNameSchema } from '$lib/files/domain/schemas';
+import { fileNameSchema } from '#lib/files/domain/schemas.js';
 
 export const namespaceGroupSchema = z.strictObject({
   group_id: z.string().refine((value) => value.trim().length > 0),

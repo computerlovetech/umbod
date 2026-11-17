@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AuthenticationRequiredError, browserTransport, HttpError, SchemaValidationError, type Transport, type TransportRequest } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, browserTransport, HttpError, SchemaValidationError, type Transport, type TransportRequest } from '#lib/admin/infrastructure/transport.js';
 import { PersonalAccessTokensApi } from './api';
 import { createdTokenSchema, createTokenSchema } from '../domain/schemas';
 import { InMemoryPersonalAccessTokens } from '../in-memory-api.test-support';

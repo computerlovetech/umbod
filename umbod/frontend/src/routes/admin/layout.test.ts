@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { LayoutLoadEvent } from './$types';
 import { load } from './+layout';
 
-vi.mock('$lib/admin/infrastructure/public-configuration', () => ({
+vi.mock('#lib/admin/infrastructure/public-configuration.js', () => ({
   publicConfigurationProvider: { get: async (): Promise<object> => ({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' }) }
 }));
 

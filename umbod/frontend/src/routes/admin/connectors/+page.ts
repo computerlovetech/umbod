@@ -1,11 +1,11 @@
-import { mapResourceCatalog } from '$lib/admin/capability-catalogs';
-import { isOperationalError } from '$lib/admin/infrastructure/transport';
+import { mapResourceCatalog } from '#lib/admin/capability-catalogs.js';
+import { isOperationalError } from '#lib/admin/infrastructure/transport.js';
 
-import { adminApi } from '$lib/admin/infrastructure/admin-api';
+import { adminApi } from '#lib/admin/infrastructure/admin-api.js';
 
-import { mapConnectorApiItem, mapConnectorConfigurationApiResponse, mapConnectorDetailApiResponse } from '$lib/admin/connectors';
+import { mapConnectorApiItem, mapConnectorConfigurationApiResponse, mapConnectorDetailApiResponse } from '#lib/admin/connectors.js';
 
-import { loadSelectedDetail } from '$lib/admin/selected-detail-facade';
+import { loadSelectedDetail } from '#lib/admin/selected-detail-facade.js';
 
 import type { PageLoad } from './$types';
 

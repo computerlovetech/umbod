@@ -1,15 +1,15 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { mountWorkspace } from '$lib/components/workspace/mount-workspace.test-support';
+import { mountWorkspace } from '#lib/components/workspace/mount-workspace.test-support.js';
 import { tick, unmount } from 'svelte';
-import { deferred, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
-import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
+import { deferred, filesystemFixture, folderId, rootId } from '#lib/files/fixtures.test-support.js';
+import { InMemoryFilesApi } from '#lib/files/infrastructure/in-memory-api.test-support.js';
 import FilesPage from './FilesPage.svelte';
 
-const navigation = vi.hoisted(() => ({ callback: undefined as ((event: { to: { url: URL } | null }) => void) | undefined }));
+const navigation = vi.hoisted(() => ({ callback: undefined as ((event: { to: { url: URL } | null; shallow?: boolean }) => void) | undefined }));
 vi.mock('$app/navigation', () => ({
   goto: vi.fn(),
-  invalidateAll: vi.fn(),
-  afterNavigate: (callback: (event: { to: { url: URL } | null }) => void): void => { navigation.callback = callback; }
+  refreshAll: vi.fn(),
+  afterNavigate: (callback: (event: { to: { url: URL } | null; shallow?: boolean }) => void): void => { navigation.callback = callback; }
 }));
 
 let component: ReturnType<typeof mountWorkspace> | undefined;
@@ -22,9 +22,9 @@ afterEach(async (): Promise<void> => {
   vi.restoreAllMocks();
 });
 
-function navigate(path: string): void {
+function navigate(path: string, shallow = false): void {
   expect(navigation.callback).toBeDefined();
-  navigation.callback!({ to: { url: new URL(path, 'https://umbod.test') } });
+  navigation.callback!({ to: { url: new URL(path, 'https://umbod.test') }, shallow });
 }
 
 function newFolderButton(): HTMLButtonElement {
@@ -60,6 +60,11 @@ describe('Files route incidental navigation', (): void => {
       expect(browse).toHaveBeenCalledTimes(1);
       expect(discovery).toHaveBeenCalledTimes(1);
     }
+    navigate('/files?node=' + folderId, true);
+    await tick();
+    expect(document.querySelector('#folder-name')).toBe(input);
+    expect(input!.value).toBe('Keep my draft');
+    expect(browse).toHaveBeenCalledTimes(1);
     navigate('/files?node=' + folderId);
     await vi.waitFor(() => expect(browse).toHaveBeenCalledTimes(2));
     await tick();

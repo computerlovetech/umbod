@@ -38,7 +38,7 @@ async def test_preflight_paginates_in_same_session_before_exactly_one_call(targe
     result = await transport.call_tool(PersonalToolCall(target=target, tool_name="lookup", expected_fingerprint=LOOKUP_FINGERPRINT, arguments={}))
     messages = [(headers, body) for _, headers, body in network.requests if body.get("method") in {"tools/list", "tools/call"}]
     assert [body["method"] for _, body in messages] == ["tools/list", "tools/list", "tools/call"]
-    assert messages[1][1]["params"] == {"cursor": "next", "_meta": {}}
+    assert messages[1][1]["params"] == {"cursor": "next"}
     assert all(headers["mcp-session-id"] == "fixture-session" for headers, _ in messages)
     assert result.result["content"] == [{"type": "text", "text": "done"}]
     assert sum(body.get("method") == "initialize" for _, _, body in network.requests) == 1

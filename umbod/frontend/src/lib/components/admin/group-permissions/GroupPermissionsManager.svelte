@@ -1,8 +1,8 @@
 <script lang="ts">
-  import AdminToggle from '$lib/components/admin/shared/AdminToggle.svelte';
-  import AdminSaveAction from '$lib/components/admin/shared/AdminSaveAction.svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
+  import AdminToggle from '#lib/components/admin/shared/AdminToggle.svelte';
+  import AdminSaveAction from '#lib/components/admin/shared/AdminSaveAction.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import DelayedSpinner from '#lib/components/admin/shared/DelayedSpinner.svelte';
   import type { GroupPermissionsState, ConnectorPermissionTarget } from './group-permissions-state.svelte';
 
   let { state }: { state: GroupPermissionsState } = $props();

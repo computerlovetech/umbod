@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
-import { filesystemFixture, filesystemNode, rootId } from '$lib/files/fixtures.test-support';
-import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
-import { NodeUpdateState } from '$lib/files/state/node-update-state.svelte';
-import { DescriptionState } from '$lib/files/state/description-state.svelte';
+import { filesystemFixture, filesystemNode, rootId } from '#lib/files/fixtures.test-support.js';
+import { InMemoryFilesApi } from '#lib/files/infrastructure/in-memory-api.test-support.js';
+import { NodeUpdateState } from '#lib/files/state/node-update-state.svelte.js';
+import { DescriptionState } from '#lib/files/state/description-state.svelte.js';
 import { NodeActionsState } from './node-actions-state.svelte';
 
 describe('node details state', (): void => {

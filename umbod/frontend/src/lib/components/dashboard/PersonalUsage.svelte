@@ -1,17 +1,17 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import DashboardPeriodSwitch from '$lib/components/shared/dashboard/DashboardPeriodSwitch.svelte';
-  import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
-  import DateTimeView from '$lib/components/shared/DateTimeView.svelte';
-  import type { UsageState } from '$lib/dashboard/state/usage-state.svelte';
-  import DashboardContainer from '$lib/components/shared/dashboard/DashboardContainer.svelte';
-  import DashboardRow from '$lib/components/shared/dashboard/DashboardRow.svelte';
-  import DashboardColumn from '$lib/components/shared/dashboard/DashboardColumn.svelte';
-  import DashboardPanel from '$lib/components/shared/dashboard/DashboardPanel.svelte';
-  import OutcomeRing from '$lib/components/shared/dashboard/visualizations/OutcomeRing.svelte';
-  import OperationMixChart from '$lib/components/shared/dashboard/visualizations/OperationMixChart.svelte';
-  import DailyActivityChart from '$lib/components/shared/dashboard/visualizations/DailyActivityChart.svelte';
-  import ToolRankingList from '$lib/components/shared/dashboard/visualizations/ToolRankingList.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import DashboardPeriodSwitch from '#lib/components/shared/dashboard/DashboardPeriodSwitch.svelte';
+  import DelayedSpinner from '#lib/components/admin/shared/DelayedSpinner.svelte';
+  import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
+  import type { UsageState } from '#lib/dashboard/state/usage-state.svelte.js';
+  import DashboardContainer from '#lib/components/shared/dashboard/DashboardContainer.svelte';
+  import DashboardRow from '#lib/components/shared/dashboard/DashboardRow.svelte';
+  import DashboardColumn from '#lib/components/shared/dashboard/DashboardColumn.svelte';
+  import DashboardPanel from '#lib/components/shared/dashboard/DashboardPanel.svelte';
+  import OutcomeRing from '#lib/components/shared/dashboard/visualizations/OutcomeRing.svelte';
+  import OperationMixChart from '#lib/components/shared/dashboard/visualizations/OperationMixChart.svelte';
+  import DailyActivityChart from '#lib/components/shared/dashboard/visualizations/DailyActivityChart.svelte';
+  import ToolRankingList from '#lib/components/shared/dashboard/visualizations/ToolRankingList.svelte';
 
   let { state, signIn }: { state: UsageState; signIn: () => void } = $props();
 </script>

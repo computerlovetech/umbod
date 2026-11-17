@@ -1,8 +1,8 @@
 import { InMemoryNamespaceAdministration } from '../../../../../tests/support/filesystem/in-memory-namespace-administration';
-import type { NamespaceAdministration } from '$lib/admin/filesystem/namespaces-port';
+import type { NamespaceAdministration } from '#lib/admin/filesystem/namespaces-port.js';
 import { vi, type Mock, type MockInstance } from 'vitest';
-import type { CatalogueGroup } from '$lib/admin/groups/domain/schemas';
-import type { GroupPermissionSet } from '$lib/admin/group-permissions';
+import type { CatalogueGroup } from '#lib/admin/groups/domain/schemas.js';
+import type { GroupPermissionSet } from '#lib/admin/group-permissions.js';
 import { InMemoryGroupPermissionsLoader } from './group-permissions-loader';
 import type { GroupPermissionsSaver } from './group-permissions-saver';
 import { GroupPermissionsWorkspaceState } from './group-permissions-workspace-state.svelte';

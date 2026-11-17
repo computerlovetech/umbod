@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
-import { adminApi } from '$lib/admin/infrastructure/admin-api';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { adminApi } from '#lib/admin/infrastructure/admin-api.js';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { LayoutLoad } from './$types';
 
 export const load: LayoutLoad = async ({ fetch }) => {

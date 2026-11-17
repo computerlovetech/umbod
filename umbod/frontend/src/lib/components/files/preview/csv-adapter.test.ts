@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
-import { fileId, filesystemNode } from '$lib/files/fixtures.test-support';
-import { InMemoryFileContent } from '$lib/files/preview/in-memory-content.test-support';
-import { PreviewRegistry } from '$lib/files/preview/ports';
+import { fileId, filesystemNode } from '#lib/files/fixtures.test-support.js';
+import { InMemoryFileContent } from '#lib/files/preview/in-memory-content.test-support.js';
+import { PreviewRegistry } from '#lib/files/preview/ports.js';
 import { csvPreviewAdapter } from './csv-adapter';
 import { textPreviewAdapter } from './text-adapter';
 

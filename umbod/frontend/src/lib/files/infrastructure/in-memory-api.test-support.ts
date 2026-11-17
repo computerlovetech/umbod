@@ -3,7 +3,7 @@ import { filesystemNode } from '../fixtures.test-support';
 import type { FilesApi, FilesystemApi } from '../api';
 import { browseResultSchema, type BrowseResult, updateNodeSchema, type UpdateNode, updateDescriptionSchema, type UpdateDescription, breadcrumbsSchema, type Breadcrumbs, type BreadcrumbItem, fileRevisionSchema, createFolderSchema, fileUploadSchema, nodeIdSchema, nodeSummarySchema, beginUploadSchema, uploadSessionSchema, rawUploadSchema, type BeginUpload, type UploadSession, type CreateFolder, type FileUpload, type NodeSummary } from '../domain/schemas';
 import { UploadPhaseError } from '../errors';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 
 export class InMemoryFilesystem implements FilesystemApi {
   private readonly nodes = new Map<string, NodeSummary>();

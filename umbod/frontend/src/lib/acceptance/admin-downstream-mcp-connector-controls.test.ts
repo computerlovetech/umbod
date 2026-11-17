@@ -2,20 +2,20 @@ import { readFileSync } from 'node:fs';
 import { render } from 'svelte/server';
 import { Window } from 'happy-dom';
 import { describe, expect, test, vi } from 'vitest';
-import type { DownstreamMcpConnector, DownstreamMcpTool } from '$lib/admin/downstream-mcp-connectors';
-import { AdminApi } from '$lib/admin/infrastructure/admin-api';
-import { HttpError, type Transport, type TransportRequest } from '$lib/admin/infrastructure/transport';
-import { downstreamMcpConnectorsOperations } from '$lib/admin/operations/downstream-mcp-connectors';
-import { serverFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
-import DownstreamMcpWorkspace from '$lib/components/admin/downstream-mcp-connectors/DownstreamMcpWorkspace.svelte';
-import DownstreamMcpSetupModal from '$lib/components/admin/downstream-mcp-connectors/DownstreamMcpSetupModal.svelte';
-import DownstreamMcpToolActivationToggle from '$lib/components/admin/downstream-mcp-connectors/DownstreamMcpToolActivationToggle.svelte';
-import OpenApiToolActivationToggle from '$lib/components/admin/openapi-connectors/OpenApiToolActivationToggle.svelte';
-import { DownstreamMcpWorkspaceState, type DownstreamMcpWorkspaceBundle } from '$lib/components/admin/downstream-mcp-connectors/downstream-mcp-workspace-state.svelte';
+import type { DownstreamMcpConnector, DownstreamMcpTool } from '#lib/admin/downstream-mcp-connectors.js';
+import { AdminApi } from '#lib/admin/infrastructure/admin-api.js';
+import { HttpError, type Transport, type TransportRequest } from '#lib/admin/infrastructure/transport.js';
+import { downstreamMcpConnectorsOperations } from '#lib/admin/operations/downstream-mcp-connectors.js';
+import { serverFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
+import DownstreamMcpWorkspace from '#lib/components/admin/downstream-mcp-connectors/DownstreamMcpWorkspace.svelte';
+import DownstreamMcpSetupModal from '#lib/components/admin/downstream-mcp-connectors/DownstreamMcpSetupModal.svelte';
+import DownstreamMcpToolActivationToggle from '#lib/components/admin/downstream-mcp-connectors/DownstreamMcpToolActivationToggle.svelte';
+import OpenApiToolActivationToggle from '#lib/components/admin/openapi-connectors/OpenApiToolActivationToggle.svelte';
+import { DownstreamMcpWorkspaceState, type DownstreamMcpWorkspaceBundle } from '#lib/components/admin/downstream-mcp-connectors/downstream-mcp-workspace-state.svelte.js';
 
 vi.mock('$app/state', () => ({ page: { url: new URL('http://localhost/admin/downstream-mcp-connectors?capability=tools') } }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn(), invalidateAll: vi.fn() }));
-vi.mock('$lib/components/feedback', () => ({ useToast: (): object => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }));
+vi.mock('$app/navigation', () => ({ goto: vi.fn(), refreshAll: vi.fn() }));
+vi.mock('#lib/components/feedback/index.js', () => ({ useToast: (): object => ({ success: vi.fn(), error: vi.fn(), warning: vi.fn() }) }));
 
 function sharedConnector(): DownstreamMcpConnector {
   return { ...serverFixture('internal-shared-id'), display_name: 'Shared records', authorization_mode: 'shared', auth_mode: 'none' };

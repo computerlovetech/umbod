@@ -1,4 +1,4 @@
-import type { ToolOutputSchemaState } from '$lib/components/shared/tools/presentation';
+import type { ToolOutputSchemaState } from '#lib/components/shared/tools/presentation.js';
 
 export function normalizeNullableToolOutputSchema(
   schema: Record<string, unknown> | null

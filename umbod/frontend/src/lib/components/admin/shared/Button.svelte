@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
   import type { HTMLButtonAttributes } from 'svelte/elements';
-  import '$lib/styles/buttons.css';
+  import '#lib/styles/buttons.css';
 
   type Props = Omit<HTMLButtonAttributes, 'children'> & {
     children: Snippet;

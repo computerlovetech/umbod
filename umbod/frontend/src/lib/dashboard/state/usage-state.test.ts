@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { UsagePort } from '../api';
 import { personalUsageSchema, type PersonalUsage } from '../domain/usage-schemas';
 import { deferred, usageSnapshot } from '../usage-fixtures.test-support';

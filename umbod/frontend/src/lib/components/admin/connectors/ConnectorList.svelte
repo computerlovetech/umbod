@@ -1,40 +1,40 @@
 <script lang="ts">
-  import { browserSubmit } from '$lib/admin/operations/browser-submit';
-  import { replaceState } from '$app/navigation';
+  import { browserSubmit } from '#lib/admin/operations/browser-submit.js';
+  import { goto } from '$app/navigation';
   import { page } from '$app/state';
-  import { untrack } from 'svelte';
-  import { parseConnectorCapability } from '$lib/admin/connector-capabilities';
-  import { promptActivationBatchResponseSchema, resourceActivationBatchResponseSchema } from '$lib/admin/capability-catalogs';
-  import { connectorToolActivationBatchResponseSchema, type ConnectorListItem } from '$lib/admin/connectors';
-  import PromptCatalog from '$lib/components/admin/capability-catalogs/PromptCatalog.svelte';
-  import ResourceCatalog from '$lib/components/admin/capability-catalogs/ResourceCatalog.svelte';
-  import { ConnectorDetailsBrowserRoute, type ConnectorDetailBundle } from '$lib/admin/connector-details-browser-api';
-  import CapabilityDescriptionOverrideModal from '$lib/components/admin/capability-descriptions/CapabilityDescriptionOverrideModal.svelte';
+  import { onMount, untrack } from 'svelte';
+  import { parseConnectorCapability } from '#lib/admin/connector-capabilities.js';
+  import { promptActivationBatchResponseSchema, resourceActivationBatchResponseSchema } from '#lib/admin/capability-catalogs.js';
+  import { connectorToolActivationBatchResponseSchema, type ConnectorListItem } from '#lib/admin/connectors.js';
+  import PromptCatalog from '#lib/components/admin/capability-catalogs/PromptCatalog.svelte';
+  import ResourceCatalog from '#lib/components/admin/capability-catalogs/ResourceCatalog.svelte';
+  import { ConnectorDetailsBrowserRoute, type ConnectorDetailBundle } from '#lib/admin/connector-details-browser-api.js';
+  import CapabilityDescriptionOverrideModal from '#lib/components/admin/capability-descriptions/CapabilityDescriptionOverrideModal.svelte';
   import ConnectorListEmptyState from './ConnectorListEmptyState.svelte';
-  import ConnectorCapabilities from '$lib/components/admin/connectors/ConnectorCapabilities.svelte';
-  import ConnectorConfigurationForm from '$lib/components/admin/connectors/ConnectorConfigurationForm.svelte';
-  import ConnectorDetailItem from '$lib/components/admin/connectors/ConnectorDetailItem.svelte';
-  import ConnectorDetailSummary from '$lib/components/admin/connectors/ConnectorDetailSummary.svelte';
-  import ConnectorPublicationMenuAction from '$lib/components/admin/connectors/ConnectorPublicationMenuAction.svelte';
-  import ConnectorSidebarList from '$lib/components/admin/connectors/ConnectorSidebarList.svelte';
-  import PublicationConfirmationModal from '$lib/components/admin/connectors/PublicationConfirmationModal.svelte';
-  import ToolCard from '$lib/components/admin/connectors/ToolCard.svelte';
-  import InvocationPolicyControl from '$lib/components/admin/connectors/InvocationPolicyControl.svelte';
-  import { invocationPolicyConflictSchema, invocationPolicyListResponseSchema } from '$lib/admin/invocation-policy';
-  import ToolSaveBar from '$lib/components/admin/connectors/ToolSaveBar.svelte';
-  import CapabilityCatalogGrid from '$lib/components/admin/shared/CapabilityCatalogGrid.svelte';
-  import ScrollableToolCatalog from '$lib/components/admin/shared/ScrollableToolCatalog.svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import AdminSplitWorkspace from '$lib/components/admin/shared/AdminSplitWorkspace.svelte';
-  import AdminSidebarActionMenu from '$lib/components/admin/shared/AdminSidebarActionMenu.svelte';
-  import AdminToggle from '$lib/components/admin/shared/AdminToggle.svelte';
-  import AdminSaveAction from '$lib/components/admin/shared/AdminSaveAction.svelte';
-  import DelayedSpinner from '$lib/components/admin/shared/DelayedSpinner.svelte';
-  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
-  import { FormPendingState } from '$lib/components/admin/shared/form-pending-state.svelte';
-  import { BrowserSelectionUrlAdapter } from '$lib/components/admin/shared/selection-url-port';
+  import ConnectorCapabilities from '#lib/components/admin/connectors/ConnectorCapabilities.svelte';
+  import ConnectorConfigurationForm from '#lib/components/admin/connectors/ConnectorConfigurationForm.svelte';
+  import ConnectorDetailItem from '#lib/components/admin/connectors/ConnectorDetailItem.svelte';
+  import ConnectorDetailSummary from '#lib/components/admin/connectors/ConnectorDetailSummary.svelte';
+  import ConnectorPublicationMenuAction from '#lib/components/admin/connectors/ConnectorPublicationMenuAction.svelte';
+  import ConnectorSidebarList from '#lib/components/admin/connectors/ConnectorSidebarList.svelte';
+  import PublicationConfirmationModal from '#lib/components/admin/connectors/PublicationConfirmationModal.svelte';
+  import ToolCard from '#lib/components/admin/connectors/ToolCard.svelte';
+  import InvocationPolicyControl from '#lib/components/admin/connectors/InvocationPolicyControl.svelte';
+  import { invocationPolicyConflictSchema, invocationPolicyListResponseSchema } from '#lib/admin/invocation-policy.js';
+  import ToolSaveBar from '#lib/components/admin/connectors/ToolSaveBar.svelte';
+  import CapabilityCatalogGrid from '#lib/components/admin/shared/CapabilityCatalogGrid.svelte';
+  import ScrollableToolCatalog from '#lib/components/admin/shared/ScrollableToolCatalog.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import AdminSplitWorkspace from '#lib/components/admin/shared/AdminSplitWorkspace.svelte';
+  import AdminSidebarActionMenu from '#lib/components/admin/shared/AdminSidebarActionMenu.svelte';
+  import AdminToggle from '#lib/components/admin/shared/AdminToggle.svelte';
+  import AdminSaveAction from '#lib/components/admin/shared/AdminSaveAction.svelte';
+  import DelayedSpinner from '#lib/components/admin/shared/DelayedSpinner.svelte';
+  import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
+  import { FormPendingState } from '#lib/components/admin/shared/form-pending-state.svelte.js';
+  import { BrowserSelectionUrlAdapter } from '#lib/components/admin/shared/selection-url-port.js';
   import { ConnectorListState } from './connector-list-state.svelte';
-  import { useToast } from '$lib/components/feedback';
+  import { useToast } from '#lib/components/feedback/index.js';
 
   type ConnectorListForm = {
     status?: string;
@@ -65,16 +65,23 @@
   } = $props();
 
   const detailsRoute = new ConnectorDetailsBrowserRoute();
+  const toast = useToast();
+  const initialSelectionId = untrack(() => (page.shallow?.url ?? page.url).searchParams.get('connector') ?? selectedConnectorId ?? connectors[0]?.id);
   const state = new ConnectorListState(untrack(() => connectors), {
-    selectedConnectorId: untrack(() => selectedConnectorId),
-    initialDetail: untrack(() => initialDetail),
-    initialDetailFailed: untrack(() => initialDetailFailed),
+    selectedConnectorId: initialSelectionId,
+    initialDetail: untrack(() => initialDetail?.detail.connector.id === initialSelectionId ? initialDetail : undefined),
+    initialDetailFailed: untrack(() => selectedConnectorId === initialSelectionId ? initialDetailFailed : false),
     loadDetail: (connectorId, signal) => detailsRoute.get(connectorId, signal),
-    selectionUrl: new BrowserSelectionUrlAdapter({ readUrl: () => page.url, replaceUrl: (url) => replaceState(url, {}) })
+    selectionUrl: new BrowserSelectionUrlAdapter({
+      readUrl: () => new URL((page.shallow?.url ?? page.url).href),
+      replaceUrl: (url) => { void goto(url, { shallow: true, replace: true, state: {} }).catch(() => toast.error('Could not update connector URL')); }
+    })
+  });
+  onMount(() => {
+    if (initialSelectionId && initialSelectionId !== selectedConnectorId) state.selectConnector(initialSelectionId);
   });
   const pendingState = new FormPendingState();
-  const toast = useToast();
-  const selectedCapability = $derived(parseConnectorCapability(page.url.searchParams.get('capability')));
+  const selectedCapability = $derived(parseConnectorCapability((page.shallow?.url ?? page.url).searchParams.get('capability')));
   const capabilityCounts = $derived({
     tools: state.selectedConnector?.tools.length ?? 0,
     prompts: state.selectedPromptCatalog.prompts.length,
@@ -218,7 +225,7 @@
           <ConnectorDetailItem label="Publication status" variant="detail">{state.selectedConnector.publicationStatus}</ConnectorDetailItem>
         {/snippet}
 
-        <ConnectorCapabilities selected={selectedCapability} counts={capabilityCounts} currentUrl={page.url}>
+        <ConnectorCapabilities selected={selectedCapability} counts={capabilityCounts} currentUrl={new URL((page.shallow?.url ?? page.url).href)}>
         {#snippet children(activeCapability)}
         {#if activeCapability === 'tools'}
           <section class="tools-section" aria-labelledby="connector-tools-heading">
@@ -267,7 +274,7 @@
                         } else {
                           toast.error(actionData.errorMessage);
                         }
-                        await update();
+                        await update({ reset: false, invalidateAll: false });
                       } finally {
                         pendingState.stop(pendingKey);
                       }
@@ -351,7 +358,7 @@
                     } else {
                       toast.error('Could not save prompt changes');
                     }
-                    await update();
+                    await update({ reset: false, invalidateAll: false });
                   } finally {
                     pendingState.stop(pendingKey);
                   }
@@ -414,7 +421,7 @@
                     } else {
                       toast.error('Could not save resource changes');
                     }
-                    await update();
+                    await update({ reset: false, invalidateAll: false });
                   } finally {
                     pendingState.stop(pendingKey);
                   }

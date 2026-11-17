@@ -1,9 +1,9 @@
-import type { PersonalServerAdministration } from '$lib/admin/personal-mcp-servers/administration';
-import type { PersonalOAuthSetupAdministration } from '$lib/admin/personal-mcp-servers/setup-administration';
-import type { PersonalPolicy } from '$lib/admin/personal-mcp-servers/domain/schemas';
-import type { SetupDiscovery, SetupStatus } from '$lib/admin/personal-mcp-servers/domain/setup';
-import type { DownstreamMcpConnector } from '$lib/admin/downstream-mcp-connectors';
-import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
+import type { PersonalServerAdministration } from '#lib/admin/personal-mcp-servers/administration.js';
+import type { PersonalOAuthSetupAdministration } from '#lib/admin/personal-mcp-servers/setup-administration.js';
+import type { PersonalPolicy } from '#lib/admin/personal-mcp-servers/domain/schemas.js';
+import type { SetupDiscovery, SetupStatus } from '#lib/admin/personal-mcp-servers/domain/setup.js';
+import type { DownstreamMcpConnector } from '#lib/admin/downstream-mcp-connectors.js';
+import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
 
 type SetupSnapshot<T> = T extends readonly unknown[] ? ReadonlyArray<SetupSnapshot<T[number]>> : T extends object ? { readonly [Key in keyof T]: SetupSnapshot<T[Key]> } : T;
 

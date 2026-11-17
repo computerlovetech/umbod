@@ -1,5 +1,5 @@
-import { capabilityKindSections, capabilityPermissionId, permissionSetDifference, type CapabilityKind, type GroupPermissionSummary } from '$lib/admin/group-permissions';
-import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
+import { capabilityKindSections, capabilityPermissionId, permissionSetDifference, type CapabilityKind, type GroupPermissionSummary } from '#lib/admin/group-permissions.js';
+import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
 import { BrowserGroupPermissionsLoader, type GroupPermissionsLoader, type ConnectorPresentationSummary } from './group-permissions-loader';
 import { BrowserGroupPermissionsSaver, type GroupPermissionsSaver } from './group-permissions-saver';
 

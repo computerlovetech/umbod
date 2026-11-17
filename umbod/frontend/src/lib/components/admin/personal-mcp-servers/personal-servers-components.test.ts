@@ -4,14 +4,14 @@ import { createRawSnippet } from 'svelte';
 import PersonalServerDialog from './PersonalServerDialog.svelte';
 import { describe, expect, test, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
-import { policyFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
+import { InMemoryPersonalServers } from '#lib/admin/personal-mcp-servers/in-memory.js';
+import { policyFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
 import { PolicyForm } from './policy-form.svelte';
 import PolicyFields from './PolicyFields.svelte';
 import PersonalServerPolicyPanel from './PersonalServerPolicyPanel.svelte';
 import PersonalServerRegistration from './PersonalServerRegistration.svelte';
 import { PersonalServerFormState } from './personal-server-form-state.svelte';
-import { configurationFixture } from '$lib/admin/personal-mcp-servers/availability.test-support';
+import { configurationFixture } from '#lib/admin/personal-mcp-servers/availability.test-support.js';
 
 vi.mock('$app/state', () => ({ navigating: { to: null, from: null } }));
 

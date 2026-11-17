@@ -1,8 +1,8 @@
-import type { GroupCatalogue } from '$lib/admin/groups/port';
-import { createGroupSchema, updateGroupSchema, type CatalogueGroup } from '$lib/admin/groups/domain/schemas';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import type { GroupCatalogue } from '#lib/admin/groups/port.js';
+import { createGroupSchema, updateGroupSchema, type CatalogueGroup } from '#lib/admin/groups/domain/schemas.js';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 
-import type { IdentityGroupDirectory } from '$lib/identity-directory/port';
+import type { IdentityGroupDirectory } from '#lib/identity-directory/port.js';
 import { GroupSuggestions } from './group-suggestions.svelte';
 
 export class GroupsState {

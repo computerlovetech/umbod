@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { connectorToolOutputSchemaStateSchema } from './connectors';
 import { normalizeDeclaredToolOutputSchema } from './tool-output-schema';
-import type { ToolOutputSchemaState, ToolParameter } from '$lib/components/shared/tools/presentation';
-import { mapJsonSchemaToToolParameters } from '$lib/components/shared/tools/json-schema-tool-parameters';
+import type { ToolOutputSchemaState, ToolParameter } from '#lib/components/shared/tools/presentation.js';
+import { mapJsonSchemaToToolParameters } from '#lib/components/shared/tools/json-schema-tool-parameters.js';
 import { capabilityDescriptionOverrideSchema } from './capability-descriptions';
 
 export const OPEN_API_CATALOG_FILE_MAX_BYTES = 10 * 1024 * 1024;

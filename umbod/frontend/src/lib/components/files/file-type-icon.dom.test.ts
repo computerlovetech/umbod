@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { mount, tick, unmount } from 'svelte';
-import { fileId, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
-import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
-import { FilesState } from '$lib/files/state/files-state.svelte';
-import { NewFolderState } from '$lib/files/state/new-folder-state.svelte';
-import { UploadState } from '$lib/files/state/upload-state.svelte';
+import { fileId, filesystemFixture, folderId, rootId } from '#lib/files/fixtures.test-support.js';
+import { InMemoryFilesApi } from '#lib/files/infrastructure/in-memory-api.test-support.js';
+import { FilesState } from '#lib/files/state/files-state.svelte.js';
+import { NewFolderState } from '#lib/files/state/new-folder-state.svelte.js';
+import { UploadState } from '#lib/files/state/upload-state.svelte.js';
 import FileTypeIcon from './FileTypeIcon.svelte';
 import FilesContent from './FilesContent.svelte';
 

@@ -2,12 +2,12 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
 import PersonalOAuthSetupDialog from './PersonalOAuthSetupDialog.svelte';
 import { PersonalOAuthSetupState } from './personal-oauth-setup-state.svelte';
-import { InMemoryPersonalOAuthSetup, discoveryFixture, setupFixture } from '$lib/admin/personal-mcp-servers/setup.test-support';
-import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
-import { policyFixture, serverFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
-import { HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
-import type { SetupStatus } from '$lib/admin/personal-mcp-servers/domain/setup';
-import type { PersonalPolicy } from '$lib/admin/personal-mcp-servers/domain/schemas';
+import { InMemoryPersonalOAuthSetup, discoveryFixture, setupFixture } from '#lib/admin/personal-mcp-servers/setup.test-support.js';
+import { InMemoryPersonalServers } from '#lib/admin/personal-mcp-servers/in-memory.js';
+import { policyFixture, serverFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
+import { HttpError, NetworkError } from '#lib/admin/infrastructure/transport.js';
+import type { SetupStatus } from '#lib/admin/personal-mcp-servers/domain/setup.js';
+import type { PersonalPolicy } from '#lib/admin/personal-mcp-servers/domain/schemas.js';
 
 let component: ReturnType<typeof mount> | undefined;
 let ownedState: PersonalOAuthSetupState | undefined;

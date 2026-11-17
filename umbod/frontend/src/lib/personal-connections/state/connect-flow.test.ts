@@ -1,8 +1,8 @@
 import { describe, expect, test, vi } from 'vitest';
-import { HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
-import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
-import { DashboardState } from '$lib/dashboard/state/dashboard-state.svelte';
-import { catalogue } from '$lib/dashboard/test-fixtures';
+import { HttpError, NetworkError } from '#lib/admin/infrastructure/transport.js';
+import { InMemoryDashboardApi } from '#lib/dashboard/infrastructure/in-memory-api.js';
+import { DashboardState } from '#lib/dashboard/state/dashboard-state.svelte.js';
+import { catalogue } from '#lib/dashboard/test-fixtures.js';
 import type { PersonalConnectionsApi } from '../api';
 import type { AttemptScheduler } from '../attempt-scheduler';
 import { InMemoryAttemptScheduler } from '../infrastructure/in-memory-attempt-scheduler';

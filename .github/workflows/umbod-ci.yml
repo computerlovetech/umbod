@@ -10,6 +10,9 @@ on:
     paths:
       - '.github/ci-paths.yml'
       - '.dockerignore'
+      - 'pyproject.toml'
+      - 'ruff.toml'
+      - '.ruff.toml'
       - 'website/**'
       - 'release-metadata.json'
       - '.semgrep.yml'
@@ -42,6 +45,8 @@ jobs:
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       sdk: ${{ steps.filter.outputs.sdk }}
+      lint: ${{ steps.filter.outputs.lint }}
+      semgrep: ${{ steps.filter.outputs.semgrep }}
       installers: ${{ steps.filter.outputs.installers }}
       scripts: ${{ steps.filter.outputs.scripts }}
       website: ${{ steps.filter.outputs.website }}
@@ -63,6 +68,55 @@ jobs:
     if: needs.changes.outputs.website == 'true'
     name: Website and documentation
     uses: ./.github/workflows/website-ci.yml
+
+  lint:
+    needs: changes
+    if: needs.changes.outputs.lint == 'true'
+    name: Python correctness lint
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: read
+    steps:
+      - uses: useblacksmith/checkout@v1
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.14'
+          enable-cache: true
+          cache-dependency-glob: |
+            umbod/api/uv.lock
+            packages/umbod-sdk/uv.lock
+      - name: Lint API
+        working-directory: umbod/api
+        run: uv run --locked ruff check .
+      - name: Lint SDK
+        working-directory: packages/umbod-sdk
+        run: uv run --locked ruff check .
+
+  semgrep:
+    needs: changes
+    if: needs.changes.outputs.semgrep == 'true'
+    name: Shared Semgrep rules
+    runs-on: blacksmith-4vcpu-ubuntu-2404
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: umbod
+    steps:
+      - uses: useblacksmith/checkout@v1
+      - uses: astral-sh/setup-uv@v7
+        with:
+          python-version: '3.14'
+          enable-cache: true
+          cache-dependency-glob: umbod/uv.lock
+      - name: Scan application sources
+        run: >-
+          uv run --locked --only-group dev semgrep scan
+          --config ../.semgrep.yml
+          --config ../.semgrep/production-design.yml
+          --config ../.semgrep/test-correctness.yml
+          --no-rewrite-rule-ids --error --metrics=off
+          .
 
   sdk-tests:
     needs: changes
@@ -243,6 +297,10 @@ jobs:
     steps:
       - uses: useblacksmith/checkout@v1
 
+      - name: Set up Node.js 22
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1
+        with:
+          node-version: '22'
       - uses: oven-sh/setup-bun@v2
 
       - name: Install frontend dependencies
@@ -375,7 +433,7 @@ jobs:
 
   ci-complete:
     name: umbod CI
-    needs: [harness-linting, changes, docs, sdk-tests, backend-tests, script-tests, plugin-installers, core, connector-builder, frontend, helm, helm-kubernetes-schema, helm-kind-install]
+    needs: [harness-linting, changes, docs, lint, semgrep, sdk-tests, backend-tests, script-tests, plugin-installers, core, connector-builder, frontend, helm, helm-kubernetes-schema, helm-kind-install]
     if: always()
     runs-on: blacksmith-4vcpu-ubuntu-2404
     environment: umbod-ci
@@ -396,6 +454,8 @@ jobs:
           selections = jobs["changes"]["outputs"]
           filters = {
               "docs": "website",
+              "lint": "lint",
+              "semgrep": "semgrep",
               "sdk-tests": "sdk",
               "backend-tests": "backend",
               "script-tests": "scripts",

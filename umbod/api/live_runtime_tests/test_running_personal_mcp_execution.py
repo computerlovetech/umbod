@@ -221,10 +221,10 @@ async def assert_private_inventory(client: Client[Any], owner: str, expected: tu
         tool = next(tool for tool in tools if tool.name.endswith(suffix))
         description = {"echo_owner": f"Private inventory for {owner}", "exclusive_alice": "Private Alice inventory", "added_alice": "New private Alice inventory"}[suffix]
         assert tool.description == description
-        assert tool.inputSchema["properties"]["message"]["type"] == "string"
-        assert tool.inputSchema["required"] == ["message"]
-        assert tool.outputSchema is not None
-        assert tool.outputSchema["type"] == "object"
+        assert tool.input_schema["properties"]["message"]["type"] == "string"
+        assert tool.input_schema["required"] == ["message"]
+        assert tool.output_schema is not None
+        assert tool.output_schema["type"] == "object"
 
 
 async def assert_added_tool(

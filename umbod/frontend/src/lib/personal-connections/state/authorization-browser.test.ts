@@ -1,11 +1,11 @@
 import { Window as TestWindow } from 'happy-dom';
 import { InMemoryAttemptScheduler } from '../infrastructure/in-memory-attempt-scheduler';
 import { describe, expect, test, vi } from 'vitest';
-import type { DashboardApi } from '$lib/dashboard/api';
-import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
-import { DashboardState } from '$lib/dashboard/state/dashboard-state.svelte';
-import type { DashboardController } from '$lib/dashboard/state/port';
-import { catalogue } from '$lib/dashboard/test-fixtures';
+import type { DashboardApi } from '#lib/dashboard/api.js';
+import { InMemoryDashboardApi } from '#lib/dashboard/infrastructure/in-memory-api.js';
+import { DashboardState } from '#lib/dashboard/state/dashboard-state.svelte.js';
+import type { DashboardController } from '#lib/dashboard/state/port.js';
+import { catalogue } from '#lib/dashboard/test-fixtures.js';
 import type { PersonalConnectionsApi } from '../api';
 import type { AuthorizationBrowser, AuthorizationWindow } from '../authorization-browser';
 import { InMemoryAuthorizationBrowser } from '../infrastructure/in-memory-authorization-browser';

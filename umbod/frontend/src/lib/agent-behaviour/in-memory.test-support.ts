@@ -1,4 +1,4 @@
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { AgentBehaviourPort, ConfigurationPort, ReportsPort } from './api';
 import { publishSchema, type Configuration, type PublishConfiguration, type ReportPage, type DiagnosticReport, type ReportQuery } from './domain/schemas';
 export class InMemoryAgentBehaviourApi implements AgentBehaviourPort {

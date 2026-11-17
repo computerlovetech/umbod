@@ -1,10 +1,10 @@
 import { describe, expect, test, vi } from 'vitest';
-import { EndpointResourceMismatchError, type EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
-import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { EndpointResourceMismatchError, type EndpointDiscoveryResult } from '#lib/admin/personal-mcp-servers/domain/discovery.js';
+import type { PersonalServerDiscovery } from '#lib/admin/personal-mcp-servers/discovery-administration.js';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import { PersonalServerDiscoveryState } from './personal-server-discovery-state.svelte';
 import { PolicyForm } from './policy-form.svelte';
-import { policyFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
+import { policyFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
 
 const endpoint = 'https://mcp.test/mcp';
 function discovered(overrides: Partial<Extract<EndpointDiscoveryResult, { kind: 'discovered' }>> = {}): Extract<EndpointDiscoveryResult, { kind: 'discovered' }> {

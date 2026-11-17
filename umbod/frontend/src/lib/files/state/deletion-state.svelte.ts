@@ -1,5 +1,5 @@
 import { SvelteMap } from 'svelte/reactivity';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { FilesApi } from '../api';
 import type { NodeSummary } from '../domain/schemas';
 

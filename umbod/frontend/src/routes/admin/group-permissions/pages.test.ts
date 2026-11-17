@@ -7,7 +7,7 @@ import PermissionsLayout from './+layout.svelte';
 const state = vi.hoisted(() => ({ page: { url: new URL('https://umbod.test/admin/group-permissions/connectors') } }));
 vi.mock('$app/state', () => ({ navigating: { to: null, from: null }, page: state.page }));
 vi.mock('$app/navigation', () => ({ afterNavigate: vi.fn() }));
-vi.mock('$lib/admin/infrastructure/admin-api', () => ({ adminApi: (): object => ({ groups: {}, namespaces: {} }) }));
+vi.mock('#lib/admin/infrastructure/admin-api.js', () => ({ adminApi: (): object => ({ groups: {}, namespaces: {} }) }));
 
 describe('persistent group permissions layout', () => {
   test.each(['connectors', 'filesystem'] as const)('owns the shared chrome for the %s tab', (activeTab): void => {

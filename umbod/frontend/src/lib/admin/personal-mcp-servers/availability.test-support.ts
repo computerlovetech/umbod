@@ -1,4 +1,4 @@
-import type { InstanceConfiguration } from '$lib/admin/instance-configuration';
+import type { InstanceConfiguration } from '#lib/admin/instance-configuration.js';
 
 export function configurationFixture(registration: boolean = true, authorization: boolean = true): InstanceConfiguration {
   return { groups: [{ id: 'personal_connections', label: 'Personal connections', entries: [

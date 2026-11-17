@@ -1,5 +1,5 @@
 import type { CataloguePort, DashboardApi, UsagePort } from '../api';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import { userCatalogueSchema, type UserCatalogue } from '../domain/schemas';
 
 export class InMemoryDashboardApi implements DashboardApi {

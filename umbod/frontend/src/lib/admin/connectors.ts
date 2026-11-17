@@ -1,8 +1,8 @@
 import { z } from 'zod';
 import { normalizeDeclaredToolOutputSchema } from './tool-output-schema';
-import type { ToolOutputSchemaState, ToolParameter } from '$lib/components/shared/tools/presentation';
+import type { ToolOutputSchemaState, ToolParameter } from '#lib/components/shared/tools/presentation.js';
 import { nullishOptional } from './infrastructure/schema';
-import { mapJsonSchemaToToolParameters } from '$lib/components/shared/tools/json-schema-tool-parameters';
+import { mapJsonSchemaToToolParameters } from '#lib/components/shared/tools/json-schema-tool-parameters.js';
 
 export const connectorSourceSchema = z.enum(['built-in', 'user-supplied']);
 export const connectorPublicationStatusSchema = z.enum(['unconfigured', 'draft', 'published', 'unpublished']);

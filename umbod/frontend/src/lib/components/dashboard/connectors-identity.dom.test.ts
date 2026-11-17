@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { mountWorkspace } from '$lib/components/workspace/mount-workspace.test-support';
+import { mountWorkspace } from '#lib/components/workspace/mount-workspace.test-support.js';
 import { tick, unmount } from 'svelte';
-import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
-import type { WorkspaceProfile } from '$lib/workspace/domain/profile';
-import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
-import { catalogue, personalConnector, sharedConnector } from '$lib/dashboard/test-fixtures';
-import { deferred } from '$lib/dashboard/usage-fixtures.test-support';
-import { InMemoryPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/in-memory-api';
+import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
+import type { WorkspaceProfile } from '#lib/workspace/domain/profile.js';
+import { InMemoryDashboardApi } from '#lib/dashboard/infrastructure/in-memory-api.js';
+import { catalogue, personalConnector, sharedConnector } from '#lib/dashboard/test-fixtures.js';
+import { deferred } from '#lib/dashboard/usage-fixtures.test-support.js';
+import { InMemoryPersonalConnectionsApi } from '#lib/personal-connections/infrastructure/in-memory-api.js';
 import { DashboardIdentityProps } from './identity-props.test-support.svelte';
 import ConnectorsPage from './ConnectorsPage.svelte';
 

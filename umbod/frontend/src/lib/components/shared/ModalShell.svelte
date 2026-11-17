@@ -1,8 +1,8 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import type { Snippet } from 'svelte';
   import type { Attachment } from 'svelte/attachments';
-  import { nativeDialog } from '$lib/components/shared/dialogs/native-dialog';
+  import { nativeDialog } from '#lib/components/shared/dialogs/native-dialog.js';
 
   let {
     title,

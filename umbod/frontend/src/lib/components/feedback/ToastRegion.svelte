@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import type { ToastState, ToastVariant } from './toast-state.svelte';
 
   let { state }: { state: ToastState } = $props();

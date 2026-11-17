@@ -32,21 +32,45 @@ async def test_literal_access_token_echo_is_rejected(target: PersonalRuntimeTarg
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("event_stream", [False, True], ids=["json", "sse"])
 @pytest.mark.parametrize("payload", [
     {},
     {"resultType": "input_required", "inputRequests": {}, "requestState": "do-not-replay"},
     {"content": [], "resultType": "input_required"},
     {"content": [], "resultType": "claimed-extension"},
+    {"content": [], "resultType": None},
+    {"content": [], "resultType": 1},
+    {"content": [], "resultType": {}},
+    {"content": [], "result_type": "complete"},
+    {"content": [], "resultType": "complete", "result_type": "complete"},
+    {"content": [], "resultType": "complete", "unexpected": "do-not-accept"},
     {"content": [], "task": {"taskId": "do-not-poll"}},
     {"content": [], "unexpected": "do-not-accept"},
     {"content": [], "isError": "false"},
 ])
-async def test_nonstandard_results_never_enter_consent_or_replay(target: PersonalRuntimeTarget, limits: PersonalRuntimeLimits, network: ScriptedNetwork, payload: dict[str, object]) -> None:
+async def test_nonstandard_results_never_enter_consent_or_replay(target: PersonalRuntimeTarget, limits: PersonalRuntimeLimits, network: ScriptedNetwork, payload: dict[str, object], event_stream: bool) -> None:
     network.call_result = payload
+    network.call_result_sse = event_stream
     transport = make_transport(limits, network, ScriptedResolver())
     with pytest.raises(PersonalRuntimeUnavailable):
         await transport.call_tool(PersonalToolCall(target=target, tool_name="lookup", expected_fingerprint=LOOKUP_FINGERPRINT, arguments={}))
     methods = [body.get("method") for _, _, body in network.requests]
+    assert methods.count("tools/call") == 1
+    assert set(methods) <= {"initialize", "notifications/initialized", "tools/list", "tools/call"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("event_stream", [False, True], ids=["json", "sse"])
+@pytest.mark.parametrize("discriminator", [{}, {"resultType": "complete"}], ids=["omitted", "complete"])
+async def test_legacy_complete_results_allow_exactly_one_call(target: PersonalRuntimeTarget, limits: PersonalRuntimeLimits, network: ScriptedNetwork, discriminator: dict[str, object], event_stream: bool) -> None:
+    network.call_result = {"content": [], **discriminator}
+    network.call_result_sse = event_stream
+    transport = make_transport(limits, network, ScriptedResolver())
+    result = await transport.call_tool(PersonalToolCall(target=target, tool_name="lookup", expected_fingerprint=LOOKUP_FINGERPRINT, arguments={}))
+    assert result.result["content"] == []
+    methods = [body.get("method") for _, _, body in network.requests]
+    assert methods.count("initialize") == 1
+    assert methods.count("tools/list") == 1
     assert methods.count("tools/call") == 1
     assert set(methods) <= {"initialize", "notifications/initialized", "tools/list", "tools/call"}
 

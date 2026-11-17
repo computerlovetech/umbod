@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { InMemoryClipboardWriter, type ClipboardWriter } from '$lib/admin/clipboard';
+import { InMemoryClipboardWriter, type ClipboardWriter } from '#lib/admin/clipboard.js';
 import { CopyableValueState } from './copyable-value-state.svelte';
-import { ToastState } from '$lib/components/feedback/toast-state.svelte';
+import { ToastState } from '#lib/components/feedback/toast-state.svelte.js';
 
 async function copyThroughPort(clipboard: ClipboardWriter, value: string): Promise<void> {
   await clipboard.writeText(value);

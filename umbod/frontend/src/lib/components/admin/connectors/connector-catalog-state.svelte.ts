@@ -1,4 +1,4 @@
-import type { ConnectorListItem } from '$lib/admin/connectors';
+import type { ConnectorListItem } from '#lib/admin/connectors.js';
 
 export class ConnectorCatalogState {
   open = $state(false);

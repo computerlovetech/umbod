@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { browserSubmit } from '$lib/admin/operations/browser-submit';
+  import { browserSubmit } from '#lib/admin/operations/browser-submit.js';
   import { untrack } from 'svelte';
   import {
     promptActivationBatchResponseSchema,
     type PromptCatalog as PromptCatalogData
-  } from '$lib/admin/capability-catalogs';
-  import PromptCatalog from '$lib/components/admin/capability-catalogs/PromptCatalog.svelte';
-  import AdminSaveAction from '$lib/components/admin/shared/AdminSaveAction.svelte';
-  import { useToast } from '$lib/components/feedback';
+  } from '#lib/admin/capability-catalogs.js';
+  import PromptCatalog from '#lib/components/admin/capability-catalogs/PromptCatalog.svelte';
+  import AdminSaveAction from '#lib/components/admin/shared/AdminSaveAction.svelte';
+  import { useToast } from '#lib/components/feedback/index.js';
   import { DownstreamMcpPromptCatalogState } from './downstream-mcp-prompt-catalog-state.svelte';
 
   let {

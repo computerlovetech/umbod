@@ -1,7 +1,7 @@
 <script lang="ts">
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import DateTimeView from '$lib/components/shared/DateTimeView.svelte';
-  import type { NodeSummary } from '$lib/files/domain/schemas';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import DateTimeView from '#lib/components/shared/DateTimeView.svelte';
+  import type { NodeSummary } from '#lib/files/domain/schemas.js';
 
   let { node, close, displayName }: { node: NodeSummary; close: () => void; displayName?: string } = $props();
   const id = $props.id();

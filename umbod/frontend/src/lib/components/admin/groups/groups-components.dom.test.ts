@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
-import { InMemoryGroupCatalogue } from '$lib/admin/groups/in-memory';
-import type { CatalogueGroup } from '$lib/admin/groups/domain/schemas';
+import { InMemoryGroupCatalogue } from '#lib/admin/groups/in-memory.js';
+import type { CatalogueGroup } from '#lib/admin/groups/domain/schemas.js';
 import GroupsManager from './GroupsManager.svelte';
 import GroupsWorkspace from './GroupsWorkspace.svelte';
-import { InMemoryIdentityDirectory } from '$lib/identity-directory/in-memory.test-support';
+import { InMemoryIdentityDirectory } from '#lib/identity-directory/in-memory.test-support.js';
 import { GroupsState } from './groups-state.svelte';
 
 const group: CatalogueGroup = { group_id: ' claim /../ group ', label: 'Operators', description: 'Report administrators', revision: 1 };

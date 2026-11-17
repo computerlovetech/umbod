@@ -1,5 +1,5 @@
-import type { OpenApiOperationToolUiModel, OpenApiToolActivationBatchRequest, OpenApiToolActivationBatchResponse } from '$lib/admin/openapi-connectors';
-import type { InvocationPolicyMode, InvocationPolicyTool } from '$lib/admin/invocation-policy';
+import type { OpenApiOperationToolUiModel, OpenApiToolActivationBatchRequest, OpenApiToolActivationBatchResponse } from '#lib/admin/openapi-connectors.js';
+import type { InvocationPolicyMode, InvocationPolicyTool } from '#lib/admin/invocation-policy.js';
 
 export const openApiOperationStatusFilters = ['all', 'enabled', 'disabled'] as const;
 export const openApiOperationPageSizes = [20, 50, 100] as const;

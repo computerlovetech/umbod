@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { flushSync, mount, unmount } from 'svelte';
-import { IdentityDirectoryApi } from '$lib/identity-directory/api';
-import { browserTransport } from '$lib/admin/infrastructure/transport';
+import { IdentityDirectoryApi } from '#lib/identity-directory/api.js';
+import { browserTransport } from '#lib/admin/infrastructure/transport.js';
 import IdentityObservation from './IdentityObservation.svelte';
 
 it.each([401, 403])('keeps observation HTTP %s failures background-safe and retries without navigation', async (status: number): Promise<void> => {

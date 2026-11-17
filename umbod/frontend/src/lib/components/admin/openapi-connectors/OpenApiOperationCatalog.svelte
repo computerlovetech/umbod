@@ -1,18 +1,18 @@
 <script lang="ts">
-  import { browserSubmit } from '$lib/admin/operations/browser-submit';
+  import { browserSubmit } from '#lib/admin/operations/browser-submit.js';
   import { untrack } from 'svelte';
-  import { openApiToolActivationBatchResponseSchema, type OpenApiOperationToolUiModel } from '$lib/admin/openapi-connectors';
-  import ToolCard from '$lib/components/admin/connectors/ToolCard.svelte';
-  import ToolSaveBar from '$lib/components/admin/connectors/ToolSaveBar.svelte';
-  import CapabilityCatalogGrid from '$lib/components/admin/shared/CapabilityCatalogGrid.svelte';
-  import ScrollableToolCatalog from '$lib/components/admin/shared/ScrollableToolCatalog.svelte';
-  import CatalogControls from '$lib/components/admin/shared/CatalogControls.svelte';
-  import CatalogPagination from '$lib/components/admin/shared/CatalogPagination.svelte';
-  import AdminSaveAction from '$lib/components/admin/shared/AdminSaveAction.svelte';
-  import type { SelectOption } from '$lib/components/admin/shared/select-state.svelte';
+  import { openApiToolActivationBatchResponseSchema, type OpenApiOperationToolUiModel } from '#lib/admin/openapi-connectors.js';
+  import ToolCard from '#lib/components/admin/connectors/ToolCard.svelte';
+  import ToolSaveBar from '#lib/components/admin/connectors/ToolSaveBar.svelte';
+  import CapabilityCatalogGrid from '#lib/components/admin/shared/CapabilityCatalogGrid.svelte';
+  import ScrollableToolCatalog from '#lib/components/admin/shared/ScrollableToolCatalog.svelte';
+  import CatalogControls from '#lib/components/admin/shared/CatalogControls.svelte';
+  import CatalogPagination from '#lib/components/admin/shared/CatalogPagination.svelte';
+  import AdminSaveAction from '#lib/components/admin/shared/AdminSaveAction.svelte';
+  import type { SelectOption } from '#lib/components/admin/shared/select-state.svelte.js';
   import OpenApiToolActivationToggle from './OpenApiToolActivationToggle.svelte';
-  import InvocationPolicyControl from '$lib/components/admin/connectors/InvocationPolicyControl.svelte';
-  import { invocationPolicyConflictSchema, invocationPolicyListResponseSchema, type InvocationPolicyTool } from '$lib/admin/invocation-policy';
+  import InvocationPolicyControl from '#lib/components/admin/connectors/InvocationPolicyControl.svelte';
+  import { invocationPolicyConflictSchema, invocationPolicyListResponseSchema, type InvocationPolicyTool } from '#lib/admin/invocation-policy.js';
   import { OpenApiOperationCatalogState, openApiOperationPageSizes, openApiOperationStatusFilters, type OpenApiOperationPageSize, type OpenApiOperationStatusFilter } from './openapi-operation-catalog-state.svelte';
 
   let { connectorId, tools, policies = [], onsaved = () => {} }: { connectorId: string; tools: OpenApiOperationToolUiModel[]; policies?: InvocationPolicyTool[]; onsaved?: (connectorId: string, tools: OpenApiOperationToolUiModel[]) => void; } = $props();

@@ -1,7 +1,7 @@
-import { type ConnectorPermissionTarget, type GroupPermissionSet } from '$lib/admin/group-permissions';
-import { browserRequest } from '$lib/admin/infrastructure/browser-request';
-import { AdminApi } from '$lib/admin/infrastructure/admin-api';
-import { browserTransport } from '$lib/admin/infrastructure/transport';
+import { type ConnectorPermissionTarget, type GroupPermissionSet } from '#lib/admin/group-permissions.js';
+import { browserRequest } from '#lib/admin/infrastructure/browser-request.js';
+import { AdminApi } from '#lib/admin/infrastructure/admin-api.js';
+import { browserTransport } from '#lib/admin/infrastructure/transport.js';
 
 export type ConnectorPresentationSummary = {
   id: string;

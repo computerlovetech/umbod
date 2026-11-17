@@ -1,8 +1,8 @@
 import { render } from 'svelte/server';
 import { describe, expect, test } from 'vitest';
-import type { CatalogueCapability } from '$lib/dashboard/domain/schemas';
+import type { CatalogueCapability } from '#lib/dashboard/domain/schemas.js';
 import CatalogueCapabilities from './CatalogueCapabilities.svelte';
-import ToolDescription from '$lib/components/shared/tools/ToolDescription.svelte';
+import ToolDescription from '#lib/components/shared/tools/ToolDescription.svelte';
 
 const tool: CatalogueCapability = {
   kind: 'tool', key: 'search_meetings', name: 'Search meetings',

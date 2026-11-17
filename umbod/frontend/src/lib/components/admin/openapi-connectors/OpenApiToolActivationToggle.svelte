@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { OpenApiToolActivationStatus } from '$lib/admin/openapi-connectors';
-  import AdminToggle from '$lib/components/admin/shared/AdminToggle.svelte';
+  import type { OpenApiToolActivationStatus } from '#lib/admin/openapi-connectors.js';
+  import AdminToggle from '#lib/components/admin/shared/AdminToggle.svelte';
 
   let {
     operationId,

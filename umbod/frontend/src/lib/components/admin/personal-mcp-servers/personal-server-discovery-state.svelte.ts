@@ -1,7 +1,7 @@
-import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
-import { EndpointResourceMismatchError, discoveryEndpointSchema, type AutomaticClient, type EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
-import { parseScopeText, scopesSchema, type ClientKind } from '$lib/admin/personal-mcp-servers/domain/schemas';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import type { PersonalServerDiscovery } from '#lib/admin/personal-mcp-servers/discovery-administration.js';
+import { EndpointResourceMismatchError, discoveryEndpointSchema, type AutomaticClient, type EndpointDiscoveryResult } from '#lib/admin/personal-mcp-servers/domain/discovery.js';
+import { parseScopeText, scopesSchema, type ClientKind } from '#lib/admin/personal-mcp-servers/domain/schemas.js';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { PolicyProposal } from './policy-form.svelte';
 
 type Discovered = Extract<EndpointDiscoveryResult, { kind: 'discovered' }>;

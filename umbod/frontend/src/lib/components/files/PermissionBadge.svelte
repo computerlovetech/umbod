@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { NodeSummary } from '$lib/files/domain/schemas';
+  import type { NodeSummary } from '#lib/files/domain/schemas.js';
   import { permissionLabel } from './permission-label';
   let { permissions }: { permissions: NodeSummary['permissions'] } = $props();
 </script>

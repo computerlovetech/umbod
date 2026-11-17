@@ -1,8 +1,8 @@
 import { type BrowserOperations } from './contracts';
 
-import { deletePermissionGroup, registerPermissionGroup, updateGroupPermissions } from '$lib/admin/group-permissions-api';
+import { deletePermissionGroup, registerPermissionGroup, updateGroupPermissions } from '#lib/admin/group-permissions-api.js';
 
-import { parseGroupIdFormValue, parsePermissionSetFormValue } from '$lib/admin/group-permissions-forms';
+import { parseGroupIdFormValue, parsePermissionSetFormValue } from '#lib/admin/group-permissions-forms.js';
 import { z } from 'zod';
 
 const deepLinkValueSchema = z.string().min(1).max(200).regex(/^[^\u0000-\u001F\u007F]+$/);
@@ -21,7 +21,7 @@ export type {
   GroupPermissionsActionResult,
   GroupPermissionsPageData,
   SaveGroupPermissionsResult
-} from '$lib/admin/group-permissions';
+} from '#lib/admin/group-permissions.js';
 
 export const groupPermissionsOperations: BrowserOperations = {
   registerPermissionGroup: async (api, data) => {

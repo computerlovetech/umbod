@@ -1,5 +1,5 @@
-import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
-import type { OpenApiConnectorListItem, OpenApiOperationToolUiModel, OpenApiToolActivationStatus } from '$lib/admin/openapi-connectors';
+import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
+import type { OpenApiConnectorListItem, OpenApiOperationToolUiModel, OpenApiToolActivationStatus } from '#lib/admin/openapi-connectors.js';
 
 export type OpenApiToolsLoadState =
   | { status: 'idle'; tools: OpenApiOperationToolUiModel[] }

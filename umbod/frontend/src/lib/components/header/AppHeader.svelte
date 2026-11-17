@@ -1,6 +1,6 @@
 <script lang="ts">
-  import AccountPicture from '$lib/components/header/AccountPicture.svelte';
-  import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+  import AccountPicture from '#lib/components/header/AccountPicture.svelte';
+  import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
 
   let { accountIdentity }: { accountIdentity: HeaderAccountIdentityState } = $props();
 </script>

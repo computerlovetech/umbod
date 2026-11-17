@@ -1,7 +1,7 @@
-import { BrowserRequestError, browserRequest } from '$lib/admin/infrastructure/browser-request';
-import { adminApi } from '$lib/admin/infrastructure/admin-api';
+import { BrowserRequestError, browserRequest } from '#lib/admin/infrastructure/browser-request.js';
+import { adminApi } from '#lib/admin/infrastructure/admin-api.js';
 
-import type { ToastApi } from '$lib/components/feedback';
+import type { ToastApi } from '#lib/components/feedback/index.js';
 
 export class OpenApiBearerConfigurationState {
   token = $state('');

@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError, type Transport, type TransportRequest } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError, type Transport, type TransportRequest } from '#lib/admin/infrastructure/transport.js';
 import type { FilesApi } from './api';
 import { browseResultSchema, type BrowseResult } from './domain/schemas';
 import { deferred, fileId, filesystemFixture, filesystemNode, folderId, rootId } from './fixtures.test-support';

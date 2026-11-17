@@ -2,7 +2,7 @@ import { render } from 'svelte/server';
 import { Window } from 'happy-dom';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import ErrorPage from './+error.svelte';
-import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
+import { navigateToSignIn } from '#lib/admin/infrastructure/transport.js';
 
 const state = vi.hoisted(() => ({ page: { status: 401, error: { message: 'private diagnostics and token' } } }));
 vi.mock('$app/state', () => state);

@@ -1,4 +1,4 @@
-import type { ActivityChart, OperationChart, OutcomeChart } from '$lib/components/shared/dashboard/visualizations/types';
+import type { ActivityChart, OperationChart, OutcomeChart } from '#lib/components/shared/dashboard/visualizations/types.js';
 import type { PersonalUsage, UsageCounts } from './domain/usage-schemas';
 
 type OutcomeCounts = UsageCounts['tool'];

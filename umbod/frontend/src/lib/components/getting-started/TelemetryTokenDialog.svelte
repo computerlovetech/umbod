@@ -1,9 +1,9 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
-  import Select from '$lib/components/admin/shared/Select.svelte';
-  import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
+  import Select from '#lib/components/admin/shared/Select.svelte';
+  import AdminConfigurationField from '#lib/components/admin/shared/AdminConfigurationField.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import type { TelemetrySetupState } from './telemetry-setup-state.svelte';
 
   let { state }: { state: TelemetrySetupState } = $props();

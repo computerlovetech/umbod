@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
-import { WorkspaceAccessState } from '$lib/workspace/workspace-access-state.svelte';
+import { AuthenticationRequiredError, HttpError, NetworkError } from '#lib/admin/infrastructure/transport.js';
+import { WorkspaceAccessState } from '#lib/workspace/workspace-access-state.svelte.js';
 import type { FilesApi } from '../api';
 import type { NodeSummary } from '../domain/schemas';
 import { deferred, fileId, filesystemFixture, filesystemNode, folderId, rootId } from '../fixtures.test-support';

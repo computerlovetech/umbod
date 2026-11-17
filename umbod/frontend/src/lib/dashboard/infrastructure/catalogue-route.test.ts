@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { z } from 'zod';
-import type { Transport, TransportRequest } from '$lib/admin/infrastructure/transport';
+import type { Transport, TransportRequest } from '#lib/admin/infrastructure/transport.js';
 import type { CataloguePort } from '../api';
 import { catalogue } from '../test-fixtures';
 import { CatalogueRoute } from './catalogue-route';

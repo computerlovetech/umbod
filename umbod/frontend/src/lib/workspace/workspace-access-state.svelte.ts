@@ -1,4 +1,4 @@
-import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
 import { resolveWorkspaceAccess, type AdminAccess } from './admin-access';
 import type { WorkspaceApi } from './api';
 

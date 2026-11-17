@@ -1,5 +1,5 @@
 <script lang="ts">
-  import '$lib/styles/form-fields.css';
+  import '#lib/styles/form-fields.css';
   import type { HTMLInputAttributes } from 'svelte/elements';
 
   type InputType = 'text' | 'password' | 'url';

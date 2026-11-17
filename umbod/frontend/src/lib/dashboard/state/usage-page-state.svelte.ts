@@ -1,4 +1,4 @@
-import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
 import type { UsagePort } from '../api';
 import { UsageState } from './usage-state.svelte';
 

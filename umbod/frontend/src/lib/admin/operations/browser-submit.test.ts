@@ -6,7 +6,7 @@ import { createBrowserSubmit, type BrowserSubmitDependencies, type BrowserSubmit
 import { operationFailure, operationRedirect, type BrowserOperation } from './contracts';
 import { OperationState } from './operation-state.svelte';
 
-vi.mock('$app/navigation', () => ({ goto: vi.fn(), invalidateAll: vi.fn() }));
+vi.mock('$app/navigation', () => ({ goto: vi.fn(), refreshAll: vi.fn() }));
 
 let window: Window;
 beforeEach(() => {

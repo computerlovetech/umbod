@@ -3,10 +3,10 @@ import { load as groupPermissionsLoad } from './+page';
 import { load as filesystemLoad } from '../filesystem/+page';
 import { load as connectorsLoad } from './connectors/+page';
 import { load as layoutLoad } from './+layout';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 
 const groups = vi.hoisted(() => ({ list: vi.fn() }));
-vi.mock('$lib/admin/infrastructure/admin-api', () => ({ adminApi: (): object => ({ groups }) }));
+vi.mock('#lib/admin/infrastructure/admin-api.js', () => ({ adminApi: (): object => ({ groups }) }));
 
 beforeEach(() => {
   vi.resetAllMocks();

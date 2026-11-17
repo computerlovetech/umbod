@@ -1,5 +1,5 @@
 <script lang="ts">
-  import '$lib/styles/form-fields.css';
+  import '#lib/styles/form-fields.css';
   import type { HTMLInputAttributes } from 'svelte/elements';
 
   let { id, label, value, ...attributes }: Omit<HTMLInputAttributes, 'id' | 'type' | 'value' | 'children'> & {

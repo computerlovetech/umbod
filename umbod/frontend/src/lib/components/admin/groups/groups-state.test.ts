@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { InMemoryGroupCatalogue } from '$lib/admin/groups/in-memory';
-import type { CatalogueGroup } from '$lib/admin/groups/domain/schemas';
-import { HttpError } from '$lib/admin/infrastructure/transport';
-import { InMemoryIdentityDirectory } from '$lib/identity-directory/in-memory.test-support';
+import { InMemoryGroupCatalogue } from '#lib/admin/groups/in-memory.js';
+import type { CatalogueGroup } from '#lib/admin/groups/domain/schemas.js';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
+import { InMemoryIdentityDirectory } from '#lib/identity-directory/in-memory.test-support.js';
 import { GroupsState } from './groups-state.svelte';
 
 const group: CatalogueGroup = { group_id: ' exact /../ provider ', label: 'Operators', description: 'Manage reports', revision: 1 };

@@ -1,5 +1,5 @@
 import type { Attachment } from 'svelte/attachments';
-import { focusDialogControl } from '$lib/components/shared/dialogs/native-dialog';
+import { focusDialogControl } from '#lib/components/shared/dialogs/native-dialog.js';
 
 export function modalDialog(close: () => void, fallbackId: string): Attachment<HTMLDialogElement> {
   return (dialog: HTMLDialogElement): (() => void) => {

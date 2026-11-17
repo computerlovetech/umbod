@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import { BrowserNavigatorClipboardWriter, type ClipboardWriter } from '$lib/admin/clipboard';
-  import { useToast } from '$lib/components/feedback';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import { BrowserNavigatorClipboardWriter, type ClipboardWriter } from '#lib/admin/clipboard.js';
+  import { useToast } from '#lib/components/feedback/index.js';
   import { CopyableValueState } from './copyable-value-state.svelte';
 
   type Props = {

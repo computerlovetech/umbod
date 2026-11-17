@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
   import { AdminFileUploadState } from './admin-file-upload-state.svelte';
 
   let {

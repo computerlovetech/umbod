@@ -1,4 +1,4 @@
-import { browserTransport, type Transport } from '$lib/admin/infrastructure/transport';
+import { browserTransport, type Transport } from '#lib/admin/infrastructure/transport.js';
 import type { TelemetrySetupApi } from '../api';
 import { SetupRoute } from './setup-route';
 

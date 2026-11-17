@@ -3,7 +3,6 @@ from typing import Any
 import pytest
 from fastmcp import Client
 from fastmcp.exceptions import ToolError
-from mcp.shared.exceptions import MCPError
 from pydantic import ValidationError
 
 from tests.umbod.mcp.connectors.native.tools.test_connector_tool_exposure_mode_acceptance import (
@@ -50,15 +49,19 @@ async def test_search_without_accessible_matches_returns_empty_matches() -> None
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("limit", [0, -1, 51], ids=["zero", "negative", "above-maximum"])
-async def test_search_rejects_limit_outside_accepted_range(limit: int) -> None:
-    with pytest.raises(MCPError, match="Invalid request parameters"):
+@pytest.mark.parametrize(
+    ("limit", "validation_error"),
+    [(0, "greater_than_equal"), (-1, "greater_than_equal"), (51, "less_than_equal")],
+    ids=["zero", "negative", "above-maximum"],
+)
+async def test_search_rejects_limit_outside_accepted_range(limit: int, validation_error: str) -> None:
+    with pytest.raises(ToolError, match=validation_error):
         await _call_search("messages", limit)
 
 
 @pytest.mark.asyncio
 async def test_search_rejects_empty_query() -> None:
-    with pytest.raises(MCPError, match="Invalid request parameters"):
+    with pytest.raises(ToolError, match="string_too_short"):
         await _call_search("")
 
 

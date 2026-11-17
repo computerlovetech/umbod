@@ -1,9 +1,9 @@
-import { emptyPromptCatalog, emptyResourceCatalog, resourceActivationKey, type CapabilityActivationStatus, type PromptCatalog, type ResourceCatalog } from '$lib/admin/capability-catalogs';
-import type { ConnectorListItem, ConnectorToolActivationStatus } from '$lib/admin/connectors';
-import type { ConnectorDetailBundle } from '$lib/admin/connector-details-browser-api';
-import { SelectionDetailController } from '$lib/components/admin/shared/selection-detail-controller.svelte';
-import { InMemorySelectionUrlAdapter, type SelectionUrlPort } from '$lib/components/admin/shared/selection-url-port';
-import type { InvocationPolicyMode, InvocationPolicyTool } from '$lib/admin/invocation-policy';
+import { emptyPromptCatalog, emptyResourceCatalog, resourceActivationKey, type CapabilityActivationStatus, type PromptCatalog, type ResourceCatalog } from '#lib/admin/capability-catalogs.js';
+import type { ConnectorListItem, ConnectorToolActivationStatus } from '#lib/admin/connectors.js';
+import type { ConnectorDetailBundle } from '#lib/admin/connector-details-browser-api.js';
+import { SelectionDetailController } from '#lib/components/admin/shared/selection-detail-controller.svelte.js';
+import { InMemorySelectionUrlAdapter, type SelectionUrlPort } from '#lib/components/admin/shared/selection-url-port.js';
+import type { InvocationPolicyMode, InvocationPolicyTool } from '#lib/admin/invocation-policy.js';
 
 export type ConnectorToolActivationDraft = {
   operationName: string;

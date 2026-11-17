@@ -1,10 +1,10 @@
 <script lang="ts">
-  import ActionMenu from '$lib/components/shared/ActionMenu.svelte';
-  import type { NodeSummary } from '$lib/files/domain/schemas';
-  import type { DescriptionState } from '$lib/files/state/description-state.svelte';
-  import type { NodeUpdateState } from '$lib/files/state/node-update-state.svelte';
-  import type { SharingEligibilityState } from '$lib/files/state/sharing-eligibility-state.svelte';
-  import type { DeletionState } from '$lib/files/state/deletion-state.svelte';
+  import ActionMenu from '#lib/components/shared/ActionMenu.svelte';
+  import type { NodeSummary } from '#lib/files/domain/schemas.js';
+  import type { DescriptionState } from '#lib/files/state/description-state.svelte.js';
+  import type { NodeUpdateState } from '#lib/files/state/node-update-state.svelte.js';
+  import type { SharingEligibilityState } from '#lib/files/state/sharing-eligibility-state.svelte.js';
+  import type { DeletionState } from '#lib/files/state/deletion-state.svelte.js';
   import { NodeActionsState } from './node-actions-state.svelte';
   import NodeUpdateDialog from './NodeUpdateDialog.svelte';
   import NodeDescriptionDialog from './NodeDescriptionDialog.svelte';

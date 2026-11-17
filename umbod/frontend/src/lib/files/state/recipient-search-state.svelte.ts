@@ -1,4 +1,4 @@
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { NodeSharingApi } from '../api';
 import { sharingRecipientSearchResultSchema, type SharingRecipient, type SharingRecipientType } from '../domain/sharing';
 

@@ -1,5 +1,5 @@
 import { untrack } from 'svelte';
-import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
 import type { WorkspaceAccessState } from './workspace-access-state.svelte';
 
 export class WorkspaceScope {

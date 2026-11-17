@@ -1,16 +1,16 @@
 import { describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
-import type { PersonalServerAdministration } from '$lib/admin/personal-mcp-servers/administration';
-import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
-import { policyFixture, serverFixture, summaryFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
-import type { PersonalPolicy } from '$lib/admin/personal-mcp-servers/domain/schemas';
+import { AuthenticationRequiredError, HttpError, NetworkError, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
+import type { PersonalServerAdministration } from '#lib/admin/personal-mcp-servers/administration.js';
+import { InMemoryPersonalServers } from '#lib/admin/personal-mcp-servers/in-memory.js';
+import { policyFixture, serverFixture, summaryFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
+import type { PersonalPolicy } from '#lib/admin/personal-mcp-servers/domain/schemas.js';
 import { DownstreamMcpWorkspaceState } from '../downstream-mcp-connectors/downstream-mcp-workspace-state.svelte';
 import { PersonalServerFormState } from './personal-server-form-state.svelte';
-import type { InstanceConfigurationRoute } from '$lib/admin/instance-configuration-api';
-import type { InstanceConfiguration } from '$lib/admin/instance-configuration';
-import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
-import type { EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
-import { configurationFixture } from '$lib/admin/personal-mcp-servers/availability.test-support';
+import type { InstanceConfigurationRoute } from '#lib/admin/instance-configuration-api.js';
+import type { InstanceConfiguration } from '#lib/admin/instance-configuration.js';
+import type { PersonalServerDiscovery } from '#lib/admin/personal-mcp-servers/discovery-administration.js';
+import type { EndpointDiscoveryResult } from '#lib/admin/personal-mcp-servers/domain/discovery.js';
+import { configurationFixture } from '#lib/admin/personal-mcp-servers/availability.test-support.js';
 
 function setup(targetId: string | null = 'personal', lockChanged: (locked: boolean) => void = () => {}): { api: PersonalServerAdministration; configuration: InstanceConfigurationRoute; state: PersonalServerFormState; completed: ReturnType<typeof vi.fn>; lost: ReturnType<typeof vi.fn> } {
   const memory: PersonalServerAdministration = new InMemoryPersonalServers([serverFixture()], [policyFixture()]);

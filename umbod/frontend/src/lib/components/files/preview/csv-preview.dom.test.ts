@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from 'vitest';
 import { mount, tick, unmount } from 'svelte';
-import { fileId, folderId, filesystemNode } from '$lib/files/fixtures.test-support';
-import { FilePreviewState } from '$lib/files/preview/file-preview-state.svelte';
-import { InMemoryPreviewConfiguration } from '$lib/files/preview/in-memory-configuration.test-support';
-import { InMemoryFileContent } from '$lib/files/preview/in-memory-content.test-support';
-import { PreviewRegistry } from '$lib/files/preview/ports';
+import { fileId, folderId, filesystemNode } from '#lib/files/fixtures.test-support.js';
+import { FilePreviewState } from '#lib/files/preview/file-preview-state.svelte.js';
+import { InMemoryPreviewConfiguration } from '#lib/files/preview/in-memory-configuration.test-support.js';
+import { InMemoryFileContent } from '#lib/files/preview/in-memory-content.test-support.js';
+import { PreviewRegistry } from '#lib/files/preview/ports.js';
 import FilePreview from './FilePreview.svelte';
 import { csvPreviewAdapter } from './csv-adapter';
 import { textPreviewAdapter } from './text-adapter';

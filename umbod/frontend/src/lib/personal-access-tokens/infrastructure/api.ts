@@ -1,4 +1,4 @@
-import { browserTransport, type Transport } from '$lib/admin/infrastructure/transport';
+import { browserTransport, type Transport } from '#lib/admin/infrastructure/transport.js';
 import type { PersonalAccessTokensApi as ApiPort } from '../api';
 import { PersonalAccessTokensRoute } from './tokens-route';
 

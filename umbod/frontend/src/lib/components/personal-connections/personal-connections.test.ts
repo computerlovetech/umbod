@@ -1,17 +1,17 @@
-import { InMemoryAttemptScheduler } from '$lib/personal-connections/infrastructure/in-memory-attempt-scheduler';
+import { InMemoryAttemptScheduler } from '#lib/personal-connections/infrastructure/in-memory-attempt-scheduler.js';
 import { render } from 'svelte/server';
 import { describe, expect, test, vi } from 'vitest';
-import { HttpError } from '$lib/admin/infrastructure/transport';
-import type { AuthorizationHealth } from '$lib/personal-connections/domain/schemas';
-import type { PersonalConnectionsApi } from '$lib/personal-connections/api';
-import type { AuthorizationBrowser } from '$lib/personal-connections/authorization-browser';
-import { InMemoryAuthorizationBrowser } from '$lib/personal-connections/infrastructure/in-memory-authorization-browser';
-import { InMemoryPersonalConnectionsApi } from '$lib/personal-connections/infrastructure/in-memory-api';
-import { ConnectionState } from '$lib/personal-connections/state/connection-state.svelte';
-import type { PersonalConnectionController } from '$lib/personal-connections/state/port';
-import { PersonalAccessViewState } from '$lib/personal-connections/state/access-view-state.svelte';
-import type { PersonalAccessViewController } from '$lib/personal-connections/presentation';
-import { authorizationHealth, completedAttempt, selection } from '$lib/personal-connections/test-fixtures';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
+import type { AuthorizationHealth } from '#lib/personal-connections/domain/schemas.js';
+import type { PersonalConnectionsApi } from '#lib/personal-connections/api.js';
+import type { AuthorizationBrowser } from '#lib/personal-connections/authorization-browser.js';
+import { InMemoryAuthorizationBrowser } from '#lib/personal-connections/infrastructure/in-memory-authorization-browser.js';
+import { InMemoryPersonalConnectionsApi } from '#lib/personal-connections/infrastructure/in-memory-api.js';
+import { ConnectionState } from '#lib/personal-connections/state/connection-state.svelte.js';
+import type { PersonalConnectionController } from '#lib/personal-connections/state/port.js';
+import { PersonalAccessViewState } from '#lib/personal-connections/state/access-view-state.svelte.js';
+import type { PersonalAccessViewController } from '#lib/personal-connections/presentation.js';
+import { authorizationHealth, completedAttempt, selection } from '#lib/personal-connections/test-fixtures.js';
 import ConnectionCard from './ConnectionCard.svelte';
 
 describe('personal connections presentation', () => {

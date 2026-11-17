@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { WorkspaceNavigationIcon } from '$lib/workspace/navigation';
+  import type { WorkspaceNavigationIcon } from '#lib/workspace/navigation.js';
 
   let { name }: { name: WorkspaceNavigationIcon } = $props();
 </script>

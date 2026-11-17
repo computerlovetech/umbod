@@ -16,6 +16,10 @@ for (const [name, grammar] of Object.entries({ typescript, javascript, json, pyt
   hljs.registerLanguage(name, grammar);
 }
 
+function markdownBody(content: string): string {
+  return content.replace(/^\uFEFF?---[ \t]*\r?\n(?:[^\n]*\n)*?(?:---|\.\.\.)[ \t]*\r?(?:\n|$)/, '');
+}
+
 export function renderMarkdown(content: string): string {
   let highlightedCharacters = 0;
   let diagrams = 0;
@@ -39,5 +43,5 @@ export function renderMarkdown(content: string): string {
     }
     return '<pre><code>' + escaped + '</code></pre>\n';
   };
-  return renderer.render(content);
+  return renderer.render(markdownBody(content));
 }

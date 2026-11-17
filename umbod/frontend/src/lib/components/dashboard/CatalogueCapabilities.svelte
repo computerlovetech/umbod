@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { CatalogueCapability } from '$lib/dashboard/domain/schemas';
-  import { CapabilitiesState, capabilityGroups, capabilityGroupLabels } from '$lib/dashboard/state/capabilities-state.svelte';
-  import CapabilityCatalogGrid from '$lib/components/admin/shared/CapabilityCatalogGrid.svelte';
-  import ToolDescription from '$lib/components/shared/tools/ToolDescription.svelte';
+  import type { CatalogueCapability } from '#lib/dashboard/domain/schemas.js';
+  import { CapabilitiesState, capabilityGroups, capabilityGroupLabels } from '#lib/dashboard/state/capabilities-state.svelte.js';
+  import CapabilityCatalogGrid from '#lib/components/admin/shared/CapabilityCatalogGrid.svelte';
+  import ToolDescription from '#lib/components/shared/tools/ToolDescription.svelte';
   import CatalogueToolCard from './CatalogueToolCard.svelte';
 
   let { capabilities }: { capabilities: readonly CatalogueCapability[] } = $props();

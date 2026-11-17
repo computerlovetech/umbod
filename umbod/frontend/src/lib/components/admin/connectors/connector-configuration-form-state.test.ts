@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { ConnectorConfigurationFormState } from '$lib/components/admin/connectors/connector-configuration-form-state.svelte';
+import { ConnectorConfigurationFormState } from '#lib/components/admin/connectors/connector-configuration-form-state.svelte.js';
 
 describe('connector configuration form state', () => {
   test('allows saving only after the current form signature has passed a check', () => {

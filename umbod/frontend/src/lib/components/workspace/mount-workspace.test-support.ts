@@ -1,6 +1,6 @@
 import { mount, type Component } from 'svelte';
-import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
-import type { WorkspaceApi } from '$lib/workspace/api';
+import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
+import type { WorkspaceApi } from '#lib/workspace/api.js';
 import WorkspacePageHarness from './WorkspacePageHarness.test-support.svelte';
 
 export function mountWorkspace<Props extends Record<string, unknown>>(

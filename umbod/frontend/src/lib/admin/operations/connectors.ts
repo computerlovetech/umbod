@@ -1,12 +1,12 @@
 import { operationFailure, operationRedirect, type BrowserOperations } from './contracts';
-import { promptActivationBatchRequestSchema, resourceActivationBatchRequestSchema } from '$lib/admin/capability-catalogs';
-import { HttpError, isOperationalError } from '$lib/admin/infrastructure/transport';
-import { invocationPolicyBatchUpdateRequestSchema, invocationPolicyConflictResponseSchema } from '$lib/admin/invocation-policy';
-import { connectorToolActivationBatchRequestSchema } from '$lib/admin/connectors';
-import { checkConnectorConfiguration, publishConnector, saveConnectorConfiguration, unpublishConnector } from '$lib/admin/connectors-api';
-import { createConfigurationBody, createFailureValues, getSecretFields } from '$lib/admin/connectors-forms';
+import { promptActivationBatchRequestSchema, resourceActivationBatchRequestSchema } from '#lib/admin/capability-catalogs.js';
+import { HttpError, isOperationalError } from '#lib/admin/infrastructure/transport.js';
+import { invocationPolicyBatchUpdateRequestSchema, invocationPolicyConflictResponseSchema } from '#lib/admin/invocation-policy.js';
+import { connectorToolActivationBatchRequestSchema } from '#lib/admin/connectors.js';
+import { checkConnectorConfiguration, publishConnector, saveConnectorConfiguration, unpublishConnector } from '#lib/admin/connectors-api.js';
+import { createConfigurationBody, createFailureValues, getSecretFields } from '#lib/admin/connectors-forms.js';
 
-import { presentSaveFailureWithReconciliation } from '$lib/admin/tool-activation-reconciliation';
+import { presentSaveFailureWithReconciliation } from '#lib/admin/tool-activation-reconciliation.js';
 
 type ConnectorConfigurationActionInput = {
   connectorId: string;

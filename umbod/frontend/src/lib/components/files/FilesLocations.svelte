@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import type { FilesState } from '$lib/files/state/files-state.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import type { FilesState } from '#lib/files/state/files-state.svelte.js';
 
   let { state, signIn }: { state: FilesState; signIn: () => void } = $props();
 </script>

@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte';
   import type { PersonalServerDiscoveryState } from './personal-server-discovery-state.svelte';
   import type { PolicyForm } from './policy-form.svelte';
-  import Checkbox from '$lib/components/shared/Checkbox.svelte';
+  import Checkbox from '#lib/components/shared/Checkbox.svelte';
   import AdminConfigurationField from '../shared/AdminConfigurationField.svelte';
   import Button from '../shared/Button.svelte';
   import Select from '../shared/Select.svelte';

@@ -1,25 +1,25 @@
 <script lang="ts">
-  import { operationState } from '$lib/admin/operations/operation-state.svelte';
-  import { goto, invalidateAll } from '$app/navigation';
+  import { operationState } from '#lib/admin/operations/operation-state.svelte.js';
+  import { goto, refreshAll } from '$app/navigation';
   import { page } from '$app/state';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import AdminShell from '$lib/components/admin/AdminShell.svelte';
-  import ConnectorCatalogModal from '$lib/components/admin/connectors/ConnectorCatalogModal.svelte';
-  import ConnectorListEmptyState from '$lib/components/admin/connectors/ConnectorListEmptyState.svelte';
-  import ConnectorList from '$lib/components/admin/connectors/ConnectorList.svelte';
-  import SubpageContainer from '$lib/components/shared/workspace/SubpageContainer.svelte';
-  import { ConnectorCatalogState } from '$lib/components/admin/connectors/connector-catalog-state.svelte';
-  import ConnectorTabs from '$lib/components/admin/connectors/ConnectorTabs.svelte';
-  import { emptyPromptCatalog, emptyResourceCatalog, type PromptCatalog, type ResourceCatalog } from '$lib/admin/capability-catalogs';
-  import type { InvocationPolicyTool } from '$lib/admin/invocation-policy';
-  import { parseConnectorCapability } from '$lib/admin/connector-capabilities';
-  import type { ConnectorListPageData } from '$lib/admin/connectors';
-  import type { HeaderAccountIdentityState } from '$lib/header/accountIdentity';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import AdminShell from '#lib/components/admin/AdminShell.svelte';
+  import ConnectorCatalogModal from '#lib/components/admin/connectors/ConnectorCatalogModal.svelte';
+  import ConnectorListEmptyState from '#lib/components/admin/connectors/ConnectorListEmptyState.svelte';
+  import ConnectorList from '#lib/components/admin/connectors/ConnectorList.svelte';
+  import SubpageContainer from '#lib/components/shared/workspace/SubpageContainer.svelte';
+  import { ConnectorCatalogState } from '#lib/components/admin/connectors/connector-catalog-state.svelte.js';
+  import ConnectorTabs from '#lib/components/admin/connectors/ConnectorTabs.svelte';
+  import { emptyPromptCatalog, emptyResourceCatalog, type PromptCatalog, type ResourceCatalog } from '#lib/admin/capability-catalogs.js';
+  import type { InvocationPolicyTool } from '#lib/admin/invocation-policy.js';
+  import { parseConnectorCapability } from '#lib/admin/connector-capabilities.js';
+  import type { ConnectorListPageData } from '#lib/admin/connectors.js';
+  import type { HeaderAccountIdentityState } from '#lib/header/accountIdentity.js';
 
   type ConnectorListAdminPageData = ConnectorListPageData & {
     accountIdentity?: HeaderAccountIdentityState;
     selectedConnectorId?: string;
-    selectedDetail?: Extract<import('$lib/admin/connectors').ConnectorDetailPageData, { status: 'ready' }>;
+    selectedDetail?: Extract<import('#lib/admin/connectors.js').ConnectorDetailPageData, { status: 'ready' }>;
     selectedPromptCatalog?: PromptCatalog;
     selectedResourceCatalog?: ResourceCatalog;
     invocationPolicies?: InvocationPolicyTool[];
@@ -33,22 +33,22 @@
   };
 
   let { data }: { data: ConnectorListAdminPageData; form?: PublicationForm } = $props();
-  const form = $derived(operationState.forOwner({ route: page.url.pathname, connectorId: page.url.searchParams.get('connector') ?? data.selectedConnectorId ?? data.connectors[0]?.id }) as PublicationForm);
+  const form = $derived(operationState.forOwner({ route: page.url.pathname, connectorId: (page.shallow?.url ?? page.url).searchParams.get('connector') ?? data.selectedConnectorId ?? data.connectors[0]?.id }) as PublicationForm);
 
   const fallbackAccountIdentity: HeaderAccountIdentityState = { kind: 'hidden' };
   const catalogState = new ConnectorCatalogState();
 
   async function retry(): Promise<void> {
-    await invalidateAll();
+    await refreshAll();
   }
 
   async function selectCatalogConnector(connectorId: string): Promise<void> {
-    await goto(`?connector=${encodeURIComponent(connectorId)}`, { keepFocus: true, noScroll: true });
+    await goto(`?connector=${encodeURIComponent(connectorId)}`, { reset: false });
     catalogState.select(connectorId);
   }
 
   async function configureConnector(connectorId: string): Promise<void> {
-    await goto(`?connector=${encodeURIComponent(connectorId)}`, { keepFocus: true, noScroll: true });
+    await goto(`?connector=${encodeURIComponent(connectorId)}`, { reset: false });
     catalogState.showConfigure(connectorId);
   }
 </script>
@@ -63,7 +63,7 @@
       <Button aria-label="Add connector" onclick={() => catalogState.show()}><span aria-hidden="true">+</span> Add connector</Button>
     {/snippet}
     {#snippet navigation()}
-      <ConnectorTabs activeTab="catalog" capability={parseConnectorCapability(page.url.searchParams.get('capability'))} />
+      <ConnectorTabs activeTab="catalog" capability={parseConnectorCapability((page.shallow?.url ?? page.url).searchParams.get('capability'))} />
     {/snippet}
 
     {#if data.status === 'ready'}

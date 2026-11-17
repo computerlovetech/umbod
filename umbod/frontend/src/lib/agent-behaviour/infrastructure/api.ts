@@ -1,4 +1,4 @@
-import { browserTransport, type Transport } from '$lib/admin/infrastructure/transport';
+import { browserTransport, type Transport } from '#lib/admin/infrastructure/transport.js';
 import type { AgentBehaviourPort, ConfigurationPort, ReportsPort } from '../api';
 import { configurationSchema, publishSchema, querySchema, pageSchema, reportSchema, type Configuration, type PublishConfiguration, type ReportQuery, type ReportPage, type DiagnosticReport } from '../domain/schemas';
 const base = '/admin/agent-behaviour';

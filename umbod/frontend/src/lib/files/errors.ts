@@ -1,4 +1,4 @@
-import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
 import { z } from 'zod';
 
 export class UploadPhaseError extends Error {

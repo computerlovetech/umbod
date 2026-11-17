@@ -34,12 +34,16 @@ def client(
     public_key["kid"] = "trusted"
     jwks = json.dumps({"keys": [public_key]}).encode()
 
-    def open_jwks(
-        request: urllib.request.Request, *, timeout: float, context: object
-    ) -> BytesIO:
-        return BytesIO(jwks)
+    class JwksOpener:
+        def open(self, request: urllib.request.Request, *, timeout: float) -> BytesIO:
+            return BytesIO(jwks)
 
-    monkeypatch.setattr(urllib.request, "urlopen", open_jwks)
+    def build_opener(
+        *handlers: urllib.request.BaseHandler | type[urllib.request.BaseHandler],
+    ) -> JwksOpener:
+        return JwksOpener()
+
+    monkeypatch.setattr(urllib.request, "build_opener", build_opener)
     config = APISettings(
         runtime={"profile": "production", "auth": "auth0"},
         rest={"metrics_enabled": False},

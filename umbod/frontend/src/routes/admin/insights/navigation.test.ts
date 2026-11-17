@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { load as insights } from './+page';
 import { load as behaviour } from '../agent-behaviour/+page';
 import { load as analytics } from '../analytics/+page';
-import { InsightsNavigation } from '$lib/components/admin/insights/insights-navigation';
+import { InsightsNavigation } from '#lib/components/admin/insights/insights-navigation.js';
 
 describe('Insights navigation', (): void => {
   test.each([

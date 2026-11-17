@@ -1,10 +1,10 @@
-import { renderWorkspace } from '$lib/components/workspace/render-workspace.test-support';
+import { renderWorkspace } from '#lib/components/workspace/render-workspace.test-support.js';
 import { describe, expect, test, vi } from 'vitest';
-import type { ToastApi } from '$lib/components/feedback/toast-state.svelte';
-import { workspaceNavigation } from '$lib/workspace/navigation';
+import type { ToastApi } from '#lib/components/feedback/toast-state.svelte.js';
+import { workspaceNavigation } from '#lib/workspace/navigation.js';
 import GettingStarted from './GettingStarted.svelte';
 
-vi.mock('$lib/components/feedback', () => ({
+vi.mock('#lib/components/feedback/index.js', () => ({
   useToast: (): ToastApi => ({
     success: (): number => 1, warning: (): number => 1, error: (): number => 1,
     dismiss: (): void => {}

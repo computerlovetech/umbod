@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { browserSubmit } from '$lib/admin/operations/browser-submit';
+  import { browserSubmit } from '#lib/admin/operations/browser-submit.js';
   import { untrack } from 'svelte';
   import {
     resourceActivationBatchResponseSchema,
     type ResourceCatalog as ResourceCatalogData
-  } from '$lib/admin/capability-catalogs';
-  import ResourceCatalog from '$lib/components/admin/capability-catalogs/ResourceCatalog.svelte';
-  import AdminSaveAction from '$lib/components/admin/shared/AdminSaveAction.svelte';
-  import { useToast } from '$lib/components/feedback';
+  } from '#lib/admin/capability-catalogs.js';
+  import ResourceCatalog from '#lib/components/admin/capability-catalogs/ResourceCatalog.svelte';
+  import AdminSaveAction from '#lib/components/admin/shared/AdminSaveAction.svelte';
+  import { useToast } from '#lib/components/feedback/index.js';
   import { DownstreamMcpResourceCatalogState } from './downstream-mcp-resource-catalog-state.svelte';
 
   let {

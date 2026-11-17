@@ -1,3 +1,5 @@
+import asyncio
+
 from tests.support.native_tool_states import enabled_native_tool_states
 from typing import Any
 
@@ -129,7 +131,8 @@ async def test_code_composes_operations_with_python_semantics(
         "import os\nos.environ",
         "import socket",
         "import subprocess",
-        "import time\ntime.time()",
+        "import ctypes",
+        "from pathlib import Path\nPath('/etc/passwd').read_text()",
     ],
 )
 async def test_code_failures_do_not_escape_the_sandbox(code: str) -> None:
@@ -171,14 +174,50 @@ async def test_each_execution_has_fresh_state() -> None:
 
 
 @pytest.mark.asyncio
-async def test_code_execution_reports_server_timeout() -> None:
-    agent = await ConnectorCodeMode().running(timeout_seconds=0.01)
+@pytest.mark.parametrize("code", ["while True:\n    pass", "import time\ntime.sleep(10)\nslack_list_readable_channels(limit=1)"])
+async def test_code_execution_reports_server_timeout(code: str) -> None:
+    codemode = ConnectorCodeMode()
+    agent = await codemode.running(timeout_seconds=0.01)
 
-    result = await agent.execute("while True:\n    pass")
+    result = await asyncio.wait_for(agent.execute(code), timeout=2)
 
     assert result.outcome == "timeout"
     assert result.error
     assert result.nested_calls == []
+    assert codemode.invocations == []
+
+
+@pytest.mark.asyncio
+async def test_server_timeout_cancels_pending_connector_and_prevents_later_calls() -> None:
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+    attempts: list[int] = []
+
+    async def waiting_connector(limit: int) -> dict[str, object]:
+        attempts.append(limit)
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await asyncio.sleep(0)
+            cancelled.set()
+        return {"limit": limit}
+
+    agent = await ConnectorCodeMode().with_operation(waiting_connector).running(timeout_seconds=1)
+
+    result = await asyncio.wait_for(
+        agent.execute("print('started')\nslack_list_readable_channels(limit=1)\nslack_list_readable_channels(limit=2)"),
+        timeout=5,
+    )
+
+    assert result.outcome == "timeout"
+    assert result.printed_output == "started\n"
+    assert attempts == [1]
+    assert started.is_set()
+    assert cancelled.is_set()
+    subsequent = await agent.execute("6 * 7")
+    assert subsequent.outcome == "success"
+    assert subsequent.final_value == 42
 
 
 def test_codemode_defaults_to_thirty_second_server_timeout() -> None:

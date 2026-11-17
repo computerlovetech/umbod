@@ -1,4 +1,4 @@
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { UsagePort } from '../api';
 import type { PersonalUsage, UsageDays } from '../domain/usage-schemas';
 

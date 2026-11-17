@@ -1,6 +1,6 @@
 <script lang="ts">
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
 
   let { name, onconfirm, oncancel }: {
     name: string;

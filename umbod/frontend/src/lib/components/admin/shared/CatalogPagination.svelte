@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
   let { ariaLabel, page, pageCount, canGoPrevious, canGoNext, onPrevious, onNext }: {
     ariaLabel: string;
     page: number;

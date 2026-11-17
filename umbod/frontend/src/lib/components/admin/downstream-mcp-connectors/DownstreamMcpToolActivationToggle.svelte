@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { DownstreamMcpTool } from '$lib/admin/downstream-mcp-connectors';
-  import AdminToggle from '$lib/components/admin/shared/AdminToggle.svelte';
+  import type { DownstreamMcpTool } from '#lib/admin/downstream-mcp-connectors.js';
+  import AdminToggle from '#lib/components/admin/shared/AdminToggle.svelte';
 
   let {
     tool,

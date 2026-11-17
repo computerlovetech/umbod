@@ -1,6 +1,6 @@
 <script lang="ts">
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
 
   type Props = {
     open: boolean;

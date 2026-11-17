@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { load } from './+layout';
 
-vi.mock('$lib/admin/infrastructure/public-configuration', () => ({
+vi.mock('#lib/admin/infrastructure/public-configuration.js', () => ({
   publicConfigurationProvider: { get: async (): Promise<object> => ({ apiBaseUrl: '/api' }) }
 }));
 

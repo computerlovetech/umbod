@@ -1,4 +1,4 @@
-import { HttpError, SchemaValidationError, type Transport } from '$lib/admin/infrastructure/transport';
+import { HttpError, SchemaValidationError, type Transport } from '#lib/admin/infrastructure/transport.js';
 import { filesystemNamespacesSchema, type FilesystemNamespace } from '../domain/schemas';
 import { UploadPhaseError } from '../errors';
 import type { FilesystemApi, UploadTransferPort } from '../api';

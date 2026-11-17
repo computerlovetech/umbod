@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { z } from 'zod';
-import { browserTransport, SchemaValidationError } from '$lib/admin/infrastructure/transport';
-import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
+import { browserTransport, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
+import { InMemoryPublicConfigurationProvider } from '#lib/admin/infrastructure/public-configuration.js';
 import { FilesApi } from './infrastructure/files-api';
 import { InMemoryNodeSharing } from './infrastructure/in-memory-sharing.test-support';
 import { fileId } from './fixtures.test-support';

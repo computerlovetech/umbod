@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { load as personalLoad } from './+page';
 import { load as workspaceLoad } from '../downstream-mcp-connectors/+page';
-import { serverFixture, summaryFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-support';
+import { serverFixture, summaryFixture } from '#lib/admin/personal-mcp-servers/fixtures.test-support.js';
 
 const api = vi.hoisted(() => ({ list: vi.fn(), get: vi.fn(), tools: vi.fn(), prompts: vi.fn(), resources: vi.fn(), listActivations: vi.fn() }));
-vi.mock('$lib/admin/infrastructure/admin-api', () => ({ adminApi: () => ({ downstreamMcpConnectors: api }) }));
+vi.mock('#lib/admin/infrastructure/admin-api.js', () => ({ adminApi: () => ({ downstreamMcpConnectors: api }) }));
 beforeEach(() => vi.clearAllMocks());
 
 describe('unified MCP administration navigation', () => {

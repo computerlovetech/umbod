@@ -1,7 +1,7 @@
 import { describe, expect, test, vi } from 'vitest';
 import { z } from 'zod';
-import { browserTransport, AuthenticationRequiredError, HttpError, SchemaValidationError } from '$lib/admin/infrastructure/transport';
-import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
+import { browserTransport, AuthenticationRequiredError, HttpError, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
+import { InMemoryPublicConfigurationProvider } from '#lib/admin/infrastructure/public-configuration.js';
 import type { FilesApi } from './api';
 import { childrenSchema, createFolderSchema, fileNameSchema, fileUploadSchema, nodeSummarySchema, type FileUpload } from './domain/schemas';
 import { FilesApi as HttpFilesApi } from './infrastructure/files-api';

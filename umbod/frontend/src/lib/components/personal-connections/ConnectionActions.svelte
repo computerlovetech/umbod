@@ -1,9 +1,9 @@
 <script lang="ts">
   import { tick } from 'svelte';
-  import type { ConnectionAction } from '$lib/personal-connections/presentation';
-  import type { PersonalConnectionController } from '$lib/personal-connections/state/port';
-  import { PersonalAccessViewState } from '$lib/personal-connections/state/access-view-state.svelte';
-  import AdminSidebarActionMenu from '$lib/components/admin/shared/AdminSidebarActionMenu.svelte';
+  import type { ConnectionAction } from '#lib/personal-connections/presentation.js';
+  import type { PersonalConnectionController } from '#lib/personal-connections/state/port.js';
+  import { PersonalAccessViewState } from '#lib/personal-connections/state/access-view-state.svelte.js';
+  import AdminSidebarActionMenu from '#lib/components/admin/shared/AdminSidebarActionMenu.svelte';
 
   let { state, onaction }: { state: PersonalConnectionController; onaction?: () => void } = $props();
   const view = new PersonalAccessViewState(() => state);

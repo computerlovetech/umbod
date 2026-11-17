@@ -1,10 +1,10 @@
 <script lang="ts">
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
-  import Form from '$lib/components/admin/shared/Form.svelte';
-  import LoadingButton from '$lib/components/admin/shared/LoadingButton.svelte';
-  import Select from '$lib/components/admin/shared/Select.svelte';
-  import type { SharingDialogState } from '$lib/files/state/sharing-dialog-state.svelte';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
+  import Form from '#lib/components/admin/shared/Form.svelte';
+  import LoadingButton from '#lib/components/admin/shared/LoadingButton.svelte';
+  import Select from '#lib/components/admin/shared/Select.svelte';
+  import type { SharingDialogState } from '#lib/files/state/sharing-dialog-state.svelte.js';
 
   let { state, signIn }: { state: SharingDialogState; signIn: () => void } = $props();
   const id = $props.id();

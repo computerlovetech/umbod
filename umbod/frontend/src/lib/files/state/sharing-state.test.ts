@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, HttpError, NetworkError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError, NetworkError } from '#lib/admin/infrastructure/transport.js';
 import type { NodeAccess, SharingRecipient, SharingRecipientSearchResult } from '../domain/sharing';
 import { deferred, fileId, filesystemFixture, filesystemNode, folderId, rootId } from '../fixtures.test-support';
 import { InMemoryFilesApi } from '../infrastructure/in-memory-api.test-support';

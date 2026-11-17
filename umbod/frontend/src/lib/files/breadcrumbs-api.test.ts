@@ -1,6 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, browserTransport, SchemaValidationError } from '$lib/admin/infrastructure/transport';
-import { InMemoryPublicConfigurationProvider } from '$lib/admin/infrastructure/public-configuration';
+import { AuthenticationRequiredError, browserTransport, SchemaValidationError } from '#lib/admin/infrastructure/transport.js';
+import { InMemoryPublicConfigurationProvider } from '#lib/admin/infrastructure/public-configuration.js';
 import { breadcrumbsSchema, type Breadcrumbs } from './domain/schemas';
 import { fileId, filesystemFixture, filesystemNode, folderId, rootId } from './fixtures.test-support';
 import { InMemoryFilesApi } from './infrastructure/in-memory-api.test-support';

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PreviewProps } from '$lib/files/preview/ports';
+  import type { PreviewProps } from '#lib/files/preview/ports.js';
 
   let { content }: PreviewProps = $props();
 </script>

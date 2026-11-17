@@ -1,4 +1,4 @@
-import type { Transport } from '$lib/admin/infrastructure/transport';
+import type { Transport } from '#lib/admin/infrastructure/transport.js';
 import type { ConnectionsPort } from '../api';
 import { emptyRequestSchema, enablementRequestSchema, selectionListSchema, selectionSchema, type EmptyRequest, type EnablementRequest, type Selection, type SelectionList } from '../domain/schemas';
 

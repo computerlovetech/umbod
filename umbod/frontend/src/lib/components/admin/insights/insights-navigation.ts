@@ -1,4 +1,4 @@
-import type { SubpageLink } from '$lib/components/shared/workspace/SubpageNavigation.svelte';
+import type { SubpageLink } from '#lib/components/shared/workspace/SubpageNavigation.svelte';
 
 export const insightsLinks: readonly SubpageLink[] = [
   { id: 'behaviour', label: 'Agent behaviour', href: '/admin/insights/agent-behaviour' },

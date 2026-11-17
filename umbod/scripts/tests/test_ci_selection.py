@@ -1,6 +1,7 @@
 import fnmatch
 import json
 import os
+import shlex
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -12,6 +13,8 @@ import yaml
 REPOSITORY = Path(__file__).resolve().parents[3]
 COMPONENT_JOBS = {
     "docs": "website",
+    "lint": "lint",
+    "semgrep": "semgrep",
     "sdk-tests": "sdk",
     "backend-tests": "backend",
     "script-tests": "scripts",
@@ -43,18 +46,32 @@ def filters() -> dict[str, list[str]]:
         ("umbod/docs/index.md", {"website"}),
         ("website/index.html", {"website"}),
         ("release-metadata.json", {"website"}),
-        ("umbod/frontend/src/routes/+page.svelte", {"frontend", "kind"}),
-        ("umbod/frontend/src/lib/styles/admin.css", {"backend", "frontend", "kind"}),
+        ("umbod/frontend/src/routes/+page.svelte", {"frontend", "kind", "semgrep"}),
+        ("umbod/frontend/src/lib/styles/admin.css", {"backend", "frontend", "kind", "semgrep"}),
         ("website/public/umbod-logo.svg", {"backend", "website"}),
-        ("umbod/api/src/umbod/core/service.py", {"backend", "core", "kind"}),
-        ("umbod/api/tests/umbod/core/test_service.py", {"backend"}),
-        ("packages/umbod-sdk/src/umbod_sdk/connectors/api.py", {"sdk", "backend", "core", "connector", "kind"}),
-        ("umbod/api/src/umbod/rest/install/assets/install.ps1", {"backend", "core", "kind", "installers"}),
+        ("umbod/api/src/umbod/core/service.py", {"backend", "core", "kind", "lint", "semgrep"}),
+        ("umbod/api/tests/umbod/core/test_service.py", {"backend", "lint", "semgrep"}),
+        ("packages/umbod-sdk/src/umbod_sdk/connectors/api.py", {"sdk", "backend", "core", "connector", "kind", "lint", "semgrep"}),
+        ("packages/umbod-sdk/tests/test_connector.py", {"sdk", "backend", "core", "connector", "kind", "lint", "semgrep"}),
+        ("packages/umbod-sdk/pyproject.toml", {"sdk", "backend", "core", "connector", "kind", "scripts", "lint", "semgrep"}),
+        ("packages/umbod-sdk/ruff.toml", {"sdk", "backend", "core", "connector", "kind", "lint", "semgrep"}),
+        (".semgrep.yml", {"backend", "semgrep"}),
+        (".semgrep/production-design.yml", {"backend", "semgrep"}),
+        (".semgrep/test-correctness.yml", {"backend", "semgrep"}),
+        (".semgrepignore", {"backend", "semgrep"}),
+        ("pyproject.toml", {"lint"}),
+        ("ruff.toml", {"lint"}),
+        (".ruff.toml", {"lint"}),
+        ("umbod/pyproject.toml", {"website", "semgrep"}),
+        ("umbod/uv.lock", {"website", "semgrep"}),
+        ("umbod/api/src/umbod/rest/install/assets/install.ps1", {"backend", "core", "kind", "installers", "lint", "semgrep"}),
         ("umbod/docker-compose.yml", {"backend"}),
-        ("umbod/frontend/deployment/generate-config.sh", {"backend", "frontend", "kind"}),
-        ("umbod/scripts/tests/test_plugin_installers_windows.py", {"scripts", "installers"}),
-        ("umbod/scripts/tests/test_release_versions.py", {"scripts", "website"}),
-        ("umbod/deploy/helm/umbod/values.yaml", {"helm", "kind", "website"}),
+        ("umbod/frontend/deployment/generate-config.sh", {"backend", "frontend", "kind", "semgrep"}),
+        ("umbod/scripts/tests/test_plugin_installers_windows.py", {"scripts", "installers", "semgrep"}),
+        ("umbod/scripts/tests/test_release_versions.py", {"scripts", "website", "semgrep"}),
+        ("umbod/scripts/repository_check.py", {"scripts", "semgrep"}),
+        ("umbod/tests/kind-runtime/fixtures/connector.py", {"semgrep"}),
+        ("umbod/deploy/helm/umbod/values.yaml", {"helm", "kind", "website", "semgrep"}),
         (".dockerignore", {"core", "connector", "kind"}),
         ("umbod/README.md", set()),
     ],
@@ -155,14 +172,15 @@ def test_completion_requires_successful_detection_and_harness_validation(
     assert run_completion(workflow, job_results).returncode != 0
 
 
+@pytest.mark.parametrize("component", ["backend", "lint", "semgrep"])
 @pytest.mark.parametrize("selection", [None, "", "unknown"])
 def test_completion_fails_closed_for_missing_or_invalid_selection(
-    workflow: dict[str, Any], job_results: dict[str, Any], selection: str | None
+    workflow: dict[str, Any], job_results: dict[str, Any], component: str, selection: str | None
 ) -> None:
     if selection is None:
-        del job_results["changes"]["outputs"]["backend"]
+        del job_results["changes"]["outputs"][component]
     else:
-        job_results["changes"]["outputs"]["backend"] = selection
+        job_results["changes"]["outputs"][component] = selection
     assert run_completion(workflow, job_results).returncode != 0
 
 
@@ -191,6 +209,55 @@ def test_script_tests_do_not_repeat_platform_or_website_owned_tests(workflow: di
         assert f"--ignore=../scripts/tests/{filename}" in command
     assert not any("scripts/tests" in step.get("run", "") for step in workflow["jobs"]["backend-tests"]["steps"])
     assert not any("pytest" in step.get("run", "") for step in workflow["jobs"]["core"]["steps"])
+
+
+@pytest.mark.parametrize("job", ["lint", "semgrep"])
+def test_quality_jobs_use_locked_dependencies_and_python_314(
+    workflow: dict[str, Any], job: str
+) -> None:
+    steps = workflow["jobs"][job]["steps"]
+    assert steps[0]["uses"] == "useblacksmith/checkout@v1"
+    setup = next(step for step in steps if step.get("uses") == "astral-sh/setup-uv@v7")
+    assert setup["with"]["python-version"] == "3.14"
+    assert setup["with"]["enable-cache"] == "true"
+    assert all(step["run"].startswith("uv run --locked ") for step in steps if "run" in step)
+    assert not workflow["jobs"][job].get("continue-on-error")
+    assert not any(step.get("continue-on-error") for step in steps)
+
+
+def test_lint_checks_api_and_sdk_without_command_line_policy_overrides(workflow: dict[str, Any]) -> None:
+    steps = workflow["jobs"]["lint"]["steps"]
+    commands = [step for step in steps if "run" in step]
+    assert {step["working-directory"] for step in commands} == {"umbod/api", "packages/umbod-sdk"}
+    assert len(commands) == 2
+    assert all(step["run"] == "uv run --locked ruff check ." for step in commands)
+    setup = next(step for step in steps if step.get("uses") == "astral-sh/setup-uv@v7")
+    assert set(setup["with"]["cache-dependency-glob"].splitlines()) == {"umbod/api/uv.lock", "packages/umbod-sdk/uv.lock"}
+
+
+def test_semgrep_loads_all_shared_rules_and_fails_on_findings(workflow: dict[str, Any]) -> None:
+    job = workflow["jobs"]["semgrep"]
+    assert job["defaults"]["run"]["working-directory"] == "umbod"
+    setup = next(step for step in job["steps"] if step.get("uses") == "astral-sh/setup-uv@v7")
+    assert setup["with"]["cache-dependency-glob"] == "umbod/uv.lock"
+    commands = [shlex.split(step["run"]) for step in job["steps"] if "run" in step]
+    assert commands == [[
+        "uv", "run", "--locked", "--only-group", "dev", "semgrep", "scan",
+        "--config", "../.semgrep.yml",
+        "--config", "../.semgrep/production-design.yml",
+        "--config", "../.semgrep/test-correctness.yml",
+        "--no-rewrite-rule-ids", "--error", "--metrics=off",
+        ".",
+    ]]
+
+
+def test_frontend_sets_node_22_before_bun_and_dependency_installation(workflow: dict[str, Any]) -> None:
+    steps = workflow["jobs"]["frontend"]["steps"]
+    node_index = next(index for index, step in enumerate(steps) if step.get("uses") == "actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1")
+    bun_index = next(index for index, step in enumerate(steps) if step.get("uses") == "oven-sh/setup-bun@v2")
+    install_index = next(index for index, step in enumerate(steps) if step.get("run") == "bun install --frozen-lockfile")
+    assert steps[node_index]["with"]["node-version"] == "22"
+    assert node_index < bun_index < install_index
 
 
 def test_frontend_build_context_excludes_generated_coverage() -> None:

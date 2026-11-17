@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import { useToast } from '$lib/components/feedback';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import { useToast } from '#lib/components/feedback/index.js';
   import { untrack } from 'svelte';
-  import AdminConfigurationField from '$lib/components/admin/shared/AdminConfigurationField.svelte';
+  import AdminConfigurationField from '#lib/components/admin/shared/AdminConfigurationField.svelte';
   import { OpenApiBearerConfigurationState } from './openapi-bearer-configuration-state.svelte';
 
   let { connectorId }: { connectorId: string } = $props();

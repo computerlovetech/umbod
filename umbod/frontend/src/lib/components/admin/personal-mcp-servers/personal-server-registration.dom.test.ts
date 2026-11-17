@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import { flushSync, mount, tick, unmount } from 'svelte';
-import { HttpError } from '$lib/admin/infrastructure/transport';
-import { InMemoryPersonalServers } from '$lib/admin/personal-mcp-servers/in-memory';
-import { InMemoryPersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery.test-support';
-import { configurationFixture } from '$lib/admin/personal-mcp-servers/availability.test-support';
-import type { EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
+import { InMemoryPersonalServers } from '#lib/admin/personal-mcp-servers/in-memory.js';
+import { InMemoryPersonalServerDiscovery } from '#lib/admin/personal-mcp-servers/discovery.test-support.js';
+import { configurationFixture } from '#lib/admin/personal-mcp-servers/availability.test-support.js';
+import type { EndpointDiscoveryResult } from '#lib/admin/personal-mcp-servers/domain/discovery.js';
 import PersonalServerRegistration from './PersonalServerRegistration.svelte';
 import { PersonalServerFormState } from './personal-server-form-state.svelte';
 

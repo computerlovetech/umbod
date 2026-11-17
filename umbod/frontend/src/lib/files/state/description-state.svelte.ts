@@ -1,4 +1,4 @@
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { FilesystemApi } from '../api';
 import { nodeSummarySchema, type NodeSummary } from '../domain/schemas';
 

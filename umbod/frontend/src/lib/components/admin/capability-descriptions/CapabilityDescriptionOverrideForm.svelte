@@ -1,9 +1,9 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import { CapabilityDescriptionsBrowserRoute } from '$lib/admin/capability-descriptions-browser-api';
-  import type { ConnectorKind } from '$lib/admin/capability-descriptions';
-  import { useToast } from '$lib/components/feedback';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import { CapabilityDescriptionsBrowserRoute } from '#lib/admin/capability-descriptions-browser-api.js';
+  import type { ConnectorKind } from '#lib/admin/capability-descriptions.js';
+  import { useToast } from '#lib/components/feedback/index.js';
   import { CapabilityDescriptionOverrideState } from './capability-description-override-state.svelte';
 
   let { kind, connectorId }: { kind: ConnectorKind; connectorId: string } = $props();

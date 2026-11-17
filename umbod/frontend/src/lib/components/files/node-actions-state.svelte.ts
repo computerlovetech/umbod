@@ -1,8 +1,8 @@
-import type { DescriptionState } from '$lib/files/state/description-state.svelte';
-import type { NodeUpdateState } from '$lib/files/state/node-update-state.svelte';
-import type { NodeSummary } from '$lib/files/domain/schemas';
-import type { SharingEligibilityState } from '$lib/files/state/sharing-eligibility-state.svelte';
-import type { DeletionState } from '$lib/files/state/deletion-state.svelte';
+import type { DescriptionState } from '#lib/files/state/description-state.svelte.js';
+import type { NodeUpdateState } from '#lib/files/state/node-update-state.svelte.js';
+import type { NodeSummary } from '#lib/files/domain/schemas.js';
+import type { SharingEligibilityState } from '#lib/files/state/sharing-eligibility-state.svelte.js';
+import type { DeletionState } from '#lib/files/state/deletion-state.svelte.js';
 
 export class NodeActionsState {
   private expanded = $state<{ nodeId: string | undefined; contextKey: number } | undefined>(undefined);

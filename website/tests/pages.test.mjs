@@ -63,7 +63,7 @@ test('production build preserves routes, metadata, shared navigation and release
       const communityLinks = [...html.matchAll(/href="(https:\/\/discord\.gg\/[^\"]+)"/g)];
       assert.equal(communityLinks.length, 3);
       for (const [, href] of communityLinks) assert.equal(href, 'https://discord.gg/Njy4GnurpE');
-      assert.match(html, /<noscript>\s*<style>\.menu-toggle, \.copy-btn \{ display: none; \}<\/style>/);
+      assert.match(html, /<noscript>\s*<style>\.menu-toggle,\s*\.copy-btn\s*\{\s*display:\s*none;?\s*\}<\/style>/);
       for (const region of [
         html.match(/<nav class="wrap"[\s\S]*?<\/nav>/)[0],
         html.match(/<nav class="mobile-menu-links"[\s\S]*?<\/nav>/)[0],

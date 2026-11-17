@@ -1,4 +1,4 @@
-import type { NodeSummary } from '$lib/files/domain/schemas';
+import type { NodeSummary } from '#lib/files/domain/schemas.js';
 
 export class NodeDetailsInputs {
   private current = $state.raw<NodeSummary>();

@@ -1,10 +1,10 @@
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
-import type { PersonalAccessTokensApi } from '$lib/personal-access-tokens/api';
-import type { TokenMetadata } from '$lib/personal-access-tokens/domain/schemas';
-import type { ClipboardWriter } from '$lib/admin/clipboard';
-import type { SelectOption } from '$lib/components/admin/shared/select-state.svelte';
-import type { TelemetrySetupSource } from '$lib/telemetry-setup/api';
-import type { TelemetrySetup } from '$lib/telemetry-setup/domain/schemas';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
+import type { PersonalAccessTokensApi } from '#lib/personal-access-tokens/api.js';
+import type { TokenMetadata } from '#lib/personal-access-tokens/domain/schemas.js';
+import type { ClipboardWriter } from '#lib/admin/clipboard.js';
+import type { SelectOption } from '#lib/components/admin/shared/select-state.svelte.js';
+import type { TelemetrySetupSource } from '#lib/telemetry-setup/api.js';
+import type { TelemetrySetup } from '#lib/telemetry-setup/domain/schemas.js';
 import { telemetryConfiguration, type TelemetryAgent } from './telemetry-formatters';
 
 export class TelemetrySetupState {

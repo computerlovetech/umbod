@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { AgentBehaviourPageState } from '$lib/agent-behaviour/state/page-state.svelte';
+  import type { AgentBehaviourPageState } from '#lib/agent-behaviour/state/page-state.svelte.js';
   import ReportsView from './ReportsView.svelte';
   let { state }: { state: AgentBehaviourPageState } = $props();
 </script>

@@ -7,6 +7,7 @@ from pydantic import TypeAdapter
 
 from .redaction import contains_secret
 from .operation import OperationState
+from .wire_models import StrictCallToolResult
 
 
 JSON_RPC_MESSAGE = TypeAdapter(types.JSONRPCMessage)
@@ -38,7 +39,9 @@ class ProtocolInputValidator:
             value = json.loads(data, object_pairs_hook=unique_json_object, parse_constant=reject_json_constant)
             if contains_secret(value, self._token):
                 self._state.reject("protocol_rejected")
-            JSON_RPC_MESSAGE.validate_python(value, strict=True, extra="forbid", by_alias=True, by_name=False)
+            message = JSON_RPC_MESSAGE.validate_python(value, strict=True, extra="forbid", by_alias=True, by_name=False)
+            if isinstance(message, types.JSONRPCResponse) and message.id in self._state.call_request_ids:
+                StrictCallToolResult.model_validate(value["result"], strict=True, extra="forbid", by_alias=True, by_name=False)
             return
         except Exception:
             pass

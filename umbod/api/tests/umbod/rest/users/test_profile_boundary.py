@@ -36,13 +36,17 @@ def client(
     key["kid"] = KEY_ID
     jwks = json.dumps({"keys": [key]}).encode("utf-8")
 
-    def open_jwks(
-        request: urllib.request.Request, timeout: float, context: object
-    ) -> BytesIO:
-        assert request.full_url == ISSUER + "jwks"
-        return BytesIO(jwks)
+    class JwksOpener:
+        def open(self, request: urllib.request.Request, *, timeout: float) -> BytesIO:
+            assert request.full_url == ISSUER + "jwks"
+            return BytesIO(jwks)
 
-    monkeypatch.setattr(urllib.request, "urlopen", open_jwks)
+    def build_opener(
+        *handlers: urllib.request.BaseHandler | type[urllib.request.BaseHandler],
+    ) -> JwksOpener:
+        return JwksOpener()
+
+    monkeypatch.setattr(urllib.request, "build_opener", build_opener)
     config = AppConfig(
         rest={"metrics_enabled": False},
         admin_authentication={

@@ -2,11 +2,11 @@ import { readFileSync } from 'node:fs';
 import { createRawSnippet, type Snippet } from 'svelte';
 import { render } from 'svelte/server';
 import { describe, expect, test } from 'vitest';
-import type { CatalogueCapability } from '$lib/dashboard/domain/schemas';
-import type { ToolParameter } from '$lib/components/shared/tools/presentation';
-import ToolCard from '$lib/components/shared/tools/ToolCard.svelte';
-import AdminToolCard from '$lib/components/admin/connectors/ToolCard.svelte';
-import CatalogueToolCard from '$lib/components/dashboard/CatalogueToolCard.svelte';
+import type { CatalogueCapability } from '#lib/dashboard/domain/schemas.js';
+import type { ToolParameter } from '#lib/components/shared/tools/presentation.js';
+import ToolCard from '#lib/components/shared/tools/ToolCard.svelte';
+import AdminToolCard from '#lib/components/admin/connectors/ToolCard.svelte';
+import CatalogueToolCard from '#lib/components/dashboard/CatalogueToolCard.svelte';
 
 function content(markup: string): Snippet {
   return createRawSnippet(() => ({ render: (): string => markup }));
@@ -114,7 +114,7 @@ describe('actor-independent tool card composition', () => {
 
   test('the user tool adapter never reaches through the admin presentation or models', (): void => {
     const source = readFileSync('src/lib/components/dashboard/CatalogueToolCard.svelte', 'utf8');
-    expect(source).not.toContain('$lib/admin/');
-    expect(source).not.toContain('$lib/components/admin/');
+    expect(source).not.toContain('#lib/admin/');
+    expect(source).not.toContain('#lib/components/admin/');
   });
 });

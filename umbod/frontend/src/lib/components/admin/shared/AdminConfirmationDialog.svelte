@@ -1,5 +1,5 @@
 <script lang="ts">
-  import ModalShell from '$lib/components/shared/ModalShell.svelte';
+  import ModalShell from '#lib/components/shared/ModalShell.svelte';
   import Button from './Button.svelte';
 
   type Props = {

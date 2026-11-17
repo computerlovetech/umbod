@@ -1,8 +1,8 @@
 <script lang="ts">
   import { page } from '$app/state';
-  import Button from '$lib/components/admin/shared/Button.svelte';
-  import { navigateToSignIn } from '$lib/admin/infrastructure/transport';
-  import { logoutNavigation, type LogoutNavigation } from '$lib/admin/infrastructure/logout';
+  import Button from '#lib/components/admin/shared/Button.svelte';
+  import { navigateToSignIn } from '#lib/admin/infrastructure/transport.js';
+  import { logoutNavigation, type LogoutNavigation } from '#lib/admin/infrastructure/logout.js';
 
   let { logout = logoutNavigation }: { logout?: LogoutNavigation } = $props();
   let loggingOut = $state(false);

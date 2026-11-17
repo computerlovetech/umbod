@@ -31,6 +31,7 @@ class OperationState:
         self.gets = 0
         self.deletes = 0
         self.calls = 0
+        self.call_request_ids: set[str | int] = set()
         self.cursors: set[str] = set()
         self.expected_cursor = ""
         self.pages = 0
@@ -143,3 +144,7 @@ class OperationState:
         self.calls += 1
         if self.calls > 1 or params != {"name": self.operation.tool_name, "arguments": self.operation.arguments}:
             self.reject("protocol_rejected")
+        request_id = message["id"]
+        if type(request_id) not in {str, int}:
+            self.reject("protocol_rejected")
+        self.call_request_ids.add(request_id)

@@ -105,7 +105,7 @@ export class FilesState {
     );
   }
 
-  observeAccountIdentity = (identity: import('$lib/header/accountIdentity').HeaderAccountIdentityState, force = false): void => {
+  observeAccountIdentity = (identity: import('#lib/header/accountIdentity.js').HeaderAccountIdentityState, force = false): void => {
     const fingerprint = JSON.stringify(identity.kind === 'visible' ? ['visible', identity.hiddenValues.id] : ['hidden']);
     if (this.disposed || !force && fingerprint === this.identityFingerprint) return;
     const previous = this.identityFingerprint;

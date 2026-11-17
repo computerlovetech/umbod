@@ -1,5 +1,5 @@
 import { SvelteMap } from 'svelte/reactivity';
-import { HttpError } from '$lib/admin/infrastructure/transport';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { FilesystemApi } from '../api';
 import { breadcrumbsSchema, type BreadcrumbItem, type NodeSummary } from '../domain/schemas';
 import { FilesNavigationState } from './navigation-state.svelte';

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { BrowserRequestError } from '$lib/admin/infrastructure/browser-request';
+import { BrowserRequestError } from '#lib/admin/infrastructure/browser-request.js';
 import { MountedDetailProxy } from './mounted-detail-proxy.svelte';
 
 type Deferred<T> = { promise: Promise<T>; resolve: (value: T) => void; reject: (error: Error) => void };

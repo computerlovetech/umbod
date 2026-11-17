@@ -1,9 +1,9 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { PromptCatalog } from '$lib/admin/capability-catalogs';
-  import ToolSaveBar from '$lib/components/admin/connectors/ToolSaveBar.svelte';
-  import AdminToggle from '$lib/components/admin/shared/AdminToggle.svelte';
-  import CapabilityCatalogGrid from '$lib/components/admin/shared/CapabilityCatalogGrid.svelte';
+  import type { PromptCatalog } from '#lib/admin/capability-catalogs.js';
+  import ToolSaveBar from '#lib/components/admin/connectors/ToolSaveBar.svelte';
+  import AdminToggle from '#lib/components/admin/shared/AdminToggle.svelte';
+  import CapabilityCatalogGrid from '#lib/components/admin/shared/CapabilityCatalogGrid.svelte';
 
   let {
     catalog,

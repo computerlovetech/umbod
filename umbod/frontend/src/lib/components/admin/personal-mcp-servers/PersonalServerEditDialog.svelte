@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { adminApi } from '$lib/admin/infrastructure/admin-api';
-  import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
-  import type { PersonalServerAdministration } from '$lib/admin/personal-mcp-servers/administration';
-  import type { InstanceConfigurationRoute } from '$lib/admin/instance-configuration-api';
+  import { adminApi } from '#lib/admin/infrastructure/admin-api.js';
+  import type { PersonalServerDiscovery } from '#lib/admin/personal-mcp-servers/discovery-administration.js';
+  import type { PersonalServerAdministration } from '#lib/admin/personal-mcp-servers/administration.js';
+  import type { InstanceConfigurationRoute } from '#lib/admin/instance-configuration-api.js';
   import PersonalServerRegistration from './PersonalServerRegistration.svelte';
   import { PersonalServerFormState } from './personal-server-form-state.svelte';
 
-  import type { DownstreamMcpConnector } from '$lib/admin/downstream-mcp-connectors';
+  import type { DownstreamMcpConnector } from '#lib/admin/downstream-mcp-connectors.js';
   import type { PolicyProposal } from './policy-form.svelte';
   let { connectorId, close, api, configuration, accessLost, lockChanged, reconciliationRequired, saved, proposal, discovery }: {
     connectorId: string;

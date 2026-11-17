@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { mountWorkspace } from '$lib/components/workspace/mount-workspace.test-support';
+import { mountWorkspace } from '#lib/components/workspace/mount-workspace.test-support.js';
 import { unmount } from 'svelte';
-import { InMemoryDashboardApi } from '$lib/dashboard/infrastructure/in-memory-api';
-import { catalogue } from '$lib/dashboard/test-fixtures';
-import { InMemoryWorkspaceApi } from '$lib/workspace/in-memory-api.test-support';
+import { InMemoryDashboardApi } from '#lib/dashboard/infrastructure/in-memory-api.js';
+import { catalogue } from '#lib/dashboard/test-fixtures.js';
+import { InMemoryWorkspaceApi } from '#lib/workspace/in-memory-api.test-support.js';
 import Dashboard from './Dashboard.svelte';
 
 let component: ReturnType<typeof mountWorkspace> | undefined;

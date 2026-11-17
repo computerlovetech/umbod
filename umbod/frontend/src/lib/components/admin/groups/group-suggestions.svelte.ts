@@ -1,4 +1,4 @@
-import type { IdentityGroupDirectory } from '$lib/identity-directory/port';
+import type { IdentityGroupDirectory } from '#lib/identity-directory/port.js';
 
 export class GroupSuggestions {
   private values = $state.raw<string[]>([]);

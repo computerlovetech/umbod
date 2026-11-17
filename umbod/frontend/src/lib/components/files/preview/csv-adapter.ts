@@ -1,5 +1,5 @@
-import type { NodeSummary } from '$lib/files/domain/schemas';
-import type { FileContentPort, FilePreviewAdapter } from '$lib/files/preview/ports';
+import type { NodeSummary } from '#lib/files/domain/schemas.js';
+import type { FileContentPort, FilePreviewAdapter } from '#lib/files/preview/ports.js';
 import CsvPreview from './CsvPreview.svelte';
 
 export const csvPreviewAdapter: FilePreviewAdapter = {

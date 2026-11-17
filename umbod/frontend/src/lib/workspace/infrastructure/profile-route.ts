@@ -1,4 +1,4 @@
-import type { Transport } from '$lib/admin/infrastructure/transport';
+import type { Transport } from '#lib/admin/infrastructure/transport.js';
 import type { WorkspaceProfileSource } from '../api';
 import { workspaceProfileSchema, type WorkspaceProfile } from '../domain/profile';
 

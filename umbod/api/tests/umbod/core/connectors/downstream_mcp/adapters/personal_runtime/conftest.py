@@ -40,6 +40,7 @@ class ScriptedNetwork(httpcore2.AsyncNetworkBackend):
         self.next_cursor = ""
         self.cursor_sequence: list[str] = []
         self.stream_call = False
+        self.call_result_sse = False
         self.close_get = False
         self.session = False
         self.cleanup_status = 200
@@ -118,6 +119,9 @@ class ScriptedStream(httpcore2.AsyncNetworkStream):
         elif rpc_method == "notifications/initialized" or method == "DELETE":
             status = self.network.cleanup_status if method == "DELETE" else 202
             payload = b""
+        elif rpc_method == "tools/call" and self.network.call_result_sse:
+            payload = b"event: message\ndata: " + payload + b"\n\n"
+            response_headers["content-type"] = "text/event-stream"
         elif rpc_method == "tools/call" and self.network.stream_call:
             payload = b"id: resume-secret\nretry: 0\ndata: \n\n"
             response_headers["content-type"] = "text/event-stream"

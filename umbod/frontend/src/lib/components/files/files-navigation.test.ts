@@ -1,12 +1,12 @@
 import { Window } from 'happy-dom';
 import { render } from 'svelte/server';
 import { describe, expect, test, vi } from 'vitest';
-import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
-import { deferred, filesystemFixture, folderId, rootId } from '$lib/files/fixtures.test-support';
-import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
-import { FilesNavigationState } from '$lib/files/state/navigation-state.svelte';
-import { FilesState } from '$lib/files/state/files-state.svelte';
-import type { Breadcrumbs, NodeSummary } from '$lib/files/domain/schemas';
+import { AuthenticationRequiredError, HttpError } from '#lib/admin/infrastructure/transport.js';
+import { deferred, filesystemFixture, folderId, rootId } from '#lib/files/fixtures.test-support.js';
+import { InMemoryFilesApi } from '#lib/files/infrastructure/in-memory-api.test-support.js';
+import { FilesNavigationState } from '#lib/files/state/navigation-state.svelte.js';
+import { FilesState } from '#lib/files/state/files-state.svelte.js';
+import type { Breadcrumbs, NodeSummary } from '#lib/files/domain/schemas.js';
 import FilesNavigation from './FilesNavigation.svelte';
 
 function documentFor(state: FilesNavigationState): Window['document'] {

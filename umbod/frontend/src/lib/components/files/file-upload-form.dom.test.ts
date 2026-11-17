@@ -1,11 +1,11 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-import { NetworkError } from '$lib/admin/infrastructure/transport';
-import type { FilesApi } from '$lib/files/api';
-import { deferred, filesystemFixture, rootId } from '$lib/files/fixtures.test-support';
-import { InMemoryFilesApi } from '$lib/files/infrastructure/in-memory-api.test-support';
-import { FilesState } from '$lib/files/state/files-state.svelte';
-import { UploadState } from '$lib/files/state/upload-state.svelte';
+import { NetworkError } from '#lib/admin/infrastructure/transport.js';
+import type { FilesApi } from '#lib/files/api.js';
+import { deferred, filesystemFixture, rootId } from '#lib/files/fixtures.test-support.js';
+import { InMemoryFilesApi } from '#lib/files/infrastructure/in-memory-api.test-support.js';
+import { FilesState } from '#lib/files/state/files-state.svelte.js';
+import { UploadState } from '#lib/files/state/upload-state.svelte.js';
 import FileUploadForm from './FileUploadForm.svelte';
 
 let component: ReturnType<typeof mount> | undefined;
