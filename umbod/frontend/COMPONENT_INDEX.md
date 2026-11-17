@@ -84,7 +84,7 @@ tags:
 
 - [PdfPreview](src/lib/components/files/preview/PdfPreview.svelte) — Content-only PDF frame; use with a prepared PDF data URL and a browser with built-in PDF viewing.
 
-- [MarkdownPreview](src/lib/components/files/preview/MarkdownPreview.svelte) — Content-only Markdown with highlighted code and bounded Mermaid diagrams; escapes raw HTML, omits images and restricts links.
+- [MarkdownPreview](src/lib/components/files/preview/MarkdownPreview.svelte) — Content-only Markdown with highlighted code and bounded Mermaid diagrams; hides front matter, escapes HTML, omits images and restricts links.
 
 - [PermissionBadge](src/lib/components/files/PermissionBadge.svelte) — Compact caller-permission summary for file and folder rows; accepts permissions only, without ownership or operation eligibility.
 - [FileTypeIcon](src/lib/components/files/FileTypeIcon.svelte) — Accessible file-format, folder and explicit home SVGs; groups MIME types and extensions without loading file contents.

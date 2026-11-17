@@ -29,6 +29,16 @@ test('renders highlighted Markdown and never invokes diagrams for ordinary fence
   expect(render).not.toHaveBeenCalled();
 });
 
+test('shows the document body without front-matter headings or separators', async (): Promise<void> => {
+  const render = vi.fn<DiagramRenderer['render']>();
+  mountPreview('---\ntype: Product Proposal\ntitle: Hidden title\nstatus: draft\n---\n\n# Umbod Enterprise Cloud\n\nExecutive proposal', { render });
+  await tick();
+  expect(document.querySelector('article')?.textContent).toBe('Umbod Enterprise Cloud\nExecutive proposal\n');
+  expect(document.querySelector('h1')?.textContent).toBe('Umbod Enterprise Cloud');
+  expect(document.querySelector('h2, hr')).toBeNull();
+  expect(render).not.toHaveBeenCalled();
+});
+
 test('replaces a mermaid fence with an accessible diagram and preserves other code', async (): Promise<void> => {
   const render = vi.fn<DiagramRenderer['render']>().mockResolvedValue(svg);
   mountPreview('~~~mermaid\ngraph TD; A-->B\n~~~\n\n~~~plaintext\nunchanged\n~~~', { render });
