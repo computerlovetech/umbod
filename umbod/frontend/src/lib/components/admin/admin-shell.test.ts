@@ -36,8 +36,8 @@ describe('admin shell logout', () => {
     expect(shell.body).toContain('aria-label="Administration navigation"');
     expect(document.querySelector('.workspace-back')?.textContent).toBe('←Back to workspace');
     expect(document.querySelector('.workspace-back')?.getAttribute('href')).toBe('/dashboard');
-    expect(document.querySelector('nav')?.textContent).toContain('Dashboard');
-    expect(document.querySelector('nav')?.textContent).toContain('Getting started');
+    expect(document.querySelector('nav')?.textContent).not.toContain('Dashboard');
+    expect(document.querySelector('nav')?.textContent).not.toContain('Getting started');
     expect(shell.body).toContain('href="/dashboard"');
     expect(shell.body).not.toContain('Administration</a>');
     expect(shell.body).not.toContain('href="/admin"');
@@ -50,7 +50,6 @@ describe('admin shell logout', () => {
     expect(shell.body).not.toContain('href="/admin/filesystem"');
     expect(shell.body).not.toContain('Filesystem</a>');
     expect(Array.from(document.querySelectorAll('nav a'), (link): string => link.textContent.trim())).toEqual([
-      'Dashboard', 'Connectors', 'Files', 'Getting started',
       'Connectors', 'Groups', 'Group permissions', 'Insights'
     ]);
     expect(document.querySelectorAll('nav a[aria-current="page"]')).toHaveLength(1);

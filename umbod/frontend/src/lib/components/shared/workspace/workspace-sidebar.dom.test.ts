@@ -53,12 +53,11 @@ describe('contextual sidebar rendering', (): void => {
     await tick();
     const links = Array.from(document.querySelectorAll('nav[aria-label="Administration navigation"] a'));
     expect(links.map((link): string | null => link.getAttribute('href'))).toEqual([
-      '/dashboard', '/connectors', '/files', '/getting-started',
       '/admin/connectors', '/admin/groups', '/admin/group-permissions/connectors',
       '/admin/insights/agent-behaviour'
     ]);
     expect(document.querySelectorAll('nav a[aria-current="page"]')).toHaveLength(1);
-    expect(document.querySelector('nav a.section-start')?.getAttribute('href')).toBe('/admin/connectors');
+    expect(document.querySelector('nav a.section-start')).toBeNull();
     for (const link of links) {
       expect(link.querySelectorAll('svg')).toHaveLength(1);
       expect(link.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');

@@ -19,21 +19,18 @@ describe('contextual workspace navigation', (): void => {
     });
   });
 
-  test('administration sidebar keeps workspace destinations before divided administration links', (): void => {
+  test('administration sidebar shows only administration destinations', (): void => {
     expect(administrationNavigation.map((link): string => link.href)).toEqual([
-      '/dashboard', '/connectors', '/files', '/getting-started',
       '/admin/connectors', '/admin/groups', '/admin/group-permissions/connectors',
       '/admin/insights/agent-behaviour'
     ]);
     expect(administrationNavigation.map((link): string | undefined => link.icon)).toEqual([
-      'dashboard', 'connectors', 'files', 'gettingStarted',
       'connectors', 'groups', 'permissions', 'analytics'
     ]);
     expect(administrationNavigation.map((link): string => link.id)).toEqual([
-      'dashboard', 'workspaceConnectors', 'files', 'gettingStarted',
       'connectors', 'groups', 'groupPermissions', 'insights'
     ]);
-    expect(new Set(administrationNavigation.map((link): string => link.id)).size).toBe(8);
-    expect(administrationNavigation.filter((link): boolean => link.startsSection === true).map((link): string => link.href)).toEqual(['/admin/connectors']);
+    expect(new Set(administrationNavigation.map((link): string => link.id)).size).toBe(4);
+    expect(administrationNavigation.filter((link): boolean => link.startsSection === true).map((link): string => link.href)).toEqual([]);
   });
 });
