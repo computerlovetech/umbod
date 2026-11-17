@@ -162,7 +162,7 @@ class InstallerDriver:
             if extra:
                 archive.writestr(extra, "unexpected")
         digest = hashlib.sha256((self.downloads / "package.zip").read_bytes()).hexdigest()
-        (self.downloads / "package.sha256").write_text(digest + "\n")
+        (self.downloads / "package.sha256").write_bytes((digest + "\n").encode("ascii"))
 
 
 @pytest.fixture(params=["codex", "claude-code"])

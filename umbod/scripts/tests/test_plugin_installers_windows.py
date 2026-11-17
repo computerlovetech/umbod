@@ -171,8 +171,6 @@ def windows_installer(user_owned_default_token_owner: None, request: pytest.Fixt
     package.write_archive()
     (downloads / "marketplace.txt").write_bytes((MARKETPLACE + "\n").encode())
     (downloads / "endpoint.txt").write_bytes((ENDPOINT + "\n").encode())
-    package_checksum = downloads / "package.sha256"
-    package_checksum.write_bytes(package_checksum.read_text().encode())
     public_root = tmp_path / "public"
     public_downloads = public_root / "api" / "install" / "v1" / request.param
     public_downloads.parent.mkdir(parents=True)
