@@ -7,7 +7,7 @@
   import Button from '../shared/Button.svelte';
 
   const clientOptions: SelectOption[] = [
-    { value: 'dynamic_public', label: 'Automatic registration' },
+    { value: 'automatic', label: 'Automatic registration' },
     { value: 'preconfigured_public', label: 'Use an existing client ID' },
     { value: 'preconfigured_confidential', label: 'Use an existing client ID and secret' }
   ];
@@ -15,17 +15,20 @@
     { value: 'client_secret_basic', label: 'Basic (client_secret_basic)' },
     { value: 'client_secret_post', label: 'POST (client_secret_post)' }
   ];
-  let { form, idPrefix, proposal, scopes, discoveredIssuer }: { form: PolicyForm; idPrefix: string; proposal?: PolicyProposal; scopes?: Snippet; discoveredIssuer?: string } = $props();
+  let { form, idPrefix, proposal, scopes, discoveredIssuer, onClientSelection }: { form: PolicyForm; idPrefix: string; proposal?: PolicyProposal; scopes?: Snippet; discoveredIssuer?: string; onClientSelection?: (value: string) => void | Promise<void> } = $props();
 </script>
 
 <div class="fields">
-  <Select id={`${idPrefix}-client-kind`} label="OAuth application setup" options={clientOptions} value={form.kind} onchange={form.setKind} />
-  {#if form.kind !== 'dynamic_public' || form.issuer}
-    {#if proposal}<p>Discovered issuer: <code>{proposal.issuer}</code></p><Button variant="secondary" onclick={() => form.set('issuer', proposal!.issuer)}>Use discovered issuer</Button>{/if}
+  <Select id={`${idPrefix}-client-kind`} label="OAuth application setup" options={clientOptions} value={form.clientSelection} onchange={onClientSelection ?? form.setKind} />
+  {#if proposal}<p>Discovered issuer: <code>{proposal.issuer}</code></p><Button variant="secondary" onclick={(): void => form.set('issuer', proposal!.issuer)}>Use discovered issuer</Button>{/if}
+  {#if !form.automatic}
     <AdminConfigurationField id={`${idPrefix}-issuer`} name="issuer" label="Exact HTTPS issuer URL" type="url" placeholder="https://auth.example.com" readonly={!!discoveredIssuer} value={discoveredIssuer ?? form.issuer} required oninput={(event) => form.set('issuer', (event.currentTarget as HTMLInputElement).value)} />
   {/if}
-  {#if form.kind !== 'dynamic_public'}
+  {#if !form.automatic}
     <AdminConfigurationField id={`${idPrefix}-client-id`} name="clientId" label="Client ID" placeholder="Client ID from the provider" value={form.clientId} required oninput={(event) => form.set('clientId', (event.currentTarget as HTMLInputElement).value)} />
+  {/if}
+  {#if form.automatic && form.automaticSupported}
+    <p>Application credentials will be obtained automatically when a user connects. Each user signs in with their own account.</p>
   {/if}
   {#if form.kind === 'preconfigured_confidential'}
     {#if form.configured}<p>Client secret configured. Enter a fresh secret to save.</p>{/if}

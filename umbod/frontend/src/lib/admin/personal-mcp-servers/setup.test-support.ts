@@ -17,7 +17,7 @@ export class InMemoryPersonalOAuthSetup implements PersonalOAuthSetupAdministrat
   readonly calls: { operation: 'status' | 'discovery' | 'validation'; id: string; input?: SetupRequest }[] = [];
   current: SetupStatus = setupFixture();
   discovery: SetupStatus = setupFixture({ status: 'discovered', checked_at: '2026-01-01T00:00:00Z', discovery: discoveryFixture() });
-  validation: SetupStatus = setupFixture({ status: 'validated', checked_at: '2026-01-01T00:00:00Z', result: { kind: 'validated', discovery: discoveryFixture(), returned_scopes: [], scope_source: 'registration' } });
+  validation: SetupStatus = setupFixture({ status: 'validated', checked_at: '2026-01-01T00:00:00Z', result: { kind: 'validated', discovery: discoveryFixture(), returned_scopes: [], scope_source: 'not_checked' } });
   async status(id: string): Promise<SetupStatus> {
     this.calls.push({ operation: 'status', id });
     if (this.policies) {

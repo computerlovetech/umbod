@@ -75,6 +75,7 @@ from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
     PersonalOAuthConfigurationUnavailable,
     PersonalOAuthSettings,
     PreconfiguredConfidentialOAuthClient,
+    DynamicConfidentialOAuthClient,
     PreconfiguredPublicOAuthClient,
     ReplacePersonalOAuthConfiguration,
 )
@@ -111,6 +112,7 @@ from umbod.rest.connectors.downstream_mcp.errors import (
 )
 from umbod.rest.connectors.downstream_mcp.schemas import (
     DynamicPublicClientResponse,
+    DynamicConfidentialClientResponse,
     PersonalOAuthConfigurationResponse,
     PreconfiguredConfidentialClientResponse,
     PreconfiguredPublicClientResponse,
@@ -413,7 +415,7 @@ def _require_confidential_encryption(
     settings: PersonalOAuthSettings, factories: ConnectorApiDependencyFactories,
 ) -> None:
     if (
-        isinstance(settings.client, PreconfiguredConfidentialOAuthClient)
+        isinstance(settings.client, (PreconfiguredConfidentialOAuthClient, DynamicConfidentialOAuthClient))
         and not factories.settings.connector_security.configuration_secret.strip()
     ):
         raise HTTPException(status_code=422, detail={"code": "personal_oauth_encryption_required"})
@@ -429,6 +431,8 @@ def _personal_configuration_response(
             token_endpoint_auth_method=client.token_endpoint_auth_method,
             client_secret_configured=True,
         )
+    elif isinstance(client, DynamicConfidentialOAuthClient):
+        projection = DynamicConfidentialClientResponse(kind=client.kind, approved_issuers=client.approved_issuers, token_endpoint_auth_method=client.token_endpoint_auth_method)
     elif isinstance(client, PreconfiguredPublicOAuthClient):
         projection = PreconfiguredPublicClientResponse(
             kind=client.kind, issuer_url=client.issuer_url, client_id=client.client_id,

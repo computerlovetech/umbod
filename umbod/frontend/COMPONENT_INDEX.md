@@ -23,7 +23,8 @@ tags:
 - [AdminConfigurationField](src/lib/components/admin/shared/AdminConfigurationField.svelte) — Labelled text, password, or URL field; use for configuration inputs with helper text, validation, or existing-secret handling.
 - [SegmentedRadio](src/lib/components/shared/SegmentedRadio.svelte) — Controlled native radios with normal or compact sizing; use for a short set of visible, mutually exclusive choices and parent-owned updates.
 - [Select](src/lib/components/admin/shared/Select.svelte) — Controlled select or searchable combobox; use for keyboard-accessible choices, with parent-owned options and filtering.
-- [AdminToggle](src/lib/components/admin/shared/AdminToggle.svelte) — Controlled checkbox or submit-button switch; use for activation and permission flags while the parent owns updates.
+- [Checkbox](src/lib/components/shared/Checkbox.svelte) — Controlled labelled native checkbox; use for selections and approvals with parent-owned updates and native input attributes.
+- [AdminToggle](src/lib/components/admin/shared/AdminToggle.svelte) — Controlled switch or submit-button switch; use for activation settings while the parent owns updates.
 - [AdminFileUpload](src/lib/components/admin/shared/AdminFileUpload.svelte) — Single-file picker/drop field with size and type checks; use for file selection, noting its fixed JSON marker.
 - [QueryPanel](src/lib/components/shared/workspace/QueryPanel.svelte) — Collapsed native query editor; callers own parameters, reset, submission and loading.
 - [Form](src/lib/components/admin/shared/Form.svelte) — Scrollable fields and optional action footer; use for forms compatible with its attached administration submission integration.

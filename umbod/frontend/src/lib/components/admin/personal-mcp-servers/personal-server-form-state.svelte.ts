@@ -7,6 +7,7 @@ import { PolicyForm } from './policy-form.svelte';
 import type { InstanceConfigurationRoute } from '$lib/admin/instance-configuration-api';
 import { personalServerAvailability, type PersonalServerAvailability } from '$lib/admin/personal-mcp-servers/domain/availability';
 
+import type { AutomaticClient } from '$lib/admin/personal-mcp-servers/domain/discovery';
 import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
 import { PersonalServerDiscoveryState } from './personal-server-discovery-state.svelte';
 
@@ -25,13 +26,40 @@ export class PersonalServerFormState {
   confirmation = $state<Confirmation | null>(null);
   metadata = $state({ name: '', prefix: '', description: '', path: '', endpoint: '' });
   readonly discovery: PersonalServerDiscoveryState;
-  readonly form = new PolicyForm(() => this.discovery.invalidateApproval());
+  readonly form = new PolicyForm((): void => { this.discovery.invalidateApproval(); this.confirmation = null; });
   private prefixEdited = false;
   private pathEdited = false;
   private epoch = 0;
   private disposed = false;
-  constructor(private readonly api: PersonalServerAdministration, private readonly configuration: InstanceConfigurationRoute, private readonly targetId: string | null, discovery: PersonalServerDiscovery | null, private readonly completed: (id: string, connector?: DownstreamMcpConnector) => Promise<void> = async () => {}, private readonly accessLost: () => void = () => {}, private readonly lockChanged: (locked: boolean) => void = () => {}) { this.discovery = new PersonalServerDiscoveryState(discovery, (error) => { this.fail(error, false); this.lockChanged(this.locked); }); }
+  constructor(private readonly api: PersonalServerAdministration, private readonly configuration: InstanceConfigurationRoute, private readonly targetId: string | null, discovery: PersonalServerDiscovery | null, private readonly completed: (id: string, connector?: DownstreamMcpConnector) => Promise<void> = async () => {}, private readonly accessLost: () => void = () => {}, private readonly lockChanged: (locked: boolean) => void = () => {}) { this.discovery = new PersonalServerDiscoveryState(discovery, (error) => { this.fail(error, false); this.lockChanged(this.locked); }, this.acceptAutomaticClient); }
+  private acceptAutomaticClient = (client: AutomaticClient | null): void => {
+    this.form.setAutomaticProposal(client);
+    this.pinAutomaticIssuer();
+  };
+  private pinAutomaticIssuer(): void {
+    if (this.editing && this.form.automatic && this.form.automaticResolved && this.discovery.result) this.form.set('issuer', this.discovery.result.issuer_url);
+  }
+  get readyForPolicyReview(): boolean {
+    if (this.locked || !this.selected || !this.policy) return false;
+    if (!this.form.automatic) return true;
+    return this.form.automaticResolved && !this.discovery.pending && !this.discovery.failed && (!this.discovery.attempted || !!this.discovery.result && this.discovery.result.automatic_client.kind === this.form.kind);
+  }
+  get automaticEditIssuer(): string { return this.form.automatic && this.readyForPolicyReview ? this.form.issuer : ''; }
+  selectClient = async (value: string): Promise<void> => {
+    if (this.locked || !this.selected || !this.policy) return;
+    this.form.setKind(value);
+    if (!this.editing || !this.form.automatic) return;
+    if (this.form.automaticResolved) { this.pinAutomaticIssuer(); return; }
+    if (this.discovery.pending) return;
+    this.discovery.reset(true);
+    this.discovery.setEndpoint(this.metadata.endpoint);
+    await this.discovery.retry();
+  };
   get canSaveCreation(): boolean { return this.canRegister && this.discovery.canSave(this.form.kind); }
+  get creationBlocker(): string {
+    if (this.editing || !this.canRegister) return '';
+    return this.discovery.creationBlocker(this.form.kind);
+  }
   get editing(): boolean { return this.targetId !== null; }
   get canRegister(): boolean { return !this.targetId && !this.disposed && !this.locked && this.availability.registration === 'enabled'; }
   private async readAvailability(token: number): Promise<PersonalServerAvailability> {
@@ -89,6 +117,7 @@ export class PersonalServerFormState {
     const token = ++this.epoch;
     this.loading = true;
     this.lockChanged(true);
+    this.discovery.reset(false);
     this.form.reset();
     this.confirmation = null;
     this.selected = null;
@@ -152,7 +181,7 @@ export class PersonalServerFormState {
     }
   };
   requestConfirmation = (action: Confirmation): void => {
-    if (this.locked || !this.selected || !this.policy) return;
+    if (!this.readyForPolicyReview) return;
     this.confirmation = action;
   };
   create = async (): Promise<void> => {
@@ -172,12 +201,15 @@ export class PersonalServerFormState {
     });
   };
   confirm = async (): Promise<void> => {
-    if (this.locked || !this.confirmation || !this.selected || !this.policy) return;
+    if (!this.readyForPolicyReview || !this.confirmation || !this.selected || !this.policy) return;
     const id = this.selected.connector_id;
     const revision = this.policy.revision;
     this.confirmation = null;
     let settings: PersonalSettings;
-    try { settings = this.form.settings(); }
+    try {
+      this.pinAutomaticIssuer();
+      settings = this.form.settings();
+    }
     catch {
       this.form.clearSecret();
       this.message = 'Check OAuth settings. Scopes must be unique ASCII tokens separated by ordinary spaces; confidential writes require a fresh secret.';

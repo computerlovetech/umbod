@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 from ..personal_oauth_configuration import PersonalOAuthPolicy, legacy_personal_oauth_policy
 
@@ -14,11 +14,18 @@ class PersonalOAuthModel(BaseModel):
 
 
 class PreparePersonalOAuth(PersonalOAuthModel):
+    connector_id: str = ""
     endpoint_url: str = Field(min_length=1)
     redirect_uri: str = Field(min_length=1)
     state: SecretStr
     code_verifier: SecretStr
     policy: PersonalOAuthPolicy = Field(default_factory=legacy_personal_oauth_policy)
+
+    @model_validator(mode="after")
+    def validate_connector_binding(self) -> "PreparePersonalOAuth":
+        if self.policy.client.kind == "dynamic_confidential" and not self.connector_id.strip():
+            raise ValueError("Connector identifier required")
+        return self
 
 
 class PreparedPersonalOAuth(PersonalOAuthModel):

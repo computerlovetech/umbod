@@ -18,6 +18,7 @@ from ..personal_oauth_configuration.models import (
     OAuthIssuer,
     OAuthScopes,
 )
+from ..personal_oauth_applications.models import AbsentApplicationReference, ApplicationReference
 from .models import Authorized, PersonalConnectionKey
 from .oauth_callback_models import OAuthCallbackURI
 
@@ -63,13 +64,14 @@ class PersonalOAuthGrant(PersonalGrantModel):
     token_endpoint: OAuthIssuer
     redirect_uri: OAuthCallbackURI
     client_mode: Literal[
-        "dynamic_public", "preconfigured_public", "preconfigured_confidential"
+        "dynamic_public", "dynamic_confidential", "preconfigured_public", "preconfigured_confidential"
     ]
     token_endpoint_auth_method: Literal[
         "none", "client_secret_basic", "client_secret_post"
     ]
     requested_scopes: OAuthScopes
     granted_scopes: OAuthScopes
+    application_reference: ApplicationReference = Field(default_factory=AbsentApplicationReference)
     configuration_revision: str = Field(min_length=1, max_length=128)
     issued_at: AwareDatetime
     lifetime: Annotated[
@@ -101,9 +103,11 @@ class PersonalOAuthGrant(PersonalGrantModel):
             raise ValueError("Invalid token lifetime")
         expected_methods = (
             {"client_secret_basic", "client_secret_post"}
-            if self.client_mode == "preconfigured_confidential"
+            if self.client_mode in ("preconfigured_confidential", "dynamic_confidential")
             else {"none"}
         )
+        if (self.client_mode == "dynamic_confidential") != (self.application_reference.kind == "registered"):
+            raise ValueError("Invalid application reference")
         if self.token_endpoint_auth_method not in expected_methods:
             raise ValueError("Invalid client authentication binding")
         return self

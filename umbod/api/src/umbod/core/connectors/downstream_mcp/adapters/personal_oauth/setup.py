@@ -4,20 +4,21 @@ from typing import TypeVar
 import anyio
 from pydantic import TypeAdapter
 
-from umbod.core.invocation.diagnostics import DownstreamHttpResponse, NoDownstreamResponse
+from umbod.core.invocation.diagnostics import NoDownstreamResponse
 from ...personal_connections.oauth_failure_models import OAuthFailureEvidence
 from ...personal_connections.oauth_models import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported
-from ...personal_oauth_configuration.models import OAuthScopes, parse_oauth_scopes
+from ...personal_oauth_configuration.models import OAuthScopes
 from ...personal_oauth_setup.models import (
     DiscoverPersonalOAuthSetup,
     PersonalOAuthSetupDiscovery,
-    PersonalOAuthSetupScopeMismatch,
     PersonalOAuthSetupValidation,
     ValidatePersonalOAuthSetup,
     ValidatedPersonalOAuthSetup,
 )
 from .failure import OAuthOperationProgress, oauth_failure_boundary
 from .provider import DiscoveredPersonalOAuthProvider, unsupported_configuration
+from .callback import CallbackURLPolicy
+from .transport import OAuthHttpTransport
 from .transport import OAuthDestination
 from .validation import DiscoveredOAuthServer, validated_url
 
@@ -54,6 +55,10 @@ def discovery_projection(discovered: DiscoveredOAuthServer, command: DiscoverPer
 
 
 class DiscoveredPersonalOAuthSetupProvider(DiscoveredPersonalOAuthProvider):
+    def __init__(self, callback_policy: CallbackURLPolicy, transport: OAuthHttpTransport) -> None:
+        self._callback_policy = callback_policy
+        self._transport = transport
+
     async def discover(self, command: DiscoverPersonalOAuthSetup) -> PersonalOAuthSetupDiscovery:
         async def operation(progress: OAuthOperationProgress) -> PersonalOAuthSetupDiscovery:
             discovered = await self._discover_setup(command, progress, True)
@@ -65,24 +70,7 @@ class DiscoveredPersonalOAuthSetupProvider(DiscoveredPersonalOAuthProvider):
         async def operation(progress: OAuthOperationProgress) -> PersonalOAuthSetupValidation:
             discovered = await self._discover_setup(command, progress, False)
             discovery = discovery_projection(discovered, command)
-            if command.policy.client.kind != "dynamic_public":
-                return ValidatedPersonalOAuthSetup(discovery=discovery, returned_scopes=(), scope_source="not_checked")
-            progress.begin("registration")
-            registered = await self._register(discovered.redirect_uri, command.policy, discovered.server, progress)
-            with oauth_failure_boundary("registration", DownstreamHttpResponse(status_code=registered.status_code)):
-                returned_scopes = (
-                    parse_oauth_scopes(registered.client.scope)
-                    if "scope" in registered.client.model_fields_set else ()
-                )
-            if "scope" in registered.client.model_fields_set and returned_scopes != command.policy.requested_scopes:
-                return PersonalOAuthSetupScopeMismatch(
-                    discovery=discovery, returned_scopes=returned_scopes,
-                    downstream_response=DownstreamHttpResponse(status_code=registered.status_code),
-                )
-            return ValidatedPersonalOAuthSetup(
-                discovery=discovery, returned_scopes=returned_scopes,
-                scope_source="registration" if "scope" in registered.client.model_fields_set else "not_returned",
-            )
+            return ValidatedPersonalOAuthSetup(discovery=discovery, returned_scopes=(), scope_source="not_checked")
 
         return await bounded_setup_operation(operation)
 
@@ -92,7 +80,7 @@ class DiscoveredPersonalOAuthSetupProvider(DiscoveredPersonalOAuthProvider):
         discovered = await self._discover(command.endpoint_url, command.redirect_uri, command.policy, progress, select_advertised_issuer)
         with oauth_failure_boundary("discovery", NoDownstreamResponse()):
             await self._transport.validate_destination(OAuthDestination(url=discovered.server.token_endpoint))
-            if command.policy.client.kind == "dynamic_public":
+            if command.policy.client.kind in ("dynamic_public", "dynamic_confidential"):
                 if not discovered.server.registration_endpoint:
                     raise unsupported_configuration("registration_unavailable", "discovery")
                 validated_url(discovered.server.registration_endpoint)

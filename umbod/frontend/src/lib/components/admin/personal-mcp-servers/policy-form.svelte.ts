@@ -1,3 +1,4 @@
+import type { AutomaticClient } from '$lib/admin/personal-mcp-servers/domain/discovery';
 import { parseScopeText, settingsSchema, type ClientKind, type PersonalPolicy, type PersonalSettings } from '$lib/admin/personal-mcp-servers/domain/schemas';
 
 export interface PolicyProposal {
@@ -13,10 +14,32 @@ export class PolicyForm {
   secret = $state('');
   method = $state<'client_secret_basic' | 'client_secret_post'>('client_secret_basic');
   configured = $state(false);
+  private automaticClient = $state.raw<AutomaticClient | null>(null);
+  get automatic(): boolean { return this.kind === 'dynamic_public' || this.kind === 'dynamic_confidential'; }
+  get automaticResolved(): boolean {
+    return !!this.automaticClient && this.automaticClient.kind === this.kind && (this.automaticClient.kind === 'dynamic_public' || this.automaticClient.kind === 'dynamic_confidential' && this.automaticClient.token_endpoint_auth_method === this.method);
+  }
+  get automaticSupported(): boolean { return this.automaticClient?.kind !== 'unavailable'; }
+  get clientSelection(): string { return this.automatic ? 'automatic' : this.kind; }
+  setAutomaticProposal = (client: AutomaticClient | null): void => {
+    this.automaticClient = client;
+    if (!this.automatic || !client || client.kind === 'unavailable') return;
+    this.changed();
+    this.secret = '';
+    this.kind = client.kind;
+    if (client.kind === 'dynamic_confidential') this.method = client.token_endpoint_auth_method;
+  };
   constructor(private readonly changed: () => void = () => {}) {}
   set = (field: 'scopes' | 'issuer' | 'clientId' | 'secret', value: string): void => { if (this[field] !== value) this.changed(); this[field] = value; };
   setKind = (value: string): void => {
-    if (value !== 'dynamic_public' && value !== 'preconfigured_public' && value !== 'preconfigured_confidential') return;
+    if (value === 'automatic') {
+      this.secret = '';
+      this.changed();
+      this.kind = this.automaticClient?.kind === 'dynamic_confidential' ? 'dynamic_confidential' : 'dynamic_public';
+      if (this.automaticClient?.kind === 'dynamic_confidential') this.method = this.automaticClient.token_endpoint_auth_method;
+      return;
+    }
+    if (value !== 'dynamic_public' && value !== 'dynamic_confidential' && value !== 'preconfigured_public' && value !== 'preconfigured_confidential') return;
     this.secret = '';
     this.changed();
     this.kind = value;
@@ -26,16 +49,17 @@ export class PolicyForm {
   reset = (policy?: PersonalPolicy): void => {
     this.changed();
     this.secret = '';
+    this.automaticClient = policy && (policy.client.kind === 'dynamic_public' || policy.client.kind === 'dynamic_confidential') ? policy.client : null;
     this.scopes = policy?.requested_scopes.join(' ') ?? '';
     this.kind = policy?.client.kind ?? 'dynamic_public';
-    this.issuer = policy ? policy.client.kind === 'dynamic_public' ? policy.client.approved_issuers?.[0] ?? '' : policy.client.issuer_url : '';
-    this.clientId = policy?.client.kind !== 'dynamic_public' && policy ? policy.client.client_id : '';
-    this.method = policy?.client.kind === 'preconfigured_confidential' ? policy.client.token_endpoint_auth_method : 'client_secret_basic';
+    this.issuer = policy ? policy.client.kind === 'dynamic_public' || policy.client.kind === 'dynamic_confidential' ? policy.client.approved_issuers?.[0] ?? '' : policy.client.issuer_url : '';
+    this.clientId = policy && (policy.client.kind === 'preconfigured_public' || policy.client.kind === 'preconfigured_confidential') ? policy.client.client_id : '';
+    this.method = policy && (policy.client.kind === 'preconfigured_confidential' || policy.client.kind === 'dynamic_confidential') ? policy.client.token_endpoint_auth_method : 'client_secret_basic';
     this.configured = policy?.client.kind === 'preconfigured_confidential';
   };
   settings = (proposal?: PolicyProposal): PersonalSettings => {
     const issuer = proposal?.issuer ?? this.issuer;
-    const client = this.kind === 'dynamic_public' ? { kind: this.kind, ...(issuer ? { approved_issuers: [issuer] } : {}) } : this.kind === 'preconfigured_public'
+    const client = this.kind === 'dynamic_public' || this.kind === 'dynamic_confidential' ? { kind: this.kind, ...(issuer ? { approved_issuers: [issuer] } : {}), ...(this.kind === 'dynamic_confidential' ? { token_endpoint_auth_method: this.method } : {}) } : this.kind === 'preconfigured_public'
       ? { kind: this.kind, issuer_url: issuer, client_id: this.clientId }
       : { kind: this.kind, issuer_url: issuer, client_id: this.clientId, token_endpoint_auth_method: this.method, client_secret: this.secret };
     return settingsSchema.parse({ requested_scopes: proposal ? [...proposal.scopes] : parseScopeText(this.scopes), client });

@@ -1,5 +1,6 @@
 from .models import (
     DynamicPublicOAuthClient,
+    DynamicConfidentialOAuthClient,
     OAuthClientId,
     OAuthIssuer,
     OAuthScopes,
@@ -20,6 +21,7 @@ from .ports import PersonalOAuthConfigurationStore
 
 __all__ = [
     "DynamicPublicOAuthClient",
+    "DynamicConfidentialOAuthClient",
     "OAuthClientId",
     "OAuthIssuer",
     "OAuthScopes",

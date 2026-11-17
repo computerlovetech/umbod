@@ -8,6 +8,8 @@ import { DownstreamMcpWorkspaceState } from '../downstream-mcp-connectors/downst
 import { PersonalServerFormState } from './personal-server-form-state.svelte';
 import type { InstanceConfigurationRoute } from '$lib/admin/instance-configuration-api';
 import type { InstanceConfiguration } from '$lib/admin/instance-configuration';
+import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
+import type { EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
 import { configurationFixture } from '$lib/admin/personal-mcp-servers/availability.test-support';
 
 function setup(targetId: string | null = 'personal', lockChanged: (locked: boolean) => void = () => {}): { api: PersonalServerAdministration; configuration: InstanceConfigurationRoute; state: PersonalServerFormState; completed: ReturnType<typeof vi.fn>; lost: ReturnType<typeof vi.fn> } {
@@ -44,6 +46,36 @@ function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reje
 }
 
 describe('personal registration and selected policy through administration port', () => {
+  test('automatic edit review and confirm fail closed while metadata is pending or failed', async (): Promise<void> => {
+    const api = new InMemoryPersonalServers([serverFixture()], [{ ...policyFixture(), client: { kind: 'preconfigured_public', issuer_url: 'https://manual.test', client_id: 'app' } }]);
+    const replace = vi.spyOn(api, 'replacePolicy');
+    const pending = deferred<EndpointDiscoveryResult>();
+    const discovery: PersonalServerDiscovery = { discover: vi.fn((): Promise<EndpointDiscoveryResult> => pending.promise) };
+    const state = new PersonalServerFormState(api, { get: async () => configurationFixture() }, 'personal', discovery);
+    try {
+      await state.reload();
+      state.requestConfirmation('policy');
+      expect(state.confirmation).toBe('policy');
+      const selecting = state.selectClient('automatic');
+      expect(state.confirmation).toBeNull();
+      expect(state.readyForPolicyReview).toBe(false);
+      state.requestConfirmation('policy');
+      await state.confirm();
+      expect(state.confirmation).toBeNull();
+      expect(replace).not.toHaveBeenCalled();
+      pending.reject(new Error('metadata unavailable'));
+      await selecting;
+      expect(state.readyForPolicyReview).toBe(false);
+      state.requestConfirmation('policy');
+      await state.confirm();
+      expect(state.confirmation).toBeNull();
+      expect(replace).not.toHaveBeenCalled();
+      await state.selectClient('preconfigured_public');
+      expect(state.readyForPolicyReview).toBe(true);
+      state.requestConfirmation('policy');
+      expect(state.confirmation).toBe('policy');
+    } finally { state.dispose(); }
+  });
   test('suggests identifiers from the server name without guessing provider settings', async () => {
     const { state, api } = setup(null);
     await state.reload();

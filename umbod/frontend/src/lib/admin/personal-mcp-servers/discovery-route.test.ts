@@ -10,7 +10,7 @@ import { createFixture } from './fixtures.test-support';
 
 const automaticRequest: EndpointDiscoveryRequest = { endpoint_url: 'https://provider.test/mcp', issuer_selection: { kind: 'automatic' } };
 const selectedRequest: EndpointDiscoveryRequest = { ...automaticRequest, issuer_selection: { kind: 'selected', issuer_url: 'https://issuer.test' } };
-const discovered: EndpointDiscoveryResult = { kind: 'discovered', endpoint_url: automaticRequest.endpoint_url, issuer_url: 'https://issuer.test', available_scopes: ['records:read'], scope_source: 'resource', automatic_registration: 'available', token_endpoint_auth_methods: ['none', 'client_secret_basic'] };
+const discovered: EndpointDiscoveryResult = { kind: 'discovered', endpoint_url: automaticRequest.endpoint_url, issuer_url: 'https://issuer.test', available_scopes: ['records:read'], scope_source: 'resource', automatic_registration: 'available', automatic_client: { kind: 'dynamic_public' }, token_endpoint_auth_methods: ['none', 'client_secret_basic'] };
 const selectionRequired: EndpointDiscoveryResult = { kind: 'issuer_selection_required', endpoint_url: automaticRequest.endpoint_url, issuer_urls: ['https://issuer.test', 'https://other.test'] };
 
 function harness(response: unknown = discovered): { api: AdminApi; request: ReturnType<typeof vi.fn<typeof fetch>> } {
@@ -28,6 +28,11 @@ describe('unsaved personal endpoint discovery', (): void => {
     expect(request.mock.calls[0][1]).toMatchObject({ method: 'POST', body: JSON.stringify(automaticRequest) });
   });
 
+  test.each(['client_secret_basic', 'client_secret_post'] as const)('consumes the backend automatic confidential %s proposal without selecting from metadata', async (method): Promise<void> => {
+    const result = { ...discovered, token_endpoint_auth_methods: ['client_secret_basic', 'client_secret_post'], automatic_client: { kind: 'dynamic_confidential', token_endpoint_auth_method: method } };
+    const { api } = harness(result);
+    expect(await api.personalServerDiscovery.discover(automaticRequest)).toEqual(result);
+  });
   test('sends and fences the explicitly selected issuer', async (): Promise<void> => {
     const { api, request } = harness();
     expect(await api.personalServerDiscovery.discover(selectedRequest)).toEqual(discovered);
@@ -65,6 +70,11 @@ describe('unsaved personal endpoint discovery', (): void => {
     { ...discovered, available_scopes: ['read', 'read'] },
     { ...discovered, scope_source: 'registration' },
     { ...discovered, automatic_registration: true },
+    { ...discovered, automatic_client: undefined },
+    { ...discovered, automatic_client: { kind: 'dynamic_confidential' } },
+    { ...discovered, automatic_client: { kind: 'dynamic_confidential', token_endpoint_auth_method: 'none' } },
+    { ...discovered, automatic_client: { kind: 'dynamic_confidential', token_endpoint_auth_method: 'client_secret_basic', client_secret: 'secret' } },
+    { ...discovered, automatic_client: { kind: 'unavailable', client_id: 'app' } },
     { ...selectionRequired, issuer_urls: ['https://issuer.test'] },
     { ...selectionRequired, issuer_urls: ['https://issuer.test', 'https://issuer.test'] },
     { ...selectionRequired, issuer_urls: ['https://issuer.test', 'http://other.test'] },

@@ -18,10 +18,11 @@ from .oauth_dependencies import get_personal_callback_policy, oauth_clock, requi
 
 
 async def get_personal_refresh_provider(
+    stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     enabled: Annotated[None, Depends(require_personal_oauth)],
     callback_policy: Annotated[CallbackURLPolicy, Depends(get_personal_callback_policy)],
 ) -> AsyncIterator[PersonalOAuthRefreshProvider]:
-    async with configured_personal_oauth_refresh_provider(callback_policy) as provider:
+    async with configured_personal_oauth_refresh_provider(callback_policy, stores.personal_oauth_applications) as provider:
         yield provider
 
 

@@ -13,9 +13,9 @@ description: "Resumable authorization and refresh integration for personal downs
 - [factory.py](./factory.py) — Provider composition.
 - [metadata.py](./metadata.py) — Read-only creation discovery, explicit issuer choice and automatic-registration capability projection.
 - [network.py](./network.py) — Bounded public HTTP transport.
-- [provider.py](./provider.py) — Discovery and authorization exchange.
+- [provider.py](./provider.py) — Discovery, reusable confidential registration and bound authorization exchange.
 - [refresh_logging.py](./refresh_logging.py) — Refresh diagnostic redaction.
 - [refresh.py](./refresh.py) — Refresh exchange.
-- [setup.py](./setup.py) — Login-free metadata discovery and public registration compatibility checks.
+- [setup.py](./setup.py) — Metadata-only setup validation without registration or user authorization.
 - [transport.py](./transport.py) — HTTP contracts and in-memory adapter.
 - [validation.py](./validation.py) — Wire and provider-context validation.

@@ -15,7 +15,7 @@ def validated_bound_grant(
 ) -> PersonalOAuthGrant:
     grant = PersonalOAuthGrant.model_validate_json(authorization.authorization.get_secret_value())
     client = policy.client
-    method = client.token_endpoint_auth_method if client.kind == "preconfigured_confidential" else "none"
+    method = client.token_endpoint_auth_method if client.kind in ("preconfigured_confidential", "dynamic_confidential") else "none"
     if (
         grant.key != key
         or grant.resource != definition.endpoint_url
@@ -23,7 +23,8 @@ def validated_bound_grant(
         or grant.requested_scopes != policy.requested_scopes
         or grant.client_mode != client.kind
         or grant.token_endpoint_auth_method != method
-        or (client.kind != "dynamic_public" and (grant.issuer != client.issuer_url or grant.client_id != client.client_id))
+        or (client.kind in ("preconfigured_public", "preconfigured_confidential") and (grant.issuer != client.issuer_url or grant.client_id != client.client_id))
+        or (client.kind == "dynamic_confidential" and client.approved_issuers and grant.issuer not in client.approved_issuers)
         or grant.issued_at > now
         or not isinstance(grant.lifetime, ExpiringPersonalToken)
     ):

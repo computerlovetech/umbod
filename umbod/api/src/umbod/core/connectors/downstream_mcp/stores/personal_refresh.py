@@ -1,4 +1,5 @@
 from .personal_discovery_projection import update_personal_discovery
+from .personal_oauth_applications import require_grant_application
 
 import hashlib
 import json
@@ -47,6 +48,7 @@ class EncryptedPersonalRefreshStore:
         configuration = await load_personal_oauth_configuration(session, self._cipher, key.connector_id)
         try:
             grant = validated_bound_grant(connection.authorization, key, now, definition, configuration.policy)
+            await require_grant_application(session, self._cipher, grant, now)
         except ValueError:
             raise PersonalRefreshUnsupported() from None
         if grant.client_mode == "dynamic_public" or not isinstance(grant.refresh_token, PresentPersonalRefreshToken):

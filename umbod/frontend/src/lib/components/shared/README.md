@@ -6,6 +6,9 @@ description: "Actor-independent presentation and interaction mechanics."
 
 # Files
 
+- [Checkbox.svelte](./Checkbox.svelte) — Controlled labelled native checkbox with shared selection styling, native attributes and caller-owned updates.
+- [checkbox.dom.test.ts](./checkbox.dom.test.ts) — Label activation, controlled updates, disabled behavior and native input integration.
+
 - [TextAreaField.svelte](./TextAreaField.svelte) — Controlled labelled multiline input forwarding native attributes and events.
 - [text-area-field.dom.test.ts](./text-area-field.dom.test.ts) — Multiline values, validation, accessibility, events and caller-owned state.
 - [Field styling](../../styles/form-fields.css) — Shared labels, control appearance, validation and focus rings for plain and configuration fields.

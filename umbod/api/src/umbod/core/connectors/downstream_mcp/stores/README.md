@@ -23,6 +23,8 @@ description: "Neutral encrypted stores, atomic lifecycle mutations and credentia
 - [personal_tool_policies.py](./personal_tool_policies.py) — Administrator tool contracts.
 - [personal_tools_schema.py](./personal_tools_schema.py) — Private observations and administrator policy tables.
 - [personal_runtime_authorizations.py](./personal_runtime_authorizations.py) — Operation-scoped credential retrieval and current authority checks.
+- [personal_oauth_applications.py](./personal_oauth_applications.py) — Encrypted shared registrations, serialized claims and current-policy fencing.
+- [personal_oauth_application_schema.py](./personal_oauth_application_schema.py) — Neutral registration table keyed by immutable application identity.
 - [personal_oauth_attempts.py](./personal_oauth_attempts.py) — Durable OAuth attempts and atomic connection installation.
 - [personal_oauth_setup.py](./personal_oauth_setup.py) — Revision-bound validation receipts, recovery leases and stale-result rejection.
 - [personal_oauth_setup_schema.py](./personal_oauth_setup_schema.py) — Neutral nonsecret setup receipt table.

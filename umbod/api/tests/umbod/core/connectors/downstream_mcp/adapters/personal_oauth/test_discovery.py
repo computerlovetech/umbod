@@ -1,4 +1,5 @@
 from urllib.parse import parse_qs, urlsplit
+from tests.support.personal_oauth_applications import InMemoryPersonalOAuthApplicationStore, application_clock
 
 import httpcore
 import pytest
@@ -49,7 +50,7 @@ async def test_prepare_uses_first_available_metadata_and_registers_once(provider
         response(provider_case.resource_metadata), *[_not_found() for _ in range(fallback_count)],
         response(provider_case.server_metadata), response(provider_case.client_metadata),
     ])
-    prepared = await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport).prepare(provider_case.preparation)
+    prepared = await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     assert parse_qs(urlsplit(prepared.authorization_url.get_secret_value()).query)["client_id"] == ["public-client"]
     assert [(request.method, request.url) for request in transport.requests] == [
         ("GET", RESOURCE_METADATA_URL), *[("GET", url) for url in METADATA_URLS[:fallback_count + 1]],
@@ -84,7 +85,7 @@ async def test_prepare_does_not_request_openid_advertised_scopes(provider_case: 
     transport = InMemoryOAuthHttpTransport([
         response(provider_case.resource_metadata), _not_found(), response(provider_case.server_metadata), response(provider_case.client_metadata),
     ])
-    prepared = await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport).prepare(provider_case.preparation)
+    prepared = await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     assert "scope" not in parse_qs(urlsplit(prepared.authorization_url.get_secret_value()).query)
     assert '"scope"' not in transport.requests[-1].body.get_secret_value()
     assert provider_case.preparation.policy.requested_scopes == ()
@@ -117,7 +118,7 @@ async def test_setup_validate_openid_without_registration_endpoint_requires_stat
 
 
 @pytest.mark.asyncio
-async def test_setup_validate_registers_once_after_openid_fallback(provider_case: ProviderCase) -> None:
+async def test_setup_validate_only_reads_metadata_after_openid_fallback(provider_case: ProviderCase) -> None:
     transport = InMemoryOAuthHttpTransport([
         response(provider_case.resource_metadata), _not_found(), _not_found(),
         response(provider_case.server_metadata), response(provider_case.client_metadata),
@@ -128,7 +129,7 @@ async def test_setup_validate_registers_once_after_openid_fallback(provider_case
     ))
     assert isinstance(result, ValidatedPersonalOAuthSetup)
     assert [(request.method, request.url) for request in transport.requests] == [
-        ("GET", RESOURCE_METADATA_URL), *[("GET", url) for url in METADATA_URLS], ("POST", "https://issuer.example/register"),
+        ("GET", RESOURCE_METADATA_URL), *[("GET", url) for url in METADATA_URLS],
     ]
 
 
@@ -143,7 +144,7 @@ async def test_invalid_openid_capabilities_or_security_never_try_later_metadata(
     provider_case.server_metadata[field] = value
     transport = InMemoryOAuthHttpTransport([response(provider_case.resource_metadata), _not_found(), response(provider_case.server_metadata)])
     with pytest.raises(PersonalOAuthProviderUnsupported) as caught:
-        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport).prepare(provider_case.preparation)
+        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     assert caught.value.evidence.reason == reason
     assert [request.url for request in transport.requests] == [RESOURCE_METADATA_URL, *METADATA_URLS[:2]]
 
@@ -156,7 +157,7 @@ async def test_invalid_metadata_body_never_triggers_fallback(provider_case: Prov
         response(provider_case.resource_metadata), *[_not_found() for _ in range(fallback_count)], OAuthHttpResponse(status=200, body=body),
     ])
     with pytest.raises(PersonalOAuthProviderUnsupported) as caught:
-        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport).prepare(provider_case.preparation)
+        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     assert caught.value.evidence.reason == "invalid_response"
     assert caught.value.evidence.downstream_response == DownstreamHttpResponse(status_code=200)
     assert SENTINEL not in str(caught.value) + caught.value.evidence.model_dump_json()
@@ -171,7 +172,7 @@ async def test_non404_metadata_rejection_stops_discovery(provider_case: Provider
         response(provider_case.resource_metadata), *[_not_found() for _ in range(fallback_count)], OAuthHttpResponse(status=status, body=SENTINEL.encode()),
     ])
     with pytest.raises(PersonalOAuthProviderFailure) as caught:
-        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport).prepare(provider_case.preparation)
+        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     assert caught.value.evidence.stage == "discovery"
     assert caught.value.evidence.reason == "provider_rejected"
     assert caught.value.evidence.downstream_response == DownstreamHttpResponse(status_code=status)
@@ -186,7 +187,7 @@ async def test_final_fallback_rejection_preserves_final_status_without_body(prov
         response(provider_case.resource_metadata), _not_found(), _not_found(), OAuthHttpResponse(status=status, body=SENTINEL.encode()),
     ])
     with pytest.raises(PersonalOAuthProviderFailure) as caught:
-        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport).prepare(provider_case.preparation)
+        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     assert caught.value.evidence.model_dump() == {
         "stage": "discovery", "reason": "provider_rejected", "downstream_response": {"kind": "http_response", "status_code": status},
     }
@@ -212,7 +213,7 @@ class InterruptedMetadataTransport(InMemoryOAuthHttpTransport):
 async def test_metadata_transport_failure_does_not_advance_or_expose_error(provider_case: ProviderCase, fallback_count: int, error: Exception, reason: str) -> None:
     transport = InterruptedMetadataTransport([response(provider_case.resource_metadata), *[_not_found() for _ in range(fallback_count)]], error)
     with pytest.raises(PersonalOAuthProviderFailure) as caught:
-        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport).prepare(provider_case.preparation)
+        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     assert caught.value.evidence.stage == "discovery"
     assert caught.value.evidence.reason == reason
     assert caught.value.evidence.downstream_response == NoDownstreamResponse()
@@ -227,7 +228,7 @@ async def test_registration_rejection_after_openid_discovery_does_not_retry_regi
         response(provider_case.resource_metadata), _not_found(), response(provider_case.server_metadata), OAuthHttpResponse(status=status, body=SENTINEL.encode()),
     ])
     with pytest.raises(PersonalOAuthProviderFailure) as caught:
-        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport).prepare(provider_case.preparation)
+        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     assert caught.value.evidence.stage == "registration"
     assert caught.value.evidence.downstream_response == DownstreamHttpResponse(status_code=status)
     assert SENTINEL not in str(caught.value) + caught.value.evidence.model_dump_json()

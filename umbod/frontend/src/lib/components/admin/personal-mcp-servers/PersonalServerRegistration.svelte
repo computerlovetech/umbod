@@ -3,6 +3,7 @@
   import PersonalServerDialog from './PersonalServerDialog.svelte';
   import AdminConfigurationField from '../shared/AdminConfigurationField.svelte';
   import Button from '../shared/Button.svelte';
+  import Select from '../shared/Select.svelte';
   import PolicyFields from './PolicyFields.svelte';
   import PersonalServerDiscoveryFields from './PersonalServerDiscoveryFields.svelte';
   import { captureInvalidSubmission } from './form-validation';
@@ -20,7 +21,7 @@
         <section aria-labelledby="personal-confirm-title">
           <h3 id="personal-confirm-title" tabindex="-1" {@attach (element: HTMLHeadingElement): void => element.focus()}>Save OAuth settings?</h3>
           <p>Changed settings disconnect all users, cancel pending sign-ins and unpublish the server. Remote tokens are not revoked. Confidential saves rotate the secret.</p>
-          <div class="actions"><Button variant="secondary" onclick={state.close}>Back</Button><Button variant="danger" disabled={state.locked} onclick={state.confirm}>Save settings</Button></div>
+          <div class="actions"><Button variant="secondary" onclick={state.close}>Back</Button><Button variant="danger" disabled={!state.readyForPolicyReview} onclick={state.confirm}>Save settings</Button></div>
         </section>
       {:else}
       <form {@attach captureInvalidSubmission(state.handleNativeInvalid)} onsubmit={(event) => { event.preventDefault(); if (state.editing) state.requestConfirmation('policy'); else void state.create(); }}>
@@ -37,13 +38,32 @@
             <h3>OAuth application</h3>
           </div>
           {#if state.editing}
-            <PolicyFields form={state.form} {proposal} idPrefix="personal-edit" />
+            <PolicyFields form={state.form} {proposal} idPrefix="personal-edit" onClientSelection={state.selectClient} />
+            {#if state.form.automatic}
+              {#if state.discovery.pending}<p role="status">Discovering automatic application settings…</p>
+              {:else if state.discovery.failed}
+                <p role="alert">{state.discovery.failureMessage}</p>
+                <Button variant="secondary" onclick={state.discovery.retry}>Retry discovery</Button>
+              {:else if state.discovery.issuers.length && !state.discovery.result}
+                <Select id="personal-edit-discovery-issuer" label="OAuth issuer" options={state.discovery.issuerOptions} value={state.discovery.selectedIssuer} onchange={state.discovery.selectIssuer} />
+              {:else if state.discovery.automaticRegistrationUnavailable}
+                <p role="status">Automatic setup is unsupported. Choose an existing client option instead.</p>
+                <Button variant="secondary" onclick={state.discovery.retry}>Retry discovery</Button>
+              {:else if state.automaticEditIssuer}
+                <p>Automatic registration issuer: <code>{state.automaticEditIssuer}</code></p>
+              {/if}
+            {/if}
           {:else}
-            <PolicyFields form={state.form} idPrefix="personal-registration" discoveredIssuer={state.discovery.result?.issuer_url}>
-              {#snippet scopes()}<PersonalServerDiscoveryFields state={state.discovery} form={state.form} />{/snippet}
-            </PolicyFields>
+            <PersonalServerDiscoveryFields state={state.discovery} form={state.form}>
+              {#snippet clientSetup()}
+                <PolicyFields form={state.form} idPrefix="personal-registration" discoveredIssuer={state.discovery.result?.issuer_url}>
+                  {#snippet scopes()}{/snippet}
+                </PolicyFields>
+              {/snippet}
+            </PersonalServerDiscoveryFields>
           {/if}
-          <div class="actions"><Button variant="secondary" onclick={close}>Cancel</Button><Button type="submit" disabled={!state.editing && !state.canSaveCreation}>{state.editing ? "Review changes" : "Register unpublished server"}</Button></div>
+          {#if !state.editing && state.creationBlocker}<p id="personal-creation-blocker" class="creation-blocker" role="status">{state.creationBlocker}</p>{/if}
+          <div class="actions"><Button variant="secondary" onclick={close}>Cancel</Button><Button type="submit" aria-describedby={!state.editing && state.creationBlocker ? 'personal-creation-blocker' : undefined} disabled={state.editing ? !state.readyForPolicyReview : !state.canSaveCreation}>{state.editing ? "Review changes" : "Register unpublished server"}</Button></div>
         </fieldset>
       </form>
       {/if}
@@ -52,6 +72,7 @@
 <style>
   .modal-content { overflow-y: auto; min-height: 0; padding-top: 8px; }
   fieldset { border: 0; padding: 0; margin: 0; display: grid; gap: 18px; min-width: 0; }
+  .creation-blocker { margin: 0; color: var(--admin-muted); font-size: 13px; }
   .actions { display: flex; gap: 12px; flex-wrap: wrap; }
   .section-heading { display: grid; gap: 7px; }
   .section-heading h3 { color: var(--admin-ink); font-size: 1rem; margin: 0; }

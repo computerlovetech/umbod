@@ -1,4 +1,5 @@
 from contextlib import AbstractContextManager
+from tests.support.personal_oauth_applications import InMemoryPersonalOAuthApplicationStore, application_clock
 from typing import Optional
 
 import anyio
@@ -71,7 +72,7 @@ async def test_registration_preserves_primary_evidence_through_body_and_cleanup_
             response(provider_case.resource_metadata), response(provider_case.server_metadata),
         ], SafeOAuthHttpTransport(pool))
         with pytest.raises(PersonalOAuthProviderFailure) as caught:
-            await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport).prepare(provider_case.preparation)
+            await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     assert caught.value.evidence.stage == "registration"
     assert caught.value.evidence.reason == reason
     assert caught.value.evidence.downstream_response == DownstreamHttpResponse(status_code=status)
@@ -87,7 +88,7 @@ async def test_refresh_aggregate_deadline_keeps_received_status_and_rejection(
 ) -> None:
     network = MemoryNetwork(StalledBodyStream(status, cleanup_failure))
     async with httpcore.AsyncConnectionPool(network_backend=PublicAddressNetworkBackend(network), retries=0) as pool:
-        provider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, SafeOAuthHttpTransport(pool))
+        provider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, SafeOAuthHttpTransport(pool), applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
         with pytest.raises(PersonalOAuthRefreshUncertain) as caught:
             await provider.refresh(refresh_command.model_copy(update={"timeout_seconds": 0.01}))
     assert caught.value.evidence.stage == "refresh"
@@ -105,7 +106,7 @@ async def test_exchange_aggregate_deadline_keeps_received_status_and_rejection(
     preparation_transport = InMemoryOAuthHttpTransport([
         response(provider_case.resource_metadata), response(provider_case.server_metadata), response(provider_case.client_metadata),
     ])
-    prepared = await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, preparation_transport).prepare(provider_case.preparation)
+    prepared = await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, preparation_transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     original_fail_after = anyio.fail_after
     deadlines = 0
 
@@ -117,7 +118,7 @@ async def test_exchange_aggregate_deadline_keeps_received_status_and_rejection(
     monkeypatch.setattr(anyio, "fail_after", exchange_deadline)
     network = MemoryNetwork(StalledBodyStream(status, True))
     async with httpcore.AsyncConnectionPool(network_backend=PublicAddressNetworkBackend(network), retries=0) as pool:
-        provider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, SafeOAuthHttpTransport(pool))
+        provider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, SafeOAuthHttpTransport(pool), applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
         with pytest.raises(PersonalOAuthProviderFailure) as caught:
             await provider.exchange(exchange_command(provider_case.preparation, prepared))
     assert caught.value.evidence.stage == "token_exchange"
@@ -137,7 +138,7 @@ async def test_unrelated_caller_cancellation_is_not_converted_to_provider_failur
         stream.content = b""
     network = MemoryNetwork(stream)
     async with httpcore.AsyncConnectionPool(network_backend=PublicAddressNetworkBackend(network), retries=0) as pool:
-        provider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, SafeOAuthHttpTransport(pool))
+        provider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, SafeOAuthHttpTransport(pool), applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
         with anyio.move_on_after(0.01) as caller_scope:
             await provider.refresh(refresh_command)
             pytest.fail("Caller cancellation was swallowed")

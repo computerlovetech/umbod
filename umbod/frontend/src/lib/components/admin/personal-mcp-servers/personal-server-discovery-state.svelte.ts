@@ -1,5 +1,5 @@
 import type { PersonalServerDiscovery } from '$lib/admin/personal-mcp-servers/discovery-administration';
-import { EndpointResourceMismatchError, discoveryEndpointSchema, type EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
+import { EndpointResourceMismatchError, discoveryEndpointSchema, type AutomaticClient, type EndpointDiscoveryResult } from '$lib/admin/personal-mcp-servers/domain/discovery';
 import { parseScopeText, scopesSchema, type ClientKind } from '$lib/admin/personal-mcp-servers/domain/schemas';
 import { AuthenticationRequiredError, HttpError } from '$lib/admin/infrastructure/transport';
 import type { PolicyProposal } from './policy-form.svelte';
@@ -22,7 +22,7 @@ export class PersonalServerDiscoveryState {
   private resourceMismatch = $state(false);
   private generation = 0;
   private active = false;
-  constructor(private readonly api: PersonalServerDiscovery | null, private readonly accessLost: (error: unknown) => void) {}
+  constructor(private readonly api: PersonalServerDiscovery | null, private readonly accessLost: (error: unknown) => void, private readonly automaticClientChanged: (client: AutomaticClient | null) => void = (): void => {}) {}
   reset = (active: boolean): void => {
     this.generation++;
     this.active = active;
@@ -35,6 +35,7 @@ export class PersonalServerDiscoveryState {
     this.manual = false;
     this.acknowledged = false;
     this.result = null;
+    this.automaticClientChanged(null);
     this.issuers = [];
     this.selectedIssuer = '';
     this.selectedScopes = [];
@@ -79,7 +80,8 @@ export class PersonalServerDiscoveryState {
         this.selectedIssuer = '';
       } else {
         this.result = result;
-        this.automaticRegistrationUnavailable = result.automatic_registration === 'unavailable';
+        this.automaticRegistrationUnavailable = result.automatic_client.kind === 'unavailable';
+        this.automaticClientChanged(result.automatic_client);
         this.selectedIssuer = result.issuer_url;
       }
     } catch (error) {
@@ -112,9 +114,21 @@ export class PersonalServerDiscoveryState {
   get issuerOptions(): { value: string; label: string }[] { return [{ value: '', label: 'Choose an issuer' }, ...this.issuers.map((issuer) => ({ value: issuer, label: issuer }))]; }
   get scopeSource(): string { return { resource: 'MCP permissions', authorization_server: 'Provider permissions', unavailable: 'Scopes' }[this.result?.scope_source ?? 'unavailable']; }
   approve = (value: boolean): void => { this.approved = value && !!this.result && !this.scopeError; };
+  creationBlocker = (kind: ClientKind): string => {
+    if (this.pending) return 'Wait for OAuth discovery to finish.';
+    if (this.failed) {
+      if (!this.manual) return 'Retry discovery or choose Configure manually.';
+      if ((kind === 'dynamic_public' || kind === 'dynamic_confidential') && this.automaticRegistrationUnavailable) return 'Automatic setup is unsupported. Choose an existing client option to continue.';
+      return this.acknowledged ? '' : 'Review manual settings and acknowledge saving without discovery.';
+    }
+    if (!this.result) return this.issuers.length ? 'Choose an OAuth issuer to continue discovery.' : 'Enter an HTTPS MCP endpoint and leave the field to discover OAuth settings.';
+    if ((kind === 'dynamic_public' || kind === 'dynamic_confidential') && this.automaticRegistrationUnavailable) return 'Automatic setup is unsupported. You can use a manually configured client instead.';
+    if (this.scopeError) return this.scopeError;
+    return this.approved ? '' : 'Review permissions and OAuth application settings, then approve the issuer and scopes.';
+  };
   canSave = (kind: ClientKind): boolean => {
-    if (!this.active || this.pending || kind === 'dynamic_public' && this.automaticRegistrationUnavailable) return false;
-    if (this.result) return this.approved && !this.scopeError && !(kind === 'dynamic_public' && this.result.automatic_registration === 'unavailable');
+    if (!this.active || this.pending || (kind === 'dynamic_public' || kind === 'dynamic_confidential') && this.automaticRegistrationUnavailable) return false;
+    if (this.result) return this.approved && !this.scopeError && (!(kind === 'dynamic_public' || kind === 'dynamic_confidential') || this.result.automatic_client.kind === kind);
     return this.failed && this.manual && this.acknowledged;
   };
   get proposal(): PolicyProposal | undefined { return this.result && this.approved ? { issuer: this.result.issuer_url, scopes: this.scopes } : undefined; }

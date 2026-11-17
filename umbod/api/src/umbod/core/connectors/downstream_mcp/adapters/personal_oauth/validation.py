@@ -1,6 +1,9 @@
 import ipaddress
 import json
 from typing import Literal
+
+from ...personal_oauth_applications.models import AbsentApplicationReference, ApplicationReference, OAuthApplicationCredentials
+from pydantic import model_validator
 from urllib.parse import SplitResult, unquote, urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
@@ -107,6 +110,10 @@ class RegisteredOAuthClient(BaseModel):
     status_code: Literal[200, 201]
 
 
+class RegisteredConfidentialOAuthClient(RegisteredOAuthClient):
+    credentials: OAuthApplicationCredentials
+
+
 class TokenResponse(WireModel):
     access_token: SecretStr = Field(min_length=1)
     token_type: str
@@ -127,5 +134,14 @@ class ProviderContext(BaseModel):
     state_digest: str
     policy_revision: str = "legacy"
     requested_scopes: list[str] = Field(default_factory=list)
-    client_mode: Literal["dynamic_public", "preconfigured_public", "preconfigured_confidential"] = "dynamic_public"
+    client_mode: Literal["dynamic_public", "dynamic_confidential", "preconfigured_public", "preconfigured_confidential"] = "dynamic_public"
+    application_reference: ApplicationReference = Field(default_factory=AbsentApplicationReference)
     token_endpoint_auth_method: Literal["none", "client_secret_basic", "client_secret_post"] = "none"
+
+    @model_validator(mode="after")
+    def validate_application_reference(self) -> "ProviderContext":
+        if (self.client_mode == "dynamic_confidential") != (self.application_reference.kind == "registered"):
+            raise ValueError("Invalid application reference")
+        if self.client_mode == "dynamic_confidential" and self.token_endpoint_auth_method == "none":
+            raise ValueError("Invalid application authentication")
+        return self

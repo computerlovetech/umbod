@@ -1,4 +1,5 @@
 import json
+from tests.support.personal_oauth_applications import InMemoryPersonalOAuthApplicationStore, application_clock
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -99,7 +100,7 @@ async def test_local_http_callback_prepares_and_exchanges_with_exact_saved_bindi
     if method == "dynamic":
         responses.append(response(client_metadata))
     transport = InMemoryOAuthHttpTransport(responses)
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.LOCAL_DEVELOPMENT, transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.LOCAL_DEVELOPMENT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     prepared = await provider.prepare(preparation)
     assert parse_qs(urlsplit(prepared.authorization_url.get_secret_value()).query)["redirect_uri"] == [final_uri]
     assert json.loads(prepared.context.get_secret_value())["redirect_uri"] == final_uri
@@ -108,11 +109,11 @@ async def test_local_http_callback_prepares_and_exchanges_with_exact_saved_bindi
         assert registration["client_name"] == "Umbod"
         assert registration["application_type"] == "native"
     exchange_transport = InMemoryOAuthHttpTransport([response({"access_token": "access", "token_type": "Bearer"})])
-    strict: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, exchange_transport)
+    strict: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, exchange_transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderFailure):
         await strict.exchange(exchange_command(preparation, prepared))
     assert not exchange_transport.requests
-    resumed: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.LOCAL_DEVELOPMENT, exchange_transport)
+    resumed: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.LOCAL_DEVELOPMENT, exchange_transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     await resumed.exchange(exchange_command(preparation, prepared))
     assert len(exchange_transport.requests) == 1
     assert parse_qs(exchange_transport.requests[0].body.get_secret_value())["redirect_uri"] == [final_uri]
@@ -145,7 +146,7 @@ async def test_registration_application_type_echo_is_bound_when_present(
             "null": None, "wrong_type": 1,
         }[echo]
     transport = InMemoryOAuthHttpTransport([response(resource_metadata), response(server_metadata), response(client_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.LOCAL_DEVELOPMENT, transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.LOCAL_DEVELOPMENT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     if echo in ("matching", "missing"):
         await provider.prepare(preparation)
     else:
@@ -163,7 +164,7 @@ async def test_registration_application_type_echo_is_bound_when_present(
 async def test_strict_http_callback_rejected_before_provider_contact(preparation: PreparePersonalOAuth, method: str) -> None:
     preparation = client_preparation(preparation.model_copy(update={"redirect_uri": LOOPBACK_CALLBACKS[0]}), method)
     transport = InMemoryOAuthHttpTransport([])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderUnsupported):
         await provider.prepare(preparation)
     assert not transport.requests
@@ -179,7 +180,7 @@ async def test_local_callback_policy_does_not_relax_discovered_outbound_destinat
     preparation = preparation.model_copy(update={"redirect_uri": LOOPBACK_CALLBACKS[0]})
     server_metadata[field] = url
     transport = InMemoryOAuthHttpTransport([response(resource_metadata), response(server_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.LOCAL_DEVELOPMENT, transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.LOCAL_DEVELOPMENT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderUnsupported):
         await provider.prepare(preparation)
     assert len(transport.requests) == 2
@@ -202,7 +203,7 @@ async def test_issuer_advertisement_selects_bound_or_generic_callback_and_reject
     if advertisement in ("omitted", "false"):
         client_metadata["redirect_uris"] = [issuer_callback_uri(preparation.redirect_uri, str(server_metadata["issuer"]))]
     transport = InMemoryOAuthHttpTransport([response(resource_metadata), response(server_metadata), response(client_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     if advertisement not in ("omitted", "true", "false"):
         with pytest.raises(PersonalOAuthProviderUnsupported):
             await provider.prepare(preparation)
@@ -229,7 +230,7 @@ async def test_unknown_or_advertised_issuer_support_never_weakens_actual_issuer_
         server_metadata.pop("authorization_response_iss_parameter_supported")
         client_metadata["redirect_uris"] = [issuer_callback_uri(preparation.redirect_uri, str(server_metadata["issuer"]))]
     transport = InMemoryOAuthHttpTransport([response(resource_metadata), response(server_metadata), response(client_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     prepared = await provider.prepare(preparation)
     command = exchange_command(preparation, prepared).model_copy(update={"issuer": PresentCallbackIssuer.model_construct(kind="present", value=issuer)})
     with pytest.raises(PersonalOAuthProviderFailure):

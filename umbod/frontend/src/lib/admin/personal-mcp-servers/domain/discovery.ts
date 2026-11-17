@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { endpointSchema, issuerSchema, scopesSchema } from './schemas';
+import { dynamicClientSchema, dynamicConfidentialClientSchema, endpointSchema, issuerSchema, scopesSchema } from './schemas';
 
 export const discoveryEndpointSchema = endpointSchema.and(issuerSchema);
 
@@ -26,6 +26,9 @@ export const endpointDiscoveryRequestSchema = z.object({
   ])
 }).strict();
 
+export const automaticClientSchema = z.discriminatedUnion('kind', [dynamicClientSchema, dynamicConfidentialClientSchema, z.object({ kind: z.literal('unavailable') }).strict()]);
+export type AutomaticClient = z.infer<typeof automaticClientSchema>;
+
 export const endpointDiscoveryResultSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('issuer_selection_required'),
@@ -39,6 +42,7 @@ export const endpointDiscoveryResultSchema = z.discriminatedUnion('kind', [
     available_scopes: scopesSchema,
     scope_source: z.enum(['resource', 'authorization_server', 'unavailable']),
     automatic_registration: z.enum(['available', 'unavailable']),
+    automatic_client: automaticClientSchema,
     token_endpoint_auth_methods: z.array(z.string().min(1).max(128)).max(16)
   }).strict()
 ]);

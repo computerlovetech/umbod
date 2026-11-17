@@ -1,7 +1,10 @@
 import hashlib
+from tests.support.personal_oauth_applications import InMemoryPersonalOAuthApplicationStore, application_clock
 import json
 
 import pytest
+
+from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.provider import DiscoveredPersonalOAuthProvider
 from pydantic import SecretStr
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
@@ -9,7 +12,7 @@ from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.setup import D
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport, OAuthHttpResponse
 from umbod.core.connectors.downstream_mcp.personal_connections.oauth_models import PersonalOAuthProviderFailure, PersonalOAuthProviderUnsupported
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import PersonalOAuthPolicy, PreconfiguredConfidentialOAuthClient, PreconfiguredPublicOAuthClient
-from umbod.core.connectors.downstream_mcp.personal_oauth_setup.models import DiscoverPersonalOAuthSetup, PersonalOAuthSetupScopeMismatch, ValidatePersonalOAuthSetup, ValidatedPersonalOAuthSetup
+from umbod.core.connectors.downstream_mcp.personal_oauth_setup.models import DiscoverPersonalOAuthSetup, ValidatePersonalOAuthSetup, ValidatedPersonalOAuthSetup
 from umbod.core.connectors.downstream_mcp.personal_oauth_setup.ports import PersonalOAuthSetupProvider
 from umbod.core.invocation.diagnostics import DownstreamHttpResponse
 
@@ -59,15 +62,11 @@ async def test_provider_defaults_are_reported_as_scope_mismatch_without_login_or
     ])
     command = validation_command(provider_case)
     result = await setup_provider(transport).validate(command)
-    assert isinstance(result, PersonalOAuthSetupScopeMismatch)
-    assert result.returned_scopes == (scope,)
-    assert result.downstream_response == DownstreamHttpResponse(status_code=201)
+    assert isinstance(result, ValidatedPersonalOAuthSetup)
+    assert result.returned_scopes == ()
+    assert result.scope_source == "not_checked"
     assert command.policy.requested_scopes == ()
-    assert [request.method for request in transport.requests] == ["GET", "GET", "POST"]
-    registration = json.loads(transport.requests[-1].body.get_secret_value())
-    assert "scope" not in registration
-    assert "state" not in registration
-    assert "code_challenge" not in registration
+    assert [request.method for request in transport.requests] == ["GET", "GET"]
     assert "secret-registration-token" not in result.model_dump_json()
     assert "public-client" not in result.model_dump_json()
 
@@ -87,8 +86,9 @@ async def test_manually_approved_scopes_do_not_require_matching_advertisements(p
     ])
     result = await setup_provider(transport).validate(command)
     assert isinstance(result, ValidatedPersonalOAuthSetup)
-    assert result.returned_scopes == ("read", "write")
-    assert json.loads(transport.requests[-1].body.get_secret_value())["scope"] == "read write"
+    assert result.returned_scopes == ()
+    assert result.scope_source == "not_checked"
+    assert [request.method for request in transport.requests] == ["GET", "GET"]
 
 
 @pytest.mark.asyncio
@@ -102,8 +102,8 @@ async def test_absent_or_explicit_empty_registration_scope_remains_compatible(pr
     result = await setup_provider(transport).validate(validation_command(provider_case))
     assert isinstance(result, ValidatedPersonalOAuthSetup)
     assert result.returned_scopes == ()
-    assert result.scope_source == ("registration" if echo_scope else "not_returned")
-    assert len(transport.requests) == 3
+    assert result.scope_source == "not_checked"
+    assert len(transport.requests) == 2
 
 
 @pytest.mark.asyncio
@@ -143,8 +143,7 @@ async def test_setup_uses_the_same_issuer_bound_callback_as_user_authorization(p
     result = await setup_provider(transport).validate(validation_command(provider_case))
     assert isinstance(result, ValidatedPersonalOAuthSetup)
     assert result.discovery.redirect_uri == callback
-    assert json.loads(transport.requests[-1].body.get_secret_value())["redirect_uris"] == [callback]
-    assert [request.method for request in transport.requests] == ["GET", "GET", "POST"]
+    assert [request.method for request in transport.requests] == ["GET", "GET"]
 
 
 @pytest.mark.asyncio
@@ -222,7 +221,7 @@ async def test_registration_contract_failure_preserves_success_status_without_se
         OAuthHttpResponse(status=201, body=json.dumps(provider_case.client_metadata).encode()),
     ])
     with pytest.raises(PersonalOAuthProviderUnsupported) as caught:
-        await setup_provider(transport).validate(validation_command(provider_case))
+        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     assert caught.value.evidence.stage == "registration"
     assert caught.value.evidence.downstream_response == DownstreamHttpResponse(status_code=201)
     assert "secret-sentinel" not in str(caught.value)
@@ -237,7 +236,7 @@ async def test_rejected_registration_is_not_retried_or_returned_raw(provider_cas
         OAuthHttpResponse(status=400, body=b'{"error_description":"secret-sentinel"}'),
     ])
     with pytest.raises(PersonalOAuthProviderFailure) as caught:
-        await setup_provider(transport).validate(validation_command(provider_case))
+        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     assert caught.value.evidence.stage == "registration"
     assert caught.value.evidence.reason == "provider_rejected"
     assert caught.value.evidence.downstream_response == DownstreamHttpResponse(status_code=400)

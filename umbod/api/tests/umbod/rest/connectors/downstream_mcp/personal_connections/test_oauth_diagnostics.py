@@ -1,4 +1,5 @@
 import json
+from tests.support.personal_oauth_applications import InMemoryPersonalOAuthApplicationStore, application_clock
 import logging
 from hashlib import sha256
 from urllib.parse import parse_qs, urlencode, urlsplit
@@ -39,7 +40,7 @@ def discovery_responses() -> list[OAuthHttpResponse]:
 
 
 def install_provider(api: OAuthApi, transport: InMemoryOAuthHttpTransport) -> None:
-    provider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.LOCAL_DEVELOPMENT, transport)
+    provider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.LOCAL_DEVELOPMENT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
 
     def provide() -> DiscoveredPersonalOAuthProvider:
         return provider

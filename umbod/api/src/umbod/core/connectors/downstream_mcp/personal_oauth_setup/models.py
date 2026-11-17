@@ -25,7 +25,7 @@ class PersonalOAuthSetupDiscovery(SetupModel):
     issuer_url: str
     redirect_uri: str
     available_scopes: OAuthScopes
-    registration_mode: Literal["dynamic_public", "preconfigured_public", "preconfigured_confidential"]
+    registration_mode: Literal["dynamic_public", "dynamic_confidential", "preconfigured_public", "preconfigured_confidential"]
 
 
 class ValidatedPersonalOAuthSetup(SetupModel):

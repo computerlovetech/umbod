@@ -1,4 +1,5 @@
 from contextlib import AbstractContextManager
+from tests.support.personal_oauth_applications import InMemoryPersonalOAuthApplicationStore, application_clock
 
 import anyio
 import httpcore
@@ -37,7 +38,7 @@ class FailedTransport(InMemoryOAuthHttpTransport):
 async def test_prepare_preserves_rejection_stage_and_status(provider_case: ProviderCase, status: int, stage: str) -> None:
     prefix = [] if stage == "discovery" else [response(provider_case.resource_metadata), response(provider_case.server_metadata)]
     transport = InMemoryOAuthHttpTransport([*prefix, OAuthHttpResponse(status=status, body=SENTINEL.encode())])
-    provider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
+    provider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderFailure) as caught:
         await provider.prepare(provider_case.preparation)
     assert caught.value.evidence.model_dump() == {
@@ -54,9 +55,9 @@ async def test_exchange_retains_only_current_response_evidence(provider_case: Pr
     preparation_transport = InMemoryOAuthHttpTransport([
         response(provider_case.resource_metadata), response(provider_case.server_metadata), response(provider_case.client_metadata),
     ])
-    prepared = await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, preparation_transport).prepare(provider_case.preparation)
+    prepared = await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, preparation_transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(provider_case.preparation)
     transport = InMemoryOAuthHttpTransport([OAuthHttpResponse(status=status, body=body)])
-    provider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
+    provider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderFailure) as caught:
         await provider.exchange(exchange_command(provider_case.preparation, prepared))
     assert caught.value.evidence.stage == "token_exchange"
@@ -70,7 +71,7 @@ async def test_exchange_retains_only_current_response_evidence(provider_case: Pr
 @pytest.mark.parametrize("error,reason", [(TimeoutError(SENTINEL), "timeout"), (httpcore.ReadTimeout(SENTINEL), "timeout"), (httpcore.ConnectError(SENTINEL), "network_failure"), (OSError(SENTINEL), "network_failure"), (RuntimeError(SENTINEL), "unexpected_failure"), (TypeError(SENTINEL), "unexpected_failure")])
 async def test_refresh_classifies_failures_without_secrets_or_retry(refresh_command: RefreshPersonalOAuth, error: Exception, reason: str) -> None:
     transport = FailedTransport(error)
-    provider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, transport)
+    provider = StoredPersonalOAuthRefreshProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthRefreshUncertain) as caught:
         await provider.refresh(refresh_command)
     assert caught.value.evidence.stage == "refresh"
@@ -106,7 +107,7 @@ async def test_aggregate_preparation_deadline_keeps_registration_stage(provider_
 
     monkeypatch.setattr(anyio, "fail_after", preparation_deadline)
     transport = SlowRegistrationTransport([response(provider_case.resource_metadata), response(provider_case.server_metadata)])
-    provider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
+    provider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderFailure) as caught:
         await provider.prepare(provider_case.preparation)
     assert caught.value.evidence.stage == "registration"

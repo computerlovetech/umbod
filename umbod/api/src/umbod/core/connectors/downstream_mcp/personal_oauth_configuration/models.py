@@ -86,6 +86,12 @@ class DynamicPublicOAuthClient(OAuthConfigurationModel):
     approved_issuers: tuple[OAuthIssuer, ...] = Field(default=(), max_length=1, exclude_if=lambda value: not value)
 
 
+class DynamicConfidentialOAuthClient(OAuthConfigurationModel):
+    kind: Literal["dynamic_confidential"] = "dynamic_confidential"
+    approved_issuers: tuple[OAuthIssuer, ...] = Field(default=(), max_length=1)
+    token_endpoint_auth_method: Literal["client_secret_basic", "client_secret_post"]
+
+
 class PreconfiguredPublicOAuthClient(OAuthConfigurationModel):
     kind: Literal["preconfigured_public"] = "preconfigured_public"
     issuer_url: OAuthIssuer
@@ -109,7 +115,7 @@ class PreconfiguredConfidentialOAuthClient(OAuthConfigurationModel):
 
 
 PersonalOAuthClient = Annotated[
-    DynamicPublicOAuthClient | PreconfiguredPublicOAuthClient | PreconfiguredConfidentialOAuthClient,
+    DynamicPublicOAuthClient | DynamicConfidentialOAuthClient | PreconfiguredPublicOAuthClient | PreconfiguredConfidentialOAuthClient,
     Field(discriminator="kind"),
 ]
 

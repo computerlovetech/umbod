@@ -5,7 +5,15 @@ import base64
 import hashlib
 import json
 import re
-from datetime import timedelta
+from datetime import UTC, datetime, timedelta
+from collections.abc import Callable
+
+from ...personal_oauth_applications.ports import PersonalOAuthApplicationStore
+from ...personal_oauth_applications.models import (
+    AbsentApplicationReference, ApplicationReference, ClaimedOAuthApplication, CompleteOAuthApplication,
+    ExpiringApplicationSecret, NonexpiringApplicationSecret, OAuthApplicationBinding,
+    OAuthApplicationCredentials, RegisteredApplicationReference, ResolveOAuthApplication,
+)
 from typing import Literal
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
@@ -36,6 +44,7 @@ from ...personal_connections.oauth_models import (
 )
 from ...personal_oauth_configuration.models import (
     PersonalOAuthClient,
+    PreconfiguredConfidentialOAuthClient,
     PersonalOAuthPolicy,
     parse_oauth_scopes,
 )
@@ -55,6 +64,7 @@ from .validation import (
     ProviderContext,
     RegisteredClient,
     RegisteredOAuthClient,
+    RegisteredConfidentialOAuthClient,
     TokenResponse,
     parse_json,
     validated_url,
@@ -69,7 +79,7 @@ def verifier_digest(verifier: SecretStr) -> str:
 
 
 def client_authentication_method(client: PersonalOAuthClient) -> Literal["none", "client_secret_basic", "client_secret_post"]:
-    if client.kind == "preconfigured_confidential":
+    if client.kind in ("preconfigured_confidential", "dynamic_confidential"):
         return client.token_endpoint_auth_method
     return "none"
 
@@ -81,9 +91,11 @@ def unsupported_configuration(reason: OAuthFailureReason, stage: OAuthFailureSta
 
 
 class DiscoveredPersonalOAuthProvider:
-    def __init__(self, callback_policy: CallbackURLPolicy, transport: OAuthHttpTransport) -> None:
+    def __init__(self, callback_policy: CallbackURLPolicy, transport: OAuthHttpTransport, applications: PersonalOAuthApplicationStore, clock: Callable[[], datetime]) -> None:
         self._callback_policy = callback_policy
         self._transport = transport
+        self._applications = applications
+        self._clock = clock
 
     async def _response(
         self, method: Literal["GET", "POST"], url: str, body: str,
@@ -135,6 +147,7 @@ class DiscoveredPersonalOAuthProvider:
         policy = command.policy
         configured_client = policy.client
         auth_method = client_authentication_method(configured_client)
+        application_reference: ApplicationReference = AbsentApplicationReference()
         if configured_client.kind == "dynamic_public":
             progress.begin("registration")
             with oauth_failure_boundary("registration", NoDownstreamResponse()):
@@ -148,6 +161,25 @@ class DiscoveredPersonalOAuthProvider:
                         downstream_response=DownstreamHttpResponse(status_code=registered.status_code),
                     ))
                 client_id = registered.client.client_id
+        elif configured_client.kind == "dynamic_confidential":
+            progress.begin("registration")
+            with oauth_failure_boundary("registration", NoDownstreamResponse()):
+                application_binding = OAuthApplicationBinding(
+                    connector_id=command.connector_id, configuration_revision=policy.revision,
+                    issuer=issuer, resource=command.endpoint_url, redirect_uri=redirect_uri,
+                    token_endpoint=server.token_endpoint, requested_scopes=policy.requested_scopes,
+                    token_endpoint_auth_method=configured_client.token_endpoint_auth_method,
+                )
+                application = await self._applications.reserve(application_binding)
+                if isinstance(application, ClaimedOAuthApplication):
+                    registered = await self._register(redirect_uri, policy, server, progress)
+                    if not isinstance(registered, RegisteredConfidentialOAuthClient):
+                        raise ValueError("Confidential credentials required")
+                    application = await self._applications.complete(CompleteOAuthApplication(
+                        claim=application, credentials=registered.credentials,
+                    ))
+                client_id = application.credentials.client_id
+                application_reference = RegisteredApplicationReference(registration_id=application.registration_id)
         else:
             client_id = configured_client.client_id
         authorization_parameters = {
@@ -165,6 +197,7 @@ class DiscoveredPersonalOAuthProvider:
             state_digest=hashlib.sha256(state.encode()).hexdigest(),
             policy_revision=policy.revision, requested_scopes=list(policy.requested_scopes),
             client_mode=configured_client.kind, token_endpoint_auth_method=auth_method,
+            application_reference=application_reference,
         )
         return PreparedPersonalOAuth(
             authorization_url=SecretStr(authorization_url), context=SecretStr(context.model_dump_json()),
@@ -181,11 +214,11 @@ class DiscoveredPersonalOAuthProvider:
             configured_client = policy.client
             auth_method = client_authentication_method(configured_client)
             issuer = resource.authorization_servers[0]
-            if configured_client.kind == "dynamic_public" and configured_client.approved_issuers:
+            if configured_client.kind in ("dynamic_public", "dynamic_confidential") and configured_client.approved_issuers:
                 issuer = configured_client.approved_issuers[0]
                 if issuer not in resource.authorization_servers:
                     raise unsupported_configuration("issuer_mismatch", "discovery")
-            elif configured_client.kind == "dynamic_public" or select_advertised_issuer:
+            elif configured_client.kind in ("dynamic_public", "dynamic_confidential") or select_advertised_issuer:
                 if len(resource.authorization_servers) != 1:
                     raise unsupported_configuration("ambiguous_issuer", "discovery")
             else:
@@ -210,7 +243,7 @@ class DiscoveredPersonalOAuthProvider:
 
     async def _register(
         self, redirect_uri: str, policy: PersonalOAuthPolicy, server: AuthorizationServer, progress: OAuthOperationProgress,
-    ) -> RegisteredOAuthClient:
+    ) -> RegisteredOAuthClient | RegisteredConfidentialOAuthClient:
         if not server.registration_endpoint:
             raise unsupported_configuration("registration_unavailable", "registration")
         validated_url(server.registration_endpoint)
@@ -221,7 +254,7 @@ class DiscoveredPersonalOAuthProvider:
             "client_name": "Umbod",
             "application_type": "native" if redirect_uri.startswith("http://") else "web",
             "redirect_uris": [redirect_uri],
-            "token_endpoint_auth_method": "none",
+            "token_endpoint_auth_method": client_authentication_method(policy.client),
             "grant_types": grant_types,
             "response_types": ["code"],
         }
@@ -235,8 +268,8 @@ class DiscoveredPersonalOAuthProvider:
             raw_client = parse_json(response.body)
             client = RegisteredClient.model_validate(raw_client)
             if (
-                "client_secret" in raw_client
-                or client.token_endpoint_auth_method != "none"
+                (policy.client.kind == "dynamic_public" and "client_secret" in raw_client)
+                or client.token_endpoint_auth_method != client_authentication_method(policy.client)
                 or client.redirect_uris != [redirect_uri]
                 or "authorization_code" not in client.grant_types
                 or not set(client.grant_types) <= set(grant_types)
@@ -246,6 +279,29 @@ class DiscoveredPersonalOAuthProvider:
                 raise PersonalOAuthProviderUnsupported(OAuthFailureEvidence(
                     stage="registration", reason="registration_contract_mismatch", downstream_response=NoDownstreamResponse(),
                 ))
+            if policy.client.kind == "dynamic_confidential":
+                if "scope" in raw_client and parse_oauth_scopes(client.scope) != policy.requested_scopes:
+                    raise PersonalOAuthProviderUnsupported(OAuthFailureEvidence(
+                        stage="registration", reason="scope_mismatch",
+                        downstream_response=DownstreamHttpResponse(status_code=response.status),
+                    ))
+                if "token_endpoint_auth_method" not in raw_client or response.status != 201:
+                    raise ValueError("Invalid registration response")
+                secret = raw_client.get("client_secret")
+                expiry = raw_client.get("client_secret_expires_at")
+                if (
+                    not isinstance(secret, str) or not 1 <= len(secret) <= 4096
+                    or not secret.strip() or any(ord(character) < 32 or ord(character) == 127 for character in secret)
+                    or type(expiry) is not int or expiry < 0
+                ):
+                    raise ValueError("Invalid registered credentials")
+                lifetime = NonexpiringApplicationSecret() if expiry == 0 else ExpiringApplicationSecret(expires_at=datetime.fromtimestamp(expiry, UTC))
+                if isinstance(lifetime, ExpiringApplicationSecret) and lifetime.expires_at <= self._clock():
+                    raise ValueError("Expired registered credentials")
+                return RegisteredConfidentialOAuthClient(
+                    client=client, status_code=response.status,
+                    credentials=OAuthApplicationCredentials(client_id=client.client_id, client_secret=SecretStr(secret), lifetime=lifetime),
+                )
             return RegisteredOAuthClient(client=client, status_code=response.status)
 
     async def exchange(self, command: ExchangePersonalOAuth) -> Authorized:
@@ -269,8 +325,8 @@ class DiscoveredPersonalOAuthProvider:
                 or tuple(context.requested_scopes) != policy.requested_scopes
                 or context.client_mode != client.kind
                 or context.token_endpoint_auth_method != client_authentication_method(client)
-                or (client.kind != "dynamic_public" and (client.client_id != context.client_id or client.issuer_url != context.issuer))
-                or (client.kind == "dynamic_public" and client.approved_issuers and context.issuer not in client.approved_issuers)
+                or (client.kind in ("preconfigured_public", "preconfigured_confidential") and (client.client_id != context.client_id or client.issuer_url != context.issuer))
+                or (client.kind in ("dynamic_public", "dynamic_confidential") and client.approved_issuers and context.issuer not in client.approved_issuers)
             ):
                 raise ValueError("Invalid policy binding")
             redirect_uri = validate_callback_binding(
@@ -307,6 +363,27 @@ class DiscoveredPersonalOAuthProvider:
                 "redirect_uri": context.redirect_uri,
                 "code_verifier": attempt.preparation.code_verifier.get_secret_value(), "resource": context.resource,
             }
+            if client.kind == "dynamic_confidential":
+                if context.application_reference.kind != "registered":
+                    raise ValueError("Application store required")
+                if attempt.preparation.connector_id != attempt.query.key.connector_id:
+                    raise ValueError("Invalid application owner")
+                application = await self._applications.resolve(ResolveOAuthApplication(
+                    reference=context.application_reference, client_id=context.client_id,
+                    binding=OAuthApplicationBinding(
+                        connector_id=attempt.preparation.connector_id, configuration_revision=policy.revision,
+                        issuer=context.issuer, resource=context.resource, redirect_uri=context.redirect_uri,
+                        token_endpoint=context.token_endpoint, requested_scopes=policy.requested_scopes,
+                        token_endpoint_auth_method=client.token_endpoint_auth_method,
+                    ),
+                ))
+                lifetime = application.credentials.lifetime
+                if lifetime.kind == "expiring" and lifetime.expires_at <= max(attempt.query.now, self._clock()):
+                    raise ValueError("Expired application credentials")
+                client = PreconfiguredConfidentialOAuthClient(
+                    issuer_url=context.issuer, client_id=context.client_id,
+                    token_endpoint_auth_method=client.token_endpoint_auth_method, client_secret=application.credentials.client_secret,
+                )
             authentication: OAuthHttpAuthentication = NoOAuthHttpAuthentication()
             if client.kind == "preconfigured_confidential" and client.token_endpoint_auth_method == "client_secret_basic":
                 authentication = BasicOAuthHttpAuthentication(client_id=SecretStr(client.client_id), client_secret=client.client_secret)
@@ -341,5 +418,5 @@ class DiscoveredPersonalOAuthProvider:
                 token_endpoint=context.token_endpoint, redirect_uri=context.redirect_uri,
                 client_mode=context.client_mode, token_endpoint_auth_method=context.token_endpoint_auth_method,
                 requested_scopes=policy.requested_scopes, granted_scopes=granted_scopes,
-                configuration_revision=policy.revision,
+                configuration_revision=policy.revision, application_reference=context.application_reference,
             ))

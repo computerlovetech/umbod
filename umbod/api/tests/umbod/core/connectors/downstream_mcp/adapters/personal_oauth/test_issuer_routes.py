@@ -1,4 +1,5 @@
 import json
+from tests.support.personal_oauth_applications import InMemoryPersonalOAuthApplicationStore, application_clock
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
@@ -33,7 +34,7 @@ async def test_discovered_capability_binds_registration_authorization_and_exchan
         response(resource_metadata), response(server_metadata), response(client_metadata),
         response({"access_token": "access", "token_type": "Bearer"}),
     ])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     prepared = await provider.prepare(preparation)
     assert prepared.callback_binding.kind == ("generic" if flag == "true" else "issuer")
     assert preparation.redirect_uri != redirect or flag == "true"
@@ -63,7 +64,7 @@ async def test_tampered_bound_exchange_is_rejected_before_token_post(
     issuer = str(server_metadata["issuer"])
     client_metadata["redirect_uris"] = [issuer_callback_uri(preparation.redirect_uri, issuer)]
     transport = InMemoryOAuthHttpTransport([response(resource_metadata), response(server_metadata), response(client_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     prepared = await provider.prepare(preparation)
     binding = prepared.callback_binding
     assert isinstance(binding, IssuerBinding)
@@ -103,7 +104,7 @@ async def test_legacy_generic_exchange_still_requires_exact_actual_issuer(
     transport = InMemoryOAuthHttpTransport([
         response(provider_case.resource_metadata), response(provider_case.server_metadata), response(provider_case.client_metadata),
     ])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     prepared = await provider.prepare(provider_case.preparation)
     legacy = PreparedPersonalOAuth.model_validate_json(json.dumps({
         "authorization_url": prepared.authorization_url.get_secret_value(),

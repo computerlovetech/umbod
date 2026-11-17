@@ -116,6 +116,12 @@ class DynamicPublicClientResponse(ApiModel):
     approved_issuers: tuple[OAuthIssuer, ...] = Field(default=(), max_length=1, exclude_if=lambda value: not value)
 
 
+class DynamicConfidentialClientResponse(ApiModel):
+    kind: Literal["dynamic_confidential"]
+    approved_issuers: tuple[OAuthIssuer, ...] = Field(default=(), max_length=1)
+    token_endpoint_auth_method: Literal["client_secret_basic", "client_secret_post"]
+
+
 class PreconfiguredPublicClientResponse(ApiModel):
     kind: Literal["preconfigured_public"]
     issuer_url: str
@@ -131,7 +137,7 @@ class PreconfiguredConfidentialClientResponse(ApiModel):
 
 
 PersonalOAuthClientResponse = Annotated[
-    DynamicPublicClientResponse | PreconfiguredPublicClientResponse | PreconfiguredConfidentialClientResponse,
+    DynamicPublicClientResponse | DynamicConfidentialClientResponse | PreconfiguredPublicClientResponse | PreconfiguredConfidentialClientResponse,
     Field(discriminator="kind"),
 ]
 

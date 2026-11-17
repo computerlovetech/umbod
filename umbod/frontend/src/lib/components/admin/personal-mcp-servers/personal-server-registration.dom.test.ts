@@ -55,7 +55,7 @@ async function open(results: EndpointDiscoveryResult[]): Promise<{ api: InMemory
   return { api, discovery };
 }
 function result(overrides: Partial<Extract<EndpointDiscoveryResult, { kind: 'discovered' }>> = {}): Extract<EndpointDiscoveryResult, { kind: 'discovered' }> {
-  return { kind: 'discovered', endpoint_url: 'https://mcp.test/mcp', issuer_url: 'https://Issuer.test:443/Exact/', available_scopes: ['read', 'write'], scope_source: 'resource', automatic_registration: 'available', token_endpoint_auth_methods: ['none'], ...overrides };
+  return { kind: 'discovered', endpoint_url: 'https://mcp.test/mcp', issuer_url: 'https://Issuer.test:443/Exact/', available_scopes: ['read', 'write'], scope_source: 'resource', automatic_registration: 'available', automatic_client: { kind: 'dynamic_public' }, token_endpoint_auth_methods: ['none'], ...overrides };
 }
 function trigger(id: string): HTMLButtonElement {
   const element = document.getElementById(id);
@@ -80,6 +80,80 @@ async function blurEndpoint(): Promise<void> {
   await tick();
 }
 describe('personal MCP registration interaction', (): void => {
+  test.each(['client_secret_basic', 'client_secret_post'] as const)('Dinero automatic setup submits backend-proposed %s without administrator credentials', async (method): Promise<void> => {
+    const metadata = result({ endpoint_url: 'https://mcp.dinero.dk/', issuer_url: 'https://authz.dinero.dk', token_endpoint_auth_methods: ['client_secret_basic', 'client_secret_post'], automatic_client: { kind: 'dynamic_confidential', token_endpoint_auth_method: method } });
+    const { api } = await open([metadata]);
+    const create = vi.spyOn(api, 'create');
+    await fill('personal-endpoint', metadata.endpoint_url);
+    await blurEndpoint();
+    expect(document.body.textContent).toContain('Discovery complete');
+    expect(document.body.textContent).not.toContain('unsupported');
+    expect(document.body.textContent).toContain('Application credentials will be obtained automatically when a user connects. Each user signs in with their own account.');
+    expect(trigger('personal-registration-client-kind').value).toBe('automatic');
+    expect(document.querySelector('input[name="clientId"]')).toBeNull();
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+    expect(document.getElementById('personal-registration-issuer')).toBeNull();
+    expect(document.getElementById('personal-registration-auth-method')).toBeNull();
+    await fill('personal-name', 'Dinero');
+    await fill('personal-description', 'Manage accounts');
+    await check('read');
+    expect(button('Register unpublished server').disabled).toBe(true);
+    await check('Approve issuer');
+    expect(button('Register unpublished server').disabled).toBe(false);
+    document.querySelector('form')!.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
+    expect(create).toHaveBeenCalledWith({
+      metadata: { display_name: 'Dinero', tool_name_prefix: 'Dinero', capability_description: 'Manage accounts', public_path: '/mcp/proxies/dinero' },
+      configuration: { endpoint_url: metadata.endpoint_url, oauth_configuration: { requested_scopes: ['read'], client: { kind: 'dynamic_confidential', approved_issuers: [metadata.issuer_url], token_endpoint_auth_method: method } } }
+    });
+    expect((await api.policy('dinero')).client).toEqual({ kind: 'dynamic_confidential', approved_issuers: [metadata.issuer_url], token_endpoint_auth_method: method });
+  });
+  test('manual selection survives confidential automatic discovery and refresh, returning to automatic uses the latest proposal and revokes approval', async (): Promise<void> => {
+    const basic = result({ token_endpoint_auth_methods: ['client_secret_basic', 'client_secret_post'], automatic_client: { kind: 'dynamic_confidential', token_endpoint_auth_method: 'client_secret_basic' } });
+    const post = { ...basic, automatic_client: { kind: 'dynamic_confidential' as const, token_endpoint_auth_method: 'client_secret_post' as const } };
+    await open([basic, post]);
+    await chooseLast('personal-registration-client-kind');
+    await fill('personal-registration-client-id', 'manual-app');
+    await fill('personal-registration-client-secret', 'manual-secret');
+    await fill('personal-endpoint', basic.endpoint_url);
+    await blurEndpoint();
+    expect(trigger('personal-registration-client-kind').value).toBe('preconfigured_confidential');
+    expect(input('personal-registration-client-id').value).toBe('manual-app');
+    expect(input('personal-registration-client-secret').value).toBe('manual-secret');
+    await check('Approve issuer');
+    button('Refresh OAuth settings').click();
+    await tick();
+    await tick();
+    expect(checkbox('Approve issuer').checked).toBe(false);
+    expect(trigger('personal-registration-client-kind').value).toBe('preconfigured_confidential');
+    expect(trigger('personal-registration-auth-method').value).toBe('client_secret_basic');
+    await check('Approve issuer');
+    const selection = trigger('personal-registration-client-kind');
+    await key(selection, 'Enter');
+    await key(selection, 'Home');
+    await key(selection, 'Enter');
+    expect(selection.value).toBe('automatic');
+    expect(checkbox('Approve issuer').checked).toBe(false);
+    expect(state?.form.secret).toBe('');
+    expect(document.querySelector('input[type="password"]')).toBeNull();
+    await check('Approve issuer');
+    expect(state?.form.settings(state.discovery.proposal).client).toEqual({ kind: 'dynamic_confidential', approved_issuers: [basic.issuer_url], token_endpoint_auth_method: 'client_secret_post' });
+  });
+  test('refresh can change the automatic proposal only after revoking approval', async (): Promise<void> => {
+    const metadata = result({ token_endpoint_auth_methods: ['client_secret_basic', 'client_secret_post'], automatic_client: { kind: 'dynamic_confidential', token_endpoint_auth_method: 'client_secret_basic' } });
+    await open([metadata, { ...metadata, automatic_client: { kind: 'dynamic_confidential', token_endpoint_auth_method: 'client_secret_post' } }]);
+    await fill('personal-endpoint', metadata.endpoint_url);
+    await blurEndpoint();
+    await check('Approve issuer');
+    expect(button('Register unpublished server').disabled).toBe(false);
+    button('Refresh OAuth settings').click();
+    await tick();
+    await tick();
+    expect(checkbox('Approve issuer').checked).toBe(false);
+    expect(button('Register unpublished server').disabled).toBe(true);
+    await check('Approve issuer');
+    expect(state?.form.settings(state.discovery.proposal).client).toEqual({ kind: 'dynamic_confidential', approved_issuers: [metadata.issuer_url], token_endpoint_auth_method: 'client_secret_post' });
+  });
   test('keyboard client-kind and authentication selection preserve original triggers and focus', async (): Promise<void> => {
     await open([]);
     const kind = trigger('personal-registration-client-kind');
@@ -113,6 +187,34 @@ describe('personal MCP registration interaction', (): void => {
     expect(input(name.id)).toBe(name);
     expect(name.value).toBe('Typing during discovery');
     expect(document.activeElement).toBe(name);
+  });
+  test('issuer choice blocks creation until discovery finishes and invalid scopes require correction before approval', async (): Promise<void> => {
+    const issuer = result().issuer_url;
+    const { discovery } = await open([
+      { kind: 'issuer_selection_required', endpoint_url: result().endpoint_url, issuer_urls: ['https://other.test', issuer] },
+      result()
+    ]);
+    await fill('personal-endpoint', result().endpoint_url);
+    await blurEndpoint();
+    expect(document.getElementById('personal-creation-blocker')?.textContent).toBe('Choose an OAuth issuer to continue discovery.');
+    expect(document.body.textContent).not.toContain('Discovery complete');
+    expect(button('Register unpublished server').disabled).toBe(true);
+    await chooseLast('personal-discovery-issuer');
+    await tick();
+    expect(discovery.requests).toEqual([
+      { endpoint_url: result().endpoint_url, issuer_selection: { kind: 'automatic' } },
+      { endpoint_url: result().endpoint_url, issuer_selection: { kind: 'selected', issuer_url: issuer } }
+    ]);
+    expect(document.body.textContent).toContain('Discovery complete');
+    await check('read');
+    await fill('personal-custom-scopes', 'read');
+    expect(checkbox('Approve issuer').disabled).toBe(true);
+    expect(document.getElementById('personal-creation-blocker')?.textContent).toBe('Use unique ASCII scope tokens separated by spaces (up to 64 scopes).');
+    await fill('personal-custom-scopes', 'custom');
+    expect(checkbox('Approve issuer').disabled).toBe(false);
+    expect(button('Register unpublished server').disabled).toBe(true);
+    await check('Approve issuer');
+    expect(button('Register unpublished server').disabled).toBe(false);
   });
   test('native-invalid confidential creation clears secret before correction and explicit reapproval submits exact settings', async (): Promise<void> => {
     const { api, discovery } = await open([result()]);
@@ -225,7 +327,9 @@ describe('personal MCP registration interaction', (): void => {
     await blurEndpoint();
     expect(document.body.textContent).toContain(label);
     expect(input('personal-custom-scopes')).toBeTruthy();
-    expect(checkbox('Approve issuer').parentElement?.textContent).toContain('No explicit scopes');
+    const approvalDescription = checkbox('Approve issuer').getAttribute('aria-describedby');
+    expect(approvalDescription).toBeTruthy();
+    expect(document.getElementById(approvalDescription!)?.textContent).toContain('No explicit scopes');
   });
   test('pending discovery permits unrelated typing but cannot submit and close fences the result', async (): Promise<void> => {
     const { api, discovery } = await open([]);
@@ -236,6 +340,8 @@ describe('personal MCP registration interaction', (): void => {
     await fill('personal-endpoint', 'https://mcp.test/mcp');
     await blurEndpoint();
     expect(document.body.textContent).toContain('Discovering OAuth settings…');
+    expect(document.getElementById('personal-creation-blocker')?.textContent).toBe('Wait for OAuth discovery to finish.');
+    expect(document.body.textContent).not.toContain('Discovery complete');
     await fill('personal-name', 'Still editable');
     expect(input('personal-name').value).toBe('Still editable');
     expect(input('personal-name').matches(':disabled')).toBe(false);
@@ -256,10 +362,14 @@ describe('personal MCP registration interaction', (): void => {
     await fill('personal-endpoint', 'https://mcp.test/mcp');
     await blurEndpoint();
     expect(document.body.textContent).toContain('Discovery failed');
+    expect(document.body.textContent).not.toContain('Discovery complete');
+    expect(document.getElementById('personal-creation-blocker')?.textContent).toBe('Retry discovery or choose Configure manually.');
     expect(document.querySelector('input[name="scopes"]')).toBeNull();
     button('Configure manually').click();
     await tick();
     expect(input('personal-manual-scopes')).toBeTruthy();
+    expect(trigger('personal-registration-client-kind').compareDocumentPosition(checkbox('Save without discovered settings')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.getElementById('personal-creation-blocker')?.textContent).toBe('Review manual settings and acknowledge saving without discovery.');
     expect(button('Register unpublished server').disabled).toBe(true);
     await check('Save without discovered settings');
     expect(button('Register unpublished server').disabled).toBe(false);
@@ -268,11 +378,20 @@ describe('personal MCP registration interaction', (): void => {
     expect(discovery.requests).toHaveLength(2);
     expect(button('Register unpublished server').disabled).toBe(true);
   });
-  test('unsupported registration stays automatic until explicit existing-client selection', async (): Promise<void> => {
-    await open([result({ automatic_registration: 'unavailable' })]);
+  test('unsupported registration stays automatic until explicit existing-client selection and approval completes the handoff', async (): Promise<void> => {
+    const { api } = await open([result({ automatic_registration: 'unavailable', automatic_client: { kind: 'unavailable' } })]);
+    const create = vi.spyOn(api, 'create');
+    expect(document.body.textContent).toContain('Enter an HTTPS MCP endpoint and leave the field');
     await fill('personal-endpoint', 'https://mcp.test/mcp');
     await blurEndpoint();
-    expect(document.body.textContent).toContain('Automatic registration unavailable');
+    expect(document.body.textContent).toContain('Discovery complete');
+    expect(document.body.textContent).toContain('Umbod cannot automatically register an application with this provider.');
+    expect(document.body.textContent).toContain('You can use an existing OAuth application instead.');
+    expect(trigger('personal-registration-client-kind').value).toBe('automatic');
+    expect(document.getElementById('personal-registration-client-id')).toBeNull();
+    const submit = button('Register unpublished server');
+    expect(submit.getAttribute('aria-describedby')).toBe('personal-creation-blocker');
+    expect(document.getElementById('personal-creation-blocker')?.textContent).toBe('Automatic setup is unsupported. You can use a manually configured client instead.');
     await check('Approve issuer');
     expect(button('Register unpublished server').disabled).toBe(true);
     button('Automatic registration⌄').click();
@@ -285,5 +404,29 @@ describe('personal MCP registration interaction', (): void => {
     expect(input('personal-registration-issuer').value).toBe(result().issuer_url);
     expect(input('personal-registration-client-id').required).toBe(true);
     expect(checkbox('Approve issuer').checked).toBe(false);
+    expect(submit.disabled).toBe(true);
+    expect(document.getElementById('personal-creation-blocker')?.textContent).toContain('then approve the issuer and scopes');
+    expect(input('personal-registration-client-id').compareDocumentPosition(checkbox('Approve issuer')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelector('input[name="scopes"]')).toBeNull();
+    await fill('personal-name', 'Existing app');
+    await fill('personal-description', 'Search records');
+    await fill('personal-registration-client-id', 'provider-client');
+    await check('read');
+    await check('Approve issuer');
+    expect(submit.disabled).toBe(false);
+    expect(submit.hasAttribute('aria-describedby')).toBe(false);
+    await fill('personal-registration-client-id', 'provider-client-updated');
+    expect(checkbox('Approve issuer').checked).toBe(false);
+    expect(submit.disabled).toBe(true);
+    await check('Approve issuer');
+    expect(submit.disabled).toBe(false);
+    const form = document.querySelector('form');
+    if (!(form instanceof HTMLFormElement)) throw new Error('Missing registration form');
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await vi.waitFor((): void => expect(create).toHaveBeenCalledOnce());
+    expect(create).toHaveBeenCalledWith({
+      metadata: { display_name: 'Existing app', tool_name_prefix: 'Existing_app', capability_description: 'Search records', public_path: '/mcp/proxies/existing-app' },
+      configuration: { endpoint_url: 'https://mcp.test/mcp', oauth_configuration: { requested_scopes: ['read'], client: { kind: 'preconfigured_public', issuer_url: result().issuer_url, client_id: 'provider-client-updated' } } }
+    });
   });
 });

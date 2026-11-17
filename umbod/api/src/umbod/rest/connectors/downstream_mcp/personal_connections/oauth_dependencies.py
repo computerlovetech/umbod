@@ -34,10 +34,11 @@ def get_personal_callback_policy(factories: Factories) -> CallbackURLPolicy:
 
 
 async def get_personal_oauth_provider(
+    stores: Annotated[DownstreamMcpStores, Depends(get_downstream_stores)],
     callback_policy: Annotated[CallbackURLPolicy, Depends(get_personal_callback_policy)],
     enabled: Annotated[None, Depends(require_personal_oauth)],
 ) -> AsyncIterator[PersonalOAuthProvider]:
-    async with configured_personal_oauth_provider(callback_policy) as provider:
+    async with configured_personal_oauth_provider(callback_policy, stores.personal_oauth_applications) as provider:
         yield provider
 
 

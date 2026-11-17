@@ -1,4 +1,5 @@
 import pytest
+from tests.support.personal_oauth_applications import InMemoryPersonalOAuthApplicationStore, application_clock
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.metadata import DiscoveredPersonalOAuthMetadataProvider
@@ -41,7 +42,7 @@ async def test_preview_scope_preference_and_get_only(provider_case: ProviderCase
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("registration,methods", [(False, ["none"]), (True, ["client_secret_basic"]), (False, ["client_secret_basic"])])
+@pytest.mark.parametrize("registration,methods", [(False, ["none"]), (True, ["unsupported"]), (False, ["client_secret_basic"])])
 async def test_preview_retains_metadata_when_automatic_registration_unavailable(provider_case: ProviderCase, registration: bool, methods: list[str]) -> None:
     if not registration:
         provider_case.server_metadata.pop("registration_endpoint")
@@ -54,6 +55,26 @@ async def test_preview_retains_metadata_when_automatic_registration_unavailable(
     assert result.available_scopes == ("read",)
     assert result.token_endpoint_auth_methods == tuple(methods)
     assert len(transport.requests) == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("methods,kind,method", [
+    (["none", "client_secret_basic"], "dynamic_public", ""),
+    (["client_secret_post", "client_secret_basic"], "dynamic_confidential", "client_secret_basic"),
+    (["client_secret_post"], "dynamic_confidential", "client_secret_post"),
+    (["private_key_jwt"], "unavailable", ""),
+])
+async def test_preview_proposes_supported_automatic_client_with_safe_preference(provider_case: ProviderCase, methods: list[str], kind: str, method: str) -> None:
+    provider_case.server_metadata["token_endpoint_auth_methods_supported"] = methods
+    result = await DiscoveredPersonalOAuthMetadataProvider(InMemoryOAuthHttpTransport([
+        response(provider_case.resource_metadata), response(provider_case.server_metadata),
+    ])).discover(command({"kind": "automatic"}))
+    assert result.kind == "discovered"
+    assert result.automatic_client.kind == kind
+    if result.automatic_client.kind == "dynamic_confidential":
+        assert result.automatic_client.token_endpoint_auth_method == method
+        assert result.automatic_client.approved_issuers == (ISSUER,)
+    assert "client_secret" not in result.automatic_client.model_dump()
 
 
 @pytest.mark.asyncio
@@ -124,7 +145,7 @@ async def test_prepare_uses_approved_issuer_even_when_multiple_advertised(provid
     policy = PersonalOAuthPolicy(revision="bound", requested_scopes=(), client=DynamicPublicOAuthClient(approved_issuers=(ISSUER,)))
     preparation = provider_case.preparation.model_copy(update={"policy": policy})
     transport = InMemoryOAuthHttpTransport([response(provider_case.resource_metadata), response(provider_case.server_metadata), response(provider_case.client_metadata)])
-    result = await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport).prepare(preparation)
+    result = await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(preparation)
     assert result.callback_binding.expected_issuer == ISSUER
     assert transport.requests[-1].method == "POST"
 
@@ -135,7 +156,7 @@ async def test_prepare_refuses_changed_approved_issuer_before_registration(provi
     preparation = provider_case.preparation.model_copy(update={"policy": policy})
     transport = InMemoryOAuthHttpTransport([response(provider_case.resource_metadata)])
     with pytest.raises(PersonalOAuthProviderUnsupported) as caught:
-        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport).prepare(preparation)
+        await DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock).prepare(preparation)
     assert caught.value.evidence.reason == "issuer_mismatch"
     assert len(transport.requests) == 1
 
@@ -169,7 +190,7 @@ async def test_saved_setup_discovery_refuses_to_replace_disappeared_approved_iss
 @pytest.mark.asyncio
 async def test_exchange_refuses_context_outside_approved_issuer_before_post(provider_case: ProviderCase) -> None:
     transport = InMemoryOAuthHttpTransport([response(provider_case.resource_metadata), response(provider_case.server_metadata), response(provider_case.client_metadata)])
-    provider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport)
+    provider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     prepared = await provider.prepare(provider_case.preparation)
     policy = provider_case.preparation.policy.model_copy(update={"client": DynamicPublicOAuthClient(approved_issuers=("https://replacement.example",))})
     preparation = provider_case.preparation.model_copy(update={"policy": policy})

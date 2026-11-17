@@ -77,7 +77,7 @@ Personal connector OAuth services publish one sanitized failure snapshot before 
 | `oauth.downstream.http.status_code` | Actual downstream status, omitted when no response evidence exists. |
 | `connector.id_hash` | Deterministic fingerprint of the connector ID; not an owner identity. |
 
-Setup discovery and validation use this same observer with `operation=validate_setup`; user authorization retains `operation=authorize`. A registration scope mismatch publishes `registration` / `scope_mismatch` with the actual registration HTTP status, including successful 201 responses. Scope names, metadata documents, client identifiers and secrets never enter diagnostic events.
+Setup discovery and validation use this same observer with `operation=validate_setup`; user authorization retains `operation=authorize`. Admin checks validate metadata without creating a provider application or signing in a user. Automatic application registration occurs when personal authorization starts. A registration scope mismatch publishes `registration` / `scope_mismatch` with the actual registration HTTP status, including successful 201 responses. Scope names, metadata documents, client identifiers and secrets never enter diagnostic events.
 
 The server-generated request ID supplies trace correlation without inventing a tracing span. Start, callback, and refresh are separate requests. Expected provider failures log at WARNING; unexpected failures remain ERROR and alertable. These records do not contain provider error codes, descriptions, response bodies, callback parameters, or unrestricted URLs.
 

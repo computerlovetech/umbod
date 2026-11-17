@@ -1,5 +1,8 @@
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta
+from collections.abc import Callable
+from ...personal_oauth_applications.ports import PersonalOAuthApplicationStore
+from ...personal_oauth_applications.models import OAuthApplicationBinding, ResolveOAuthApplication
 from typing import Literal
 from urllib.parse import urlencode
 
@@ -20,7 +23,7 @@ from ...personal_connections.refresh_provider_models import (
     PersonalOAuthRefreshUncertain,
     RefreshPersonalOAuth,
 )
-from ...personal_oauth_configuration.models import parse_oauth_scopes
+from ...personal_oauth_configuration.models import parse_oauth_scopes, PreconfiguredConfidentialOAuthClient
 from .refresh_logging import private_refresh_network_logs
 from .callback import CallbackURLPolicy, validate_callback_url
 from .transport import (
@@ -52,9 +55,11 @@ def _definitive_denial(status: int, raw: dict[str, object]) -> bool:
 
 
 class StoredPersonalOAuthRefreshProvider:
-    def __init__(self, callback_policy: CallbackURLPolicy, transport: OAuthHttpTransport) -> None:
+    def __init__(self, callback_policy: CallbackURLPolicy, transport: OAuthHttpTransport, applications: PersonalOAuthApplicationStore, clock: Callable[[], datetime]) -> None:
         self._callback_policy = callback_policy
         self._transport = transport
+        self._applications = applications
+        self._clock = clock
 
     async def refresh(self, command: RefreshPersonalOAuth) -> Authorized:
         progress = OAuthOperationProgress("refresh")
@@ -71,7 +76,7 @@ class StoredPersonalOAuthRefreshProvider:
         grant = PersonalOAuthGrant.model_validate(command.grant.model_dump())
         policy = command.policy
         client = policy.client
-        method = client.token_endpoint_auth_method if client.kind == "preconfigured_confidential" else "none"
+        method = client.token_endpoint_auth_method if client.kind in ("preconfigured_confidential", "dynamic_confidential") else "none"
         if (
             client.kind == "dynamic_public"
             or grant.client_mode != client.kind
@@ -83,6 +88,27 @@ class StoredPersonalOAuthRefreshProvider:
             or grant.issued_at > command.now
         ):
             raise ValueError("Unsupported refresh binding")
+        if client.kind == "dynamic_confidential":
+            if grant.application_reference.kind != "registered":
+                raise ValueError("Application store required")
+            if client.approved_issuers and grant.issuer not in client.approved_issuers:
+                raise ValueError("Unsupported refresh issuer")
+            application = await self._applications.resolve(ResolveOAuthApplication(
+                reference=grant.application_reference, client_id=grant.client_id,
+                binding=OAuthApplicationBinding(
+                    connector_id=grant.key.connector_id, configuration_revision=policy.revision,
+                    issuer=grant.issuer, resource=grant.resource, redirect_uri=grant.redirect_uri,
+                    token_endpoint=grant.token_endpoint, requested_scopes=policy.requested_scopes,
+                    token_endpoint_auth_method=client.token_endpoint_auth_method,
+                ),
+            ))
+            lifetime = application.credentials.lifetime
+            if lifetime.kind == "expiring" and lifetime.expires_at <= max(command.now, self._clock()):
+                raise ValueError("Expired application credentials")
+            client = PreconfiguredConfidentialOAuthClient(
+                issuer_url=grant.issuer, client_id=grant.client_id,
+                client_secret=application.credentials.client_secret, token_endpoint_auth_method=client.token_endpoint_auth_method,
+            )
         if grant.client_id != client.client_id or grant.issuer != client.issuer_url:
             raise ValueError("Unsupported refresh binding")
         validate_callback_url(grant.redirect_uri, self._callback_policy)

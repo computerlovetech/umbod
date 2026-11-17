@@ -128,6 +128,20 @@ describe('administrator configuration check', (): void => {
     expect(setup.calls.map((call) => call.operation)).toEqual(['status', 'validation', 'discovery']);
   });
 
+  test.each(['dynamic_public', 'dynamic_confidential'] as const)('%s readiness explains metadata-only validation and later independent user sign-in', async (kind): Promise<void> => {
+    const setup = new InMemoryPersonalOAuthSetup();
+    setup.validation = setupFixture({ status: 'validated', checked_at: '2026-01-01T00:00:00Z', result: { kind: 'validated', discovery: { ...discoveryFixture(), registration_mode: kind }, returned_scopes: [], scope_source: 'not_checked' } });
+    const client: PersonalPolicy['client'] = kind === 'dynamic_public' ? { kind } : { kind, token_endpoint_auth_method: 'client_secret_basic' };
+    await openDialog(setup, { ...policyFixture(), client });
+    button('Check configuration').click();
+    await vi.waitFor(() => expect(document.body.textContent).toContain('Ready to publish'));
+    expect(document.body.textContent).toContain('Only provider metadata was checked.');
+    expect(document.body.textContent).toContain('Automatic application registration and each user’s sign-in happen when they connect');
+    expect(document.body.textContent).toContain('this check does not prove either will succeed');
+    expect(document.body.textContent).not.toContain('Confirm them and this callback URL');
+    expect(document.querySelectorAll('input')).toHaveLength(0);
+    expect(setup.calls.map((call) => call.operation)).toEqual(['status', 'validation']);
+  });
   test.each(['preconfigured_public', 'preconfigured_confidential'] as const)('existing %s clients retain only the essential provider-side credential and callback reminder', async (kind): Promise<void> => {
     const setup = new InMemoryPersonalOAuthSetup();
     const effective = 'https://umbod.test/oauth/callback/issuer/hashed-issuer';
@@ -140,6 +154,7 @@ describe('administrator configuration check', (): void => {
     button('Check configuration').click();
     await vi.waitFor(() => expect(document.body.textContent).toContain('Ready to publish'));
     expect(document.body.textContent).toContain('Client credentials are not tested');
+    expect(document.body.textContent).not.toContain('Automatic application registration');
     expect(document.querySelector('code')?.textContent).toBe(effective);
     expect(document.body.textContent).not.toContain('Unvalidated redirect URI');
     expect(document.querySelectorAll('input, details')).toHaveLength(0);

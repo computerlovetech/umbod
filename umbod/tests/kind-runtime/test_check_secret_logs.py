@@ -23,6 +23,17 @@ def test_signed_s3_credentials_are_detected_and_redacted(marker: str, encoding: 
     check_secret_logs(redacted)
 
 
+def test_dynamic_registration_secrets_are_detected_and_fully_redacted() -> None:
+    secret = "kind-personal-dcr-secret-unique-confidential-value"
+    output = "OAuth diagnostic " + secret + "\n"
+    with pytest.raises(SystemExit, match="Sensitive credentials"):
+        check_secret_logs(output)
+    redacted = redacted_diagnostics(output)
+    assert redacted == "OAuth diagnostic [REDACTED CLIENT SECRET]\n"
+    assert "unique-confidential-value" not in redacted
+    check_secret_logs(redacted)
+
+
 def test_ordinary_s3_diagnostics_are_preserved() -> None:
     output = "S3 upload completion rejected: checksum mismatch\n"
     check_secret_logs(output)

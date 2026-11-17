@@ -8,7 +8,7 @@ import { policyFixture } from '$lib/admin/personal-mcp-servers/fixtures.test-sup
 
 const endpoint = 'https://mcp.test/mcp';
 function discovered(overrides: Partial<Extract<EndpointDiscoveryResult, { kind: 'discovered' }>> = {}): Extract<EndpointDiscoveryResult, { kind: 'discovered' }> {
-  return { kind: 'discovered', endpoint_url: endpoint, issuer_url: 'https://Issuer.test:443/Exact/', available_scopes: ['read', 'write'], scope_source: 'resource', automatic_registration: 'available', token_endpoint_auth_methods: ['none'], ...overrides };
+  return { kind: 'discovered', endpoint_url: endpoint, issuer_url: 'https://Issuer.test:443/Exact/', available_scopes: ['read', 'write'], scope_source: 'resource', automatic_registration: 'available', automatic_client: { kind: 'dynamic_public' }, token_endpoint_auth_methods: ['none'], ...overrides };
 }
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void; reject: (error: unknown) => void } {
   let resolve!: (value: T) => void;
@@ -115,7 +115,7 @@ describe('creation metadata discovery', (): void => {
   });
   test('unsupported automatic registration cannot be bypassed by manual acknowledgement', async (): Promise<void> => {
     const { state, api } = setup();
-    vi.mocked(api.discover).mockResolvedValueOnce(discovered({ automatic_registration: 'unavailable' }));
+    vi.mocked(api.discover).mockResolvedValueOnce(discovered({ automatic_registration: 'unavailable', automatic_client: { kind: 'unavailable' } }));
     await state.blur();
     state.approve(true);
     state.configureManually();

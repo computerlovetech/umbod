@@ -14,7 +14,6 @@ from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback impor
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.setup import DiscoveredPersonalOAuthSetupProvider
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.transport import InMemoryOAuthHttpTransport
 from umbod.core.connectors.downstream_mcp.personal_oauth_setup.models import DiscoverPersonalOAuthSetup, PersonalOAuthSetupDiscovery, PersonalOAuthSetupValidation, ValidatePersonalOAuthSetup
-from umbod.logging import OpenTelemetryJsonFormatter
 from umbod.rest.connectors.downstream_mcp.personal_connections.oauth_diagnostics import get_oauth_application_failures
 from umbod.rest.connectors.downstream_mcp.personal_oauth_setup import get_setup_provider
 from .test_personal_catalogue import client as client, payload
@@ -128,7 +127,7 @@ def test_setup_is_admin_only_and_not_mounted_on_personal_api(oauth_api: OAuthApi
     assert oauth_api.client.get(personal, headers={"X-Access": "alice"}).status_code == 404
 
 
-def test_real_provider_scope_mismatch_has_one_correlated_warning_with_registration_201(oauth_api: OAuthApi, caplog: pytest.LogCaptureFixture) -> None:
+def test_real_provider_validation_checks_metadata_without_registration_or_warning(oauth_api: OAuthApi, caplog: pytest.LogCaptureFixture) -> None:
     caplog.set_level(logging.WARNING)
     admin = next(route.app for route in oauth_api.app.routes if getattr(route, "path", "") == "/api/admin")
     transport = InMemoryOAuthHttpTransport(discovery_responses() + [response({"client_id": "sentinel-client", "scope": "candidate.read", "redirect_uris": ["http://localhost:18010/api/oauth/downstream-mcp/callback"], "token_endpoint_auth_method": "none", "grant_types": ["authorization_code"], "response_types": ["code"]}, status=201)])
@@ -144,24 +143,10 @@ def test_real_provider_scope_mismatch_has_one_correlated_warning_with_registrati
     revision = oauth_api.client.get(url, headers=oauth_api.admin_headers).json()["revision"]
     result = oauth_api.client.post(url + "/validation", headers=oauth_api.admin_headers, json={"expected_revision": revision})
     assert result.status_code == 200
-    assert result.json()["state"]["status"] == "scope_mismatch"
-    assert result.json()["state"]["result"]["returned_scopes"] == ["candidate.read"]
-    assert len(captured.events) == 1
-    attributes = dict(captured.events[0].attributes)
-    assert attributes["operation"] == "validate_setup"
-    assert attributes["oauth.stage"] == "registration"
-    assert attributes["oauth.reason"] == "scope_mismatch"
-    assert attributes["oauth.downstream.http.status_code"] == 201
-    records = [record for record in caplog.records if record.name == "umbod.application.failure"]
-    assert len(records) == 1
-    logged = json.loads(OpenTelemetryJsonFormatter("test").format(records[0]))
-    assert logged["severity_text"] == "WARNING"
-    assert logged["trace_id"] == result.headers["X-Request-ID"]
-    assert "candidate.read" not in captured.events[0].model_dump_json() + json.dumps(logged)
-    assert "sentinel-client" not in result.text + captured.events[0].model_dump_json() + json.dumps(logged)
-    publication = f"/api/admin/connectors/mcp/{oauth_api.connector_id}/publication"
-    rejected = oauth_api.client.put(publication, headers=oauth_api.admin_headers)
-    assert rejected.status_code == 409
-    assert rejected.json()["detail"]["code"] == "personal_oauth_setup_required"
-    connector = oauth_api.client.get(f"/api/admin/connectors/mcp/{oauth_api.connector_id}", headers=oauth_api.admin_headers)
-    assert connector.json()["publication_status"] == "published"
+    assert result.json()["state"]["status"] == "validated"
+    assert result.json()["state"]["result"]["scope_source"] == "not_checked"
+    assert result.json()["state"]["result"]["returned_scopes"] == []
+    assert captured.events == []
+    assert [request.method for request in transport.requests] == ["GET", "GET"]
+    assert not [record for record in caplog.records if record.name == "umbod.application.failure"]
+    assert "sentinel-client" not in result.text

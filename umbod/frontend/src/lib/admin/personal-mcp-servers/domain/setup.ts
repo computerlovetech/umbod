@@ -6,7 +6,7 @@ export const setupDiscoverySchema = z.object({
   issuer_url: issuerSchema,
   redirect_uri: z.string().url(),
   available_scopes: scopesSchema,
-  registration_mode: z.enum(['dynamic_public', 'preconfigured_public', 'preconfigured_confidential'])
+  registration_mode: z.enum(['dynamic_public', 'dynamic_confidential', 'preconfigured_public', 'preconfigured_confidential'])
 }).strict();
 const resultFields = { discovery: setupDiscoverySchema, returned_scopes: scopesSchema };
 const completedFields = { checked_at: z.string().datetime({ offset: true }) };

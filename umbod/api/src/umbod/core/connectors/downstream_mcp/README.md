@@ -17,6 +17,7 @@ description: "Shared and personal downstream MCP connector coordination."
 - [oauth/](./oauth/README.md) — Shared authorization and injected session boundaries.
 - [permissions.py](./permissions.py) — Personal connector permission targets.
 - [personal_connections/](./personal_connections/README.md) — Owner-bound connection lifecycle.
+- [personal_oauth_applications/](./personal_oauth_applications/README.md) — Shared confidential registrations and immutable personal grant references.
 - [personal_oauth_configuration/](./personal_oauth_configuration/README.md) — Personal OAuth policy, separate from shared connector authority.
 - [personal_oauth_metadata/](./personal_oauth_metadata/README.md) — Read-only creation discovery contracts and injected provider port.
 - [personal_oauth_setup/](./personal_oauth_setup/README.md) — Nonsecret pre-publication discovery and validation receipts.

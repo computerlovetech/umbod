@@ -1,4 +1,5 @@
 import json
+from tests.support.personal_oauth_applications import InMemoryPersonalOAuthApplicationStore, application_clock
 from datetime import timedelta
 
 from umbod.core.connectors.downstream_mcp.adapters.personal_oauth.callback import CallbackURLPolicy
@@ -31,7 +32,7 @@ async def test_preparation_and_exchange_resume_with_only_persisted_context(
     server_metadata: dict[str, object], client_metadata: dict[str, object],
 ) -> None:
     transport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata), response(server_metadata), response(client_metadata)])
-    port: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    port: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     prepared = await port.prepare(preparation)
     query = parse_qs(urlsplit(prepared.authorization_url.get_secret_value()).query)
     assert query == {
@@ -52,7 +53,7 @@ async def test_preparation_and_exchange_resume_with_only_persisted_context(
         "access_token": "actual-access", "refresh_token": "actual-refresh", "token_type": "bEaReR",
         "expires_in": 3600, "untrusted_extra": "must-not-persist",
     })])
-    resumed: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=exchange_transport)
+    resumed: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=exchange_transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     command = exchange_command(preparation, prepared)
     authorized = await resumed.exchange(command)
     stored = json.loads(authorized.authorization.get_secret_value())
@@ -82,7 +83,7 @@ async def test_preparation_and_exchange_resume_with_only_persisted_context(
 @pytest.mark.parametrize("status", [400, 401, 403, 302])
 async def test_resource_fallback_is_not_used_except_for_not_found(preparation: PreparePersonalOAuth, status: int) -> None:
     transport = InMemoryOAuthHttpTransport(responses=[OAuthHttpResponse(status=status, body=b"{}")])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderFailure):
         await provider.prepare(preparation)
     assert len(transport.requests) == 1
@@ -105,7 +106,7 @@ async def test_temporary_provider_outages_fail_without_fallback_retry_or_sensiti
         status=status, body=b'{"error":"sensitive-provider-error","endpoint":"https://secret.example"}',
     )]
     transport = InMemoryOAuthHttpTransport(responses=responses)
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderFailure) as caught:
         await provider.prepare(preparation)
     assert str(caught.value) == "Personal OAuth provider request failed"
@@ -121,7 +122,7 @@ async def test_resource_root_fallback_on_not_found(
     transport = InMemoryOAuthHttpTransport(responses=[
         OAuthHttpResponse(status=404, body=b""), response(resource_metadata), response(server_metadata), response(client_metadata),
     ])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     await provider.prepare(preparation)
     assert transport.requests[1].url == "https://resource.example/.well-known/oauth-protected-resource"
 
@@ -146,7 +147,7 @@ async def test_unsupported_server_metadata_fails_before_registration(
 ) -> None:
     server_metadata[field] = value
     transport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata), response(server_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderUnsupported):
         await provider.prepare(preparation)
     assert len(transport.requests) == 2
@@ -163,7 +164,7 @@ async def test_registration_requests_refresh_when_the_server_supports_it(
     server_metadata["grant_types_supported"] = ["authorization_code", "refresh_token"]
     client_metadata["grant_types"] = registered_grants
     transport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata), response(server_metadata), response(client_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     await provider.prepare(preparation)
     registration = json.loads(transport.requests[2].body.get_secret_value())
     assert registration["grant_types"] == ["authorization_code", "refresh_token"]
@@ -178,7 +179,7 @@ async def test_registration_rejects_grants_beyond_the_request(
     server_metadata["grant_types_supported"] = ["authorization_code", "refresh_token"]
     client_metadata["grant_types"] = registered_grants
     transport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata), response(server_metadata), response(client_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderUnsupported):
         await provider.prepare(preparation)
 
@@ -197,7 +198,7 @@ async def test_registration_requires_exact_public_client_subset(
 ) -> None:
     client_metadata[field] = value
     transport: OAuthHttpTransport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata), response(server_metadata), response(client_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderUnsupported) as caught:
         await provider.prepare(preparation)
     assert str(caught.value) == "Personal OAuth provider is unsupported"
@@ -210,7 +211,7 @@ async def test_exchange_bindings_fail_before_network(
     client_metadata: dict[str, object], field: str,
 ) -> None:
     transport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata), response(server_metadata), response(client_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     prepared = await provider.prepare(preparation)
     command = exchange_command(preparation, prepared)
     if field == "issuer":
@@ -241,7 +242,7 @@ async def test_invalid_token_response_fails_once_without_leaking_provider_messag
     token: dict[str, object] = {"access_token": "valid-token", "token_type": "Bearer"}
     token[field] = value
     transport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata), response(server_metadata), response(client_metadata), response(token)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     prepared = await provider.prepare(preparation)
     with pytest.raises(PersonalOAuthProviderFailure) as caught:
         await provider.exchange(exchange_command(preparation, prepared))
@@ -256,7 +257,7 @@ async def test_invalid_token_response_fails_once_without_leaking_provider_messag
 ])
 async def test_invalid_resource_json_is_rejected(preparation: PreparePersonalOAuth, body: bytes) -> None:
     transport: OAuthHttpTransport = InMemoryOAuthHttpTransport(responses=[OAuthHttpResponse(status=200, body=body)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderUnsupported):
         await provider.prepare(preparation)
 
@@ -266,7 +267,7 @@ async def test_invalid_resource_json_is_rejected(preparation: PreparePersonalOAu
 async def test_resource_identity_is_exact(preparation: PreparePersonalOAuth, resource_metadata: dict[str, object], resource: str) -> None:
     resource_metadata["resource"] = resource
     transport = InMemoryOAuthHttpTransport(responses=[response(resource_metadata)])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderUnsupported):
         await provider.prepare(preparation)
     assert len(transport.requests) == 1
@@ -281,7 +282,7 @@ async def test_resource_identity_is_exact(preparation: PreparePersonalOAuth, res
 ])
 async def test_unsafe_endpoint_urls_fail_before_network(preparation: PreparePersonalOAuth, url: str) -> None:
     transport = InMemoryOAuthHttpTransport(responses=[])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderUnsupported):
         await provider.prepare(preparation.model_copy(update={"endpoint_url": url}))
     assert not transport.requests
@@ -291,7 +292,7 @@ async def test_unsafe_endpoint_urls_fail_before_network(preparation: PreparePers
 @pytest.mark.parametrize("verifier", ["short", "a" * 129, "!" * 43, "é" * 43])
 async def test_invalid_pkce_is_rejected_before_network(preparation: PreparePersonalOAuth, verifier: str) -> None:
     transport = InMemoryOAuthHttpTransport(responses=[])
-    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport)
+    provider: PersonalOAuthProvider = DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport=transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock)
     with pytest.raises(PersonalOAuthProviderUnsupported):
         await provider.prepare(preparation.model_copy(update={"code_verifier": SecretStr(verifier)}))
     assert not transport.requests

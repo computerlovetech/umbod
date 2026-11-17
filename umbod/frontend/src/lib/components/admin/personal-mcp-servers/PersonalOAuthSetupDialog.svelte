@@ -44,10 +44,16 @@
         <div><dt>Provider returned</dt><dd><code>{state.returnedScopes.join(' ') || 'None'}</code></dd></div>
       </dl>
     {/if}
-    {#if state.outcome === 'changes_required' && state.discovery && state.policy && state.policy.client.kind !== 'dynamic_public' && state.policy.client.issuer_url !== state.discovery.issuer_url}
+    {#if state.outcome === 'changes_required' && state.discovery && state.policy && (state.policy.client.kind === 'preconfigured_public' || state.policy.client.kind === 'preconfigured_confidential') && state.policy.client.issuer_url !== state.discovery.issuer_url}
       <div class="correction"><span>Required authorization provider</span><code>{state.discovery.issuer_url}</code></div>
     {/if}
-    {#if state.outcome === 'ready' && state.policy?.client.kind !== 'dynamic_public' && state.discovery}
+    {#if state.outcome === 'ready'}
+      <p>Only provider metadata was checked.</p>
+      {#if state.policy?.client.kind === 'dynamic_public' || state.policy?.client.kind === 'dynamic_confidential'}
+        <p>Automatic application registration and each user’s sign-in happen when they connect; this check does not prove either will succeed.</p>
+      {/if}
+    {/if}
+    {#if state.outcome === 'ready' && (state.policy?.client.kind === 'preconfigured_public' || state.policy?.client.kind === 'preconfigured_confidential') && state.discovery}
       <div class="correction"><p>Client credentials are not tested. Confirm them and this callback URL in your provider.</p><code>{state.discovery.redirect_uri}</code></div>
     {/if}
     <footer>

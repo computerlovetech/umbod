@@ -1,4 +1,7 @@
 from collections.abc import AsyncIterator
+from ...management import utc_clock
+
+from ...personal_oauth_applications.ports import PersonalOAuthApplicationStore
 from contextlib import asynccontextmanager
 
 from ...personal_connections.oauth_ports import PersonalOAuthProvider
@@ -13,9 +16,9 @@ from ...personal_oauth_setup.ports import PersonalOAuthSetupProvider
 
 
 @asynccontextmanager
-async def configured_personal_oauth_provider(callback_policy: CallbackURLPolicy) -> AsyncIterator[PersonalOAuthProvider]:
+async def configured_personal_oauth_provider(callback_policy: CallbackURLPolicy, applications: PersonalOAuthApplicationStore) -> AsyncIterator[PersonalOAuthProvider]:
     async with public_http_connection_pool(max_connections=10) as pool:
-        yield DiscoveredPersonalOAuthProvider(callback_policy=callback_policy, transport=SafeOAuthHttpTransport(pool=pool))
+        yield DiscoveredPersonalOAuthProvider(callback_policy=callback_policy, transport=SafeOAuthHttpTransport(pool=pool), applications=applications, clock=utc_clock)
 
 
 @asynccontextmanager
@@ -25,6 +28,6 @@ async def configured_personal_oauth_setup_provider(callback_policy: CallbackURLP
 
 
 @asynccontextmanager
-async def configured_personal_oauth_refresh_provider(callback_policy: CallbackURLPolicy) -> AsyncIterator[PersonalOAuthRefreshProvider]:
+async def configured_personal_oauth_refresh_provider(callback_policy: CallbackURLPolicy, applications: PersonalOAuthApplicationStore) -> AsyncIterator[PersonalOAuthRefreshProvider]:
     async with public_http_connection_pool(max_connections=10) as pool:
-        yield StoredPersonalOAuthRefreshProvider(callback_policy=callback_policy, transport=SafeOAuthHttpTransport(pool=pool))
+        yield StoredPersonalOAuthRefreshProvider(callback_policy=callback_policy, transport=SafeOAuthHttpTransport(pool=pool), applications=applications, clock=utc_clock)

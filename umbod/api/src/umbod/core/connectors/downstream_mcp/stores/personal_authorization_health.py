@@ -1,4 +1,5 @@
 from umbod.core.configuration.persistence import TextCipher
+from .personal_oauth_applications import require_grant_application
 from umbod.core.persistence import Database, Equals, TransactionMode
 
 from ..models import uses_personal_oauth
@@ -45,6 +46,7 @@ class EncryptedPersonalAuthorizationHealthStore:
                 configuration = await load_personal_oauth_configuration(session, self._cipher, query.key.connector_id)
                 try:
                     grant = validated_bound_grant(connection.authorization, query.key, query.now, definition, configuration.policy)
+                    await require_grant_application(session, self._cipher, grant, query.now)
                 except ValueError:
                     return UnsupportedAuthorization()
                 if await matching_rejection(session, self._cipher, connection):

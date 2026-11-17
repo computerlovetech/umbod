@@ -2,7 +2,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..personal_oauth_configuration.models import OAuthIssuer, OAuthScopes
+from ..personal_oauth_configuration.models import OAuthIssuer, OAuthScopes, DynamicPublicOAuthClient, DynamicConfidentialOAuthClient
 
 
 class MetadataModel(BaseModel):
@@ -33,6 +33,10 @@ class PersonalOAuthIssuerSelectionRequired(MetadataModel):
     issuer_urls: tuple[OAuthIssuer, ...] = Field(min_length=2, max_length=16)
 
 
+class UnavailableAutomaticOAuthClient(MetadataModel):
+    kind: Literal["unavailable"] = "unavailable"
+
+
 class DiscoveredPersonalOAuthMetadata(MetadataModel):
     kind: Literal["discovered"] = "discovered"
     endpoint_url: MetadataEndpoint
@@ -40,6 +44,7 @@ class DiscoveredPersonalOAuthMetadata(MetadataModel):
     available_scopes: OAuthScopes
     scope_source: Literal["resource", "authorization_server", "unavailable"]
     automatic_registration: Literal["available", "unavailable"]
+    automatic_client: Annotated[DynamicPublicOAuthClient | DynamicConfidentialOAuthClient | UnavailableAutomaticOAuthClient, Field(discriminator="kind")]
     token_endpoint_auth_methods: tuple[AuthenticationMethod, ...] = Field(max_length=16)
 
 

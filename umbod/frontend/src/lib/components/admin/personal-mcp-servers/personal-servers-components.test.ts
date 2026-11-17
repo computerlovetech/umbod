@@ -106,7 +106,7 @@ describe('personal server administration presentation', () => {
 
 
 
-    expect(body).toContain('value="dynamic_public"');
+    expect(body).toContain('value="automatic"');
     expect(body).toContain('Requested scopes');
 
 

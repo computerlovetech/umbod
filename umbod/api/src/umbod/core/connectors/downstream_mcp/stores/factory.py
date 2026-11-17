@@ -1,5 +1,8 @@
 from dataclasses import dataclass
 
+from ..personal_oauth_applications.ports import PersonalOAuthApplicationStore
+from .personal_oauth_applications import EncryptedPersonalOAuthApplicationStore, UnavailablePersonalOAuthApplicationStore
+
 from ..personal_oauth_setup.ports import PersonalOAuthSetupStore
 from .personal_oauth_setup import PersonalOAuthSetupStoreService
 
@@ -82,6 +85,7 @@ class DownstreamMcpStores:
     personal_oauth_attempts: PersonalOAuthAttemptStore
     personal_oauth_configurations: PersonalOAuthConfigurationStore
     personal_oauth_setup: PersonalOAuthSetupStore
+    personal_oauth_applications: PersonalOAuthApplicationStore
 
 
 async def create_downstream_mcp_stores(
@@ -89,6 +93,7 @@ async def create_downstream_mcp_stores(
     database: Database,
 ) -> DownstreamMcpStores:
     return DownstreamMcpStores(
+        personal_oauth_applications=EncryptedPersonalOAuthApplicationStore(database, AuthenticatedTextCipher(credential_secret), utc_clock) if credential_secret.strip() else UnavailablePersonalOAuthApplicationStore(),
         personal_oauth_setup=PersonalOAuthSetupStoreService(database, AuthenticatedTextCipher(credential_secret), utc_clock),
         personal_refresh=EncryptedPersonalRefreshStore(database, AuthenticatedTextCipher(credential_secret), utc_clock),
         personal_authorization_health=EncryptedPersonalAuthorizationHealthStore(database, AuthenticatedTextCipher(credential_secret)),

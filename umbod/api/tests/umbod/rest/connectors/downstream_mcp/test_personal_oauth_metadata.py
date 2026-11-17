@@ -29,7 +29,7 @@ def metadata_provider(client: TestClient) -> InMemoryPersonalOAuthMetadataProvid
     provider = InMemoryPersonalOAuthMetadataProvider(DiscoveredPersonalOAuthMetadata(
         endpoint_url="https://resource.example/mcp", issuer_url="https://issuer.example",
         available_scopes=("read",), scope_source="resource", automatic_registration="unavailable",
-        token_endpoint_auth_methods=("none",),
+        automatic_client={"kind": "unavailable"}, token_endpoint_auth_methods=("none",),
     ))
 
     def provide() -> InMemoryPersonalOAuthMetadataProvider:

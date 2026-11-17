@@ -1,4 +1,5 @@
 from tests.support.personal_oauth_diagnostics import RecordingOAuthFailureObserver
+from tests.support.personal_oauth_applications import InMemoryPersonalOAuthApplicationStore, application_clock
 from tests.support.personal_oauth_setup import SETUP_CALLBACK, install_setup_validation
 from umbod.core.connectors.downstream_mcp.management import PublishDownstreamConnectorAggregate
 from tests.umbod.core.connectors.downstream_mcp.personal_caller_support import captured_personal_caller
@@ -64,7 +65,7 @@ async def start_configured(case: AttemptCase, method: str) -> tuple[str, str]:
     service = PersonalOAuthService(
         captured_personal_caller(case.query.key.principal, ("team",)), inventory, case.bundle.definitions,
         case.bundle.personal_connections, case.bundle.personal_oauth_attempts,
-        DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), "https://umbod.example/api/oauth/downstream-mcp/callback",
+        DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock), "https://umbod.example/api/oauth/downstream-mcp/callback",
         case.clock, case.bundle.personal_oauth_configurations, failures=RecordingOAuthFailureObserver(),
     )
     started = await service.start("personal")
@@ -79,7 +80,7 @@ async def test_configured_workflow_completes_on_recreated_worker_with_scoped_cal
     state, revision = await start_configured(case, method)
     recreated = await create_downstream_mcp_stores("test-secret", case.database)
     transport = InMemoryOAuthHttpTransport([response({"access_token": "user-access-token", "token_type": "Bearer", "expires_in": 3600})])
-    callback = PersonalOAuthCallbackService(recreated.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), case.clock, failures=RecordingOAuthFailureObserver())
+    callback = PersonalOAuthCallbackService(recreated.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock), case.clock, failures=RecordingOAuthFailureObserver())
     await callback.finish(FinishCallback(state=SecretStr(state), code=SecretStr("authorization-code"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), error="", scope="read", route=GenericRoute(kind="generic")))
     connection = await recreated.personal_connections.get(case.query.key)
     assert connection.authorization.kind == "authorized"
@@ -134,7 +135,7 @@ async def test_callback_cleanup_failure_does_not_replace_original_provider_evide
     transport = InMemoryOAuthHttpTransport([OAuthHttpResponse(status=403, body=b"sentinel-provider-token")])
     failures = RecordingOAuthFailureObserver()
     callback = PersonalOAuthCallbackService(
-        store, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), case.clock, failures=failures,
+        store, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock), case.clock, failures=failures,
     )
 
     with pytest.raises(PersonalOAuthProviderFailure) as caught:
@@ -170,7 +171,7 @@ class PausingTokenTransport:
 async def test_policy_change_during_exchange_cannot_install_old_authorization(case: AttemptCase) -> None:
     state, revision = await start_configured(case, "client_secret_basic")
     started, release = asyncio.Event(), asyncio.Event()
-    callback = PersonalOAuthCallbackService(case.bundle.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, PausingTokenTransport(started, release)), case.clock, failures=RecordingOAuthFailureObserver())
+    callback = PersonalOAuthCallbackService(case.bundle.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, PausingTokenTransport(started, release), applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock), case.clock, failures=RecordingOAuthFailureObserver())
     task = asyncio.create_task(callback.finish(FinishCallback(state=SecretStr(state), code=SecretStr("authorization-code"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), error="", scope="read", route=GenericRoute(kind="generic"))))
     try:
         await asyncio.wait_for(started.wait(), timeout=5)
@@ -192,7 +193,7 @@ async def test_policy_change_during_exchange_cannot_install_old_authorization(ca
 async def test_callback_scope_escalation_or_invalid_syntax_never_exchanges_code(case: AttemptCase, callback_scope: str) -> None:
     state, _ = await start_configured(case, "client_secret_basic")
     transport = InMemoryOAuthHttpTransport([])
-    callback = PersonalOAuthCallbackService(case.bundle.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport), case.clock, failures=RecordingOAuthFailureObserver())
+    callback = PersonalOAuthCallbackService(case.bundle.personal_oauth_attempts, DiscoveredPersonalOAuthProvider(CallbackURLPolicy.STRICT, transport, applications=InMemoryPersonalOAuthApplicationStore(application_clock), clock=application_clock), case.clock, failures=RecordingOAuthFailureObserver())
     with pytest.raises(PersonalOAuthProviderFailure):
         await callback.finish(FinishCallback(state=SecretStr(state), code=SecretStr("authorization-code"), issuer=PresentCallbackIssuer(kind="present", value="https://issuer.example"), error="", scope=callback_scope, route=GenericRoute(kind="generic")))
     assert transport.requests == []

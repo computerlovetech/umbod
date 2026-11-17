@@ -102,6 +102,7 @@ class PersonalOAuthService:
         attempt_id = uuid4().hex
         now = self._clock()
         preparation = PreparePersonalOAuth(
+            connector_id=connector_id,
             endpoint_url=str(result.definition.endpoint_url),
             redirect_uri=self._redirect_uri,
             state=SecretStr(attempt_id + "." + secrets.token_urlsafe(32)),

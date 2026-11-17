@@ -20,6 +20,7 @@ from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import Pe
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configurations import install_personal_oauth_configuration, load_personal_oauth_configuration
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_setup import require_current_setup
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_setup_schema import PERSONAL_OAUTH_SETUP_TABLE, PERSONAL_OAUTH_SETUP_CONNECTOR_ID
+from umbod.core.connectors.downstream_mcp.stores.personal_oauth_application_schema import PERSONAL_OAUTH_APPLICATION_TABLE, PERSONAL_OAUTH_APPLICATION_CONNECTOR_ID
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configuration_schema import PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID
 
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_schema import PERSONAL_OAUTH_ATTEMPT_TABLE, PERSONAL_OAUTH_ATTEMPT_CONNECTOR_ID
@@ -481,6 +482,7 @@ async def _delete(
         ("personal_connections", PERSONAL_CONNECTION_TABLE, PERSONAL_CONNECTION_CONNECTOR_ID),
         ("personal_oauth_attempts", PERSONAL_OAUTH_ATTEMPT_TABLE, PERSONAL_OAUTH_ATTEMPT_CONNECTOR_ID),
         ("personal_oauth_configuration", PERSONAL_OAUTH_CONFIGURATION_TABLE, PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID),
+        ("personal_oauth_application", PERSONAL_OAUTH_APPLICATION_TABLE, PERSONAL_OAUTH_APPLICATION_CONNECTOR_ID),
         ("personal_oauth_setup", PERSONAL_OAUTH_SETUP_TABLE, PERSONAL_OAUTH_SETUP_CONNECTOR_ID),
         ("credential", CONNECTOR_CREDENTIAL_TABLE, CONNECTOR_CREDENTIAL_CONNECTOR_ID),
         ("catalog", TOOL_CATALOG_TABLE, TOOL_CATALOG_CONNECTOR_ID),

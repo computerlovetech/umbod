@@ -9,7 +9,7 @@ import time
 import jwt
 from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Annotated, Any, AsyncIterator
-from urllib.parse import urlencode, parse_qs
+from urllib.parse import urlencode, parse_qs, unquote_plus
 
 import uvicorn
 from fastmcp import FastMCP
@@ -24,7 +24,8 @@ RESOURCE = ISSUER + "/mcp"
 identity_codes: dict[str, dict[str, str]] = {}
 codes: dict[str, dict[str, str]] = {}
 tokens: dict[str, str] = {}
-refresh_tokens: dict[str, str] = {}
+refresh_tokens: dict[str, dict[str, str]] = {}
+registered_clients: dict[str, dict[str, Any]] = {}
 counters: dict[str, int] = {"calls": 0, "exchanges": 0, "refreshes": 0, "unauthorized": 0, "discoveries": 0, "registrations": 0, "authorizations": 0}
 modes: dict[str, str] = {}
 refresh_release: dict[str, asyncio.Event] = {}
@@ -72,6 +73,21 @@ async def lifespan(app: Starlette) -> AsyncIterator[None]:
         yield
 
 
+def supported_client_methods() -> list[str]:
+    return {
+        "confidential_only": ["client_secret_post", "client_secret_basic"],
+        "confidential_basic": ["client_secret_basic"],
+        "confidential_post": ["client_secret_post"],
+    }.get(modes.get("metadata", ""), ["none", "client_secret_basic"])
+
+
+def callback_uri() -> str:
+    uri = "https://umbod-runtime.kind.invalid/api/oauth/downstream-mcp/callback"
+    if modes.get("metadata") in ("issuer_omitted", "issuer_false"):
+        uri += "/issuer/" + hashlib.sha256(ISSUER.encode("utf-8")).hexdigest()
+    return uri
+
+
 async def metadata(request: Request) -> Response:
     if request.url.hostname == "identity.personal-runtime.kind.invalid":
         issuer = "https://identity.personal-runtime.kind.invalid/"
@@ -84,7 +100,7 @@ async def metadata(request: Request) -> Response:
         return JSONResponse({"resource": RESOURCE, "authorization_servers": [ISSUER], "scopes_supported": ["read"], "bearer_methods_supported": ["header"]})
     if modes.get("metadata") == "preview_openid" and request.url.path == "/.well-known/oauth-authorization-server":
         return JSONResponse({"error": "not_found"}, status_code=404)
-    document = {"issuer": ISSUER, "authorization_endpoint": ISSUER + "/authorize", "token_endpoint": ISSUER + "/token", "response_types_supported": ["code"], "grant_types_supported": ["authorization_code", "refresh_token"], "token_endpoint_auth_methods_supported": ["none", "client_secret_basic"], "code_challenge_methods_supported": ["S256"], "authorization_response_iss_parameter_supported": True}
+    document = {"issuer": ISSUER, "authorization_endpoint": ISSUER + "/authorize", "token_endpoint": ISSUER + "/token", "response_types_supported": ["code"], "grant_types_supported": ["authorization_code", "refresh_token"], "token_endpoint_auth_methods_supported": supported_client_methods(), "code_challenge_methods_supported": ["S256"], "authorization_response_iss_parameter_supported": True}
     document["registration_endpoint"] = ISSUER + "/register"
     if modes.get("metadata", "").startswith("preview_"):
         document["scopes_supported"] = ["openid", "profile"]
@@ -136,15 +152,24 @@ async def identity_exchange(request: Request) -> Response:
 async def register(request: Request) -> Response:
     counters["registrations"] += 1
     payload = await request.json()
-    return JSONResponse({
-        "client_id": "kind-personal-client",
-        "redirect_uris": payload["redirect_uris"],
-        "application_type": payload["application_type"],
-        "token_endpoint_auth_method": "none",
-        "grant_types": payload["grant_types"],
-        "response_types": ["code"],
-        "scope": payload.get("scope", "read"),
-    }, status_code=201)
+    method = payload.get("token_endpoint_auth_method")
+    redirects = payload.get("redirect_uris")
+    if (
+        method not in supported_client_methods()
+        or redirects != [callback_uri()]
+        or payload.get("application_type") != "web"
+        or set(payload.get("grant_types", [])) != {"authorization_code", "refresh_token"}
+        or payload.get("response_types") != ["code"]
+        or payload.get("scope", "") not in ("", "read")
+    ):
+        return JSONResponse({"error": "invalid_client_metadata"}, status_code=400)
+    client_id = "kind-personal-client-" + secrets.token_urlsafe(16)
+    registered = {**payload, "client_id": client_id, "token_endpoint_auth_method": method}
+    if method != "none":
+        registered["client_secret"] = "kind-personal-dcr-secret-" + secrets.token_urlsafe(32)
+        registered["client_secret_expires_at"] = 0
+    registered_clients[client_id] = registered
+    return JSONResponse(registered, status_code=201)
 
 
 async def authorize(request: Request) -> Response:
@@ -153,11 +178,21 @@ async def authorize(request: Request) -> Response:
     counters["authorizations"] += 1
     parameters = dict(request.query_params)
     owner = parameters.pop("owner", "")
-    redirect_uri = "https://umbod-runtime.kind.invalid/api/oauth/downstream-mcp/callback"
+    redirect_uri = callback_uri()
     issuer_bound = modes.get("metadata") in ("issuer_omitted", "issuer_false")
-    if issuer_bound:
-        redirect_uri += "/issuer/" + hashlib.sha256(ISSUER.encode("utf-8")).hexdigest()
-    if owner not in apps or parameters.get("client_id") != "kind-personal-client" or parameters.get("code_challenge_method") != "S256" or parameters.get("resource") != RESOURCE or parameters.get("redirect_uri") != redirect_uri:
+    client_id = parameters.get("client_id", "")
+    registered = registered_clients.get(client_id)
+    valid_client = client_id == "kind-personal-client" or registered is not None
+    if (
+        owner not in apps or not valid_client
+        or parameters.get("code_challenge_method") != "S256"
+        or not parameters.get("code_challenge") or not parameters.get("state")
+        or parameters.get("response_type") != "code"
+        or parameters.get("scope", "") not in ("", "read")
+        or (registered is not None and parameters.get("scope", "") != registered.get("scope", ""))
+        or parameters.get("resource") != RESOURCE or parameters.get("redirect_uri") != redirect_uri
+        or (registered is not None and redirect_uri not in registered["redirect_uris"])
+    ):
         return JSONResponse({"error": "invalid_request"}, status_code=400)
     code = secrets.token_urlsafe(32)
     codes[code] = {**parameters, "owner": owner}
@@ -167,13 +202,45 @@ async def authorize(request: Request) -> Response:
     return RedirectResponse(parameters["redirect_uri"] + "?" + urlencode(callback), status_code=302)
 
 
+def authenticated_client(request: Request, parameters: dict[str, str]) -> str:
+    header = request.headers.get("authorization", "")
+    client_id = parameters.get("client_id", "")
+    secret = parameters.get("client_secret", "")
+    method = "client_secret_post" if "client_secret" in parameters else "none"
+    if header:
+        if not header.startswith("Basic ") or "client_secret" in parameters:
+            return ""
+        try:
+            encoded_id, encoded_secret = base64.b64decode(header[6:], validate=True).decode().split(":", 1)
+        except (ValueError, UnicodeDecodeError):
+            return ""
+        basic_id, secret = unquote_plus(encoded_id), unquote_plus(encoded_secret)
+        if client_id and client_id != basic_id:
+            return ""
+        client_id, method = basic_id, "client_secret_basic"
+    if client_id == "kind-personal-client":
+        return client_id if method == "none" else ""
+    registered = registered_clients.get(client_id)
+    if registered is None or registered["token_endpoint_auth_method"] != method:
+        return ""
+    if method != "none" and not secrets.compare_digest(secret, registered["client_secret"]):
+        return ""
+    return client_id
+
+
 async def exchange(request: Request) -> Response:
-    parameters = {key: values[0] for key, values in parse_qs((await request.body()).decode()).items()}
+    parameters = {key: values[0] for key, values in parse_qs((await request.body()).decode(), keep_blank_values=True).items()}
+    client_id = authenticated_client(request, parameters)
+    if not client_id:
+        return JSONResponse({"error": "invalid_client"}, status_code=401)
+    parameters["client_id"] = client_id
     if parameters.get("grant_type") == "refresh_token":
         counters["refreshes"] += 1
-        owner = refresh_tokens.pop(parameters.get("refresh_token", ""), "")
-        if not owner or parameters.get("client_id") != "kind-personal-client" or parameters.get("resource") != RESOURCE or "scope" in parameters:
+        saved_refresh = refresh_tokens.get(parameters.get("refresh_token", ""), {})
+        owner = saved_refresh.get("owner", "")
+        if not owner or client_id != saved_refresh["client_id"] or parameters.get("resource") != RESOURCE or "scope" in parameters:
             return JSONResponse({"error": "invalid_grant"}, status_code=400)
+        refresh_tokens.pop(parameters["refresh_token"])
         mode = modes.get(owner, "normal")
         if mode == "refresh_hold":
             await refresh_release[owner].wait()
@@ -186,7 +253,7 @@ async def exchange(request: Request) -> Response:
         token = "kind-personal-downstream-token-" + secrets.token_urlsafe(32)
         refresh = "kind-personal-refresh-token-" + secrets.token_urlsafe(32)
         tokens[token] = owner
-        refresh_tokens[refresh] = owner
+        refresh_tokens[refresh] = {"owner": owner, "client_id": client_id}
         return JSONResponse({"access_token": token, "token_type": "Bearer", "expires_in": 3600, "scope": "read", "refresh_token": refresh})
     if parameters.get("grant_type") != "authorization_code":
         return JSONResponse({"error": "unsupported_grant_type"}, status_code=400)
@@ -198,8 +265,9 @@ async def exchange(request: Request) -> Response:
     token = "kind-personal-downstream-token-" + secrets.token_urlsafe(32)
     tokens[token] = saved["owner"]
     refresh = "kind-personal-refresh-token-" + secrets.token_urlsafe(32)
-    refresh_tokens[refresh] = saved["owner"]
-    return JSONResponse({"access_token": token, "token_type": "Bearer", "expires_in": 3600, "scope": "read", "refresh_token": refresh})
+    refresh_tokens[refresh] = {"owner": saved["owner"], "client_id": client_id}
+    expires_in = 3 if modes.get(saved["owner"]) == "short_lived" else 3600
+    return JSONResponse({"access_token": token, "token_type": "Bearer", "expires_in": expires_in, "scope": "read", "refresh_token": refresh})
 
 
 async def control(request: Request) -> Response:

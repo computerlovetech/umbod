@@ -115,6 +115,42 @@ def test_confidential_writes_require_encryption_before_creation(client: TestClie
     assert client.get("/api/admin/connectors/mcp").json()["connectors"] == []
 
 
+@pytest.mark.parametrize("method", ["client_secret_basic", "client_secret_post"])
+def test_dynamic_confidential_configuration_has_safe_projection_and_explicit_reconfiguration(client: TestClient, method: str) -> None:
+    settings = {"requested_scopes": ["read"], "client": {
+        "kind": "dynamic_confidential", "approved_issuers": ["https://issuer.example"],
+        "token_endpoint_auth_method": method,
+    }}
+    created = client.post("/api/admin/connectors/mcp/personal-oauth", json=creation(settings))
+    assert created.status_code == 201
+    url = f'/api/admin/connectors/mcp/{created.json()["connector_id"]}/personal-oauth'
+    current = client.get(url).json()
+    assert current["client"] == settings["client"]
+    assert "client_secret" not in current["client"]
+    assert "client_id" not in current["client"]
+    replaced = client.put(url, json={"expected_revision": current["revision"], "settings": settings})
+    assert replaced.status_code == 200
+    assert replaced.json()["revision"] != current["revision"]
+
+
+@pytest.mark.parametrize("client", [""], indirect=True)
+def test_dynamic_confidential_requires_root_encryption_secret(client: TestClient) -> None:
+    settings = {"requested_scopes": [], "client": {"kind": "dynamic_confidential", "token_endpoint_auth_method": "client_secret_basic"}}
+    response = client.post("/api/admin/connectors/mcp/personal-oauth", json=creation(settings))
+    assert response.status_code == 422
+    assert response.json()["detail"]["code"] == "personal_oauth_encryption_required"
+
+
+@pytest.mark.parametrize("extra", [{"client_secret": SECRET}, {"client_id": "forbidden"}])
+def test_dynamic_confidential_rejects_admin_supplied_credentials(client: TestClient, extra: dict[str, str]) -> None:
+    settings = {"requested_scopes": [], "client": {
+        "kind": "dynamic_confidential", "token_endpoint_auth_method": "client_secret_basic", **extra,
+    }}
+    result = client.post("/api/admin/connectors/mcp/personal-oauth", json=creation(settings))
+    assert result.status_code == 422
+    assert SECRET not in result.text
+
+
 def test_public_clients_reject_secrets_and_personal_write_json_errors_are_sanitized(client: TestClient) -> None:
     settings = confidential_settings()
     configured_client = settings["client"]

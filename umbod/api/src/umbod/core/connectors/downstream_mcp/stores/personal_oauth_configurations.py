@@ -1,4 +1,5 @@
 import json
+from .personal_oauth_application_schema import PERSONAL_OAUTH_APPLICATION_TABLE, PERSONAL_OAUTH_APPLICATION_CONNECTOR_ID
 from datetime import UTC, datetime
 
 from umbod.core.publishing.events import connector_publication_changed_event
@@ -16,7 +17,7 @@ from umbod.core.connectors.downstream_mcp.personal_connections.models import Per
 from umbod.core.connectors.downstream_mcp.personal_oauth_configuration import (
     PersonalOAuthConfiguration, PersonalOAuthConfigurationConflict,
     PersonalOAuthConfigurationQuery, PersonalOAuthConfigurationUnavailable,
-    PersonalOAuthPolicy, PersonalOAuthSettings, PreconfiguredConfidentialOAuthClient,
+    PersonalOAuthPolicy, PersonalOAuthSettings,
     ReplacePersonalOAuthConfiguration, legacy_personal_oauth_policy,
 )
 from umbod.core.connectors.downstream_mcp.stores.personal_oauth_configuration_schema import (
@@ -74,6 +75,7 @@ async def load_personal_oauth_configuration(
 async def install_personal_oauth_configuration(
     session: DatabaseSession, cipher: TextCipher, connector_id: str, settings: PersonalOAuthSettings
 ) -> PersonalOAuthConfiguration:
+    await session.delete(PERSONAL_OAUTH_APPLICATION_TABLE, DeleteQuery(Equals(PERSONAL_OAUTH_APPLICATION_CONNECTOR_ID, connector_id)))
     configuration = PersonalOAuthConfiguration(
         connector_id=connector_id,
         policy=PersonalOAuthPolicy(revision=uuid4().hex, requested_scopes=settings.requested_scopes, client=settings.client),
@@ -138,6 +140,7 @@ class EncryptedPersonalOAuthConfigurationStore:
                 PERSONAL_OAUTH_CONFIGURATION_TABLE,
                 DeleteQuery(Equals(PERSONAL_OAUTH_CONFIGURATION_CONNECTOR_ID, connector_id)),
             )
+            await session.delete(PERSONAL_OAUTH_APPLICATION_TABLE, DeleteQuery(Equals(PERSONAL_OAUTH_APPLICATION_CONNECTOR_ID, connector_id)))
             await _invalidate_setup(session, connector_id)
             invalidated = await _invalidate_connections(session, self._cipher, connector_id, rotate_unauthorized=bool(removed))
             if removed or invalidated:
@@ -152,7 +155,7 @@ class EncryptedPersonalOAuthConfigurationStore:
             current = await load_personal_oauth_configuration(session, self._cipher, command.connector_id)
             if current.policy.revision != command.expected_revision:
                 raise PersonalOAuthConfigurationConflict("Personal OAuth configuration revision conflict")
-            if not isinstance(command.settings.client, PreconfiguredConfidentialOAuthClient) and (
+            if command.settings.client.kind not in ("preconfigured_confidential", "dynamic_confidential") and (
                 command.settings.requested_scopes == current.policy.requested_scopes and command.settings.client == current.policy.client
             ):
                 return current

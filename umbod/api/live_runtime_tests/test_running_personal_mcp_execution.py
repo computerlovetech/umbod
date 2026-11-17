@@ -35,18 +35,22 @@ def contract(connector_id: str, name: str) -> dict[str, Any]:
 
 
 @contextmanager
-def personal_clients(endpoints: RuntimeEndpoints) -> Iterator[tuple[httpx.Client, httpx.Client, httpx.Client, str]]:
+def personal_clients(
+    endpoints: RuntimeEndpoints, client_configuration: dict[str, Any] | None = None,
+) -> Iterator[tuple[httpx.Client, httpx.Client, httpx.Client, str]]:
     context = ssl.create_default_context(cafile=os.environ["UMBOD_TEST_PERSONAL_CA"])
     with httpx.Client(base_url=endpoints.api_base_url, headers={"Authorization": f"Bearer {endpoints.bearer_token}"}, timeout=90) as alice, httpx.Client(base_url=endpoints.api_base_url, headers={"Authorization": "Bearer " + os.environ["UMBOD_TEST_BEARER_TOKEN_B"]}, timeout=90) as bob, httpx.Client(base_url=os.environ["UMBOD_TEST_PERSONAL_URL"], verify=context, timeout=30, follow_redirects=False) as fixture:
-        created = checked(alice.post("/api/admin/connectors/mcp/personal-oauth", json={"metadata": {"display_name": "Controlled personal runtime", "capability_description": "Controlled TLS interoperability", "public_path": "/mcp/proxies/runtime-" + uuid4().hex[:20]}, "configuration": {"endpoint_url": ISSUER + "/mcp", "oauth_configuration": {"requested_scopes": ["read"], "client": {"kind": "preconfigured_public", "issuer_url": ISSUER, "client_id": "kind-personal-client"}}}}), 201)
+        created = checked(alice.post("/api/admin/connectors/mcp/personal-oauth", json={"metadata": {"display_name": "Controlled personal runtime", "capability_description": "Controlled TLS interoperability", "public_path": "/mcp/proxies/runtime-" + uuid4().hex[:20]}, "configuration": {"endpoint_url": ISSUER + "/mcp", "oauth_configuration": {"requested_scopes": ["read"], "client": client_configuration if client_configuration is not None else {"kind": "preconfigured_public", "issuer_url": ISSUER, "client_id": "kind-personal-client"}}}}), 201)
         connector_id = created["connector_id"]
         admin = f"/api/admin/connectors/mcp/{connector_id}"
         try:
+            before = checked(fixture.get("/control"))
             validate_setup(alice, connector_id)
             checked(alice.put(admin + "/publication"))
             grant(alice, connector_id, "enabled", connector=True)
             for client in (alice, bob):
                 checked(client.put(f"/api/me/connectors/mcp/{connector_id}/enablement", json={"enabled": True}))
+            assert checked(fixture.get("/control")) == before
             yield alice, bob, fixture, connector_id
         finally:
             grant(alice, connector_id, "disabled")
@@ -59,6 +63,8 @@ def validate_setup(client: httpx.Client, connector_id: str) -> None:
     policy_url = f"/api/admin/connectors/mcp/{connector_id}/personal-oauth"
     result = checked(client.post(policy_url + "/setup/validation", json={"expected_revision": client.get(policy_url + "/setup").json()["revision"]}))
     assert result["state"]["status"] == "validated"
+    assert result["state"]["result"]["scope_source"] == "not_checked"
+    assert result["state"]["result"]["returned_scopes"] == []
 
 
 def grant(client: httpx.Client, connector_id: str, status: str, connector: bool = False) -> None:
@@ -66,7 +72,10 @@ def grant(client: httpx.Client, connector_id: str, status: str, connector: bool 
     checked(client.put(PERMISSIONS, json=body))
 
 
-def authorize(client: httpx.Client, fixture: httpx.Client, connector_id: str, owner: str) -> None:
+def authorize(
+    client: httpx.Client, fixture: httpx.Client, connector_id: str, owner: str,
+    callback_client: httpx.Client | None = None,
+) -> str:
     personal = f"/api/me/connectors/mcp/{connector_id}"
     started = checked(client.post(personal + "/oauth/attempts", json={}), 201)
     authorization = urlsplit(started["authorization_url"])
@@ -74,7 +83,8 @@ def authorize(client: httpx.Client, fixture: httpx.Client, connector_id: str, ow
     assert consent.status_code == 302
     callback = urlsplit(consent.headers["location"])
     assert callback.hostname == "umbod-runtime.kind.invalid"
-    response = client.get(callback.path + "?" + callback.query, follow_redirects=False)
+    callback_worker = callback_client if callback_client is not None else client
+    response = callback_worker.get(callback.path + "?" + callback.query, follow_redirects=False)
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert response.headers["cache-control"] == "no-store"
@@ -93,6 +103,7 @@ def authorize(client: httpx.Client, fixture: httpx.Client, connector_id: str, ow
     assert replay.headers["content-type"].startswith("text/html")
     assert replay.headers["cache-control"] == "no-store"
     assert "Return to Umbod" in replay.text
+    return parse_qs(authorization.query)["client_id"][0]
 
 
 def approve(client: httpx.Client, connector_id: str, tools: list[dict[str, Any]]) -> None:
@@ -338,6 +349,87 @@ def test_failed_refresh_requires_reconnect_without_provider_replay(
             assert after["discoveries"] == before["discoveries"]
         finally:
             checked(fixture.post("/control", json={"owner": "alice", "mode": "normal"}))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("metadata_mode,method", [
+    ("confidential_basic", "client_secret_basic"),
+    ("confidential_post", "client_secret_post"),
+])
+async def test_dynamic_confidential_registration_is_shared_across_users_and_workers(
+    runtime_endpoints: RuntimeEndpoints, metadata_mode: str, method: str,
+) -> None:
+    context = ssl.create_default_context(cafile=os.environ["UMBOD_TEST_PERSONAL_CA"])
+    configuration = {"kind": "dynamic_confidential", "approved_issuers": [ISSUER], "token_endpoint_auth_method": method}
+    with httpx.Client(base_url=os.environ["UMBOD_TEST_PERSONAL_URL"], verify=context, timeout=30) as provider:
+        checked(provider.post("/control", json={"owner": "metadata", "mode": metadata_mode}))
+        try:
+            initial = checked(provider.get("/control"))
+            with personal_clients(runtime_endpoints, configuration) as (alice, bob, fixture, connector_id), httpx.Client(
+                base_url=os.environ["UMBOD_TEST_API_B_BASE_URL"],
+                headers={"Authorization": f"Bearer {runtime_endpoints.bearer_token}"}, timeout=90,
+            ) as alice_worker_b:
+                assert checked(fixture.get("/control")) == initial
+                personal = f"/api/me/connectors/mcp/{connector_id}"
+                policy = checked(alice.get(f"/api/admin/connectors/mcp/{connector_id}/personal-oauth"))
+                assert policy["client"] == configuration
+                checked(fixture.post("/control", json={"owner": "alice", "mode": "short_lived"}))
+                alice_client_id = authorize(alice_worker_b, fixture, connector_id, "alice", callback_client=alice)
+                after_alice = checked(fixture.get("/control"))
+                assert after_alice["registrations"] == initial["registrations"] + 1
+                assert after_alice["exchanges"] == initial["exchanges"] + 1
+                bob_client_id = authorize(bob, fixture, connector_id, "bob")
+                assert bob_client_id == alice_client_id
+                assert checked(fixture.get("/control"))["registrations"] == after_alice["registrations"]
+                discover(bob, connector_id)
+                bob_selection = checked(bob.get(personal))
+                for _ in range(100):
+                    if checked(alice.get(personal + "/authorization"))["state"] == "expired":
+                        break
+                    await asyncio.sleep(0.1)
+                else:
+                    raise AssertionError("Short-lived authorization did not expire")
+                checked(fixture.post("/control", json={"owner": "alice", "mode": "normal"}))
+                before_refresh = checked(fixture.get("/control"))
+                assert checked(alice_worker_b.post(personal + "/authorization/refresh", json={})) == {
+                    "status": "refreshed", "discovery_required": True,
+                }
+                after_refresh = checked(fixture.get("/control"))
+                assert after_refresh["refreshes"] == before_refresh["refreshes"] + 1
+                assert after_refresh["registrations"] == after_alice["registrations"]
+                assert after_refresh["exchanges"] == before_refresh["exchanges"]
+                discover(alice, connector_id)
+                alice_token = proxy_token(os.environ["UMBOD_TEST_MCP_B_URL"], runtime_endpoints.bearer_token, fixture)
+                bob_token = proxy_token(runtime_endpoints.mcp_url, os.environ["UMBOD_TEST_BEARER_TOKEN_B"], fixture)
+                async with mcp_client(os.environ["UMBOD_TEST_MCP_B_URL"], alice_token) as a, mcp_client(runtime_endpoints.mcp_url, bob_token) as b:
+                    name = await find_tool(a, "echo_owner")
+                    assert await find_tool(b, "echo_owner") == name
+                    exclusive = await find_tool(a, "exclusive_alice")
+                    assert not any(tool.name == exclusive for tool in await b.list_tools())
+                    await owner_result(a, name, "alice")
+                    await owner_result(b, name, "bob")
+                    checked(alice_worker_b.delete(personal + "/authorization"), 204)
+                    assert checked(alice.get(personal + "/authorization")) == {"state": "not_authorized"}
+                    await denied(a, name, fixture)
+                    assert checked(bob.get(personal)) == bob_selection
+                    await owner_result(b, name, "bob")
+                    assert checked(alice.get(personal))["enabled"] is False
+                    assert checked(alice_worker_b.put(personal + "/enablement", json={"enabled": True}))["enabled"] is True
+                    reconnected_client_id = authorize(alice_worker_b, fixture, connector_id, "alice", callback_client=alice)
+                    assert reconnected_client_id == alice_client_id
+                    discover(alice, connector_id)
+                    await owner_result(a, name, "alice")
+                final = checked(fixture.get("/control"))
+                assert final["registrations"] == initial["registrations"] + 1
+                assert final["exchanges"] == initial["exchanges"] + 3
+                assert final["refreshes"] == initial["refreshes"] + 1
+                for path in (personal, personal + "/authorization", f"/api/admin/connectors/mcp/{connector_id}/personal-oauth", f"/api/admin/connectors/mcp/{connector_id}/personal-oauth/setup"):
+                    response = alice.get(path)
+                    checked(response)
+                    assert "kind-personal-dcr-secret-" not in response.text
+        finally:
+            checked(provider.post("/control", json={"owner": "alice", "mode": "normal"}))
+            checked(provider.post("/control", json={"owner": "metadata", "mode": "normal"}))
 
 
 @pytest.mark.asyncio
