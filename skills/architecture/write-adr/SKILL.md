@@ -1,60 +1,56 @@
 ---
 name: write-adr
-description: Write a concise Architecture Decision Record and keep the AGENTS.md ADR index current. Use only when explicitly invoked by the user.
+description: >
+  Write a concise Architecture Decision Record and keep the AGENTS.md ADR index current. Use when explicitly invoked by the user only.
 disable-model-invocation: true
 ---
 
 # Write an Architecture Decision Record
 
-Capture one consequential decision and why it made sense at the time, not an implementation plan. Aim for one page, at most two. Use plain language and an inverted pyramid: decision first, explanation next, supporting detail linked rather than embedded. Use drafting to expose disagreements, not manufacture consensus.
+## Outcome
+
+An explicitly requested ADR records a factual decision and keeps the architecture index synchronized.
+
+## Inputs
+
+- Required: Explicit user invocation, consequential decision, and essential rationale.
+- Optional: Established acceptance, owners, advice, evidence, and related records.
+- Default: Use Proposed status; label material unknowns and omit inapplicable optional fields.
+
+## Rules
+
+- R1: Apply only when explicitly invoked by the user; read references/guide.md completely before applying. Writing an ADR never authorizes implementation.
+- R2: Never invent rationale, evidence, alternatives, advice, owners, confidence, or approval; use Accepted only when team acceptance is established.
+- R3: Preserve accepted text; changes require a new ADR. On accepted replacement, synchronize dated supersession links both ways and the root AGENTS.md index.
 
 ## Workflow
 
-1. Read repository instructions and related ADRs; identify conflicts or decisions this record would replace. Ask about missing decisions or essential rationale. Never invent evidence, alternatives considered, advice, owners, confidence, or approval; label material unknowns.
-2. Write to `umbod/project/architecture-records/ADR-NNN-short-decision-title.md`, using the next number after the highest existing number. Do not reuse gaps or renumber records. In other repositories, follow their existing location and naming convention.
-3. Fill the template below, preserving local metadata conventions. Remove inapplicable optional fields and sections. Default to **Proposed** (under discussion); use **Accepted** (active) only when team acceptance is established.
-4. Preserve accepted decision text. A changed decision needs a new ADR, not a rewrite. When its replacement is accepted, mark the old record **Superseded**, date the transition, and link the records in both directions through lifecycle metadata.
-5. Synchronize the root `AGENTS.md` architecture decisions index with every ADR in the directory: exactly one entry per record, ordered by number, using the ADR number and title as link text and a working relative path. Include all statuses, label non-accepted records, and preserve existing reading guidance. Add missing entries and refresh stale titles, links, and statuses.
-6. Review for brevity, factual accuracy, complete template coverage, and valid links in both the ADR and index. Report changed paths and unresolved questions. Writing an ADR does not authorize implementation.
+1. Confirm explicit invocation, read the complete guide, repository instructions, and related ADRs; ask about missing decisions or essential rationale.
+2. Use the next number after the highest existing ADR and the repository location; draft with the guide's existing template, defaulting to Proposed.
+3. Preserve accepted records; update lifecycle metadata for accepted replacements and synchronize exactly one numbered index entry per ADR, including statuses and reading guidance.
+4. Review brevity, factual accuracy, template coverage, bidirectional supersession links, and every ADR/index link; report unresolved questions.
 
-## Template
+## Decisions
 
-```markdown
-# ADR-[NNN]: [Short title stating the decision]
+| Condition | Action |
+|---|---|
+| Explicit invocation, decision, or essential rationale is missing | Do not create a record; ask for the missing authorization or facts. |
+| Acceptance or optional metadata is absent | Use Proposed, label material unknowns, and omit inapplicable fields. |
+| Review finds invented claims or index/link mismatches | Remove unsupported claims, repair synchronization, and rerun review. |
+| Recovery fails | Stop the affected ADR work and report the blocker without inventing consensus. |
 
-- **Status:** Proposed
-- **Date:** [YYYY-MM-DD]
-- **Decision owners:** [Responsible people or team, if known]
-- **Scope:** [Product, subsystem, or ecosystem boundary]
-- **Supersedes:** [Relative link, if applicable]
-- **Superseded by:** [Relative link, if applicable]
-- **Status changed:** [YYYY-MM-DD, if applicable]
+## Output
 
-## Decision
+Return:
+- Changed ADR and root AGENTS.md paths.
+- Factual, template, lifecycle, index, and link review results.
+- Unresolved questions and implementation authorization limitations.
 
-[State the choice and where it applies, understandable without the remaining sections.]
+## Completion criteria
 
-## Context and rationale
+- The explicitly requested record uses grounded content and established status without rewriting accepted decisions.
+- All records have current index entries; applicable supersession links and dates agree in both directions.
 
-[Describe the problem, facts, constraints, and competing forces. Explain why this choice best balances them. Distinguish evidence from assumptions.]
+## References
 
-## Alternatives considered
-
-[For every serious alternative actually considered, give benefits, drawbacks, and why it was not chosen. Include retaining the current approach when relevant.]
-
-## Consequences
-
-[Record expected benefits, accepted costs, obligations, risks, and limitations.]
-
-## Confidence and reevaluation
-
-[State confidence and its basis, unresolved assumptions, and observable changes that should trigger reevaluation through a new ADR.]
-
-## Advice gathered
-
-[When advice was gathered, summarize its source, influence, and unresolved disagreement. Link to the full discussion.]
-
-## Supporting material
-
-[Link to evidence, related ADRs, and detailed designs as needed.]
-```
+- Read `references/guide.md` when applying this skill; the full workflow and existing ADR template are mandatory. Command paths remain skill-root-relative; repository paths retain their repository-relative meaning.

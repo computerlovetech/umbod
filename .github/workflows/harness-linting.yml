@@ -26,8 +26,8 @@ jobs:
       - name: Test skill template validation
         run: python -m unittest discover -s skills/development/write-skill/tests
 
-      - name: Validate write-skill template compliance
-        run: python skills/development/write-skill/scripts/validate_skill.py skills/development/write-skill/SKILL.md
+      - name: Validate all repository skills
+        run: python skills/development/write-skill/scripts/validate_skill.py skills
 
       - name: Test README link and navigation validation
         run: python -m unittest discover -s skills/development/write-module-readme/tests

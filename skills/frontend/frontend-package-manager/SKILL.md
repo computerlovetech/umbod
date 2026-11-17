@@ -1,67 +1,55 @@
 ---
 name: frontend-package-manager
-description: >-
-  Enforce what package managers to use for this repository. Use when installing dependencies, running package scripts, adding or removing packages, lockfile updates.
+description: >
+  Enforce repository package managers. Use when installing, adding, removing, updating dependencies or lockfiles, running package scripts, or invoking project tools.
 ---
 
 # Repository package managers
 
-## Rule
+## Outcome
 
-- Use **Bun** for all package-manager operations in `frontend/` (TypeScript; `package.json`).
-- Use **uv** for all package-manager operations in `api/` (Python; `pyproject.toml`, `uv.lock`).
+All dependency and tool operations use the correct manager, project manifest, and lockfile.
 
-Always run commands from inside the respective project folder so the correct manifest and lockfile are used.
+## Inputs
 
-## Frontend (`frontend/`) — Bun
+- Required: Target project folder and requested dependency or command operation.
+- Optional: Dependency version, development scope, and script arguments.
+- Default: Bun for ALL Node/TS projects; uv for ALL Python projects, including future projects.
 
-| Task | Use |
-|------|-----|
-| Install dependencies | `bun install` |
-| Add dependency | `bun add <pkg>` |
-| Add dev dependency | `bun add -d <pkg>` |
-| Remove dependency | `bun remove <pkg>` |
-| Update dependency | `bun update <pkg>` |
-| Run a script | `bun run <script>` |
-| Run a one-off binary | `bunx <command>` (not `npx`) |
+## Rules
 
-Example:
+- R1: Run every command inside its respective project folder: app paths from repository root are `umbod/frontend` and `umbod/api`; other projects use their own manifest folders.
+- R2: Use only Bun for Node/TS and uv for Python. Do not hand-edit Python dependencies in `pyproject.toml` or `uv.lock`; use uv commands.
+- R3: Never use `npm`, `yarn`, `pnpm`, `npx`, or `corepack` for Node/TS; never use `pip`, `pip-tools`, `poetry`, `pipenv`, or `conda` for Python.
 
-```bash
-cd frontend && bun install
-cd frontend && bun run lint
-```
+## Workflow
 
-### Do not (frontend)
+1. Locate the target manifest and enter its project folder before running commands.
+2. Read the operation reference and select the Bun or uv operation for that project.
+3. Execute the requested operation through that manager; let it maintain dependencies and lockfiles.
+4. Check command exit status and the manifest/lockfile diff; verify requested changes and preserve unrelated work.
 
-- Do not use `npm`, `yarn`, `pnpm`, `npx`, or `corepack`.
+## Decisions
 
-## API (`api/`) — uv
+| Condition | Action |
+|---|---|
+| Target folder or operation is unclear | Infer from the request and workspace; ask only if materially ambiguous. |
+| Dependency scope is unspecified | Infer runtime or development scope from usage; ask if ambiguous rather than defaulting to runtime. |
+| Command or diff verification fails | Diagnose within the same project and retry using only its approved manager. |
+| Recovery fails | Report the failure; do not switch managers or hand-edit Python dependencies or uv.lock. |
 
-| Task | Use |
-|------|-----|
-| Install/sync dependencies from lockfile | `uv sync` |
-| Add dependency | `uv add <pkg>` |
-| Add dev dependency | `uv add --dev <pkg>` |
-| Remove dependency | `uv remove <pkg>` |
-| Update a specific dependency | `uv lock --upgrade-package <pkg> && uv sync` |
-| Update all dependencies | `uv lock --upgrade && uv sync` |
-| Run a command in the project env | `uv run <command>` |
+## Output
 
-Example:
+Return:
+- Project folder, manager, operation, and changed files.
+- Command exit status and manifest/lockfile verification result.
+- Unresolved failures or missing inputs.
 
-```bash
-cd api && uv sync
-cd api && uv add httpx
-cd api && uv remove httpx
-cd api && uv run pytest
-```
+## Completion criteria
 
-### Do not (api)
+- Requested operations succeeded inside the correct project using only Bun or uv.
+- Manifest and lockfile changes are consistent; Python dependency edits use uv.
 
-- Do not use `pip`, `pip-tools`, `poetry`, `pipenv`, `conda`, or edit `uv.lock` by hand.
-- Do not edit `pyproject.toml` dependencies manually — use `uv add` / `uv remove` so the lockfile stays in sync.
+## References
 
-## General
-
-If another `package.json` or `pyproject.toml` is added under this repo later, treat it the same way: **Bun only** for Node/TS projects, **uv only** for Python projects.
+- Read `references/operations.md` when choosing dependency, script, or one-off tool commands.

@@ -1,23 +1,57 @@
 ---
 name: test-writing
-description: >-
-  Guides writing and refactoring tests across pytest, Vitest and Kind integration
-  tests. Use when adding tests, changing fixtures or assertions, choosing test
-  boundaries, or reviewing test coverage and quality.
+description: >
+  Guide writing and refactoring tests across pytest, Vitest, and Kind integration tests. Use when adding tests, changing fixtures or assertions, choosing test boundaries, or reviewing coverage and quality.
 ---
 
 # Test writing
 
-Before writing or changing a test, identify the behavior and test boundary, then read the relevant reference below. Read more than one when they apply; do not load unrelated references.
+## Outcome
 
-| Test being written | Required reference |
-| --- | --- |
-| Python unit, adapter, contract or in-process application tests | [Pytest practices](references/pytest.md) |
-| TypeScript or JavaScript unit tests, reactive state tests or Svelte DOM tests | [Vitest practices](references/vitest.md) |
-| Tests against running services in a Kind cluster | [Kind integration practices](references/kind-integration.md) and [pytest practices](references/pytest.md) |
+Tests prove observable behavior at the smallest suitable boundary with applicable verification completed.
 
-For real-browser UI checks, also load the [agent-browser-ui-check skill](../../../skills/other/agent-browser-ui-check/SKILL.md). DOM tests do not establish real-browser layout or deployed behavior.
+## Inputs
 
-Choose the smallest boundary that proves the behavior. Add deployed integration coverage when the risk depends on real service wiring or cross-process behavior, rather than duplicating every unit scenario.
+- Required: Changed behavior, acceptance conditions, and affected test boundary.
+- Optional: Existing tests, fixtures, timing data, and deployed-service risks.
+- Default: Read only applicable references; choose the smallest boundary that proves behavior.
 
-Follow the repository's `AGENTS.md` verification requirements independently. A requirement to run a suite does not by itself mean every change needs a new integration test.
+## Rules
+
+- R1: Before writing or changing tests, identify behavior and boundary, then read the matching references; read multiple when applicable.
+- R2: Add deployed integration coverage for real service wiring or cross-process risks, not duplicates of every unit scenario; DOM tests do not prove real-browser layout or deployed behavior.
+- R3: Follow repository AGENTS.md verification requirements independently; a required suite does not imply every change needs a new integration test.
+
+## Workflow
+
+1. Identify acceptance conditions, changed behavior, existing coverage, and risks requiring deployed verification.
+2. Read references/pytest.md for Python, references/vitest.md for TypeScript or JavaScript, and both references/kind-integration.md and references/pytest.md for Kind services.
+3. Add or refactor behavior-focused tests using the relevant practices; for real-browser checks also load ../../../skills/other/agent-browser-ui-check/SKILL.md.
+4. Run applicable repository checks; investigate failures and rerun after corrections, reporting any unresolved blocker.
+
+## Decisions
+
+| Condition | Action |
+|---|---|
+| Behavior or boundary is unclear | Clarify the acceptance condition before writing tests. |
+| Multiple test boundaries apply | Read each matching reference and avoid redundant scenarios. |
+| Real-browser evidence is needed | Use the agent-browser-ui-check skill; do not substitute DOM tests. |
+| Verification fails | Investigate and repair, or report the blocker without claiming success. |
+
+## Output
+
+Return:
+- Changed tests and the behavior they prove.
+- Verification commands and observed results.
+- Remaining coverage gaps or blocked checks.
+
+## Completion criteria
+
+- Tests cover acceptance behavior at appropriate boundaries and applicable verification passes.
+- Deployed or browser risks are verified where needed; unresolved failures and limitations are explicit.
+
+## References
+
+- Read `references/pytest.md` when writing Python unit, adapter, contract, or in-process tests, or Kind service tests.
+- Read `references/vitest.md` when writing TypeScript, JavaScript, reactive-state, or Svelte DOM tests.
+- Read `references/kind-integration.md` when testing running services in a Kind cluster.

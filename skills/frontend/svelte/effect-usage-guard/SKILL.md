@@ -1,47 +1,55 @@
 ---
 name: effect-usage-guard
-description: Enforces critical review before introducing Svelte $effect. Use when writing or modifying code that includes $effect, reactive synchronization, URL-state sync, derived state, or side-effectful reactivity.
+description: >
+  Review and avoid unnecessary Svelte $effect usage. Use when adding or editing effects, syncing UI with URL/query parameters, deriving state from props, stores or router state, or changing reactive side effects.
 ---
 
-# Effect Usage Guard
+# Effect usage guard
 
-## Purpose
+## Outcome
 
-Avoid unnecessary `$effect` usage and prefer explicit, deterministic state flows.
+Reactive state has explicit one-way ownership; every retained effect has a justified external purpose.
 
-## When to Apply
+## Inputs
 
-Apply this skill whenever:
-- You are about to add `$effect`.
-- You are editing code that already uses `$effect`.
-- The task involves syncing UI state with URL/query params.
-- The task involves deriving state from props, stores, or router state.
+- Required: Component, state sources, and intended behavior.
+- Optional: Ownership and lifecycle contracts.
+- Default: Prefer URL-first or model-first state and no effect unless external boundary work requires it.
 
-## Required Reconsideration Checklist
+## Rules
 
-Before keeping or adding `$effect`, answer these in order:
+- R1: Review in order: single source of truth, derived state, explicit event handler, two-way sync risk, then intentional external side effect; if any of the first three suffices, do not use an effect.
+- R2: Prefer controlled components (`value` + `onChange`), one-way data flow, and explicit commands over local mirrors, hidden coupling, or internal synchronization loops.
+- R3: Limit effects to external boundary work; require idempotence, feedback-loop and redundant-write guards, and teardown for subscriptions or other owned resources.
 
-1. Is there a single source of truth you can read directly (for example `page.url`, props, or store state)?
-2. Can this be expressed as derived state (`$derived`) instead of mirrored mutable state?
-3. Can the change be handled in an explicit event handler (click/submit/navigation) instead of reactive side effects?
-4. Would `$effect` introduce two-way sync or hidden coupling between states?
-5. If `$effect` remains, is the side effect external and intentional (I/O, imperative API, subscription lifecycle)?
+## Workflow
 
-If 1-3 are true, do not use `$effect`.
+1. Identify the state owner and apply the ordered review in the reference before adding or retaining any `$effect`.
+2. Use direct reads, `$derived`, or explicit click, submit, or navigation handlers whenever sufficient; remove mirrored mutable state.
+3. Explicitly justify each remaining effect in reasoning: why derivation cannot work, why a handler is insufficient, and what prevents loops or redundant writes; stop and refactor if unjustified.
+4. Check ownership, one-way flow, repeated execution, and teardown against the intended behavior; verify each retained effect is intentional external I/O, imperative integration, or subscription lifecycle work.
 
-## Best Practices
+## Decisions
 
-- Prefer URL-first or model-first state over duplicated local mirrors.
-- Prefer controlled components (`value` + `onChange`) over internal sync loops.
-- Prefer one-way data flow with explicit commands.
-- Keep effects for boundary work only (imperative integration, subscriptions, teardown).
-- Ensure effects are idempotent and guarded against feedback loops.
+| Condition | Action |
+|---|---|
+| State owner or behavior is unclear | Inspect the request and existing state flow; ask only if materially ambiguous. |
+| Optional lifecycle guidance is missing | Default to direct URL/model ownership and no effect; identify any boundary cleanup needs. |
+| Review or behavior checks fail | Refactor to direct, derived, or handler-owned state; repair boundary guards and teardown where justified. |
+| Justification or recovery fails | Stop effect-based work, report the blocker, and refactor away from unjustified effects. |
 
-## Decision Rule
+## Output
 
-If an `$effect` is still necessary, briefly justify it in your reasoning with:
-- Why it cannot be derived.
-- Why an event handler is insufficient.
-- What guard prevents loops or redundant writes.
+Return:
+- Chosen state flow and effect changes.
+- Ordered-review result, justification for each retained effect, and behavior-check results.
+- Ownership, lifecycle, or verification limitations.
 
-If you cannot provide this justification, refactor away from `$effect`.
+## Completion criteria
+
+- No effect duplicates readable, derivable, or handler-owned state; controlled components preserve one-way flow.
+- Every retained effect has explicit justification, intentional external work, idempotence, loop guards, and necessary teardown.
+
+## References
+
+- Read `references/review.md` when reviewing any proposed or existing effect.

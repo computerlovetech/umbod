@@ -11,31 +11,6 @@
       "sourceType": "local",
       "computedHash": "5d11889c902cde1290e48da55b461dd4de35a71a83e6849ddc66e78098ea9c9e"
     },
-    "atdd-clarify-feature": {
-      "source": "./skills",
-      "sourceType": "local",
-      "computedHash": "2113b3da7ff8303e5240056c42bf014df242617592519a9fbd938ca0edaf62d4"
-    },
-    "atdd-design-testable-interface": {
-      "source": "./skills",
-      "sourceType": "local",
-      "computedHash": "c04afa988dc8f17e3e27660fb0229181210e359687db0d5d8a466162da1d5514"
-    },
-    "atdd-identify-scenarios": {
-      "source": "./skills",
-      "sourceType": "local",
-      "computedHash": "7b45cbfc3e8067a21464c2f9fc070d89c385c4a8b20566c18fe530769944788b"
-    },
-    "atdd-implementation-loop": {
-      "source": "./skills",
-      "sourceType": "local",
-      "computedHash": "a941ac57b761833304cdcf67c575728e6ba697850e3bb60f6483f1fbc343ca9c"
-    },
-    "atdd-write-acceptance-tests": {
-      "source": "./skills",
-      "sourceType": "local",
-      "computedHash": "a5164b31bb46dfc59cb10ef1372035ba92a140eb3cc1088d2ce60c6a2688a871"
-    },
     "choose-design-pattern": {
       "source": "./skills",
       "sourceType": "local",

@@ -1,97 +1,56 @@
 ---
 name: fastapi-dependency-lifetime
-description: Use when adding or modifying FastAPI routes, dependency providers, application services, repositories, adapters, app factories, lifespan setup, or any API object creation and dependency injection.
+description: >
+  Assign safe FastAPI dependency lifetimes and explicit composition. Use when changing routes, providers, services, repositories, adapters, app factories, lifespan setup, or API dependency injection.
 ---
 
 # FastAPI dependency lifetime
 
-Create dependencies at the narrowest safe lifetime. Default to request-scoped application objects and reserve ASGI lifespan state for shared infrastructure resources that are designed for concurrent reuse.
+## Outcome
 
-## Core rule
+Request operations use typed providers; only safe shared infrastructure lives in lifespan state.
 
-Application services, repositories, use-case classes, handlers, dispatchers, and objects that perform operations on data must be created through FastAPI dependency providers during the request cycle by default.
+## Inputs
 
-ASGI lifespan and `app.state` are only for long-lived infrastructure resources with documented concurrency safety, such as database engines, database connection pools, shared HTTP client pools, telemetry clients, and explicitly safe SDK clients.
+- Required: Target objects, callers, and ownership or lifecycle requirements.
+- Optional: Documented concurrency guarantees and existing provider chains.
+- Default: Create operation objects per request; unclear concurrency safety never justifies sharing.
 
-## Do not
+## Rules
 
-- Do not use `app.state` as a general dependency container.
-- Do not attach application services, repositories, use cases, handlers, or dispatchers to `app.state`.
-- Do not instantiate request-operation objects in `api/main.py`.
-- Do not share mutable service instances across async requests unless the type is explicitly designed for concurrent reuse.
-- Do not resolve normal service dependencies with repeated `request.app.state.<service>` lookups.
+- R1: Read the full guide before work; use the narrowest safe lifetime and its request-versus-lifespan classification.
+- R2: Keep services, repositories, use cases, handlers, and dispatchers behind typed Depends providers, not app.state or api/main.py construction.
+- R3: Reserve app.state for concurrency-safe, lifecycle-owned infrastructure; keep bounded-context provider chains explicit and main focused on assembly.
 
-## Do
+## Workflow
 
-- Keep `api/main.py` focused on app assembly, middleware, routers, exception handlers, mounts, and lifespan wiring.
-- Put dependency provider functions near their bounded context, usually in a `deps.py` module.
-- Use typed `Depends` providers to construct services, repositories, and use cases per request.
-- Inject lifespan-owned infrastructure resources into request-scoped operation objects.
-- Store only concurrency-safe infrastructure resources on `app.state` when FastAPI owns their lifecycle.
-- Prefer explicit provider function chains over dynamic framework-state service lookup.
+1. Read references/guide.md and inspect object creation, mutable/request state, consumers, and resource ownership.
+2. Classify infrastructure and operation objects using the lifetime guide; require documented safety for concurrent sharing.
+3. Compose request objects through typed bounded-context providers; inject lifespan infrastructure and use provider overrides in tests.
+4. Apply every review-checklist question in the guide; verify creation sites, scope, app.state access, and test replacement seams.
 
-## Lifetime guide
+## Decisions
 
-### Lifespan-created
+| Condition | Action |
+|---|---|
+| Objects or lifetimes are unclear | Inspect the request, callers, and composition; ask only if materially ambiguous. |
+| Optional input is missing | Apply the stated default and inspect existing code. |
+| Validation fails | Move unsafe shared operation objects behind providers and repeat the lifetime review. |
+| Recovery fails | Stop affected work and report the blocker; do not claim completion. |
 
-Create these in ASGI lifespan when the app owns their startup and shutdown:
+## Output
 
-- database engines
-- database connection pools
-- shared HTTP client pools
-- shared SDK clients with documented thread or async safety
-- telemetry and metrics exporters
-- caches explicitly designed for concurrent shared access
+Return:
+- Changed provider, composition, and lifecycle paths.
+- Lifetime checklist results and concurrency-safety evidence.
+- Unresolved limitations or blockers.
 
-### Request-created
+## Completion criteria
 
-Create these through FastAPI dependency providers:
+- Operation objects are request-created by default and normal service resolution uses explicit providers.
+- Shared resources have lifecycle ownership and documented concurrency safety; main remains assembly-only.
 
-- application services
-- domain or application use cases
-- repositories wrapping a pool, engine, client, or session
-- notification dispatchers
-- command and query handlers
-- objects that coordinate reads, writes, validation, or data operations
+## References
 
-## Preferred shape
-
-```python
-from typing import Annotated
-
-from fastapi import Depends, Request
-
-
-async def get_database_pool(request: Request) -> DatabasePool:
-    return request.app.state.database_pool
-
-
-async def get_booking_repository(
-    pool: Annotated[DatabasePool, Depends(get_database_pool)],
-) -> BookingRepository:
-    return BookingRepository(pool)
-
-
-async def get_booking_service(
-    repository: Annotated[BookingRepository, Depends(get_booking_repository)],
-) -> BookingService:
-    return BookingService(repository)
-```
-
-`app.state.database_pool` is acceptable when the pool is concurrency-safe and lifecycle-owned by FastAPI. `app.state.booking_service` is not acceptable by default because the service performs request operations and may accumulate state or hide concurrency hazards.
-
-## Review checklist
-
-Before adding or moving object creation, answer these questions:
-
-- Is this object documented as concurrency-safe and intended to be shared?
-  - If yes, it may belong in lifespan or `app.state`.
-  - If no or unclear, create it through `Depends`.
-- Does the object hold request-specific data, mutable state, or operation coordination?
-  - If yes, create it through `Depends`.
-- Is this an application service, repository, use case, handler, or dispatcher?
-  - If yes, create it through `Depends` by default.
-- Is this being added to `api/main.py`?
-  - If yes, reconsider and prefer bounded-context dependency providers.
-- Are tests forced to patch `app.state` to replace an operation object?
-  - If yes, move that object behind a typed provider that can be overridden.
+- Read `references/guide.md` when starting any task covered by this skill; reading the full guide before work is mandatory.
+- Read `references/guide.md` when object creation moves or test replacement requires its lifetime classification, provider pattern, and review checklist.

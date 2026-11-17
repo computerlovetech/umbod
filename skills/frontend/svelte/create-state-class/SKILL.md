@@ -1,111 +1,56 @@
 ---
 name: create-state-class
-description: Enforces using reactive state classes instead of multiple let statements in Svelte components. Use when creating or modifying Svelte component state, adding reactive variables, refactoring component logic, or when the user mentions state management in Svelte.
+description: >
+  Encapsulate cohesive Svelte reactive state in dedicated state classes. Use when creating or modifying component state, adding reactive variables, refactoring component logic, or managing Svelte state.
 ---
 
 # Create State Class
 
-## Purpose
+## Outcome
 
-Always prefer a dedicated state class over multiple `let` / `$state` or `let` / `$derived` or any form of Svelte state variable declarations scattered in a Svelte component's `<script>` block. A state class groups related reactive state and exposes explicit methods for mutation, keeping components declarative and behaviour testable outside Svelte.
+Cohesive state classes own reactive values and mutations while components stay declarative.
 
-The following rules also apply to `$derived`.
+## Inputs
+
+- Required: Target component, state concerns, and intended behavior.
+- Optional: Existing state classes and caller constraints.
+- Default: Use one class per cohesive state concern in a separate .svelte.ts module.
 
 ## Rules
 
-1. **All mutable state lives in a class** — never declare loose `let x = $state(...)` variables at the top of a component. Instead, create a class whose fields use those variable types.
-2. **All mutations go through methods** — never assign to a state class field from outside the class. Every write must happen via a named method on the class.
-3. **Reads are direct property access** — consumers read values directly on the instance (e.g. `state.count`), no getters required unless computation is involved.
-4. **One class per cohesive state group** — if a component manages two unrelated concerns, use two state classes rather than one god-class.
-5. **Prefer arrow-function methods** — avoids `this`-binding issues when passing methods as callbacks in templates.
-6. **State classes live in `.svelte.ts` modules, never inside `.svelte` files** — define and export the class from a TypeScript module with the `.svelte.ts` extension so the Svelte compiler processes the state variables. The component imports the class and instantiates it. This keeps components declarative and makes state testable in isolation.
+- R1: Read the full guide before work; apply its ownership rules to mutable state and derived values.
+- R2: Keep all mutations behind named class methods; read properties directly and prefer arrow methods for callback binding.
+- R3: Never define inline state classes or loose component state; use svelte/reactivity versions of Set, Map, Date, and URL.
 
-## Svelte 5 `$state` in Classes
+## Workflow
 
-The `$state` rune works in class fields and in the first assignment inside the constructor. The compiler transforms these into get/set pairs on the prototype backed by private fields.
+1. Read references/guide.md and inspect state ownership, consumers, initial values, and mutations.
+2. Define or extend exported .svelte.ts state classes; keep unrelated concerns separate and avoid trivial getters.
+3. Import and instantiate classes in components; route writes through methods and preserve callback binding.
+4. Review the guide's rules and anti-patterns; use .cursor/hooks/check-state-class.ts if available. If absent, report that automated check as unavailable without blocking work solely on its absence.
 
-### Canonical Pattern
+## Decisions
 
-State class in a `.svelte.ts` module:
+| Condition | Action |
+|---|---|
+| Target or behavior is unclear | Inspect the request and workspace; ask only if material ambiguity remains. |
+| Optional input is missing | Apply the stated default and inspect existing code. |
+| Review or an available check finds violations | Fix ownership, placement, or mutation issues and repeat the review or check. |
+| Recovery fails | Stop affected work and report the blocker; do not claim completion. |
 
-```ts
-// counter-state.svelte.ts
-export class CounterState {
-  count = $state(0);
+## Output
 
-  increment = () => {
-    this.count += 1;
-  };
+Return:
+- Changed .svelte.ts classes and component integration paths.
+- Compliance check and ownership review results.
+- Unresolved limitations or blockers.
 
-  reset = () => {
-    this.count = 0;
-  };
-}
-```
+## Completion criteria
 
-Component imports and instantiates:
+- All mutable and derived state follows cohesive class ownership with method-only writes.
+- Classes live outside .svelte files; callback binding and compliance verification are accounted for.
 
-```svelte
-<script lang="ts">
-import { CounterState } from './counter-state.svelte';
+## References
 
-const counter = new CounterState();
-</script>
-
-<button onclick={counter.increment}>
-  {counter.count}
-</button>
-<button onclick={counter.reset}>
-  reset
-</button>
-```
-
-### Constructor-Initialised Fields
-
-When initial values come from props or external data, assign with `$state` inside the constructor:
-
-```ts
-// todo-state.svelte.ts
-export class TodoState {
-  done = $state(false);
-
-  constructor(text: string) {
-    this.text = $state(text);
-  }
-
-  reset = () => {
-    this.text = '';
-    this.done = false;
-  };
-}
-```
-
-### `this`-Binding Caveat
-
-Regular methods lose their `this` context when passed directly as event handlers:
-
-```svelte
-<!-- WRONG — `this` will be the <button>, not the class instance -->
-<button onclick={todo.reset}>reset</button>
-
-<!-- OK — arrow wrapper preserves context -->
-<button onclick={() => todo.reset()}>reset</button>
-```
-
-Using arrow-function methods on the class avoids this entirely and is the preferred style.
-
-## Built-in Reactive Classes
-
-For `Set`, `Map`, `Date`, and `URL`, import the reactive versions from `svelte/reactivity` instead of wrapping the built-ins manually.
-
-## Compliance Check
-
-Use `.cursor/hooks/check-state-class.ts` to verify that a change follows this skill's expected code quality rules.
-
-## Anti-Patterns
-
-- **Loose `$state` declarations** — `let count = $state(0)` at component top-level. Wrap in a class.
-- **Inline state classes** — defining a state class inside `<script>` instead of in a `.svelte.ts` module. Always extract to a separate file.
-- **External mutation** — `state.count += 1` from the template or parent. Add a method instead.
-- **Getter-heavy classes** — don't add trivial getters for every field; direct property reads are fine and keep the class lean.
-- **Single god-class** — don't lump unrelated state into one class. Split by domain concern.
+- Read `references/guide.md` when starting any task covered by this skill; reading the full guide before work is mandatory.
+- Read `references/guide.md` when prop or external data initialization, callback binding, or built-in collections require its constructor, binding, and reactive-class guidance.

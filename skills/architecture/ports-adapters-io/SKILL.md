@@ -1,6 +1,6 @@
 ---
 name: ports-adapters-io
-description: >-
+description: >
   Applies hexagonal (ports and adapters) design for I/O boundaries—network,
   files, databases—so the core stays independent of infrastructure. Use when the
   user mentions ports and adapters, hexagonal architecture,
@@ -9,120 +9,50 @@ description: >-
 
 # Ports and Adapters for I/O
 
-## Concept (source)
+## Outcome
 
-**Hexagonal architecture** (also **ports and adapters**) structures the system so the application core talks to the outside world only through **ports** (abstract APIs / protocols) implemented by **adapters** (HTTP clients, DB drivers, filesystem, tests). Components stay loosely coupled and swappable; multiple adapters can satisfy one port (for example GUI, CLI, or automated tests). See [Hexagonal architecture (software)](https://en.wikipedia.org/wiki/Hexagonal_architecture_(software)) on Wikipedia for the full pattern.
+The core depends on validated domain ports with swappable I/O adapters and fast contract tests.
 
-For **HTTP clients in this repo**, apply the same workflow using the concrete layout in [api-client-architecture](../api-client-architecture/SKILL.md) (Zod schemas, transport port, route classes, composite client).
+## Inputs
 
-## When to use
+- Required: I/O operation, domain contract, and observable success and failure behavior.
+- Optional: Existing ports, adapters, and application composition.
+- Default: Define the port first and implement an in-memory adapter before or alongside real I/O.
 
-- Adding or changing code that performs **network**, **file**, or **database** I/O.
-- The user or agent mentions **ports and adapters**, **hexagonal** architecture, or **adapter** / **port** in an I/O context.
-- The user explicitly invokes this skill.
+## Rules
 
-## Mandatory workflow
+- R1: Read references/guide.md completely before applying; follow its mandatory workflow and finishing checklist.
+- R2: Keep concrete drivers out of the core; adapters validate boundary data with Pydantic or Zod and expose domain contracts.
+- R3: Test behavior through the port using in-memory adapters; keep test-only adapters in tests, never production source or exports without an actual runtime consumer.
 
-Follow this order every time. Do not skip steps.
+## Workflow
 
-### 1. Define the port first (interface / protocol)
+1. Read the detailed guide; define the domain port before concrete I/O and inspect existing composition.
+2. Define validated inputs and outputs and implement the in-memory adapter using the same contracts.
+3. Implement and inject the real adapter; use the linked API client skill for HTTP clients.
+4. Run public port-contract tests and narrow infrastructure adapter tests; verify the guide's finishing checklist.
 
-- Name and shape the port from the **domain** need: what operation does the core require, independent of HTTP, SQL, or paths?
-- Express inputs and outputs only as **domain-level** contracts at the boundary (see step 2).
-- The port is an abstract type: Python `Protocol` or `ABC`, TypeScript `interface`, or an equivalent boundary the core depends on.
+## Decisions
 
-### 2. Validate at the boundary with Pydantic or Zod
+| Condition | Action |
+|---|---|
+| Domain operation or contract is unclear | Inspect the request and existing code; ask only if material ambiguity remains. |
+| Existing adapters are absent | Apply the port-first, in-memory-first default. |
+| Validation or contract tests fail | Repair boundary mapping or adapter behavior and rerun tests. |
+| Recovery fails | Stop the affected I/O work and report the blocker. |
 
-- **Python**: Use Pydantic `BaseModel` (or equivalent) for every argument bundle and return value that crosses the port from or to the outside world. Parsing/validation happens in adapters (or immediately inside the port implementation that wraps raw bytes/rows).
-- **TypeScript**: Use Zod schemas as the source of truth for wire and external shapes; derive types with `z.infer`. Do not hand-write parallel interfaces for the same payloads.
-- The core should consume **already-validated** domain types where practical; adapters own mapping from raw I/O → validated models.
+## Output
 
-### 3. First adapter is always in-memory
+Return:
+- Port, model, adapter, test, and composition paths.
+- Contract-test results and finishing checklist findings.
+- Unresolved boundary or runtime-placement limitations.
 
-- Implement an **in-memory** adapter of the port before (or alongside) the real network / file / DB adapter.
-- It must satisfy the same interface and use the same Pydantic/Zod types so callers cannot tell which adapter they use.
-- If the in-memory adapter is only for testing and is not used as a swappable runtime implementation, place it in the test suite, next to its consumers or in shared test support. Do not ship it in production source or re-export it from production packages.
-- Keep an in-memory adapter in production source only when application composition actually selects it as a runtime implementation, including a supported local-development runtime. Being injectable or protocol-compatible alone is not a runtime use.
-- Use test-only adapters for fast tests and proving the port shape; use runtime adapters only where application wiring requires them.
+## Completion criteria
 
-### 4. Tests target the port, not implementation details
+- The core imports ports rather than concrete drivers; invalid data fails at the edge.
+- In-memory contract tests pass and test-only adapters stay outside production dependencies.
 
-- Write tests **against the port contract**: call the public operations with validated inputs; assert on validated outputs and required error behavior.
-- Do not assert on SQL strings, internal HTTP URLs, private methods, or file paths unless a dedicated adapter test exists for that adapter only.
-- Prefer testing the **in-memory** adapter for business rules that flow through the port; add **narrow** tests for real adapters only for infrastructure concerns (connection config, query shape where untyped, etc.).
+## References
 
-## Checklist before finishing I/O work
-
-- [ ] Port defined from domain vocabulary; core imports only the port, not concrete drivers.
-- [ ] Inputs/outputs at the boundary use Pydantic (Python) or Zod (TypeScript); invalid data fails at the edge.
-- [ ] In-memory adapter implemented; test-only adapters live in the test suite, while production adapters have an actual runtime consumer.
-- [ ] Production source and package exports do not depend on test-only adapters.
-- [ ] Primary tests run through the port using the in-memory adapter; no coupling to transport specifics in those tests.
-
-## Minimal examples
-
-### Python: port → Pydantic → in-memory → test against port
-
-```python
-from typing import Protocol
-from pydantic import BaseModel
-
-class UserRecord(BaseModel):
-    id: str
-    name: str
-
-class UserStore(Protocol):
-    def get_user(self, user_id: str) -> UserRecord | None: ...
-
-class InMemoryUserStore:
-    def __init__(self) -> None:
-        self._rows: dict[str, UserRecord] = {}
-
-    def get_user(self, user_id: str) -> UserRecord | None:
-        return self._rows.get(user_id)
-
-    def seed(self, row: UserRecord) -> None:
-        self._rows[row.id] = row
-
-# Tests import UserStore and InMemoryUserStore only; assert behavior of get_user.
-```
-
-A real adapter (Postgres, REST, filesystem) implements `UserStore`, maps raw I/O into `UserRecord`, and is tested separately if needed.
-
-### TypeScript: port → Zod → in-memory
-
-```ts
-import { z } from 'zod';
-
-const UserRecord = z.object({ id: z.string(), name: z.string() });
-type UserRecord = z.infer<typeof UserRecord>;
-
-export type UserStore = {
-  getUser(userId: string): Promise<UserRecord | null>;
-};
-
-export class InMemoryUserStore implements UserStore {
-  private rows = new Map<string, UserRecord>();
-  async getUser(userId: string) {
-    return this.rows.get(userId) ?? null;
-  }
-  seed(row: UserRecord) {
-    this.rows.set(row.id, UserRecord.parse(row));
-  }
-}
-
-// Tests: instantiate InMemoryUserStore, call getUser, assert results — no fetch.
-```
-
-## Relation to other skills
-
-- **HTTP / frontend API clients**: Follow [api-client-architecture](../api-client-architecture/SKILL.md) for Zod-at-the-transport and route layout.
-- **Python tests**: Prefer interface-level examples in tests per [test-writing](../../../skills/development/test-writing/SKILL.md).
-
-## Anti-patterns
-
-- Starting with a concrete `requests.get`, `open()`, or `cursor.execute` and “extracting an interface later”.
-- Untyped `dict` / `Any` / `unknown` crossing the boundary without Pydantic/Zod.
-- Skipping the in-memory adapter and testing only against live I/O (slow, flaky, unclear domain failures).
-- Shipping a test-only in-memory adapter in production source merely because every port should have an in-memory implementation.
-- Unit tests that break when the storage path or SQL dialect changes but the observable behavior did not.
+- Read `references/guide.md` when applying this skill; its workflow and checklist are mandatory. Command paths remain skill-root-relative unless stated otherwise.
