@@ -9,7 +9,7 @@
 [![umbod CI](https://github.com/computerlovetech/umbod/actions/workflows/umbod-ci.yml/badge.svg?branch=main)](https://github.com/computerlovetech/umbod/actions/workflows/umbod-ci.yml)
 [![codecov](https://codecov.io/gh/computerlovetech/umbod/branch/main/graph/badge.svg)](https://codecov.io/gh/computerlovetech/umbod)
 
-<p align="center"><strong>Manage agent access. On your own infrastructure.</strong></p>
+<p align="center"><strong>Manage agent access and collaboration. On your own infrastructure.</strong></p>
 
 <p align="center">
   <a href="https://umbod.ai">Website</a> ·
@@ -89,13 +89,18 @@ Try it with an integration your team actually needs. [Report an issue](https://g
 | Group permissions | ✅ Complete | 🟡 Evolving | Manage group-level access to MCP tools from the admin UI. |
 | Authentication and deployment profiles | ✅ Complete | 🟡 Evolving | Support local development authentication and production OIDC-based deployments. |
 | Helm chart for Kubernetes | ✅ Complete | 🟡 Evolving | Install and configure Umbod on Kubernetes using Helm. |
-| File uploads and sharing | ✅ Complete | 🟡 Evolving | Store files locally or in S3 and share individual nodes with registered groups or observed users; permissions do not inherit. |
+| File uploads and sharing | ✅ Complete | 🟡 Evolving | Store files locally or in S3 and share files or folders with registered groups or observed users, with optional recursive folder permissions. |
 | Connector-backed filesystem resources | ⬜ Planned | ⚪ Not assessed | Extend the filesystem to connector-backed resources. |
-| Tool description overrides | ⬜ Planned | ⚪ Not assessed | Override published tool descriptions from the `/admin` interface. |
-| Configurable `toolPolicy` | ✅ Complete | 🟡 Evolving | Configure tool access policies as `allow`, `ask`, or `blocked`, controlling whether tools run directly, require approval, or cannot be used. |
-| Agent observability tools | ⬜ Planned | ⚪ Not assessed | Provide built-in tools such as `give_feedback` and `self_diagnose` for agent feedback and diagnostics. |
+| Connector capability-description overrides | ✅ Complete | 🟡 Evolving | Override or restore connector-level capability descriptions through the admin UI or administrator MCP tools. |
+| Individual tool-description overrides | ⬜ Planned | ⚪ Not assessed | Override individual published tool descriptions from the admin UI. |
+| Configurable tool invocation policies | ✅ Complete | 🟡 Evolving | Set tool invocation to `direct` or `ask` for approval; activation and group permissions control access separately. |
+| Agent diagnostic playbooks and self-reporting | ✅ Complete | 🟡 Evolving | Provide diagnostic playbook resources, the `run_diagnostics` prompt, and the `report_diagnostic` tool for agent self-reports. |
+| Agent feedback tools | ⬜ Planned | ⚪ Not assessed | Extend agent feedback and diagnostics with tools such as `give_feedback` and `self_diagnose`. |
 | Per-connector runtime logging configuration | ⬜ Planned | ⚪ Not assessed | Configure logging levels independently for each connector at runtime. |
-| OTLP compatible collector endpoint | ⬜ Planned | ⚪ Not assessed | Provide a collector endpoint compatible with the OpenTelemetry Protocol (OTLP) for receiving telemetry. |
+| OTLP-compatible HTTP collector | ✅ Complete | 🟡 Evolving | Receive authenticated logs, metrics, and traces over OTLP/HTTP using JSON or protobuf, with gzip support; opt-in, without gRPC. |
+| Personal downstream MCP connections | ✅ Complete | 🟡 Evolving | Let users authorize their own downstream accounts through OAuth for administrator-approved MCP servers. |
+| Administrator MCP configuration tools | ✅ Complete | 🟡 Evolving | Configure existing connectors through administrator-only MCP tools; connector creation and publication remain separate. |
+| Administrator log analytics | ✅ Complete | 🟡 Evolving | Browse and analyze ingested logs in the admin UI when analytics storage is enabled. |
 
 ## Image channels
 
