@@ -74,9 +74,11 @@ Resolve the paths below relative to this skill directory, whether using the repo
 - [check_module_readmes.py](scripts/check_module_readmes.py) — Run with the repository argument to validate YAML frontmatter in READMEs beneath `src` directories.
 - [check_readme_bodies.py](scripts/check_readme_bodies.py) — Run with the repository argument to enforce headings and linked bullets with descriptions of at most 160 characters.
 - [check_readme_links.py](scripts/check_readme_links.py) — Validate target existence in all READMEs and source-tree containment under `src/`, with the repository ADR exception.
-- [Link-checker tests](tests/test_check_readme_links.py) — Run `python -m unittest discover -s skills/development/write-module-readme/tests` with the skill requirements installed.
+- [check_readme_navigation.py](scripts/check_readme_navigation.py) — Fail on source READMEs unreachable through explicit README links and directory links in README indexes or navigation entrypoints that conceal existing source module READMEs. Navigation starts at repository-root `AGENTS.md`; use repeated `--entrypoint` arguments to select other repository-relative roots. Directory existence does not establish navigation, and no README is required in directories without module documentation.
+- [Link-checker tests](tests/test_check_readme_links.py) — Regression coverage for target existence and source-tree containment.
+- [Navigation-checker tests](tests/test_check_readme_navigation.py) — Regression coverage for reachable indexes, hidden child documentation, cycles and excluded artifacts. Run all skill tests with `python -m unittest discover -s skills/development/write-module-readme/tests` and the skill requirements installed.
 
-All three scripts must exit successfully before reporting README work complete. The harness workflow runs these same source scripts directly without installing the skill.
+All four scripts and the skill tests must exit successfully before reporting README work complete. The harness workflow runs these same source scripts directly without installing the skill.
 
 ## Scope
 

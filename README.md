@@ -110,9 +110,9 @@ Successful pushes to `main` publish core, frontend, and connector-builder images
 
 See the [development guide](umbod/README.md) for local setup and checks.
 
-- [`umbod/`](umbod/) — API, MCP server, admin interface, and Helm chart.
-- [`packages/umbod-sdk/`](packages/umbod-sdk/) — Python SDK for connector authors.
-- [`website/`](website/) — Landing page and documentation publishing.
+- [`umbod/`](umbod/README.md) — API, MCP server, admin interface, and Helm chart.
+- [`packages/umbod-sdk/`](packages/umbod-sdk/README.md) — Python SDK for connector authors.
+- [`website/`](website/README.md) — Landing page and documentation publishing.
 
 Built at [Computerlove](https://computerlove.tech).
 

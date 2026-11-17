@@ -12,5 +12,5 @@ description: Authorized configuration publication and self-reported diagnostic i
 
 # Related
 
-- [Core agent behaviour](../../core/agent_behaviour/) — Transport-neutral domain contracts and durable storage.
+- [Core agent behaviour](../../core/agent_behaviour/README.md) — Transport-neutral domain contracts and durable storage.
 - [REST boundary](../README.md) — Existing administration authentication and application composition.

@@ -11,7 +11,7 @@ description: "FastAPI delivery for administration, authenticated users, system e
 - [agent_behaviour/](./agent_behaviour/README.md) — Published behaviour configuration and administrator-only self-report inspection.
 - [authentication/](./authentication/) — Authentication and cookie safeguards.
 - [capability_descriptions/](./capability_descriptions/) — Description overrides.
-- [connectors/](./connectors/) — Connector administration and personal delivery.
+- [connectors/](./connectors/README.md) — Connector administration and personal delivery.
 - [dependencies.py](./dependencies.py) — Shared dependency providers.
 - [factories.py](./factories.py) — Adapter composition and lazy personal catalogue store wiring.
 - [filesystem/](./filesystem/README.md) — User namespace browsing, item sharing, creation, uploads and downloads.

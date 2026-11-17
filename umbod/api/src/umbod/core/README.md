@@ -16,7 +16,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [capabilities](./capabilities/README.md) — Capability identity and catalogues.
 - [cleanup](./cleanup/README.md) — Explicit one-shot jobs, sequential time bounds and safe failure continuation.
 - [configuration](./configuration/) — Encrypted connector configuration.
-- [connectors](./connectors/) — Native, OpenAPI and downstream MCP connectors.
+- [connectors](./connectors/README.md) — Native, OpenAPI and downstream MCP connectors.
 - [diagnostics](./diagnostics/README.md) — Safe failure-event snapshots and signal publication contracts.
 - [filesystem](./filesystem/README.md) — Namespaces, content and access policy.
 - [groups](./groups/README.md) — Group catalogue.
