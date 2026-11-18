@@ -12,6 +12,7 @@ import pytest
 from tests.persistence_runtime import prepared_sqlite_runtime
 from tests.umbod.core.filesystem.test_authorized_content import metadata, stream
 from tests.umbod.core.filesystem.test_verified_identity import snapshot
+from umbod.core.callers import CallerSnapshot
 from umbod.core.filesystem import AccessGrant, NodeKind, Permission, StorageFailure
 from umbod.core.filesystem.authorization import PermissionDenied, VerifiedIdentityResolver
 from umbod.core.filesystem.deletion import DeletionService
@@ -202,12 +203,23 @@ async def test_namespace_delete_serializes_with_writers(
     acquired = asyncio.Event()
     attempting = asyncio.Event()
     first_session, second_session = first.database.session, second.database.session
+    upload_lookup = uploads.get
+    looking_up_upload = False
+
+    async def lookup_before_publication(caller: CallerSnapshot, upload_id: UUID) -> UploadSession:
+        nonlocal looking_up_upload
+        looking_up_upload = True
+        try:
+            return await upload_lookup(caller, upload_id)
+        finally:
+            looking_up_upload = False
 
     @asynccontextmanager
     async def hold_first(*, mode: TransactionMode) -> AsyncIterator[DatabaseSession]:
         async with first_session(mode=mode) as session:
-            acquired.set()
-            await attempting.wait()
+            if not looking_up_upload:
+                acquired.set()
+                await attempting.wait()
             yield session
 
     @asynccontextmanager
@@ -234,6 +246,8 @@ async def test_namespace_delete_serializes_with_writers(
             await delete_shared(delete_db, target)
 
         earlier, later = (delete, write) if delete_first else (write, delete)
+        if operation == "publish" and not delete_first:
+            monkeypatch.setattr(uploads, "get", lookup_before_publication)
         monkeypatch.setattr(first.database, "session", hold_first)
         monkeypatch.setattr(second.database, "session", signal_second)
 
