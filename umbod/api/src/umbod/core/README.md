@@ -9,7 +9,7 @@ description: Shared application workflows, domain contracts and feature-local ad
 - [__init__.py](./__init__.py) — Shared core exports; cross-kind composition belongs in delivery wiring.
 - [activation](./activation/README.md) — Capability enablement.
 - [admin_overview](./admin_overview/README.md) — Administration summary contracts.
-- [administrator](./administrator/) — Shared administrator configuration.
+- [administrator](./administrator/README.md) — Shared administrator discovery, inspection, and changes.
 - [agent_behaviour](./agent_behaviour/README.md) — Behaviour patterns, diagnostic playbooks and durable agent self-reports.
 - [caching](./caching/README.md) — Request-local result reuse.
 - [callers](./callers/README.md) — Transport-neutral caller facts.

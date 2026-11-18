@@ -74,6 +74,41 @@ def test_pre_admission_argument_failure_does_not_suggest_post_write_recovery() -
     ) == ()
 
 
+@pytest.mark.parametrize("operation, inspection", [
+    ("update_connector_configuration", "read_connector_configuration"),
+    ("update_group_permissions", "read_group_permissions"),
+    ("create_namespace", "list_namespaces"),
+    ("update_namespace", "list_namespaces"),
+])
+@pytest.mark.parametrize("state", [OperationState.UNKNOWN, OperationState.COMPLETED])
+def test_admin_apply_inspects_the_affected_target_before_retry(
+    operation: str, inspection: str, state: OperationState,
+) -> None:
+    instructions = recovery_instructions(
+        "admin_apply", {"request": {"operation": operation, "group_id": "private-id"}},
+        "operation_failed", state,
+    )
+    assert inspection in " ".join(instructions)
+    assert "private-id" not in " ".join(instructions)
+
+
+@pytest.mark.parametrize("desired_state", [{}, {"operations": []}])
+def test_empty_connector_patch_is_described_as_read_only(desired_state: dict[str, Any]) -> None:
+    instructions = recovery_instructions(
+        "admin_apply", {"request": {
+            "operation": "update_connector_configuration", "desired_state": desired_state,
+        }}, "operation_failed", OperationState.UNKNOWN,
+    )
+    assert "No configuration write was requested" in " ".join(instructions)
+
+
+def test_admin_apply_does_not_suggest_inspection_before_admission() -> None:
+    assert recovery_instructions(
+        "admin_apply", {"request": {"operation": "create_namespace"}},
+        "invalid_arguments", OperationState.NOT_STARTED,
+    ) == ()
+
+
 def test_failed_approval_requires_renewed_user_intent_not_automatic_reconfirmation() -> None:
     text = " ".join(recovery_instructions(
         "filesystem_delete_file", {}, "filesystem_delete_approval_denied", OperationState.NOT_STARTED,

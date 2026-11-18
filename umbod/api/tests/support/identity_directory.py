@@ -116,10 +116,18 @@ class InMemoryIdentityDirectory:
                 if issuer == scope.issuer
                 and any(
                     scope.query.casefold() in value.casefold()
-                    for value in (user.name, user.email, user.subject)
+                    for value in (
+                        (user.name, user.email, user.subject)
+                        if scope.user_search_fields == "profile_and_subject"
+                        else (user.name, user.email)
+                    )
                 )
             ),
-            key=lambda user: (user.subject, user.user_id),
+            key=(
+                (lambda user: (user.name.casefold(), user.email.casefold(), user.user_id))
+                if scope.user_search_fields == "profile"
+                else (lambda user: (user.subject, "", user.user_id))
+            ),
         )
         return UserPage(
             issuer=scope.issuer,

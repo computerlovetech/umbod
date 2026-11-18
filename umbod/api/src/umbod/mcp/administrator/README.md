@@ -12,3 +12,7 @@ description: Shared administrator tool composition and the dedicated administrat
 - [authorization.py](./authorization.py) — Membership-based tool visibility and invocation authorization.
 - [Connector configuration](./connector_configuration/README.md) — Connector configuration tools, registration, catalog adapter, and rejection mapping.
 - [principal.py](./principal.py) — Authenticated administrator principal capture.
+- [operation_facade.py](./operation_facade.py) — Discovery, inspection and change dispatch to core administrator operations.
+- [operation_inputs.py](./operation_inputs.py) — Typed administrator operation requests.
+- [operation_results.py](./operation_results.py) — Operation-tagged MCP result payloads.
+- [operation_registration.py](./operation_registration.py) — Observed registration, authorization and agent-visible operation guidance.

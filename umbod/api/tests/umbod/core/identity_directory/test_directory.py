@@ -185,6 +185,16 @@ async def test_users_keep_distinct_provenance_and_search_known_fields(
 
 
 @pytest.mark.asyncio
+async def test_profile_search_does_not_match_raw_subject(store: IdentityDirectoryStore) -> None:
+    await store.observe(observation(subject="opaque-subject"))
+    restricted_scope = scope(query="opaque-subject").model_copy(
+        update={"user_search_fields": "profile"}
+    )
+
+    assert (await store.search_users(restricted_scope)).users == ()
+
+
+@pytest.mark.asyncio
 async def test_store_recreation_preserves_directory_and_does_not_register_groups(
     directory_database: Database,
 ) -> None:

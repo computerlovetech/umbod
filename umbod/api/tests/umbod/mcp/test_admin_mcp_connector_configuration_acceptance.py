@@ -3,7 +3,7 @@ from umbod.mcp.runtime_adapters import create_configured_downstream_client_facto
 import asyncio
 from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
-from dataclasses import dataclass, replace
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Literal
 
@@ -32,8 +32,20 @@ from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.main import create_app_with_dependency_factories
 from umbod.rest.settings import APISettings
 
-READ_TOOL = "read_connector_configuration"
-UPSERT_TOOL = "upsert_connector_configuration"
+READ_TOOL = "admin_inspect"
+UPSERT_TOOL = "admin_apply"
+ADMIN_TOOLS = {"admin_discover", READ_TOOL, UPSERT_TOOL}
+READ_OPERATION = "read_connector_configuration"
+UPDATE_OPERATION = "update_connector_configuration"
+
+
+def _connector_state(result: ToolResult) -> dict[str, Any]:
+    assert not result.is_error, result.content
+    envelope = result.structured_content
+    assert set(envelope) == {"result"}
+    assert set(envelope["result"]) == {"operation", "result"}
+    assert envelope["result"]["operation"] in {READ_OPERATION, UPDATE_OPERATION}
+    return envelope["result"]["result"]
 ADMINISTRATOR_GROUP = "umbod-administrators"
 
 
@@ -91,8 +103,10 @@ class AdminConnectorConfigurationDsl:
             return await client.call_tool(
                 READ_TOOL,
                 {
-                    "connector_kind": self._connector.connector_kind,
-                    "connector_id": self._connector.connector_id,
+                    "request": {
+                        "operation": READ_OPERATION,
+                        "connector": asdict(self._connector),
+                    },
                 },
                 raise_on_error=False,
             )
@@ -102,9 +116,11 @@ class AdminConnectorConfigurationDsl:
             return await client.call_tool(
                 UPSERT_TOOL,
                 {
-                    "connector_kind": self._connector.connector_kind,
-                    "connector_id": self._connector.connector_id,
-                    "desired_state": desired_state,
+                    "request": {
+                        "operation": UPDATE_OPERATION,
+                        "connector": asdict(self._connector),
+                        "desired_state": desired_state,
+                    },
                 },
                 raise_on_error=False,
             )
@@ -431,11 +447,11 @@ async def test_administrator_can_discover_and_read_connector_configuration(
     configuration = AdminConnectorConfigurationDsl(
         await create_journey(administrator())
     )
-    assert {READ_TOOL, UPSERT_TOOL} <= await configuration.available_tools()
+    assert ADMIN_TOOLS <= await configuration.available_tools()
     result = await configuration.read()
     assert result.is_error is False
-    assert result.structured_content["connector"]["connector_kind"] == "openapi"
-    assert result.structured_content["capabilities"] == [
+    assert _connector_state(result)["connector"]["connector_kind"] == "openapi"
+    assert _connector_state(result)["capabilities"] == [
         {
             "capability_kind": "tool",
             "capability_key": "listItems",
@@ -443,12 +459,12 @@ async def test_administrator_can_discover_and_read_connector_configuration(
             "invocation_policy": {"mode": "ask", "revision": 1},
         }
     ]
-    assert result.structured_content["capability_description"] == {
+    assert _connector_state(result)["capability_description"] == {
         "state": "overridden",
         "revision": 1,
         "description": "Custom inventory",
     }
-    assert result.structured_content["group_permissions"] == [
+    assert _connector_state(result)["group_permissions"] == [
         {
             "group_id": "engineering",
             "connector_status": "enabled",
@@ -461,8 +477,8 @@ async def test_administrator_can_discover_and_read_connector_configuration(
             ],
         }
     ]
-    assert "acceptance-secret-token" not in str(result.structured_content)
-    assert "credential" not in str(result.structured_content).lower()
+    assert "acceptance-secret-token" not in str(_connector_state(result))
+    assert "credential" not in str(_connector_state(result)).lower()
 
 
 @pytest.mark.asyncio
@@ -520,9 +536,9 @@ async def test_empty_desired_state_is_idempotent_no_op_with_complete_read_back(
     assert first_upsert.is_error is False
     assert second_upsert.is_error is False
     assert after.is_error is False
-    assert first_upsert.structured_content == before.structured_content
-    assert second_upsert.structured_content == before.structured_content
-    assert after.structured_content == before.structured_content
+    assert _connector_state(first_upsert) == _connector_state(before)
+    assert _connector_state(second_upsert) == _connector_state(before)
+    assert _connector_state(after) == _connector_state(before)
 
 
 @pytest.mark.asyncio
@@ -551,21 +567,21 @@ async def test_partial_activation_upsert_preserves_omitted_state_and_connector_s
 
     assert before.is_error is False
     assert result.is_error is False
-    assert result.structured_content["capabilities"] == [
+    assert _connector_state(result)["capabilities"] == [
         {
-            **before.structured_content["capabilities"][0],
+            **_connector_state(before)["capabilities"][0],
             "activation_status": "disabled",
         }
     ]
-    assert result.structured_content["capability_description"] == before.structured_content[
+    assert _connector_state(result)["capability_description"] == _connector_state(before)[
         "capability_description"
     ]
-    assert result.structured_content["group_permissions"] == before.structured_content[
+    assert _connector_state(result)["group_permissions"] == _connector_state(before)[
         "group_permissions"
     ]
     assert duplicate.is_error is False
-    assert duplicate.structured_content["capabilities"][0]["capability_key"] == "listItems"
-    assert duplicate.structured_content["capabilities"][0]["activation_status"] == "enabled"
+    assert _connector_state(duplicate)["capabilities"][0]["capability_key"] == "listItems"
+    assert _connector_state(duplicate)["capabilities"][0]["activation_status"] == "enabled"
 
 
 @pytest.mark.asyncio
@@ -605,20 +621,20 @@ async def test_invocation_mode_upsert_preserves_omitted_state_and_idempotent_rev
 
     assert before.is_error is False
     assert changed.is_error is False
-    assert changed.structured_content["capabilities"] == [
+    assert _connector_state(changed)["capabilities"] == [
         {
-            **before.structured_content["capabilities"][0],
+            **_connector_state(before)["capabilities"][0],
             "invocation_policy": {"mode": "direct", "revision": 2},
         }
     ]
-    assert changed.structured_content["capability_description"] == before.structured_content[
+    assert _connector_state(changed)["capability_description"] == _connector_state(before)[
         "capability_description"
     ]
-    assert changed.structured_content["group_permissions"] == before.structured_content[
+    assert _connector_state(changed)["group_permissions"] == _connector_state(before)[
         "group_permissions"
     ]
     assert unchanged.is_error is False
-    assert unchanged.structured_content == changed.structured_content
+    assert _connector_state(unchanged) == _connector_state(changed)
 
 
 @pytest.mark.asyncio
@@ -649,17 +665,17 @@ async def test_description_override_upsert_preserves_omitted_state_and_is_idempo
     )
 
     assert changed.is_error is False
-    assert changed.structured_content["capability_description"] == {
+    assert _connector_state(changed)["capability_description"] == {
         "state": "overridden",
         "revision": 2,
         "description": "Updated inventory description",
     }
-    assert changed.structured_content["capabilities"] == before.structured_content["capabilities"]
-    assert changed.structured_content["group_permissions"] == before.structured_content[
+    assert _connector_state(changed)["capabilities"] == _connector_state(before)["capabilities"]
+    assert _connector_state(changed)["group_permissions"] == _connector_state(before)[
         "group_permissions"
     ]
     assert unchanged.is_error is False
-    assert unchanged.structured_content == changed.structured_content
+    assert _connector_state(unchanged) == _connector_state(changed)
 
 
 @pytest.mark.asyncio
@@ -688,16 +704,16 @@ async def test_restore_system_description_returns_complete_state_and_is_idempote
     )
 
     assert restored.is_error is False
-    assert restored.structured_content["capability_description"] == {
+    assert _connector_state(restored)["capability_description"] == {
         "state": "system",
         "revision": 2,
     }
-    assert restored.structured_content["capabilities"] == before.structured_content["capabilities"]
-    assert restored.structured_content["group_permissions"] == before.structured_content[
+    assert _connector_state(restored)["capabilities"] == _connector_state(before)["capabilities"]
+    assert _connector_state(restored)["group_permissions"] == _connector_state(before)[
         "group_permissions"
     ]
     assert unchanged.is_error is False
-    assert unchanged.structured_content == restored.structured_content
+    assert _connector_state(unchanged) == _connector_state(restored)
 
 
 @pytest.mark.asyncio
@@ -758,7 +774,7 @@ async def test_partial_group_permission_upsert_supports_connector_and_capability
 
     assert before.is_error is False
     assert disabled.is_error is False
-    assert disabled.structured_content["group_permissions"] == [
+    assert _connector_state(disabled)["group_permissions"] == [
         {
             "group_id": "engineering",
             "connector_status": "disabled",
@@ -771,11 +787,11 @@ async def test_partial_group_permission_upsert_supports_connector_and_capability
             ],
         }
     ]
-    assert disabled.structured_content["capabilities"] == before.structured_content["capabilities"]
-    assert disabled.structured_content["capability_description"] == before.structured_content[
+    assert _connector_state(disabled)["capabilities"] == _connector_state(before)["capabilities"]
+    assert _connector_state(disabled)["capability_description"] == _connector_state(before)[
         "capability_description"
     ]
-    assert capability_granted.structured_content["group_permissions"][0] == {
+    assert _connector_state(capability_granted)["group_permissions"][0] == {
         "group_id": "engineering",
         "connector_status": "disabled",
         "capabilities": [
@@ -786,8 +802,8 @@ async def test_partial_group_permission_upsert_supports_connector_and_capability
             }
         ],
     }
-    assert connector_granted.structured_content == before.structured_content
-    assert after.structured_content == before.structured_content
+    assert _connector_state(connector_granted) == _connector_state(before)
+    assert _connector_state(after) == _connector_state(before)
 
 
 @pytest.mark.asyncio
@@ -821,7 +837,7 @@ async def test_unknown_permission_target_is_rejected_before_any_write(
     assert result.is_error is True
     assert result.meta["computerlove.tech/umbod"]["guidance"]["error"]["code"] == "capability_not_found"
     assert "missingTool" not in str(result)
-    assert after.structured_content == before.structured_content
+    assert _connector_state(after) == _connector_state(before)
 
 
 @pytest.mark.asyncio
@@ -846,7 +862,7 @@ async def test_stale_description_revision_reports_conflict_without_write(
     assert result.is_error is True
     assert result.meta["computerlove.tech/umbod"]["guidance"]["error"]["code"] == "revision_conflict"
     assert result.meta["computerlove.tech/umbod"]["guidance"]["recovery"]["retry"] == "inspect_before_retry"
-    assert after.structured_content == before.structured_content
+    assert _connector_state(after) == _connector_state(before)
 
 
 @pytest.mark.asyncio
@@ -894,7 +910,7 @@ async def test_unknown_activation_targets_are_rejected_before_any_write(
     assert unknown_capability.is_error is True
     assert unknown_capability.meta["computerlove.tech/umbod"]["guidance"]["error"]["code"] == "capability_not_found"
     assert "missingTool" not in str(unknown_capability)
-    assert after.structured_content == before.structured_content
+    assert _connector_state(after) == _connector_state(before)
     assert unknown_connector_result.is_error is True
     assert unknown_connector_result.meta["computerlove.tech/umbod"]["guidance"]["error"]["code"] == "connector_not_found"
     assert "unknown-connector" not in str(unknown_connector_result)
@@ -933,7 +949,7 @@ async def test_combined_desired_state_applies_every_dimension_and_repeated_upser
     read_back = await configuration.read()
 
     expected = {
-        "connector": changed.structured_content["connector"],
+        "connector": _connector_state(changed)["connector"],
         "capabilities": [
             {
                 "capability_kind": "tool",
@@ -962,11 +978,11 @@ async def test_combined_desired_state_applies_every_dimension_and_repeated_upser
         ],
     }
     assert changed.is_error is False
-    assert changed.structured_content == expected
+    assert _connector_state(changed) == expected
     assert unchanged.is_error is False
-    assert unchanged.structured_content == expected
+    assert _connector_state(unchanged) == expected
     assert read_back.is_error is False
-    assert read_back.structured_content == expected
+    assert _connector_state(read_back) == expected
 
 
 @pytest.mark.asyncio
@@ -999,12 +1015,12 @@ async def test_combined_stale_request_rolls_back_every_configuration_dimension(
     assert rejected.meta["computerlove.tech/umbod"]["guidance"]["operation_state"] == "unknown"
     assert rejected.meta["computerlove.tech/umbod"]["guidance"]["recovery"]["retry"] == "inspect_before_retry"
     instructions = rejected.meta["computerlove.tech/umbod"]["guidance"]["recovery"]["instructions"]
-    assert any("read_connector_configuration" in instruction for instruction in instructions)
+    assert any("admin_inspect" in instruction and READ_OPERATION in instruction for instruction in instructions)
     for instruction in instructions:
         assert instruction in rejected.content[1].text
     assert "unknown" in rejected.content[1].text
     assert "inspect_before_retry" in rejected.content[1].text
-    assert after.structured_content == before.structured_content
+    assert _connector_state(after) == _connector_state(before)
 
 
 @pytest.mark.asyncio
@@ -1022,7 +1038,7 @@ async def test_malformed_desired_state_is_rejected_at_mcp_tool_boundary(
     assert details["guidance"]["error"]["code"] == "invalid_arguments"
     assert details["guidance"]["operation_state"] == "not_started"
     assert details["guidance"]["recovery"]["retry"] == "after_correction"
-    assert details["guidance"]["error"]["issues"][0]["field"] == "desired_state.operations"
+    assert details["guidance"]["error"]["issues"][0]["field"] == "request.desired_state.operations"
 
 
 @pytest.mark.asyncio
@@ -1045,7 +1061,7 @@ async def test_unauthorized_caller_cannot_discover_administration_tools(
             include_memberships=include_memberships,
         )
     )
-    assert {READ_TOOL, UPSERT_TOOL}.isdisjoint(await configuration.available_tools())
+    assert ADMIN_TOOLS.isdisjoint(await configuration.available_tools())
 
 
 @pytest.mark.asyncio
@@ -1054,16 +1070,14 @@ async def test_builtin_administration_success_metadata_preserves_declared_schema
     create_journey: AdminConnectorConfigurationJourneyFactory, tool: str,
 ) -> None:
     journey = await create_journey(administrator())
-    arguments: dict[str, Any] = {
-        "connector_kind": journey.connector.connector_kind,
-        "connector_id": journey.connector.connector_id,
-    }
-    if tool == UPSERT_TOOL:
-        arguments["desired_state"] = {"operations": []}
     async with journey.client() as client:
         before = next(item for item in await client.list_tools() if item.name == tool)
-        result = await client.call_tool(tool, arguments)
+        configuration = AdminConnectorConfigurationDsl(journey)
+        result = await (configuration.read() if tool == READ_TOOL else configuration.upsert_raw({"operations": []}))
         after = next(item for item in await client.list_tools() if item.name == tool)
+    assert result.structured_content["result"]["operation"] == (
+        READ_OPERATION if tool == READ_TOOL else UPDATE_OPERATION
+    )
     metadata = result.meta["computerlove.tech/umbod"]
     assert metadata["schema_version"] == 1
     assert metadata["guidance"]["outcome"] == "success"
@@ -1074,7 +1088,7 @@ async def test_builtin_administration_success_metadata_preserves_declared_schema
     assert metadata["guidance"]["notices"] == []
     assert metadata["guidance"]["extensions"] == {}
     assert metadata["extensions"] == {}
-    assert result.structured_content["connector"]["connector_id"] == journey.connector.connector_id
+    assert _connector_state(result)["connector"]["connector_id"] == journey.connector.connector_id
     assert before.input_schema == after.input_schema
     assert before.output_schema == after.output_schema
 
@@ -1090,18 +1104,15 @@ async def test_builtin_administration_invalid_arguments_have_safe_field_diagnost
     connector_id: str, connector_kind: str, field: str,
 ) -> None:
     journey = await create_journey(administrator())
-    arguments: dict[str, Any] = {"connector_kind": connector_kind, "connector_id": connector_id}
-    if tool == UPSERT_TOOL:
-        arguments["desired_state"] = {"operations": []}
-    async with journey.client() as client:
-        result = await client.call_tool(tool, arguments, raise_on_error=False)
+    configuration = AdminConnectorConfigurationDsl(journey, ConnectorReference(connector_kind, connector_id))
+    result = await (configuration.read() if tool == READ_TOOL else configuration.upsert_raw({"operations": []}))
     metadata = result.meta["computerlove.tech/umbod"]
     assert result.is_error
     assert metadata["guidance"]["outcome"] == "failure"
     assert metadata["guidance"]["operation_state"] == "not_started"
     assert metadata["guidance"]["recovery"]["retry"] == "after_correction"
     assert metadata["guidance"]["error"]["code"] == "invalid_arguments"
-    assert field in {issue["field"] for issue in metadata["guidance"]["error"]["issues"]}
+    assert f"request.connector.{field}" in {issue["field"] for issue in metadata["guidance"]["error"]["issues"]}
     assert "SECRET" not in repr(result)
 
 
@@ -1115,7 +1126,7 @@ async def test_disabled_feature_hides_administration_tools_from_administrator(
             mcp_administrator_enabled=False,
         )
     )
-    assert {READ_TOOL, UPSERT_TOOL}.isdisjoint(await configuration.available_tools())
+    assert ADMIN_TOOLS.isdisjoint(await configuration.available_tools())
 
 
 @pytest.mark.asyncio
@@ -1124,6 +1135,6 @@ async def test_separate_hosting_removes_administrator_tools_from_public_even_for
 ) -> None:
     journey = await create_journey(administrator(), administrator_hosting='separate')
     configuration = AdminConnectorConfigurationDsl(journey)
-    assert {READ_TOOL, UPSERT_TOOL}.isdisjoint(await configuration.available_tools())
+    assert ADMIN_TOOLS.isdisjoint(await configuration.available_tools())
     assert (await configuration.read()).is_error
     assert (await configuration.upsert_raw({'operations': []})).is_error

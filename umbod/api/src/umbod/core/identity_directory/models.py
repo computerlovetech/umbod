@@ -64,6 +64,7 @@ class DirectoryScope(DirectoryModel):
     claim: str
     query: str
     limit: int = Field(ge=1, le=100)
+    user_search_fields: Literal["profile", "profile_and_subject"] = "profile_and_subject"
 
 
 class GroupPage(DirectoryModel):

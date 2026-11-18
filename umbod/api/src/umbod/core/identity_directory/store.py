@@ -218,20 +218,23 @@ class DatabaseIdentityDirectory:
                 USER_TABLE,
                 Query(Equals(USER_ISSUER, scope.issuer), AllFields(), Unordered()),
             )
+        query = scope.query.casefold()
         users = sorted(
             (
                 row.payload
                 for row in rows
-                if any(
-                    scope.query.casefold() in field.casefold()
-                    for field in (
-                        row.payload.name,
-                        row.payload.email,
-                        row.payload.subject,
-                    )
+                if query in row.payload.name.casefold()
+                or query in row.payload.email.casefold()
+                or (
+                    scope.user_search_fields == "profile_and_subject"
+                    and query in row.payload.subject.casefold()
                 )
             ),
-            key=lambda user: (user.subject, user.user_id),
+            key=(
+                (lambda user: (user.name.casefold(), user.email.casefold(), user.user_id))
+                if scope.user_search_fields == "profile"
+                else (lambda user: (user.subject, "", user.user_id))
+            ),
         )
         public_users = tuple(
             ObservedUser.model_validate(

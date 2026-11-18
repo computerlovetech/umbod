@@ -1,6 +1,6 @@
 # Admin MCP
 
-The admin tools use a separate [MCP endpoint](endpoints-and-ports.md) on port `8013` by default and require membership in `config.authorization.adminGroup` via `config.authorization.adminMembershipClaim`. They configure existing `native`, `openapi`, and `downstream_mcp` connectors; they do not create or publish connectors.
+The admin tools use a separate [MCP endpoint](endpoints-and-ports.md) on port `8013` by default and require membership in `config.authorization.adminGroup` via `config.authorization.adminMembershipClaim`. They discover administration targets, configure existing connectors, manage group grants, and administer shared filesystem namespaces. They do not create or publish connectors.
 
 ## Hosting and deployment
 
@@ -14,4 +14,4 @@ For Compose, the base file selects separate hosting, propagates settings to API 
 
 ## Tools
 
-See the [built-in tool reference](../reference/built-in-tools.md#administrator-connector-tools) for connector configuration inputs, outputs, and update operations.
+See the [built-in tool reference](../reference/built-in-tools.md#administrator-tools) for operation inputs and outputs.

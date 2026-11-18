@@ -67,10 +67,10 @@ async def _set_admin_activation(
     administrator: Client[Any], status: Literal["enabled", "disabled"]
 ) -> None:
     result = await administrator.call_tool(
-        "upsert_connector_configuration",
-        {
-            "connector_kind": "native",
-            "connector_id": CONNECTOR_ID,
+        "admin_apply",
+        {"request": {
+            "operation": "update_connector_configuration",
+            "connector": {"connector_kind": "native", "connector_id": CONNECTOR_ID},
             "desired_state": {
                 "operations": [{
                     "operation": "set_capability_activation",
@@ -79,8 +79,10 @@ async def _set_admin_activation(
                     "activation_status": status,
                 }],
             },
-        },
+        }},
     )
+    operation_result = result.structured_content["result"]
+    assert operation_result["operation"] == "update_connector_configuration"
     metadata = result.meta["computerlove.tech/umbod"]
     assert metadata["schema_version"] == 1
     assert metadata["guidance"]["outcome"] == "success"
@@ -90,7 +92,7 @@ async def _set_admin_activation(
     assert any(
         capability["capability_key"] == OPERATION_NAME
         and capability["activation_status"] == status
-        for capability in result.structured_content["capabilities"]
+        for capability in operation_result["result"]["capabilities"]
     )
 
 

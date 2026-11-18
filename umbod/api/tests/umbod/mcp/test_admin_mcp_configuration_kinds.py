@@ -1,6 +1,7 @@
 from collections.abc import AsyncIterator
 from contextlib import contextmanager
-from typing import Iterator, Literal
+from typing import Any, Iterator, Literal
+from unittest.mock import Mock
 
 import pytest
 import pytest_asyncio
@@ -18,6 +19,7 @@ from umbod.core.messaging.stores.event_stream import (
 from umbod.core.persistence import Database, DatabaseSession
 from umbod.core.activation.stores.schema import CAPABILITY_ACTIVATION_STATE_TABLE
 from umbod.core.activation.stores.service import CapabilityActivationStoreService
+from umbod.core.administrator import AdministratorAccess, AdministratorChanges, AdministratorDiscovery, AdministratorInspection
 from umbod.core.administrator.connector_configuration import (
     AdministratorConnectorConfiguration,
     AdministratorConnectorConfigurationService,
@@ -43,9 +45,22 @@ from umbod.core.permissions.stores.schema import (
     CONNECTOR_PERMISSION_TABLE,
 )
 from umbod.core.permissions.stores.service import GroupPermissionStoreService
-from umbod.mcp.administrator.connector_configuration import AdministratorConnectorConfigurationTools
+from umbod.mcp.administrator.operation_facade import AdministratorOperationFacade
+from umbod.mcp.administrator.operation_registration import register_administrator_operation_tools
+from umbod.mcp.tools import McpObservedToolRegistrar
+from umbod.mcp.tools.registration import McpInvocationPublisher
 
 ConnectorKind = Literal["native", "openapi", "downstream_mcp"]
+
+
+def inspect_arguments(connector: dict[str, str]) -> dict[str, Any]:
+    return {"request": {"operation": "read_connector_configuration", "connector": connector}}
+
+
+def apply_arguments(connector: dict[str, str], desired_state: dict[str, Any]) -> dict[str, Any]:
+    return {"request": {
+        "operation": "update_connector_configuration", "connector": connector, "desired_state": desired_state,
+    }}
 
 
 @pytest_asyncio.fixture
@@ -124,10 +139,18 @@ async def test_mcp_configuration_roundtrip_conflict_and_isolation(
             ),
         )
     )
-    tools = AdministratorConnectorConfigurationTools(configuration, "groups")
+    access = AdministratorAccess("umbod-administrators")
+    facade = AdministratorOperationFacade(
+        Mock(spec=AdministratorDiscovery),
+        AdministratorInspection(access, configuration, permissions),
+        AdministratorChanges(access, configuration, Mock(), Mock()),
+        "groups",
+    )
     server = FastMCP("configuration-test")
-    server.tool(tools.read_connector_configuration)
-    server.tool(tools.upsert_connector_configuration)
+    register_administrator_operation_tools(
+        McpObservedToolRegistrar(server, Mock(spec=McpInvocationPublisher)),
+        facade, "groups", "umbod-administrators",
+    )
     target = {"connector_kind": kind, "connector_id": "inventory"}
     operations = [
         {
@@ -170,10 +193,10 @@ async def test_mcp_configuration_roundtrip_conflict_and_isolation(
     with authenticated_administrator():
         async with Client(server) as client:
             result = await client.call_tool(
-                "upsert_connector_configuration",
-                {**target, "desired_state": {"operations": operations}},
+                "admin_apply",
+                apply_arguments(target, {"operations": operations}),
             )
-            state = result.structured_content
+            state = result.structured_content["result"]["result"]
             events = await event_stream.list_after(0, 100)
             assert [event.event.event_type for event in events] == [
                 "connector.invocation_policy.changed",
@@ -215,17 +238,17 @@ async def test_mcp_configuration_roundtrip_conflict_and_isolation(
             )
             assert state["group_permissions"][0]["capabilities"][1]["status"] == "enabled"
             assert (
-                await client.call_tool("read_connector_configuration", target)
-            ).structured_content == state
+                await client.call_tool("admin_inspect", inspect_arguments(target))
+            ).structured_content["result"]["result"] == state
             other = await client.call_tool(
-                "read_connector_configuration", {**target, "connector_id": "other"}
+                "admin_inspect", inspect_arguments({**target, "connector_id": "other"})
             )
-            assert other.structured_content["capability_description"] == {
+            assert other.structured_content["result"]["result"]["capability_description"] == {
                 "state": "system",
                 "revision": 0,
             }
             assert (
-                other.structured_content["capabilities"][0]["invocation_policy"]["revision"]
+                other.structured_content["result"]["result"]["capabilities"][0]["invocation_policy"]["revision"]
                 == 0
             )
             conflict_operations = [
@@ -238,22 +261,22 @@ async def test_mcp_configuration_roundtrip_conflict_and_isolation(
                 operations[1],
             ]
             conflict = await client.call_tool(
-                "upsert_connector_configuration",
-                {**target, "desired_state": {"operations": conflict_operations}},
+                "admin_apply",
+                apply_arguments(target, {"operations": conflict_operations}),
                 raise_on_error=False,
             )
             assert conflict.is_error
             assert await event_stream.list_after(0, 100) == events
             assert (
-                await client.call_tool("read_connector_configuration", target)
-            ).structured_content == state
+                await client.call_tool("admin_inspect", inspect_arguments(target))
+            ).structured_content["result"]["result"] == state
             operations[1]["expected_revision"] = 1
             operations[2]["expected_revision"] = 1
             repeated = await client.call_tool(
-                "upsert_connector_configuration",
-                {**target, "desired_state": {"operations": operations}},
+                "admin_apply",
+                apply_arguments(target, {"operations": operations}),
             )
-            assert repeated.structured_content == state
+            assert repeated.structured_content["result"]["result"] == state
             assert await event_stream.list_after(0, 100) == events
             reverse_operations = [
                 {
@@ -294,20 +317,18 @@ async def test_mcp_configuration_roundtrip_conflict_and_isolation(
                     append_then_fail,
                 )
                 failed = await client.call_tool(
-                    "upsert_connector_configuration",
-                    {**target, "desired_state": {"operations": reverse_operations}},
+                    "admin_apply",
+                    apply_arguments(target, {"operations": reverse_operations}),
                     raise_on_error=False,
                 )
                 assert failed.is_error
             assert await event_stream.list_after(0, 100) == events
             assert (
-                await client.call_tool("read_connector_configuration", target)
-            ).structured_content == state
+                await client.call_tool("admin_inspect", inspect_arguments(target))
+            ).structured_content["result"]["result"] == state
             wrong_kind = await client.call_tool(
-                "upsert_connector_configuration",
-                {
-                    **target,
-                    "desired_state": {
+                "admin_apply",
+                apply_arguments(target, {
                         "operations": [
                             {
                                 "operation": "set_capability_invocation_policy",
@@ -317,16 +338,13 @@ async def test_mcp_configuration_roundtrip_conflict_and_isolation(
                                 "expected_revision": 0,
                             }
                         ]
-                    },
-                },
+                    }),
                 raise_on_error=False,
             )
             assert wrong_kind.is_error
             wrong_key = await client.call_tool(
-                "upsert_connector_configuration",
-                {
-                    **target,
-                    "desired_state": {
+                "admin_apply",
+                apply_arguments(target, {
                         "operations": [
                             {
                                 "operation": "set_capability_activation",
@@ -335,18 +353,17 @@ async def test_mcp_configuration_roundtrip_conflict_and_isolation(
                                 "activation_status": "enabled",
                             }
                         ]
-                    },
-                },
+                    }),
                 raise_on_error=False,
             )
             assert wrong_key.is_error
             assert await event_stream.list_after(0, 100) == events
             assert (
-                await client.call_tool("read_connector_configuration", target)
-            ).structured_content == state
+                await client.call_tool("admin_inspect", inspect_arguments(target))
+            ).structured_content["result"]["result"] == state
             await client.call_tool(
-                "upsert_connector_configuration",
-                {**target, "desired_state": {"operations": reverse_operations}},
+                "admin_apply",
+                apply_arguments(target, {"operations": reverse_operations}),
             )
             reversed_events = await event_stream.list_after(events[-1].sequence, 100)
             assert [event.event.event_type for event in reversed_events] == [

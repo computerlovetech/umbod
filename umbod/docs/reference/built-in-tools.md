@@ -39,16 +39,34 @@ Legacy requests using top-level `group_id` instead of `recipient` remain support
 
 Search inputs and share inputs/outputs advertise alternative `anyOf` schema branches. Clients must resolve the advertised branches and references rather than assuming one flat object with every field. A canonical share returns a typed recipient; a legacy group share retains its legacy identity fields. Both include the containing namespace descriptor or restricted visibility. MCP's legacy compatibility does not apply to REST policy replacement.
 
-## Administrator connector tools
+## Administrator tools
 
-These tools require administrator membership and use the [administrator MCP endpoint](../operations/admin-mcp.md). They configure existing `native`, `openapi`, and `downstream_mcp` connectors; they do not create or publish connectors.
+[Administrator MCP endpoint](../operations/admin-mcp.md) · Full JSON Schemas: `tools/list` → `inputSchema`, `outputSchema`.
 
-| Tool | Inputs | Returns |
-| --- | --- | --- |
-| `read_connector_configuration` | `connector_kind`, `connector_id` | Capability activation, tool policies, description state, and group permissions. |
-| `upsert_connector_configuration` | `connector_kind`, `connector_id`, `desired_state` | Updated configuration. |
+Input: `request` object with `operation` and the fields below (`?` = optional). Success: `structuredContent.result` contains `{operation, result}`; the table describes the inner `result`.
 
-`desired_state` contains an `operations` array:
+| Tool | `request.operation` | Other `request` fields | `result` |
+| --- | --- | --- | --- |
+| `admin_discover` | `list_connectors` | — | `[{connector, display_name, publication_state, authorization_mode}]` |
+| `admin_discover` | `list_groups` | — | `[{group_id, label, description, revision}]` |
+| `admin_discover` | `list_permission_targets` | — | `{connectors, capabilities}`: assignable targets with exact IDs or keys and display names |
+| `admin_discover` | `search_users` | `query` (1–200 characters after trimming, matches name or email), `limit?` (1–100, default 20) | `{users: [{user_id, name, email, last_seen_at}], has_more}`; observed users only |
+| `admin_discover` | `list_namespaces` | — | Array of shared namespace views |
+| `admin_inspect` | `read_connector_configuration` | `connector` | Connector state |
+| `admin_inspect` | `read_group_permissions` | `group_id` | `{group_id, connector_ids, capabilities}`; direct grants, including stale targets |
+| `admin_apply` | `update_connector_configuration` | `connector`, `desired_state` | Updated connector state |
+| `admin_apply` | `update_group_permissions` | `group_id`, `connectors?`, `capabilities?`; at least one change | `{group_id, status: "applied"}` |
+| `admin_apply` | `create_namespace` | `namespace: {name, groups, description?}` | Created shared namespace view |
+| `admin_apply` | `update_namespace` | `namespace_id`, `namespace: {name, groups, expected_revision, description?, expected_root_revision?}`; supply both optional fields together | Updated shared namespace view |
+
+- **Connector reference:** `{connector_kind, connector_id}`. Kinds: `native`, `openapi`, `downstream_mcp`.
+- **Connector state:** `{connector, capabilities, capability_description, group_permissions}`. Capabilities include activation and, for tools, invocation policy and revision. Description state includes its revision.
+- **Group patch:** `connectors` entries are `{connector_id, permission_status}`; `capabilities` entries are `{capability: {connector_id, capability_kind, capability_key}, permission_status}`. `enabled` adds a grant; `disabled` removes it. Omitted targets stay unchanged.
+- **Shared namespace view:** `{id, root_node_id, name, groups, description, revision, root_revision}`. Group entries are `{group_id, access}` (`read` or `read_write`). Updates replace the full group list; an empty `description` clears it.
+
+### `desired_state.operations`
+
+Each entry has an `operation` tag and the fields below.
 
 | Operation | Fields | Purpose |
 | --- | --- | --- |
@@ -58,4 +76,4 @@ These tools require administrator membership and use the [administrator MCP endp
 | `use_system_capability_description` | `expected_revision` | Restore the system description. |
 | `update_group_permissions` | `group_id`, `connector_status`, `capabilities` | Change connector and/or capability grants for a group. |
 
-Upserts are **partial**: omitted settings stay unchanged, and an empty `operations` array only reads the current state. Read first for capability keys and revisions; stale revisions or invalid targets reject the whole update. Activation alone does not grant group access. Invocation policies apply only to tools; activation and grants also support prompts, resources, and resource templates where available.
+Omitted settings stay unchanged; omitted or empty `operations` reads current state. Capability kinds: `tool`, `prompt`, `resource`, `resource_template`. Invocation policies are tool-only.

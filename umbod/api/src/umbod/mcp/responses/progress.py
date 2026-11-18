@@ -10,6 +10,9 @@ class OperationProgress:
     def __init__(self) -> None:
         self.state: OperationState = OperationState.NOT_STARTED
 
+    def rejected_before_work(self) -> None:
+        self.state = OperationState.NOT_STARTED
+
     def started(self) -> None:
         self.state = OperationState.UNKNOWN
 
@@ -28,6 +31,12 @@ def operation_progress_context() -> Iterator[OperationProgress]:
         yield progress
     finally:
         _current_progress.reset(token)
+
+
+def operation_rejected_before_work() -> None:
+    progress = _current_progress.get()
+    if progress is not None:
+        progress.rejected_before_work()
 
 
 def operation_state() -> OperationState:
