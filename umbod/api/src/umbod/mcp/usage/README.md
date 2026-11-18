@@ -10,7 +10,7 @@ description: Trusted completion projections and bounded application-local asynch
 - [composition.py](./composition.py) — Explicit signal registration, database adapter selection, and HTTP/in-process worker lifespan.
 - [identity.py](./identity.py) — Trusted provider adaptation for missing Google issuer claims using approved configured Google issuers.
 - [ports.py](./ports.py) — Admission, validated settings, clocks, and retry scheduler boundaries.
-- [receivers.py](./receivers.py) — Trusted, privacy-safe tool/resource/prompt projections excluding discovery and orchestration wrappers.
+- [receivers.py](./receivers.py) — Trusted completion projections carrying canonical tool targets and bounded labels, excluding discovery and orchestration wrappers.
 - [statistics.py](./statistics.py) — Bounded aggregate loss counters and rate-limited sanitized application-failure observations.
 - [writer.py](./writer.py) — Bounded admission, batch retries and a shared shutdown budget; retention runs separately through the cleanup CLI.
 

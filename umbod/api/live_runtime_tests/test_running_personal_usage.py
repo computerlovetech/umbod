@@ -49,6 +49,7 @@ def test_running_usage_crosses_mcp_and_rest_processes_without_crossing_users(run
     ) as identity:
         before = read_usage(http, runtime_endpoints.api_base_url, member_token)
         other_before = read_usage(http, runtime_endpoints.api_base_url, other_token)
+        previous_browse_count = sum(tool.count for tool in before.top_tools if tool.tool_name == 'filesystem_browse')
         authenticated_token = proxy_token(runtime_endpoints.mcp_url, member_token, identity)
         asyncio.run(exercise_usage(runtime_endpoints.mcp_url, authenticated_token))
         deadline = time.monotonic() + 20
@@ -59,6 +60,7 @@ def test_running_usage_crosses_mcp_and_rest_processes_without_crossing_users(run
                 observed.totals.tool.success >= before.totals.tool.success + 1
                 and observed.totals.resource.success >= before.totals.resource.success + 1
                 and observed.totals.prompt.failure >= before.totals.prompt.failure + 1
+                and sum(tool.count for tool in observed.top_tools if tool.tool_name == 'filesystem_browse') >= previous_browse_count + 1
             ):
                 break
             time.sleep(0.2)
@@ -66,8 +68,16 @@ def test_running_usage_crosses_mcp_and_rest_processes_without_crossing_users(run
         assert observed.totals.resource.success == before.totals.resource.success + 1
         assert observed.totals.prompt.failure == before.totals.prompt.failure + 1
         assert observed.totals.total == before.totals.total + 3
-        assert read_usage(http, runtime_endpoints.api_base_url, member_token).totals == observed.totals
-        assert read_usage(http, runtime_endpoints.api_base_url, other_token).totals == other_before.totals
+        browse_tools = tuple(tool for tool in observed.top_tools if tool.tool_name == 'filesystem_browse')
+        assert len(browse_tools) == 1
+        assert browse_tools[0].count == previous_browse_count + 1
+        assert browse_tools[0].connector_name == 'Umbod'
+        same_owner = read_usage(http, runtime_endpoints.api_base_url, member_token)
+        assert same_owner.totals == observed.totals
+        assert same_owner.top_tools == observed.top_tools
+        other_owner = read_usage(http, runtime_endpoints.api_base_url, other_token)
+        assert other_owner.totals == other_before.totals
+        assert other_owner.top_tools == other_before.top_tools
         assert len(observed.daily) == 7
         assert 'personal_usage_missing_prompt' not in observed.model_dump_json()
         assert http.get(runtime_endpoints.api_base_url + '/api/me/usage').status_code == 401

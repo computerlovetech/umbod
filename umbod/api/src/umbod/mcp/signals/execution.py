@@ -1,4 +1,6 @@
 import asyncio
+
+from umbod.core.usage.models import ConnectorUsageToolTarget
 from collections.abc import Callable
 from typing import Any, Protocol
 
@@ -45,6 +47,10 @@ class ConnectorInvocationSignalInterceptor:
             connector_id=identity.connector_id.strip()[:256] or "unknown",
             connector_name=self._connector_name.strip()[:256] or identity.connector_id.strip()[:256] or "unknown",
             operation_name=identity.capability_key,
+            usage_target=ConnectorUsageToolTarget(
+                kind='connector', connector_kind=identity.connector_kind,
+                connector_id=identity.connector_id, capability_key=identity.capability_key,
+            ),
         )
         return self._publisher.start(connector_identity)
 

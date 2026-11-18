@@ -5,11 +5,13 @@ from uuid import UUID
 import pytest
 from pydantic import ValidationError
 
+from umbod.core.usage.models import UnavailableUsageTool
 from umbod.core.usage import UsageKind, UsageOutcome, UsageRecord, serialize_usage_otel, usage_occurred_at
 
 
 def record(kind: UsageKind, outcome: UsageOutcome) -> UsageRecord:
     return UsageRecord(
+        tool=UnavailableUsageTool(kind='unavailable'),
         event_id=UUID('11111111-1111-4111-8111-111111111111'), owner_id='a' * 64,
         occurred_at_unix_nano=1704067200123456789, observed_at_unix_nano=1704067200999999999,
         kind=kind, outcome=outcome, duration_ms=12.5, service_name='umbod-mcp',

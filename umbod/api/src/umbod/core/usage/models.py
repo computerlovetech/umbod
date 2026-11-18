@@ -1,3 +1,5 @@
+import hashlib
+import json
 from datetime import date, timedelta
 from enum import StrEnum
 from typing import Annotated, Literal, Self
@@ -38,7 +40,54 @@ class UsageOutcome(StrEnum):
     CANCELLED = 'cancelled'
 
 
+ToolId = Annotated[str, Field(pattern=r'^[0-9a-f]{64}$')]
+ToolLabel = Annotated[str, Field(min_length=1, max_length=256)]
+CanonicalToolPart = Annotated[str, Field(min_length=1, max_length=8192)]
+
+
+class ConnectorUsageToolTarget(UsageModel):
+    kind: Literal['connector']
+    connector_kind: CanonicalToolPart
+    connector_id: CanonicalToolPart
+    capability_key: CanonicalToolPart
+
+
+class BuiltinUsageToolTarget(UsageModel):
+    kind: Literal['builtin']
+    registered_name: CanonicalToolPart
+
+
+class UnavailableUsageToolTarget(UsageModel):
+    kind: Literal['unavailable']
+
+
+UsageToolTarget = ConnectorUsageToolTarget | BuiltinUsageToolTarget | UnavailableUsageToolTarget
+
+
+def usage_tool_id(target: ConnectorUsageToolTarget | BuiltinUsageToolTarget) -> str:
+    canonical = json.dumps(target.model_dump(), sort_keys=True, ensure_ascii=True, separators=(',', ':'))
+    return hashlib.sha256(('umbod:personal-usage:tool:v1:' + canonical).encode('utf-8')).hexdigest()
+
+
+class UsageTool(UsageModel):
+    target: Annotated[ConnectorUsageToolTarget | BuiltinUsageToolTarget, Field(discriminator='kind')]
+    tool_name: ToolLabel
+    connector_name: ToolLabel
+
+
+class UnavailableUsageTool(UsageModel):
+    kind: Literal['unavailable']
+
+
+class UsageTopTool(UsageModel):
+    tool_id: ToolId
+    tool_name: ToolLabel
+    connector_name: ToolLabel
+    count: Annotated[int, Field(ge=1)]
+
+
 class UsageRecord(UsageModel):
+    tool: UsageTool | UnavailableUsageTool
     event_id: UUID
     owner_id: OwnerId
     occurred_at_unix_nano: Annotated[int, Field(ge=0)]
@@ -103,9 +152,12 @@ class UsageSummary(UsageModel):
     as_of: AwareDatetime
     totals: UsageCounts
     daily: tuple[UsageDay, ...]
+    top_tools: Annotated[tuple[UsageTopTool, ...], Field(max_length=5)]
 
     @model_validator(mode='after')
     def consistent_counts(self) -> Self:
+        if len({tool.tool_id for tool in self.top_tools}) != len(self.top_tools):
+            raise ValueError('Top tools must have unique identifiers')
         expected_dates = tuple(
             self.range.start + timedelta(days=offset)
             for offset in range((self.range.end - self.range.start).days)

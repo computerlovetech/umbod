@@ -2,7 +2,7 @@ import math
 from re import fullmatch
 from uuid import uuid4
 
-from umbod.core.usage.models import UsageKind, UsageOutcome, UsageOwner, UsageRecord
+from umbod.core.usage.models import BuiltinUsageToolTarget, UnavailableUsageTool, UnavailableUsageToolTarget, UsageKind, UsageOutcome, UsageOwner, UsageRecord, UsageTool
 from umbod.mcp.signals.capabilities import McpCapabilityCompleted, McpCapabilityMethod
 from umbod.mcp.signals.events import McpInvocationActor, McpInvocationCorrelation, McpToolInvocationCompleted
 
@@ -25,6 +25,7 @@ class UsageCompletionProjection:
     def completed(
         self, actor: McpInvocationActor, started_at: int, duration_ms: float,
         correlation: McpInvocationCorrelation | NoUsageCorrelation, kind: UsageKind, outcome: str,
+        tool: UsageTool | UnavailableUsageTool,
     ) -> None:
         owner = actor.usage_owner
         if not isinstance(owner, UsageOwner):
@@ -36,7 +37,7 @@ class UsageCompletionProjection:
             trace = _correlation_id(correlation.trace_id, 32) if isinstance(correlation, McpInvocationCorrelation) else ''
             span = _correlation_id(correlation.span_id or '', 16) if isinstance(correlation, McpInvocationCorrelation) and trace else ''
             record = UsageRecord(
-                event_id=uuid4(), owner_id=owner.owner_id,
+                event_id=uuid4(), owner_id=owner.owner_id, tool=tool,
                 occurred_at_unix_nano=started_at + int(duration * 1_000_000),
                 observed_at_unix_nano=self._clock(), kind=kind, outcome=UsageOutcome(outcome),
                 duration_ms=duration, service_name=self._service_name, trace_id=trace, span_id=span,
@@ -58,6 +59,11 @@ class InvocationUsageReceiver:
             started.actor, started.started_at_unix_nano, event.duration_ms,
             started.correlation if started.correlation is not None else NoUsageCorrelation(),
             UsageKind.TOOL, event.outcome.value,
+            UnavailableUsageTool(kind='unavailable') if isinstance(started.tool.usage_target, UnavailableUsageToolTarget) else UsageTool(
+                target=started.tool.usage_target,
+                tool_name=started.tool.tool_name.strip()[:256] or 'unknown',
+                connector_name='Umbod' if isinstance(started.tool.usage_target, BuiltinUsageToolTarget) else (started.tool.connector_name or '').strip()[:256] or 'unknown',
+            ),
         )
 
 
@@ -71,7 +77,7 @@ class CapabilityUsageReceiver:
             return
         self._projection.completed(
             event.actor, event.started_at_unix_nano, event.duration_ms,
-            event.correlation, kind, event.outcome.value,
+            event.correlation, kind, event.outcome.value, UnavailableUsageTool(kind='unavailable'),
         )
 
 

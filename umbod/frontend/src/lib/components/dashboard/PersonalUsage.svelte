@@ -53,7 +53,7 @@
         </DashboardColumn>
         <DashboardColumn span={5}>
           <DashboardPanel title="Most-used tools">
-            <ToolRankingList tools={[]} />
+            <ToolRankingList tools={state.charts.tools} />
           </DashboardPanel>
         </DashboardColumn>
       </DashboardRow>

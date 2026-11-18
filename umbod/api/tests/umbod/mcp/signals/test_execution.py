@@ -7,6 +7,7 @@ from fastmcp.exceptions import AuthorizationError, ToolError, ValidationError
 from pydantic import ValidationError as ModelValidationError
 
 from umbod.core.capabilities import CapabilityIdentity
+from umbod.core.usage.models import ConnectorUsageToolTarget
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoInvocationFailureDiagnostic
 from umbod.core.invocation.failure_evidence import (
     InvocationExceptionEvidence,
@@ -323,6 +324,9 @@ async def test_successful_result_publishes_success_without_changing_response(exe
 
     assert len(events) == 1
     assert isinstance(events[0], McpToolInvocationSucceeded)
+    assert events[0].started.tool.usage_target == ConnectorUsageToolTarget(
+        kind='connector', connector_kind='openapi', connector_id='connector', capability_key='operation',
+    )
     assert outcome.result is response
     assert response == {"content": [{"text": "unchanged"}]}
     classifier.assert_called_once_with(response)

@@ -3,11 +3,28 @@ from uuid import UUID
 
 import pytest
 
-from umbod.core.usage.models import UsageRecord
+from umbod.core.usage.models import BuiltinUsageToolTarget, UsageRecord, UsageTool
 from umbod.mcp.usage.statistics import UsageDropReason, UsageObservations
+from umbod.core.usage.otel import serialize_usage_otel
 from umbod.mcp.usage.writer import UsageWriteBehind
 
 from .conftest import UsageHarness
+
+
+@pytest.mark.asyncio
+async def test_canonical_tool_metadata_counts_towards_byte_admission(harness: UsageHarness, record: UsageRecord) -> None:
+    tool = UsageTool(
+        target=BuiltinUsageToolTarget(kind='builtin', registered_name='x' * 8192),
+        tool_name='Files', connector_name='Umbod',
+    )
+    observed = record.model_copy(update={'tool': tool})
+    harness.settings.max_record_bytes = len(serialize_usage_otel(observed).encode('utf-8')) + 1
+    harness.runtime.start()
+    harness.runtime.enqueue(observed)
+    await harness.runtime.stop()
+    assert harness.runtime.statistics.accepted == 0
+    assert dict(harness.runtime.statistics.dropped)[UsageDropReason.OVERSIZED] == 1
+    assert harness.writer.batches == []
 
 
 @pytest.mark.asyncio

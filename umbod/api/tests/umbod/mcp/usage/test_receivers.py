@@ -3,7 +3,7 @@ import math
 import pytest
 
 from umbod.mcp.usage.ports import NoUsageCorrelation
-from umbod.core.usage.models import UsageKind, UsageOwner, UsageRecord
+from umbod.core.usage.models import BuiltinUsageToolTarget, ConnectorUsageToolTarget, UnavailableUsageTool, UsageKind, UsageOwner, UsageRecord, UsageTool, usage_tool_id
 from umbod.core.usage.otel import serialize_usage_otel
 from umbod.mcp.signals.capabilities import (
     McpCapabilityCompleted, McpCapabilityMethod, McpCapabilitySucceeded, prompt_target,
@@ -77,7 +77,7 @@ def test_only_resource_reads_and_prompt_retrievals_are_collected(
 
 def test_bare_audit_identity_is_not_an_ownership_authority(admission: AdmissionCollector) -> None:
     projection = UsageCompletionProjection(admission, 'test', lambda: 999)
-    projection.completed(McpInvocationActor(authenticated_user_id='user'), 100, 1, NoUsageCorrelation(), UsageKind.TOOL, 'success')
+    projection.completed(McpInvocationActor(authenticated_user_id='user'), 100, 1, NoUsageCorrelation(), UsageKind.TOOL, 'success', UnavailableUsageTool(kind='unavailable'))
     assert admission.records == []
     assert admission.failures == 0
 
@@ -92,7 +92,7 @@ def test_correlation_is_bounded_valid_or_empty(
     trace: str, span: str, expected_trace: str, expected_span: str,
 ) -> None:
     projection = UsageCompletionProjection(admission, 'test', lambda: 999)
-    projection.completed(actor, 100, 1, McpInvocationCorrelation(trace, span), UsageKind.TOOL, 'success')
+    projection.completed(actor, 100, 1, McpInvocationCorrelation(trace, span), UsageKind.TOOL, 'success', UnavailableUsageTool(kind='unavailable'))
     assert admission.records[0].trace_id == expected_trace
     assert admission.records[0].span_id == expected_span
 
@@ -102,13 +102,38 @@ def test_nonfinite_duration_is_dropped_as_projection_failure(
     admission: AdmissionCollector, actor: McpInvocationActor, duration: float,
 ) -> None:
     projection = UsageCompletionProjection(admission, 'test', lambda: 999)
-    projection.completed(actor, 100, duration, NoUsageCorrelation(), UsageKind.TOOL, 'success')
+    projection.completed(actor, 100, duration, NoUsageCorrelation(), UsageKind.TOOL, 'success', UnavailableUsageTool(kind='unavailable'))
     assert admission.records == []
     assert admission.failures == 1
 
 
 def test_negative_duration_is_normalized_to_zero(admission: AdmissionCollector, actor: McpInvocationActor) -> None:
     projection = UsageCompletionProjection(admission, 'test', lambda: 999)
-    projection.completed(actor, 100, -1, NoUsageCorrelation(), UsageKind.TOOL, 'failure')
+    projection.completed(actor, 100, -1, NoUsageCorrelation(), UsageKind.TOOL, 'failure', UnavailableUsageTool(kind='unavailable'))
     assert admission.records[0].duration_ms == 0
     assert admission.records[0].occurred_at_unix_nano == 100
+
+
+@pytest.mark.parametrize('target', [
+    BuiltinUsageToolTarget(kind='builtin', registered_name='filesystem_browse'),
+    ConnectorUsageToolTarget(kind='connector', connector_kind='openapi', connector_id='x' * 300, capability_key='read'),
+])
+def test_receiver_queues_canonical_identity_with_bounded_display_snapshots(
+    admission: AdmissionCollector, actor: McpInvocationActor,
+    target: BuiltinUsageToolTarget | ConnectorUsageToolTarget,
+) -> None:
+    receiver = InvocationUsageReceiver(UsageCompletionProjection(admission, 'test', lambda: 999))
+    receiver(McpToolInvocationSucceeded(McpToolInvocationStarted(
+        McpInteractionType.TOOL_INVOCATION,
+        McpToolIdentity('Alias' * 100, 'truncated-diagnostic', 'not-the-key', 'Connector' * 100, target),
+        actor, 100,
+    ), 1))
+    assert len(admission.records) == 1
+    tool = admission.records[0].tool
+    assert isinstance(tool, UsageTool)
+    assert tool.target == target
+    assert usage_tool_id(tool.target) == usage_tool_id(target)
+    assert len(tool.tool_name) == 256
+    assert tool.connector_name == ('Umbod' if isinstance(target, BuiltinUsageToolTarget) else ('Connector' * 100)[:256])
+    assert 'Alias' not in serialize_usage_otel(admission.records[0])
+    assert 'registered_name' not in serialize_usage_otel(admission.records[0])

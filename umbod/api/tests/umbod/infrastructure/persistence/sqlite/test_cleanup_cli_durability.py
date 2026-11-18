@@ -14,6 +14,7 @@ from umbod.core.agent_behaviour.store import DatabaseAgentBehaviourStore
 from umbod.core.agent_behaviour.schema import DEDUPE_TABLE, REPORT_LIST_TABLE, REPORT_TABLE
 from umbod.core.callers import AuthenticationProvenance, CallerContext, DeclaredIssuer, SubjectIdentity
 from umbod.core.persistence import AllFields, NoFilter, PersistenceRuntime, Query, Unordered
+from umbod.core.usage.models import UnavailableUsageTool
 from umbod.core.usage.models import OwnedUsageQuery, UsageBatch, UsageKind, UsageOutcome, UsageRecord
 from umbod.core.usage.store import DatabaseUsageStore
 from umbod.infrastructure import ConfiguredPersistenceRuntimeProvider
@@ -29,6 +30,7 @@ def runtime(path: Path) -> PersistenceRuntime:
 def record(at: datetime) -> UsageRecord:
     nanos = int(at.timestamp()) * 1_000_000_000
     return UsageRecord(
+        tool=UnavailableUsageTool(kind='unavailable'),
         event_id=uuid4(), owner_id=OWNER, occurred_at_unix_nano=nanos,
         observed_at_unix_nano=nanos, kind=UsageKind.TOOL, outcome=UsageOutcome.SUCCESS,
         duration_ms=1, service_name="test", trace_id="", span_id="",

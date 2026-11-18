@@ -8,7 +8,7 @@ import pytest
 
 from tests.persistence_runtime import prepared_sqlite_runtime
 from umbod.core.persistence import PersistenceBusyError
-from umbod.core.usage.models import OwnedUsageQuery, UsageBatch, UsageKind, UsageOutcome, UsageRecord
+from umbod.core.usage.models import BuiltinUsageToolTarget, OwnedUsageQuery, UsageBatch, UsageKind, UsageOutcome, UsageRecord, UsageTool
 from umbod.core.usage.store import DatabaseUsageStore
 
 
@@ -23,6 +23,7 @@ def batch() -> UsageBatch:
         observed_at_unix_nano=int(AS_OF.timestamp()) * 1_000_000_000,
         kind=UsageKind.TOOL, outcome=UsageOutcome.SUCCESS, duration_ms=1.0,
         service_name="umbod-test", trace_id="", span_id="",
+        tool=UsageTool(target=BuiltinUsageToolTarget(kind="builtin", registered_name="files"), tool_name="Files", connector_name="Umbod"),
     ),))
 
 
@@ -41,18 +42,57 @@ async def test_usage_survives_runtime_restart_and_replay(tmp_path: Path) -> None
         await store.append_usage(observed)
         summary = await store.count_usage(OwnedUsageQuery(owner_id=OWNER, days=7, as_of=AS_OF))
         assert summary.totals.tool.success == 1
+        assert summary.top_tools[0].count == 1
     finally:
         await second.shutdown()
 
 
 @pytest.mark.asyncio
-async def test_rollup_failure_rolls_back_ledger_and_can_be_retried(tmp_path: Path) -> None:
+async def test_readiness_adds_tool_aggregates_without_rewriting_legacy_usage(tmp_path: Path) -> None:
+    path = tmp_path / "upgrade.sqlite"
+    runtime = await prepared_sqlite_runtime(path)
+    observed = batch()
+    try:
+        await DatabaseUsageStore(runtime.database).append_usage(observed)
+    finally:
+        await runtime.shutdown()
+    async with aiosqlite.connect(path) as connection:
+        await connection.execute("DROP TABLE personal_usage_tool_daily")
+        cursor = await connection.execute("SELECT otel_json FROM personal_usage_events")
+        original = await cursor.fetchone()
+        await cursor.close()
+        await connection.commit()
+    upgraded = await prepared_sqlite_runtime(path)
+    try:
+        store = DatabaseUsageStore(upgraded.database)
+        await store.append_usage(observed)
+        legacy = await store.count_usage(OwnedUsageQuery(owner_id=OWNER, days=7, as_of=AS_OF))
+        assert legacy.totals.total == 1
+        assert legacy.top_tools == ()
+        await store.append_usage(batch())
+        current = await store.count_usage(OwnedUsageQuery(owner_id=OWNER, days=7, as_of=AS_OF))
+        assert current.totals.total == 2
+        assert current.top_tools[0].count == 1
+        async with aiosqlite.connect(path) as connection:
+            cursor = await connection.execute(
+                "SELECT otel_json FROM personal_usage_events WHERE event_id = ?",
+                (str(observed.records[0].event_id),),
+            )
+            assert await cursor.fetchone() == original
+            await cursor.close()
+    finally:
+        await upgraded.shutdown()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize('rollup_table', ('personal_usage_daily', 'personal_usage_tool_daily'))
+async def test_rollup_failure_rolls_back_ledger_and_can_be_retried(tmp_path: Path, rollup_table: str) -> None:
     path = tmp_path / "atomic.sqlite"
     runtime = await prepared_sqlite_runtime(path)
     try:
         async with aiosqlite.connect(path) as connection:
             await connection.execute(
-                "CREATE TRIGGER reject_usage_rollup BEFORE INSERT ON personal_usage_daily "
+                f"CREATE TRIGGER reject_usage_rollup BEFORE INSERT ON {rollup_table} "
                 "BEGIN SELECT RAISE(ABORT, 'test rollup failure'); END"
             )
             await connection.commit()
@@ -64,11 +104,18 @@ async def test_rollup_failure_rolls_back_ledger_and_can_be_retried(tmp_path: Pat
             cursor = await connection.execute("SELECT count(*) FROM personal_usage_events")
             assert await cursor.fetchone() == (0,)
             await cursor.close()
+            cursor = await connection.execute("SELECT count(*) FROM personal_usage_daily")
+            assert await cursor.fetchone() == (0,)
+            await cursor.close()
+            cursor = await connection.execute("SELECT count(*) FROM personal_usage_tool_daily")
+            assert await cursor.fetchone() == (0,)
+            await cursor.close()
             await connection.execute("DROP TRIGGER reject_usage_rollup")
             await connection.commit()
         await store.append_usage(observed)
         summary = await store.count_usage(OwnedUsageQuery(owner_id=OWNER, days=7, as_of=AS_OF))
         assert summary.totals.total == 1
+        assert summary.top_tools[0].count == 1
     finally:
         await runtime.shutdown()
 
@@ -92,6 +139,7 @@ async def test_independent_runtimes_preserve_rollups_when_busy_batches_are_retri
                 raise result
         summary = await stores[0].count_usage(OwnedUsageQuery(owner_id=OWNER, days=7, as_of=AS_OF))
         assert summary.totals.total == 12
+        assert summary.top_tools[0].count == 12
     finally:
         await first.shutdown()
         await second.shutdown()
@@ -106,6 +154,7 @@ async def test_usage_retention_and_owner_date_indexes_exist(tmp_path: Path) -> N
             for table, expected in (
                 ("personal_usage_events", {("day",), ("owner_id", "day"), ("event_id",)}),
                 ("personal_usage_daily", {("day",), ("owner_id", "day", "kind", "outcome")}),
+                ("personal_usage_tool_daily", {("day",), ("owner_id", "day", "tool_id")}),
             ):
                 cursor = await connection.execute(f"PRAGMA index_list('{table}')")
                 indexes = await cursor.fetchall()

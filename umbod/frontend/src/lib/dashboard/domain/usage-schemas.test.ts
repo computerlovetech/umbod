@@ -21,6 +21,40 @@ describe('usage snapshot contract', () => {
     expect(personalUsageSchema.safeParse({ ...usageSnapshot(), ...invalid }).success).toBe(false);
   });
 
+  test('requires explicit top tools without assuming complete historical coverage', (): void => {
+    const snapshot = usageSnapshot(7, 'account-one', 10);
+    const { top_tools, ...missingRanking } = snapshot;
+    expect(top_tools).toEqual([]);
+    expect(personalUsageSchema.safeParse(missingRanking).success).toBe(false);
+    const tools = Array.from({ length: 5 }, (_, index) => ({
+      tool_id: index.toString(16).padStart(64, '0'), tool_name: 'Search', connector_name: 'Archive', count: 1
+    }));
+    expect(personalUsageSchema.parse({ ...snapshot, top_tools: tools }).top_tools).toEqual(tools);
+    expect(personalUsageSchema.safeParse({ ...snapshot, top_tools: [...tools, { ...tools[0], tool_id: 'f'.repeat(64) }] }).success).toBe(false);
+    expect(personalUsageSchema.safeParse({ ...snapshot, top_tools: [tools[0], tools[0]] }).success).toBe(false);
+  });
+
+  test.each([
+    { tool_id: 'a'.repeat(63) },
+    { tool_id: 'a'.repeat(65) },
+    { tool_id: 'A'.repeat(64) },
+    { tool_id: 'g'.repeat(64) },
+    { tool_name: '' },
+    { connector_name: '' },
+    { count: 0 },
+    { count: -1 },
+    { count: 1.5 },
+    { count: '1' },
+    { extra: true }
+  ])('rejects malformed tool rows %j', (invalid): void => {
+    const tool = { tool_id: 'a'.repeat(64), tool_name: 'Search', connector_name: 'Archive', count: 1 };
+    expect(personalUsageSchema.safeParse({ ...usageSnapshot(), top_tools: [{ ...tool, ...invalid }] }).success).toBe(false);
+  });
+
+  test.each([null, {}, [{ tool_id: 'a'.repeat(64) }]])('rejects malformed rankings %j', (top_tools): void => {
+    expect(personalUsageSchema.safeParse({ ...usageSnapshot(), top_tools }).success).toBe(false);
+  });
+
   test('accepts an explicit UTC timestamp offset', (): void => {
     expect(personalUsageSchema.safeParse({ ...usageSnapshot(), as_of: '2026-11-09T12:00:00+00:00' }).success).toBe(true);
   });

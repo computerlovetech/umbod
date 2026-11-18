@@ -34,12 +34,27 @@ describe('usage chart projections', (): void => {
       expect(charts.outcomes.label).toBe('No tool calls');
       expect(charts.outcomes.successRate).toBe('');
       expect(charts.outcomes.segments.every((segment) => segment.percentage === 0)).toBe(true);
+      expect(charts.tools).toEqual([]);
       expect(charts.mix.total).toBe(0);
       expect(charts.activity.total).toBe(0);
       expect(charts.activity.axisMaximum).toBe(50);
     }
     expect(projectUsage().activity.days).toEqual([]);
     expect(projectUsage(usageSnapshot()).activity.days).toHaveLength(7);
+  });
+
+  it('preserves authoritative tool order and identities while scaling against the largest count', (): void => {
+    const top_tools = [
+      { tool_id: 'b'.repeat(64), tool_name: 'Search', connector_name: 'Archive', count: 3 },
+      { tool_id: 'a'.repeat(64), tool_name: 'Search', connector_name: 'Calendar', count: 12 },
+      { tool_id: 'c'.repeat(64), tool_name: 'Read', connector_name: 'Archive', count: 6 }
+    ];
+    const charts = projectUsage(personalUsageSchema.parse({ ...usageSnapshot(7, 'account-one', 10), top_tools }));
+    expect(charts.tools).toEqual([
+      { id: 'b'.repeat(64), name: 'Search', connector: 'Archive', count: 3, barWidth: 25 },
+      { id: 'a'.repeat(64), name: 'Search', connector: 'Calendar', count: 12, barWidth: 100 },
+      { id: 'c'.repeat(64), name: 'Read', connector: 'Archive', count: 6, barWidth: 50 }
+    ]);
   });
 
   it('does not imply tool calls when only resources were used', (): void => {

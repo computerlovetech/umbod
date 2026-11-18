@@ -3,7 +3,7 @@ from typing import Annotated, cast
 from pydantic import BaseModel, Field as ModelField
 
 from umbod.core.persistence import Field, IntegerCodec, KeyCodec, RowCodec, Table, TableIdentity, TextCodec
-from .models import OwnerId, UsageModel
+from .models import OwnerId, ToolId, ToolLabel, UsageModel
 
 
 class UsageEventKey(UsageModel):
@@ -53,4 +53,37 @@ ROLLUP_TABLE = Table(
     RowCodec(UsageRollupRow, (*ROLLUP_KEY_FIELDS, cast(Field[UsageRollupRow, object], ROLLUP_COUNT))),
     KeyCodec(UsageRollupKey, ROLLUP_KEY_FIELDS),
 )
-USAGE_TABLES = cast(tuple[Table[BaseModel, BaseModel], ...], (EVENT_TABLE, ROLLUP_TABLE))
+
+
+class UsageToolDailyKey(UsageModel):
+    owner_id: OwnerId
+    day: int
+    tool_id: ToolId
+
+
+class UsageToolDailyRow(UsageToolDailyKey):
+    tool_name: ToolLabel
+    connector_name: ToolLabel
+    count: Annotated[int, ModelField(ge=1)]
+
+
+TOOL_DAILY_IDENTITY = TableIdentity("personal_usage_tool_daily")
+TOOL_DAILY_OWNER = Field[UsageToolDailyRow, str](TOOL_DAILY_IDENTITY, "owner_id", TextCodec())
+TOOL_DAILY_DAY = Field[UsageToolDailyRow, int](TOOL_DAILY_IDENTITY, "day", IntegerCodec())
+TOOL_DAILY_ID = Field[UsageToolDailyRow, str](TOOL_DAILY_IDENTITY, "tool_id", TextCodec())
+TOOL_DAILY_NAME = Field[UsageToolDailyRow, str](TOOL_DAILY_IDENTITY, "tool_name", TextCodec())
+TOOL_DAILY_CONNECTOR_NAME = Field[UsageToolDailyRow, str](TOOL_DAILY_IDENTITY, "connector_name", TextCodec())
+TOOL_DAILY_COUNT = Field[UsageToolDailyRow, int](TOOL_DAILY_IDENTITY, "count", IntegerCodec())
+TOOL_DAILY_KEY_FIELDS = cast(
+    tuple[Field[UsageToolDailyRow, object], ...],
+    (TOOL_DAILY_OWNER, TOOL_DAILY_DAY, TOOL_DAILY_ID),
+)
+TOOL_DAILY_TABLE = Table(
+    TOOL_DAILY_IDENTITY,
+    RowCodec(UsageToolDailyRow, (*TOOL_DAILY_KEY_FIELDS, *cast(
+        tuple[Field[UsageToolDailyRow, object], ...],
+        (TOOL_DAILY_NAME, TOOL_DAILY_CONNECTOR_NAME, TOOL_DAILY_COUNT),
+    ))),
+    KeyCodec(UsageToolDailyKey, TOOL_DAILY_KEY_FIELDS),
+)
+USAGE_TABLES = cast(tuple[Table[BaseModel, BaseModel], ...], (EVENT_TABLE, ROLLUP_TABLE, TOOL_DAILY_TABLE))

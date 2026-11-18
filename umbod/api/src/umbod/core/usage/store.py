@@ -6,12 +6,13 @@ from umbod.core.persistence import (
 )
 from .models import (
     OutcomeCounts, OwnedUsageQuery, UsageBatch, UsageCounts, UsageDay, UsageKind,
-    UsageOutcome, UsageRange, UsageRecord, UsageSummary,
+    UsageOutcome, UsageRange, UsageRecord, UsageSummary, UsageTool, UsageTopTool, usage_tool_id,
 )
 from .otel import serialize_usage_otel, usage_occurred_at
 from .schema import (
     EVENT_DAY, EVENT_TABLE, ROLLUP_DAY, ROLLUP_KIND, ROLLUP_OUTCOME, ROLLUP_OWNER,
     ROLLUP_TABLE, UsageEventRow, UsageRollupKey, UsageRollupRow,
+    TOOL_DAILY_DAY, TOOL_DAILY_OWNER, TOOL_DAILY_ID, TOOL_DAILY_TABLE, UsageToolDailyKey, UsageToolDailyRow,
 )
 
 
@@ -54,6 +55,37 @@ async def _append_record(session: DatabaseSession, record: UsageRecord) -> None:
         ),
     )
 
+    if record.kind == UsageKind.TOOL and isinstance(record.tool, UsageTool):
+        await _increment_tool(session, record.tool, record.owner_id, day)
+
+
+async def _increment_tool(session: DatabaseSession, tool: UsageTool, owner_id: str, day: int) -> None:
+    key = UsageToolDailyKey(owner_id=owner_id, day=day, tool_id=usage_tool_id(tool.target))
+    existing = await session.find_one(
+        TOOL_DAILY_TABLE,
+        Query(AllOf((
+            Equals(TOOL_DAILY_OWNER, key.owner_id), Equals(TOOL_DAILY_DAY, key.day),
+            Equals(TOOL_DAILY_ID, key.tool_id),
+        )), AllFields(), Unordered()),
+    )
+    await session.upsert(TOOL_DAILY_TABLE, UpsertCommand(
+        key=key, row=UsageToolDailyRow(
+            **key.model_dump(), tool_name=tool.tool_name, connector_name=tool.connector_name,
+            count=1 if existing is None else existing.count + 1,
+        ),
+    ))
+
+
+def _top_tools(rows: tuple[UsageToolDailyRow, ...]) -> tuple[UsageTopTool, ...]:
+    combined: dict[str, UsageTopTool] = {}
+    for row in sorted(rows, key=lambda item: item.day):
+        previous = combined.get(row.tool_id)
+        combined[row.tool_id] = UsageTopTool(
+            tool_id=row.tool_id, tool_name=row.tool_name, connector_name=row.connector_name,
+            count=row.count + (previous.count if previous is not None else 0),
+        )
+    return tuple(sorted(combined.values(), key=lambda tool: (-tool.count, tool.tool_id))[:5])
+
 
 class DatabaseUsageStore:
     def __init__(self, database: Database) -> None:
@@ -68,6 +100,7 @@ class DatabaseUsageStore:
         async with self._database.session(mode=TransactionMode.TRY_SERIALIZED_WRITE) as session:
             await session.delete(EVENT_TABLE, DeleteQuery(LessThan(EVENT_DAY, before.toordinal())))
             await session.delete(ROLLUP_TABLE, DeleteQuery(LessThan(ROLLUP_DAY, before.toordinal())))
+            await session.delete(TOOL_DAILY_TABLE, DeleteQuery(LessThan(TOOL_DAILY_DAY, before.toordinal())))
 
     async def count_usage(self, query: OwnedUsageQuery) -> UsageSummary:
         as_of = query.as_of.astimezone(timezone.utc)
@@ -81,11 +114,18 @@ class DatabaseUsageStore:
                     Equals(ROLLUP_OWNER, query.owner_id), OneOf(ROLLUP_DAY, days),
                 )), AllFields(), Unordered()),
             )
+            tool_rows = await session.find_many(
+                TOOL_DAILY_TABLE,
+                Query(AllOf((
+                    Equals(TOOL_DAILY_OWNER, query.owner_id), OneOf(TOOL_DAILY_DAY, days),
+                )), AllFields(), Unordered()),
+            )
         values = {(row.day, row.kind, row.outcome): row.count for row in rows}
         return UsageSummary(
             range=UsageRange(start=start, end=end, timezone="UTC"),
             as_of=as_of,
             totals=_counts(values, days),
+            top_tools=_top_tools(tuple(tool_rows)),
             daily=tuple(
                 UsageDay(date=date.fromordinal(day), counts=_counts(values, (day,)))
                 for day in days

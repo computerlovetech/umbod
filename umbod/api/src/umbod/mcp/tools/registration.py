@@ -1,4 +1,6 @@
 import asyncio
+
+from umbod.core.usage.models import BuiltinUsageToolTarget
 import json
 
 from collections.abc import Callable
@@ -86,7 +88,7 @@ class ObservedFunctionTool(Tool):
         operation = arguments.get("operation")
         operation_name = operation if isinstance(operation, str) and operation in self._operation_names else None
         try:
-            lifecycle = self._publisher.start(McpToolIdentity(tool_name=self.name, connector_id=None, operation_name=operation_name))
+            lifecycle = self._publisher.start(McpToolIdentity(tool_name=self.name, connector_id=None, operation_name=operation_name, usage_target=BuiltinUsageToolTarget(kind='builtin', registered_name=self._delegate.name)))
         except Exception as error:
             self._publisher.report_failure("invocation.start", error)
             lifecycle = UnavailableToolInvocationLifecycle()
@@ -209,5 +211,5 @@ class McpObservedToolRegistrar:
         observed_delegate = BuiltinArgumentErrorsTool(delegate) if builtin_response else delegate
         tool = ObservedFunctionTool(observed_delegate, self._publisher, result_is_error, operation_names, response_adapter)
         self._mcp.add_tool(tool)
-        self._publisher.tool_registered(McpToolIdentity(tool_name=delegate.name, connector_id=None, operation_name=None))
+        self._publisher.tool_registered(McpToolIdentity(tool_name=delegate.name, connector_id=None, operation_name=None, usage_target=BuiltinUsageToolTarget(kind='builtin', registered_name=delegate.name)))
         return tool

@@ -43,7 +43,7 @@ class UsageWriteBehind:
             self._observations.drop(UsageDropReason.SHUTDOWN, 1)
             return
         try:
-            size = len(serialize_usage_otel(record).encode('utf-8'))
+            size = len(serialize_usage_otel(record).encode('utf-8')) + len(record.tool.model_dump_json().encode('utf-8'))
         except Exception:
             self.projection_failed()
             return

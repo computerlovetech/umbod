@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from umbod.core.usage.models import UnavailableUsageOwner, UsageOwnership
+from umbod.core.usage.models import UnavailableUsageOwner, UsageOwnership, UsageToolTarget, UnavailableUsageToolTarget
 
 from umbod.core.invocation.diagnostics import InvocationFailureDiagnostic, NoInvocationFailureDiagnostic
 from umbod.core.invocation.failure_evidence import InvocationFailureEvidence
@@ -33,6 +33,7 @@ class McpToolIdentity:
     connector_id: str | None
     operation_name: str | None
     connector_name: str | None = None
+    usage_target: UsageToolTarget = UnavailableUsageToolTarget(kind='unavailable')
 
 
 @dataclass(frozen=True)

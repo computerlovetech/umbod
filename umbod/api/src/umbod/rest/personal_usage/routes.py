@@ -30,5 +30,5 @@ async def read_personal_usage(
         raise HTTPException(status_code=503, detail='Personal usage analytics are unavailable') from None
     return PersonalUsageResponse(
         identity_key=identity.identity_key, range=summary.range,
-        as_of=summary.as_of, totals=summary.totals, daily=summary.daily,
+        as_of=summary.as_of, totals=summary.totals, daily=summary.daily, top_tools=summary.top_tools,
     )

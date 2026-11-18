@@ -17,11 +17,21 @@ const countsSchema = z.strictObject({
   prompt: outcomesSchema
 }).readonly();
 
+const topToolsSchema = z.array(z.strictObject({
+  tool_id: z.string().regex(/^[0-9a-f]{64}$/),
+  tool_name: z.string().min(1),
+  connector_name: z.string().min(1),
+  count: z.number().int().positive()
+}).readonly()).max(5).refine((tools): boolean => new Set(tools.map((tool) => tool.tool_id)).size === tools.length, {
+  message: 'Duplicate tool IDs'
+}).readonly();
+
 export const personalUsageSchema = z.strictObject({
   identity_key: z.string().min(1),
   range: z.strictObject({ start: z.iso.date(), end: z.iso.date(), timezone: z.literal('UTC') }).readonly(),
   as_of: z.iso.datetime({ offset: true }).refine((value) => value.endsWith('Z') || value.endsWith('+00:00')),
   totals: countsSchema,
+  top_tools: topToolsSchema,
   daily: z.array(z.strictObject({ date: z.iso.date(), counts: countsSchema }).readonly()).readonly()
 }).superRefine((usage, context): void => {
   const start = Date.parse(usage.range.start);

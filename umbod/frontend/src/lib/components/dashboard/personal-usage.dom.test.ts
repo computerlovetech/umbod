@@ -34,6 +34,12 @@ function button(label: string): HTMLButtonElement {
   return found!;
 }
 
+function withRankedTool(snapshot: PersonalUsage, name: string): PersonalUsage {
+  return personalUsageSchema.parse({ ...snapshot, top_tools: [
+    { tool_id: 'a'.repeat(64), tool_name: name, connector_name: 'Archive', count: 1 }
+  ] });
+}
+
 function renderUsage(get: UsagePort['get']): UsageState {
   const usage = new UsageState({ get }, (): void => {});
   state = usage;
@@ -78,6 +84,22 @@ describe('personal usage presentation', () => {
     expect(document.querySelector('.updated time')?.getAttribute('datetime')).toBe('2026-11-09T12:00:00.000Z');
   });
 
+  test('renders authoritative ranked tool names, connectors, counts and normalized bars', async (): Promise<void> => {
+    const result = personalUsageSchema.parse({ ...usageSnapshot(7, 'account-one', 10), top_tools: [
+      { tool_id: 'a'.repeat(64), tool_name: 'Search', connector_name: 'Archive', count: 12 },
+      { tool_id: 'b'.repeat(64), tool_name: 'Search', connector_name: 'Calendar', count: 3 }
+    ] });
+    renderUsage(vi.fn<UsagePort['get']>().mockResolvedValue(result));
+    button('Refresh usage').click();
+    await vi.waitFor(() => expect(document.querySelectorAll('.tool-ranking li')).toHaveLength(2));
+    const rows = Array.from(document.querySelectorAll('.tool-ranking li'));
+    expect(rows.map((row) => row.querySelector('.dv-tool-name')?.textContent)).toEqual(['Search', 'Search']);
+    expect(rows.map((row) => row.querySelector('.dv-tool-connector')?.textContent)).toEqual(['Archive', 'Calendar']);
+    expect(rows.map((row) => row.querySelector('.dv-tool-count')?.textContent)).toEqual(['12 calls', '3 calls']);
+    expect(rows.map((row) => row.querySelector<HTMLElement>('.dv-rank-track > div')?.style.getPropertyValue('--width'))).toEqual(['100%', '25%']);
+    expect(document.querySelector('.empty-ranking')).toBeNull();
+  });
+
   test('resources-only usage does not imply tool activity or fabricate a ranking', async (): Promise<void> => {
     const snapshot = usageSnapshot();
     const counts = { ...snapshot.totals, resource: { success: 5, failure: 2, cancelled: 3 } };
@@ -104,7 +126,7 @@ describe('personal usage presentation', () => {
     const get = vi.fn<UsagePort['get']>()
       .mockRejectedValueOnce(new Error('private'))
       .mockReturnValueOnce(pending.promise)
-      .mockResolvedValue(usageSnapshot(30, 'account-one', 1));
+      .mockResolvedValue(withRankedTool(usageSnapshot(30, 'account-one', 1), 'Monthly search'));
     renderUsage(get);
     button('Refresh usage').click();
     await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toBe("Couldn't load usage"));
@@ -117,23 +139,29 @@ describe('personal usage presentation', () => {
     expect(button('30 days').getAttribute('aria-pressed')).toBe('true');
     expect(button('7 days').getAttribute('aria-pressed')).toBe('false');
     expect(get.mock.calls.map(([days]) => days)).toEqual([7, 7, 30]);
-    pending.resolve(usageSnapshot());
+    expect(document.querySelector('.dv-tool-name')?.textContent).toBe('Monthly search');
+    pending.resolve(withRankedTool(usageSnapshot(), 'Obsolete search'));
     await tick();
+    expect(document.querySelector('.dv-tool-name')?.textContent).toBe('Monthly search');
     expect(document.querySelectorAll('.dv-bar[role="img"]')).toHaveLength(30);
     expect(document.querySelector('[aria-label="Tool activity"]')?.textContent).toContain('30 calls');
   });
 
   test('identity changes remove old account counts before replacement', async (): Promise<void> => {
     const pending = deferred<PersonalUsage>();
-    const get = vi.fn<UsagePort['get']>().mockResolvedValueOnce(usageSnapshot(7, 'account-one', 9)).mockReturnValueOnce(pending.promise);
+    const get = vi.fn<UsagePort['get']>().mockResolvedValueOnce(withRankedTool(usageSnapshot(7, 'account-one', 9), 'Account one search')).mockReturnValueOnce(pending.promise);
     const usage = renderUsage(get);
     button('Refresh usage').click();
     await vi.waitFor(() => expect(document.querySelector('[aria-label="Tool activity"]')).not.toBeNull());
+    expect(document.querySelector('.dv-tool-name')?.textContent).toBe('Account one search');
     usage.reconcileIdentity('account-two');
     await tick();
     expect(document.querySelector('[aria-label="Tool activity"]')).toBeNull();
-    pending.resolve(usageSnapshot(7, 'account-two', 1));
+    expect(document.querySelector('.tool-ranking')).toBeNull();
+    expect(document.body.textContent).not.toContain('Account one search');
+    pending.resolve(withRankedTool(usageSnapshot(7, 'account-two', 1), 'Account two search'));
     await vi.waitFor(() => expect(document.querySelector('[aria-label="Tool activity"]')?.textContent).toContain('7 calls'));
+    expect(document.querySelector('.dv-tool-name')?.textContent).toBe('Account two search');
   });
 
   test.each(['pending', 'loaded'] as const)('profile identity B fences %s account A data while the header switches', async (initialPhase): Promise<void> => {

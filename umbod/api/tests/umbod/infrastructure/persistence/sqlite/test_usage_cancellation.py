@@ -13,6 +13,7 @@ from tests.support.persistence_contracts import table
 from umbod.config.usage import PersonalUsageConfig
 from umbod.core.diagnostics import ApplicationFailure
 from umbod.core.cleanup import CleanupRunner
+from umbod.core.usage.models import UnavailableUsageTool
 from umbod.core.usage.retention import UsageRetention
 from umbod.mcp.usage.statistics import UsageDropReason, UsageObservations
 from umbod.mcp.usage.writer import UsageWriteBehind
@@ -77,6 +78,7 @@ async def sqlite(tmp_path: Path) -> AsyncIterator[SQLiteHarness]:
 def batch() -> UsageBatch:
     nanos = int(AS_OF.timestamp()) * 1_000_000_000
     return UsageBatch(records=(UsageRecord(
+        tool=UnavailableUsageTool(kind='unavailable'),
         event_id=uuid4(), owner_id=OWNER, occurred_at_unix_nano=nanos,
         observed_at_unix_nano=nanos, kind=UsageKind.TOOL, outcome=UsageOutcome.SUCCESS,
         duration_ms=1, service_name="test", trace_id="", span_id="",

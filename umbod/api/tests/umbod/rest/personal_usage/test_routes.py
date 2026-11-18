@@ -19,6 +19,7 @@ from umbod.core.callers import AuthenticationProvenance, CallerContext, Declared
 from umbod.core.persistence import Database
 from umbod.core.usage import OwnedUsageQuery, UsageBatch, UsageKind, UsageOutcome, UsageOwner, UsageReader, UsageRecord, UsageSummary, resolve_usage_owner
 from umbod.core.usage.store import DatabaseUsageStore
+from umbod.core.usage.models import BuiltinUsageToolTarget, UsageTool
 from umbod.rest.authentication.verifiers import ProductionJwksJwtVerifier
 from umbod.rest.factories import ConnectorApiDependencyFactories
 from umbod.rest.main import create_app_with_dependency_factories
@@ -67,6 +68,7 @@ def usage_record(subject: str, kind: UsageKind, outcome: UsageOutcome) -> UsageR
         occurred_at_unix_nano=int(NOW.timestamp()) * 1_000_000_000,
         observed_at_unix_nano=int(NOW.timestamp()) * 1_000_000_000,
         kind=kind, outcome=outcome, duration_ms=1.0, service_name='umbod-mcp', trace_id='', span_id='',
+        tool=UsageTool(target=BuiltinUsageToolTarget(kind='builtin', registered_name='files'), tool_name='Files', connector_name='Umbod'),
     )
 
 
@@ -125,6 +127,11 @@ def test_normal_user_reads_only_own_persisted_usage_without_administrator_access
     summary = PersonalUsageResponse.model_validate(alice.json())
     other = PersonalUsageResponse.model_validate(bob.json())
     assert summary.totals.tool.success == 2
+    assert summary.top_tools[0].count == 2
+    assert summary.top_tools[0].tool_name == 'Files'
+    assert summary.top_tools[0].connector_name == 'Umbod'
+    assert len(summary.top_tools[0].tool_id) == 64
+    assert other.top_tools[0].count == 1
     assert summary.totals.resource.failure == 1
     assert summary.totals.prompt.cancelled == 1
     assert summary.totals.tool.failure == 0

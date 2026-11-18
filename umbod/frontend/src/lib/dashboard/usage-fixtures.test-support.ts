@@ -9,6 +9,7 @@ export function usageSnapshot(days: UsageDays = 7, identity = 'account-one', suc
   };
   return personalUsageSchema.parse({
     identity_key: identity,
+    top_tools: [],
     as_of: '2026-11-09T12:00:00Z',
     range: { start: new Date(end - days * 86400000).toISOString().slice(0, 10), end: '2026-11-10', timezone: 'UTC' },
     totals: { ...counts, tool: { ...counts.tool, success: successes * days } },

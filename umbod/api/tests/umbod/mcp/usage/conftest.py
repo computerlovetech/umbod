@@ -7,6 +7,7 @@ import pytest
 
 from umbod.config.usage import PersonalUsageConfig
 from umbod.core.diagnostics import ApplicationFailure
+from umbod.core.usage.models import UnavailableUsageTool
 from umbod.core.usage.models import UsageBatch, UsageKind, UsageOutcome, UsageRecord
 from umbod.mcp.usage.statistics import UsageObservations
 from umbod.mcp.usage.writer import UsageWriteBehind
@@ -69,7 +70,7 @@ def harness() -> UsageHarness:
 
 @pytest.fixture
 def record() -> UsageRecord:
-    return UsageRecord(event_id=UUID(int=1), owner_id='a' * 64,
+    return UsageRecord(tool=UnavailableUsageTool(kind='unavailable'), event_id=UUID(int=1), owner_id='a' * 64,
                        occurred_at_unix_nano=1_735_689_600_000_000_000,
                        observed_at_unix_nano=1_735_689_600_000_000_000,
                        kind=UsageKind.TOOL, outcome=UsageOutcome.SUCCESS,

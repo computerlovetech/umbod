@@ -1,4 +1,4 @@
-import type { ActivityChart, OperationChart, OutcomeChart } from '#lib/components/shared/dashboard/visualizations/types.js';
+import type { ActivityChart, OperationChart, OutcomeChart, RankedTool } from '#lib/components/shared/dashboard/visualizations/types.js';
 import type { PersonalUsage, UsageCounts } from './domain/usage-schemas';
 
 type OutcomeCounts = UsageCounts['tool'];
@@ -47,8 +47,14 @@ export function projectActivity(rows: readonly ActivityInput[]): ActivityChart {
   return { days, axisMaximum, total, label: `Daily tool calls for ${days.length} days. ${total} tool calls in total. UTC.` };
 }
 
-export function projectUsage(snapshot?: PersonalUsage): { outcomes: OutcomeChart; mix: OperationChart; activity: ActivityChart } {
+export function projectUsage(snapshot?: PersonalUsage): { outcomes: OutcomeChart; mix: OperationChart; activity: ActivityChart; tools: readonly RankedTool[] } {
+  const topTools = snapshot?.top_tools ?? [];
+  const maximumCount = Math.max(0, ...topTools.map((tool): number => tool.count));
   return {
+    tools: topTools.map((tool): RankedTool => ({
+      id: tool.tool_id, name: tool.tool_name, connector: tool.connector_name,
+      count: tool.count, barWidth: tool.count / maximumCount * 100
+    })),
     outcomes: projectOutcomes(snapshot?.totals.tool),
     mix: projectOperationMix(snapshot?.totals),
     activity: projectActivity(snapshot?.daily.map((row) => ({ date: row.date, ...row.counts.tool })) ?? [])
