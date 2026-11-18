@@ -29,7 +29,7 @@ from umbod.core.telemetry.analytics import (
     TelemetryAnalyticsUnavailable,
     TelemetryAnalyticsWriter,
 )
-from umbod.infrastructure.metrics.collector import install_telemetry_receiver
+from umbod.infrastructure import install_telemetry_receiver
 from umbod.rest.telemetry.dependencies import get_analytics_writer, get_telemetry_sink
 
 

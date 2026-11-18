@@ -1,3 +1,18 @@
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from umbod.infrastructure.metrics.mcp.composition import create_mcp_metrics
+    from umbod.infrastructure.metrics.rest.composition import (
+        create_rest_metrics_recorder,
+        create_rest_metrics_http_server,
+    )
+    from umbod.infrastructure.metrics.collector.composition import (
+        create_telemetry_app,
+        create_receiver_app_with_registry,
+        install_telemetry_receiver,
+    )
+
 from umbod.infrastructure.key_value import create_inmemory_key_value_driver, create_request_cache
 from umbod.infrastructure.telemetry import (
     create_configured_analytics_runtime,
@@ -32,6 +47,12 @@ from umbod.infrastructure.filesystem import (
 )
 
 __all__ = [
+    "create_mcp_metrics",
+    "create_rest_metrics_recorder",
+    "create_rest_metrics_http_server",
+    "create_telemetry_app",
+    "create_receiver_app_with_registry",
+    "install_telemetry_receiver",
     "migrate_local_content",
     "create_configured_analytics_runtime",
     "create_disabled_analytics_runtime",
@@ -60,3 +81,25 @@ __all__ = [
     "create_namespace_driver",
     "create_filesystem",
 ]
+
+_EXPORTS: dict[str, str] = {
+    "create_mcp_metrics": ".metrics.mcp.composition",
+    "create_rest_metrics_recorder": ".metrics.rest.composition",
+    "create_rest_metrics_http_server": ".metrics.rest.composition",
+    "create_telemetry_app": ".metrics.collector.composition",
+    "create_receiver_app_with_registry": ".metrics.collector.composition",
+    "install_telemetry_receiver": ".metrics.collector.composition",
+}
+
+
+def __getattr__(name: str) -> Any:
+    module_name = _EXPORTS.get(name)
+    if module_name is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    value = getattr(import_module(module_name, __name__), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__() -> list[str]:
+    return sorted(__all__)

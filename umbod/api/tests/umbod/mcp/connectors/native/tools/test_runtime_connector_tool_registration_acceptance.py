@@ -15,7 +15,7 @@ from tests.support.signals import InMemorySignalFailureHandler
 from umbod.mcp.signals import McpSignals, McpToolIdentity, ToolInventoryObserved
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
-from umbod.infrastructure.metrics.mcp import PrometheusMcpMetricsRecorder
+from tests.support.mcp_metrics import InMemoryMcpMetricsRecorder
 from umbod.mcp.logging import create_default_mcp_audit_recorder
 
 import pytest
@@ -57,7 +57,7 @@ async def test_connector_tool_invocation_emits_invocation_and_audit_logs() -> No
     await _save_valid_slack_configuration(configuration_store)
     await publishing_store.publish_connector('slack')
     mcp = FastMCP(name='test')
-    signals = create_mcp_signals(StdoutMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter(), invocation_stream), PrometheusMcpMetricsRecorder(), McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), audit_stream), 'test', application_failures=application_failures), application_failures=application_failures)
+    signals = create_mcp_signals(StdoutMcpToolInvocationLogSink(StructuredMcpToolInvocationLogFormatter(), invocation_stream), InMemoryMcpMetricsRecorder(), McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), audit_stream), 'test', application_failures=application_failures), application_failures=application_failures)
     await register_connector_tools(
         mcp,
         signals=signals,
@@ -332,7 +332,7 @@ async def _save_valid_slack_configuration(configuration_store: InMemoryConnector
 async def _build_mcp_with_runtime_state(configuration_store: InMemoryConnectorCurrentConfigurationStore, publishing_store: ConnectorPublishingStoreService, runtime_state_store: InMemoryConnectorToolRuntimeStateStore) -> FastMCP:
     application_failures = create_application_failure_signal()
     mcp = FastMCP(name='test')
-    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test", application_failures=application_failures), application_failures=application_failures)
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), InMemoryMcpMetricsRecorder(), create_default_mcp_audit_recorder("test", application_failures=application_failures), application_failures=application_failures)
     await register_connector_tools(
         mcp,
         signals=signals,

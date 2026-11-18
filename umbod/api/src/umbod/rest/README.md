@@ -22,7 +22,7 @@ description: "FastAPI delivery for administration, authenticated users, system e
 - [instance_configuration/](./instance_configuration/) — Client-visible instance settings.
 - [main.py](./main.py) — Application assembly and mounts.
 - [mcp_permissions/](./mcp_permissions/README.md) — Group-to-capability permissions.
-- [metrics/](./metrics/) — API instrumentation.
+- [metrics/](./metrics/) — API instrumentation and application-owned recorder, exposition and listener contracts.
 - [proxies.py](./proxies.py) — Deferred bindings.
 - [settings.py](./settings.py) — REST settings.
 - [system/](./system/) — Internal state, events and health.

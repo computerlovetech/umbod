@@ -5,7 +5,7 @@ from typing import cast
 from umbod.logging import create_application_failure_signal
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
-from umbod.infrastructure.metrics.mcp import PrometheusMcpMetricsRecorder
+from tests.support.mcp_metrics import InMemoryMcpMetricsRecorder
 from umbod.mcp.logging import create_default_mcp_audit_recorder
 
 from fastmcp import FastMCP
@@ -57,7 +57,7 @@ async def metadata_server(case: RuntimeCase, exposure: str) -> FastMCP:
     if exposure == "flat":
         public.add_provider(provider)
         return public
-    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test", application_failures=application_failures), application_failures=application_failures)
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), InMemoryMcpMetricsRecorder(), create_default_mcp_audit_recorder("test", application_failures=application_failures), application_failures=application_failures)
     await register_connector_tools(
         public,
         signals=signals,

@@ -1,4 +1,4 @@
-from umbod.infrastructure.metrics.mcp import create_mcp_metrics
+from umbod.infrastructure import create_mcp_metrics
 
 from umbod.logging import create_application_failure_signal
 

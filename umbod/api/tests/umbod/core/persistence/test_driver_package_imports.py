@@ -103,6 +103,12 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
         'ConfiguredPersistenceRuntimeProvider',
         'create_inmemory_key_value_driver',
         'create_request_cache',
+        'create_mcp_metrics',
+        'create_rest_metrics_recorder',
+        'create_rest_metrics_http_server',
+        'create_telemetry_app',
+        'create_receiver_app_with_registry',
+        'install_telemetry_receiver',
         'create_configured_analytics_runtime',
         'create_disabled_analytics_runtime',
         'create_sqlite_analytics_runtime',
@@ -148,6 +154,13 @@ def test_infrastructure_public_surface_is_composition_only() -> None:
         'LocalNamespace',
         'LocalContent',
         'S3Content',
+        'PrometheusMcpMetricsRecorder',
+        'PrometheusRestMetricsRecorder',
+        'PrometheusCollectorMetrics',
+        'McpMetricsHttpServer',
+        'RestMetricsHttpServer',
+        'ConfiguredMcpMetricsServerFactory',
+        'CollectorRegistry',
     }
     assert forbidden.isdisjoint(set(infrastructure.__all__))
 
@@ -322,7 +335,7 @@ def test_personal_identity_policy_does_not_load_persistence_drivers() -> None:
 def test_infrastructure_contains_only_approved_io_composition_and_drivers() -> None:
     infrastructure_root = Path(__file__).parents[4] / 'src' / 'umbod' / 'infrastructure'
     source_entries = {path.relative_to(infrastructure_root).parts[0] for path in infrastructure_root.rglob('*.py')}
-    assert source_entries == {'__init__.py', 'connections', 'persistence', 'filesystem', 'key_value', 'telemetry'}
+    assert source_entries == {'__init__.py', 'connections', 'persistence', 'filesystem', 'key_value', 'telemetry', 'metrics'}
 
 
 def test_driver_packages_export_adapter_types() -> None:

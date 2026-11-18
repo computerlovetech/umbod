@@ -6,7 +6,7 @@ from typing import Any
 from umbod.logging import create_application_failure_signal
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
-from umbod.infrastructure.metrics.mcp import PrometheusMcpMetricsRecorder
+from tests.support.mcp_metrics import InMemoryMcpMetricsRecorder
 from umbod.mcp.logging import create_default_mcp_audit_recorder
 
 import pytest
@@ -53,7 +53,7 @@ async def test_codemode_registration_does_not_mutate_unrelated_tools() -> None:
     def unrelated_tool() -> dict[str, str]:
         return {"status": "still callable"}
 
-    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), create_default_mcp_audit_recorder("test", application_failures=application_failures), application_failures=application_failures)
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), InMemoryMcpMetricsRecorder(), create_default_mcp_audit_recorder("test", application_failures=application_failures), application_failures=application_failures)
     await register_connector_tools(
         mcp,
         signals=signals,

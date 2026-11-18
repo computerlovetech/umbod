@@ -55,11 +55,12 @@ from umbod.rest.instance_configuration.dependencies import get_app_config
 from umbod.rest.mcp_permissions import router as mcp_permission_router
 from umbod.rest.groups import router as groups_router
 from umbod.rest.identity_directory.routes import admin_router as identity_directory_admin_router, personal_router as identity_directory_personal_router
-from umbod.rest.metrics import AdminRestMetricsMiddleware
-from umbod.infrastructure.metrics.rest.composition import create_rest_metrics_recorder
-from umbod.infrastructure.metrics.rest.prometheus import PrometheusRestMetricsRecorder
-from umbod.infrastructure.metrics.rest.composition import create_rest_metrics_http_server
-from umbod.infrastructure.metrics.rest.http_server import RestMetricsHttpServer
+from umbod.rest.metrics import (
+    AdminRestMetricsMiddleware,
+    RestMetricsRecorderExposer,
+    RestMetricsServer,
+)
+from umbod.infrastructure import create_rest_metrics_recorder, create_rest_metrics_http_server
 from umbod.config import AppConfig, load_server_app_config
 from umbod.logging import create_application_failure_signal, flush_logging
 from umbod.core.diagnostics import ApplicationFailure
@@ -291,7 +292,7 @@ def _mount_system_app(
 
 
 def _create_lifespan(
-    metrics_server: RestMetricsHttpServer,
+    metrics_server: RestMetricsServer,
     persistence_runtime: PersistenceRuntime,
     settings: APISettings,
     analytics_runtime: TelemetryAnalyticsRuntime,
@@ -301,7 +302,7 @@ def _create_lifespan(
 
 
 def _create_configured_lifespan(
-    metrics_server: RestMetricsHttpServer,
+    metrics_server: RestMetricsServer,
     persistence_runtime: PersistenceRuntime,
     settings: APISettings,
     metrics_enabled: bool,
@@ -387,7 +388,7 @@ def create_app_with_analytics_runtime(
 
 def create_app_with_shared_metrics(
     analytics_runtime: TelemetryAnalyticsRuntime,
-    metrics_recorder: PrometheusRestMetricsRecorder,
+    metrics_recorder: RestMetricsRecorderExposer,
     *args: Any, **kwargs: Any,
 ) -> FastAPI:
     create_app_arguments = _resolve_create_app_arguments(*args, **kwargs)
@@ -398,7 +399,7 @@ def create_app_with_shared_metrics(
 def create_app_with_shared_persistence(
     persistence_runtime: PersistenceRuntime,
     analytics_runtime: TelemetryAnalyticsRuntime,
-    metrics_recorder: PrometheusRestMetricsRecorder,
+    metrics_recorder: RestMetricsRecorderExposer,
     *args: Any,
     **kwargs: Any,
 ) -> FastAPI:
@@ -418,7 +419,7 @@ def _create_application(
     app_settings: APISettings,
     analytics_runtime: TelemetryAnalyticsRuntime,
     manage_analytics: bool,
-    metrics_recorder: PrometheusRestMetricsRecorder,
+    metrics_recorder: RestMetricsRecorderExposer,
 ) -> FastAPI:
     app_settings.validate_rest_authentication()
     persistence_runtime = ConfiguredPersistenceRuntimeProvider(
@@ -438,7 +439,7 @@ def _assemble_application(
     app_settings: APISettings,
     analytics_runtime: TelemetryAnalyticsRuntime,
     manage_analytics: bool,
-    metrics_recorder: PrometheusRestMetricsRecorder,
+    metrics_recorder: RestMetricsRecorderExposer,
     dependency_factories: ConnectorApiDependencyFactories,
     manage_persistence: bool,
 ) -> FastAPI:

@@ -1,6 +1,11 @@
 from umbod.rest.metrics.middleware import AdminRestMetricsMiddleware
 from umbod.rest.metrics.models import CompletedRestRequest, RestMetricSample
-from umbod.rest.metrics.recorder import RestMetricsExposer, RestMetricsRecorder
+from umbod.rest.metrics.recorder import (
+    RestMetricsExposer,
+    RestMetricsRecorder,
+    RestMetricsRecorderExposer,
+    RestMetricsServer,
+)
 
 __all__ = (
     "AdminRestMetricsMiddleware",
@@ -8,4 +13,6 @@ __all__ = (
     "RestMetricSample",
     "RestMetricsExposer",
     "RestMetricsRecorder",
+    "RestMetricsRecorderExposer",
+    "RestMetricsServer",
 )

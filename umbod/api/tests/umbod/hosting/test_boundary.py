@@ -25,7 +25,7 @@ def test_public_exports_and_explicit_keyword_only_signatures() -> None:
         owner = (
             "umbod.hosting.applications" if name in {"create_rest_app", "create_mcp_app"}
             else "umbod.config.telemetry" if name == "TelemetryAppConfig"
-            else "umbod.infrastructure.metrics.collector.composition" if name == "create_telemetry_app"
+            else "umbod.infrastructure" if name == "create_telemetry_app"
             else "umbod.hosting.contracts"
         )
         original = getattr(import_module(owner), name)
@@ -77,7 +77,7 @@ def test_rest_exports_preserve_original_owners_and_annotations() -> None:
 
 
 def test_telemetry_export_preserves_original_signature_and_annotations() -> None:
-    original = import_module("umbod.infrastructure.metrics.collector.composition").create_telemetry_app
+    original = import_module("umbod.infrastructure").create_telemetry_app
     assert hosting.create_telemetry_app is original
     assert inspect.signature(hosting.create_telemetry_app) == inspect.signature(original)
     assert hosting.create_telemetry_app.__annotations__ == original.__annotations__

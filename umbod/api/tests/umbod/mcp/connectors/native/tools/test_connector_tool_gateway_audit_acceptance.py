@@ -10,7 +10,7 @@ from io import StringIO
 from typing import Any
 from umbod.mcp.listeners import create_mcp_signals
 from umbod.mcp.signals import SignalToolExecutionPipelineFactory
-from umbod.infrastructure.metrics.mcp import PrometheusMcpMetricsRecorder
+from tests.support.mcp_metrics import InMemoryMcpMetricsRecorder
 
 import pytest
 from fastmcp import Client, FastMCP
@@ -61,7 +61,7 @@ async def _audited_gateway() -> tuple[FastMCP, StringIO]:
     stream = StringIO()
     audit_recorder = McpAuditRecorder(StdoutMcpAuditEventSink(StructuredMcpAuditFormatter(), stream), 'test', application_failures=application_failures)
     mcp = FastMCP(name='test', middleware=[McpAuditMiddleware(audit_recorder, McpAuditIdentityAdapter(), exposure_mode='gateway')])
-    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), PrometheusMcpMetricsRecorder(), audit_recorder, application_failures=application_failures)
+    signals = create_mcp_signals(create_default_mcp_tool_invocation_log_sink(), InMemoryMcpMetricsRecorder(), audit_recorder, application_failures=application_failures)
     await register_connector_tools(
         mcp,
         signals=signals,

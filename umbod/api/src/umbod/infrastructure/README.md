@@ -6,7 +6,7 @@ description: "Concrete storage and metrics adapters with explicit infrastructure
 
 # Files
 
-- [__init__.py](./__init__.py) — Package exports.
+- [__init__.py](./__init__.py) — Public composition exports with deferred metrics factory loading.
 - [connections/](./connections/README.md) — Infrastructure-owned connection leases, bounded pooling and driver cleanup.
 - [filesystem/](./filesystem/README.md) — Filesystem composition and content storage.
 - [key_value/](./key_value/README.md) — Key-value driver composition.
