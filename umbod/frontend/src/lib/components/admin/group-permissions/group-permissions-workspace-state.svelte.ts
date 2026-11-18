@@ -39,7 +39,7 @@ export class GroupPermissionsWorkspaceState {
     return this.groupEntries.find((group) => group.id === this.selectedGroupId) ?? null;
   }
   get pendingSelection(): string | null { return this.pending; }
-  get busy(): boolean { return this.connectorState?.saving === true || this.namespaces.writing || this.namespaces.editorOpen; }
+  get busy(): boolean { return this.connectorState?.saving === true || this.namespaces.writing || this.namespaces.editorOpen || this.namespaces.confirmingDelete; }
   get dirty(): boolean { return this.connectorState?.hasUnsavedChanges === true || this.namespaces.hasUnsavedChanges; }
 
   activate = (tab: GroupPermissionsTab): void => {

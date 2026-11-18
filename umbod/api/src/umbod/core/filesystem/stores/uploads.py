@@ -1,15 +1,18 @@
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import datetime
 from typing import Optional, cast
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
 from umbod.core.persistence import (
-    AllFields, Database, DatabaseSession, Equals, Field, KeyCodec, PydanticJsonCodec,
+    AllFields, Database, DatabaseSession, Equals, Field, GreaterThan, KeyCodec, NoFilter,
+    OrderBy, Predicate, PydanticJsonCodec,
     Query, RowCodec, Table, TableIdentity, TextCodec, TransactionMode, Unordered, UpsertCommand,
 )
-from ..uploads.models import UploadSession
+from ..models import NodeId
+from ..uploads.models import CompletedUpload, UploadSession
 from ..uploads.ports import UploadTransaction
 from .access_control import SessionAccessControl
 from .namespace import SessionNamespace
@@ -47,6 +50,21 @@ class SessionUploads:
             UPLOAD_TABLE, Query(Equals(UPLOAD_ID, str(upload_id)), AllFields(), Unordered()),
         )
         return record.payload if record is not None else None
+
+    async def has_active_destination(self, parent_id: NodeId, now: datetime) -> bool:
+        page_size = 256
+        ordering = OrderBy((cast(Field[UploadRecord, object], UPLOAD_ID),))
+        after: Predicate[UploadRecord] = NoFilter()
+        while True:
+            page = await self._session.find_many(UPLOAD_TABLE, Query(after, AllFields(), ordering, limit=page_size))
+            if any(
+                upload.parent_id == parent_id and not isinstance(upload.progress, CompletedUpload) and upload.expires_at > now
+                for upload in (record.payload for record in page)
+            ):
+                return True
+            if len(page) < page_size:
+                return False
+            after = GreaterThan(UPLOAD_ID, page[-1].upload_id)
 
     async def save(self, upload: UploadSession) -> None:
         await self._session.upsert(UPLOAD_TABLE, UpsertCommand(

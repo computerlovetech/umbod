@@ -19,7 +19,7 @@ type Fixture = {
 async function createFixture(): Promise<Fixture> {
   const memory = new InMemoryNamespaceAdministration([], ['readers', 'writers']);
   const initial = await memory.create({ name: 'Research', groups: [{ group_id: 'readers', access: 'read' }, { group_id: 'writers', access: 'read_write' }] });
-  const api: NamespaceAdministration = { list: memory.list, create: memory.create, update: memory.update };
+  const api: NamespaceAdministration = { list: memory.list, create: memory.create, update: memory.update, delete: memory.delete };
   const selection: { id: string | null } = { id: 'readers' };
   const state = new NamespaceManagementState(api, () => selection.id);
   await state.load();

@@ -5,7 +5,7 @@ from umbod.core.callers import CallerSnapshot
 from ..errors import PolicyUnavailable
 from ..authorization import FilesystemIdentityResolver, PermissionDenied, UnresolvedIdentity
 from ..models import Permission
-from .models import CreateSharedNamespace, NamespaceDetails, NamespaceGroupAccess, NamespaceSummary, SaveSharedNamespace, SaveSharedNamespaceDescription, SharedNamespaceView
+from .models import CreateSharedNamespace, DeleteSharedNamespace, NamespaceDetails, NamespaceGroupAccess, NamespaceSummary, SaveSharedNamespace, SaveSharedNamespaceDescription, SharedNamespaceView
 from .ports import NamespaceRegistry
 
 
@@ -52,3 +52,6 @@ class NamespaceManagementService:
 
     async def save(self, namespace_id: UUID, command: SaveSharedNamespace | SaveSharedNamespaceDescription) -> SharedNamespaceView:
         return await self._registry.save(namespace_id, command, self._issuer)
+
+    async def delete(self, namespace_id: UUID, command: DeleteSharedNamespace) -> None:
+        await self._registry.delete(namespace_id, command, self._issuer)

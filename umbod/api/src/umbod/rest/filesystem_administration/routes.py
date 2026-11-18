@@ -2,8 +2,8 @@ from collections.abc import Awaitable, Callable
 from typing import Annotated
 from uuid import UUID
 
-from umbod.core.filesystem.namespaces.errors import NamespaceValidationError
-from umbod.core.filesystem.namespaces import CreateSharedNamespace, SaveSharedNamespace, SaveSharedNamespaceDescription, SharedNamespaceView, NamespaceManagement
+from umbod.core.filesystem.namespaces.errors import NamespaceActiveUploads, NamespaceNotEmpty, NamespaceNotFound, NamespaceValidationError
+from umbod.core.filesystem.namespaces import CreateSharedNamespace, DeleteSharedNamespace, SaveSharedNamespace, SaveSharedNamespaceDescription, SharedNamespaceView, NamespaceManagement
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.exceptions import RequestValidationError
@@ -28,6 +28,12 @@ class PolicyRoute(APIRoute):
         async def handle(request: Request) -> Response:
             try:
                 response = await handler(request)
+            except NamespaceNotFound:
+                return policy_error(404, "filesystem_namespace_not_found")
+            except NamespaceNotEmpty:
+                return policy_error(409, "filesystem_namespace_not_empty")
+            except NamespaceActiveUploads:
+                return policy_error(409, "filesystem_namespace_active_uploads")
             except PolicyRevisionConflict:
                 return policy_error(409, "filesystem_policy_stale")
             except PolicyUnavailable:
@@ -68,3 +74,12 @@ async def save_namespace(
     management: Annotated[NamespaceManagement, Depends(get_namespace_management)],
 ) -> SharedNamespaceView:
     return await management.save(namespace_id, command)
+
+
+@router.delete("/namespaces/{namespace_id}", status_code=204)
+async def delete_namespace(
+    namespace_id: UUID, command: DeleteSharedNamespace,
+    management: Annotated[NamespaceManagement, Depends(get_namespace_management)],
+) -> Response:
+    await management.delete(namespace_id, command)
+    return Response(status_code=204)

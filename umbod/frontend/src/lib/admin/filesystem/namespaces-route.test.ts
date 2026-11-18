@@ -1,6 +1,7 @@
-import { describe, expect, test } from 'vitest';
-import type { Transport, TransportRequest } from '../infrastructure/transport';
+import { describe, expect, test, vi } from 'vitest';
+import { browserTransport, SchemaValidationError, type Transport, type TransportRequest } from '../infrastructure/transport';
 import { NamespacesRoute } from './namespaces-route';
+import { InMemoryPublicConfigurationProvider } from '../infrastructure/public-configuration';
 import { createNamespaceSchema, updateNamespaceSchema, sharedNamespaceSchema } from './domain/namespaces';
 
 class MemoryTransport implements Transport {
@@ -63,6 +64,29 @@ describe('namespace HTTP contract', () => {
       { method: 'POST', path: '/admin/filesystem/namespaces', body: { name: 'Research', groups: [] } },
       { method: 'PUT', path: '/admin/filesystem/namespaces/' + entry.id, body: { expected_revision: 1, name: 'Research', groups: [] } }
     ]);
+  });
+
+  test('sends both deletion revisions as JSON and accepts a 204 without parsing JSON', async (): Promise<void> => {
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(new Response(null, { status: 204 }));
+    const configuration = new InMemoryPublicConfigurationProvider({ apiBaseUrl: '/api', mcpBaseUrl: '/mcp' });
+    const api = new NamespacesRoute(browserTransport({ fetch, configuration }));
+    const id = '00000000-0000-4000-8000-000000000001';
+    await expect(api.delete(id, { expected_revision: 2, expected_root_revision: 3 })).resolves.toBeUndefined();
+    expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/admin/filesystem/namespaces/' + id, expect.objectContaining({
+      method: 'DELETE',
+      headers: expect.objectContaining({ 'content-type': 'application/json' }),
+      body: JSON.stringify({ expected_revision: 2, expected_root_revision: 3 })
+    }));
+  });
+
+  test.each([
+    { expected_revision: 0, expected_root_revision: 1 },
+    { expected_revision: 1, expected_root_revision: 1.5 }
+  ])('rejects invalid deletion revisions before fetch', async (revisions): Promise<void> => {
+    const fetch = vi.fn<typeof globalThis.fetch>();
+    const api = new NamespacesRoute(browserTransport({ fetch }));
+    await expect(api.delete('00000000-0000-4000-8000-000000000001', revisions)).rejects.toBeInstanceOf(SchemaValidationError);
+    expect(fetch).not.toHaveBeenCalled();
   });
 
   test.each([

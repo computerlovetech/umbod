@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import type { Transport } from '../infrastructure/transport';
 import type { NamespaceAdministration } from './namespaces-port';
-import { createNamespaceSchema, updateNamespaceSchema, sharedNamespaceSchema, sharedNamespacesSchema, type CreateNamespace, type UpdateNamespace, type SharedNamespace } from './domain/namespaces';
+import { createNamespaceSchema, deleteNamespaceSchema, updateNamespaceSchema, sharedNamespaceSchema, sharedNamespacesSchema, type CreateNamespace, type DeleteNamespace, type UpdateNamespace, type SharedNamespace } from './domain/namespaces';
 
 export class NamespacesRoute implements NamespaceAdministration {
   constructor(private readonly transport: Transport) {}
@@ -14,5 +14,8 @@ export class NamespacesRoute implements NamespaceAdministration {
   });
   update = (id: string, body: UpdateNamespace): Promise<SharedNamespace> => this.transport.request({
     method: 'PUT', path: '/admin/filesystem/namespaces/' + z.uuid().parse(id), body, inputSchema: updateNamespaceSchema, outputSchema: sharedNamespaceSchema
+  });
+  delete = (id: string, body: DeleteNamespace): Promise<void> => this.transport.request<void>({
+    method: 'DELETE', path: '/admin/filesystem/namespaces/' + z.uuid().parse(id), body, inputSchema: deleteNamespaceSchema
   });
 }

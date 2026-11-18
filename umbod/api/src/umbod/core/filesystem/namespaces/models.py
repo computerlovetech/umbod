@@ -68,6 +68,11 @@ class SaveSharedNamespaceDescription(SaveSharedNamespace):
     expected_root_revision: int = Field(strict=True, ge=1, description="Current root_revision from namespace administration; protects against concurrent root metadata edits.")
 
 
+class DeleteSharedNamespace(NamespaceModel):
+    expected_revision: int = Field(strict=True, ge=1)
+    expected_root_revision: int = Field(strict=True, ge=1)
+
+
 class SharedNamespaceView(SharedNamespaceDefinition):
     description: str = Field(description="Current namespace root description; empty when absent.")
     root_revision: int = Field(ge=1, description="Current root node revision; send as expected_root_revision when updating the description.")

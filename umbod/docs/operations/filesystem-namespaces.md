@@ -27,6 +27,7 @@ Administrator routes are:
 - `GET /api/admin/filesystem/namespaces`: list shared configurations.
 - `POST /api/admin/filesystem/namespaces`: create from `name`, `groups` and an optional `description`.
 - `PUT /api/admin/filesystem/namespaces/{namespace_id}`: replace the name and assignments using the current `expected_revision`; optionally update the description using `expected_root_revision`.
+- `DELETE /api/admin/filesystem/namespaces/{namespace_id}`: delete an empty shared namespace. Supply both `expected_revision` and `expected_root_revision` in the JSON body. Success returns `204 No Content`.
 
 A shared namespace exists independently of groups and can be created with `groups: []` before any groups are registered. Its name is unique among shared namespaces, not tied to a group or reserved by an unmanaged storage entry. Multiple groups can receive access to the same namespace and root UUID.
 
@@ -38,10 +39,12 @@ Omitting `description` when saving preserves it, including during grant-only upd
 
 Stale saves return `409` with `filesystem_policy_stale`; reread and reconcile rather than blindly replaying. Invalid assignments return `422`. Saved grants are bound to their configured trusted issuer; ordinary editing cannot silently rebind them after an issuer change. A referenced group cannot be deleted until its assignments are removed.
 
+In **Group permissions → Filesystem**, choose **Delete namespace** on the shared namespace’s row and confirm. Group assignments do not prevent deletion. Any stored child blocks it, including an empty folder or an entry the administrator cannot see. An active upload targeting the root also blocks deletion. The API returns `409` with `filesystem_namespace_not_empty` or `filesystem_namespace_active_uploads`, respectively. If the response is `filesystem_policy_stale`, reload the namespace and confirm again. Deletion is never recursive and does not remove stored bytes.
+
 ## Boundaries
 
 Namespace roots cannot be renamed, moved or deleted through ordinary file operations. Cross-namespace moves are rejected atomically. Breadcrumbs stop at the namespace root. Normal file operations remain available inside each namespace according to the caller's permissions.
 
-Global-root browsing and root-access administration have been removed without compatibility aliases. Per-node sharing remains available below namespace roots, with recursive inheritance bounded by the namespace. Existing unmanaged data is retained, not automatically imported. Namespace deletion and physical content garbage collection are unsupported.
+Global-root browsing and root-access administration have been removed without compatibility aliases. Per-node sharing remains available below namespace roots, with recursive inheritance bounded by the namespace. Existing unmanaged data is retained, not automatically imported. Personal namespace deletion and physical content garbage collection are unsupported.
 
 See [Files](../using-umbod/files.md), [File and folder sharing](filesystem-sharing.md), [Homes and permissions](filesystem-homes-and-permissions.md) and [Upload transfers](filesystem-upload-transfers.md).

@@ -1,6 +1,6 @@
 import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { NamespaceAdministration } from '#lib/admin/filesystem/namespaces-port.js';
-import { createNamespaceSchema, updateNamespaceSchema, sharedNamespaceSchema, type CreateNamespace, type SharedNamespace, type UpdateNamespace } from '#lib/admin/filesystem/domain/namespaces.js';
+import { createNamespaceSchema, deleteNamespaceSchema, updateNamespaceSchema, sharedNamespaceSchema, type CreateNamespace, type DeleteNamespace, type SharedNamespace, type UpdateNamespace } from '#lib/admin/filesystem/domain/namespaces.js';
 
 export class InMemoryNamespaceAdministration implements NamespaceAdministration {
   private readonly entries = new Map<string, SharedNamespace>();
@@ -28,6 +28,16 @@ export class InMemoryNamespaceAdministration implements NamespaceAdministration 
     const updated = sharedNamespaceSchema.parse({ ...entry, name: parsed.name, groups: parsed.groups, revision: entry.revision + 1, description: parsed.description ?? entry.description, root_revision: entry.root_revision + (parsed.description !== undefined && parsed.description !== entry.description ? 1 : 0) });
     this.entries.set(id, updated);
     return structuredClone(updated);
+  };
+
+  delete = async (id: string, input: DeleteNamespace): Promise<void> => {
+    const parsed = deleteNamespaceSchema.parse(input);
+    const entry = this.entries.get(id);
+    if (!entry) throw new HttpError(404, 'Not found', { detail: { code: 'filesystem_namespace_not_found' } });
+    if (entry.revision !== parsed.expected_revision || entry.root_revision !== parsed.expected_root_revision) {
+      throw new HttpError(409, 'Stale revision', { detail: { code: 'filesystem_policy_stale' } });
+    }
+    this.entries.delete(id);
   };
 
   private validate(input: CreateNamespace, id?: string): void {

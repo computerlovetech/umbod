@@ -8,7 +8,7 @@ from jsonschema import ValidationError, validate
 
 from umbod.core.callers import AuthenticationProvenance
 from umbod.core.filesystem.namespace import ROOT_ID
-from umbod.core.filesystem.namespaces import CreateSharedNamespace, NamespaceGroupAccess, SaveSharedNamespace
+from umbod.core.filesystem.namespaces import CreateSharedNamespace, DeleteSharedNamespace, NamespaceGroupAccess, SaveSharedNamespace
 from umbod.core.groups import RegisterGroup
 from umbod.core.groups.stores.composition import create_group_management
 from umbod.infrastructure import create_filesystem_namespace_management
@@ -138,6 +138,32 @@ async def test_namespace_revocation_removes_outsider_access_without_removing_cre
     assert owner.structured_content["permissions"]["can_share"] is True
     assert owner.structured_content["permissions"]["can_write"] is True
     assert all(value["id"] != str(shared.id) for value in visible.structured_content["result"]["namespaces"])
+
+
+@pytest.mark.asyncio
+async def test_mcp_discovery_drops_only_the_deleted_shared_namespace(
+    filesystem_invocation_mcp: FilesystemMcp,
+) -> None:
+    filesystem = filesystem_invocation_mcp
+    select_caller(filesystem, "alice", ("writers",))
+    await create_group_management(filesystem.database).register_group(RegisterGroup(group_id="writers"))
+    management = create_filesystem_namespace_management(database=filesystem.database, issuer="https://issuer")
+    groups = [NamespaceGroupAccess(group_id="writers", access="read_write")]
+    target = await management.create(CreateSharedNamespace(name="Remove", groups=groups))
+    other = await management.create(CreateSharedNamespace(name="Keep", groups=groups))
+    async with Client(filesystem.server) as client:
+        before = await client.call_tool("filesystem_browse", {"operation": "namespaces"})
+        before_ids = {entry["id"] for entry in before.structured_content["result"]["namespaces"]}
+        assert {str(target.id), str(other.id)} <= before_ids
+
+        await management.delete(target.id, DeleteSharedNamespace(
+            expected_revision=target.revision, expected_root_revision=target.root_revision,
+        ))
+
+        after = await client.call_tool("filesystem_browse", {"operation": "namespaces"})
+        assert {entry["id"] for entry in after.structured_content["result"]["namespaces"]} == before_ids - {str(target.id)}
+        root = await client.call_tool("get_filesystem_node", {"node_id": str(target.root_node_id)}, raise_on_error=False)
+        assert root.is_error
 
 
 @pytest.mark.asyncio

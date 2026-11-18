@@ -1,8 +1,18 @@
 import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import type { NamespaceAdministration } from '#lib/admin/filesystem/namespaces-port.js';
-import { createNamespaceSchema, type SharedNamespace, type NamespaceGroup } from '#lib/admin/filesystem/domain/namespaces.js';
+import { createNamespaceSchema, namespaceErrorSchema, type DeleteNamespace, type SharedNamespace, type NamespaceGroup } from '#lib/admin/filesystem/domain/namespaces.js';
 
 type AccessDraft = Readonly<{ access: 'none' | NamespaceGroup['access']; revision: number }>;
+
+type DeleteSnapshot = Readonly<{ id: string; name: string; revisions: Readonly<DeleteNamespace> }>;
+
+const deletionErrors: Readonly<Partial<Record<string, string>>> = {
+  filesystem_namespace_not_empty: 'Could not delete namespace because it still contains files or folders.',
+  filesystem_namespace_active_uploads: 'Could not delete namespace because it has active uploads. Wait for the uploads to finish or expire.',
+  filesystem_namespace_not_found: 'This namespace is no longer available. Reload namespaces to update the list.',
+  filesystem_policy_unavailable: 'This namespace cannot be managed right now.',
+  filesystem_policy_invalid: 'Could not delete namespace with these revisions. Reload namespaces before trying again.'
+};
 
 export class NamespaceManagementState {
   private entries = $state.raw<SharedNamespace[]>([]);
@@ -12,6 +22,7 @@ export class NamespaceManagementState {
   private reloadRequested = $state(false);
   private activated = false;
   private editorVisible = $state(false);
+  private deletion = $state.raw<DeleteSnapshot | null>(null);
   private selectedId = $state<string | null>(null);
   private draftName = $state('');
   private draftDescription = $state('');
@@ -33,7 +44,13 @@ export class NamespaceManagementState {
   get selectedGroupId(): string | null { return this.readSelectedGroupId(); }
   get namespaces(): readonly SharedNamespace[] { return structuredClone(this.entries); }
   get editorOpen(): boolean { return this.editorVisible; }
-  get selected(): string | null { return this.selectedId; }
+  get selected(): string | null { return this.deletion?.id ?? this.selectedId; }
+  get deleteName(): string | undefined { return this.deletion?.name; }
+  get confirmingDelete(): boolean { return this.deletion !== null; }
+  get canOpenEditor(): boolean { return !this.busy && !this.confirmingDelete && !this.disposed; }
+  get canDelete(): boolean {
+    return this.canOpenEditor && !this.editorOpen && !this.hasUnsavedChanges && !this.needsReload && !this.reloadConfirmation;
+  }
   get name(): string { return this.draftName; }
   get description(): string { return this.draftDescription; }
   get busy(): boolean { return this.pending || this.permissionsPending || this.loading; }
@@ -41,7 +58,7 @@ export class NamespaceManagementState {
   get conflict(): boolean { return this.conflicted; }
   get needsReload(): boolean { return this.accessStale || this.inventoryUnavailable; }
   get canSave(): boolean { return this.editorOpen && !this.disposed && !this.busy && !this.conflicted && createNamespaceSchema.safeParse({ name: this.draftName, groups: [] }).success; }
-  get canAssignAccess(): boolean { return this.selectedGroupId !== null && !this.busy && !this.editorOpen && !this.disposed && !this.needsReload; }
+  get canAssignAccess(): boolean { return this.selectedGroupId !== null && this.canOpenEditor && !this.editorOpen && !this.needsReload; }
   get writing(): boolean { return this.pending || this.permissionsPending; }
   get savingPermissions(): boolean { return this.permissionsPending; }
   get permissionError(): string { return this.permissionMessage; }
@@ -74,7 +91,7 @@ export class NamespaceManagementState {
   ensureLoaded = (): Promise<void> => this.activated ? Promise.resolve() : this.load();
 
   requestReload = (): void => {
-    if (this.busy || this.editorOpen || this.disposed) return;
+    if (!this.canOpenEditor || this.editorOpen) return;
     if (this.hasUnsavedChanges) this.reloadRequested = true;
     else void this.load();
   };
@@ -96,7 +113,7 @@ export class NamespaceManagementState {
     }
   };
 
-  load = async (): Promise<void> => {
+  load = async (notice = ''): Promise<void> => {
     if (this.disposed) return;
     this.activated = true;
     this.pending = false;
@@ -108,7 +125,8 @@ export class NamespaceManagementState {
     this.loading = true;
     this.inventoryUnavailable = true;
     this.entries = [];
-    this.message = '';
+    this.message = notice;
+    this.deletion = null;
     this.clearDraft();
     try {
       const entries = await this.api.list();
@@ -117,7 +135,9 @@ export class NamespaceManagementState {
       this.inventoryUnavailable = false;
       this.accessStale = false;
     } catch {
-      if (!this.disposed && generation === this.generation) this.message = 'Could not load shared namespaces.';
+      if (!this.disposed && generation === this.generation) {
+        this.message = notice ? notice + ' Could not reload shared namespaces.' : 'Could not load shared namespaces.';
+      }
     } finally {
       if (!this.disposed && generation === this.generation) this.loading = false;
     }
@@ -134,7 +154,7 @@ export class NamespaceManagementState {
   }
 
   beginCreate = (): void => {
-    if (this.busy || this.disposed) return;
+    if (!this.canOpenEditor) return;
     ++this.generation;
     this.clearDraft();
     this.message = '';
@@ -142,7 +162,7 @@ export class NamespaceManagementState {
   };
 
   beginEdit = (id: string): void => {
-    if (this.busy || this.disposed) return;
+    if (!this.canOpenEditor) return;
     const entry = this.entries.find((item) => item.id === id);
     if (!entry) return;
     ++this.generation;
@@ -156,8 +176,50 @@ export class NamespaceManagementState {
     this.revision = entry.revision;
   };
 
+  beginDelete = (id: string): void => {
+    if (!this.canDelete) return;
+    const entry = this.entries.find((item) => item.id === id);
+    if (!entry) return;
+    this.message = '';
+    this.deletion = {
+      id: entry.id, name: entry.name,
+      revisions: { expected_revision: entry.revision, expected_root_revision: entry.root_revision }
+    };
+  };
+
+  cancelDelete = (): void => {
+    if (!this.busy && !this.disposed) this.deletion = null;
+  };
+
+  confirmDelete = async (): Promise<void> => {
+    const snapshot = this.deletion;
+    if (!snapshot || this.busy || this.disposed || this.hasUnsavedChanges || this.needsReload) return;
+    const generation = ++this.generation;
+    this.pending = true;
+    try {
+      await this.api.delete(snapshot.id, snapshot.revisions);
+      if (this.disposed || generation !== this.generation) return;
+      this.entries = this.entries.filter((entry) => entry.id !== snapshot.id);
+    } catch (error) {
+      if (this.disposed || generation !== this.generation) return;
+      const envelope = namespaceErrorSchema.safeParse(error instanceof HttpError ? error.body : undefined);
+      const code = envelope.success ? envelope.data.detail.code : undefined;
+      if (code === 'filesystem_policy_stale') {
+        await this.load('Namespace changed. Review the refreshed list before confirming deletion again.');
+        return;
+      }
+      this.message = (code && Object.hasOwn(deletionErrors, code) ? deletionErrors[code] : undefined)
+        ?? 'Could not delete shared namespace. Reload namespaces to check whether it was deleted.';
+    } finally {
+      if (!this.disposed && generation === this.generation) {
+        this.pending = false;
+        this.deletion = null;
+      }
+    }
+  };
+
   closeEditor = (): void => {
-    if (this.busy || this.disposed) return;
+    if (this.busy || this.disposed || !this.editorOpen) return;
     ++this.generation;
     this.clearDraft();
     this.message = '';
@@ -291,6 +353,7 @@ export class NamespaceManagementState {
     this.pending = false;
     this.loading = false;
     this.message = '';
+    this.deletion = null;
     this.clearDraft();
   };
 }

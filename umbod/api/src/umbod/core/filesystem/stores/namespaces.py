@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import cast
 from uuid import NAMESPACE_URL, UUID, uuid4, uuid5
 
@@ -5,22 +6,23 @@ from pydantic import BaseModel, ConfigDict, model_validator
 from typing import Self
 
 from umbod.core.groups.stores.schema import GROUP_ID, GROUP_TABLE
-from umbod.core.persistence import AllFields, Database, DatabaseSession, Equals, Field, KeyCodec, NoFilter, PydanticJsonCodec, Query, ReadSession, RowCodec, Table, TableIdentity, TextCodec, TransactionMode, Unordered, UpsertCommand
+from umbod.core.persistence import AllFields, Database, DatabaseSession, DeleteQuery, Equals, Field, KeyCodec, NoFilter, PersistenceDecodingError, PydanticJsonCodec, Query, ReadSession, RowCodec, Table, TableIdentity, TextCodec, TransactionMode, Unordered, UpsertCommand
 
 from ..errors import PolicyConflict, PolicyRevisionConflict, PolicyUnavailable
 from ..authorization import PermissionDenied
 from ..errors import MissingNode, OwnershipNotFound, NameCollision
-from ..namespaces.errors import NamespaceValidationError
+from ..namespaces.errors import NamespaceActiveUploads, NamespaceNotEmpty, NamespaceNotFound, NamespaceValidationError
 from ..homes.models import HomeBinding
-from ..models import NodeId, NodeKind, NodeMetadata, NodeUpdate, Ownership, Permission, Principal, PrincipalType, SYSTEM_ROOT_OWNER, UnspecifiedContentType
+from ..models import Node, NodeId, NodeKind, NodeMetadata, NodeUpdate, Ownership, Permission, Principal, PrincipalType, RootParent, SYSTEM_ROOT_OWNER, UnspecifiedContentType
 from ..namespace import ROOT_ID, updated_details
-from ..namespaces.models import CreateSharedNamespace, NamespaceDetails, NamespaceGrant, NamespacePolicy, SaveSharedNamespace, SaveSharedNamespaceDescription, SharedNamespaceView
+from ..namespaces.models import CreateSharedNamespace, DeleteSharedNamespace, NamespaceDetails, NamespaceGrant, NamespacePolicy, SaveSharedNamespace, SaveSharedNamespaceDescription, SharedNamespaceView
 from .access_control import SessionAccessControl
 from .discovery_events import append_discovery_changed
 from .homes import HOME_TABLE, SessionHomes
 from .namespace import SessionNamespace, node_record
-from .schema import NODE_TABLE, NodeKey
+from .schema import NODE_ID, NODE_KEY_PROJECTION, NODE_PARENT, NODE_TABLE, NodeKey
 from .session import storage_session
+from .uploads import SessionUploads
 
 
 class NamespaceKey(BaseModel):
@@ -108,6 +110,34 @@ async def adopt_existing_homes(database: Database) -> None:
                 await adopt_personal(session, home.payload)
 
 
+def require_shared_policy(policies: list[NamespacePolicy], namespace_id: UUID, issuer: str, expected_revision: int) -> NamespacePolicy:
+    for policy in policies:
+        if policy.id == namespace_id and policy.kind == "shared":
+            if policy.issuer != issuer:
+                raise PolicyUnavailable()
+            if policy.revision != expected_revision:
+                raise PolicyRevisionConflict()
+            return policy
+    raise NamespaceNotFound()
+
+
+async def verified_shared_root(namespace: SessionNamespace, policy: NamespacePolicy, policies: list[NamespacePolicy]) -> Node:
+    try:
+        root = await namespace.get_node(policy.root_node_id)
+        if root.id == ROOT_ID or root.kind != NodeKind.DIRECTORY or root.name != policy.name or isinstance(root.parent_id, RootParent):
+            raise PolicyUnavailable()
+        structural_root = await namespace.get_root()
+        if root.parent_id != ROOT_ID:
+            parent = await namespace.get_node(root.parent_id)
+            if parent.kind != NodeKind.DIRECTORY or parent.parent_id != ROOT_ID or any(entry.root_node_id == parent.id for entry in policies):
+                raise PolicyUnavailable()
+        if structural_root.kind != NodeKind.DIRECTORY or not isinstance(structural_root.parent_id, RootParent) or structural_root.name != "":
+            raise PolicyUnavailable()
+    except (MissingNode, PersistenceDecodingError):
+        raise PolicyUnavailable() from None
+    return root
+
+
 class DatabaseNamespaceRegistry:
     def __init__(self, database: Database) -> None:
         self._database = database
@@ -180,14 +210,10 @@ class DatabaseNamespaceRegistry:
     async def save(self, namespace_id: UUID, command: SaveSharedNamespace | SaveSharedNamespaceDescription, issuer: str) -> SharedNamespaceView:
         async with storage_session(self._database, TransactionMode.SERIALIZED_WRITE) as session:
             policies = await namespace_policies(session)
-            matches = [policy for policy in policies if policy.id == namespace_id and policy.kind == "shared"]
-            if not matches:
-                raise PolicyConflict()
-            policy = matches[0]
-            if policy.issuer != issuer:
-                raise PolicyUnavailable()
-            if policy.revision != command.expected_revision:
-                raise PolicyRevisionConflict()
+            try:
+                policy = require_shared_policy(policies, namespace_id, issuer, command.expected_revision)
+            except NamespaceNotFound:
+                raise PolicyConflict() from None
             if any(other.kind == "shared" and other.id != namespace_id and other.name == command.name for other in policies):
                 raise PolicyConflict()
             await self._validate_groups(session, command)
@@ -219,3 +245,21 @@ class DatabaseNamespaceRegistry:
             view = SharedNamespaceView(name=command.name, groups=command.groups, description=node.metadata.attributes.get("description", ""), root_revision=node.revision, id=namespace_id, root_node_id=policy.root_node_id, revision=policy.revision + 1)
             await persist_policy(session, self._policy(view, issuer))
             return view
+
+    async def delete(self, namespace_id: UUID, command: DeleteSharedNamespace, issuer: str) -> None:
+        async with storage_session(self._database, TransactionMode.SERIALIZED_WRITE) as session:
+            policies = await namespace_policies(session)
+            policy = require_shared_policy(policies, namespace_id, issuer, command.expected_revision)
+            root = await verified_shared_root(SessionNamespace(session), policy, policies)
+            if root.revision != command.expected_root_revision:
+                raise PolicyRevisionConflict()
+            child = await session.find_one(
+                NODE_TABLE, Query(Equals(NODE_PARENT, str(root.id)), NODE_KEY_PROJECTION, Unordered()),
+            )
+            if child is not None:
+                raise NamespaceNotEmpty()
+            if await SessionUploads(session).has_active_destination(root.id, datetime.now(timezone.utc)):
+                raise NamespaceActiveUploads()
+            await session.delete(NAMESPACE_TABLE, DeleteQuery(Equals(NAMESPACE_ID, str(policy.id))))
+            await session.delete(NODE_TABLE, DeleteQuery(Equals(NODE_ID, str(root.id))))
+            await SessionAccessControl(session).clear_node(root.id)

@@ -1,5 +1,6 @@
 from collections.abc import Iterator
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -151,16 +152,15 @@ def test_duplicate_shared_name_is_conflict(namespace_client: TestClient) -> None
     (AdminAuthConfig(mode="jwt"), 401),
     (AdminAuthConfig(mode="simulation", simulated_admin=False), 403),
 ])
-@pytest.mark.parametrize("method", ["GET", "POST", "PUT"])
+@pytest.mark.parametrize("method", ["GET", "POST", "PUT", "DELETE"])
 def test_namespace_administration_requires_admin_membership(
     namespace_settings: AppConfig, authentication: AdminAuthConfig, status: int, method: str,
 ) -> None:
-    from uuid import uuid4
-
     settings = namespace_settings.model_copy(update={"admin_authentication": authentication})
     with TestClient(create_app(settings, [])) as client:
-        path = PATH + "/" + str(uuid4()) if method == "PUT" else PATH
-        response = client.request(method, path, json={"name": "Shared", "groups": [], "expected_revision": 1})
+        path = PATH + "/" + str(uuid4()) if method in {"PUT", "DELETE"} else PATH
+        body = {"expected_revision": 1, "expected_root_revision": 1} if method == "DELETE" else {"name": "Shared", "groups": [], "expected_revision": 1}
+        response = client.request(method, path, json=body)
     assert response.status_code == status
     assert response.headers["cache-control"] == "no-store"
 

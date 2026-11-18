@@ -4,6 +4,7 @@ import NamespaceWorkspaceTestHarness from './NamespaceWorkspaceTestHarness.test-
 import { NamespaceManagementState } from './namespace-management-state.svelte';
 import { InMemoryNamespaceAdministration } from '../../../../../tests/support/filesystem/in-memory-namespace-administration';
 import type { SharedNamespace } from '#lib/admin/filesystem/domain/namespaces.js';
+import { HttpError } from '#lib/admin/infrastructure/transport.js';
 import { deferred } from '#lib/files/fixtures.test-support.js';
 import { createWorkspace } from '../group-permissions/workspace.test-support';
 import type { GroupPermissionsWorkspaceState } from '../group-permissions/group-permissions-workspace-state.svelte';
@@ -23,8 +24,8 @@ afterEach(async (): Promise<void> => {
   document.body.replaceChildren();
 });
 
-function button(label: string): HTMLButtonElement {
-  const result = [...document.querySelectorAll('button')].find((entry) => entry.getAttribute('aria-label') === label || entry.textContent?.trim() === label);
+function button(label: string, scope: ParentNode = document): HTMLButtonElement {
+  const result = [...scope.querySelectorAll('button')].find((entry) => entry.getAttribute('aria-label') === label || entry.textContent?.trim() === label);
   if (!result) throw new Error(`Button not found: ${label}`);
   return result;
 }
@@ -389,6 +390,119 @@ test('refreshes a rename conflict without replacing another group’s concurrent
   button('Save changes').click();
   await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
   expect(await api.list()).toMatchObject([{ name: 'My draft', description: 'My description', root_revision: 3, revision: 3, groups: [{ group_id: 'readers', access: 'read_write' }] }]);
+});
+
+test('requires confirmation and removes only the confirmed namespace after one pending request', async (): Promise<void> => {
+  const api = new InMemoryNamespaceAdministration([], ['readers']);
+  const target = await api.create({ name: 'Research', groups: [{ group_id: 'readers', access: 'read' }] });
+  await api.create({ name: 'Archives', groups: [] });
+  const remove = vi.spyOn(api, 'delete');
+  await renderNamespaces(api);
+
+  button('Delete namespace: Research').click();
+  await tick();
+  expect(dialog().getAttribute('role')).toBe('alertdialog');
+  expect(dialog().textContent).toContain('Delete Research? Only empty namespaces can be deleted.');
+  expect(state?.selected).toBe(target.id);
+  button('Cancel').click();
+  await tick();
+  expect(document.querySelector('dialog')).toBeNull();
+  expect(remove).not.toHaveBeenCalled();
+
+  const pending = deferred<void>();
+  remove.mockReturnValueOnce(pending.promise);
+  button('Delete namespace: Research').click();
+  await tick();
+  const confirm = button('Delete namespace', dialog());
+  confirm.click();
+  confirm.click();
+  await tick();
+  expect(confirm.disabled).toBe(true);
+  expect(button('Cancel').disabled).toBe(true);
+  expect(button('Close').disabled).toBe(true);
+  dialog().dispatchEvent(new Event('cancel', { cancelable: true }));
+  expect(dialog().open).toBe(true);
+  expect(button('Delete namespace: Research').disabled).toBe(true);
+  expect(remove).toHaveBeenCalledExactlyOnceWith(target.id, { expected_revision: 1, expected_root_revision: 1 });
+
+  pending.resolve();
+  await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
+  expect(state?.selected).toBeNull();
+  expect(document.querySelector('button[aria-label="Delete namespace: Research"]')).toBeNull();
+  expect(button('Delete namespace: Archives')).toBeDefined();
+});
+
+test('blocks deletion while permission edits are unsaved or being saved', async (): Promise<void> => {
+  const api = new InMemoryNamespaceAdministration([], ['readers']);
+  await api.create({ name: 'Research', groups: [] });
+  const remove = vi.spyOn(api, 'delete');
+  await renderNamespaces(api);
+  await chooseAccess('Research', 'Read');
+  const action = button('Delete namespace: Research');
+  expect(action.disabled).toBe(true);
+  action.click();
+  expect(document.querySelector('dialog')).toBeNull();
+
+  const pending = deferred<SharedNamespace>();
+  const update = api.update;
+  vi.spyOn(api, 'update').mockImplementationOnce(async (id, input) => {
+    await pending.promise;
+    return update(id, input);
+  });
+  button('Save permissions').click();
+  await tick();
+  expect(action.disabled).toBe(true);
+  pending.resolve((await api.list())[0]);
+  await vi.waitFor(() => expect(action.disabled).toBe(false));
+  expect(remove).not.toHaveBeenCalled();
+});
+
+test('refreshes stale confirmation and requires another confirmation with both refreshed revisions', async (): Promise<void> => {
+  const api = new InMemoryNamespaceAdministration([], []);
+  const target = await api.create({ name: 'Research', groups: [] });
+  await renderNamespaces(api);
+  const list = vi.spyOn(api, 'list');
+  const remove = vi.spyOn(api, 'delete');
+
+  button('Delete namespace: Research').click();
+  await tick();
+  const refreshed = await api.update(target.id, {
+    name: 'Updated research', groups: [], description: 'New', expected_revision: 1, expected_root_revision: 1
+  });
+  button('Delete namespace', dialog()).click();
+  await vi.waitFor(() => expect(button('Delete namespace: Updated research').disabled).toBe(false));
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain('Namespace changed');
+  expect(document.querySelector('dialog')).toBeNull();
+  expect(list).toHaveBeenCalledTimes(1);
+  expect(remove).toHaveBeenCalledExactlyOnceWith(target.id, { expected_revision: 1, expected_root_revision: 1 });
+
+  button('Delete namespace: Updated research').click();
+  await tick();
+  expect(dialog().textContent).toContain('Updated research');
+  button('Delete namespace', dialog()).click();
+  await vi.waitFor(() => expect(document.querySelector('dialog')).toBeNull());
+  expect(remove).toHaveBeenCalledTimes(2);
+  expect(remove).toHaveBeenLastCalledWith(target.id, { expected_revision: refreshed.revision, expected_root_revision: refreshed.root_revision });
+  expect(document.body.textContent).toContain('No shared namespaces');
+});
+
+test.each([
+  ['filesystem_namespace_not_empty', 'still contains files or folders'],
+  ['filesystem_namespace_active_uploads', 'has active uploads']
+])('keeps the namespace and explains the %s blocker', async (code: string, message: string): Promise<void> => {
+  const api = new InMemoryNamespaceAdministration([], []);
+  await api.create({ name: 'Research', groups: [] });
+  await renderNamespaces(api);
+  const list = vi.spyOn(api, 'list');
+  const remove = vi.spyOn(api, 'delete').mockRejectedValueOnce(new HttpError(409, 'Conflict', { detail: { code } }));
+  button('Delete namespace: Research').click();
+  await tick();
+  button('Delete namespace', dialog()).click();
+  await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain(message));
+  expect(document.querySelector('dialog')).toBeNull();
+  expect(button('Delete namespace: Research').disabled).toBe(false);
+  expect(list).not.toHaveBeenCalled();
+  expect(remove).toHaveBeenCalledTimes(1);
 });
 
 test('shows namespace loading failures with reload outside the name modal', async (): Promise<void> => {

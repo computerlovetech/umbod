@@ -13,6 +13,11 @@ export const updateNamespaceSchema = z.strictObject({
 }).refine((input) => (input.description === undefined) === (input.expected_root_revision === undefined), {
   message: 'Description and root revision must be supplied together.', path: ['expected_root_revision']
 });
+export const deleteNamespaceSchema = z.strictObject({
+  expected_revision: z.number().int().positive(),
+  expected_root_revision: z.number().int().positive()
+});
+export const namespaceErrorSchema = z.object({ detail: z.object({ code: z.string() }) });
 export const sharedNamespaceSchema = z.strictObject({
   id: z.uuid(), root_node_id: z.uuid(), name: z.string(),
   revision: z.number().int().positive(), root_revision: z.number().int().positive(), description: z.string(), groups: groupsSchema
@@ -22,3 +27,4 @@ export type NamespaceGroup = z.infer<typeof namespaceGroupSchema>;
 export type SharedNamespace = z.infer<typeof sharedNamespaceSchema>;
 export type CreateNamespace = z.infer<typeof createNamespaceSchema>;
 export type UpdateNamespace = z.infer<typeof updateNamespaceSchema>;
+export type DeleteNamespace = z.infer<typeof deleteNamespaceSchema>;

@@ -7,7 +7,7 @@ from ..sharing.errors import InvalidSharingPolicy, SharingPolicyUnavailable
 from ..content.errors import UploadTooLarge
 from ..uploads.errors import UploadSessionError
 from ..errors import PolicyConflict, PolicyRevisionConflict, PolicyUnavailable
-from ..namespaces.errors import NamespaceValidationError
+from ..namespaces.errors import NamespaceActiveUploads, NamespaceNotEmpty, NamespaceNotFound, NamespaceValidationError
 from ..errors import (
     InvalidMove,
     RootMutation,
@@ -36,6 +36,9 @@ async def storage_session(
         UploadSessionError,
         PolicyConflict,
         PolicyUnavailable,
+        NamespaceActiveUploads,
+        NamespaceNotEmpty,
+        NamespaceNotFound,
         NamespaceValidationError,
         PolicyRevisionConflict,
         InvalidMove,

@@ -8,7 +8,7 @@ description: "Authenticated shared namespace management."
 
 - [__init__.py](./__init__.py) — Package exports.
 - [deps.py](./deps.py) — Request-local management composition with the configured backend issuer.
-- [routes.py](./routes.py) — No-store shared namespace create, list and revision-checked replacement.
+- [routes.py](./routes.py) — No-store shared namespace listing, creation, revision-checked replacement, and empty namespace deletion.
 
 # Architecture
 
